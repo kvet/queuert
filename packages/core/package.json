@@ -1,0 +1,18 @@
+{
+  "name": "@queuert/core",
+  "type": "module",
+  "devDependencies": {
+    "tsdown": "^0.15.10",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.3"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "zod": "^4.0.0"
+  }
+}
