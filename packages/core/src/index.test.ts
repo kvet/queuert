@@ -138,7 +138,7 @@ describe("Handler", () => {
         chain.createQueue({
           name: "test",
           handler: async ({ claim, heartbeat, finalize }) => {
-            const { job, result } = await claim(async ({ job, client }) => {
+            const result = await claim(async ({ job, client }) => {
               expectTypeOf(client).toEqualTypeOf<PoolClient>();
               expectTypeOf(job.id).toEqualTypeOf<string>();
               expectTypeOf(job.input).toEqualTypeOf<{ test: boolean }>();
@@ -149,10 +149,9 @@ describe("Handler", () => {
 
               return "prepare";
             });
-            expect(job.id).toBeDefined();
             expect(result).toEqual("prepare");
 
-            await heartbeat({ leaseMs: 100 });
+            await heartbeat({ leaseMs: 1000 });
 
             return finalize(async ({ client }) => {
               expectTypeOf(client).toEqualTypeOf<PoolClient>();
@@ -727,7 +726,7 @@ describe("Worker", () => {
         chain.createQueue({
           name: "test",
           handler: async ({ claim, finalize }) => {
-            const { job } = await claim(async () => {});
+            const { job } = await claim(async ({ job }) => ({ job }));
 
             processedJobs.push(job.input.jobNumber);
 
@@ -786,7 +785,7 @@ describe("Worker", () => {
         chain.createQueue({
           name: "test",
           handler: async ({ claim, finalize }) => {
-            const { job } = await claim(async () => {});
+            const { job } = await claim(async ({ job }) => ({ job }));
 
             processedJobs.push(job.input.jobNumber);
 
@@ -857,7 +856,7 @@ describe("Chains", () => {
           .createQueue({
             name: "linear",
             handler: async ({ claim, finalize }) => {
-              const { job } = await claim(async () => {});
+              const { job } = await claim(async ({ job }) => ({ job }));
 
               return finalize(async ({ client, enqueueJob }) =>
                 enqueueJob({
@@ -871,7 +870,7 @@ describe("Chains", () => {
           .createQueue({
             name: "linear:next",
             handler: async ({ claim, finalize }) => {
-              const { job } = await claim(async () => {});
+              const { job } = await claim(async ({ job }) => ({ job }));
 
               return finalize(async ({ client, enqueueJob }) =>
                 enqueueJob({
@@ -885,7 +884,7 @@ describe("Chains", () => {
           .createQueue({
             name: "linear:next_next",
             handler: async ({ claim, finalize }) => {
-              const { job } = await claim(async () => {});
+              const { job } = await claim(async ({ job }) => ({ job }));
 
               return finalize(async () => ({
                 result: job.input.valueNextNext,
@@ -948,7 +947,7 @@ describe("Chains", () => {
           .createQueue({
             name: "main",
             handler: async ({ claim, finalize }) => {
-              const { job } = await claim(async () => {});
+              const { job } = await claim(async ({ job }) => ({ job }));
               return finalize(async ({ client, enqueueJob }) =>
                 enqueueJob({
                   client,
@@ -962,14 +961,14 @@ describe("Chains", () => {
           .createQueue({
             name: "main:branch1",
             handler: async ({ claim, finalize }) => {
-              const { job } = await claim(async () => {});
+              const { job } = await claim(async ({ job }) => ({ job }));
               return finalize(async () => ({ result1: job.input.value }));
             },
           })
           .createQueue({
             name: "main:branch2",
             handler: async ({ claim, finalize }) => {
-              const { job } = await claim(async () => {});
+              const { job } = await claim(async ({ job }) => ({ job }));
               return finalize(async () => ({ result2: job.input.value }));
             },
           })
@@ -1031,7 +1030,7 @@ describe("Chains", () => {
         chain.createQueue({
           name: "loop",
           handler: async ({ claim, finalize }) => {
-            const { job } = await claim(async () => {});
+            const { job } = await claim(async ({ job }) => ({ job }));
 
             return finalize(async ({ client, enqueueJob }) =>
               job.input.counter < 3
@@ -1105,7 +1104,7 @@ describe("Dependency Chains", () => {
           chain.createQueue({
             name: "dependency",
             handler: async ({ claim, finalize }) => {
-              const { job } = await claim(async () => {});
+              const { job } = await claim(async ({ job }) => ({ job }));
 
               return finalize(async ({ client, enqueueJob }) =>
                 job.input.value < 1
@@ -1136,14 +1135,15 @@ describe("Dependency Chains", () => {
               ];
             },
             handler: async ({ claim, finalize }) => {
-              const {
-                dependencies: [dep],
-                job,
-              } = await claim(async ({ dependencies: [dep] }) => {
-                expectTypeOf<(typeof dep)["output"]>().toEqualTypeOf<{
-                  result: number;
-                }>();
-              });
+              const { dep, job } = await claim(
+                async ({ job, dependencies: [dep] }) => {
+                  expectTypeOf<(typeof dep)["output"]>().toEqualTypeOf<{
+                    result: number;
+                  }>();
+
+                  return { dep, job };
+                }
+              );
               expectTypeOf<(typeof dep)["output"]>().toEqualTypeOf<{
                 result: number;
               }>();
@@ -1206,7 +1206,7 @@ describe("Dependency Chains", () => {
           chain.createQueue({
             name: "dependency",
             handler: async ({ claim, finalize }) => {
-              const { job } = await claim(async () => {});
+              const { job } = await claim(async ({ job }) => ({ job }));
 
               return finalize(async () => ({ result: job.input.value }));
             },
@@ -1231,9 +1231,9 @@ describe("Dependency Chains", () => {
               return [dependencyJob];
             },
             handler: async ({ claim, finalize }) => {
-              const {
-                dependencies: [dep],
-              } = await claim(async () => {});
+              const { dep } = await claim(async ({ dependencies: [dep] }) => ({
+                dep,
+              }));
 
               return finalize(async () => ({
                 finalResult: dep.output.result,
@@ -1309,7 +1309,7 @@ describe("Dependency Chains", () => {
         chain.createQueue({
           name: "test",
           handler: async ({ claim, finalize }) => {
-            const { job } = await claim(async () => {});
+            const { job } = await claim(async ({ job }) => ({ job }));
 
             return finalize(async ({ enqueueJob, client }) =>
               enqueueJob({
@@ -1331,7 +1331,7 @@ describe("Dependency Chains", () => {
         chain.createQueue({
           name: "test:finish",
           handler: async ({ claim, finalize }) => {
-            const { job } = await claim(async () => {});
+            const { job } = await claim(async ({ job }) => ({ job }));
 
             return finalize(async () => ({ result: job.input.valueNext + 1 }));
           },
@@ -1392,7 +1392,7 @@ describe("Dependency Chains", () => {
           chain.createQueue({
             name: "dependency",
             handler: async ({ claim, finalize }) => {
-              const { job } = await claim(async () => {});
+              const { job } = await claim(async ({ job }) => ({ job }));
               return finalize(async () => ({ result: job.input.value }));
             },
           })
@@ -1417,7 +1417,9 @@ describe("Dependency Chains", () => {
               return dependencyChains;
             },
             handler: async ({ claim, finalize }) => {
-              const { dependencies } = await claim(async () => {});
+              const { dependencies } = await claim(
+                async ({ dependencies }) => ({ dependencies })
+              );
               const depResults = dependencies.map((dep) => dep.output.result);
               return finalize(async () => ({ finalResult: depResults }));
             },

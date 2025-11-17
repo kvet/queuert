@@ -61,22 +61,7 @@ export type JobHandler<
         };
       } & GetDbProviderContext<TDbProvider>
     ) => Promise<T>
-  ) => Promise<{
-    job: RunningJob<
-      Job<
-        TQueueName,
-        ResolveQueueDefinitions<
-          TChainDefinitions,
-          TChainName,
-          TQueueDefinitions
-        >[TQueueName]["input"]
-      >
-    >;
-    dependencies: {
-      [K in keyof TDependencies]: FinishedJobChain<TDependencies[K]>;
-    };
-    result: T;
-  }>;
+  ) => Promise<T>;
   heartbeat: (options: { leaseMs: number }) => Promise<void>;
   withHeartbeat: <T>(
     cb: () => Promise<T>,
@@ -189,15 +174,10 @@ export const processJobHandler = async ({
             context,
           });
 
-          const claimResult = await claimCallback({
+          return await claimCallback({
             ...jobInput,
             ...context,
           });
-
-          return {
-            ...jobInput,
-            result: claimResult,
-          };
         },
         heartbeat: async ({ leaseMs }) => commitHeartbeat(leaseMs),
         withHeartbeat: async (cb, { intervalMs, leaseMs }) => {

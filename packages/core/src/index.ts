@@ -38,9 +38,10 @@ export { rescheduleJob } from "./process-helper.js";
 
 // DOCS:
 // Queue → QueueJob → enqueueJob() → getJob()
-// Chain → JobChain → enqueueChain() → getChain()
+// Chain → JobChain → enqueueJobChain() → getJobChain()
 
 // TODO: reaper
+// TODO: abort signal
 // TODO: custom ids
 // TODO: custom schema name
 // TODO: partitioning
