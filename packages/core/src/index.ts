@@ -7,7 +7,7 @@ import { BaseChainDefinitions } from "./entities/chain.js";
 import { JobChain } from "./entities/job_chain.js";
 import { BaseQueueDefinitions } from "./entities/queue.js";
 import { Log } from "./log.js";
-import { Notifier } from "./notifier/notifier.js";
+import { NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 import {
   processHelper,
   ResolveEnqueueDependencyJobChains,
@@ -33,7 +33,7 @@ export {
   type BaseQueueDefinitions,
 } from "./entities/queue.js";
 export { type Log } from "./log.js";
-export { type Notifier } from "./notifier/notifier.js";
+export { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 export { rescheduleJob } from "./process-helper.js";
 
 // DOCS:
@@ -46,7 +46,7 @@ export { rescheduleJob } from "./process-helper.js";
 // TODO: custom schema name
 // TODO: partitioning
 // TODO: notify about long transactions
-// TODO: redis notifier
+// TODO: redis NotifyAdapter
 // TODO: termination
 // TODO: cancellation
 // TODO: deduplication
@@ -154,7 +154,7 @@ export type Queuert<
     TChainDefinitions[TChainName]["input"],
     TChainDefinitions[TChainName]["output"]
   > | null>;
-  withNotifier: <T, TArgs extends any[]>(
+  withNotify: <T, TArgs extends any[]>(
     cb: (...args: TArgs) => Promise<T>,
     ...args: TArgs
   ) => Promise<T>;
@@ -193,17 +193,17 @@ export const createQueuert = async <
   TChainDefinitions extends BaseChainDefinitions
 >({
   dbProvider,
-  notifier,
+  notifyAdapter,
   log,
 }: {
   dbProvider: TDbProvider;
-  notifier: Notifier;
+  notifyAdapter: NotifyAdapter;
   chainDefinitions: TChainDefinitions;
   log: Log;
 }): Promise<Queuert<TDbProvider, TChainDefinitions>> => {
   const helper = processHelper({
     dbProvider,
-    notifier,
+    notifyAdapter,
     log,
   });
 
@@ -240,7 +240,7 @@ export const createQueuert = async <
         start: (startOptions) =>
           createExecutor({
             helper,
-            notifier,
+            notifyAdapter,
             log,
             registeredQueues,
           })(startOptions),
@@ -254,7 +254,7 @@ export const createQueuert = async <
       }),
     getJobChain: async ({ id, ...context }) =>
       helper.getJobChain({ id, context }),
-    withNotifier: async (cb, ...args) => {
+    withNotify: async (cb, ...args) => {
       return helper.withNotifyQueueContext(() => cb(...args));
     },
   };

@@ -7,7 +7,7 @@ import { JobChain } from "../entities/job_chain.js";
 import { BaseQueueDefinitions } from "../entities/queue.js";
 import { sleep } from "../helpers/timers.js";
 import { Log } from "../log.js";
-import { Notifier } from "../notifier/notifier.js";
+import { NotifyAdapter } from "../notify-adapter/notify-adapter.js";
 import {
   ProcessHelper,
   ResolveEnqueueDependencyJobChains,
@@ -36,14 +36,14 @@ export type RegisteredQueues = Map<
   }
 >;
 
-export const createExecutor = <TNotifier extends Notifier>({
+export const createExecutor = ({
   helper,
-  notifier,
+  notifyAdapter,
   log,
   registeredQueues,
 }: {
   helper: ProcessHelper;
-  notifier: TNotifier;
+  notifyAdapter: NotifyAdapter;
   log: Log;
   registeredQueues: RegisteredQueues;
 }): ((startOptions?: {
@@ -69,8 +69,8 @@ export const createExecutor = <TNotifier extends Notifier>({
         };
         stopController.signal.addEventListener("abort", onStop);
         await Promise.any([
-          notifier
-            .listen([...registeredQueues.keys()], {
+          notifyAdapter
+            .listenJobScheduled([...registeredQueues.keys()], {
               signal: notifyController.signal,
             })
             .catch(() => {}),

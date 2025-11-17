@@ -17,12 +17,9 @@ import {
   JobChain,
   mapDbJobToJobChain,
 } from "./entities/job_chain.js";
-import {
-  BaseChainDefinitions,
-  BaseQueueDefinitions,
-  Notifier,
-} from "./index.js";
+import { BaseChainDefinitions, BaseQueueDefinitions } from "./index.js";
 import { Log } from "./log.js";
+import { NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 import { executeTypedSql } from "./sql-executor.js";
 import {
   addJobDependenciesSql,
@@ -135,11 +132,11 @@ export const rescheduleJob = (afterMs: number, cause?: unknown): never => {
 
 export const processHelper = ({
   dbProvider,
-  notifier,
+  notifyAdapter,
   log,
 }: {
   dbProvider: QueuertDbProvider<BaseDbProviderContext>;
-  notifier: Notifier;
+  notifyAdapter: NotifyAdapter;
   log: Log;
 }) => {
   const enqueueDbJob = async ({
@@ -163,7 +160,7 @@ export const processHelper = ({
     } else {
       log({
         level: "warn",
-        message: `Not withNotifier context when enqueueing job for queue. The job processing may be delayed.`,
+        message: `Not withNotify context when enqueueing job for queue. The job processing may be delayed.`,
         args: [{ queueName }],
       });
     }
@@ -180,7 +177,7 @@ export const processHelper = ({
 
       await Promise.all(
         Array.from(notifyQueueStorage.getStore() ?? []).map((queueName) =>
-          notifier.notify(queueName)
+          notifyAdapter.notifyJobScheduled(queueName)
         )
       );
 
