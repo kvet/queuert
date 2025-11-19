@@ -6,19 +6,19 @@ import { Client, Pool, PoolClient } from "pg";
 import { beforeAll, type TestAPI } from "vitest";
 
 import { createHash } from "crypto";
-import { QueuertDbProvider } from "./db-provider/db-provider.js";
+import { migrateToLatest, prepareQueuertSchema } from "./index.js";
+import { StateProvider } from "./state-provider/state-provider.js";
 import {
   createPgPoolProvider,
   PgPoolProvider,
-} from "./db-provider/db-provider.pg-pool.js";
-import { migrateToLatest, prepareQueuertSchema } from "./index.js";
+} from "./state-provider/state-provider.pg-pool.js";
 
 const LABEL = "queuert-postgres-test";
 
 export const extendWithDb = <T>(
   api: TestAPI<T>,
   reuseId: string
-): TestAPI<T & { dbProvider: PgPoolProvider }> => {
+): TestAPI<T & { stateProvider: PgPoolProvider }> => {
   const normalizedReuseId = createHash("sha1").update(reuseId).digest("hex");
 
   let container: StartedPostgreSqlContainer;
@@ -39,7 +39,7 @@ export const extendWithDb = <T>(
     _db: Pool;
     _dbMigrateToLatest: void;
     _dbCleanup: void;
-    dbProvider: QueuertDbProvider<{ client: PoolClient }>;
+    stateProvider: StateProvider<{ client: PoolClient }>;
   }>({
     _db: [
       // eslint-disable-next-line no-empty-pattern
@@ -77,16 +77,16 @@ export const extendWithDb = <T>(
           });
         client.release();
 
-        const dbProvider = createPgPoolProvider({
+        const stateProvider = createPgPoolProvider({
           pool: _db,
         });
-        await dbProvider.provideContext(async ({ client }) => {
+        await stateProvider.provideContext(async ({ client }) => {
           await prepareQueuertSchema({
-            dbProvider,
+            stateProvider,
             client,
           });
           await migrateToLatest({
-            dbProvider,
+            stateProvider,
             client,
           });
         });
@@ -106,7 +106,7 @@ export const extendWithDb = <T>(
       },
       { scope: "test" },
     ],
-    dbProvider: [
+    stateProvider: [
       ({ _db, _dbMigrateToLatest, _dbCleanup }, use) => {
         void _dbMigrateToLatest;
         void _dbCleanup;

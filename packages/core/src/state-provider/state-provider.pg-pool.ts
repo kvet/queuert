@@ -1,11 +1,11 @@
 import { Pool, PoolClient } from "pg";
-import { QueuertDbProvider } from "./db-provider.js";
+import { StateProvider } from "./state-provider.js";
 
 export const createPgPoolProvider = ({
   pool,
 }: {
   pool: Pool;
-}): QueuertDbProvider<{ client: PoolClient }> => ({
+}): StateProvider<{ client: PoolClient }> => ({
   provideContext: async (fn) => {
     const client = await pool.connect();
     try {
@@ -34,4 +34,4 @@ export const createPgPoolProvider = ({
     }
   },
 });
-export type PgPoolProvider = QueuertDbProvider<{ client: PoolClient }>;
+export type PgPoolProvider = StateProvider<{ client: PoolClient }>;

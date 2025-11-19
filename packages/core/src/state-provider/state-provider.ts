@@ -1,6 +1,6 @@
-export type BaseDbProviderContext = Record<string, unknown>;
+export type BaseStateProviderContext = Record<string, unknown>;
 
-export type QueuertDbProvider<TContext extends BaseDbProviderContext> = {
+export type StateProvider<TContext extends BaseStateProviderContext> = {
   provideContext: <T>(fn: (context: TContext) => Promise<T>) => Promise<T>;
   executeSql: <T>(
     context: TContext,
@@ -14,5 +14,5 @@ export type QueuertDbProvider<TContext extends BaseDbProviderContext> = {
   ) => Promise<T>;
 };
 
-export type GetDbProviderContext<TDbProvider> =
-  TDbProvider extends QueuertDbProvider<infer TContext> ? TContext : never;
+export type GetStateProviderContext<TStateProvider> =
+  TStateProvider extends StateProvider<infer TContext> ? TContext : never;

@@ -1,4 +1,4 @@
-import { DbJob } from "../sql.js";
+import { StateJob } from "../state-adapter/state-adapter.js";
 
 export type Job<TQueueName, TInput> = {
   id: string; // TODO
@@ -29,28 +29,26 @@ export type RunningJob<TJob extends Job<any, any>> = TJob & {
   status: "running";
 };
 
-export const mapDbJobToJob = (dbJob: DbJob): Job<any, any> => {
+export const mapStateJobToJob = (stateJob: StateJob): Job<any, any> => {
   return {
-    id: dbJob.id,
-    queueName: dbJob.queue_name, // TODO
-    input: dbJob.input,
-    createdAt: new Date(dbJob.created_at),
-    scheduledAt: new Date(dbJob.scheduled_at),
-    updatedAt: new Date(dbJob.updated_at),
-    ...(dbJob.status === "completed"
+    id: stateJob.id,
+    queueName: stateJob.queueName,
+    input: stateJob.input,
+    createdAt: stateJob.createdAt,
+    scheduledAt: stateJob.scheduledAt,
+    updatedAt: stateJob.updatedAt,
+    ...(stateJob.status === "completed"
       ? {
           status: "completed",
-          completedAt: new Date(dbJob.completed_at!),
+          completedAt: stateJob.completedAt!,
         }
-      : dbJob.status === "running"
+      : stateJob.status === "running"
       ? {
           status: "running",
-          lockedBy: dbJob.locked_by ?? undefined,
-          lockedUntil: dbJob.locked_until
-            ? new Date(dbJob.locked_until)
-            : undefined,
+          lockedBy: stateJob.lockedBy ?? undefined,
+          lockedUntil: stateJob.lockedUntil ?? undefined,
         }
-      : dbJob.status === "waiting"
+      : stateJob.status === "waiting"
       ? {
           status: "waiting",
         }

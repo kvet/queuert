@@ -1,44 +1,26 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import {
-  BaseDbProviderContext,
-  GetDbProviderContext,
-  QueuertDbProvider,
-} from "./db-provider/db-provider.js";
+  FinishedJobChain,
+  JobChain,
+  mapStateJobChainToJobChain,
+} from "./entities/job-chain.js";
 import {
   EnqueuedJob,
   enqueuedJobSymbol,
   isEnqueuedJob,
   Job,
-  mapDbJobToJob,
+  mapStateJobToJob,
   RunningJob,
 } from "./entities/job.js";
-import {
-  FinishedJobChain,
-  JobChain,
-  mapDbJobToJobChain,
-} from "./entities/job_chain.js";
 import { BaseChainDefinitions, BaseQueueDefinitions } from "./index.js";
 import { Log } from "./log.js";
 import { NotifyAdapter } from "./notify-adapter/notify-adapter.js";
-import { executeTypedSql } from "./sql-executor.js";
+import { StateAdapter, StateJob } from "./state-adapter/state-adapter.js";
 import {
-  addJobDependenciesSql,
-  completeJobSql,
-  createJobSql,
-  DbJob,
-  getJobByIdSql,
-  getJobChainById,
-  getJobDependenciesSql,
-  getJobsToProcessSql,
-  getNextJobAvailableAt,
-  heartbeatJobSql,
-  linkJobSql,
-  markJobAsPendingSql,
-  markJobAsRunningSql,
-  markJobAsWaitingSql,
-  rescheduleJobSql,
-  scheduleDependentJobsSql,
-} from "./sql.js";
+  BaseStateProviderContext,
+  GetStateProviderContext,
+  StateProvider,
+} from "./state-provider/state-provider.js";
 
 const notifyQueueStorage = new AsyncLocalStorage<Set<string>>();
 
@@ -79,7 +61,7 @@ export type ResolvedQueueJobs<
 >];
 
 export type ResolveEnqueueDependencyJobChains<
-  TDbProvider extends QueuertDbProvider<BaseDbProviderContext>,
+  TStateProvider extends StateProvider<BaseStateProviderContext>,
   TChainDefinitions extends BaseChainDefinitions,
   TChainName extends keyof TChainDefinitions,
   TQueueDefinitions extends BaseQueueDefinitions,
@@ -105,7 +87,7 @@ export type ResolveEnqueueDependencyJobChains<
         TQueueDefinitions
       >[TQueueName]["input"]
     >;
-  } & GetDbProviderContext<TDbProvider>
+  } & GetStateProviderContext<TStateProvider>
 ) => Promise<TDependencies>;
 
 export class RescheduleJobError extends Error {
@@ -130,28 +112,30 @@ export const rescheduleJob = (afterMs: number, cause?: unknown): never => {
   });
 };
 
-export const processHelper = ({
-  dbProvider,
+export const queuertHelper = ({
+  stateProvider,
+  stateAdapter,
   notifyAdapter,
   log,
 }: {
-  dbProvider: QueuertDbProvider<BaseDbProviderContext>;
+  stateProvider: StateProvider<BaseStateProviderContext>;
+  stateAdapter: StateAdapter;
   notifyAdapter: NotifyAdapter;
   log: Log;
 }) => {
-  const enqueueDbJob = async ({
+  const enqueueStateJob = async ({
     queueName,
     input,
     context,
   }: {
     queueName: string;
     input: unknown;
-    context: BaseDbProviderContext;
-  }): Promise<DbJob> => {
-    let [job] = await executeTypedSql({
-      executeSql: (...args) => dbProvider.executeSql(context, ...args),
-      sql: createJobSql,
-      params: [queueName, input as any],
+    context: BaseStateProviderContext;
+  }): Promise<StateJob> => {
+    const job = await stateAdapter.createJob({
+      context,
+      queueName,
+      input,
     });
 
     const notifyQueueSet = notifyQueueStorage.getStore();
@@ -191,47 +175,48 @@ export const processHelper = ({
     ) => Promise<T>,
     runInTransaction: async <T>(
       cb: (
-        context: GetDbProviderContext<QueuertDbProvider<BaseDbProviderContext>>
+        context: GetStateProviderContext<
+          StateProvider<BaseStateProviderContext>
+        >
       ) => Promise<T>
     ): Promise<T> => {
-      return dbProvider.provideContext((context) =>
-        withNotifyQueueContext(() => dbProvider.runInTransaction(context, cb))
+      return stateProvider.provideContext((context) =>
+        withNotifyQueueContext(() =>
+          stateProvider.runInTransaction(context, cb)
+        )
       );
     },
-    scheduleDependentJobChainsSql: async ({
+    scheduleDependentJobChains: async ({
       job,
       enqueueDependencyJobChains,
       context,
     }: {
-      job: DbJob;
+      job: StateJob;
       enqueueDependencyJobChains?: ResolveEnqueueDependencyJobChains<
-        QueuertDbProvider<BaseDbProviderContext>,
+        StateProvider<BaseStateProviderContext>,
         BaseChainDefinitions,
         string,
         BaseQueueDefinitions,
         string,
         readonly JobChain<any, any, any>[]
       >;
-      context: BaseDbProviderContext;
-    }): Promise<DbJob> => {
+      context: BaseStateProviderContext;
+    }): Promise<StateJob> => {
       if (job.status !== "created") {
         return job;
       }
 
       const dependencyJobChains = enqueueDependencyJobChains
         ? await enqueueDependencyJobChains({
-            job: mapDbJobToJob(job),
+            job: mapStateJobToJob(job),
             ...context,
           })
         : [];
       if (dependencyJobChains.length) {
-        await executeTypedSql({
-          executeSql: (...args) => dbProvider.executeSql(context, ...args),
-          sql: addJobDependenciesSql,
-          params: [
-            Array.from({ length: dependencyJobChains.length }, () => job.id),
-            dependencyJobChains.map((d) => d.id),
-          ],
+        await stateAdapter.addJobDependencies({
+          context,
+          jobId: job.id,
+          dependsOnChainIds: dependencyJobChains.map((d) => d.id),
         });
         log({
           level: "info",
@@ -239,7 +224,7 @@ export const processHelper = ({
           args: [
             {
               jobId: job.id,
-              queueName: job.queue_name,
+              queueName: job.queueName,
               status: job.status,
               ...(dependencyJobChains.length > 0
                 ? {
@@ -254,10 +239,10 @@ export const processHelper = ({
         (d) => d.status !== "finished"
       );
       if (incompleteDependencies.length) {
-        [job] = await executeTypedSql({
-          executeSql: (...args) => dbProvider.executeSql(context, ...args),
-          sql: markJobAsWaitingSql,
-          params: [job.id],
+        job = await stateAdapter.markJob({
+          context,
+          jobId: job.id,
+          status: "waiting",
         });
         log({
           level: "info",
@@ -265,17 +250,17 @@ export const processHelper = ({
           args: [
             {
               jobId: job.id,
-              queueName: job.queue_name,
+              queueName: job.queueName,
               status: job.status,
               incompleteDependencyIds: incompleteDependencies.map((d) => d.id),
             },
           ],
         });
       } else {
-        [job] = await executeTypedSql({
-          executeSql: (...args) => dbProvider.executeSql(context, ...args),
-          sql: markJobAsPendingSql,
-          params: [job.id],
+        job = await stateAdapter.markJob({
+          context,
+          jobId: job.id,
+          status: "pending",
         });
       }
       return job;
@@ -284,35 +269,34 @@ export const processHelper = ({
       job,
       context,
     }: {
-      job: DbJob;
-      context: BaseDbProviderContext;
+      job: StateJob;
+      context: BaseStateProviderContext;
     }): Promise<{
       job: RunningJob<Job<any, any>>;
       dependencies: FinishedJobChain<JobChain<any, any, any>>[];
     }> => {
-      const [runningJob] = await executeTypedSql({
-        executeSql: (...args) => dbProvider.executeSql(context, ...args),
-        sql: markJobAsRunningSql,
-        params: [job.id],
+      const runningJob = await stateAdapter.markJob({
+        context,
+        jobId: job.id,
+        status: "running",
       });
 
-      const dependencies = await executeTypedSql({
-        executeSql: (...args) => dbProvider.executeSql(context, ...args),
-        sql: getJobDependenciesSql,
-        params: [job.id],
+      const dependencies = await stateAdapter.getJobDependencies({
+        context,
+        jobId: job.id,
       });
 
-      if (dependencies.some((dep) => dep.status !== "completed")) {
+      if (dependencies.some((dep) => dep[1]?.status !== "completed")) {
         log({
           level: "error",
           message: `Job ${job.id} has unfinished or failed dependencies`,
           args: [
             {
               jobId: job.id,
-              dependencyIds: dependencies.map((dep) => dep.id),
+              dependencyIds: dependencies.map((dep) => dep[0]?.id),
               incompleteDependencyIds: dependencies
-                .filter((dep) => dep.status !== "completed")
-                .map((dep) => dep.id),
+                .filter((dep) => dep[1]?.status !== "completed")
+                .map((dep) => dep[0]?.id),
             },
           ],
         });
@@ -320,10 +304,10 @@ export const processHelper = ({
       }
 
       return {
-        job: mapDbJobToJob(runningJob) as RunningJob<Job<any, any>>,
-        dependencies: dependencies.map(mapDbJobToJobChain) as FinishedJobChain<
-          JobChain<any, any, any>
-        >[],
+        job: mapStateJobToJob(runningJob) as RunningJob<Job<any, any>>,
+        dependencies: dependencies.map(
+          mapStateJobChainToJobChain
+        ) as FinishedJobChain<JobChain<any, any, any>>[],
       };
     },
     enqueueJobChain: async <TChainName extends string, TInput, TOutput>({
@@ -336,9 +320,9 @@ export const processHelper = ({
       context: any;
     }): Promise<JobChain<TChainName, TInput, TOutput>> => {
       // TODO: test
-      await dbProvider.assertInTransaction(context);
+      await stateProvider.assertInTransaction(context);
 
-      let job = await enqueueDbJob({
+      const job = await enqueueStateJob({
         queueName: chainName,
         input,
         context,
@@ -350,7 +334,7 @@ export const processHelper = ({
         args: [{ jobId: job.id, chainName, input }],
       });
 
-      return mapDbJobToJobChain(job);
+      return mapStateJobChainToJobChain([job, undefined]);
     },
     getJobChain: async <TChainName extends string, TInput, TOutput>({
       id,
@@ -359,13 +343,12 @@ export const processHelper = ({
       id: string;
       context: any;
     }): Promise<JobChain<TChainName, TInput, TOutput> | null> => {
-      const [job] = await executeTypedSql({
-        executeSql: (...args) => dbProvider.executeSql(context, ...args),
-        sql: getJobChainById,
-        params: [id],
+      const jobChain = await stateAdapter.getJobChainById({
+        context,
+        jobId: id,
       });
 
-      return job ? mapDbJobToJobChain(job) : null;
+      return jobChain ? mapStateJobChainToJobChain(jobChain) : null;
     },
     // TODO: ensure only one job is enqueued per call and it should be returned
     enqueueJob: async <TQueueName extends string, TInput>({
@@ -377,7 +360,7 @@ export const processHelper = ({
       input: TInput;
       context: any;
     }): Promise<EnqueuedJob<TQueueName, TInput>> => {
-      let job = await enqueueDbJob({
+      let job = await enqueueStateJob({
         queueName,
         input,
         context,
@@ -390,7 +373,7 @@ export const processHelper = ({
       });
 
       return {
-        ...mapDbJobToJob(job),
+        ...mapStateJobToJob(job),
         [enqueuedJobSymbol]: true,
       };
     },
@@ -400,9 +383,9 @@ export const processHelper = ({
       context,
       pollIntervalMs,
     }: {
-      job: DbJob;
+      job: StateJob;
       error: unknown;
-      context: BaseDbProviderContext;
+      context: BaseStateProviderContext;
       pollIntervalMs: number;
     }): Promise<void> => {
       let afterMs: number;
@@ -425,10 +408,12 @@ export const processHelper = ({
         afterMs = retryAfterMs;
         cause = error;
       }
-      await executeTypedSql({
-        executeSql: (...args) => dbProvider.executeSql(context, ...args),
-        sql: rescheduleJobSql,
-        params: [job.id, afterMs, String(cause)],
+
+      await stateAdapter.rescheduleJob({
+        context,
+        jobId: job.id,
+        afterMs,
+        error: String(cause),
       });
     },
     finishJob: async ({
@@ -436,29 +421,28 @@ export const processHelper = ({
       output,
       context,
     }: {
-      job: DbJob;
+      job: StateJob;
       output: unknown;
-      context: BaseDbProviderContext;
+      context: BaseStateProviderContext;
     }): Promise<void> => {
       const hasChainedJob = isEnqueuedJob(output);
 
-      [job] = await executeTypedSql({
-        executeSql: (...args) => dbProvider.executeSql(context, ...args),
-        sql: completeJobSql,
-        params: [job.id, hasChainedJob ? null : (output as any)],
+      job = await stateAdapter.completeJob({
+        context,
+        jobId: job.id,
+        output: hasChainedJob ? null : output,
       });
 
       if (hasChainedJob) {
-        await executeTypedSql({
-          executeSql: (...args) => dbProvider.executeSql(context, ...args),
-          sql: linkJobSql,
-          params: [output.id, job.chain_id],
+        await stateAdapter.linkJob({
+          context,
+          jobId: output.id,
+          chainId: job.chainId,
         });
       } else {
-        const scheduledJobIds = await executeTypedSql({
-          executeSql: (...args) => dbProvider.executeSql(context, ...args),
-          sql: scheduleDependentJobsSql,
-          params: [job.chain_id],
+        const scheduledJobIds = await stateAdapter.scheduleDependentJobs({
+          context,
+          dependsOnChainId: job.chainId!,
         });
 
         if (scheduledJobIds.length > 0) {
@@ -468,7 +452,7 @@ export const processHelper = ({
             args: [
               {
                 jobId: job.id,
-                queueName: job.queue_name,
+                queueName: job.queueName,
                 status: job.status,
                 scheduledJobIds,
               },
@@ -482,7 +466,7 @@ export const processHelper = ({
         args: [
           {
             jobId: job.id,
-            queueName: job.queue_name,
+            queueName: job.queueName,
             status: job.status,
           },
         ],
@@ -495,79 +479,67 @@ export const processHelper = ({
       allowEmptyWorker,
       workerId,
     }: {
-      context: BaseDbProviderContext;
-      job: DbJob;
+      context: BaseStateProviderContext;
+      job: StateJob;
       leaseMs: number;
       allowEmptyWorker: boolean;
       workerId: string;
-    }): Promise<DbJob> => {
-      const [fetchecJob] = await executeTypedSql({
-        executeSql: (...args) => dbProvider.executeSql(context, ...args),
-        sql: getJobByIdSql,
-        params: [job.id],
+    }): Promise<StateJob> => {
+      const fetchedJob = await stateAdapter.getJobById({
+        context,
+        jobId: job.id,
       });
 
-      if (!fetchecJob) {
+      if (!fetchedJob) {
         throw new Error(`Job with id ${job.id} not found for heartbeat`);
       }
 
       if (
-        fetchecJob.locked_by !== workerId &&
-        !(allowEmptyWorker ? fetchecJob.locked_by === null : false)
+        fetchedJob.lockedBy !== workerId &&
+        !(allowEmptyWorker ? fetchedJob.lockedBy === null : false)
       ) {
         throw new Error(
           `Job with id ${job.id} is not locked by this worker for heartbeat`
         );
       }
 
-      return (
-        await executeTypedSql({
-          executeSql: (...args) => dbProvider.executeSql(context, ...args),
-          sql: heartbeatJobSql,
-          params: [job.id, workerId, leaseMs],
-        })
-      )[0];
+      return stateAdapter.sendHeartbeat({
+        context,
+        jobId: job.id,
+        workerId,
+        lockDurationMs: leaseMs,
+      });
     },
-    getNextJobAvailableAt: async ({
+    getNextJobAvailableInMs: async ({
       queueNames,
       pollIntervalMs,
     }: {
       queueNames: string[];
       pollIntervalMs: number;
     }): Promise<number> => {
-      const [nextJobAvailableAt] = await dbProvider.provideContext((context) =>
-        executeTypedSql({
-          executeSql: (...args) => dbProvider.executeSql(context, ...args),
-          sql: getNextJobAvailableAt,
-          params: [queueNames],
-        })
+      const nextJobAvailableInMs = await stateProvider.provideContext(
+        (context) =>
+          stateAdapter.getNextJobAvailableInMs({
+            context,
+            queueNames,
+          })
       );
 
-      return nextJobAvailableAt
-        ? Math.min(
-            Math.max(
-              0,
-              nextJobAvailableAt.scheduled_at.getTime() -
-                nextJobAvailableAt.current_time.getTime()
-            ),
-            pollIntervalMs
-          )
+      return nextJobAvailableInMs
+        ? Math.min(Math.max(0, nextJobAvailableInMs), pollIntervalMs)
         : pollIntervalMs;
     },
-    getJobToProcess: async ({
+    acquireJob: async ({
       queueNames,
       context,
     }: {
       queueNames: string[];
-      context: BaseDbProviderContext;
-    }): Promise<DbJob | undefined> => {
-      const [job] = await executeTypedSql({
-        executeSql: (...args) => dbProvider.executeSql(context, ...args),
-        sql: getJobsToProcessSql,
-        params: [queueNames],
-      });
-      return job;
-    },
+      context: BaseStateProviderContext;
+    }): Promise<StateJob | undefined> =>
+      stateAdapter.acquireJob({
+        context,
+        queueNames,
+      }),
   };
 };
-export type ProcessHelper = ReturnType<typeof processHelper>;
+export type ProcessHelper = ReturnType<typeof queuertHelper>;

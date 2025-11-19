@@ -1,20 +1,21 @@
-import {
-  BaseDbProviderContext,
-  GetDbProviderContext,
-  QueuertDbProvider,
-} from "./db-provider/db-provider.js";
 import { BaseChainDefinitions } from "./entities/chain.js";
-import { JobChain } from "./entities/job_chain.js";
+import { JobChain } from "./entities/job-chain.js";
 import { BaseQueueDefinitions } from "./entities/queue.js";
 import { Log } from "./log.js";
 import { NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 import {
-  processHelper,
+  queuertHelper,
   ResolveEnqueueDependencyJobChains,
   ResolveQueueDefinitions,
-} from "./process-helper.js";
-import { executeTypedSql } from "./sql-executor.js";
-import { migrateSql, setupSql } from "./sql.js";
+} from "./queuert-helper.js";
+import { StateAdapter } from "./state-adapter/state-adapter.js";
+import { migrateSql, setupSql } from "./state-adapter/state-adapter.pg/sql.js";
+import { executeTypedSql } from "./state-adapter/state-adapter.pg/typed-sql.js";
+import {
+  BaseStateProviderContext,
+  GetStateProviderContext,
+  StateProvider,
+} from "./state-provider/state-provider.js";
 import {
   createExecutor,
   Executor,
@@ -22,19 +23,19 @@ import {
 } from "./worker/executor.js";
 import { JobHandler } from "./worker/job-handler.js";
 
-export { type QueuertDbProvider } from "./db-provider/db-provider.js";
 export {
   defineUnionChains,
   type BaseChainDefinitions,
 } from "./entities/chain.js";
-export { type FinishedJobChain, type JobChain } from "./entities/job_chain.js";
+export { type FinishedJobChain, type JobChain } from "./entities/job-chain.js";
 export {
   defineUnionQueues,
   type BaseQueueDefinitions,
 } from "./entities/queue.js";
 export { type Log } from "./log.js";
 export { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
-export { rescheduleJob } from "./process-helper.js";
+export { rescheduleJob } from "./queuert-helper.js";
+export { type StateProvider as QueuerTStateProvider } from "./state-provider/state-provider.js";
 
 // DOCS:
 // Queue → QueueJob → enqueueJob() → getJob()
@@ -53,7 +54,7 @@ export { rescheduleJob } from "./process-helper.js";
 // TODO: singletons/concurrency limit
 
 type QueuertChainDefinition<
-  TDbProvider extends QueuertDbProvider<BaseDbProviderContext>,
+  TStateProvider extends StateProvider<BaseStateProviderContext>,
   TChainDefinitions extends BaseChainDefinitions,
   TChainName extends keyof TChainDefinitions & string,
   TQueueDefinitions extends BaseQueueDefinitions = {}
@@ -75,7 +76,7 @@ type QueuertChainDefinition<
   >(options: {
     name: TQueueName;
     enqueueDependencyJobChains?: ResolveEnqueueDependencyJobChains<
-      TDbProvider,
+      TStateProvider,
       TChainDefinitions,
       TChainName,
       TQueueDefinitions,
@@ -83,7 +84,7 @@ type QueuertChainDefinition<
       TDependencies
     >;
     handler: JobHandler<
-      TDbProvider,
+      TStateProvider,
       TChainDefinitions,
       TChainName,
       TQueueDefinitions,
@@ -91,7 +92,7 @@ type QueuertChainDefinition<
       TDependencies
     >;
   }) => QueuertChainDefinition<
-    TDbProvider,
+    TStateProvider,
     TChainDefinitions,
     TChainName,
     TQueueDefinitions
@@ -99,7 +100,7 @@ type QueuertChainDefinition<
 };
 
 type QueuertWorkerDefinition<
-  TDbProvider extends QueuertDbProvider<BaseDbProviderContext>,
+  TStateProvider extends StateProvider<BaseStateProviderContext>,
   TChainDefinitions extends BaseChainDefinitions
 > = {
   createChain: <
@@ -112,31 +113,34 @@ type QueuertWorkerDefinition<
     },
     createChainCallback: (
       chainDefinition: QueuertChainDefinition<
-        TDbProvider,
+        TStateProvider,
         TChainDefinitions,
         TChainName,
         TQueueDefinitions
       >
     ) => QueuertChainDefinition<
-      TDbProvider,
+      TStateProvider,
       TChainDefinitions,
       TChainName,
       TQueueDefinitions
     >
-  ) => QueuertWorkerDefinition<TDbProvider, TChainDefinitions>;
+  ) => QueuertWorkerDefinition<TStateProvider, TChainDefinitions>;
   start: Executor;
 };
 
 export type Queuert<
-  TDbProvider extends QueuertDbProvider<any>,
+  TStateProvider extends StateProvider<any>,
   TChainDefinitions extends BaseChainDefinitions
 > = {
-  createWorker: () => QueuertWorkerDefinition<TDbProvider, TChainDefinitions>;
+  createWorker: () => QueuertWorkerDefinition<
+    TStateProvider,
+    TChainDefinitions
+  >;
   enqueueJobChain: <TChainName extends keyof TChainDefinitions & string>(
     options: {
       chainName: TChainName;
       input: TChainDefinitions[TChainName]["input"];
-    } & GetDbProviderContext<TDbProvider>
+    } & GetStateProviderContext<TStateProvider>
   ) => Promise<
     JobChain<
       TChainName,
@@ -148,7 +152,7 @@ export type Queuert<
     options: {
       name: TChainName;
       id: string;
-    } & GetDbProviderContext<TDbProvider>
+    } & GetStateProviderContext<TStateProvider>
   ) => Promise<JobChain<
     TChainName,
     TChainDefinitions[TChainName]["input"],
@@ -161,48 +165,51 @@ export type Queuert<
 };
 
 export const prepareQueuertSchema = async <
-  TDbProvider extends QueuertDbProvider<any>
+  TStateProvider extends StateProvider<any>
 >({
-  dbProvider,
+  stateProvider,
   ...context
 }: {
-  dbProvider: TDbProvider;
-} & GetDbProviderContext<TDbProvider>): Promise<void> => {
+  stateProvider: TStateProvider;
+} & GetStateProviderContext<TStateProvider>): Promise<void> => {
   await executeTypedSql({
-    executeSql: (...args) => dbProvider.executeSql(context, ...args),
+    executeSql: (...args) => stateProvider.executeSql(context, ...args),
     sql: setupSql,
   });
 };
 
 export const migrateToLatest = async <
-  TDbProvider extends QueuertDbProvider<any>
+  TStateProvider extends StateProvider<any>
 >({
-  dbProvider,
+  stateProvider,
   ...context
 }: {
-  dbProvider: TDbProvider;
-} & GetDbProviderContext<TDbProvider>): Promise<void> => {
+  stateProvider: TStateProvider;
+} & GetStateProviderContext<TStateProvider>): Promise<void> => {
   await executeTypedSql({
-    executeSql: (...args) => dbProvider.executeSql(context, ...args),
+    executeSql: (...args) => stateProvider.executeSql(context, ...args),
     sql: migrateSql,
   });
 };
 
 export const createQueuert = async <
-  TDbProvider extends QueuertDbProvider<any>,
+  TStateProvider extends StateProvider<any>,
   TChainDefinitions extends BaseChainDefinitions
 >({
-  dbProvider,
+  stateProvider,
+  stateAdapter,
   notifyAdapter,
   log,
 }: {
-  dbProvider: TDbProvider;
+  stateProvider: TStateProvider;
+  stateAdapter: StateAdapter;
   notifyAdapter: NotifyAdapter;
   chainDefinitions: TChainDefinitions;
   log: Log;
-}): Promise<Queuert<TDbProvider, TChainDefinitions>> => {
-  const helper = processHelper({
-    dbProvider,
+}): Promise<Queuert<TStateProvider, TChainDefinitions>> => {
+  const helper = queuertHelper({
+    stateProvider,
+    stateAdapter,
     notifyAdapter,
     log,
   });

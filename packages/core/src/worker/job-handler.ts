@@ -1,20 +1,20 @@
 import { randomUUID } from "crypto";
-import {
-  BaseDbProviderContext,
-  GetDbProviderContext,
-  QueuertDbProvider,
-} from "../db-provider/db-provider.js";
 import { BaseChainDefinitions } from "../entities/chain.js";
+import { FinishedJobChain, JobChain } from "../entities/job-chain.js";
 import { EnqueuedJob, Job, RunningJob } from "../entities/job.js";
-import { FinishedJobChain, JobChain } from "../entities/job_chain.js";
 import { BaseQueueDefinitions } from "../entities/queue.js";
 import { Branded } from "../helpers/typescript.js";
 import {
   ProcessHelper,
   ResolvedQueueJobs,
   ResolveQueueDefinitions,
-} from "../process-helper.js";
-import { DbJob } from "../sql.js";
+} from "../queuert-helper.js";
+import { StateJob } from "../state-adapter/state-adapter.js";
+import {
+  BaseStateProviderContext,
+  GetStateProviderContext,
+  StateProvider,
+} from "../state-provider/state-provider.js";
 
 const createSignal = <T = void>() => {
   const { promise, resolve } = Promise.withResolvers<T>();
@@ -32,7 +32,7 @@ const createSignal = <T = void>() => {
 };
 
 export type JobHandler<
-  TDbProvider extends QueuertDbProvider<BaseDbProviderContext>,
+  TStateProvider extends StateProvider<BaseStateProviderContext>,
   TChainDefinitions extends BaseChainDefinitions,
   TChainName extends keyof TChainDefinitions,
   TQueueDefinitions extends BaseQueueDefinitions,
@@ -59,7 +59,7 @@ export type JobHandler<
         dependencies: {
           [K in keyof TDependencies]: FinishedJobChain<TDependencies[K]>;
         };
-      } & GetDbProviderContext<TDbProvider>
+      } & GetStateProviderContext<TStateProvider>
     ) => Promise<T>
   ) => Promise<T>;
   heartbeat: (options: { leaseMs: number }) => Promise<void>;
@@ -84,7 +84,7 @@ export type JobHandler<
               TChainName,
               TQueueDefinitions
             >[TEnqueueQueueName]["input"];
-          } & GetDbProviderContext<TDbProvider>
+          } & GetStateProviderContext<TStateProvider>
         ) => Promise<
           EnqueuedJob<
             TEnqueueQueueName,
@@ -95,7 +95,7 @@ export type JobHandler<
             >[TEnqueueQueueName]["input"]
           >
         >;
-      } & GetDbProviderContext<TDbProvider>
+      } & GetStateProviderContext<TStateProvider>
     ) => Promise<
       | TChainDefinitions[TChainName]["output"]
       | ResolvedQueueJobs<TChainDefinitions, TChainName, TQueueDefinitions>
@@ -124,15 +124,15 @@ export const processJobHandler = async ({
 }: {
   helper: ProcessHelper;
   handler: JobHandler<
-    QueuertDbProvider<BaseDbProviderContext>,
+    StateProvider<BaseStateProviderContext>,
     BaseChainDefinitions,
     string,
     BaseQueueDefinitions,
     string,
     readonly JobChain<string, unknown, unknown>[]
   >;
-  context: GetDbProviderContext<QueuertDbProvider<BaseDbProviderContext>>;
-  job: DbJob;
+  context: GetStateProviderContext<StateProvider<BaseStateProviderContext>>;
+  job: StateJob;
   pollIntervalMs: number;
 }): Promise<{ execute: Promise<void> }> => {
   const workerId = randomUUID(); // TODO?
@@ -141,7 +141,7 @@ export const processJobHandler = async ({
 
   const runInTransaction = async <T>(
     cb: (
-      context: GetDbProviderContext<QueuertDbProvider<BaseDbProviderContext>>
+      context: GetStateProviderContext<StateProvider<BaseStateProviderContext>>
     ) => Promise<T>
   ): Promise<T> => {
     if (!firstHeartbeat.signalled) {
@@ -165,7 +165,7 @@ export const processJobHandler = async ({
     firstHeartbeat.signalOnce();
   };
 
-  const startProcessing = async (job: DbJob) => {
+  const startProcessing = async (job: StateJob) => {
     try {
       await handler({
         claim: async (claimCallback) => {

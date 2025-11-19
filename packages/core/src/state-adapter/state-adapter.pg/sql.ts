@@ -1,4 +1,4 @@
-import { NamedParameter, TypedSql } from "./sql-executor.js";
+import { NamedParameter, TypedSql } from "./typed-sql.js";
 
 // TODO: pgstattuple with partitioning
 export const setupSql = /* sql */ `
@@ -53,16 +53,15 @@ CREATE TABLE IF NOT EXISTS queuert.job_dependency (
 );
 ` as TypedSql<[], void>;
 
-export type DbJobId = string;
 export type DbJob = {
-  id: DbJobId;
+  id: string;
   queue_name: string;
   input: unknown;
   output: unknown;
 
-  root_id: DbJobId;
-  chain_id: DbJobId;
-  parent_id: DbJobId;
+  root_id: string;
+  chain_id: string;
+  parent_id: string | null;
 
   status: "created" | "waiting" | "pending" | "running" | "completed";
   created_at: string;
@@ -106,26 +105,15 @@ FROM unnest($1::uuid[], $2::uuid[]) WITH ORDINALITY AS t(job_id, depends_on_chai
   DbJob[]
 >;
 
-export const markJobAsWaitingSql = /* sql */ `
+export const markJobSql = /* sql */ `
 UPDATE queuert.job
-SET status = 'waiting'
+SET status = $2
 WHERE id = $1
 RETURNING *
-` as TypedSql<readonly [NamedParameter<"id", string>], [DbJob]>;
-
-export const markJobAsPendingSql = /* sql */ `
-UPDATE queuert.job
-SET status = 'pending'
-WHERE id = $1
-RETURNING *
-` as TypedSql<readonly [NamedParameter<"id", string>], [DbJob]>;
-
-export const markJobAsRunningSql = /* sql */ `
-UPDATE queuert.job
-SET status = 'running'
-WHERE id = $1
-RETURNING *
-` as TypedSql<readonly [NamedParameter<"id", string>], [DbJob]>;
+` as TypedSql<
+  readonly [NamedParameter<"id", string>, NamedParameter<"status", string>],
+  [DbJob]
+>;
 
 export const completeJobSql = /* sql */ `
 UPDATE queuert.job
@@ -185,49 +173,53 @@ WHERE j.id IN (SELECT job_id FROM ready_jobs)
 RETURNING j.id;
 ` as TypedSql<
   readonly [NamedParameter<"depends_on_chain_id", string>],
-  DbJobId[]
+  string[]
 >;
 
-export const getJobChainById = /* sql */ `
-SELECT j.*,
-       COALESCE(l.status,      j.status)      AS status,
-       COALESCE(l.output,      j.output)      AS output,
-       COALESCE(l.completed_at, j.completed_at) AS completed_at
+export const getJobChainByIdSql = /* sql */ `
+SELECT
+  row_to_json(j)  AS root_job,
+  row_to_json(lc) AS last_chain_job
 FROM queuert.job AS j
 LEFT JOIN LATERAL (
-  SELECT status, output, completed_at
+  SELECT *
   FROM queuert.job
   WHERE chain_id = j.id
   ORDER BY created_at DESC
   LIMIT 1
-) AS l ON TRUE
+) AS lc ON TRUE
 WHERE j.id = $1
-` as TypedSql<readonly [NamedParameter<"id", string>], [DbJob]>;
+` as TypedSql<
+  readonly [NamedParameter<"id", string>],
+  [{ root_job: DbJob; last_chain_job: DbJob | null } | undefined]
+>;
 
 export const getJobDependenciesSql = /* sql */ `
-SELECT j.*,
-       COALESCE(l.status,      j.status)      AS status,
-       COALESCE(l.output,      j.output)      AS output,
-       COALESCE(l.completed_at, j.completed_at) AS completed_at
+SELECT
+  row_to_json(j)   AS root_job,
+  row_to_json(lc)  AS last_chain_job
 FROM queuert.job_dependency AS d
 JOIN queuert.job AS j
   ON j.id = d.depends_on_chain_id
 LEFT JOIN LATERAL (
-  SELECT status, output, completed_at
+  SELECT *
   FROM queuert.job
   WHERE chain_id = j.id
   ORDER BY created_at DESC
   LIMIT 1
-) AS l ON TRUE
+) AS lc ON TRUE
 WHERE d.job_id = $1
 ORDER BY d.index ASC
-` as TypedSql<readonly [NamedParameter<"id", string>], DbJob[]>;
+` as TypedSql<
+  readonly [NamedParameter<"id", string>],
+  { root_job: DbJob; last_chain_job: DbJob | null }[]
+>;
 
 export const getJobByIdSql = /* sql */ `
 SELECT *
 FROM queuert.job
 WHERE id = $1
-` as TypedSql<readonly [NamedParameter<"id", string>], [DbJob]>;
+` as TypedSql<readonly [NamedParameter<"id", string>], [DbJob | undefined]>;
 
 export const rescheduleJobSql = /* sql */ `
 UPDATE queuert.job
@@ -249,7 +241,7 @@ RETURNING *
   [DbJob]
 >;
 
-export const heartbeatJobSql = /* sql */ `
+export const sendHeartbeatJobSql = /* sql */ `
 UPDATE queuert.job
 SET locked_by = $2,
   locked_until = now() + ($3::text || ' milliseconds')::interval,
@@ -265,7 +257,7 @@ RETURNING *
   [DbJob]
 >;
 
-export const getJobsToProcessSql = /* sql */ `
+export const acquireJobSql = /* sql */ `
 SELECT job.*
 FROM queuert.job as job
 WHERE job.queue_name IN (SELECT unnest($1::text[]))
@@ -279,8 +271,8 @@ FOR UPDATE SKIP LOCKED
   [DbJob | undefined]
 >;
 
-export const getNextJobAvailableAt = /* sql */ `
-SELECT job.scheduled_at, now() AS current_time
+export const getNextJobAvailableInMsSql = /* sql */ `
+SELECT GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (job.scheduled_at - now())) * 1000)::bigint) AS available_in_ms
 FROM queuert.job as job
 WHERE job.queue_name IN (SELECT unnest($1::text[]))
   AND job.status IN ('created', 'pending')
@@ -289,5 +281,5 @@ LIMIT 1
 FOR UPDATE SKIP LOCKED
 ` as TypedSql<
   readonly [NamedParameter<"queue_names", string[]>],
-  [{ scheduled_at: Date; current_time: Date } | undefined]
+  [{ available_in_ms: number } | undefined]
 >;

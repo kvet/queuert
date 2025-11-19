@@ -10,8 +10,9 @@ Imagine you have some long-running process. For example, performing image proces
 
 ```ts
 const queuert = createQueuert({
-  dbProvider: ...,
-  notifyProvider: ...,
+  stateProvider: ...,
+  stateAdapter: ...,
+  notifyAdapter: ...,
   chainDefinitions: defineUnionChains<{
     'process-and-distribute-image': {
       input: { imageId: string };

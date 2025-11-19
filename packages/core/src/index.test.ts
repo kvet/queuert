@@ -1,6 +1,5 @@
 import { PoolClient } from "pg";
 import { test as baseTest, describe, expectTypeOf, vi } from "vitest";
-import { PgPoolProvider } from "./db-provider/db-provider.pg-pool.js";
 import { extendWithDb } from "./db.spec-helper.js";
 import { sleep } from "./helpers/timers.js";
 import {
@@ -15,8 +14,12 @@ import {
   rescheduleJob,
 } from "./index.js";
 import { createInProcessNotifyAdapter } from "./notify-adapter/notify-adapter.in-process.js";
+import { StateAdapter } from "./state-adapter/state-adapter.js";
+import { createPgStateAdapter } from "./state-adapter/state-adapter.pg.js";
+import { PgPoolProvider } from "./state-provider/state-provider.pg-pool.js";
 
 const test = extendWithDb(baseTest, import.meta.url).extend<{
+  stateAdapter: StateAdapter;
   notifyAdapter: NotifyAdapter;
   runInTransaction: <T>(
     queuert: Queuert<PgPoolProvider, any>,
@@ -31,6 +34,17 @@ const test = extendWithDb(baseTest, import.meta.url).extend<{
     chains: TChains
   ) => Promise<{ [K in keyof TChains]: FinishedJobChain<TChains[K]> }>;
 }>({
+  stateAdapter: [
+    // oxlint-disable-next-line no-empty-pattern
+    async ({ stateProvider }, use) => {
+      await use(
+        createPgStateAdapter({
+          stateProvider,
+        })
+      );
+    },
+    { scope: "test" },
+  ],
   notifyAdapter: [
     // oxlint-disable-next-line no-empty-pattern
     async ({}, use) => {
@@ -40,10 +54,10 @@ const test = extendWithDb(baseTest, import.meta.url).extend<{
   ],
   runInTransaction: [
     // oxlint-disable-next-line no-empty-pattern
-    async ({ dbProvider }, use) => {
+    async ({ stateProvider }, use) => {
       await use(async (queuert, cb) => {
-        return dbProvider.provideContext((context) =>
-          queuert.withNotify(() => dbProvider.runInTransaction(context, cb))
+        return stateProvider.provideContext((context) =>
+          queuert.withNotify(() => stateProvider.runInTransaction(context, cb))
         );
       });
     },
@@ -66,20 +80,21 @@ const test = extendWithDb(baseTest, import.meta.url).extend<{
     { scope: "test" },
   ],
   waitForJobChainsFinished: [
-    async ({ dbProvider, expect }, use) => {
+    async ({ stateProvider, expect }, use) => {
       await use((queuert, chains) =>
         vi.waitFor(
           async () => {
-            const latestChains = await dbProvider.provideContext(({ client }) =>
-              Promise.all(
-                chains.map(async (chain) =>
-                  queuert.getJobChain({
-                    client,
-                    id: chain.id,
-                    name: chain.chainName,
-                  })
+            const latestChains = await stateProvider.provideContext(
+              ({ client }) =>
+                Promise.all(
+                  chains.map(async (chain) =>
+                    queuert.getJobChain({
+                      client,
+                      id: chain.id,
+                      name: chain.chainName,
+                    })
+                  )
                 )
-              )
             );
 
             if (latestChains.some((chain) => !chain)) {
@@ -111,7 +126,8 @@ const log = vi.fn<Log>(async ({ level, message, args }) => {
 
 describe("Handler", () => {
   test("executes long-running jobs", async ({
-    dbProvider,
+    stateProvider,
+    stateAdapter,
     notifyAdapter,
     runInTransaction,
     withWorkers,
@@ -119,7 +135,8 @@ describe("Handler", () => {
     expect,
   }) => {
     const queuert = await createQueuert({
-      dbProvider,
+      stateProvider,
+      stateAdapter,
       notifyAdapter,
       log,
       chainDefinitions: defineUnionChains<{
@@ -188,7 +205,8 @@ describe("Handler", () => {
   });
 
   test("executes long-running jobs with automatic heartbeat", async ({
-    dbProvider,
+    stateProvider,
+    stateAdapter,
     notifyAdapter,
     runInTransaction,
     withWorkers,
@@ -196,7 +214,8 @@ describe("Handler", () => {
     expect,
   }) => {
     const queuert = await createQueuert({
-      dbProvider,
+      stateProvider,
+      stateAdapter,
       notifyAdapter,
       log,
       chainDefinitions: defineUnionChains<{
@@ -248,7 +267,8 @@ describe("Handler", () => {
   });
 
   test("executes long-running jobs with manual heartbeat", async ({
-    dbProvider,
+    stateProvider,
+    stateAdapter,
     notifyAdapter,
     runInTransaction,
     withWorkers,
@@ -256,7 +276,8 @@ describe("Handler", () => {
     expect,
   }) => {
     const queuert = await createQueuert({
-      dbProvider,
+      stateProvider,
+      stateAdapter,
       notifyAdapter,
       log,
       chainDefinitions: defineUnionChains<{
@@ -301,7 +322,8 @@ describe("Handler", () => {
   });
 
   test("executes a job only once", async ({
-    dbProvider,
+    stateProvider,
+    stateAdapter,
     notifyAdapter,
     runInTransaction,
     withWorkers,
@@ -316,7 +338,8 @@ describe("Handler", () => {
     });
 
     const queuert = await createQueuert({
-      dbProvider,
+      stateProvider,
+      stateAdapter,
       notifyAdapter,
       log,
       chainDefinitions: defineUnionChains<{
@@ -357,7 +380,8 @@ describe("Handler", () => {
   });
 
   test("handles job handler errors during claim", async ({
-    dbProvider,
+    stateProvider,
+    stateAdapter,
     notifyAdapter,
     runInTransaction,
     withWorkers,
@@ -367,7 +391,8 @@ describe("Handler", () => {
     let simulateFailure = true;
 
     const queuert = await createQueuert({
-      dbProvider,
+      stateProvider,
+      stateAdapter,
       notifyAdapter,
       log,
       chainDefinitions: defineUnionChains<{
@@ -428,7 +453,8 @@ describe("Handler", () => {
   });
 
   test("handles job handler errors during processing with opened claim transaction", async ({
-    dbProvider,
+    stateProvider,
+    stateAdapter,
     notifyAdapter,
     runInTransaction,
     withWorkers,
@@ -438,7 +464,8 @@ describe("Handler", () => {
     let simulateFailure = true;
 
     const queuert = await createQueuert({
-      dbProvider,
+      stateProvider,
+      stateAdapter,
       notifyAdapter,
       log,
       chainDefinitions: defineUnionChains<{
@@ -494,7 +521,8 @@ describe("Handler", () => {
   });
 
   test("handles job handler errors during processing with closed claim transaction", async ({
-    dbProvider,
+    stateProvider,
+    stateAdapter,
     notifyAdapter,
     runInTransaction,
     withWorkers,
@@ -504,7 +532,8 @@ describe("Handler", () => {
     let simulateFailure = true;
 
     const queuert = await createQueuert({
-      dbProvider,
+      stateProvider,
+      stateAdapter,
       notifyAdapter,
       log,
       chainDefinitions: defineUnionChains<{
@@ -562,7 +591,8 @@ describe("Handler", () => {
   });
 
   test("handles job handler errors during finalization with opened claim transaction", async ({
-    dbProvider,
+    stateProvider,
+    stateAdapter,
     notifyAdapter,
     runInTransaction,
     withWorkers,
@@ -572,7 +602,8 @@ describe("Handler", () => {
     let simulateFailure = true;
 
     const queuert = await createQueuert({
-      dbProvider,
+      stateProvider,
+      stateAdapter,
       notifyAdapter,
       log,
       chainDefinitions: defineUnionChains<{
@@ -627,7 +658,8 @@ describe("Handler", () => {
   });
 
   test("handles job handler errors during finalization with closed claim transaction", async ({
-    dbProvider,
+    stateProvider,
+    stateAdapter,
     notifyAdapter,
     runInTransaction,
     withWorkers,
@@ -637,7 +669,8 @@ describe("Handler", () => {
     let simulateFailure = true;
 
     const queuert = await createQueuert({
-      dbProvider,
+      stateProvider,
+      stateAdapter,
       notifyAdapter,
       log,
       chainDefinitions: defineUnionChains<{
@@ -697,7 +730,8 @@ describe("Handler", () => {
 
 describe("Worker", () => {
   test("processes jobs in order", async ({
-    dbProvider,
+    stateProvider,
+    stateAdapter,
     notifyAdapter,
     runInTransaction,
     withWorkers,
@@ -707,7 +741,8 @@ describe("Worker", () => {
     const processedJobs: number[] = [];
 
     const queuert = await createQueuert({
-      dbProvider,
+      stateProvider,
+      stateAdapter,
       notifyAdapter,
       log,
       chainDefinitions: defineUnionChains<{
@@ -756,7 +791,8 @@ describe("Worker", () => {
   });
 
   test("processes jobs in order distributed across workers", async ({
-    dbProvider,
+    stateProvider,
+    stateAdapter,
     notifyAdapter,
     runInTransaction,
     withWorkers,
@@ -766,7 +802,8 @@ describe("Worker", () => {
     const processedJobs: number[] = [];
 
     const queuert = await createQueuert({
-      dbProvider,
+      stateProvider,
+      stateAdapter,
       notifyAdapter,
       log,
       chainDefinitions: defineUnionChains<{
@@ -820,7 +857,8 @@ describe("Worker", () => {
 
 describe("Chains", () => {
   test("handles chained jobs", async ({
-    dbProvider,
+    stateProvider,
+    stateAdapter,
     notifyAdapter,
     runInTransaction,
     withWorkers,
@@ -828,7 +866,8 @@ describe("Chains", () => {
     expect,
   }) => {
     const queuert = await createQueuert({
-      dbProvider,
+      stateProvider,
+      stateAdapter,
       notifyAdapter,
       log,
       chainDefinitions: defineUnionChains<{
@@ -911,7 +950,8 @@ describe("Chains", () => {
   });
 
   test("handles branched chains", async ({
-    dbProvider,
+    stateProvider,
+    stateAdapter,
     notifyAdapter,
     runInTransaction,
     withWorkers,
@@ -919,7 +959,8 @@ describe("Chains", () => {
     expect,
   }) => {
     const queuert = await createQueuert({
-      dbProvider,
+      stateProvider,
+      stateAdapter,
       notifyAdapter,
       log,
       chainDefinitions: defineUnionChains<{
@@ -1003,7 +1044,8 @@ describe("Chains", () => {
   });
 
   test("handles loops", async ({
-    dbProvider,
+    stateProvider,
+    stateAdapter,
     notifyAdapter,
     runInTransaction,
     withWorkers,
@@ -1011,7 +1053,8 @@ describe("Chains", () => {
     expect,
   }) => {
     const queuert = await createQueuert({
-      dbProvider,
+      stateProvider,
+      stateAdapter,
       notifyAdapter,
       log,
       chainDefinitions: defineUnionChains<{
@@ -1071,7 +1114,8 @@ describe("Chains", () => {
 
 describe("Dependency Chains", () => {
   test("handles long dependency chains", async ({
-    dbProvider,
+    stateProvider,
+    stateAdapter,
     notifyAdapter,
     runInTransaction,
     withWorkers,
@@ -1079,7 +1123,8 @@ describe("Dependency Chains", () => {
     expect,
   }) => {
     const queuert = await createQueuert({
-      dbProvider,
+      stateProvider,
+      stateAdapter,
       notifyAdapter,
       log,
       chainDefinitions: defineUnionChains<{
@@ -1173,7 +1218,8 @@ describe("Dependency Chains", () => {
   });
 
   test("handles finalized dependency chains", async ({
-    dbProvider,
+    stateProvider,
+    stateAdapter,
     notifyAdapter,
     runInTransaction,
     withWorkers,
@@ -1181,7 +1227,8 @@ describe("Dependency Chains", () => {
     expect,
   }) => {
     const queuert = await createQueuert({
-      dbProvider,
+      stateProvider,
+      stateAdapter,
       notifyAdapter,
       log,
       chainDefinitions: defineUnionChains<{
@@ -1275,7 +1322,8 @@ describe("Dependency Chains", () => {
   });
 
   test("handles chains that are distributed across workers", async ({
-    dbProvider,
+    stateProvider,
+    stateAdapter,
     notifyAdapter,
     runInTransaction,
     withWorkers,
@@ -1283,7 +1331,8 @@ describe("Dependency Chains", () => {
     expect,
   }) => {
     const queuert = await createQueuert({
-      dbProvider,
+      stateProvider,
+      stateAdapter,
       notifyAdapter,
       log,
       chainDefinitions: defineUnionChains<{
@@ -1359,7 +1408,8 @@ describe("Dependency Chains", () => {
   });
 
   test("handles multiple dependency chains", async ({
-    dbProvider,
+    stateProvider,
+    stateAdapter,
     notifyAdapter,
     runInTransaction,
     withWorkers,
@@ -1367,7 +1417,8 @@ describe("Dependency Chains", () => {
     expect,
   }) => {
     const queuert = await createQueuert({
-      dbProvider,
+      stateProvider,
+      stateAdapter,
       notifyAdapter,
       log,
       chainDefinitions: defineUnionChains<{
