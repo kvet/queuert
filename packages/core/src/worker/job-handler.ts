@@ -21,7 +21,9 @@ const createSignal = <T = void>() => {
   let resolved = false;
   return {
     onSignal: promise,
-    signalled: resolved,
+    get signalled() {
+      return resolved;
+    },
     signalOnce: (value: T) => {
       if (!resolved) {
         resolve(value);
@@ -134,35 +136,45 @@ export const processJobHandler = async ({
   context: GetStateProviderContext<StateProvider<BaseStateProviderContext>>;
   job: StateJob;
   pollIntervalMs: number;
-}): Promise<{ execute: Promise<void> }> => {
+}): Promise<() => Promise<void>> => {
   const workerId = randomUUID(); // TODO?
 
-  const firstHeartbeat = createSignal<void>();
+  const firstHeartbeatSent = createSignal<void>();
+  const claimTransactionClosed = createSignal<void>();
 
-  const runInTransaction = async <T>(
+  const runInGuardedTransaction = async <T>(
     cb: (
       context: GetStateProviderContext<StateProvider<BaseStateProviderContext>>
     ) => Promise<T>
   ): Promise<T> => {
-    if (!firstHeartbeat.signalled) {
+    if (!firstHeartbeatSent.signalled) {
       return cb(context);
     }
 
-    return helper.runInTransaction(cb);
+    return helper.runInTransaction(async (context) => {
+      await helper.refetchJobForUpdate({
+        context,
+        job,
+        allowEmptyWorker: !firstHeartbeatSent.signalled,
+        workerId,
+      });
+
+      return cb(context);
+    });
   };
 
   const commitHeartbeat = async (leaseMs: number) => {
-    await runInTransaction(async (context) => {
+    await runInGuardedTransaction(async (context) => {
       await helper.commitHeartbeat({
         context,
         job,
         leaseMs,
-        allowEmptyWorker: !firstHeartbeat.signalled,
         workerId,
       });
     });
 
-    firstHeartbeat.signalOnce();
+    firstHeartbeatSent.signalOnce();
+    await claimTransactionClosed.onSignal;
   };
 
   const startProcessing = async (job: StateJob) => {
@@ -196,7 +208,7 @@ export const processJobHandler = async ({
           });
         },
         finalize: async (finalizeCallback) => {
-          return runInTransaction(async (context) => {
+          return runInGuardedTransaction(async (context) => {
             const output = await finalizeCallback({
               enqueueJob: async ({ queueName, input, ...context }) =>
                 helper.enqueueJob({
@@ -216,7 +228,7 @@ export const processJobHandler = async ({
         },
       });
     } catch (error) {
-      await runInTransaction(async (context) =>
+      await runInGuardedTransaction(async (context) =>
         helper.handleJobHandlerError({
           job,
           error,
@@ -229,9 +241,10 @@ export const processJobHandler = async ({
 
   const processingPromise = startProcessing(job);
 
-  await Promise.any([firstHeartbeat.onSignal, processingPromise]);
+  await Promise.any([firstHeartbeatSent.onSignal, processingPromise]);
 
-  return {
-    execute: processingPromise,
+  return async () => {
+    claimTransactionClosed.signalOnce();
+    await processingPromise;
   };
 };

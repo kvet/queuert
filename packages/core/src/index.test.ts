@@ -321,6 +321,129 @@ describe("Handler", () => {
     });
   });
 
+  test("allows to extend job lease after lease expiration if wasn't grabbed by another worker", async ({
+    stateProvider,
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    withWorkers,
+    waitForJobChainsFinished,
+    expect,
+  }) => {
+    const queuert = await createQueuert({
+      stateProvider,
+      stateAdapter,
+      notifyAdapter,
+      log,
+      chainDefinitions: defineUnionChains<{
+        test: {
+          input: { test: boolean };
+          output: { result: boolean };
+        };
+      }>(),
+    });
+
+    const worker = queuert.createWorker().createChain(
+      {
+        name: "test",
+      },
+      (chain) =>
+        chain.createQueue({
+          name: "test",
+          handler: async ({ heartbeat, finalize }) => {
+            await heartbeat({ leaseMs: 1 });
+            const bool = await sleep(100).then(() => true);
+            await heartbeat({ leaseMs: 1000 });
+
+            return finalize(async () => ({ result: bool }));
+          },
+        })
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      const jobChain = await runInTransaction(queuert, ({ client }) =>
+        queuert.enqueueJobChain({
+          client,
+          chainName: "test",
+          input: { test: true },
+        })
+      );
+
+      const [succeededJobChain] = await waitForJobChainsFinished(queuert, [
+        jobChain,
+      ]);
+
+      expect(succeededJobChain.output).toEqual({ result: true });
+      expect(log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          level: "warn",
+          message: expect.stringContaining("expired"),
+        })
+      );
+    });
+  });
+
+  test("allows to complete job after lease expiration if wasn't grabbed by another worker", async ({
+    stateProvider,
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    withWorkers,
+    waitForJobChainsFinished,
+    expect,
+  }) => {
+    const queuert = await createQueuert({
+      stateProvider,
+      stateAdapter,
+      notifyAdapter,
+      log,
+      chainDefinitions: defineUnionChains<{
+        test: {
+          input: { test: boolean };
+          output: { result: boolean };
+        };
+      }>(),
+    });
+
+    const worker = queuert.createWorker().createChain(
+      {
+        name: "test",
+      },
+      (chain) =>
+        chain.createQueue({
+          name: "test",
+          handler: async ({ heartbeat, finalize }) => {
+            await heartbeat({ leaseMs: 1 });
+            const bool = await sleep(100).then(() => true);
+
+            return finalize(async () => ({ result: bool }));
+          },
+        })
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      const jobChain = await runInTransaction(queuert, ({ client }) =>
+        queuert.enqueueJobChain({
+          client,
+          chainName: "test",
+          input: { test: true },
+        })
+      );
+
+      const [succeededJobChain] = await waitForJobChainsFinished(queuert, [
+        jobChain,
+      ]);
+
+      expect(succeededJobChain.output).toEqual({ result: true });
+      expect(log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          level: "warn",
+          message: expect.stringContaining("expired"),
+        })
+      );
+    });
+  });
+
   test("executes a job only once", async ({
     stateProvider,
     stateAdapter,

@@ -41,7 +41,10 @@ CREATE TABLE IF NOT EXISTS queuert.job (
 
   -- locking/heartbeats
   locked_by                     text,
-  locked_until                  timestamptz
+  locked_until                  timestamptz,
+
+  -- metadata
+  updated_at                    timestamptz NOT NULL DEFAULT now()
 );
 
 -- Tables: job_dependency table
@@ -51,6 +54,21 @@ CREATE TABLE IF NOT EXISTS queuert.job_dependency (
   index                         integer NOT NULL,
   PRIMARY KEY (job_id, depends_on_chain_id)
 );
+
+-- Triggers: updated_at triggers
+CREATE OR REPLACE FUNCTION queuert.update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+   NEW.updated_at = now();
+   RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS update_job_updated_at ON queuert.job;
+CREATE TRIGGER update_job_updated_at
+BEFORE UPDATE ON queuert.job
+FOR EACH ROW
+EXECUTE PROCEDURE queuert.update_updated_at_column();
 ` as TypedSql<[], void>;
 
 export type DbJob = {

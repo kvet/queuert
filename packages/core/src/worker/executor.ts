@@ -88,7 +88,8 @@ export const createExecutor = ({
         try {
           while (
             await (async () => {
-              let finalizePromise: Promise<void> = Promise.resolve();
+              let finalizePromise: () => Promise<void> = () =>
+                Promise.resolve();
 
               const claimPromise = await helper.runInTransaction(
                 async (context) => {
@@ -130,7 +131,7 @@ export const createExecutor = ({
                     return true;
                   }
 
-                  const startExecution = await processJobHandler({
+                  finalizePromise = await processJobHandler({
                     helper,
                     handler: queue.handler,
                     context,
@@ -138,12 +139,11 @@ export const createExecutor = ({
                     pollIntervalMs,
                   });
 
-                  finalizePromise = startExecution.execute;
                   return true;
                 }
               );
 
-              await finalizePromise;
+              await finalizePromise();
 
               return claimPromise;
             })()

@@ -394,7 +394,14 @@ export const queuertHelper = ({
         log({
           level: "warn",
           message: `Job processing failed. Rescheduling in ${error.afterMs}ms.`,
-          args: [error],
+          args: [
+            {
+              jobId: job.id,
+              queueName: job.queueName,
+              status: job.status,
+            },
+            error,
+          ],
         });
         afterMs = error.afterMs;
         cause = error.cause;
@@ -403,7 +410,14 @@ export const queuertHelper = ({
         log({
           level: "error",
           message: `Job processing failed unexpectedly. Rescheduling in ${retryAfterMs}ms.`,
-          args: [error],
+          args: [
+            {
+              jobId: job.id,
+              queueName: job.queueName,
+              status: job.status,
+            },
+            error,
+          ],
         });
         afterMs = retryAfterMs;
         cause = error;
@@ -472,18 +486,16 @@ export const queuertHelper = ({
         ],
       });
     },
-    commitHeartbeat: async ({
+    refetchJobForUpdate: async ({
       context,
       job,
-      leaseMs,
-      allowEmptyWorker,
       workerId,
+      allowEmptyWorker,
     }: {
       context: BaseStateProviderContext;
       job: StateJob;
-      leaseMs: number;
-      allowEmptyWorker: boolean;
       workerId: string;
+      allowEmptyWorker: boolean;
     }): Promise<StateJob> => {
       const fetchedJob = await stateAdapter.getJobById({
         context,
@@ -503,6 +515,36 @@ export const queuertHelper = ({
         );
       }
 
+      if (
+        fetchedJob.lockedUntil &&
+        fetchedJob.lockedUntil.getTime() < Date.now()
+      ) {
+        log({
+          level: "warn",
+          message: `Job lock has expired before heartbeat`,
+          args: [
+            {
+              jobId: job.id,
+              lockedBy: fetchedJob.lockedBy,
+              lockedUntil: fetchedJob.lockedUntil,
+            },
+          ],
+        });
+      }
+
+      return fetchedJob;
+    },
+    commitHeartbeat: async ({
+      context,
+      job,
+      leaseMs,
+      workerId,
+    }: {
+      context: BaseStateProviderContext;
+      job: StateJob;
+      leaseMs: number;
+      workerId: string;
+    }): Promise<StateJob> => {
       return stateAdapter.sendHeartbeat({
         context,
         jobId: job.id,
