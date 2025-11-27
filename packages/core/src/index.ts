@@ -148,35 +148,39 @@ export const createQueuert = async <
 
   return {
     createWorker: () => {
-      const registeredQueues: RegisteredQueues = new Map();
+      const createWorkerInstance = (
+        registeredQueues: RegisteredQueues
+      ): QueuertWorkerDefinition<TStateProvider, TQueueDefinitions> => {
+        return {
+          setupQueueHandler({
+            name: queueName,
+            enqueueDependencyJobChains,
+            handler,
+          }) {
+            if (registeredQueues.has(queueName)) {
+              throw new Error(
+                `Queue with name "${queueName}" is already registered`
+              );
+            }
+            const newRegisteredQueues = new Map(registeredQueues);
+            newRegisteredQueues.set(queueName, {
+              enqueueDependencyJobChains: enqueueDependencyJobChains as any,
+              handler: handler as any,
+            });
 
-      return {
-        setupQueueHandler({
-          name: queueName,
-          enqueueDependencyJobChains,
-          handler,
-        }) {
-          if (registeredQueues.has(queueName)) {
-            throw new Error(
-              `Queue with name "${queueName}" is already registered`
-            );
-          }
-          registeredQueues.set(queueName, {
-            enqueueDependencyJobChains: enqueueDependencyJobChains as any,
-            handler: handler as any,
-          });
-
-          // TODO: rework
-          return this;
-        },
-        start: (startOptions) =>
-          createExecutor({
-            helper,
-            notifyAdapter,
-            log,
-            registeredQueues,
-          })(startOptions),
+            return createWorkerInstance(newRegisteredQueues);
+          },
+          start: (startOptions) =>
+            createExecutor({
+              helper,
+              notifyAdapter,
+              log,
+              registeredQueues,
+            })(startOptions),
+        };
       };
+
+      return createWorkerInstance(new Map());
     },
     enqueueJobChain: async ({ input, chainName, ...context }) =>
       helper.enqueueJobChain({
