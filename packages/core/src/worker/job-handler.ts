@@ -1,14 +1,13 @@
 import { randomUUID } from "crypto";
-import { BaseChainDefinitions } from "../entities/chain.js";
-import { FinishedJobChain, JobChain } from "../entities/job-chain.js";
+import {
+  CompatibleQueueTargets,
+  FinishedJobChain,
+  JobChain,
+} from "../entities/job-chain.js";
 import { EnqueuedJob, Job, RunningJob } from "../entities/job.js";
 import { BaseQueueDefinitions } from "../entities/queue.js";
 import { Branded } from "../helpers/typescript.js";
-import {
-  ProcessHelper,
-  ResolvedQueueJobs,
-  ResolveQueueDefinitions,
-} from "../queuert-helper.js";
+import { ProcessHelper, ResolvedQueueJobs } from "../queuert-helper.js";
 import { StateJob } from "../state-adapter/state-adapter.js";
 import {
   BaseStateProviderContext,
@@ -35,28 +34,15 @@ const createSignal = <T = void>() => {
 
 export type JobHandler<
   TStateProvider extends StateProvider<BaseStateProviderContext>,
-  TChainDefinitions extends BaseChainDefinitions,
-  TChainName extends keyof TChainDefinitions,
   TQueueDefinitions extends BaseQueueDefinitions,
-  TQueueName extends keyof ResolveQueueDefinitions<
-    TChainDefinitions,
-    TChainName,
-    TQueueDefinitions
-  >,
+  TQueueName extends keyof TQueueDefinitions & string,
   TDependencies extends readonly JobChain<any, any, any>[]
 > = (handlerOptions: {
   claim: <T>(
     claimCallback: (
       claimCallbackOptions: {
         job: RunningJob<
-          Job<
-            TQueueName,
-            ResolveQueueDefinitions<
-              TChainDefinitions,
-              TChainName,
-              TQueueDefinitions
-            >[TQueueName]["input"]
-          >
+          Job<TQueueName, TQueueDefinitions[TQueueName]["input"]>
         >;
         dependencies: {
           [K in keyof TDependencies]: FinishedJobChain<TDependencies[K]>;
@@ -73,46 +59,38 @@ export type JobHandler<
     finalizeCallback: (
       finalizeOptions: {
         enqueueJob: <
-          TEnqueueQueueName extends keyof ResolveQueueDefinitions<
-            TChainDefinitions,
-            TChainName,
-            TQueueDefinitions
-          >
+          TEnqueueQueueName extends CompatibleQueueTargets<
+            TQueueDefinitions,
+            TQueueName
+          > &
+            string
         >(
           options: {
             queueName: TEnqueueQueueName;
-            input: ResolveQueueDefinitions<
-              TChainDefinitions,
-              TChainName,
-              TQueueDefinitions
-            >[TEnqueueQueueName]["input"];
+            input: TQueueDefinitions[TEnqueueQueueName]["input"];
           } & GetStateProviderContext<TStateProvider>
         ) => Promise<
           EnqueuedJob<
             TEnqueueQueueName,
-            ResolveQueueDefinitions<
-              TChainDefinitions,
-              TChainName,
-              TQueueDefinitions
-            >[TEnqueueQueueName]["input"]
+            TQueueDefinitions[TEnqueueQueueName]["input"]
           >
         >;
       } & GetStateProviderContext<TStateProvider>
     ) => Promise<
-      | TChainDefinitions[TChainName]["output"]
-      | ResolvedQueueJobs<TChainDefinitions, TChainName, TQueueDefinitions>
+      | TQueueDefinitions[TQueueName]["output"]
+      | ResolvedQueueJobs<TQueueDefinitions, TQueueName>
     >
   ) => Promise<
     Branded<
-      | TChainDefinitions[TChainName]["output"]
-      | ResolvedQueueJobs<TChainDefinitions, TChainName, TQueueDefinitions>,
+      | TQueueDefinitions[TQueueName]["output"]
+      | ResolvedQueueJobs<TQueueDefinitions, TQueueName>,
       "finalize_result"
     >
   >;
 }) => Promise<
   Branded<
-    | TChainDefinitions[TChainName]["output"]
-    | ResolvedQueueJobs<TChainDefinitions, TChainName, TQueueDefinitions>,
+    | TQueueDefinitions[TQueueName]["output"]
+    | ResolvedQueueJobs<TQueueDefinitions, TQueueName>,
     "finalize_result"
   >
 >;
@@ -127,8 +105,6 @@ export const processJobHandler = async ({
   helper: ProcessHelper;
   handler: JobHandler<
     StateProvider<BaseStateProviderContext>,
-    BaseChainDefinitions,
-    string,
     BaseQueueDefinitions,
     string,
     readonly JobChain<string, unknown, unknown>[]

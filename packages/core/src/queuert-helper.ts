@@ -1,8 +1,10 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import {
+  CompatibleQueueTargets,
   FinishedJobChain,
   JobChain,
-  mapStateJobChainToJobChain,
+  mapStateJobPairToJobChain,
+  ResolvedJobChain,
 } from "./entities/job-chain.js";
 import {
   EnqueuedJob,
@@ -12,7 +14,7 @@ import {
   mapStateJobToJob,
   RunningJob,
 } from "./entities/job.js";
-import { BaseChainDefinitions, BaseQueueDefinitions } from "./index.js";
+import { BaseQueueDefinitions } from "./index.js";
 import { Log } from "./log.js";
 import { NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 import { StateAdapter, StateJob } from "./state-adapter/state-adapter.js";
@@ -24,69 +26,26 @@ import {
 
 const notifyQueueStorage = new AsyncLocalStorage<Set<string>>();
 
-export type ResolveQueueDefinitions<
-  TChainDefinitions extends BaseChainDefinitions,
-  TChainName extends keyof TChainDefinitions,
-  TQueueDefinitions extends BaseQueueDefinitions
-> = {
-  [K in TChainName]: {
-    input: TChainDefinitions[TChainName]["input"];
-  };
-} & {
-  [K in keyof TQueueDefinitions as `${TChainName & string}:${K &
-    string}`]: TQueueDefinitions[K];
-};
-
 export type ResolvedQueueJobs<
-  TChainDefinitions extends BaseChainDefinitions,
-  TChainName extends keyof TChainDefinitions,
-  TQueueDefinitions extends BaseQueueDefinitions
-> = {
-  [K in keyof ResolveQueueDefinitions<
-    TChainDefinitions,
-    TChainName,
-    TQueueDefinitions
-  >]: Job<
-    K,
-    ResolveQueueDefinitions<
-      TChainDefinitions,
-      TChainName,
-      TQueueDefinitions
-    >[K]["input"]
-  >;
-}[keyof ResolveQueueDefinitions<
-  TChainDefinitions,
-  TChainName,
-  TQueueDefinitions
->];
-
-export type ResolveEnqueueDependencyJobChains<
-  TStateProvider extends StateProvider<BaseStateProviderContext>,
-  TChainDefinitions extends BaseChainDefinitions,
-  TChainName extends keyof TChainDefinitions,
   TQueueDefinitions extends BaseQueueDefinitions,
-  TQueueName extends keyof ResolveQueueDefinitions<
-    TChainDefinitions,
-    TChainName,
-    TQueueDefinitions
-  >,
+  TQueueName extends keyof TQueueDefinitions & string
+> = {
+  [K in CompatibleQueueTargets<TQueueDefinitions, TQueueName>]: Job<
+    K,
+    TQueueDefinitions[K]["input"]
+  >;
+}[CompatibleQueueTargets<TQueueDefinitions, TQueueName>];
+
+export type EnqueueDependencyJobChains<
+  TStateProvider extends StateProvider<BaseStateProviderContext>,
+  TQueueDefinitions extends BaseQueueDefinitions,
+  TQueueName extends keyof TQueueDefinitions & string,
   TDependencies extends readonly {
-    [K in keyof TChainDefinitions]: JobChain<
-      K,
-      TChainDefinitions[K]["input"],
-      TChainDefinitions[K]["output"]
-    >;
-  }[keyof TChainDefinitions][]
+    [K in keyof TQueueDefinitions]: ResolvedJobChain<TQueueDefinitions, K>;
+  }[keyof TQueueDefinitions][]
 > = (
   enqueueDependencyJobChainsOptions: {
-    job: Job<
-      TQueueName,
-      ResolveQueueDefinitions<
-        TChainDefinitions,
-        TChainName,
-        TQueueDefinitions
-      >[TQueueName]["input"]
-    >;
+    job: Job<TQueueName, TQueueDefinitions[TQueueName]["input"]>;
   } & GetStateProviderContext<TStateProvider>
 ) => Promise<TDependencies>;
 
@@ -192,10 +151,8 @@ export const queuertHelper = ({
       context,
     }: {
       job: StateJob;
-      enqueueDependencyJobChains?: ResolveEnqueueDependencyJobChains<
+      enqueueDependencyJobChains?: EnqueueDependencyJobChains<
         StateProvider<BaseStateProviderContext>,
-        BaseChainDefinitions,
-        string,
         BaseQueueDefinitions,
         string,
         readonly JobChain<any, any, any>[]
@@ -306,7 +263,7 @@ export const queuertHelper = ({
       return {
         job: mapStateJobToJob(runningJob) as RunningJob<Job<any, any>>,
         dependencies: dependencies.map(
-          mapStateJobChainToJobChain
+          mapStateJobPairToJobChain
         ) as FinishedJobChain<JobChain<any, any, any>>[],
       };
     },
@@ -334,13 +291,14 @@ export const queuertHelper = ({
         args: [{ jobId: job.id, chainName, input }],
       });
 
-      return mapStateJobChainToJobChain([job, undefined]);
+      return mapStateJobPairToJobChain([job, undefined]);
     },
     getJobChain: async <TChainName extends string, TInput, TOutput>({
       id,
       context,
     }: {
       id: string;
+      chainName: TChainName;
       context: any;
     }): Promise<JobChain<TChainName, TInput, TOutput> | null> => {
       const jobChain = await stateAdapter.getJobChainById({
@@ -348,7 +306,7 @@ export const queuertHelper = ({
         jobId: id,
       });
 
-      return jobChain ? mapStateJobChainToJobChain(jobChain) : null;
+      return jobChain ? mapStateJobPairToJobChain(jobChain) : null;
     },
     // TODO: ensure only one job is enqueued per call and it should be returned
     enqueueJob: async <TQueueName extends string, TInput>({

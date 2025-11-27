@@ -1,12 +1,11 @@
-import { BaseChainDefinitions } from "../entities/chain.js";
 import { JobChain } from "../entities/job-chain.js";
 import { BaseQueueDefinitions } from "../entities/queue.js";
 import { sleep } from "../helpers/timers.js";
 import { Log } from "../log.js";
 import { NotifyAdapter } from "../notify-adapter/notify-adapter.js";
 import {
+  EnqueueDependencyJobChains,
   ProcessHelper,
-  ResolveEnqueueDependencyJobChains,
 } from "../queuert-helper.js";
 import {
   BaseStateProviderContext,
@@ -17,18 +16,14 @@ import { JobHandler, processJobHandler } from "./job-handler.js";
 export type RegisteredQueues = Map<
   string,
   {
-    enqueueDependencyJobChains?: ResolveEnqueueDependencyJobChains<
+    enqueueDependencyJobChains?: EnqueueDependencyJobChains<
       StateProvider<BaseStateProviderContext>,
-      BaseChainDefinitions,
-      string,
       BaseQueueDefinitions,
       string,
       readonly JobChain<string, any, any>[]
     >;
     handler: JobHandler<
       StateProvider<BaseStateProviderContext>,
-      BaseChainDefinitions,
-      string,
       BaseQueueDefinitions,
       string,
       readonly JobChain<string, any, any>[]
