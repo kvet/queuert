@@ -1,4 +1,3 @@
-import { randomUUID } from "crypto";
 import {
   CompatibleQueueTargets,
   FinishedJobChain,
@@ -101,6 +100,7 @@ export const processJobHandler = async ({
   context,
   job,
   pollIntervalMs,
+  workerId,
 }: {
   helper: ProcessHelper;
   handler: JobHandler<
@@ -112,9 +112,8 @@ export const processJobHandler = async ({
   context: GetStateProviderContext<StateProvider<BaseStateProviderContext>>;
   job: StateJob;
   pollIntervalMs: number;
+  workerId: string;
 }): Promise<() => Promise<void>> => {
-  const workerId = randomUUID(); // TODO?
-
   const firstHeartbeatSent = createSignal<void>();
   const claimTransactionClosed = createSignal<void>();
 

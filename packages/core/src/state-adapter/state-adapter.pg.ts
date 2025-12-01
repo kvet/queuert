@@ -12,6 +12,7 @@ import {
   getNextJobAvailableInMsSql,
   linkJobSql,
   markJobSql,
+  removeExpiredJobClaimsSql,
   rescheduleJobSql,
   scheduleDependentJobsSql,
   sendHeartbeatJobSql,
@@ -183,6 +184,14 @@ export const createPgStateAdapter = ({
       });
 
       return mapDbJobToStateJob(job);
+    },
+    removeExpiredJobClaims: async ({ context, queueNames }) => {
+      const jobIds = await executeTypedSql({
+        executeSql: (...args) => stateProvider.executeSql(context, ...args),
+        sql: /* sql */ removeExpiredJobClaimsSql,
+        params: [queueNames],
+      });
+      return jobIds;
     },
   };
 };

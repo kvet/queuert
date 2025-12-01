@@ -301,3 +301,15 @@ FOR UPDATE SKIP LOCKED
   readonly [NamedParameter<"queue_names", string[]>],
   [{ available_in_ms: number } | undefined]
 >;
+
+export const removeExpiredJobClaimsSql = /* sql */ `
+UPDATE queuert.job
+SET locked_by = NULL,
+  locked_until = NULL,
+  status = 'pending'
+WHERE locked_until IS NOT NULL
+  AND locked_until < now()
+  AND status = 'running'
+  AND queue_name IN (SELECT unnest($1::text[]))
+RETURNING id
+` as TypedSql<readonly [NamedParameter<"queue_names", string[]>], string[]>;

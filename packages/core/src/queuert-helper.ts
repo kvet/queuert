@@ -461,16 +461,14 @@ export const queuertHelper = ({
       });
 
       if (!fetchedJob) {
-        throw new Error(`Job with id ${job.id} not found for heartbeat`);
+        throw new Error(`Job with id ${job.id} not found`);
       }
 
       if (
         fetchedJob.lockedBy !== workerId &&
         !(allowEmptyWorker ? fetchedJob.lockedBy === null : false)
       ) {
-        throw new Error(
-          `Job with id ${job.id} is not locked by this worker for heartbeat`
-        );
+        throw new Error(`Job with id ${job.id} is not locked by this worker`);
       }
 
       if (
@@ -479,7 +477,7 @@ export const queuertHelper = ({
       ) {
         log({
           level: "warn",
-          message: `Job lock has expired before heartbeat`,
+          message: `Job lock has expired`,
           args: [
             {
               jobId: job.id,
@@ -540,6 +538,26 @@ export const queuertHelper = ({
         context,
         queueNames,
       }),
+    removeExpiredJobClaims: async ({
+      queueNames,
+    }: {
+      queueNames: string[];
+    }): Promise<void> => {
+      const ids = await stateProvider.provideContext((context) =>
+        stateAdapter.removeExpiredJobClaims({ context, queueNames })
+      );
+      if (ids.length > 0) {
+        log({
+          level: "info",
+          message: `Reaped expired job claims`,
+          args: [
+            {
+              jobIds: ids,
+            },
+          ],
+        });
+      }
+    },
   };
 };
 export type ProcessHelper = ReturnType<typeof queuertHelper>;

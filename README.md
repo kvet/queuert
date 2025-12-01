@@ -13,9 +13,13 @@ const queuert = createQueuert({
   stateProvider: ...,
   stateAdapter: ...,
   notifyAdapter: ...,
-  chainDefinitions: defineUnionChains<{
-    'process-and-distribute-image': {
+  queueDefinitions: defineUnionQueues<{
+    'process-image': {
       input: { imageId: string };
+      output: DefineQueueRef<"distribute-image">;
+    };
+    'distribute-image': {
+      input: { imageId: string; minifiedImageId: string };
       output: { done: true };
     };
   }>(),
@@ -26,7 +30,7 @@ db.transaction(queuert.withNotify(async (tx) => {
 
   await queuert.enqueueJobChain({
     tx,
-    name: "process-and-distribute-image",
+    name: "process-image",
     input: { imageId: image.id },
   });
 }));
@@ -38,16 +42,8 @@ Later, a background worker picks up the job and processes it:
 
 ```ts
 queuert.createWorker()
-  .createChain({
-    name: "process-and-distribute-image",
-    queueDefinitions: defineUnionQueues<{
-      distribute: {
-        input: { imageId: string; minifiedImageId: string };
-      };
-    }>(),
-  })
-  .createQueue({
-    name: "process-and-distribute-image",
+  .setupQueueHandler({
+    name: "process-image",
     handler: async ({ claim, heartbeat, finalize }) => {
       const image = await claim(async ({ tx, job }) => {
         return tx.images.getById(job.input.imageId);
@@ -62,14 +58,14 @@ queuert.createWorker()
 
         return enqueueJob({
           tx,
-          name: "process-and-distribute-image:distribute",
+          name: "distribute-image",
           input: { imageId: image.id, minifiedImageId: minifiedImage.id },
         });
       });
     },
   })
-  .createQueue({
-    name: "process-and-distribute-image:distribute",
+  .setupQueueHandler({
+    name: "distribute-image",
     handler: async ({ claim, withHeartbeat, finalize }) => {
       const [image, minifiedImage] = await claim(async ({ tx, job }) => {
         return Promise.all([

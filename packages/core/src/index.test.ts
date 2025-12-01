@@ -782,6 +782,180 @@ describe("Handler", () => {
   });
 });
 
+describe("Reaper", () => {
+  test("reaps abandoned jobs on heartbeat", async ({
+    stateProvider,
+    stateAdapter,
+    notifyAdapter,
+    runInTransactionWithNotify,
+    withWorkers,
+    waitForJobChainsFinished,
+    expect,
+  }) => {
+    const queuert = await createQueuert({
+      stateProvider,
+      stateAdapter,
+      notifyAdapter,
+      log,
+      queueDefinitions: defineUnionQueues<{
+        test: {
+          input: null;
+          output: null;
+        };
+      }>(),
+    });
+
+    let failed = false;
+    const { promise: startPromise, resolve: startResolve } =
+      Promise.withResolvers<void>();
+    const { promise: endPromise, resolve: endResolve } =
+      Promise.withResolvers<void>();
+
+    const worker = queuert.createWorker().setupQueueHandler({
+      name: "test",
+      handler: async ({ claim, heartbeat, finalize }) => {
+        await claim(async () => {});
+
+        await heartbeat({ leaseMs: 1 });
+        if (!failed) {
+          failed = true;
+
+          startResolve();
+          await sleep(100);
+          await expect(() => heartbeat({ leaseMs: 1 })).rejects.toThrow();
+          endResolve();
+        }
+
+        return finalize(async () => null);
+      },
+    });
+
+    await withWorkers(
+      [await worker.start(), await worker.start()],
+      async () => {
+        const failJobChain = await runInTransactionWithNotify(
+          queuert,
+          ({ client }) =>
+            queuert.enqueueJobChain({
+              client,
+              chainName: "test",
+              input: null,
+            })
+        );
+
+        await startPromise;
+
+        const successJobChain = await runInTransactionWithNotify(
+          queuert,
+          ({ client }) =>
+            queuert.enqueueJobChain({
+              client,
+              chainName: "test",
+              input: null,
+            })
+        );
+
+        const [succeededSuccessJobChain, succeededFailJobChain] =
+          await waitForJobChainsFinished(queuert, [
+            successJobChain,
+            failJobChain,
+          ]);
+
+        expect(succeededSuccessJobChain.output).toEqual(null);
+        expect(succeededFailJobChain.output).toEqual(null);
+
+        await endPromise;
+      }
+    );
+  });
+
+  test("reaps abandoned jobs on finalize", async ({
+    stateProvider,
+    stateAdapter,
+    notifyAdapter,
+    runInTransactionWithNotify,
+    withWorkers,
+    waitForJobChainsFinished,
+    expect,
+  }) => {
+    const queuert = await createQueuert({
+      stateProvider,
+      stateAdapter,
+      notifyAdapter,
+      log,
+      queueDefinitions: defineUnionQueues<{
+        test: {
+          input: null;
+          output: null;
+        };
+      }>(),
+    });
+
+    let failed = false;
+    const { promise: startPromise, resolve: startResolve } =
+      Promise.withResolvers<void>();
+    const { promise: endPromise, resolve: endResolve } =
+      Promise.withResolvers<void>();
+
+    const worker = queuert.createWorker().setupQueueHandler({
+      name: "test",
+      handler: async ({ claim, heartbeat, finalize }) => {
+        await claim(async () => {});
+
+        await heartbeat({ leaseMs: 1 });
+        if (!failed) {
+          failed = true;
+
+          startResolve();
+          await sleep(100);
+          await expect(() => finalize(async () => null)).rejects.toThrow();
+          endResolve();
+        }
+
+        return finalize(async () => null);
+      },
+    });
+
+    await withWorkers(
+      [await worker.start(), await worker.start()],
+      async () => {
+        const failJobChain = await runInTransactionWithNotify(
+          queuert,
+          ({ client }) =>
+            queuert.enqueueJobChain({
+              client,
+              chainName: "test",
+              input: null,
+            })
+        );
+
+        await startPromise;
+
+        const successJobChain = await runInTransactionWithNotify(
+          queuert,
+          ({ client }) =>
+            queuert.enqueueJobChain({
+              client,
+              chainName: "test",
+              input: null,
+            })
+        );
+
+        const [succeededSuccessJobChain, succeededFailJobChain] =
+          await waitForJobChainsFinished(queuert, [
+            successJobChain,
+            failJobChain,
+          ]);
+
+        expect(succeededSuccessJobChain.output).toEqual(null);
+        expect(succeededFailJobChain.output).toEqual(null);
+
+        await endPromise;
+      }
+    );
+  });
+});
+
 describe("Worker", () => {
   test("processes jobs in order", async ({
     stateProvider,

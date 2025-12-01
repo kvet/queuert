@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { JobChain } from "../entities/job-chain.js";
 import { BaseQueueDefinitions } from "../entities/queue.js";
 import { sleep } from "../helpers/timers.js";
@@ -42,15 +43,25 @@ export const createExecutor = ({
   log: Log;
   registeredQueues: RegisteredQueues;
 }): ((startOptions?: {
+  workerId?: string;
   pollIntervalMs?: number;
   nextJobDelayMs?: number;
 }) => Promise<() => Promise<void>>) => {
-  return async ({ pollIntervalMs = 60_000, nextJobDelayMs = 0 } = {}) => {
+  const queueNames = Array.from(registeredQueues.keys());
+  return async ({
+    workerId = randomUUID(),
+    pollIntervalMs = 60_000,
+    nextJobDelayMs = 0,
+  } = {}) => {
     const stopController = new AbortController();
     const performWorkIteration = async () => {
       while (true) {
+        await helper.removeExpiredJobClaims({
+          queueNames,
+        });
+
         const pullDelayMs = await helper.getNextJobAvailableInMs({
-          queueNames: Array.from(registeredQueues.keys()),
+          queueNames,
           pollIntervalMs,
         });
 
@@ -65,7 +76,7 @@ export const createExecutor = ({
         stopController.signal.addEventListener("abort", onStop);
         await Promise.any([
           notifyAdapter
-            .listenJobScheduled([...registeredQueues.keys()], {
+            .listenJobScheduled(queueNames, {
               signal: notifyController.signal,
             })
             .catch(() => {}),
@@ -89,7 +100,7 @@ export const createExecutor = ({
               const claimPromise = await helper.runInTransaction(
                 async (context) => {
                   let job = await helper.acquireJob({
-                    queueNames: Array.from(registeredQueues.keys()),
+                    queueNames,
                     context,
                   });
                   if (!job) {
@@ -132,6 +143,7 @@ export const createExecutor = ({
                     context,
                     job,
                     pollIntervalMs,
+                    workerId,
                   });
 
                   return true;

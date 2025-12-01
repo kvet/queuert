@@ -29,7 +29,8 @@ export { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 export { rescheduleJob } from "./queuert-helper.js";
 export { type StateProvider as QueuerTStateProvider } from "./state-provider/state-provider.js";
 
-// TODO: reaper
+// TODO: reschedule timeout after errors
+// TODO: provide attempt in job handler
 // TODO: withstand state layer errors in worker
 // TODO: abort signal
 // TODO: custom ids

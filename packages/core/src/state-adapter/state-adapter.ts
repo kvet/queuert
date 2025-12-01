@@ -91,4 +91,8 @@ export type StateAdapter = {
     jobId: string;
     output: unknown;
   }) => Promise<StateJob>;
+  removeExpiredJobClaims: (params: {
+    context: BaseStateProviderContext;
+    queueNames: string[];
+  }) => Promise<string[]>;
 };
