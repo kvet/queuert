@@ -29,20 +29,21 @@ export { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 export { rescheduleJob } from "./queuert-helper.js";
 export { type StateProvider as QueuerTStateProvider } from "./state-provider/state-provider.js";
 
-// TODO: chain id
 // TODO: parent id
+// TODO: finalize job externally
 // TODO: reschedule timeout after errors
 // TODO: withstand state layer errors in worker
 // TODO: abort signal
 // TODO: custom ids
 // TODO: custom schema name
-// TODO: partitioning
-// TODO: notify about long transactions
 // TODO: redis NotifyAdapter
 // TODO: termination
 // TODO: cancellation
 // TODO: deduplication
+
+// TODO: partitioning
 // TODO: singletons/concurrency limit
+// TODO: notify about long transactions
 
 type QueuertWorkerDefinition<
   TStateProvider extends StateProvider<BaseStateProviderContext>,

@@ -157,6 +157,8 @@ describe("Handler", () => {
 
           expect(client).toBeDefined();
           expect(job.id).toBeDefined();
+          expect(job.chainId).toEqual(job.id);
+          expect(job.parentId).toBeNull();
           expect(job.input.test).toBeDefined();
 
           return "prepare";
@@ -1172,12 +1174,18 @@ describe("Chains", () => {
       }>(),
     });
 
+    let chainId: string | undefined;
+
     const worker = queuert
       .createWorker()
       .setupQueueHandler({
         name: "linear",
         handler: async ({ claim, finalize }) => {
           const { job } = await claim(async ({ job }) => ({ job }));
+
+          expect(job.id).toEqual(chainId);
+          expect(job.chainId).toEqual(chainId);
+          expect(job.parentId).toBeNull();
 
           return finalize(async ({ client, enqueueJob }) => {
             expectTypeOf<
@@ -1197,6 +1205,10 @@ describe("Chains", () => {
         handler: async ({ claim, finalize }) => {
           const { job } = await claim(async ({ job }) => ({ job }));
 
+          expect(job.id).not.toEqual(chainId);
+          expect(job.chainId).toEqual(chainId);
+          expect(job.parentId).toBeNull();
+
           return finalize(async ({ client, enqueueJob }) => {
             expectTypeOf<
               Parameters<typeof enqueueJob>[0]["queueName"]
@@ -1215,6 +1227,10 @@ describe("Chains", () => {
         handler: async ({ claim, finalize }) => {
           const { job } = await claim(async ({ job }) => ({ job }));
 
+          expect(job.id).not.toEqual(chainId);
+          expect(job.chainId).toEqual(chainId);
+          expect(job.parentId).toBeNull();
+
           return finalize(async () => ({
             result: job.input.valueNextNext,
           }));
@@ -1222,12 +1238,19 @@ describe("Chains", () => {
       });
 
     await withWorkers([await worker.start()], async () => {
-      const jobChain = await runInTransactionWithNotify(queuert, ({ client }) =>
-        queuert.enqueueJobChain({
-          client,
-          chainName: "linear",
-          input: { value: 1 },
-        })
+      const jobChain = await runInTransactionWithNotify(
+        queuert,
+        async ({ client }) => {
+          const jobChain = await queuert.enqueueJobChain({
+            client,
+            chainName: "linear",
+            input: { value: 1 },
+          });
+
+          chainId = jobChain.id;
+
+          return jobChain;
+        }
       );
 
       expectTypeOf<
