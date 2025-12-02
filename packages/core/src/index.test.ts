@@ -463,6 +463,76 @@ describe("Handler", () => {
     );
   });
 
+  test("provides attempt information to job handler", async ({
+    stateProvider,
+    stateAdapter,
+    notifyAdapter,
+    runInTransactionWithNotify,
+    withWorkers,
+    waitForJobChainsFinished,
+    expect,
+  }) => {
+    const queuert = await createQueuert({
+      stateProvider,
+      stateAdapter,
+      notifyAdapter,
+      log,
+      queueDefinitions: defineUnionQueues<{
+        test: {
+          input: null;
+          output: null;
+        };
+      }>(),
+    });
+
+    const attemps: number[] = [];
+
+    const worker = queuert.createWorker().setupQueueHandler({
+      name: "test",
+      handler: async ({ claim, finalize }) => {
+        await claim(async ({ job }) => {
+          attemps.push(job.attempt);
+
+          expectTypeOf(job.attempt).toEqualTypeOf<number>();
+          expectTypeOf(job.lastAttemptAt).toEqualTypeOf<Date | null>();
+          expectTypeOf(job.lastAttemptError).toEqualTypeOf<unknown>();
+
+          expect(job.attempt).toBeGreaterThan(0);
+          if (job.attempt > 1) {
+            expect(job.lastAttemptAt).toBeInstanceOf(Date);
+            expect(job.lastAttemptError).toBe("Simulated failure");
+          } else {
+            expect(job.lastAttemptAt).toBeNull();
+            expect(job.lastAttemptError).toBeNull();
+          }
+
+          if (job.attempt < 3) {
+            throw rescheduleJob(1, "Simulated failure");
+          }
+          return job;
+        });
+
+        return finalize(async () => {
+          return null;
+        });
+      },
+    });
+
+    await withWorkers([await worker.start()], async () => {
+      const job = await runInTransactionWithNotify(queuert, ({ client }) =>
+        queuert.enqueueJobChain({
+          client: client,
+          chainName: "test",
+          input: null,
+        })
+      );
+
+      await waitForJobChainsFinished(queuert, [job]);
+
+      expect(attemps).toEqual([1, 2, 3]);
+    });
+  });
+
   test("handles job handler errors during claim", async ({
     stateProvider,
     stateAdapter,

@@ -125,7 +125,8 @@ FROM unnest($1::uuid[], $2::uuid[]) WITH ORDINALITY AS t(job_id, depends_on_chai
 
 export const markJobSql = /* sql */ `
 UPDATE queuert.job
-SET status = $2
+SET status = $2,
+    attempt = attempt + CASE WHEN $2 = 'running'::queuert.job_status THEN 1 ELSE 0 END
 WHERE id = $1
 RETURNING *
 ` as TypedSql<
@@ -242,7 +243,6 @@ WHERE id = $1
 export const rescheduleJobSql = /* sql */ `
 UPDATE queuert.job
 SET scheduled_at = now() + ($2::text || ' milliseconds')::interval,
-  attempt = attempt + 1,
   last_attempt_at = now(),
   last_attempt_error = $3,
   locked_by = NULL,
