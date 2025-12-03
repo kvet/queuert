@@ -126,27 +126,29 @@ export const createExecutor = ({
                     ],
                   });
 
-                  job = await helper.scheduleDependentJobChains({
-                    job,
-                    enqueueDependencyJobChains:
-                      queue.enqueueDependencyJobChains,
-                    context,
-                  });
+                  return helper.withParentJobContext(job.id, async () => {
+                    job = await helper.scheduleDependentJobChains({
+                      job: job!,
+                      enqueueDependencyJobChains:
+                        queue.enqueueDependencyJobChains,
+                      context,
+                    });
 
-                  if (job.status === "waiting") {
+                    if (job.status === "waiting") {
+                      return true;
+                    }
+
+                    finalizePromise = await processJobHandler({
+                      helper,
+                      handler: queue.handler,
+                      context,
+                      job,
+                      pollIntervalMs,
+                      workerId,
+                    });
+
                     return true;
-                  }
-
-                  finalizePromise = await processJobHandler({
-                    helper,
-                    handler: queue.handler,
-                    context,
-                    job,
-                    pollIntervalMs,
-                    workerId,
                   });
-
-                  return true;
                 }
               );
 

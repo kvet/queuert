@@ -44,45 +44,46 @@ Later, a background worker picks up the job and processes it:
 queuert.createWorker()
   .setupQueueHandler({
     name: "process-image",
-    handler: async ({ claim, heartbeat, finalize }) => {
-      const image = await claim(async ({ tx, job }) => {
+    handler: async ({ claim, process, finalize }) => {
+      const image = await claim(async ({ job, tx }) => {
         return tx.images.getById(job.input.imageId);
       });
 
       // CPU-intensive image minification that blocks the event loop for a while
-      await heartbeat({ leaseMs: 60000 });
+      await process({ leaseMs: 60000 });
       const minifiedImage = minifyImage(image);
 
-      return finalize(async ({ tx, enqueueJob }) => {
-        const minifiedImage = await tx.minifiedImages.create({ image: minifiedImage });
+      return finalize(async ({ job, tx, enqueueJob }) => {
+        const saved = await tx.minifiedImages.create({ image: minifiedImage });
 
         return enqueueJob({
           tx,
           name: "distribute-image",
-          input: { imageId: image.id, minifiedImageId: minifiedImage.id },
+          input: { imageId: job.input.imageId, minifiedImageId: saved.id },
         });
       });
     },
   })
   .setupQueueHandler({
     name: "distribute-image",
-    handler: async ({ claim, withHeartbeat, finalize }) => {
-      const [image, minifiedImage] = await claim(async ({ tx, job }) => {
+    handler: async ({ claim, withProcess, finalize }) => {
+      const [image, minifiedImage] = await claim(async ({ job, tx }) => {
         return Promise.all([
           tx.images.getById(job.input.imageId),
-          tx.minifiedImages.getById(job.input.imageId),
+          tx.minifiedImages.getById(job.input.minifiedImageId),
         ]);
       });
 
       // Network-intensive non blocking distribution that may take a while
-      const distribution = await withHeartbeat(async () => {
+      const cdnUrl = await withProcess(async () => {
         return distributeImageToCDN(minifiedImage, 'some-cdn');
       }, { intervalMs: 10000, leaseMs: 60000 });
 
-      return finalize(async ({ tx, enqueueJob }) => {
-        const distribution = await tx.distributions.create({
+      return finalize(async ({ tx }) => {
+        await tx.distributions.create({
           imageId: image.id,
-          minifiedImageId: minifiedImage.id
+          minifiedImageId: minifiedImage.id,
+          cdnUrl,
         });
 
         return { done: true };
@@ -95,9 +96,9 @@ Each task is performed in a database transaction, so you can safely read and wri
 
 In the claim phase you can read data and perform non side-effecting operations.
 
-The process phase is where you perform the main work of the job. You can optionally send heartbeats to extend the job lease if your processing takes a long time. Make sure to implement it in an idempotent way, as the process phase may be retried multiple times if the worker crashes or the job lease expires.
+The process phase is where you perform the main work of the job. Call `process()` to break the claim transaction and set a lease. Use `withProcess()` for automatic lease refresh during long-running operations. Make sure to implement it in an idempotent way, as the process phase may be retried multiple times if the worker crashes or the job lease expires.
 
-In the finalize phase you can perform state commit and enqueue further jobs. If the worker crashes during the finalize phase, the whole job is retried from the beginning.
+In the finalize phase you can perform state commit and enqueue further jobs. If `process()` was not called, finalize runs in the same transaction as claim (atomic). If the worker crashes during the finalize phase, the whole job is retried from the beginning.
 
 ## It looks familiar, right?
 

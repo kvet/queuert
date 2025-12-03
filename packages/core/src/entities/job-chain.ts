@@ -51,7 +51,7 @@ export type ResolvedJobChain<
 > = {
   [Q in NonInternalReachableQueues<TQueueDefinitions, Start> &
     keyof TQueueDefinitions]: JobChain<
-    Q,
+    Start,
     TQueueDefinitions[Q]["input"],
     StripQueueRefs<TQueueDefinitions[Q]["output"]>
   >;
@@ -60,6 +60,7 @@ export type ResolvedJobChain<
 
 export type JobChain<TChainName, TInput, TOutput> = {
   id: string;
+  parentId: string | null;
   chainName: TChainName;
   input: TInput;
   startedAt: Date;
@@ -81,6 +82,7 @@ export const mapStateJobPairToJobChain = (
 ): JobChain<any, any, any> => {
   return {
     id: stateJobPair[0].id,
+    parentId: stateJobPair[0].parentId,
     chainName: stateJobPair[0].queueName,
     input: stateJobPair[0].input,
     startedAt: stateJobPair[0].createdAt,

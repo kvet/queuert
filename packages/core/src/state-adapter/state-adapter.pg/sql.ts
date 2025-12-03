@@ -98,15 +98,16 @@ export type DbJob = {
 
 export const createJobSql = /* sql */ `
 WITH new_id AS (SELECT gen_random_uuid() AS id)
-INSERT INTO queuert.job (id, queue_name, input, chain_id)
-SELECT id, $1, $2, id
+INSERT INTO queuert.job (id, queue_name, input, parent_id, chain_id)
+SELECT id, $1, $2, $3, id
 FROM new_id
 ON CONFLICT (id) DO NOTHING
 RETURNING *
 ` as TypedSql<
   readonly [
     NamedParameter<"queue_name", string>,
-    NamedParameter<"input", unknown>
+    NamedParameter<"input", unknown>,
+    NamedParameter<"parent_id", string | undefined>
   ],
   [DbJob]
 >;
@@ -123,16 +124,27 @@ FROM unnest($1::uuid[], $2::uuid[]) WITH ORDINALITY AS t(job_id, depends_on_chai
   DbJob[]
 >;
 
-export const markJobSql = /* sql */ `
+export const markJobAsWaitingSql = /* sql */ `
 UPDATE queuert.job
-SET status = $2,
-    attempt = attempt + CASE WHEN $2 = 'running'::queuert.job_status THEN 1 ELSE 0 END
+SET status = 'waiting'
 WHERE id = $1
 RETURNING *
-` as TypedSql<
-  readonly [NamedParameter<"id", string>, NamedParameter<"status", string>],
-  [DbJob]
->;
+` as TypedSql<readonly [NamedParameter<"id", string>], [DbJob]>;
+
+export const markJobAsPendingSql = /* sql */ `
+UPDATE queuert.job
+SET status = 'pending'
+WHERE id = $1
+RETURNING *
+` as TypedSql<readonly [NamedParameter<"id", string>], [DbJob]>;
+
+export const startJobAttemptSql = /* sql */ `
+UPDATE queuert.job
+SET status = 'running',
+    attempt = attempt + 1
+WHERE id = $1
+RETURNING *
+` as TypedSql<readonly [NamedParameter<"id", string>], [DbJob]>;
 
 export const completeJobSql = /* sql */ `
 UPDATE queuert.job

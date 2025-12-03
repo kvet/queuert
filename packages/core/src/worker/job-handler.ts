@@ -49,14 +49,20 @@ export type JobHandler<
       } & GetStateProviderContext<TStateProvider>
     ) => Promise<T>
   ) => Promise<T>;
-  heartbeat: (options: { leaseMs: number }) => Promise<void>;
-  withHeartbeat: <T>(
+  process: (options: { leaseMs: number }) => Promise<void>;
+  withProcess: <T>(
     cb: () => Promise<T>,
-    options: { intervalMs: number; leaseMs: number }
+    options: { leaseMs: number; intervalMs: number }
   ) => Promise<T>;
   finalize: (
     finalizeCallback: (
       finalizeOptions: {
+        job: RunningJob<
+          Job<TQueueName, TQueueDefinitions[TQueueName]["input"]>
+        >;
+        dependencies: {
+          [K in keyof TDependencies]: FinishedJobChain<TDependencies[K]>;
+        };
         enqueueJob: <
           TEnqueueQueueName extends CompatibleQueueTargets<
             TQueueDefinitions,
@@ -114,7 +120,7 @@ export const processJobHandler = async ({
   pollIntervalMs: number;
   workerId: string;
 }): Promise<() => Promise<void>> => {
-  const firstHeartbeatSent = createSignal<void>();
+  const firstProcessCalled = createSignal<void>();
   const claimTransactionClosed = createSignal<void>();
 
   const runInGuardedTransaction = async <T>(
@@ -122,7 +128,7 @@ export const processJobHandler = async ({
       context: GetStateProviderContext<StateProvider<BaseStateProviderContext>>
     ) => Promise<T>
   ): Promise<T> => {
-    if (!firstHeartbeatSent.signalled) {
+    if (!firstProcessCalled.signalled) {
       return cb(context);
     }
 
@@ -130,7 +136,7 @@ export const processJobHandler = async ({
       await helper.refetchJobForUpdate({
         context,
         job,
-        allowEmptyWorker: !firstHeartbeatSent.signalled,
+        allowEmptyWorker: !firstProcessCalled.signalled,
         workerId,
       });
 
@@ -138,7 +144,7 @@ export const processJobHandler = async ({
     });
   };
 
-  const commitHeartbeat = async (leaseMs: number) => {
+  const commitProcess = async (leaseMs: number) => {
     await runInGuardedTransaction(async (context) => {
       await helper.commitHeartbeat({
         context,
@@ -148,43 +154,45 @@ export const processJobHandler = async ({
       });
     });
 
-    firstHeartbeatSent.signalOnce();
+    firstProcessCalled.signalOnce();
     await claimTransactionClosed.onSignal;
   };
 
   const startProcessing = async (job: StateJob) => {
     try {
+      const jobInput = await helper.getJobHandlerInput({
+        job,
+        context,
+      });
+
       await handler({
         claim: async (claimCallback) => {
-          const jobInput = await helper.getJobHandlerInput({
-            job,
-            context,
-          });
-
           return await claimCallback({
             ...jobInput,
             ...context,
           });
         },
-        heartbeat: async ({ leaseMs }) => commitHeartbeat(leaseMs),
-        withHeartbeat: async (cb, { intervalMs, leaseMs }) => {
-          let commitHeartbeatPromise: Promise<void>;
+        process: async ({ leaseMs }) => commitProcess(leaseMs),
+        withProcess: async (cb, options) => {
+          let commitProcessPromise: Promise<void>;
           let timeout: NodeJS.Timeout;
-          const sendHeartbeat = async () => {
-            commitHeartbeatPromise = commitHeartbeat(leaseMs);
-            await commitHeartbeatPromise;
-            timeout = setTimeout(sendHeartbeat, intervalMs);
-          };
-          await sendHeartbeat();
 
+          const sendHeartbeat = async () => {
+            commitProcessPromise = commitProcess(options.leaseMs);
+            await commitProcessPromise;
+            timeout = setTimeout(sendHeartbeat, options.intervalMs);
+          };
+
+          await sendHeartbeat();
           return cb().finally(async () => {
-            await commitHeartbeatPromise;
+            await commitProcessPromise;
             clearTimeout(timeout);
           });
         },
         finalize: async (finalizeCallback) => {
           return runInGuardedTransaction(async (context) => {
             const output = await finalizeCallback({
+              ...jobInput,
               enqueueJob: async ({ queueName, input, ...context }) =>
                 helper.enqueueJob({
                   queueName,
@@ -216,7 +224,7 @@ export const processJobHandler = async ({
 
   const processingPromise = startProcessing(job);
 
-  await Promise.any([firstHeartbeatSent.onSignal, processingPromise]);
+  await Promise.any([firstProcessCalled.onSignal, processingPromise]);
 
   return async () => {
     claimTransactionClosed.signalOnce();

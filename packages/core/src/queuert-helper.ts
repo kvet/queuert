@@ -25,6 +25,7 @@ import {
 } from "./state-provider/state-provider.js";
 
 const notifyQueueStorage = new AsyncLocalStorage<Set<string>>();
+const parentProvideStorage = new AsyncLocalStorage<string | undefined>();
 
 export type ResolvedQueueJobs<
   TQueueDefinitions extends BaseQueueDefinitions,
@@ -95,6 +96,7 @@ export const queuertHelper = ({
       context,
       queueName,
       input,
+      parentId: parentProvideStorage.getStore(),
     });
 
     const notifyQueueSet = notifyQueueStorage.getStore();
@@ -132,6 +134,12 @@ export const queuertHelper = ({
     withNotifyQueueContext: withNotifyQueueContext as <T>(
       cb: () => Promise<T>
     ) => Promise<T>,
+    withParentJobContext: async <T>(
+      parentId: string | undefined,
+      cb: () => Promise<T>
+    ): Promise<T> => {
+      return parentProvideStorage.run(parentId, cb);
+    },
     runInTransaction: async <T>(
       cb: (
         context: GetStateProviderContext<
@@ -196,10 +204,9 @@ export const queuertHelper = ({
         (d) => d.status !== "finished"
       );
       if (incompleteDependencies.length) {
-        job = await stateAdapter.markJob({
+        job = await stateAdapter.markJobAsWaiting({
           context,
           jobId: job.id,
-          status: "waiting",
         });
         log({
           level: "info",
@@ -214,10 +221,9 @@ export const queuertHelper = ({
           ],
         });
       } else {
-        job = await stateAdapter.markJob({
+        job = await stateAdapter.markJobAsPending({
           context,
           jobId: job.id,
-          status: "pending",
         });
       }
       return job;
@@ -232,10 +238,9 @@ export const queuertHelper = ({
       job: RunningJob<Job<any, any>>;
       dependencies: FinishedJobChain<JobChain<any, any, any>>[];
     }> => {
-      const runningJob = await stateAdapter.markJob({
+      const runningJob = await stateAdapter.startJobAttempt({
         context,
         jobId: job.id,
-        status: "running",
       });
 
       const dependencies = await stateAdapter.getJobDependencies({

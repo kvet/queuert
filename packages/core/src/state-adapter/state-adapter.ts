@@ -39,7 +39,7 @@ export type StateAdapter = {
     context: BaseStateProviderContext;
     queueName: string;
     input: unknown;
-    parentId?: string;
+    parentId: string | undefined;
   }) => Promise<StateJob>;
 
   addJobDependencies: (params: {
@@ -64,10 +64,17 @@ export type StateAdapter = {
     context: BaseStateProviderContext;
     queueNames: string[];
   }) => Promise<StateJob | undefined>;
-  markJob: (params: {
+  markJobAsWaiting: (params: {
     context: BaseStateProviderContext;
     jobId: string;
-    status: "pending" | "running" | "waiting";
+  }) => Promise<StateJob>;
+  markJobAsPending: (params: {
+    context: BaseStateProviderContext;
+    jobId: string;
+  }) => Promise<StateJob>;
+  startJobAttempt: (params: {
+    context: BaseStateProviderContext;
+    jobId: string;
   }) => Promise<StateJob>;
   sendHeartbeat: (params: {
     context: BaseStateProviderContext;

@@ -11,11 +11,13 @@ import {
   getJobDependenciesSql,
   getNextJobAvailableInMsSql,
   linkJobSql,
-  markJobSql,
+  markJobAsPendingSql,
+  markJobAsWaitingSql,
   removeExpiredJobClaimsSql,
   rescheduleJobSql,
   scheduleDependentJobsSql,
   sendHeartbeatJobSql,
+  startJobAttemptSql,
 } from "./state-adapter.pg/sql.js";
 import { executeTypedSql } from "./state-adapter.pg/typed-sql.js";
 
@@ -84,7 +86,7 @@ export const createPgStateAdapter = ({
       const [job] = await executeTypedSql({
         executeSql: (...args) => stateProvider.executeSql(context, ...args),
         sql: createJobSql,
-        params: [queueName, input as any],
+        params: [queueName, input as any, parentId as any],
       });
 
       return mapDbJobToStateJob(job);
@@ -140,11 +142,29 @@ export const createPgStateAdapter = ({
 
       return job ? mapDbJobToStateJob(job) : undefined;
     },
-    markJob: async ({ context, jobId, status }) => {
+    markJobAsWaiting: async ({ context, jobId }) => {
       const [job] = await executeTypedSql({
         executeSql: (...args) => stateProvider.executeSql(context, ...args),
-        sql: markJobSql,
-        params: [jobId, status],
+        sql: markJobAsWaitingSql,
+        params: [jobId],
+      });
+
+      return mapDbJobToStateJob(job);
+    },
+    markJobAsPending: async ({ context, jobId }) => {
+      const [job] = await executeTypedSql({
+        executeSql: (...args) => stateProvider.executeSql(context, ...args),
+        sql: markJobAsPendingSql,
+        params: [jobId],
+      });
+
+      return mapDbJobToStateJob(job);
+    },
+    startJobAttempt: async ({ context, jobId }) => {
+      const [job] = await executeTypedSql({
+        executeSql: (...args) => stateProvider.executeSql(context, ...args),
+        sql: startJobAttemptSql,
+        params: [jobId],
       });
 
       return mapDbJobToStateJob(job);
