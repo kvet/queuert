@@ -4,14 +4,8 @@ import { BaseQueueDefinitions } from "../entities/queue.js";
 import { sleep } from "../helpers/timers.js";
 import { Log } from "../log.js";
 import { NotifyAdapter } from "../notify-adapter/notify-adapter.js";
-import {
-  EnqueueDependencyJobChains,
-  ProcessHelper,
-} from "../queuert-helper.js";
-import {
-  BaseStateProviderContext,
-  StateProvider,
-} from "../state-provider/state-provider.js";
+import { EnqueueDependencyJobChains, ProcessHelper, RetryConfig } from "../queuert-helper.js";
+import { BaseStateProviderContext, StateProvider } from "../state-provider/state-provider.js";
 import { JobHandler, processJobHandler } from "./job-handler.js";
 
 export type RegisteredQueues = Map<
@@ -29,6 +23,7 @@ export type RegisteredQueues = Map<
       string,
       readonly JobChain<string, any, any>[]
     >;
+    retryConfig?: RetryConfig;
   }
 >;
 
@@ -48,11 +43,7 @@ export const createExecutor = ({
   nextJobDelayMs?: number;
 }) => Promise<() => Promise<void>>) => {
   const queueNames = Array.from(registeredQueues.keys());
-  return async ({
-    workerId = randomUUID(),
-    pollIntervalMs = 60_000,
-    nextJobDelayMs = 0,
-  } = {}) => {
+  return async ({ workerId = randomUUID(), pollIntervalMs = 60_000, nextJobDelayMs = 0 } = {}) => {
     const stopController = new AbortController();
     const performWorkIteration = async () => {
       while (true) {
@@ -94,63 +85,57 @@ export const createExecutor = ({
         try {
           while (
             await (async () => {
-              let finalizePromise: () => Promise<void> = () =>
-                Promise.resolve();
+              let finalizePromise: () => Promise<void> = () => Promise.resolve();
 
-              const claimPromise = await helper.runInTransaction(
-                async (context) => {
-                  let job = await helper.acquireJob({
-                    queueNames,
+              const claimPromise = await helper.runInTransaction(async (context) => {
+                let job = await helper.acquireJob({
+                  queueNames,
+                  context,
+                });
+                if (!job) {
+                  return false;
+                }
+
+                const queue = registeredQueues.get(job.queueName);
+                if (!queue) {
+                  throw new Error(`No handler registered for queue "${job.queueName}"`);
+                }
+
+                log({
+                  level: "info",
+                  message: `Processing job`,
+                  args: [
+                    {
+                      jobId: job.id,
+                      queueName: job.queueName,
+                      status: job.status,
+                    },
+                  ],
+                });
+
+                return helper.withParentJobContext(job.id, async () => {
+                  job = await helper.scheduleDependentJobChains({
+                    job: job!,
+                    enqueueDependencyJobChains: queue.enqueueDependencyJobChains,
                     context,
                   });
-                  if (!job) {
-                    return false;
-                  }
 
-                  const queue = registeredQueues.get(job.queueName);
-                  if (!queue) {
-                    throw new Error(
-                      `No handler registered for queue "${job.queueName}"`
-                    );
-                  }
-
-                  log({
-                    level: "info",
-                    message: `Processing job`,
-                    args: [
-                      {
-                        jobId: job.id,
-                        queueName: job.queueName,
-                        status: job.status,
-                      },
-                    ],
-                  });
-
-                  return helper.withParentJobContext(job.id, async () => {
-                    job = await helper.scheduleDependentJobChains({
-                      job: job!,
-                      enqueueDependencyJobChains:
-                        queue.enqueueDependencyJobChains,
-                      context,
-                    });
-
-                    if (job.status === "waiting") {
-                      return true;
-                    }
-
-                    finalizePromise = await processJobHandler({
-                      helper,
-                      handler: queue.handler,
-                      context,
-                      job,
-                      pollIntervalMs,
-                      workerId,
-                    });
-
+                  if (job.status === "waiting") {
                     return true;
+                  }
+
+                  finalizePromise = await processJobHandler({
+                    helper,
+                    handler: queue.handler,
+                    context,
+                    job,
+                    retryConfig: queue.retryConfig ?? {},
+                    workerId,
                   });
-                }
-              );
+
+                  return true;
+                });
+              });
 
               await finalizePromise();
 

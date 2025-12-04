@@ -1,17 +1,11 @@
-export type NamedParameter<
-  TParamName extends string,
-  TParamValue,
-> = TParamValue & {
+export type NamedParameter<TParamName extends string, TParamValue> = TParamValue & {
   /* @deprecated - type-only */
   $paramName?: TParamName;
 };
 
 export type TypedSql<
   TParams extends
-    | readonly [
-        NamedParameter<string, unknown>,
-        ...NamedParameter<string, unknown>[],
-      ]
+    | readonly [NamedParameter<string, unknown>, ...NamedParameter<string, unknown>[]]
     | readonly [],
   TResult,
 > = string & {
@@ -23,10 +17,7 @@ export type TypedSql<
 
 export const executeTypedSql = async <
   TParams extends
-    | readonly [
-        NamedParameter<string, unknown>,
-        ...NamedParameter<string, unknown>[],
-      ]
+    | readonly [NamedParameter<string, unknown>, ...NamedParameter<string, unknown>[]]
     | readonly [],
   TResult,
 >({
@@ -38,5 +29,4 @@ export const executeTypedSql = async <
   sql: TypedSql<TParams, TResult>;
 } & (TParams extends readonly []
   ? { params?: undefined }
-  : { params: TParams })): Promise<TResult> =>
-  executeSql<TResult>(sql, params as any);
+  : { params: TParams })): Promise<TResult> => executeSql<TResult>(sql, params as any);

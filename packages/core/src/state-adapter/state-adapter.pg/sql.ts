@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS queuert.job (
   -- attempts
   attempt                       integer NOT NULL DEFAULT 0,
   last_attempt_at               timestamptz,
-  last_attempt_error            text,
+  last_attempt_error            jsonb,
 
   -- locking/heartbeats
   locked_by                     text,
@@ -107,7 +107,7 @@ RETURNING *
   readonly [
     NamedParameter<"queue_name", string>,
     NamedParameter<"input", unknown>,
-    NamedParameter<"parent_id", string | undefined>
+    NamedParameter<"parent_id", string | undefined>,
   ],
   [DbJob]
 >;
@@ -117,10 +117,7 @@ INSERT INTO queuert.job_dependency (job_id, depends_on_chain_id, "index")
 SELECT job_id, depends_on_chain_id, ord - 1 AS "index"
 FROM unnest($1::uuid[], $2::uuid[]) WITH ORDINALITY AS t(job_id, depends_on_chain_id, ord)
 ` as TypedSql<
-  readonly [
-    NamedParameter<"job_id", string[]>,
-    NamedParameter<"depends_on_chain_id", string[]>
-  ],
+  readonly [NamedParameter<"job_id", string[]>, NamedParameter<"depends_on_chain_id", string[]>],
   DbJob[]
 >;
 
@@ -155,20 +152,14 @@ SET status = 'completed',
   locked_until = NULL
 WHERE id = $1
 RETURNING *
-` as TypedSql<
-  readonly [NamedParameter<"id", string>, NamedParameter<"output", unknown>],
-  [DbJob]
->;
+` as TypedSql<readonly [NamedParameter<"id", string>, NamedParameter<"output", unknown>], [DbJob]>;
 
 export const linkJobSql = /* sql */ `
 UPDATE queuert.job
 SET chain_id = $2
 WHERE id = $1
 RETURNING *
-` as TypedSql<
-  readonly [NamedParameter<"id", string>, NamedParameter<"chain_id", string>],
-  [DbJob]
->;
+` as TypedSql<readonly [NamedParameter<"id", string>, NamedParameter<"chain_id", string>], [DbJob]>;
 
 export const scheduleDependentJobsSql = /* sql */ `
 WITH direct_dependents AS (
@@ -202,10 +193,7 @@ SET scheduled_at = now(),
 WHERE j.id IN (SELECT job_id FROM ready_jobs)
   AND j.status = 'waiting'
 RETURNING j.id;
-` as TypedSql<
-  readonly [NamedParameter<"depends_on_chain_id", string>],
-  string[]
->;
+` as TypedSql<readonly [NamedParameter<"depends_on_chain_id", string>], string[]>;
 
 export const getJobChainByIdSql = /* sql */ `
 SELECT
@@ -266,7 +254,7 @@ RETURNING *
   readonly [
     NamedParameter<"id", string>,
     NamedParameter<"delay_ms", number>,
-    NamedParameter<"error", string>
+    NamedParameter<"error", string>,
   ],
   [DbJob]
 >;
@@ -282,7 +270,7 @@ RETURNING *
   readonly [
     NamedParameter<"id", string>,
     NamedParameter<"locked_by", string>,
-    NamedParameter<"lock_duration_ms", number>
+    NamedParameter<"lock_duration_ms", number>,
   ],
   [DbJob]
 >;
@@ -296,10 +284,7 @@ WHERE job.queue_name IN (SELECT unnest($1::text[]))
 ORDER BY job.scheduled_at ASC
 LIMIT 1
 FOR UPDATE SKIP LOCKED
-` as TypedSql<
-  readonly [NamedParameter<"queue_names", string[]>],
-  [DbJob | undefined]
->;
+` as TypedSql<readonly [NamedParameter<"queue_names", string[]>], [DbJob | undefined]>;
 
 export const getNextJobAvailableInMsSql = /* sql */ `
 SELECT GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (job.scheduled_at - now())) * 1000)::bigint) AS available_in_ms

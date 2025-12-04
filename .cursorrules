@@ -1,0 +1,19 @@
+# Queuert Code Style Guide
+
+## Testing Patterns
+
+- Embed small verification tests into existing related tests rather than creating separate ones
+- Test all relevant phases: `claim`, `before-process`, `process`, `finalize`
+- Prefer descriptive test names that match what's being tested
+
+## Code Style
+
+- Inline types used in only one place
+- Remove obvious comments
+- Merge similar functionality
+
+## Session Requirements
+
+- End each agentic session only when all checks pass: `pnpm check` (runs lint, fmt:check, typecheck, test)
+- Update documentation (README) if there were changes to public API
+

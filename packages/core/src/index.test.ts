@@ -7,6 +7,7 @@ import {
   DefineQueueRef,
   defineUnionQueues,
   FinishedJobChain,
+  JobAttemptError,
   JobChain,
   Log,
   NotifyAdapter,
@@ -23,15 +24,12 @@ const test = extendWithDb(baseTest, import.meta.url).extend<{
   notifyAdapter: NotifyAdapter;
   runInTransactionWithNotify: <T>(
     queuert: Queuert<PgPoolProvider, any>,
-    cb: (context: { client: PoolClient }) => Promise<T>
+    cb: (context: { client: PoolClient }) => Promise<T>,
   ) => Promise<T>;
-  withWorkers: <T>(
-    workers: (() => Promise<void>)[],
-    cb: () => Promise<T>
-  ) => Promise<T>;
+  withWorkers: <T>(workers: (() => Promise<void>)[], cb: () => Promise<T>) => Promise<T>;
   waitForJobChainsFinished: <TChains extends JobChain<any, any, any>[]>(
     queuert: Queuert<PgPoolProvider, any>,
-    chains: TChains
+    chains: TChains,
   ) => Promise<{ [K in keyof TChains]: FinishedJobChain<TChains[K]> }>;
 }>({
   stateAdapter: [
@@ -40,7 +38,7 @@ const test = extendWithDb(baseTest, import.meta.url).extend<{
       await use(
         createPgStateAdapter({
           stateProvider,
-        })
+        }),
       );
     },
     { scope: "test" },
@@ -57,7 +55,7 @@ const test = extendWithDb(baseTest, import.meta.url).extend<{
     async ({ stateProvider }, use) => {
       await use(async (queuert, cb) => {
         return stateProvider.provideContext((context) =>
-          queuert.withNotify(() => stateProvider.runInTransaction(context, cb))
+          queuert.withNotify(() => stateProvider.runInTransaction(context, cb)),
         );
       });
     },
@@ -84,17 +82,16 @@ const test = extendWithDb(baseTest, import.meta.url).extend<{
       await use((queuert, chains) =>
         vi.waitFor(
           async () => {
-            const latestChains = await stateProvider.provideContext(
-              ({ client }) =>
-                Promise.all(
-                  chains.map(async (chain) =>
-                    queuert.getJobChain({
-                      client,
-                      id: chain.id,
-                      name: chain.chainName,
-                    })
-                  )
-                )
+            const latestChains = await stateProvider.provideContext(({ client }) =>
+              Promise.all(
+                chains.map(async (chain) =>
+                  queuert.getJobChain({
+                    client,
+                    id: chain.id,
+                    name: chain.chainName,
+                  }),
+                ),
+              ),
             );
 
             if (latestChains.some((chain) => !chain)) {
@@ -102,17 +99,15 @@ const test = extendWithDb(baseTest, import.meta.url).extend<{
             }
             if (latestChains.some((chain) => chain!.status !== "finished")) {
               expect(latestChains.map((chain) => chain!.status)).toEqual(
-                latestChains.map(() =>
-                  expect.objectContaining({ status: "finished" })
-                )
+                latestChains.map(() => expect.objectContaining({ status: "finished" })),
               );
             }
             return latestChains as {
               [K in keyof typeof chains]: FinishedJobChain<(typeof chains)[K]>;
             };
           },
-          { timeout: 2000, interval: 10 }
-        )
+          { timeout: 2000, interval: 10 },
+        ),
       );
     },
     { scope: "test" },
@@ -183,18 +178,14 @@ describe("Handler", () => {
           client,
           chainName: "test",
           input: { test: true },
-        })
+        }),
       );
 
-      expectTypeOf<
-        FinishedJobChain<typeof jobChain>["output"]
-      >().toEqualTypeOf<{
+      expectTypeOf<FinishedJobChain<typeof jobChain>["output"]>().toEqualTypeOf<{
         result: boolean;
       }>();
 
-      const [succeededJobChain] = await waitForJobChainsFinished(queuert, [
-        jobChain,
-      ]);
+      const [succeededJobChain] = await waitForJobChainsFinished(queuert, [jobChain]);
 
       expect(succeededJobChain.output).toEqual({ result: true });
     });
@@ -242,12 +233,10 @@ describe("Handler", () => {
           client,
           chainName: "test",
           input: { test: true },
-        })
+        }),
       );
 
-      const [succeededJobChain] = await waitForJobChainsFinished(queuert, [
-        jobChain,
-      ]);
+      const [succeededJobChain] = await waitForJobChainsFinished(queuert, [jobChain]);
 
       expect(succeededJobChain.output).toEqual({ result: true });
     });
@@ -291,12 +280,10 @@ describe("Handler", () => {
           client,
           chainName: "test",
           input: { test: true },
-        })
+        }),
       );
 
-      const [succeededJobChain] = await waitForJobChainsFinished(queuert, [
-        jobChain,
-      ]);
+      const [succeededJobChain] = await waitForJobChainsFinished(queuert, [jobChain]);
 
       expect(succeededJobChain.output).toEqual({ result: true });
     });
@@ -341,19 +328,17 @@ describe("Handler", () => {
           client,
           chainName: "test",
           input: { test: true },
-        })
+        }),
       );
 
-      const [succeededJobChain] = await waitForJobChainsFinished(queuert, [
-        jobChain,
-      ]);
+      const [succeededJobChain] = await waitForJobChainsFinished(queuert, [jobChain]);
 
       expect(succeededJobChain.output).toEqual({ result: true });
       expect(log).toHaveBeenCalledWith(
         expect.objectContaining({
           level: "warn",
           message: expect.stringContaining("expired"),
-        })
+        }),
       );
     });
   });
@@ -396,19 +381,17 @@ describe("Handler", () => {
           client,
           chainName: "test",
           input: { test: true },
-        })
+        }),
       );
 
-      const [succeededJobChain] = await waitForJobChainsFinished(queuert, [
-        jobChain,
-      ]);
+      const [succeededJobChain] = await waitForJobChainsFinished(queuert, [jobChain]);
 
       expect(succeededJobChain.output).toEqual({ result: true });
       expect(log).toHaveBeenCalledWith(
         expect.objectContaining({
           level: "warn",
           message: expect.stringContaining("expired"),
-        })
+        }),
       );
     });
   });
@@ -447,22 +430,19 @@ describe("Handler", () => {
       handler: handler,
     });
 
-    await withWorkers(
-      [await worker.start(), await worker.start()],
-      async () => {
-        const job = await runInTransactionWithNotify(queuert, ({ client }) =>
-          queuert.enqueueJobChain({
-            client: client,
-            chainName: "test",
-            input: { test: true },
-          })
-        );
+    await withWorkers([await worker.start(), await worker.start()], async () => {
+      const job = await runInTransactionWithNotify(queuert, ({ client }) =>
+        queuert.enqueueJobChain({
+          client: client,
+          chainName: "test",
+          input: { test: true },
+        }),
+      );
 
-        await waitForJobChainsFinished(queuert, [job]);
+      await waitForJobChainsFinished(queuert, [job]);
 
-        expect(handler).toHaveBeenCalledTimes(1);
-      }
-    );
+      expect(handler).toHaveBeenCalledTimes(1);
+    });
   });
 
   test("provides attempt information to job handler", async ({
@@ -497,12 +477,16 @@ describe("Handler", () => {
 
           expectTypeOf(job.attempt).toEqualTypeOf<number>();
           expectTypeOf(job.lastAttemptAt).toEqualTypeOf<Date | null>();
-          expectTypeOf(job.lastAttemptError).toEqualTypeOf<unknown>();
+          expectTypeOf(job.lastAttemptError).toEqualTypeOf<JobAttemptError | null>();
 
           expect(job.attempt).toBeGreaterThan(0);
           if (job.attempt > 1) {
             expect(job.lastAttemptAt).toBeInstanceOf(Date);
-            expect(job.lastAttemptError).toBe("Simulated failure");
+            expect(job.lastAttemptError).toMatchObject({
+              type: "rescheduled",
+              afterMs: 1,
+              cause: "Simulated failure",
+            });
           } else {
             expect(job.lastAttemptAt).toBeNull();
             expect(job.lastAttemptError).toBeNull();
@@ -526,7 +510,7 @@ describe("Handler", () => {
           client: client,
           chainName: "test",
           input: null,
-        })
+        }),
       );
 
       await waitForJobChainsFinished(queuert, [job]);
@@ -535,7 +519,7 @@ describe("Handler", () => {
     });
   });
 
-  test("handles job handler errors during claim", async ({
+  test("uses exponential backoff for unexpected errors in all phases", async ({
     stateProvider,
     stateAdapter,
     notifyAdapter,
@@ -544,7 +528,7 @@ describe("Handler", () => {
     waitForJobChainsFinished,
     expect,
   }) => {
-    let simulateFailure = true;
+    type ErrorPhase = "claim" | "before-process" | "process" | "finalize";
 
     const queuert = await createQueuert({
       stateProvider,
@@ -553,118 +537,94 @@ describe("Handler", () => {
       log,
       queueDefinitions: defineUnionQueues<{
         test: {
-          input: { jobNumber: number };
-          output: { success: boolean };
+          input: { phase: ErrorPhase };
+          output: null;
         };
       }>(),
     });
 
+    const errors: { phase: ErrorPhase; error: JobAttemptError }[] = [];
+
     const worker = queuert.createWorker().setupQueueHandler({
       name: "test",
+      retryConfig: {
+        initialIntervalMs: 10,
+        backoffCoefficient: 2.0,
+        maxIntervalMs: 100,
+      },
       handler: async ({ claim, process, finalize }) => {
-        await claim(async ({ job }) => {
-          if (job.input.jobNumber === 2 && simulateFailure) {
-            simulateFailure = false;
-            rescheduleJob(100, "Simulated failure");
+        const claimResult = await claim(async ({ job }) => {
+          if (job.lastAttemptError) {
+            errors.push({
+              phase: job.input.phase,
+              error: job.lastAttemptError,
+            });
+          }
+          if (job.input.phase === "claim" && job.attempt === 1) {
+            throw new Error("Error in claim");
           }
           return job;
         });
 
+        if (claimResult.input.phase === "before-process" && claimResult.attempt === 1) {
+          throw new Error("Error before process");
+        }
+
         await process({ leaseMs: 1000 });
 
-        return finalize(async () => {
-          return { success: true };
-        });
-      },
-    });
-
-    await withWorkers([await worker.start()], async () => {
-      const jobs = [];
-      for (let i = 0; i < 5; i++) {
-        jobs.push(
-          await runInTransactionWithNotify(queuert, ({ client }) =>
-            queuert.enqueueJobChain({
-              client: client,
-              chainName: "test",
-              input: { jobNumber: i },
-            })
-          )
-        );
-      }
-
-      const succeededJobs = await waitForJobChainsFinished(queuert, jobs);
-
-      expect(
-        succeededJobs
-          .toSorted((a, b) => a.finishedAt.getTime() - b.finishedAt.getTime())
-          .map((job) => job.id)
-      ).not.toEqual(jobs.map((job) => job.id));
-    });
-  });
-
-  test("handles job handler errors during processing with opened claim transaction", async ({
-    stateProvider,
-    stateAdapter,
-    notifyAdapter,
-    runInTransactionWithNotify,
-    withWorkers,
-    waitForJobChainsFinished,
-    expect,
-  }) => {
-    let simulateFailure = true;
-
-    const queuert = await createQueuert({
-      stateProvider,
-      stateAdapter,
-      notifyAdapter,
-      log,
-      queueDefinitions: defineUnionQueues<{
-        test: {
-          input: { jobNumber: number };
-          output: { success: boolean };
-        };
-      }>(),
-    });
-
-    const worker = queuert.createWorker().setupQueueHandler({
-      name: "test",
-      handler: async ({ finalize }) => {
-        if (simulateFailure) {
-          simulateFailure = false;
-          rescheduleJob(100, "Simulated failure");
+        if (claimResult.input.phase === "process" && claimResult.attempt === 1) {
+          throw new Error("Error in process");
         }
 
         return finalize(async () => {
-          return { success: true };
+          if (claimResult.input.phase === "finalize" && claimResult.attempt === 1) {
+            throw new Error("Error in finalize");
+          }
+          return null;
         });
       },
     });
 
     await withWorkers([await worker.start()], async () => {
-      const jobs = [];
-      for (let i = 0; i < 5; i++) {
-        jobs.push(
-          await runInTransactionWithNotify(queuert, ({ client }) =>
+      const jobs = await Promise.all(
+        (["claim", "before-process", "process", "finalize"] as ErrorPhase[]).map((phase) =>
+          runInTransactionWithNotify(queuert, ({ client }) =>
             queuert.enqueueJobChain({
-              client: client,
+              client,
               chainName: "test",
-              input: { jobNumber: i },
-            })
-          )
-        );
-      }
+              input: { phase },
+            }),
+          ),
+        ),
+      );
 
-      const succeededJobs = await waitForJobChainsFinished(queuert, jobs);
+      await waitForJobChainsFinished(queuert, jobs);
 
-      expect(
-        succeededJobs
-          .toSorted((a, b) => a.finishedAt.getTime() - b.finishedAt.getTime())
-          .map((job) => job.id)
-      ).not.toEqual(jobs.map((job) => job.id));
+      expect(errors).toHaveLength(4);
+      expect(errors.find((e) => e.phase === "claim")?.error).toEqual({
+        type: "unhandled",
+        cause: "Error: Error in claim",
+        afterMs: 10,
+      });
+      expect(errors.find((e) => e.phase === "before-process")?.error).toEqual({
+        type: "unhandled",
+        cause: "Error: Error before process",
+        afterMs: 10,
+      });
+      expect(errors.find((e) => e.phase === "process")?.error).toEqual({
+        type: "unhandled",
+        cause: "Error: Error in process",
+        afterMs: 10,
+      });
+      expect(errors.find((e) => e.phase === "finalize")?.error).toEqual({
+        type: "unhandled",
+        cause: "Error: Error in finalize",
+        afterMs: 10,
+      });
     });
   });
 
-  test("handles job handler errors during processing with closed claim transaction", async ({
+  test("uses exponential backoff progression for repeated failures", async ({
     stateProvider,
     stateAdapter,
     notifyAdapter,
@@ -673,7 +633,83 @@ describe("Handler", () => {
     waitForJobChainsFinished,
     expect,
   }) => {
-    let simulateFailure = true;
+    const queuert = await createQueuert({
+      stateProvider,
+      stateAdapter,
+      notifyAdapter,
+      log,
+      queueDefinitions: defineUnionQueues<{
+        test: {
+          input: null;
+          output: null;
+        };
+      }>(),
+    });
+
+    const errors: JobAttemptError[] = [];
+
+    const worker = queuert.createWorker().setupQueueHandler({
+      name: "test",
+      retryConfig: {
+        initialIntervalMs: 10,
+        backoffCoefficient: 2.0,
+        maxIntervalMs: 100,
+      },
+      handler: async ({ claim, finalize }) => {
+        await claim(async ({ job }) => {
+          if (job.lastAttemptError) {
+            errors.push(job.lastAttemptError);
+          }
+          if (job.attempt < 4) {
+            throw new Error("Unexpected error");
+          }
+        });
+
+        return finalize(async () => null);
+      },
+    });
+
+    await withWorkers([await worker.start()], async () => {
+      const job = await runInTransactionWithNotify(queuert, ({ client }) =>
+        queuert.enqueueJobChain({
+          client,
+          chainName: "test",
+          input: null,
+        }),
+      );
+
+      await waitForJobChainsFinished(queuert, [job]);
+
+      // Verify exponential backoff: 10ms, 20ms, 40ms
+      expect(errors).toHaveLength(3);
+      expect(errors[0]).toEqual({
+        type: "unhandled",
+        cause: "Error: Unexpected error",
+        afterMs: 10,
+      });
+      expect(errors[1]).toEqual({
+        type: "unhandled",
+        cause: "Error: Unexpected error",
+        afterMs: 20,
+      });
+      expect(errors[2]).toEqual({
+        type: "unhandled",
+        cause: "Error: Unexpected error",
+        afterMs: 40,
+      });
+    });
+  });
+
+  test("handles rescheduled errors in all phases", async ({
+    stateProvider,
+    stateAdapter,
+    notifyAdapter,
+    runInTransactionWithNotify,
+    withWorkers,
+    waitForJobChainsFinished,
+    expect,
+  }) => {
+    type ErrorPhase = "claim" | "before-process" | "process" | "finalize";
 
     const queuert = await createQueuert({
       stateProvider,
@@ -682,174 +718,85 @@ describe("Handler", () => {
       log,
       queueDefinitions: defineUnionQueues<{
         test: {
-          input: { jobNumber: number };
-          output: { success: boolean };
+          input: { phase: ErrorPhase };
+          output: null;
         };
       }>(),
     });
 
+    const errors: { phase: ErrorPhase; error: JobAttemptError }[] = [];
+
     const worker = queuert.createWorker().setupQueueHandler({
       name: "test",
-      handler: async ({ process, finalize }) => {
+      handler: async ({ claim, process, finalize }) => {
+        const claimResult = await claim(async ({ job }) => {
+          if (job.lastAttemptError) {
+            errors.push({
+              phase: job.input.phase,
+              error: job.lastAttemptError,
+            });
+          }
+          if (job.input.phase === "claim" && job.attempt === 1) {
+            rescheduleJob(1, "Rescheduled in claim");
+          }
+          return job;
+        });
+
+        if (claimResult.input.phase === "before-process" && claimResult.attempt === 1) {
+          rescheduleJob(1, "Rescheduled before process");
+        }
+
         await process({ leaseMs: 1000 });
 
-        if (simulateFailure) {
-          simulateFailure = false;
-          rescheduleJob(100, "Simulated failure");
+        if (claimResult.input.phase === "process" && claimResult.attempt === 1) {
+          rescheduleJob(1, "Rescheduled in process");
         }
 
         return finalize(async () => {
-          return { success: true };
-        });
-      },
-    });
-
-    await withWorkers([await worker.start()], async () => {
-      const jobs = [];
-      for (let i = 0; i < 5; i++) {
-        jobs.push(
-          await runInTransactionWithNotify(queuert, ({ client }) =>
-            queuert.enqueueJobChain({
-              client: client,
-              chainName: "test",
-              input: { jobNumber: i },
-            })
-          )
-        );
-      }
-
-      const succeededJobs = await waitForJobChainsFinished(queuert, jobs);
-
-      expect(
-        succeededJobs
-          .toSorted((a, b) => a.finishedAt.getTime() - b.finishedAt.getTime())
-          .map((job) => job.id)
-      ).not.toEqual(jobs.map((job) => job.id));
-    });
-  });
-
-  test("handles job handler errors during finalization with opened claim transaction", async ({
-    stateProvider,
-    stateAdapter,
-    notifyAdapter,
-    runInTransactionWithNotify,
-    withWorkers,
-    waitForJobChainsFinished,
-    expect,
-  }) => {
-    let simulateFailure = true;
-
-    const queuert = await createQueuert({
-      stateProvider,
-      stateAdapter,
-      notifyAdapter,
-      log,
-      queueDefinitions: defineUnionQueues<{
-        test: {
-          input: { jobNumber: number };
-          output: { success: boolean };
-        };
-      }>(),
-    });
-
-    const worker = queuert.createWorker().setupQueueHandler({
-      name: "test",
-      handler: async ({ finalize }) => {
-        return finalize(async () => {
-          if (simulateFailure) {
-            simulateFailure = false;
-            rescheduleJob(100, "Simulated failure");
+          if (claimResult.input.phase === "finalize" && claimResult.attempt === 1) {
+            rescheduleJob(1, "Rescheduled in finalize");
           }
-          return { success: true };
+          return null;
         });
       },
     });
 
     await withWorkers([await worker.start()], async () => {
-      const jobs = [];
-      for (let i = 0; i < 5; i++) {
-        jobs.push(
-          await runInTransactionWithNotify(queuert, ({ client }) =>
+      const jobs = await Promise.all(
+        (["claim", "before-process", "process", "finalize"] as ErrorPhase[]).map((phase) =>
+          runInTransactionWithNotify(queuert, ({ client }) =>
             queuert.enqueueJobChain({
-              client: client,
+              client,
               chainName: "test",
-              input: { jobNumber: i },
-            })
-          )
-        );
-      }
+              input: { phase },
+            }),
+          ),
+        ),
+      );
 
-      const succeededJobs = await waitForJobChainsFinished(queuert, jobs);
+      await waitForJobChainsFinished(queuert, jobs);
 
-      expect(
-        succeededJobs
-          .toSorted((a, b) => a.finishedAt.getTime() - b.finishedAt.getTime())
-          .map((job) => job.id)
-      ).not.toEqual(jobs.map((job) => job.id));
-    });
-  });
-
-  test("handles job handler errors during finalization with closed claim transaction", async ({
-    stateProvider,
-    stateAdapter,
-    notifyAdapter,
-    runInTransactionWithNotify,
-    withWorkers,
-    waitForJobChainsFinished,
-    expect,
-  }) => {
-    let simulateFailure = true;
-
-    const queuert = await createQueuert({
-      stateProvider,
-      stateAdapter,
-      notifyAdapter,
-      log,
-      queueDefinitions: defineUnionQueues<{
-        test: {
-          input: { jobNumber: number };
-          output: { success: boolean };
-        };
-      }>(),
-    });
-
-    const worker = queuert.createWorker().setupQueueHandler({
-      name: "test",
-      handler: async ({ process, finalize }) => {
-        await process({ leaseMs: 1000 });
-
-        return finalize(async () => {
-          if (simulateFailure) {
-            simulateFailure = false;
-            rescheduleJob(100, "Simulated failure");
-          }
-
-          return { success: true };
-        });
-      },
-    });
-
-    await withWorkers([await worker.start()], async () => {
-      const jobs = [];
-      for (let i = 0; i < 5; i++) {
-        jobs.push(
-          await runInTransactionWithNotify(queuert, ({ client }) =>
-            queuert.enqueueJobChain({
-              client: client,
-              chainName: "test",
-              input: { jobNumber: i },
-            })
-          )
-        );
-      }
-
-      const succeededJobs = await waitForJobChainsFinished(queuert, jobs);
-
-      expect(
-        succeededJobs
-          .toSorted((a, b) => a.finishedAt.getTime() - b.finishedAt.getTime())
-          .map((job) => job.id)
-      ).not.toEqual(jobs.map((job) => job.id));
+      expect(errors).toHaveLength(4);
+      expect(errors.find((e) => e.phase === "claim")?.error).toEqual({
+        type: "rescheduled",
+        cause: "Rescheduled in claim",
+        afterMs: 1,
+      });
+      expect(errors.find((e) => e.phase === "before-process")?.error).toEqual({
+        type: "rescheduled",
+        cause: "Rescheduled before process",
+        afterMs: 1,
+      });
+      expect(errors.find((e) => e.phase === "process")?.error).toEqual({
+        type: "rescheduled",
+        cause: "Rescheduled in process",
+        afterMs: 1,
+      });
+      expect(errors.find((e) => e.phase === "finalize")?.error).toEqual({
+        type: "rescheduled",
+        cause: "Rescheduled in finalize",
+        afterMs: 1,
+      });
     });
   });
 });
@@ -878,10 +825,8 @@ describe("Reaper", () => {
     });
 
     let failed = false;
-    const { promise: startPromise, resolve: startResolve } =
-      Promise.withResolvers<void>();
-    const { promise: endPromise, resolve: endResolve } =
-      Promise.withResolvers<void>();
+    const { promise: startPromise, resolve: startResolve } = Promise.withResolvers<void>();
+    const { promise: endPromise, resolve: endResolve } = Promise.withResolvers<void>();
 
     const worker = queuert.createWorker().setupQueueHandler({
       name: "test",
@@ -902,43 +847,35 @@ describe("Reaper", () => {
       },
     });
 
-    await withWorkers(
-      [await worker.start(), await worker.start()],
-      async () => {
-        const failJobChain = await runInTransactionWithNotify(
-          queuert,
-          ({ client }) =>
-            queuert.enqueueJobChain({
-              client,
-              chainName: "test",
-              input: null,
-            })
-        );
+    await withWorkers([await worker.start(), await worker.start()], async () => {
+      const failJobChain = await runInTransactionWithNotify(queuert, ({ client }) =>
+        queuert.enqueueJobChain({
+          client,
+          chainName: "test",
+          input: null,
+        }),
+      );
 
-        await startPromise;
+      await startPromise;
 
-        const successJobChain = await runInTransactionWithNotify(
-          queuert,
-          ({ client }) =>
-            queuert.enqueueJobChain({
-              client,
-              chainName: "test",
-              input: null,
-            })
-        );
+      const successJobChain = await runInTransactionWithNotify(queuert, ({ client }) =>
+        queuert.enqueueJobChain({
+          client,
+          chainName: "test",
+          input: null,
+        }),
+      );
 
-        const [succeededSuccessJobChain, succeededFailJobChain] =
-          await waitForJobChainsFinished(queuert, [
-            successJobChain,
-            failJobChain,
-          ]);
+      const [succeededSuccessJobChain, succeededFailJobChain] = await waitForJobChainsFinished(
+        queuert,
+        [successJobChain, failJobChain],
+      );
 
-        expect(succeededSuccessJobChain.output).toEqual(null);
-        expect(succeededFailJobChain.output).toEqual(null);
+      expect(succeededSuccessJobChain.output).toEqual(null);
+      expect(succeededFailJobChain.output).toEqual(null);
 
-        await endPromise;
-      }
-    );
+      await endPromise;
+    });
   });
 
   test("reaps abandoned jobs on finalize", async ({
@@ -964,10 +901,8 @@ describe("Reaper", () => {
     });
 
     let failed = false;
-    const { promise: startPromise, resolve: startResolve } =
-      Promise.withResolvers<void>();
-    const { promise: endPromise, resolve: endResolve } =
-      Promise.withResolvers<void>();
+    const { promise: startPromise, resolve: startResolve } = Promise.withResolvers<void>();
+    const { promise: endPromise, resolve: endResolve } = Promise.withResolvers<void>();
 
     const worker = queuert.createWorker().setupQueueHandler({
       name: "test",
@@ -988,43 +923,35 @@ describe("Reaper", () => {
       },
     });
 
-    await withWorkers(
-      [await worker.start(), await worker.start()],
-      async () => {
-        const failJobChain = await runInTransactionWithNotify(
-          queuert,
-          ({ client }) =>
-            queuert.enqueueJobChain({
-              client,
-              chainName: "test",
-              input: null,
-            })
-        );
+    await withWorkers([await worker.start(), await worker.start()], async () => {
+      const failJobChain = await runInTransactionWithNotify(queuert, ({ client }) =>
+        queuert.enqueueJobChain({
+          client,
+          chainName: "test",
+          input: null,
+        }),
+      );
 
-        await startPromise;
+      await startPromise;
 
-        const successJobChain = await runInTransactionWithNotify(
-          queuert,
-          ({ client }) =>
-            queuert.enqueueJobChain({
-              client,
-              chainName: "test",
-              input: null,
-            })
-        );
+      const successJobChain = await runInTransactionWithNotify(queuert, ({ client }) =>
+        queuert.enqueueJobChain({
+          client,
+          chainName: "test",
+          input: null,
+        }),
+      );
 
-        const [succeededSuccessJobChain, succeededFailJobChain] =
-          await waitForJobChainsFinished(queuert, [
-            successJobChain,
-            failJobChain,
-          ]);
+      const [succeededSuccessJobChain, succeededFailJobChain] = await waitForJobChainsFinished(
+        queuert,
+        [successJobChain, failJobChain],
+      );
 
-        expect(succeededSuccessJobChain.output).toEqual(null);
-        expect(succeededFailJobChain.output).toEqual(null);
+      expect(succeededSuccessJobChain.output).toEqual(null);
+      expect(succeededFailJobChain.output).toEqual(null);
 
-        await endPromise;
-      }
-    );
+      await endPromise;
+    });
   });
 });
 
@@ -1072,8 +999,8 @@ describe("Worker", () => {
               client: client,
               chainName: "test",
               input: { jobNumber: i },
-            })
-          )
+            }),
+          ),
         );
       }
 
@@ -1117,27 +1044,24 @@ describe("Worker", () => {
       },
     });
 
-    await withWorkers(
-      [await worker.start(), await worker.start()],
-      async () => {
-        const jobs = [];
-        for (let i = 0; i < 5; i++) {
-          jobs.push(
-            await runInTransactionWithNotify(queuert, ({ client }) =>
-              queuert.enqueueJobChain({
-                client: client,
-                chainName: "test",
-                input: { jobNumber: i },
-              })
-            )
-          );
-        }
-
-        await waitForJobChainsFinished(queuert, jobs);
-
-        expect(processedJobs).toEqual([0, 1, 2, 3, 4]);
+    await withWorkers([await worker.start(), await worker.start()], async () => {
+      const jobs = [];
+      for (let i = 0; i < 5; i++) {
+        jobs.push(
+          await runInTransactionWithNotify(queuert, ({ client }) =>
+            queuert.enqueueJobChain({
+              client: client,
+              chainName: "test",
+              input: { jobNumber: i },
+            }),
+          ),
+        );
       }
-    );
+
+      await waitForJobChainsFinished(queuert, jobs);
+
+      expect(processedJobs).toEqual([0, 1, 2, 3, 4]);
+    });
   });
 });
 
@@ -1239,28 +1163,23 @@ describe("Chains", () => {
       });
 
     await withWorkers([await worker.start()], async () => {
-      const jobChain = await runInTransactionWithNotify(
-        queuert,
-        async ({ client }) => {
-          const jobChain = await queuert.enqueueJobChain({
-            client,
-            chainName: "linear",
-            input: { value: 1 },
-          });
+      const jobChain = await runInTransactionWithNotify(queuert, async ({ client }) => {
+        const jobChain = await queuert.enqueueJobChain({
+          client,
+          chainName: "linear",
+          input: { value: 1 },
+        });
 
-          chainId = jobChain.id;
+        chainId = jobChain.id;
 
-          return jobChain;
-        }
-      );
+        return jobChain;
+      });
 
-      expectTypeOf<
-        FinishedJobChain<typeof jobChain>["output"]
-      >().toEqualTypeOf<{ result: number }>();
+      expectTypeOf<FinishedJobChain<typeof jobChain>["output"]>().toEqualTypeOf<{
+        result: number;
+      }>();
 
-      const [finishedJobChain] = await waitForJobChainsFinished(queuert, [
-        jobChain,
-      ]);
+      const [finishedJobChain] = await waitForJobChainsFinished(queuert, [jobChain]);
 
       expect(finishedJobChain.output).toEqual({ result: 3 });
     });
@@ -1302,9 +1221,9 @@ describe("Chains", () => {
         name: "main",
         handler: async ({ finalize }) => {
           return finalize(async ({ job, client, enqueueJob }) => {
-            expectTypeOf<
-              Parameters<typeof enqueueJob>[0]["queueName"]
-            >().toEqualTypeOf<"branch1" | "branch2">();
+            expectTypeOf<Parameters<typeof enqueueJob>[0]["queueName"]>().toEqualTypeOf<
+              "branch1" | "branch2"
+            >();
 
             return enqueueJob({
               client,
@@ -1317,42 +1236,44 @@ describe("Chains", () => {
       .setupQueueHandler({
         name: "branch1",
         handler: async ({ finalize }) => {
-          return finalize(async ({ job }) => ({ result1: job.input.valueBranched }));
+          return finalize(async ({ job }) => ({
+            result1: job.input.valueBranched,
+          }));
         },
       })
       .setupQueueHandler({
         name: "branch2",
         handler: async ({ finalize }) => {
-          return finalize(async ({ job }) => ({ result2: job.input.valueBranched }));
+          return finalize(async ({ job }) => ({
+            result2: job.input.valueBranched,
+          }));
         },
       });
 
     await withWorkers([await worker.start()], async () => {
-      const evenJobChain = await runInTransactionWithNotify(
-        queuert,
-        ({ client }) =>
-          queuert.enqueueJobChain({
-            client,
-            chainName: "main",
-            input: { value: 2 },
-          })
+      const evenJobChain = await runInTransactionWithNotify(queuert, ({ client }) =>
+        queuert.enqueueJobChain({
+          client,
+          chainName: "main",
+          input: { value: 2 },
+        }),
       );
-      const oddJobChain = await runInTransactionWithNotify(
-        queuert,
-        ({ client }) =>
-          queuert.enqueueJobChain({
-            client,
-            chainName: "main",
-            input: { value: 3 },
-          })
+      const oddJobChain = await runInTransactionWithNotify(queuert, ({ client }) =>
+        queuert.enqueueJobChain({
+          client,
+          chainName: "main",
+          input: { value: 3 },
+        }),
       );
 
-      expectTypeOf<
-        FinishedJobChain<typeof evenJobChain>["output"]
-      >().toEqualTypeOf<{ result1: number } | { result2: number }>();
+      expectTypeOf<FinishedJobChain<typeof evenJobChain>["output"]>().toEqualTypeOf<
+        { result1: number } | { result2: number }
+      >();
 
-      const [succeededJobEven, succeededJobOdd] =
-        await waitForJobChainsFinished(queuert, [evenJobChain, oddJobChain]);
+      const [succeededJobEven, succeededJobOdd] = await waitForJobChainsFinished(queuert, [
+        evenJobChain,
+        oddJobChain,
+      ]);
 
       expect(succeededJobEven.output).toEqual({ result1: 2 });
       expect(succeededJobOdd.output).toEqual({ result2: 3 });
@@ -1385,9 +1306,7 @@ describe("Chains", () => {
       name: "loop",
       handler: async ({ finalize }) => {
         return finalize(async ({ job, client, enqueueJob }) => {
-          expectTypeOf<
-            Parameters<typeof enqueueJob>[0]["queueName"]
-          >().toEqualTypeOf<"loop">();
+          expectTypeOf<Parameters<typeof enqueueJob>[0]["queueName"]>().toEqualTypeOf<"loop">();
 
           return job.input.counter < 3
             ? enqueueJob({
@@ -1406,16 +1325,12 @@ describe("Chains", () => {
           client,
           chainName: "loop",
           input: { counter: 0 },
-        })
+        }),
       );
 
-      expectTypeOf<
-        FinishedJobChain<typeof jobChain>["output"]
-      >().toEqualTypeOf<{ done: true }>();
+      expectTypeOf<FinishedJobChain<typeof jobChain>["output"]>().toEqualTypeOf<{ done: true }>();
 
-      const [succeededJobChain] = await waitForJobChainsFinished(queuert, [
-        jobChain,
-      ]);
+      const [succeededJobChain] = await waitForJobChainsFinished(queuert, [jobChain]);
 
       expect(succeededJobChain.output).toEqual({ done: true });
     });
@@ -1453,9 +1368,7 @@ describe("Chains", () => {
         name: "start",
         handler: async ({ finalize }) => {
           return finalize(async ({ job, client, enqueueJob }) => {
-            expectTypeOf<
-              Parameters<typeof enqueueJob>[0]["queueName"]
-            >().toEqualTypeOf<"end">();
+            expectTypeOf<Parameters<typeof enqueueJob>[0]["queueName"]>().toEqualTypeOf<"end">();
 
             return enqueueJob({
               client,
@@ -1469,9 +1382,7 @@ describe("Chains", () => {
         name: "end",
         handler: async ({ finalize }) => {
           return finalize(async ({ job, client, enqueueJob }) => {
-            expectTypeOf<
-              Parameters<typeof enqueueJob>[0]["queueName"]
-            >().toEqualTypeOf<"start">();
+            expectTypeOf<Parameters<typeof enqueueJob>[0]["queueName"]>().toEqualTypeOf<"start">();
 
             if (job.input.result < 3) {
               return enqueueJob({
@@ -1492,16 +1403,14 @@ describe("Chains", () => {
           client,
           chainName: "start",
           input: { value: 0 },
-        })
+        }),
       );
 
-      expectTypeOf<
-        FinishedJobChain<typeof jobChain>["output"]
-      >().toEqualTypeOf<{ finalResult: number }>();
+      expectTypeOf<FinishedJobChain<typeof jobChain>["output"]>().toEqualTypeOf<{
+        finalResult: number;
+      }>();
 
-      const [succeededJobChain] = await waitForJobChainsFinished(queuert, [
-        jobChain,
-      ]);
+      const [succeededJobChain] = await waitForJobChainsFinished(queuert, [jobChain]);
 
       expect(succeededJobChain.output).toEqual({ finalResult: 3 });
     });
@@ -1556,7 +1465,7 @@ describe("Dependency Chains", () => {
                   queueName: "dependency",
                   input: { value: job.input.value + 1 },
                 })
-              : { done: true }
+              : { done: true },
           );
         },
       })
@@ -1574,20 +1483,16 @@ describe("Dependency Chains", () => {
           ];
         },
         handler: async ({ claim, finalize }) => {
-          const { dep, job } = await claim(
-            async ({ job, dependencies: [dep] }) => {
-              expectTypeOf<(typeof dep)["output"]>().toEqualTypeOf<{
-                done: true;
-              }>();
+          const { dep, job } = await claim(async ({ job, dependencies: [dep] }) => {
+            expectTypeOf<(typeof dep)["output"]>().toEqualTypeOf<{
+              done: true;
+            }>();
 
-              expectTypeOf<(typeof dep)["parentId"]>().toEqualTypeOf<
-                string | null
-              >();
-              expect(dep.parentId).toEqual(job.id);
+            expectTypeOf<(typeof dep)["parentId"]>().toEqualTypeOf<string | null>();
+            expect(dep.parentId).toEqual(job.id);
 
-              return { dep, job };
-            }
-          );
+            return { dep, job };
+          });
 
           return finalize(async () => ({
             finalResult: (dep.output.done ? 1 : 0) + (job.input.start ? 1 : 0),
@@ -1601,12 +1506,10 @@ describe("Dependency Chains", () => {
           client,
           chainName: "main",
           input: { start: true },
-        })
+        }),
       );
 
-      const [succeededJobChain] = await waitForJobChainsFinished(queuert, [
-        jobChain,
-      ]);
+      const [succeededJobChain] = await waitForJobChainsFinished(queuert, [jobChain]);
 
       expect(succeededJobChain.output).toEqual({ finalResult: 2 });
     });
@@ -1679,32 +1582,27 @@ describe("Dependency Chains", () => {
       });
 
     await withWorkers([await worker.start()], async () => {
-      const dependencyJobChain = await runInTransactionWithNotify(
-        queuert,
-        ({ client }) =>
-          queuert.enqueueJobChain({
-            client,
-            chainName: "dependency",
-            input: { value: 1 },
-          })
+      const dependencyJobChain = await runInTransactionWithNotify(queuert, ({ client }) =>
+        queuert.enqueueJobChain({
+          client,
+          chainName: "dependency",
+          input: { value: 1 },
+        }),
       );
 
-      const [succeededDependencyJobChain] = await waitForJobChainsFinished(
-        queuert,
-        [dependencyJobChain]
-      );
+      const [succeededDependencyJobChain] = await waitForJobChainsFinished(queuert, [
+        dependencyJobChain,
+      ]);
 
       const jobChain = await runInTransactionWithNotify(queuert, ({ client }) =>
         queuert.enqueueJobChain({
           client,
           chainName: "main",
           input: { dependencyJobId: dependencyJobChain.id },
-        })
+        }),
       );
 
-      const [succeededJobChain] = await waitForJobChainsFinished(queuert, [
-        jobChain,
-      ]);
+      const [succeededJobChain] = await waitForJobChainsFinished(queuert, [jobChain]);
 
       expect(succeededJobChain.output).toEqual({
         finalResult: succeededDependencyJobChain.output.result,
@@ -1765,8 +1663,8 @@ describe("Dependency Chains", () => {
                   client,
                   chainName: "inner",
                   input: null,
-                })
-              )
+                }),
+              ),
             );
 
             return;
@@ -1780,8 +1678,8 @@ describe("Dependency Chains", () => {
                 client,
                 chainName: "inner",
                 input: null,
-              })
-            )
+              }),
+            ),
           );
 
           return finalize(async ({ client }) => {
@@ -1791,8 +1689,8 @@ describe("Dependency Chains", () => {
                   client,
                   chainName: "inner",
                   input: null,
-                })
-              )
+                }),
+              ),
             );
 
             return null;
@@ -1806,15 +1704,12 @@ describe("Dependency Chains", () => {
           client,
           chainName: "outer",
           input: null,
-        })
+        }),
       );
 
       await waitForJobChainsFinished(queuert, [jobChain]);
 
-      const succeededChildJobChains = await waitForJobChainsFinished(
-        queuert,
-        childJobChains
-      );
+      const succeededChildJobChains = await waitForJobChainsFinished(queuert, childJobChains);
 
       expect(succeededChildJobChains).toHaveLength(3);
     });
@@ -1854,7 +1749,7 @@ describe("Dependency Chains", () => {
             client,
             queueName: "finish",
             input: { valueNext: job.input.value + 1 },
-          })
+          }),
         );
       },
     });
@@ -1862,30 +1757,25 @@ describe("Dependency Chains", () => {
     const worker2 = queuert.createWorker().setupQueueHandler({
       name: "finish",
       handler: async ({ finalize }) => {
-        return finalize(async ({ job }) => ({ result: job.input.valueNext + 1 }));
+        return finalize(async ({ job }) => ({
+          result: job.input.valueNext + 1,
+        }));
       },
     });
 
-    await withWorkers(
-      [await worker1.start(), await worker2.start()],
-      async () => {
-        const jobChain = await runInTransactionWithNotify(
-          queuert,
-          ({ client }) =>
-            queuert.enqueueJobChain({
-              client,
-              chainName: "test",
-              input: { value: 1 },
-            })
-        );
+    await withWorkers([await worker1.start(), await worker2.start()], async () => {
+      const jobChain = await runInTransactionWithNotify(queuert, ({ client }) =>
+        queuert.enqueueJobChain({
+          client,
+          chainName: "test",
+          input: { value: 1 },
+        }),
+      );
 
-        const [finishedJobChain] = await waitForJobChainsFinished(queuert, [
-          jobChain,
-        ]);
+      const [finishedJobChain] = await waitForJobChainsFinished(queuert, [jobChain]);
 
-        expect(finishedJobChain.output).toEqual({ result: 3 });
-      }
-    );
+      expect(finishedJobChain.output).toEqual({ result: 3 });
+    });
   });
 
   test("handles multiple dependency chains", async ({
@@ -1931,8 +1821,8 @@ describe("Dependency Chains", () => {
                 client,
                 chainName: "dependency",
                 input: { value: i + 1 },
-              })
-            )
+              }),
+            ),
           );
           return dependencyChains;
         },
@@ -1949,12 +1839,10 @@ describe("Dependency Chains", () => {
           client,
           chainName: "main",
           input: { count: 5 },
-        })
+        }),
       );
 
-      const [succeededJobChain] = await waitForJobChainsFinished(queuert, [
-        jobChain,
-      ]);
+      const [succeededJobChain] = await waitForJobChainsFinished(queuert, [jobChain]);
 
       expect(succeededJobChain.output).toEqual({
         finalResult: Array.from({ length: 5 }, (_, i) => i + 1),

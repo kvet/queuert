@@ -1,4 +1,4 @@
-import { StateJob } from "../state-adapter/state-adapter.js";
+import { JobAttemptError, StateJob } from "../state-adapter/state-adapter.js";
 
 export type Job<TQueueName, TInput> = {
   id: string; // TODO
@@ -11,7 +11,7 @@ export type Job<TQueueName, TInput> = {
   updatedAt: Date;
   attempt: number;
   lastAttemptAt: Date | null;
-  lastAttemptError: unknown;
+  lastAttemptError: JobAttemptError | null;
 } & (
   | {
       status: "waiting";
@@ -53,18 +53,18 @@ export const mapStateJobToJob = (stateJob: StateJob): Job<any, any> => {
           completedAt: stateJob.completedAt!,
         }
       : stateJob.status === "running"
-      ? {
-          status: "running",
-          lockedBy: stateJob.lockedBy ?? undefined,
-          lockedUntil: stateJob.lockedUntil ?? undefined,
-        }
-      : stateJob.status === "waiting"
-      ? {
-          status: "waiting",
-        }
-      : {
-          status: "pending",
-        }),
+        ? {
+            status: "running",
+            lockedBy: stateJob.lockedBy ?? undefined,
+            lockedUntil: stateJob.lockedUntil ?? undefined,
+          }
+        : stateJob.status === "waiting"
+          ? {
+              status: "waiting",
+            }
+          : {
+              status: "pending",
+            }),
   };
 };
 
@@ -75,9 +75,5 @@ export type EnqueuedJob<TQueueName, TInput> = Job<TQueueName, TInput> & {
 };
 
 export const isEnqueuedJob = (obj: unknown): obj is EnqueuedJob<any, any> => {
-  return (
-    typeof obj === "object" &&
-    obj !== null &&
-    (obj as any)[enqueuedJobSymbol] === true
-  );
+  return typeof obj === "object" && obj !== null && (obj as any)[enqueuedJobSymbol] === true;
 };

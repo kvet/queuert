@@ -1,23 +1,17 @@
-import {
-  PostgreSqlContainer,
-  type StartedPostgreSqlContainer,
-} from "@testcontainers/postgresql";
+import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import { Client, Pool, PoolClient } from "pg";
 import { beforeAll, type TestAPI } from "vitest";
 
 import { createHash } from "crypto";
 import { migrateToLatest, prepareQueuertSchema } from "./index.js";
 import { StateProvider } from "./state-provider/state-provider.js";
-import {
-  createPgPoolProvider,
-  PgPoolProvider,
-} from "./state-provider/state-provider.pg-pool.js";
+import { createPgPoolProvider, PgPoolProvider } from "./state-provider/state-provider.pg-pool.js";
 
 const LABEL = "queuert-postgres-test";
 
 export const extendWithDb = <T>(
   api: TestAPI<T>,
-  reuseId: string
+  reuseId: string,
 ): TestAPI<T & { stateProvider: PgPoolProvider }> => {
   const normalizedReuseId = createHash("sha1").update(reuseId).digest("hex");
 
@@ -52,7 +46,7 @@ export const extendWithDb = <T>(
 
         await client.query(`DROP DATABASE IF EXISTS "${normalizedReuseId}";`);
         await client.query(
-          `CREATE DATABASE "${normalizedReuseId}" WITH OWNER "${container.getUsername()}" TEMPLATE template0`
+          `CREATE DATABASE "${normalizedReuseId}" WITH OWNER "${container.getUsername()}" TEMPLATE template0`,
         );
 
         await client.end();
@@ -62,7 +56,7 @@ export const extendWithDb = <T>(
             connectionString: container
               .getConnectionUri()
               .replace("base_database_for_tests", normalizedReuseId),
-          })
+          }),
         );
       },
       { scope: "worker" },
@@ -70,11 +64,9 @@ export const extendWithDb = <T>(
     _dbMigrateToLatest: [
       async ({ _db }, use) => {
         const client = await _db.connect();
-        await client
-          .query(`DROP SCHEMA IF EXISTS queuert CASCADE;`)
-          .catch(() => {
-            // ignore
-          });
+        await client.query(`DROP SCHEMA IF EXISTS queuert CASCADE;`).catch(() => {
+          // ignore
+        });
         client.release();
 
         const stateProvider = createPgPoolProvider({
@@ -114,7 +106,7 @@ export const extendWithDb = <T>(
         return use(
           createPgPoolProvider({
             pool: _db,
-          })
+          }),
         );
       },
       { scope: "test" },

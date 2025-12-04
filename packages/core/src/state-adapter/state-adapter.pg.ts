@@ -1,5 +1,5 @@
 import { StateProvider } from "../state-provider/state-provider.js";
-import { StateAdapter, StateJob } from "./state-adapter.js";
+import { JobAttemptError, StateAdapter, StateJob } from "./state-adapter.js";
 import {
   acquireJobSql,
   addJobDependenciesSql,
@@ -38,10 +38,8 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
     completedAt: dbJob.completed_at ? new Date(dbJob.completed_at) : null,
 
     attempt: dbJob.attempt,
-    lastAttemptError: dbJob.last_attempt_error,
-    lastAttemptAt: dbJob.last_attempt_at
-      ? new Date(dbJob.last_attempt_at)
-      : null,
+    lastAttemptError: dbJob.last_attempt_error as JobAttemptError | null,
+    lastAttemptAt: dbJob.last_attempt_at ? new Date(dbJob.last_attempt_at) : null,
 
     lockedBy: dbJob.locked_by,
     lockedUntil: dbJob.locked_until ? new Date(dbJob.locked_until) : null,
@@ -66,9 +64,7 @@ export const createPgStateAdapter = ({
       return jobChain
         ? [
             mapDbJobToStateJob(jobChain.root_job),
-            jobChain.last_chain_job
-              ? mapDbJobToStateJob(jobChain.last_chain_job)
-              : undefined,
+            jobChain.last_chain_job ? mapDbJobToStateJob(jobChain.last_chain_job) : undefined,
           ]
         : undefined;
     },
@@ -96,10 +92,7 @@ export const createPgStateAdapter = ({
       const jobs = await executeTypedSql({
         executeSql: (...args) => stateProvider.executeSql(context, ...args),
         sql: addJobDependenciesSql,
-        params: [
-          Array.from({ length: dependsOnChainIds.length }, () => jobId),
-          dependsOnChainIds,
-        ],
+        params: [Array.from({ length: dependsOnChainIds.length }, () => jobId), dependsOnChainIds],
       });
 
       return jobs.map(mapDbJobToStateJob).map((job) => [job, undefined]);

@@ -11,10 +11,7 @@ export const createInProcessNotifyAdapter = (): NotifyAdapter => {
         }
       }
     },
-    listenJobScheduled: (
-      queueNames: string[],
-      { signal }: { signal?: AbortSignal }
-    ) => {
+    listenJobScheduled: (queueNames: string[], { signal }: { signal?: AbortSignal }) => {
       return new Promise<void>((resolve, reject) => {
         const listener = (notifiedQueueName: string) => {
           if (queueNames.includes(notifiedQueueName)) {

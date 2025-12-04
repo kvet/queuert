@@ -33,19 +33,19 @@
   },
   "scripts": {
     "build": "tsdown",
-    "test": "vitest"
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@testcontainers/postgresql": "^11.8.0",
-    "@testcontainers/redis": "^11.8.0",
-    "@types/node": "^22.19.0",
+    "@testcontainers/postgresql": "^11.9.0",
+    "@testcontainers/redis": "^11.9.0",
+    "@types/node": "^24.10.1",
     "@types/pg": "^8.15.6",
     "@types/proper-lockfile": "^4.1.4",
     "pg": "^8.16.3",
     "proper-lockfile": "^4.1.2",
-    "testcontainers": "^11.8.0",
-    "tsdown": "^0.16.0",
+    "testcontainers": "^11.9.0",
+    "tsdown": "^0.17.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.7"
+    "vitest": "^4.0.15"
   }
 }

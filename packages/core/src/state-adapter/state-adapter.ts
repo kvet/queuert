@@ -1,5 +1,11 @@
 import { BaseStateProviderContext } from "../state-provider/state-provider.js";
 
+export type JobAttemptError = {
+  type: "rescheduled" | "unhandled";
+  afterMs: number;
+  cause: string;
+};
+
 export type StateJob = {
   id: string;
   queueName: string;
@@ -16,7 +22,7 @@ export type StateJob = {
   completedAt: Date | null;
 
   attempt: number;
-  lastAttemptError: unknown;
+  lastAttemptError: JobAttemptError | null;
   lastAttemptAt: Date | null;
 
   lockedBy: string | null;
@@ -86,7 +92,7 @@ export type StateAdapter = {
     context: BaseStateProviderContext;
     jobId: string;
     afterMs: number;
-    error: unknown;
+    error: JobAttemptError;
   }) => Promise<StateJob>;
   linkJob: (params: {
     context: BaseStateProviderContext;

@@ -7,7 +7,7 @@ export class TimeoutAbortError extends Error {
 
 export const sleep = (
   ms: number,
-  { jitterMs = 0, signal }: { jitterMs?: number; signal?: AbortSignal } = {}
+  { jitterMs = 0, signal }: { jitterMs?: number; signal?: AbortSignal } = {},
 ): Promise<void> =>
   new Promise((resolve, reject) => {
     let timeoutId: NodeJS.Timeout;
@@ -21,10 +21,13 @@ export const sleep = (
       }
       signal.addEventListener("abort", onAbort, { once: true });
     }
-    timeoutId = setTimeout(() => {
-      if (signal) {
-        signal.removeEventListener("abort", onAbort);
-      }
-      resolve();
-    }, Math.max(0, ms + (jitterMs ? Math.floor(Math.random() * jitterMs) - jitterMs / 2 : 0)));
+    timeoutId = setTimeout(
+      () => {
+        if (signal) {
+          signal.removeEventListener("abort", onAbort);
+        }
+        resolve();
+      },
+      Math.max(0, ms + (jitterMs ? Math.floor(Math.random() * jitterMs) - jitterMs / 2 : 0)),
+    );
   });

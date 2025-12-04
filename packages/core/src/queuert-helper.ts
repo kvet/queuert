@@ -29,7 +29,7 @@ const parentProvideStorage = new AsyncLocalStorage<string | undefined>();
 
 export type ResolvedQueueJobs<
   TQueueDefinitions extends BaseQueueDefinitions,
-  TQueueName extends keyof TQueueDefinitions & string
+  TQueueName extends keyof TQueueDefinitions & string,
 > = {
   [K in CompatibleQueueTargets<TQueueDefinitions, TQueueName>]: Job<
     K,
@@ -43,11 +43,11 @@ export type EnqueueDependencyJobChains<
   TQueueName extends keyof TQueueDefinitions & string,
   TDependencies extends readonly {
     [K in keyof TQueueDefinitions]: ResolvedJobChain<TQueueDefinitions, K>;
-  }[keyof TQueueDefinitions][]
+  }[keyof TQueueDefinitions][],
 > = (
   enqueueDependencyJobChainsOptions: {
     job: Job<TQueueName, TQueueDefinitions[TQueueName]["input"]>;
-  } & GetStateProviderContext<TStateProvider>
+  } & GetStateProviderContext<TStateProvider>,
 ) => Promise<TDependencies>;
 
 export class RescheduleJobError extends Error {
@@ -57,7 +57,7 @@ export class RescheduleJobError extends Error {
     options: {
       afterMs: number;
       cause?: unknown;
-    }
+    },
   ) {
     super(message, { cause: options.cause });
     this.afterMs = options.afterMs;
@@ -70,6 +70,27 @@ export const rescheduleJob = (afterMs: number, cause?: unknown): never => {
     afterMs,
     cause,
   });
+};
+
+export type RetryConfig = {
+  initialIntervalMs?: number;
+  backoffCoefficient?: number;
+  maxIntervalMs?: number;
+};
+
+const DEFAULT_RETRY_CONFIG = {
+  initialIntervalMs: 1000,
+  backoffCoefficient: 2.0,
+  maxIntervalMs: 100 * 1000,
+} satisfies RetryConfig;
+
+export const calculateBackoffMs = (attempt: number, config: RetryConfig): number => {
+  const initialIntervalMs = config.initialIntervalMs ?? DEFAULT_RETRY_CONFIG.initialIntervalMs;
+  const backoffCoefficient = config.backoffCoefficient ?? DEFAULT_RETRY_CONFIG.backoffCoefficient;
+  const maxIntervalMs = config.maxIntervalMs ?? DEFAULT_RETRY_CONFIG.maxIntervalMs;
+
+  const backoffMs = initialIntervalMs * Math.pow(backoffCoefficient, attempt - 1);
+  return Math.min(backoffMs, maxIntervalMs);
 };
 
 export const queuertHelper = ({
@@ -122,8 +143,8 @@ export const queuertHelper = ({
 
       await Promise.all(
         Array.from(notifyQueueStorage.getStore() ?? []).map((queueName) =>
-          notifyAdapter.notifyJobScheduled(queueName)
-        )
+          notifyAdapter.notifyJobScheduled(queueName),
+        ),
       );
 
       return result;
@@ -131,26 +152,18 @@ export const queuertHelper = ({
   };
 
   return {
-    withNotifyQueueContext: withNotifyQueueContext as <T>(
-      cb: () => Promise<T>
-    ) => Promise<T>,
+    withNotifyQueueContext: withNotifyQueueContext as <T>(cb: () => Promise<T>) => Promise<T>,
     withParentJobContext: async <T>(
       parentId: string | undefined,
-      cb: () => Promise<T>
+      cb: () => Promise<T>,
     ): Promise<T> => {
       return parentProvideStorage.run(parentId, cb);
     },
     runInTransaction: async <T>(
-      cb: (
-        context: GetStateProviderContext<
-          StateProvider<BaseStateProviderContext>
-        >
-      ) => Promise<T>
+      cb: (context: GetStateProviderContext<StateProvider<BaseStateProviderContext>>) => Promise<T>,
     ): Promise<T> => {
       return stateProvider.provideContext((context) =>
-        withNotifyQueueContext(() =>
-          stateProvider.runInTransaction(context, cb)
-        )
+        withNotifyQueueContext(() => stateProvider.runInTransaction(context, cb)),
       );
     },
     scheduleDependentJobChains: async ({
@@ -200,9 +213,7 @@ export const queuertHelper = ({
           ],
         });
       }
-      const incompleteDependencies = dependencyJobChains.filter(
-        (d) => d.status !== "finished"
-      );
+      const incompleteDependencies = dependencyJobChains.filter((d) => d.status !== "finished");
       if (incompleteDependencies.length) {
         job = await stateAdapter.markJobAsWaiting({
           context,
@@ -267,9 +278,9 @@ export const queuertHelper = ({
 
       return {
         job: mapStateJobToJob(runningJob) as RunningJob<Job<any, any>>,
-        dependencies: dependencies.map(
-          mapStateJobPairToJobChain
-        ) as FinishedJobChain<JobChain<any, any, any>>[],
+        dependencies: dependencies.map(mapStateJobPairToJobChain) as FinishedJobChain<
+          JobChain<any, any, any>
+        >[],
       };
     },
     enqueueJobChain: async <TChainName extends string, TInput, TOutput>({
@@ -344,15 +355,13 @@ export const queuertHelper = ({
       job,
       error,
       context,
-      pollIntervalMs,
+      retryConfig,
     }: {
       job: StateJob;
       error: unknown;
       context: BaseStateProviderContext;
-      pollIntervalMs: number;
+      retryConfig: RetryConfig;
     }): Promise<void> => {
-      let afterMs: number;
-      let cause: unknown;
       if (error instanceof RescheduleJobError) {
         log({
           level: "warn",
@@ -366,32 +375,44 @@ export const queuertHelper = ({
             error,
           ],
         });
-        afterMs = error.afterMs;
-        cause = error.cause;
+
+        await stateAdapter.rescheduleJob({
+          context,
+          jobId: job.id,
+          afterMs: error.afterMs,
+          error: {
+            type: "rescheduled",
+            afterMs: error.afterMs,
+            cause: String(error.cause),
+          },
+        });
       } else {
-        const retryAfterMs = pollIntervalMs * 100;
+        const afterMs = calculateBackoffMs(job.attempt, retryConfig);
         log({
           level: "error",
-          message: `Job processing failed unexpectedly. Rescheduling in ${retryAfterMs}ms.`,
+          message: `Job processing failed unexpectedly. Rescheduling in ${afterMs}ms.`,
           args: [
             {
               jobId: job.id,
               queueName: job.queueName,
               status: job.status,
+              attempt: job.attempt,
             },
             error,
           ],
         });
-        afterMs = retryAfterMs;
-        cause = error;
-      }
 
-      await stateAdapter.rescheduleJob({
-        context,
-        jobId: job.id,
-        afterMs,
-        error: String(cause),
-      });
+        await stateAdapter.rescheduleJob({
+          context,
+          jobId: job.id,
+          afterMs,
+          error: {
+            type: "unhandled",
+            afterMs,
+            cause: String(error),
+          },
+        });
+      }
     },
     finishJob: async ({
       job,
@@ -476,10 +497,7 @@ export const queuertHelper = ({
         throw new Error(`Job with id ${job.id} is not locked by this worker`);
       }
 
-      if (
-        fetchedJob.lockedUntil &&
-        fetchedJob.lockedUntil.getTime() < Date.now()
-      ) {
+      if (fetchedJob.lockedUntil && fetchedJob.lockedUntil.getTime() < Date.now()) {
         log({
           level: "warn",
           message: `Job lock has expired`,
@@ -520,12 +538,11 @@ export const queuertHelper = ({
       queueNames: string[];
       pollIntervalMs: number;
     }): Promise<number> => {
-      const nextJobAvailableInMs = await stateProvider.provideContext(
-        (context) =>
-          stateAdapter.getNextJobAvailableInMs({
-            context,
-            queueNames,
-          })
+      const nextJobAvailableInMs = await stateProvider.provideContext((context) =>
+        stateAdapter.getNextJobAvailableInMs({
+          context,
+          queueNames,
+        }),
       );
 
       return nextJobAvailableInMs
@@ -543,13 +560,9 @@ export const queuertHelper = ({
         context,
         queueNames,
       }),
-    removeExpiredJobClaims: async ({
-      queueNames,
-    }: {
-      queueNames: string[];
-    }): Promise<void> => {
+    removeExpiredJobClaims: async ({ queueNames }: { queueNames: string[] }): Promise<void> => {
       const ids = await stateProvider.provideContext((context) =>
-        stateAdapter.removeExpiredJobClaims({ context, queueNames })
+        stateAdapter.removeExpiredJobClaims({ context, queueNames }),
       );
       if (ids.length > 0) {
         log({

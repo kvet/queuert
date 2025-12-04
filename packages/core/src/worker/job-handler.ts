@@ -1,12 +1,8 @@
-import {
-  CompatibleQueueTargets,
-  FinishedJobChain,
-  JobChain,
-} from "../entities/job-chain.js";
+import { CompatibleQueueTargets, FinishedJobChain, JobChain } from "../entities/job-chain.js";
 import { EnqueuedJob, Job, RunningJob } from "../entities/job.js";
 import { BaseQueueDefinitions } from "../entities/queue.js";
 import { Branded } from "../helpers/typescript.js";
-import { ProcessHelper, ResolvedQueueJobs } from "../queuert-helper.js";
+import { ProcessHelper, ResolvedQueueJobs, RetryConfig } from "../queuert-helper.js";
 import { StateJob } from "../state-adapter/state-adapter.js";
 import {
   BaseStateProviderContext,
@@ -35,67 +31,51 @@ export type JobHandler<
   TStateProvider extends StateProvider<BaseStateProviderContext>,
   TQueueDefinitions extends BaseQueueDefinitions,
   TQueueName extends keyof TQueueDefinitions & string,
-  TDependencies extends readonly JobChain<any, any, any>[]
+  TDependencies extends readonly JobChain<any, any, any>[],
 > = (handlerOptions: {
   claim: <T>(
     claimCallback: (
       claimCallbackOptions: {
-        job: RunningJob<
-          Job<TQueueName, TQueueDefinitions[TQueueName]["input"]>
-        >;
+        job: RunningJob<Job<TQueueName, TQueueDefinitions[TQueueName]["input"]>>;
         dependencies: {
           [K in keyof TDependencies]: FinishedJobChain<TDependencies[K]>;
         };
-      } & GetStateProviderContext<TStateProvider>
-    ) => Promise<T>
+      } & GetStateProviderContext<TStateProvider>,
+    ) => Promise<T>,
   ) => Promise<T>;
   process: (options: { leaseMs: number }) => Promise<void>;
   withProcess: <T>(
     cb: () => Promise<T>,
-    options: { leaseMs: number; intervalMs: number }
+    options: { leaseMs: number; intervalMs: number },
   ) => Promise<T>;
   finalize: (
     finalizeCallback: (
       finalizeOptions: {
-        job: RunningJob<
-          Job<TQueueName, TQueueDefinitions[TQueueName]["input"]>
-        >;
+        job: RunningJob<Job<TQueueName, TQueueDefinitions[TQueueName]["input"]>>;
         dependencies: {
           [K in keyof TDependencies]: FinishedJobChain<TDependencies[K]>;
         };
         enqueueJob: <
-          TEnqueueQueueName extends CompatibleQueueTargets<
-            TQueueDefinitions,
-            TQueueName
-          > &
-            string
+          TEnqueueQueueName extends CompatibleQueueTargets<TQueueDefinitions, TQueueName> & string,
         >(
           options: {
             queueName: TEnqueueQueueName;
             input: TQueueDefinitions[TEnqueueQueueName]["input"];
-          } & GetStateProviderContext<TStateProvider>
-        ) => Promise<
-          EnqueuedJob<
-            TEnqueueQueueName,
-            TQueueDefinitions[TEnqueueQueueName]["input"]
-          >
-        >;
-      } & GetStateProviderContext<TStateProvider>
+          } & GetStateProviderContext<TStateProvider>,
+        ) => Promise<EnqueuedJob<TEnqueueQueueName, TQueueDefinitions[TEnqueueQueueName]["input"]>>;
+      } & GetStateProviderContext<TStateProvider>,
     ) => Promise<
-      | TQueueDefinitions[TQueueName]["output"]
-      | ResolvedQueueJobs<TQueueDefinitions, TQueueName>
-    >
+      TQueueDefinitions[TQueueName]["output"] | ResolvedQueueJobs<TQueueDefinitions, TQueueName>
+    >,
   ) => Promise<
     Branded<
-      | TQueueDefinitions[TQueueName]["output"]
-      | ResolvedQueueJobs<TQueueDefinitions, TQueueName>,
+      TQueueDefinitions[TQueueName]["output"] | ResolvedQueueJobs<TQueueDefinitions, TQueueName>,
       "finalize_result"
     >
   >;
 }) => Promise<
   Branded<
-    | TQueueDefinitions[TQueueName]["output"]
-    | ResolvedQueueJobs<TQueueDefinitions, TQueueName>,
+    TQueueDefinitions[TQueueName]["output"] | ResolvedQueueJobs<TQueueDefinitions, TQueueName>,
     "finalize_result"
   >
 >;
@@ -105,7 +85,7 @@ export const processJobHandler = async ({
   handler,
   context,
   job,
-  pollIntervalMs,
+  retryConfig,
   workerId,
 }: {
   helper: ProcessHelper;
@@ -117,16 +97,14 @@ export const processJobHandler = async ({
   >;
   context: GetStateProviderContext<StateProvider<BaseStateProviderContext>>;
   job: StateJob;
-  pollIntervalMs: number;
+  retryConfig: RetryConfig;
   workerId: string;
 }): Promise<() => Promise<void>> => {
   const firstProcessCalled = createSignal<void>();
   const claimTransactionClosed = createSignal<void>();
 
   const runInGuardedTransaction = async <T>(
-    cb: (
-      context: GetStateProviderContext<StateProvider<BaseStateProviderContext>>
-    ) => Promise<T>
+    cb: (context: GetStateProviderContext<StateProvider<BaseStateProviderContext>>) => Promise<T>,
   ): Promise<T> => {
     if (!firstProcessCalled.signalled) {
       return cb(context);
@@ -164,6 +142,7 @@ export const processJobHandler = async ({
         job,
         context,
       });
+      job = { ...job, attempt: jobInput.job.attempt };
 
       await handler({
         claim: async (claimCallback) => {
@@ -216,8 +195,8 @@ export const processJobHandler = async ({
           job,
           error,
           context,
-          pollIntervalMs,
-        })
+          retryConfig,
+        }),
       );
     }
   };
