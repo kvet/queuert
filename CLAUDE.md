@@ -16,4 +16,3 @@
 
 - End each agentic session only when all checks pass: `pnpm check` (runs lint, fmt:check, typecheck, test)
 - Update documentation (README) if there were changes to public API
-
