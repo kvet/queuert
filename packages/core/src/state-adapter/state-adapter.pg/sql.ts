@@ -39,9 +39,9 @@ CREATE TABLE IF NOT EXISTS queuert.job (
   last_attempt_at               timestamptz,
   last_attempt_error            jsonb,
 
-  -- locking
-  locked_by                     text,
-  locked_until                  timestamptz,
+  -- leasing
+  leased_by                     text,
+  leased_until                  timestamptz,
 
   -- metadata
   updated_at                    timestamptz NOT NULL DEFAULT now()
@@ -90,8 +90,8 @@ export type DbJob = {
   last_attempt_error: string | null;
   last_attempt_at: string | null;
 
-  locked_by: string | null;
-  locked_until: string | null;
+  leased_by: string | null;
+  leased_until: string | null;
 
   updated_at: string;
 };
@@ -150,8 +150,8 @@ UPDATE queuert.job
 SET status = 'completed',
   completed_at = now(),
   output = $2,
-  locked_by = NULL,
-  locked_until = NULL
+  leased_by = NULL,
+  leased_until = NULL
 WHERE id = $1
 RETURNING *
 ` as TypedSql<readonly [NamedParameter<"id", string>, NamedParameter<"output", unknown>], [DbJob]>;
@@ -240,8 +240,8 @@ UPDATE queuert.job
 SET scheduled_at = now() + ($2::text || ' milliseconds')::interval,
   last_attempt_at = now(),
   last_attempt_error = $3,
-  locked_by = NULL,
-  locked_until = NULL,
+  leased_by = NULL,
+  leased_until = NULL,
   status = 'pending'
 WHERE id = $1
 RETURNING *
@@ -256,16 +256,16 @@ RETURNING *
 
 export const renewJobLeaseSql = /* sql */ `
 UPDATE queuert.job
-SET locked_by = $2,
-  locked_until = now() + ($3::text || ' milliseconds')::interval,
+SET leased_by = $2,
+  leased_until = now() + ($3::text || ' milliseconds')::interval,
   status = 'running'
 WHERE id = $1
 RETURNING *
 ` as TypedSql<
   readonly [
     NamedParameter<"id", string>,
-    NamedParameter<"locked_by", string>,
-    NamedParameter<"lock_duration_ms", number>,
+    NamedParameter<"leased_by", string>,
+    NamedParameter<"lease_duration_ms", number>,
   ],
   [DbJob]
 >;
@@ -294,21 +294,21 @@ FOR UPDATE SKIP LOCKED
   [{ available_in_ms: number } | undefined]
 >;
 
-export const removeExpiredJobClaimsSql = /* sql */ `
+export const removeExpiredJobLeaseSql = /* sql */ `
 WITH job_to_unlock AS (
   SELECT id
   FROM queuert.job
-  WHERE locked_until IS NOT NULL
-    AND locked_until < now()
+  WHERE leased_until IS NOT NULL
+    AND leased_until < now()
     AND status = 'running'
     AND queue_name IN (SELECT unnest($1::text[]))
-  ORDER BY locked_until ASC
+  ORDER BY leased_until ASC
   LIMIT 1
   FOR UPDATE SKIP LOCKED
 )
 UPDATE queuert.job as job
-SET locked_by = NULL,
-  locked_until = NULL,
+SET leased_by = NULL,
+  leased_until = NULL,
   status = 'pending'
 FROM job_to_unlock
 WHERE job.id = job_to_unlock.id

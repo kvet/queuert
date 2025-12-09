@@ -18,7 +18,7 @@ Jobs can depend on other job chains. A job with blockers enters `waiting` status
 A typed logging function for observability. All job lifecycle events are logged with structured data (job IDs, queue names, worker IDs, etc.). Consumers provide their own log implementation to integrate with their logging infrastructure.
 
 ### StateAdapter
-Abstracts database operations for job persistence. Allows different database implementations (currently PostgreSQL). Handles job creation, status transitions, locking, and queries.
+Abstracts database operations for job persistence. Allows different database implementations (currently PostgreSQL). Handles job creation, status transitions, leasing, and queries.
 
 ### StateProvider
 Abstracts ORM/database client operations. Provides context management, transaction handling, and SQL execution. Allows integration with different ORMs (e.g., Drizzle, Prisma, raw pg).
@@ -41,6 +41,7 @@ Avoid asymmetric naming (e.g., `started`/`finished` vs `created`/`completed`) ev
 - `chainId`: The job chain this job belongs to, self-referential for the first job (equals own ID)
 - `blockers`/`blocked`: Describes job dependencies (not `dependencies`/`dependents`)
 - `continueWith`: Chains jobs in finalize callback (not `enqueueJob`)
+- `lease`/`leased`: Time-bounded exclusive claim on a job during processing (not `lock`/`locked`). Use `leasedBy`, `leasedUntil`, `leaseMs`, `leaseDurationMs`. DB columns use `leased_by`, `leased_until`.
 
 ## Testing Patterns
 

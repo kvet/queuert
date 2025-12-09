@@ -22,8 +22,8 @@ export type Job<TQueueName, TInput> = {
     }
   | {
       status: "running";
-      lockedBy?: string;
-      lockedUntil?: Date;
+      leasedBy?: string;
+      leasedUntil?: Date;
     }
   | {
       status: "completed";
@@ -57,8 +57,8 @@ export const mapStateJobToJob = (stateJob: StateJob): Job<any, any> => {
       : stateJob.status === "running"
         ? {
             status: "running",
-            lockedBy: stateJob.lockedBy ?? undefined,
-            lockedUntil: stateJob.lockedUntil ?? undefined,
+            leasedBy: stateJob.leasedBy ?? undefined,
+            leasedUntil: stateJob.leasedUntil ?? undefined,
           }
         : stateJob.status === "waiting"
           ? {

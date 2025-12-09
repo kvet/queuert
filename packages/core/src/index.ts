@@ -58,7 +58,7 @@ export type Queuert<
   ) => Promise<ResolvedJobChain<TQueueDefinitions, TChainName>>;
   getJobChain: <TChainName extends keyof TQueueDefinitions & string>(
     options: {
-      name: TChainName;
+      chainName: TChainName;
       id: string;
     } & GetStateProviderContext<TStateProvider>,
   ) => Promise<ResolvedJobChain<TQueueDefinitions, TChainName> | null>;

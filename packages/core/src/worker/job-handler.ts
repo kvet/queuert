@@ -182,7 +182,7 @@ export const processJobHandler = async ({
     await claimTransactionClosed.onSignal;
   };
 
-  const withLock = ((): {
+  const withLease = ((): {
     start: () => Promise<void>;
     stop: () => Promise<void>;
   } => {
@@ -240,11 +240,11 @@ export const processJobHandler = async ({
             const output = await claimCallback({
               ...context,
             });
-            await withLock.start();
+            await withLease.start();
             return output;
           },
           finalize: async (finalizeCallback) => {
-            await withLock.stop();
+            await withLease.stop();
             return runInGuardedTransaction(async (context) => {
               const output = await finalizeCallback({
                 continueWith: async ({ queueName, input, ...context }) =>
@@ -265,7 +265,7 @@ export const processJobHandler = async ({
           },
         });
       } finally {
-        await withLock.stop();
+        await withLease.stop();
       }
     } catch (error) {
       await runInGuardedTransaction(async (context) =>

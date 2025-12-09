@@ -19,8 +19,8 @@ export type StateJob = {
   lastAttemptError: string | null;
   lastAttemptAt: Date | null;
 
-  lockedBy: string | null;
-  lockedUntil: Date | null;
+  leasedBy: string | null;
+  leasedUntil: Date | null;
 
   updatedAt: Date;
 };
@@ -82,7 +82,7 @@ export type StateAdapter = {
     context: BaseStateProviderContext;
     jobId: string;
     workerId: string;
-    lockDurationMs: number;
+    leaseDurationMs: number;
   }) => Promise<StateJob>;
   rescheduleJob: (params: {
     context: BaseStateProviderContext;
@@ -95,7 +95,7 @@ export type StateAdapter = {
     jobId: string;
     output: unknown;
   }) => Promise<StateJob>;
-  removeExpiredJobClaim: (params: {
+  removeExpiredJobLease: (params: {
     context: BaseStateProviderContext;
     queueNames: string[];
   }) => Promise<StateJob | undefined>;

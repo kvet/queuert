@@ -96,7 +96,7 @@ const test = extendWithDb(baseTest, import.meta.url).extend<{
                   queuert.getJobChain({
                     client,
                     id: chain.id,
-                    name: chain.chainName,
+                    chainName: chain.chainName,
                   }),
                 ),
               ),
@@ -1534,7 +1534,7 @@ describe("Blocker Chains", () => {
           const blockerJob = await queuert.getJobChain({
             client,
             id: job.input.blockerJobId,
-            name: "blocker",
+            chainName: "blocker",
           });
           if (!blockerJob) {
             throw new Error("Blocker job not found");

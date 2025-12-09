@@ -68,7 +68,7 @@ export const createExecutor = ({
     const performWorkIteration = async () => {
       // TODO: make robust against crashes
       while (true) {
-        await helper.removeExpiredJobClaims({
+        await helper.removeExpiredJobLease({
           queueNames,
           workerId,
         });

@@ -63,13 +63,13 @@ type JobLeaseExpiredLogEntry = LogEntry<
   "job_lease_expired",
   "warn",
   "Job lease expired",
-  [{ lockedBy: string; lockedUntil: Date } & JobProcessingArgs & WorkerBasicArgs]
+  [{ leasedBy: string; leasedUntil: Date } & JobProcessingArgs & WorkerBasicArgs]
 >;
 type JobReapedLogEntry = LogEntry<
   "job_reaped",
   "info",
-  "Reaped expired job claim",
-  [{ lockedBy: string; lockedUntil: Date } & JobBasicArgs & WorkerBasicArgs]
+  "Reaped expired job lease",
+  [{ leasedBy: string; leasedUntil: Date } & JobBasicArgs & WorkerBasicArgs]
 >;
 type JobAttemptFailedLogEntry = LogEntry<
   "job_attempt_failed",

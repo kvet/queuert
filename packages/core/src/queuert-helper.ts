@@ -294,7 +294,7 @@ export const queuertHelper = ({
       });
 
       if (blockers.some((blocker) => blocker[1]?.status !== "completed")) {
-        throw new Error("Some blockers are not finished successfully", {
+        throw new Error("Some blockers are not completed", {
           cause: {
             jobId: job.id,
             blockerIds: blockers.map((blocker) => blocker[0]?.id),
@@ -531,8 +531,8 @@ export const queuertHelper = ({
       }
 
       if (
-        fetchedJob.lockedBy !== workerId &&
-        !(allowEmptyWorker ? fetchedJob.lockedBy === null : false)
+        fetchedJob.leasedBy !== workerId &&
+        !(allowEmptyWorker ? fetchedJob.leasedBy === null : false)
       ) {
         log({
           type: "job_lease_expired",
@@ -548,21 +548,21 @@ export const queuertHelper = ({
               chainId: fetchedJob.chainId,
               rootId: fetchedJob.rootId,
               originId: fetchedJob.originId,
-              lockedBy: fetchedJob.lockedBy!,
-              lockedUntil: fetchedJob.lockedUntil!,
+              leasedBy: fetchedJob.leasedBy!,
+              leasedUntil: fetchedJob.leasedUntil!,
             },
           ],
         });
-        throw new LeaseExpiredError(`Job lock taken by another worker`, {
+        throw new LeaseExpiredError(`Job lease taken by another worker`, {
           cause: {
             jobId: fetchedJob.id,
             workerId,
-            lockedBy: fetchedJob.lockedBy,
+            leasedBy: fetchedJob.leasedBy,
           },
         });
       }
 
-      if (fetchedJob.lockedUntil && fetchedJob.lockedUntil.getTime() < Date.now()) {
+      if (fetchedJob.leasedUntil && fetchedJob.leasedUntil.getTime() < Date.now()) {
         log({
           type: "job_lease_expired",
           level: "warn",
@@ -577,8 +577,8 @@ export const queuertHelper = ({
               chainId: fetchedJob.chainId,
               rootId: fetchedJob.rootId,
               originId: fetchedJob.originId,
-              lockedBy: fetchedJob.lockedBy!,
-              lockedUntil: fetchedJob.lockedUntil!,
+              leasedBy: fetchedJob.leasedBy!,
+              leasedUntil: fetchedJob.leasedUntil!,
             },
           ],
         });
@@ -601,7 +601,7 @@ export const queuertHelper = ({
         context,
         jobId: job.id,
         workerId,
-        lockDurationMs: leaseMs,
+        leaseDurationMs: leaseMs,
       });
     },
     getNextJobAvailableInMs: async ({
@@ -658,7 +658,7 @@ export const queuertHelper = ({
 
       return job;
     },
-    removeExpiredJobClaims: async ({
+    removeExpiredJobLease: async ({
       queueNames,
       workerId,
     }: {
@@ -666,19 +666,19 @@ export const queuertHelper = ({
       workerId: string;
     }): Promise<void> => {
       const job = await stateProvider.provideContext((context) =>
-        stateAdapter.removeExpiredJobClaim({ context, queueNames }),
+        stateAdapter.removeExpiredJobLease({ context, queueNames }),
       );
       if (job) {
         log({
           type: "job_reaped",
           level: "info",
-          message: "Reaped expired job claim",
+          message: "Reaped expired job lease",
           args: [
             {
               jobId: job.id,
               queueName: job.queueName,
-              lockedBy: job.lockedBy!,
-              lockedUntil: job.lockedUntil!,
+              leasedBy: job.leasedBy!,
+              leasedUntil: job.leasedUntil!,
               chainId: job.chainId,
               originId: job.originId,
               rootId: job.rootId,

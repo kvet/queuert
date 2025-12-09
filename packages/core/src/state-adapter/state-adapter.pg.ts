@@ -12,7 +12,7 @@ import {
   getNextJobAvailableInMsSql,
   markJobAsPendingSql,
   markJobAsWaitingSql,
-  removeExpiredJobClaimsSql as removeExpiredJobClaimSql,
+  removeExpiredJobLeaseSql,
   renewJobLeaseSql,
   rescheduleJobSql,
   scheduleBlockedJobsSql,
@@ -40,8 +40,8 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
     lastAttemptError: dbJob.last_attempt_error,
     lastAttemptAt: dbJob.last_attempt_at ? new Date(dbJob.last_attempt_at) : null,
 
-    lockedBy: dbJob.locked_by,
-    lockedUntil: dbJob.locked_until ? new Date(dbJob.locked_until) : null,
+    leasedBy: dbJob.leased_by,
+    leasedUntil: dbJob.leased_until ? new Date(dbJob.leased_until) : null,
 
     updatedAt: new Date(dbJob.updated_at),
   };
@@ -161,11 +161,11 @@ export const createPgStateAdapter = ({
 
       return mapDbJobToStateJob(job);
     },
-    renewJobLease: async ({ context, jobId, workerId, lockDurationMs }) => {
+    renewJobLease: async ({ context, jobId, workerId, leaseDurationMs }) => {
       const [job] = await executeTypedSql({
         executeSql: (...args) => stateProvider.executeSql(context, ...args),
         sql: renewJobLeaseSql,
-        params: [jobId, workerId, lockDurationMs],
+        params: [jobId, workerId, leaseDurationMs],
       });
 
       return mapDbJobToStateJob(job);
@@ -188,10 +188,10 @@ export const createPgStateAdapter = ({
 
       return mapDbJobToStateJob(job);
     },
-    removeExpiredJobClaim: async ({ context, queueNames }) => {
+    removeExpiredJobLease: async ({ context, queueNames }) => {
       const [job] = await executeTypedSql({
         executeSql: (...args) => stateProvider.executeSql(context, ...args),
-        sql: /* sql */ removeExpiredJobClaimSql,
+        sql: /* sql */ removeExpiredJobLeaseSql,
         params: [queueNames],
       });
       return job ? mapDbJobToStateJob(job) : undefined;
