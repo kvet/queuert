@@ -44,8 +44,8 @@ Later, a background worker picks up the job and processes it:
 queuert.createWorker()
   .setupQueueHandler({
     name: "process-image",
-    handler: async ({ job, claim, finalize }) => {
-      const image = await claim(async ({ tx }) => {
+    handler: async ({ prepareStaged }) => {
+      const [{ finalize, job }, image] = await prepareStaged(async ({ tx, job }) => {
         return tx.images.getById(job.input.imageId);
       });
 
@@ -64,8 +64,8 @@ queuert.createWorker()
   })
   .setupQueueHandler({
     name: "distribute-image",
-    handler: async ({ job, claim, finalize }) => {
-      const [image, minifiedImage] = await claim(async ({ tx }) => {
+    handler: async ({ prepareStaged }) => {
+      const [{ finalize, job }, [image, minifiedImage]] = await prepareStaged(async ({ tx, job }) => {
         return Promise.all([
           tx.images.getById(job.input.imageId),
           tx.minifiedImages.getById(job.input.minifiedImageId),
@@ -87,11 +87,11 @@ queuert.createWorker()
   })
 ```
 
-Each task is performed in a database transaction, so you can safely read and write data as part of your job processing. Task is split into claim and finalize phases, with automatic lease renewal in between.
+Each task is performed in a database transaction, so you can safely read and write data as part of your job processing. Task is split into prepare and finalize phases, with automatic lease renewal in between.
 
-In the claim phase you can read data and perform non side-effecting operations within a transaction.
+In the prepare phase you can read data and perform non side-effecting operations within a transaction.
 
-Between claim and finalize, you can perform long-running work (CPU-intensive processing, network calls, etc.). The worker automatically renews the job lease at configured intervals. Make sure to implement this phase in an idempotent way, as it may be retried if the worker crashes or the lease expires.
+Between prepare and finalize, you can perform long-running work (CPU-intensive processing, network calls, etc.). The worker automatically renews the job lease at configured intervals. Make sure to implement this phase in an idempotent way, as it may be retried if the worker crashes or the lease expires.
 
 In the finalize phase you can commit state changes and enqueue further jobs. If the worker crashes during finalize, the whole job is retried from the beginning.
 

@@ -46,7 +46,7 @@ Avoid asymmetric naming (e.g., `started`/`finished` vs `created`/`completed`) ev
 ## Testing Patterns
 
 - Embed small verification tests into existing related tests rather than creating separate ones
-- Test all relevant phases: `claim`, `process`, `finalize`
+- Test all relevant phases: `prepare`, `process`, `finalize`
 - Prefer descriptive test names that match what's being tested
 
 ## Code Style
@@ -58,4 +58,6 @@ Avoid asymmetric naming (e.g., `started`/`finished` vs `created`/`completed`) ev
 ## Session Requirements
 
 - End each agentic session only when all checks pass: `pnpm check` (runs lint, fmt:check, typecheck, test)
-- Update documentation (README) if there were changes to public API
+- Update documentation in README.md if there were changes to public API
+- Update knowledge base in CLAUDE.md if there were architectural changes
+- Update todos in TODO.md if any were addressed

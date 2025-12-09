@@ -64,48 +64,90 @@ const DEFAULT_LEASE_CONFIG = {
   renewIntervalMs: 15 * 1000,
 } satisfies LeaseConfig;
 
+export type FinalizeCallback<
+  TStateProvider extends StateProvider<BaseStateProviderContext>,
+  TQueueDefinitions extends BaseQueueDefinitions,
+  TQueueName extends keyof TQueueDefinitions & string,
+> = (
+  finalizeOptions: {
+    continueWith: <
+      TEnqueueQueueName extends CompatibleQueueTargets<TQueueDefinitions, TQueueName> & string,
+    >(
+      options: {
+        queueName: TEnqueueQueueName;
+        input: TQueueDefinitions[TEnqueueQueueName]["input"];
+      } & GetStateProviderContext<TStateProvider>,
+    ) => Promise<EnqueuedJob<TEnqueueQueueName, TQueueDefinitions[TEnqueueQueueName]["input"]>>;
+  } & GetStateProviderContext<TStateProvider>,
+) =>
+  | TQueueDefinitions[TQueueName]["output"]
+  | ResolvedQueueJobs<TQueueDefinitions, TQueueName>
+  | Promise<
+      TQueueDefinitions[TQueueName]["output"] | ResolvedQueueJobs<TQueueDefinitions, TQueueName>
+    >;
+
+export type FinalizeFn<
+  TStateProvider extends StateProvider<BaseStateProviderContext>,
+  TQueueDefinitions extends BaseQueueDefinitions,
+  TQueueName extends keyof TQueueDefinitions & string,
+> = (
+  finalizeCallback: FinalizeCallback<TStateProvider, TQueueDefinitions, TQueueName>,
+) => Promise<
+  Branded<
+    TQueueDefinitions[TQueueName]["output"] | ResolvedQueueJobs<TQueueDefinitions, TQueueName>,
+    "finalize_result"
+  >
+>;
+
+export type PrepareResult<
+  TStateProvider extends StateProvider<BaseStateProviderContext>,
+  TQueueDefinitions extends BaseQueueDefinitions,
+  TQueueName extends keyof TQueueDefinitions & string,
+  TBlockers extends readonly JobChain<any, any, any>[],
+> = {
+  finalize: FinalizeFn<TStateProvider, TQueueDefinitions, TQueueName>;
+  job: RunningJob<Job<TQueueName, TQueueDefinitions[TQueueName]["input"]>>;
+  blockers: {
+    [K in keyof TBlockers]: CompletedJobChain<TBlockers[K]>;
+  };
+};
+
+export type PrepareCallback<
+  TStateProvider extends StateProvider<BaseStateProviderContext>,
+  TQueueDefinitions extends BaseQueueDefinitions,
+  TQueueName extends keyof TQueueDefinitions & string,
+  TBlockers extends readonly JobChain<any, any, any>[],
+  T,
+> = (
+  prepareCallbackOptions: {
+    job: RunningJob<Job<TQueueName, TQueueDefinitions[TQueueName]["input"]>>;
+    blockers: {
+      [K in keyof TBlockers]: CompletedJobChain<TBlockers[K]>;
+    };
+  } & GetStateProviderContext<TStateProvider>,
+) => T | Promise<T>;
+
+export type PrepareFn<
+  TStateProvider extends StateProvider<BaseStateProviderContext>,
+  TQueueDefinitions extends BaseQueueDefinitions,
+  TQueueName extends keyof TQueueDefinitions & string,
+  TBlockers extends readonly JobChain<any, any, any>[],
+> = {
+  (): Promise<[PrepareResult<TStateProvider, TQueueDefinitions, TQueueName, TBlockers>]>;
+  <T>(
+    prepareCallback: PrepareCallback<TStateProvider, TQueueDefinitions, TQueueName, TBlockers, T>,
+  ): Promise<[PrepareResult<TStateProvider, TQueueDefinitions, TQueueName, TBlockers>, T]>;
+};
+
 export type JobHandler<
   TStateProvider extends StateProvider<BaseStateProviderContext>,
   TQueueDefinitions extends BaseQueueDefinitions,
   TQueueName extends keyof TQueueDefinitions & string,
   TBlockers extends readonly JobChain<any, any, any>[],
 > = (handlerOptions: {
-  job: RunningJob<Job<TQueueName, TQueueDefinitions[TQueueName]["input"]>>;
-  blockers: {
-    [K in keyof TBlockers]: CompletedJobChain<TBlockers[K]>;
-  };
   signal: TypedAbortSignal<"lease_expired">;
-  claim: <T>(
-    claimCallback: (
-      claimCallbackOptions: {
-        // empty
-      } & GetStateProviderContext<TStateProvider>,
-    ) => T | Promise<T>,
-  ) => Promise<T>;
-  finalize: (
-    finalizeCallback: (
-      finalizeOptions: {
-        continueWith: <
-          TEnqueueQueueName extends CompatibleQueueTargets<TQueueDefinitions, TQueueName> & string,
-        >(
-          options: {
-            queueName: TEnqueueQueueName;
-            input: TQueueDefinitions[TEnqueueQueueName]["input"];
-          } & GetStateProviderContext<TStateProvider>,
-        ) => Promise<EnqueuedJob<TEnqueueQueueName, TQueueDefinitions[TEnqueueQueueName]["input"]>>;
-      } & GetStateProviderContext<TStateProvider>,
-    ) =>
-      | TQueueDefinitions[TQueueName]["output"]
-      | ResolvedQueueJobs<TQueueDefinitions, TQueueName>
-      | Promise<
-          TQueueDefinitions[TQueueName]["output"] | ResolvedQueueJobs<TQueueDefinitions, TQueueName>
-        >,
-  ) => Promise<
-    Branded<
-      TQueueDefinitions[TQueueName]["output"] | ResolvedQueueJobs<TQueueDefinitions, TQueueName>,
-      "finalize_result"
-    >
-  >;
+  prepareStaged: PrepareFn<TStateProvider, TQueueDefinitions, TQueueName, TBlockers>;
+  prepareAtomic: PrepareFn<TStateProvider, TQueueDefinitions, TQueueName, TBlockers>;
 }) => Promise<
   Branded<
     TQueueDefinitions[TQueueName]["output"] | ResolvedQueueJobs<TQueueDefinitions, TQueueName>,
@@ -232,37 +274,86 @@ export const processJobHandler = async ({
       });
       job = { ...job, attempt: jobInput.job.attempt };
 
-      try {
-        await handler({
-          ...jobInput,
-          signal: abortController.signal,
-          claim: async (claimCallback) => {
-            const output = await claimCallback({
+      const createFinalizeFn = () => {
+        let finalizeCalled = false;
+        return async (
+          finalizeCallback: (
+            options: {
+              continueWith: (
+                options: {
+                  queueName: string;
+                  input: unknown;
+                } & BaseStateProviderContext,
+              ) => Promise<unknown>;
+            } & BaseStateProviderContext,
+          ) => unknown,
+        ) => {
+          if (finalizeCalled) {
+            throw new Error("Finalize can only be called once");
+          }
+          finalizeCalled = true;
+          await withLease.stop();
+          return runInGuardedTransaction(async (context) => {
+            const output = await finalizeCallback({
+              continueWith: async ({ queueName, input, ...context }) =>
+                helper.continueWith({
+                  queueName,
+                  input,
+                  context,
+                }),
               ...context,
             });
-            await withLease.start();
-            return output;
-          },
-          finalize: async (finalizeCallback) => {
-            await withLease.stop();
-            return runInGuardedTransaction(async (context) => {
-              const output = await finalizeCallback({
-                continueWith: async ({ queueName, input, ...context }) =>
-                  helper.continueWith({
-                    queueName,
-                    input,
-                    context,
-                  }),
-                ...context,
-              });
-              await helper.finishJob({
-                job,
-                output,
-                context,
-                workerId,
-              });
+            await helper.finishJob({
+              job,
+              output,
+              context,
+              workerId,
             });
-          },
+          });
+        };
+      };
+
+      let prepareCalled = false;
+      const createPrepareFn = (startLease: boolean) =>
+        (async <T>(
+          prepareCallback?: (
+            options: {
+              job: RunningJob<Job<string, unknown>>;
+              blockers: readonly CompletedJobChain<JobChain<string, unknown, unknown>>[];
+            } & BaseStateProviderContext,
+          ) => T | Promise<T>,
+        ) => {
+          if (prepareCalled) {
+            throw new Error("Prepare can only be called once");
+          }
+          prepareCalled = true;
+          const output = prepareCallback
+            ? await prepareCallback({
+                ...context,
+                job: jobInput.job,
+                blockers: jobInput.blockers,
+              })
+            : undefined;
+          if (startLease) {
+            await withLease.start();
+          }
+          const finalize = createFinalizeFn();
+          const result = { finalize, job: jobInput.job, blockers: jobInput.blockers };
+          return (output === undefined ? [result] : [result, output]) as T extends undefined
+            ? [typeof result]
+            : [typeof result, T];
+        }) as PrepareFn<
+          StateProvider<BaseStateProviderContext>,
+          BaseQueueDefinitions,
+          string,
+          readonly JobChain<string, unknown, unknown>[]
+        >;
+
+      try {
+        await handler({
+          signal: abortController.signal,
+          prepareStaged: createPrepareFn(true),
+          prepareAtomic: createPrepareFn(false),
         });
       } finally {
         await withLease.stop();

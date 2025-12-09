@@ -180,18 +180,17 @@ describe("Handler", () => {
 
     const worker = queuert.createWorker().setupQueueHandler({
       name: "test",
-      handler: async ({ job, claim, finalize }) => {
-        expectTypeOf(job.id).toEqualTypeOf<string>();
-        expectTypeOf(job.input).toEqualTypeOf<{ test: boolean }>();
-        expect(job.id).toBeDefined();
-        expect(job.chainId).toEqual(job.id);
-        expect(job.originId).toBeNull();
-        expect(job.rootId).toEqual(job.id);
-        expect(job.input.test).toBeDefined();
+      handler: async ({ prepareStaged }) => {
+        const [{ finalize }, result] = await prepareStaged(({ client, job }) => {
+          expectTypeOf(job.id).toEqualTypeOf<string>();
+          expectTypeOf(job.input).toEqualTypeOf<{ test: boolean }>();
+          expect(job.id).toBeDefined();
+          expect(job.chainId).toEqual(job.id);
+          expect(job.originId).toBeNull();
+          expect(job.rootId).toEqual(job.id);
+          expect(job.input.test).toBeDefined();
 
-        const result = await claim(({ client }) => {
           expectTypeOf(client).toEqualTypeOf<PoolClient>();
-
           expect(client).toBeDefined();
 
           return "prepare";
@@ -257,6 +256,66 @@ describe("Handler", () => {
     ]);
   });
 
+  test("throws when prepare or finalize is called more than once", async ({
+    stateProvider,
+    stateAdapter,
+    notifyAdapter,
+    runInTransactionWithNotify,
+    withWorkers,
+    waitForJobChainsCompleted,
+    log,
+    expect,
+  }) => {
+    const queuert = await createQueuert({
+      stateProvider,
+      stateAdapter,
+      notifyAdapter,
+      log,
+      queueDefinitions: defineUnionQueues<{
+        "test-prepare": {
+          input: null;
+          output: null;
+        };
+        "test-finalize": {
+          input: null;
+          output: null;
+        };
+      }>(),
+    });
+
+    const worker = queuert
+      .createWorker()
+      .setupQueueHandler({
+        name: "test-prepare",
+        handler: async ({ prepareAtomic }) => {
+          const [{ finalize }] = await prepareAtomic();
+          await expect(prepareAtomic()).rejects.toThrow("Prepare can only be called once");
+          return finalize(() => null);
+        },
+      })
+      .setupQueueHandler({
+        name: "test-finalize",
+        handler: async ({ prepareAtomic }) => {
+          const [{ finalize }] = await prepareAtomic();
+          const result = finalize(() => null);
+          await expect(finalize(() => null)).rejects.toThrow("Finalize can only be called once");
+          return result;
+        },
+      });
+
+    await withWorkers([await worker.start()], async () => {
+      const [prepareJobChain, finalizeJobChain] = await runInTransactionWithNotify(
+        queuert,
+        async ({ client }) => [
+          await queuert.enqueueJobChain({ client, chainName: "test-prepare", input: null }),
+          await queuert.enqueueJobChain({ client, chainName: "test-finalize", input: null }),
+        ],
+      );
+
+      await waitForJobChainsCompleted(queuert, [prepareJobChain, finalizeJobChain]);
+    });
+  });
+
   test("allows to extend job lease after lease expiration if wasn't grabbed by another worker", async ({
     stateProvider,
     stateAdapter,
@@ -282,8 +341,8 @@ describe("Handler", () => {
 
     const worker = queuert.createWorker().setupQueueHandler({
       name: "test",
-      handler: async ({ claim, finalize }) => {
-        await claim(() => {});
+      handler: async ({ prepareStaged }) => {
+        const [{ finalize }] = await prepareStaged(() => {});
 
         await sleep(100);
 
@@ -325,8 +384,8 @@ describe("Handler", () => {
     log,
     expect,
   }) => {
-    const handler = vi.fn(async ({ claim, finalize }) => {
-      await claim(() => {});
+    const handler = vi.fn(async ({ prepareStaged }) => {
+      const [{ finalize }] = await prepareStaged(() => {});
 
       return finalize(() => ({ success: true }));
     });
@@ -391,25 +450,27 @@ describe("Handler", () => {
 
     const worker = queuert.createWorker().setupQueueHandler({
       name: "test",
-      handler: async ({ job, finalize }) => {
-        attempts.push(job.attempt);
+      handler: async ({ prepareAtomic }) => {
+        const [{ finalize }] = await prepareAtomic(({ job }) => {
+          attempts.push(job.attempt);
 
-        expectTypeOf(job.attempt).toEqualTypeOf<number>();
-        expectTypeOf(job.lastAttemptAt).toEqualTypeOf<Date | null>();
-        expectTypeOf(job.lastAttemptError).toEqualTypeOf<string | null>();
+          expectTypeOf(job.attempt).toEqualTypeOf<number>();
+          expectTypeOf(job.lastAttemptAt).toEqualTypeOf<Date | null>();
+          expectTypeOf(job.lastAttemptError).toEqualTypeOf<string | null>();
 
-        expect(job.attempt).toBeGreaterThan(0);
-        if (job.attempt > 1) {
-          expect(job.lastAttemptAt).toBeInstanceOf(Date);
-          expect(job.lastAttemptError).toBe("Simulated failure");
-        } else {
-          expect(job.lastAttemptAt).toBeNull();
-          expect(job.lastAttemptError).toBeNull();
-        }
+          expect(job.attempt).toBeGreaterThan(0);
+          if (job.attempt > 1) {
+            expect(job.lastAttemptAt).toBeInstanceOf(Date);
+            expect(job.lastAttemptError).toBe("Simulated failure");
+          } else {
+            expect(job.lastAttemptAt).toBeNull();
+            expect(job.lastAttemptError).toBeNull();
+          }
 
-        if (job.attempt < 3) {
-          throw rescheduleJob(1, "Simulated failure");
-        }
+          if (job.attempt < 3) {
+            throw rescheduleJob(1, "Simulated failure");
+          }
+        });
 
         return finalize(() => null);
       },
@@ -440,7 +501,7 @@ describe("Handler", () => {
     log,
     expect,
   }) => {
-    type ErrorPhase = "claim" | "process" | "finalize";
+    type ErrorPhase = "prepare" | "process" | "finalize";
 
     const queuert = await createQueuert({
       stateProvider,
@@ -459,17 +520,17 @@ describe("Handler", () => {
 
     const worker = queuert.createWorker().setupQueueHandler({
       name: "test",
-      handler: async ({ job, claim, finalize }) => {
-        if (job.lastAttemptError) {
-          errors.push({
-            phase: job.input.phase,
-            error: job.lastAttemptError,
-          });
-        }
+      handler: async ({ prepareStaged }) => {
+        const [{ finalize, job }] = await prepareStaged(({ job }) => {
+          if (job.lastAttemptError) {
+            errors.push({
+              phase: job.input.phase,
+              error: job.lastAttemptError,
+            });
+          }
 
-        await claim(() => {
-          if (job.input.phase === "claim" && job.attempt === 1) {
-            throw new Error("Error in claim");
+          if (job.input.phase === "prepare" && job.attempt === 1) {
+            throw new Error("Error in prepare");
           }
         });
 
@@ -498,7 +559,7 @@ describe("Handler", () => {
       ],
       async () => {
         const jobs = await Promise.all(
-          (["claim", "process", "finalize"] as ErrorPhase[]).map((phase) =>
+          (["prepare", "process", "finalize"] as ErrorPhase[]).map((phase) =>
             runInTransactionWithNotify(queuert, ({ client }) =>
               queuert.enqueueJobChain({
                 client,
@@ -512,7 +573,7 @@ describe("Handler", () => {
         await waitForJobChainsCompleted(queuert, jobs);
 
         expect(errors).toHaveLength(3);
-        expect(errors.find((e) => e.phase === "claim")?.error).toBe("Error: Error in claim");
+        expect(errors.find((e) => e.phase === "prepare")?.error).toBe("Error: Error in prepare");
         expect(errors.find((e) => e.phase === "process")?.error).toBe("Error: Error in process");
         expect(errors.find((e) => e.phase === "finalize")?.error).toBe("Error: Error in finalize");
       },
@@ -547,14 +608,16 @@ describe("Handler", () => {
 
     const worker = queuert.createWorker().setupQueueHandler({
       name: "test",
-      handler: async ({ job, finalize }) => {
-        if (job.lastAttemptError) {
-          errors.push(job.lastAttemptError);
-        }
+      handler: async ({ prepareAtomic }) => {
+        const [{ finalize }] = await prepareAtomic(({ job }) => {
+          if (job.lastAttemptError) {
+            errors.push(job.lastAttemptError);
+          }
 
-        if (job.attempt < 4) {
-          throw new Error("Unexpected error");
-        }
+          if (job.attempt < 4) {
+            throw new Error("Unexpected error");
+          }
+        });
 
         return finalize(() => null);
       },
@@ -612,7 +675,7 @@ describe("Handler", () => {
     log,
     expect,
   }) => {
-    type ErrorPhase = "claim" | "process" | "finalize";
+    type ErrorPhase = "prepare" | "process" | "finalize";
 
     const queuert = await createQueuert({
       stateProvider,
@@ -631,17 +694,17 @@ describe("Handler", () => {
 
     const worker = queuert.createWorker().setupQueueHandler({
       name: "test",
-      handler: async ({ job, claim, finalize }) => {
-        if (job.lastAttemptError) {
-          errors.push({
-            phase: job.input.phase,
-            error: job.lastAttemptError,
-          });
-        }
+      handler: async ({ prepareStaged }) => {
+        const [{ finalize, job }] = await prepareStaged(({ job }) => {
+          if (job.lastAttemptError) {
+            errors.push({
+              phase: job.input.phase,
+              error: job.lastAttemptError,
+            });
+          }
 
-        await claim(() => {
-          if (job.input.phase === "claim" && job.attempt === 1) {
-            throw rescheduleJob(1, "Rescheduled in claim");
+          if (job.input.phase === "prepare" && job.attempt === 1) {
+            throw rescheduleJob(1, "Rescheduled in prepare");
           }
         });
 
@@ -660,7 +723,7 @@ describe("Handler", () => {
 
     await withWorkers([await worker.start()], async () => {
       const jobs = await Promise.all(
-        (["claim", "process", "finalize"] as ErrorPhase[]).map((phase) =>
+        (["prepare", "process", "finalize"] as ErrorPhase[]).map((phase) =>
           runInTransactionWithNotify(queuert, ({ client }) =>
             queuert.enqueueJobChain({
               client,
@@ -674,7 +737,7 @@ describe("Handler", () => {
       await waitForJobChainsCompleted(queuert, jobs);
 
       expect(errors).toHaveLength(3);
-      expect(errors.find((e) => e.phase === "claim")?.error).toBe("Rescheduled in claim");
+      expect(errors.find((e) => e.phase === "prepare")?.error).toBe("Rescheduled in prepare");
       expect(errors.find((e) => e.phase === "process")?.error).toBe("Rescheduled in process");
       expect(errors.find((e) => e.phase === "finalize")?.error).toBe("Rescheduled in finalize");
     });
@@ -712,8 +775,8 @@ describe("Reaper", () => {
 
     const worker = queuert.createWorker().setupQueueHandler({
       name: "test",
-      handler: async ({ signal, claim, finalize }) => {
-        await claim(async () => {});
+      handler: async ({ signal, prepareStaged }) => {
+        const [{ finalize }] = await prepareStaged(async () => {});
 
         if (!failed) {
           failed = true;
@@ -801,8 +864,8 @@ describe("Reaper", () => {
 
     const worker = queuert.createWorker().setupQueueHandler({
       name: "test",
-      handler: async ({ claim, finalize }) => {
-        await claim(async () => {});
+      handler: async ({ prepareStaged }) => {
+        const [{ finalize }] = await prepareStaged(async () => {});
 
         if (!failed) {
           failed = true;
@@ -886,8 +949,10 @@ describe("Worker", () => {
 
     const worker = queuert.createWorker().setupQueueHandler({
       name: "test",
-      handler: async ({ job, finalize }) => {
-        processedJobs.push(job.input.jobNumber);
+      handler: async ({ prepareAtomic }) => {
+        const [{ finalize }] = await prepareAtomic(({ job }) => {
+          processedJobs.push(job.input.jobNumber);
+        });
 
         return finalize(() => {
           return { success: true };
@@ -942,8 +1007,10 @@ describe("Worker", () => {
 
     const worker = queuert.createWorker().setupQueueHandler({
       name: "test",
-      handler: async ({ job, finalize }) => {
-        processedJobs.push(job.input.jobNumber);
+      handler: async ({ prepareAtomic }) => {
+        const [{ finalize }] = await prepareAtomic(({ job }) => {
+          processedJobs.push(job.input.jobNumber);
+        });
 
         return finalize(() => {
           return { success: true };
@@ -1012,12 +1079,14 @@ describe("Chains", () => {
       .createWorker()
       .setupQueueHandler({
         name: "linear",
-        handler: async ({ job, finalize }) => {
-          expect(job.id).toEqual(chainId);
-          expect(job.chainId).toEqual(chainId);
-          expect(job.originId).toBeNull();
-          expect(job.rootId).toEqual(chainId);
-          originIds.push(job.id);
+        handler: async ({ prepareAtomic }) => {
+          const [{ finalize, job }] = await prepareAtomic(({ job }) => {
+            expect(job.id).toEqual(chainId);
+            expect(job.chainId).toEqual(chainId);
+            expect(job.originId).toBeNull();
+            expect(job.rootId).toEqual(chainId);
+            originIds.push(job.id);
+          });
 
           return finalize(({ client, continueWith }) => {
             expectTypeOf<
@@ -1034,12 +1103,14 @@ describe("Chains", () => {
       })
       .setupQueueHandler({
         name: "linear_next",
-        handler: async ({ job, finalize }) => {
-          expect(job.id).not.toEqual(chainId);
-          expect(job.chainId).toEqual(chainId);
-          expect(job.originId).toEqual(originIds[0]);
-          expect(job.rootId).toEqual(chainId);
-          originIds.push(job.id);
+        handler: async ({ prepareAtomic }) => {
+          const [{ finalize, job }] = await prepareAtomic(({ job }) => {
+            expect(job.id).not.toEqual(chainId);
+            expect(job.chainId).toEqual(chainId);
+            expect(job.originId).toEqual(originIds[0]);
+            expect(job.rootId).toEqual(chainId);
+            originIds.push(job.id);
+          });
 
           return finalize(({ client, continueWith }) => {
             expectTypeOf<
@@ -1056,11 +1127,13 @@ describe("Chains", () => {
       })
       .setupQueueHandler({
         name: "linear_next_next",
-        handler: async ({ job, finalize }) => {
-          expect(job.id).not.toEqual(chainId);
-          expect(job.chainId).toEqual(chainId);
-          expect(job.originId).toEqual(originIds[1]);
-          expect(job.rootId).toEqual(chainId);
+        handler: async ({ prepareAtomic }) => {
+          const [{ finalize, job }] = await prepareAtomic(({ job }) => {
+            expect(job.id).not.toEqual(chainId);
+            expect(job.chainId).toEqual(chainId);
+            expect(job.originId).toEqual(originIds[1]);
+            expect(job.rootId).toEqual(chainId);
+          });
 
           return finalize(() => ({
             result: job.input.valueNextNext,
@@ -1157,7 +1230,8 @@ describe("Chains", () => {
       .createWorker()
       .setupQueueHandler({
         name: "main",
-        handler: async ({ job, finalize }) => {
+        handler: async ({ prepareAtomic }) => {
+          const [{ finalize, job }] = await prepareAtomic();
           return finalize(({ client, continueWith }) => {
             expectTypeOf<Parameters<typeof continueWith>[0]["queueName"]>().toEqualTypeOf<
               "branch1" | "branch2"
@@ -1173,7 +1247,8 @@ describe("Chains", () => {
       })
       .setupQueueHandler({
         name: "branch1",
-        handler: async ({ job, finalize }) => {
+        handler: async ({ prepareAtomic }) => {
+          const [{ finalize, job }] = await prepareAtomic();
           return finalize(() => ({
             result1: job.input.valueBranched,
           }));
@@ -1181,7 +1256,8 @@ describe("Chains", () => {
       })
       .setupQueueHandler({
         name: "branch2",
-        handler: async ({ job, finalize }) => {
+        handler: async ({ prepareAtomic }) => {
+          const [{ finalize, job }] = await prepareAtomic();
           return finalize(() => ({
             result2: job.input.valueBranched,
           }));
@@ -1243,7 +1319,8 @@ describe("Chains", () => {
 
     const worker = queuert.createWorker().setupQueueHandler({
       name: "loop",
-      handler: async ({ job, finalize }) => {
+      handler: async ({ prepareAtomic }) => {
+        const [{ finalize, job }] = await prepareAtomic();
         return finalize(({ client, continueWith }) => {
           expectTypeOf<Parameters<typeof continueWith>[0]["queueName"]>().toEqualTypeOf<"loop">();
 
@@ -1306,7 +1383,8 @@ describe("Chains", () => {
       .createWorker()
       .setupQueueHandler({
         name: "start",
-        handler: async ({ job, finalize }) => {
+        handler: async ({ prepareAtomic }) => {
+          const [{ finalize, job }] = await prepareAtomic();
           return finalize(({ client, continueWith }) => {
             expectTypeOf<Parameters<typeof continueWith>[0]["queueName"]>().toEqualTypeOf<"end">();
 
@@ -1320,7 +1398,8 @@ describe("Chains", () => {
       })
       .setupQueueHandler({
         name: "end",
-        handler: async ({ job, finalize }) => {
+        handler: async ({ prepareAtomic }) => {
+          const [{ finalize, job }] = await prepareAtomic();
           return finalize(({ client, continueWith }) => {
             expectTypeOf<
               Parameters<typeof continueWith>[0]["queueName"]
@@ -1396,11 +1475,13 @@ describe("Blocker Chains", () => {
       .createWorker()
       .setupQueueHandler({
         name: "blocker",
-        handler: async ({ job, finalize }) => {
-          expect(job.chainId).toEqual(dependencyChainId);
-          expect(job.rootId).toEqual(mainChainId);
-          expect(job.originId).toEqual(originId);
-          originId = job.id;
+        handler: async ({ prepareAtomic }) => {
+          const [{ finalize, job }] = await prepareAtomic(({ job }) => {
+            expect(job.chainId).toEqual(dependencyChainId);
+            expect(job.rootId).toEqual(mainChainId);
+            expect(job.originId).toEqual(originId);
+            originId = job.id;
+          });
 
           return finalize(({ client, continueWith }) =>
             job.input.value < 1
@@ -1427,13 +1508,21 @@ describe("Blocker Chains", () => {
 
           return [dependencyJobChain];
         },
-        handler: async ({ job, blockers: [blocker], finalize }) => {
-          expectTypeOf<(typeof blocker)["output"]>().toEqualTypeOf<{
-            done: true;
-          }>();
+        handler: async ({ prepareAtomic }) => {
+          const [
+            {
+              finalize,
+              job,
+              blockers: [blocker],
+            },
+          ] = await prepareAtomic(({ job, blockers: [blocker] }) => {
+            expectTypeOf<(typeof blocker)["output"]>().toEqualTypeOf<{
+              done: true;
+            }>();
 
-          expectTypeOf<(typeof blocker)["originId"]>().toEqualTypeOf<string | null>();
-          expect(blocker.originId).toEqual(job.id);
+            expectTypeOf<(typeof blocker)["originId"]>().toEqualTypeOf<string | null>();
+            expect(blocker.originId).toEqual(job.id);
+          });
 
           return finalize(() => ({
             finalResult: (blocker.output.done ? 1 : 0) + (job.input.start ? 1 : 0),
@@ -1522,8 +1611,10 @@ describe("Blocker Chains", () => {
       .createWorker()
       .setupQueueHandler({
         name: "blocker",
-        handler: async ({ job, finalize }) => {
-          expect(job.originId).toBeNull();
+        handler: async ({ prepareAtomic }) => {
+          const [{ finalize, job }] = await prepareAtomic(({ job }) => {
+            expect(job.originId).toBeNull();
+          });
 
           return finalize(() => ({ result: job.input.value }));
         },
@@ -1541,8 +1632,15 @@ describe("Blocker Chains", () => {
           }
           return [blockerJob];
         },
-        handler: async ({ blockers: [blocker], finalize }) => {
-          expect(blocker.originId).toBeNull();
+        handler: async ({ prepareAtomic }) => {
+          const [
+            {
+              finalize,
+              blockers: [blocker],
+            },
+          ] = await prepareAtomic(({ blockers: [blocker] }) => {
+            expect(blocker.originId).toBeNull();
+          });
 
           return finalize(() => ({
             finalResult: blocker.output.result,
@@ -1613,7 +1711,8 @@ describe("Blocker Chains", () => {
       .createWorker()
       .setupQueueHandler({
         name: "inner",
-        handler: async ({ job, finalize }) => {
+        handler: async ({ prepareAtomic }) => {
+          const [{ finalize, job }] = await prepareAtomic();
           return finalize(() => {
             expect(job.originId).toEqual(originId);
             return null;
@@ -1622,8 +1721,8 @@ describe("Blocker Chains", () => {
       })
       .setupQueueHandler({
         name: "outer",
-        handler: async ({ job, claim, finalize }) => {
-          await claim(async ({ client }) => {
+        handler: async ({ prepareStaged }) => {
+          const [{ finalize }] = await prepareStaged(async ({ client, job }) => {
             expect(job.originId).toBeNull();
             originId = job.id;
 
@@ -1712,7 +1811,8 @@ describe("Blocker Chains", () => {
 
     const worker1 = queuert.createWorker().setupQueueHandler({
       name: "test",
-      handler: async ({ job, finalize }) => {
+      handler: async ({ prepareAtomic }) => {
+        const [{ finalize, job }] = await prepareAtomic();
         return finalize(({ continueWith, client }) =>
           continueWith({
             client,
@@ -1725,7 +1825,8 @@ describe("Blocker Chains", () => {
 
     const worker2 = queuert.createWorker().setupQueueHandler({
       name: "finish",
-      handler: async ({ job, finalize }) => {
+      handler: async ({ prepareAtomic }) => {
+        const [{ finalize, job }] = await prepareAtomic();
         return finalize(() => ({
           result: job.input.valueNext + 1,
         }));
@@ -1778,7 +1879,8 @@ describe("Blocker Chains", () => {
       .createWorker()
       .setupQueueHandler({
         name: "blocker",
-        handler: async ({ job, finalize }) => {
+        handler: async ({ prepareAtomic }) => {
+          const [{ finalize, job }] = await prepareAtomic();
           return finalize(() => ({ result: job.input.value }));
         },
       })
@@ -1796,7 +1898,8 @@ describe("Blocker Chains", () => {
           );
           return blockerChains;
         },
-        handler: async ({ blockers, finalize }) => {
+        handler: async ({ prepareAtomic }) => {
+          const [{ finalize, blockers }] = await prepareAtomic();
           return finalize(() => ({
             finalResult: blockers.map((blocker) => blocker.output.result),
           }));
