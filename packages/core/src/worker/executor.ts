@@ -4,14 +4,14 @@ import { BaseQueueDefinitions } from "../entities/queue.js";
 import { sleep } from "../helpers/timers.js";
 import { Log } from "../log.js";
 import { NotifyAdapter } from "../notify-adapter/notify-adapter.js";
-import { EnqueueDependencyJobChains, ProcessHelper, RetryConfig } from "../queuert-helper.js";
+import { EnqueueBlockerJobChains, LeaseExpiredError, ProcessHelper } from "../queuert-helper.js";
 import { BaseStateProviderContext, StateProvider } from "../state-provider/state-provider.js";
-import { JobHandler, processJobHandler } from "./job-handler.js";
+import { JobHandler, LeaseConfig, processJobHandler, RetryConfig } from "./job-handler.js";
 
 export type RegisteredQueues = Map<
   string,
   {
-    enqueueDependencyJobChains?: EnqueueDependencyJobChains<
+    enqueueBlockerJobChains?: EnqueueBlockerJobChains<
       StateProvider<BaseStateProviderContext>,
       BaseQueueDefinitions,
       string,
@@ -23,7 +23,6 @@ export type RegisteredQueues = Map<
       string,
       readonly JobChain<string, any, any>[]
     >;
-    retryConfig?: RetryConfig;
   }
 >;
 
@@ -41,14 +40,37 @@ export const createExecutor = ({
   workerId?: string;
   pollIntervalMs?: number;
   nextJobDelayMs?: number;
+  retryConfig?: RetryConfig;
+  leaseConfig?: LeaseConfig;
 }) => Promise<() => Promise<void>>) => {
   const queueNames = Array.from(registeredQueues.keys());
-  return async ({ workerId = randomUUID(), pollIntervalMs = 60_000, nextJobDelayMs = 0 } = {}) => {
+  return async ({
+    workerId = randomUUID(),
+    pollIntervalMs = 60_000,
+    nextJobDelayMs = 0,
+    retryConfig = {},
+    leaseConfig = {},
+  } = {}) => {
+    log({
+      type: "worker_started",
+      level: "info",
+      message: "Started worker",
+      args: [
+        {
+          workerId,
+          queueNames,
+        },
+      ],
+    });
+
     const stopController = new AbortController();
+
     const performWorkIteration = async () => {
+      // TODO: make robust against crashes
       while (true) {
         await helper.removeExpiredJobClaims({
           queueNames,
+          workerId,
         });
 
         const pullDelayMs = await helper.getNextJobAvailableInMs({
@@ -91,6 +113,7 @@ export const createExecutor = ({
                 let job = await helper.acquireJob({
                   queueNames,
                   context,
+                  workerId,
                 });
                 if (!job) {
                   return false;
@@ -101,40 +124,36 @@ export const createExecutor = ({
                   throw new Error(`No handler registered for queue "${job.queueName}"`);
                 }
 
-                log({
-                  level: "info",
-                  message: `Processing job`,
-                  args: [
-                    {
-                      jobId: job.id,
-                      queueName: job.queueName,
-                      status: job.status,
-                    },
-                  ],
-                });
+                return helper.withJobContext(
+                  {
+                    rootId: job.rootId,
+                    chainId: job.chainId,
+                    originId: job.id,
+                  },
+                  async () => {
+                    job = await helper.scheduleBlockerJobChains({
+                      job: job!,
+                      enqueueBlockerJobChains: queue.enqueueBlockerJobChains,
+                      context,
+                    });
 
-                return helper.withParentJobContext(job.id, async () => {
-                  job = await helper.scheduleDependentJobChains({
-                    job: job!,
-                    enqueueDependencyJobChains: queue.enqueueDependencyJobChains,
-                    context,
-                  });
+                    if (job.status === "waiting") {
+                      return true;
+                    }
 
-                  if (job.status === "waiting") {
+                    finalizePromise = await processJobHandler({
+                      helper,
+                      handler: queue.handler,
+                      context,
+                      job,
+                      retryConfig,
+                      leaseConfig,
+                      workerId,
+                    });
+
                     return true;
-                  }
-
-                  finalizePromise = await processJobHandler({
-                    helper,
-                    handler: queue.handler,
-                    context,
-                    job,
-                    retryConfig: queue.retryConfig ?? {},
-                    workerId,
-                  });
-
-                  return true;
-                });
+                  },
+                );
               });
 
               await finalizePromise();
@@ -152,11 +171,21 @@ export const createExecutor = ({
             }
           }
         } catch (error) {
-          log({
-            level: "error",
-            message: "Worker iteration failed",
-            args: [error],
-          });
+          if (error instanceof LeaseExpiredError) {
+            // empty
+          } else {
+            log({
+              type: "worker_error",
+              level: "error",
+              message: "Worker error",
+              args: [
+                {
+                  workerId,
+                },
+                error,
+              ],
+            });
+          }
           await sleep(pollIntervalMs * 10, {
             jitterMs: pollIntervalMs,
             signal: stopController.signal,
@@ -172,16 +201,26 @@ export const createExecutor = ({
 
     return async () => {
       log({
+        type: "worker_stopping",
         level: "info",
         message: "Stopping worker...",
-        args: [],
+        args: [
+          {
+            workerId,
+          },
+        ],
       });
       stopController.abort();
       await performWorkIterationPromise;
       log({
+        type: "worker_stopped",
         level: "info",
         message: "Worker has been stopped",
-        args: [],
+        args: [
+          {
+            workerId,
+          },
+        ],
       });
     };
   };

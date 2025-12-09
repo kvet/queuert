@@ -1,11 +1,5 @@
 import { BaseStateProviderContext } from "../state-provider/state-provider.js";
 
-export type JobAttemptError = {
-  type: "rescheduled" | "unhandled";
-  afterMs: number;
-  cause: string;
-};
-
 export type StateJob = {
   id: string;
   queueName: string;
@@ -14,7 +8,7 @@ export type StateJob = {
 
   rootId: string;
   chainId: string;
-  parentId: string | null;
+  originId: string | null;
 
   status: "created" | "waiting" | "pending" | "running" | "completed";
   createdAt: Date;
@@ -22,7 +16,7 @@ export type StateJob = {
   completedAt: Date | null;
 
   attempt: number;
-  lastAttemptError: JobAttemptError | null;
+  lastAttemptError: string | null;
   lastAttemptAt: Date | null;
 
   lockedBy: string | null;
@@ -45,19 +39,21 @@ export type StateAdapter = {
     context: BaseStateProviderContext;
     queueName: string;
     input: unknown;
-    parentId: string | undefined;
+    rootId: string | undefined;
+    chainId: string | undefined;
+    originId: string | undefined;
   }) => Promise<StateJob>;
 
-  addJobDependencies: (params: {
+  addJobBlockers: (params: {
     context: BaseStateProviderContext;
     jobId: string;
-    dependsOnChainIds: string[];
+    blockedByChainIds: string[];
   }) => Promise<[StateJob, StateJob | undefined][]>;
-  scheduleDependentJobs: (params: {
+  scheduleBlockedJobs: (params: {
     context: BaseStateProviderContext;
-    dependsOnChainId: string;
-  }) => Promise<string[]>;
-  getJobDependencies: (params: {
+    blockedByChainId: string;
+  }) => Promise<StateJob[]>;
+  getJobBlockers: (params: {
     context: BaseStateProviderContext;
     jobId: string;
   }) => Promise<[StateJob, StateJob | undefined][]>;
@@ -82,7 +78,7 @@ export type StateAdapter = {
     context: BaseStateProviderContext;
     jobId: string;
   }) => Promise<StateJob>;
-  sendHeartbeat: (params: {
+  renewJobLease: (params: {
     context: BaseStateProviderContext;
     jobId: string;
     workerId: string;
@@ -92,20 +88,15 @@ export type StateAdapter = {
     context: BaseStateProviderContext;
     jobId: string;
     afterMs: number;
-    error: JobAttemptError;
-  }) => Promise<StateJob>;
-  linkJob: (params: {
-    context: BaseStateProviderContext;
-    jobId: string;
-    chainId: string;
+    error: string;
   }) => Promise<StateJob>;
   completeJob: (params: {
     context: BaseStateProviderContext;
     jobId: string;
     output: unknown;
   }) => Promise<StateJob>;
-  removeExpiredJobClaims: (params: {
+  removeExpiredJobClaim: (params: {
     context: BaseStateProviderContext;
     queueNames: string[];
-  }) => Promise<string[]>;
+  }) => Promise<StateJob | undefined>;
 };

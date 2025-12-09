@@ -1,9 +1,10 @@
-import { JobAttemptError, StateJob } from "../state-adapter/state-adapter.js";
+import { StateJob } from "../state-adapter/state-adapter.js";
 
 export type Job<TQueueName, TInput> = {
-  id: string; // TODO
-  chainId: string; // TODO
-  parentId: string | null; // TODO
+  id: string;
+  chainId: string;
+  originId: string | null;
+  rootId: string;
   queueName: TQueueName;
   input: TInput;
   createdAt: Date;
@@ -11,7 +12,7 @@ export type Job<TQueueName, TInput> = {
   updatedAt: Date;
   attempt: number;
   lastAttemptAt: Date | null;
-  lastAttemptError: JobAttemptError | null;
+  lastAttemptError: string | null;
 } & (
   | {
       status: "waiting";
@@ -38,7 +39,8 @@ export const mapStateJobToJob = (stateJob: StateJob): Job<any, any> => {
   return {
     id: stateJob.id,
     chainId: stateJob.chainId,
-    parentId: stateJob.parentId,
+    originId: stateJob.originId,
+    rootId: stateJob.rootId,
     queueName: stateJob.queueName,
     input: stateJob.input,
     createdAt: stateJob.createdAt,

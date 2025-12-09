@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import {
   CompatibleQueueTargets,
-  FinishedJobChain,
+  CompletedJobChain,
   JobChain,
   mapStateJobPairToJobChain,
   ResolvedJobChain,
@@ -23,9 +23,20 @@ import {
   GetStateProviderContext,
   StateProvider,
 } from "./state-provider/state-provider.js";
+import { calculateBackoffMs, RescheduleJobError, RetryConfig } from "./worker/job-handler.js";
 
 const notifyQueueStorage = new AsyncLocalStorage<Set<string>>();
-const parentProvideStorage = new AsyncLocalStorage<string | undefined>();
+const jobContextStorage = new AsyncLocalStorage<{
+  originId: string;
+  chainId: string;
+  rootId: string;
+}>();
+
+export class LeaseExpiredError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+  }
+}
 
 export type ResolvedQueueJobs<
   TQueueDefinitions extends BaseQueueDefinitions,
@@ -37,61 +48,18 @@ export type ResolvedQueueJobs<
   >;
 }[CompatibleQueueTargets<TQueueDefinitions, TQueueName>];
 
-export type EnqueueDependencyJobChains<
+export type EnqueueBlockerJobChains<
   TStateProvider extends StateProvider<BaseStateProviderContext>,
   TQueueDefinitions extends BaseQueueDefinitions,
   TQueueName extends keyof TQueueDefinitions & string,
-  TDependencies extends readonly {
+  TBlockers extends readonly {
     [K in keyof TQueueDefinitions]: ResolvedJobChain<TQueueDefinitions, K>;
   }[keyof TQueueDefinitions][],
 > = (
-  enqueueDependencyJobChainsOptions: {
+  enqueueBlockerJobChainsOptions: {
     job: Job<TQueueName, TQueueDefinitions[TQueueName]["input"]>;
   } & GetStateProviderContext<TStateProvider>,
-) => Promise<TDependencies>;
-
-export class RescheduleJobError extends Error {
-  public readonly afterMs: number;
-  constructor(
-    message: string,
-    options: {
-      afterMs: number;
-      cause?: unknown;
-    },
-  ) {
-    super(message, { cause: options.cause });
-    this.afterMs = options.afterMs;
-  }
-}
-
-// TODO
-export const rescheduleJob = (afterMs: number, cause?: unknown): never => {
-  throw new RescheduleJobError(`Reschedule job after ${afterMs}ms`, {
-    afterMs,
-    cause,
-  });
-};
-
-export type RetryConfig = {
-  initialIntervalMs?: number;
-  backoffCoefficient?: number;
-  maxIntervalMs?: number;
-};
-
-const DEFAULT_RETRY_CONFIG = {
-  initialIntervalMs: 1000,
-  backoffCoefficient: 2.0,
-  maxIntervalMs: 100 * 1000,
-} satisfies RetryConfig;
-
-export const calculateBackoffMs = (attempt: number, config: RetryConfig): number => {
-  const initialIntervalMs = config.initialIntervalMs ?? DEFAULT_RETRY_CONFIG.initialIntervalMs;
-  const backoffCoefficient = config.backoffCoefficient ?? DEFAULT_RETRY_CONFIG.backoffCoefficient;
-  const maxIntervalMs = config.maxIntervalMs ?? DEFAULT_RETRY_CONFIG.maxIntervalMs;
-
-  const backoffMs = initialIntervalMs * Math.pow(backoffCoefficient, attempt - 1);
-  return Math.min(backoffMs, maxIntervalMs);
-};
+) => Promise<TBlockers>;
 
 export const queuertHelper = ({
   stateProvider,
@@ -108,16 +76,54 @@ export const queuertHelper = ({
     queueName,
     input,
     context,
+    isChain,
   }: {
     queueName: string;
     input: unknown;
     context: BaseStateProviderContext;
+    isChain: boolean;
   }): Promise<StateJob> => {
+    const jobContext = jobContextStorage.getStore();
     const job = await stateAdapter.createJob({
       context,
       queueName,
       input,
-      parentId: parentProvideStorage.getStore(),
+      originId: jobContext?.originId,
+      chainId: isChain ? undefined : jobContext?.chainId,
+      rootId: jobContext?.rootId,
+    });
+
+    if (isChain) {
+      log({
+        type: "job_chain_created",
+        level: "info",
+        message: "Job chain created",
+        args: [
+          {
+            chainName: job.queueName,
+            chainId: job.chainId,
+            originId: job.originId,
+            rootId: job.rootId,
+            input,
+          },
+        ],
+      });
+    }
+
+    log({
+      type: "job_created",
+      level: "info",
+      message: "Job created",
+      args: [
+        {
+          jobId: job.id,
+          queueName: job.queueName,
+          originId: job.originId,
+          chainId: job.chainId,
+          rootId: job.rootId,
+          input,
+        },
+      ],
     });
 
     const notifyQueueSet = notifyQueueStorage.getStore();
@@ -125,9 +131,19 @@ export const queuertHelper = ({
       notifyQueueSet.add(queueName);
     } else {
       log({
+        type: "notify_context_absence",
         level: "warn",
-        message: `Not withNotify context when enqueueing job for queue. The job processing may be delayed.`,
-        args: [{ queueName }],
+        message:
+          "Not withNotify context when enqueueing job for queue. The job processing may be delayed.",
+        args: [
+          {
+            jobId: job.id,
+            queueName: job.queueName,
+            chainId: job.chainId,
+            rootId: job.rootId,
+            originId: job.originId,
+          },
+        ],
       });
     }
 
@@ -153,11 +169,11 @@ export const queuertHelper = ({
 
   return {
     withNotifyQueueContext: withNotifyQueueContext as <T>(cb: () => Promise<T>) => Promise<T>,
-    withParentJobContext: async <T>(
-      parentId: string | undefined,
+    withJobContext: async <T>(
+      context: { originId: string; chainId: string; rootId: string },
       cb: () => Promise<T>,
     ): Promise<T> => {
-      return parentProvideStorage.run(parentId, cb);
+      return jobContextStorage.run(context, cb);
     },
     runInTransaction: async <T>(
       cb: (context: GetStateProviderContext<StateProvider<BaseStateProviderContext>>) => Promise<T>,
@@ -166,13 +182,13 @@ export const queuertHelper = ({
         withNotifyQueueContext(() => stateProvider.runInTransaction(context, cb)),
       );
     },
-    scheduleDependentJobChains: async ({
+    scheduleBlockerJobChains: async ({
       job,
-      enqueueDependencyJobChains,
+      enqueueBlockerJobChains,
       context,
     }: {
       job: StateJob;
-      enqueueDependencyJobChains?: EnqueueDependencyJobChains<
+      enqueueBlockerJobChains?: EnqueueBlockerJobChains<
         StateProvider<BaseStateProviderContext>,
         BaseQueueDefinitions,
         string,
@@ -184,50 +200,68 @@ export const queuertHelper = ({
         return job;
       }
 
-      const dependencyJobChains = enqueueDependencyJobChains
-        ? await enqueueDependencyJobChains({
+      const blockerJobChains = enqueueBlockerJobChains
+        ? await enqueueBlockerJobChains({
             job: mapStateJobToJob(job),
             ...context,
           })
         : [];
-      if (dependencyJobChains.length) {
-        await stateAdapter.addJobDependencies({
+      if (blockerJobChains.length) {
+        await stateAdapter.addJobBlockers({
           context,
           jobId: job.id,
-          dependsOnChainIds: dependencyJobChains.map((d) => d.id),
+          blockedByChainIds: blockerJobChains.map((b: JobChain<any, any, any>) => b.id),
         });
         log({
+          type: "job_blockers_added",
           level: "info",
-          message: "Enqueued dependent job chains",
+          message: "Job blockers added",
           args: [
             {
               jobId: job.id,
               queueName: job.queueName,
               status: job.status,
-              ...(dependencyJobChains.length > 0
-                ? {
-                    dependencyIds: dependencyJobChains.map((d) => d.id),
-                  }
-                : {}),
+              attempt: job.attempt,
+              originId: job.originId,
+              chainId: job.chainId,
+              rootId: job.rootId,
+              blockers: blockerJobChains.map((b: JobChain<any, any, any>) => ({
+                chainId: b.id,
+                chainName: b.chainName,
+                rootId: b.rootId,
+                originId: b.originId,
+              })),
             },
           ],
         });
       }
-      const incompleteDependencies = dependencyJobChains.filter((d) => d.status !== "finished");
-      if (incompleteDependencies.length) {
+      const incompleteBlockers = blockerJobChains.filter(
+        (b: JobChain<any, any, any>) => b.status !== "completed",
+      );
+      if (incompleteBlockers.length) {
         job = await stateAdapter.markJobAsWaiting({
           context,
           jobId: job.id,
         });
         log({
+          type: "job_blocked",
           level: "info",
-          message: "Scheduled job for later",
+          message: "Job is blocked",
           args: [
             {
               jobId: job.id,
               queueName: job.queueName,
               status: job.status,
-              incompleteDependencyIds: incompleteDependencies.map((d) => d.id),
+              attempt: job.attempt,
+              originId: job.originId,
+              chainId: job.chainId,
+              rootId: job.rootId,
+              incompleteBlockers: incompleteBlockers.map((b: JobChain<any, any, any>) => ({
+                chainId: b.id,
+                chainName: b.chainName,
+                rootId: b.rootId,
+                originId: b.originId,
+              })),
             },
           ],
         });
@@ -247,38 +281,33 @@ export const queuertHelper = ({
       context: BaseStateProviderContext;
     }): Promise<{
       job: RunningJob<Job<any, any>>;
-      dependencies: FinishedJobChain<JobChain<any, any, any>>[];
+      blockers: CompletedJobChain<JobChain<any, any, any>>[];
     }> => {
       const runningJob = await stateAdapter.startJobAttempt({
         context,
         jobId: job.id,
       });
 
-      const dependencies = await stateAdapter.getJobDependencies({
+      const blockers = await stateAdapter.getJobBlockers({
         context,
         jobId: job.id,
       });
 
-      if (dependencies.some((dep) => dep[1]?.status !== "completed")) {
-        log({
-          level: "error",
-          message: `Job ${job.id} has unfinished or failed dependencies`,
-          args: [
-            {
-              jobId: job.id,
-              dependencyIds: dependencies.map((dep) => dep[0]?.id),
-              incompleteDependencyIds: dependencies
-                .filter((dep) => dep[1]?.status !== "completed")
-                .map((dep) => dep[0]?.id),
-            },
-          ],
+      if (blockers.some((blocker) => blocker[1]?.status !== "completed")) {
+        throw new Error("Some blockers are not finished successfully", {
+          cause: {
+            jobId: job.id,
+            blockerIds: blockers.map((blocker) => blocker[0]?.id),
+            incompleteBlockerIds: blockers
+              .filter((blocker) => blocker[1]?.status !== "completed")
+              .map((blocker) => blocker[0]?.id),
+          },
         });
-        throw new Error("Some dependencies are not finished successfully");
       }
 
       return {
         job: mapStateJobToJob(runningJob) as RunningJob<Job<any, any>>,
-        dependencies: dependencies.map(mapStateJobPairToJobChain) as FinishedJobChain<
+        blockers: blockers.map(mapStateJobPairToJobChain) as CompletedJobChain<
           JobChain<any, any, any>
         >[],
       };
@@ -299,12 +328,7 @@ export const queuertHelper = ({
         queueName: chainName,
         input,
         context,
-      });
-
-      log({
-        level: "debug",
-        message: `Enqueued job chain ${chainName} with id ${job.id}`,
-        args: [{ jobId: job.id, chainName, input }],
+        isChain: true,
       });
 
       return mapStateJobPairToJobChain([job, undefined]);
@@ -325,7 +349,7 @@ export const queuertHelper = ({
       return jobChain ? mapStateJobPairToJobChain(jobChain) : null;
     },
     // TODO: ensure only one job is enqueued per call and it should be returned
-    enqueueJob: async <TQueueName extends string, TInput>({
+    continueWith: async <TQueueName extends string, TInput>({
       queueName,
       input,
       context,
@@ -338,12 +362,7 @@ export const queuertHelper = ({
         queueName,
         input,
         context,
-      });
-
-      log({
-        level: "debug",
-        message: `Enqueued job ${queueName} with id ${job.id}`,
-        args: [{ jobId: job.id, queueName, input }],
+        isChain: false,
       });
 
       return {
@@ -356,72 +375,59 @@ export const queuertHelper = ({
       error,
       context,
       retryConfig,
+      workerId,
     }: {
       job: StateJob;
       error: unknown;
       context: BaseStateProviderContext;
       retryConfig: RetryConfig;
+      workerId: string;
     }): Promise<void> => {
-      if (error instanceof RescheduleJobError) {
-        log({
-          level: "warn",
-          message: `Job processing failed. Rescheduling in ${error.afterMs}ms.`,
-          args: [
-            {
-              jobId: job.id,
-              queueName: job.queueName,
-              status: job.status,
-            },
-            error,
-          ],
-        });
-
-        await stateAdapter.rescheduleJob({
-          context,
-          jobId: job.id,
-          afterMs: error.afterMs,
-          error: {
-            type: "rescheduled",
-            afterMs: error.afterMs,
-            cause: String(error.cause),
-          },
-        });
-      } else {
-        const afterMs = calculateBackoffMs(job.attempt, retryConfig);
-        log({
-          level: "error",
-          message: `Job processing failed unexpectedly. Rescheduling in ${afterMs}ms.`,
-          args: [
-            {
-              jobId: job.id,
-              queueName: job.queueName,
-              status: job.status,
-              attempt: job.attempt,
-            },
-            error,
-          ],
-        });
-
-        await stateAdapter.rescheduleJob({
-          context,
-          jobId: job.id,
-          afterMs,
-          error: {
-            type: "unhandled",
-            afterMs,
-            cause: String(error),
-          },
-        });
+      if (error instanceof LeaseExpiredError) {
+        return;
       }
+
+      const isRescheduled = error instanceof RescheduleJobError;
+      const afterMs = isRescheduled ? error.afterMs : calculateBackoffMs(job.attempt, retryConfig);
+      const errorString = isRescheduled ? String(error.cause) : String(error);
+
+      log({
+        type: "job_attempt_failed",
+        level: "error",
+        message: "Job attempt failed",
+        args: [
+          {
+            jobId: job.id,
+            queueName: job.queueName,
+            status: job.status,
+            attempt: job.attempt,
+            workerId,
+            chainId: job.chainId,
+            rootId: job.rootId,
+            originId: job.originId,
+            rescheduledAfterMs: afterMs,
+          },
+          error,
+        ],
+      });
+
+      await stateAdapter.rescheduleJob({
+        context,
+        jobId: job.id,
+        afterMs,
+        error: errorString,
+      });
     },
     finishJob: async ({
       job,
       output,
       context,
+      workerId,
     }: {
       job: StateJob;
       output: unknown;
       context: BaseStateProviderContext;
+      workerId: string;
     }): Promise<void> => {
       const hasChainedJob = isEnqueuedJob(output);
 
@@ -431,44 +437,78 @@ export const queuertHelper = ({
         output: hasChainedJob ? null : output,
       });
 
-      if (hasChainedJob) {
-        await stateAdapter.linkJob({
-          context,
-          jobId: output.id,
-          chainId: job.chainId,
-        });
-      } else {
-        const scheduledJobIds = await stateAdapter.scheduleDependentJobs({
-          context,
-          dependsOnChainId: job.chainId!,
-        });
-
-        if (scheduledJobIds.length > 0) {
-          log({
-            level: "info",
-            message: `Scheduled dependent jobs`,
-            args: [
-              {
-                jobId: job.id,
-                queueName: job.queueName,
-                status: job.status,
-                scheduledJobIds,
-              },
-            ],
-          });
-        }
-      }
       log({
+        type: "job_completed",
         level: "info",
-        message: "Completed job processing",
+        message: "Job completed",
         args: [
           {
             jobId: job.id,
             queueName: job.queueName,
             status: job.status,
+            attempt: job.attempt,
+            output,
+            workerId,
+            chainId: job.chainId,
+            rootId: job.rootId,
+            originId: job.originId,
           },
         ],
       });
+
+      if (!hasChainedJob) {
+        const jobChainStartJob = await stateAdapter.getJobById({
+          context,
+          jobId: job.chainId,
+        });
+
+        if (!jobChainStartJob) {
+          throw new Error(`Job chain with id ${job.chainId} not found`);
+        }
+
+        log({
+          type: "job_chain_completed",
+          level: "info",
+          message: "Job chain completed",
+          args: [
+            {
+              chainName: jobChainStartJob.queueName,
+              chainId: jobChainStartJob.chainId,
+              originId: jobChainStartJob.originId,
+              rootId: jobChainStartJob.rootId,
+              output,
+            },
+          ],
+        });
+
+        const unblockedJobs = await stateAdapter.scheduleBlockedJobs({
+          context,
+          blockedByChainId: jobChainStartJob.id,
+        });
+
+        if (unblockedJobs.length > 0) {
+          log({
+            type: "job_chain_unblocked_jobs",
+            level: "info",
+            message: "Job chain completed and unblocked jobs",
+            args: [
+              {
+                chainName: jobChainStartJob.queueName,
+                originId: jobChainStartJob.originId,
+                chainId: jobChainStartJob.chainId,
+                rootId: jobChainStartJob.rootId,
+                unblockedJobs: unblockedJobs.map((j) => ({
+                  jobId: j.id,
+                  queueName: j.queueName,
+                  chainId: j.chainId,
+                  originId: j.originId,
+                  rootId: j.rootId,
+                })),
+              },
+            ],
+          });
+        }
+      }
     },
     refetchJobForUpdate: async ({
       context,
@@ -494,18 +534,51 @@ export const queuertHelper = ({
         fetchedJob.lockedBy !== workerId &&
         !(allowEmptyWorker ? fetchedJob.lockedBy === null : false)
       ) {
-        throw new Error(`Job with id ${job.id} is not locked by this worker`);
+        log({
+          type: "job_lease_expired",
+          level: "warn",
+          message: "Job lease expired",
+          args: [
+            {
+              jobId: fetchedJob.id,
+              queueName: fetchedJob.queueName,
+              status: fetchedJob.status,
+              attempt: fetchedJob.attempt,
+              workerId,
+              chainId: fetchedJob.chainId,
+              rootId: fetchedJob.rootId,
+              originId: fetchedJob.originId,
+              lockedBy: fetchedJob.lockedBy!,
+              lockedUntil: fetchedJob.lockedUntil!,
+            },
+          ],
+        });
+        throw new LeaseExpiredError(`Job lock taken by another worker`, {
+          cause: {
+            jobId: fetchedJob.id,
+            workerId,
+            lockedBy: fetchedJob.lockedBy,
+          },
+        });
       }
 
       if (fetchedJob.lockedUntil && fetchedJob.lockedUntil.getTime() < Date.now()) {
         log({
+          type: "job_lease_expired",
           level: "warn",
-          message: `Job lock has expired`,
+          message: `Job lease expired`,
           args: [
             {
-              jobId: job.id,
-              lockedBy: fetchedJob.lockedBy,
-              lockedUntil: fetchedJob.lockedUntil,
+              jobId: fetchedJob.id,
+              queueName: fetchedJob.queueName,
+              status: fetchedJob.status,
+              attempt: fetchedJob.attempt,
+              workerId,
+              chainId: fetchedJob.chainId,
+              rootId: fetchedJob.rootId,
+              originId: fetchedJob.originId,
+              lockedBy: fetchedJob.lockedBy!,
+              lockedUntil: fetchedJob.lockedUntil!,
             },
           ],
         });
@@ -513,7 +586,7 @@ export const queuertHelper = ({
 
       return fetchedJob;
     },
-    commitHeartbeat: async ({
+    renewJobLease: async ({
       context,
       job,
       leaseMs,
@@ -524,7 +597,7 @@ export const queuertHelper = ({
       leaseMs: number;
       workerId: string;
     }): Promise<StateJob> => {
-      return stateAdapter.sendHeartbeat({
+      return stateAdapter.renewJobLease({
         context,
         jobId: job.id,
         workerId,
@@ -552,25 +625,64 @@ export const queuertHelper = ({
     acquireJob: async ({
       queueNames,
       context,
+      workerId,
     }: {
       queueNames: string[];
       context: BaseStateProviderContext;
-    }): Promise<StateJob | undefined> =>
-      stateAdapter.acquireJob({
+      workerId: string;
+    }): Promise<StateJob | undefined> => {
+      const job = await stateAdapter.acquireJob({
         context,
         queueNames,
-      }),
-    removeExpiredJobClaims: async ({ queueNames }: { queueNames: string[] }): Promise<void> => {
-      const ids = await stateProvider.provideContext((context) =>
-        stateAdapter.removeExpiredJobClaims({ context, queueNames }),
-      );
-      if (ids.length > 0) {
+      });
+
+      if (job) {
         log({
+          type: "job_acquired",
           level: "info",
-          message: `Reaped expired job claims`,
+          message: `Job acquired`,
           args: [
             {
-              jobIds: ids,
+              status: job.status,
+              attempt: job.attempt,
+              jobId: job.id,
+              queueName: job.queueName,
+              chainId: job.chainId,
+              originId: job.originId,
+              rootId: job.rootId,
+              workerId,
+            },
+          ],
+        });
+      }
+
+      return job;
+    },
+    removeExpiredJobClaims: async ({
+      queueNames,
+      workerId,
+    }: {
+      queueNames: string[];
+      workerId: string;
+    }): Promise<void> => {
+      const job = await stateProvider.provideContext((context) =>
+        stateAdapter.removeExpiredJobClaim({ context, queueNames }),
+      );
+      if (job) {
+        log({
+          type: "job_reaped",
+          level: "info",
+          message: "Reaped expired job claim",
+          args: [
+            {
+              jobId: job.id,
+              queueName: job.queueName,
+              lockedBy: job.lockedBy!,
+              lockedUntil: job.lockedUntil!,
+              chainId: job.chainId,
+              originId: job.originId,
+              rootId: job.rootId,
+              workerId,
             },
           ],
         });

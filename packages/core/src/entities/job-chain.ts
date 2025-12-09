@@ -58,22 +58,23 @@ export type ResolvedJobChain<
 
 export type JobChain<TChainName, TInput, TOutput> = {
   id: string;
-  parentId: string | null;
+  originId: string | null;
+  rootId: string;
   chainName: TChainName;
   input: TInput;
-  startedAt: Date;
+  createdAt: Date;
 } & (
   | {
-      status: "started";
+      status: "created";
     }
   | {
-      status: "finished";
+      status: "completed";
       output: TOutput;
-      finishedAt: Date;
+      completedAt: Date;
     }
 );
-export type FinishedJobChain<TJobChain extends JobChain<any, any, any>> = TJobChain & {
-  status: "finished";
+export type CompletedJobChain<TJobChain extends JobChain<any, any, any>> = TJobChain & {
+  status: "completed";
 };
 
 export const mapStateJobPairToJobChain = (
@@ -81,18 +82,19 @@ export const mapStateJobPairToJobChain = (
 ): JobChain<any, any, any> => {
   return {
     id: stateJobPair[0].id,
-    parentId: stateJobPair[0].parentId,
+    originId: stateJobPair[0].originId,
+    rootId: stateJobPair[0].rootId,
     chainName: stateJobPair[0].queueName,
     input: stateJobPair[0].input,
-    startedAt: stateJobPair[0].createdAt,
+    createdAt: stateJobPair[0].createdAt,
     ...(stateJobPair[1]?.status === "completed"
       ? {
-          status: "finished",
+          status: "completed",
           output: stateJobPair[1].output,
-          finishedAt: stateJobPair[1].completedAt!,
+          completedAt: stateJobPair[1].completedAt!,
         }
       : {
-          status: "started",
+          status: "created",
         }),
   };
 };

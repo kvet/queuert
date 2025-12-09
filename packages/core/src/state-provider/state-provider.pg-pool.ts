@@ -15,7 +15,6 @@ export const createPgPoolProvider = ({
     }
   },
   executeSql: async ({ client }, sql, params) => {
-    // console.log("Executing SQL:", sql, "with params:", params);
     const result = await client.query(sql, params);
     return result.rows as any;
   },

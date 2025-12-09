@@ -92,7 +92,7 @@ export const extendWithDb = <T>(
         await use();
 
         const client = await _db.connect();
-        await client.query(`DELETE FROM queuert.job_dependency;`);
+        await client.query(`DELETE FROM queuert.job_blocker;`);
         await client.query(`DELETE FROM queuert.job;`);
         client.release();
       },

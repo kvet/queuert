@@ -1,22 +1,21 @@
 import { StateProvider } from "../state-provider/state-provider.js";
-import { JobAttemptError, StateAdapter, StateJob } from "./state-adapter.js";
+import { StateAdapter, StateJob } from "./state-adapter.js";
 import {
   acquireJobSql,
-  addJobDependenciesSql,
+  addJobBlockersSql,
   completeJobSql,
   createJobSql,
   DbJob,
+  getJobBlockersSql,
   getJobByIdSql,
   getJobChainByIdSql,
-  getJobDependenciesSql,
   getNextJobAvailableInMsSql,
-  linkJobSql,
   markJobAsPendingSql,
   markJobAsWaitingSql,
-  removeExpiredJobClaimsSql,
+  removeExpiredJobClaimsSql as removeExpiredJobClaimSql,
+  renewJobLeaseSql,
   rescheduleJobSql,
-  scheduleDependentJobsSql,
-  sendHeartbeatJobSql,
+  scheduleBlockedJobsSql,
   startJobAttemptSql,
 } from "./state-adapter.pg/sql.js";
 import { executeTypedSql } from "./state-adapter.pg/typed-sql.js";
@@ -30,7 +29,7 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
 
     rootId: dbJob.root_id,
     chainId: dbJob.chain_id,
-    parentId: dbJob.parent_id,
+    originId: dbJob.origin_id,
 
     status: dbJob.status,
     createdAt: new Date(dbJob.created_at),
@@ -38,7 +37,7 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
     completedAt: dbJob.completed_at ? new Date(dbJob.completed_at) : null,
 
     attempt: dbJob.attempt,
-    lastAttemptError: dbJob.last_attempt_error as JobAttemptError | null,
+    lastAttemptError: dbJob.last_attempt_error,
     lastAttemptAt: dbJob.last_attempt_at ? new Date(dbJob.last_attempt_at) : null,
 
     lockedBy: dbJob.locked_by,
@@ -78,37 +77,37 @@ export const createPgStateAdapter = ({
       return job ? mapDbJobToStateJob(job) : undefined;
     },
 
-    createJob: async ({ context, queueName, input, parentId }) => {
+    createJob: async ({ context, queueName, input, rootId, chainId, originId }) => {
       const [job] = await executeTypedSql({
         executeSql: (...args) => stateProvider.executeSql(context, ...args),
         sql: createJobSql,
-        params: [queueName, input as any, parentId as any],
+        params: [queueName, input as any, rootId as any, chainId as any, originId as any],
       });
 
       return mapDbJobToStateJob(job);
     },
 
-    addJobDependencies: async ({ context, jobId, dependsOnChainIds }) => {
+    addJobBlockers: async ({ context, jobId, blockedByChainIds }) => {
       const jobs = await executeTypedSql({
         executeSql: (...args) => stateProvider.executeSql(context, ...args),
-        sql: addJobDependenciesSql,
-        params: [Array.from({ length: dependsOnChainIds.length }, () => jobId), dependsOnChainIds],
+        sql: addJobBlockersSql,
+        params: [Array.from({ length: blockedByChainIds.length }, () => jobId), blockedByChainIds],
       });
 
       return jobs.map(mapDbJobToStateJob).map((job) => [job, undefined]);
     },
-    scheduleDependentJobs: async ({ context, dependsOnChainId }) => {
-      const jobIds = await executeTypedSql({
+    scheduleBlockedJobs: async ({ context, blockedByChainId }) => {
+      const jobs = await executeTypedSql({
         executeSql: (...args) => stateProvider.executeSql(context, ...args),
-        sql: scheduleDependentJobsSql,
-        params: [dependsOnChainId],
+        sql: scheduleBlockedJobsSql,
+        params: [blockedByChainId],
       });
-      return jobIds;
+      return jobs.map(mapDbJobToStateJob);
     },
-    getJobDependencies: async ({ context, jobId }) => {
+    getJobBlockers: async ({ context, jobId }) => {
       const jobChains = await executeTypedSql({
         executeSql: (...args) => stateProvider.executeSql(context, ...args),
-        sql: getJobDependenciesSql,
+        sql: getJobBlockersSql,
         params: [jobId],
       });
 
@@ -162,10 +161,10 @@ export const createPgStateAdapter = ({
 
       return mapDbJobToStateJob(job);
     },
-    sendHeartbeat: async ({ context, jobId, workerId, lockDurationMs }) => {
+    renewJobLease: async ({ context, jobId, workerId, lockDurationMs }) => {
       const [job] = await executeTypedSql({
         executeSql: (...args) => stateProvider.executeSql(context, ...args),
-        sql: sendHeartbeatJobSql,
+        sql: renewJobLeaseSql,
         params: [jobId, workerId, lockDurationMs],
       });
 
@@ -175,16 +174,7 @@ export const createPgStateAdapter = ({
       const [job] = await executeTypedSql({
         executeSql: (...args) => stateProvider.executeSql(context, ...args),
         sql: rescheduleJobSql,
-        params: [jobId, afterMs, error as any],
-      });
-
-      return mapDbJobToStateJob(job);
-    },
-    linkJob: async ({ context, jobId, chainId }) => {
-      const [job] = await executeTypedSql({
-        executeSql: (...args) => stateProvider.executeSql(context, ...args),
-        sql: linkJobSql,
-        params: [jobId, chainId],
+        params: [jobId, afterMs, JSON.stringify(error)],
       });
 
       return mapDbJobToStateJob(job);
@@ -198,13 +188,13 @@ export const createPgStateAdapter = ({
 
       return mapDbJobToStateJob(job);
     },
-    removeExpiredJobClaims: async ({ context, queueNames }) => {
-      const jobIds = await executeTypedSql({
+    removeExpiredJobClaim: async ({ context, queueNames }) => {
+      const [job] = await executeTypedSql({
         executeSql: (...args) => stateProvider.executeSql(context, ...args),
-        sql: /* sql */ removeExpiredJobClaimsSql,
+        sql: /* sql */ removeExpiredJobClaimSql,
         params: [queueNames],
       });
-      return jobIds;
+      return job ? mapDbJobToStateJob(job) : undefined;
     },
   };
 };
