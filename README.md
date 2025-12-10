@@ -10,7 +10,6 @@ Imagine you have some long-running process. For example, performing image proces
 
 ```ts
 const queuert = createQueuert({
-  stateProvider: ...,
   stateAdapter: ...,
   notifyAdapter: ...,
   queueDefinitions: defineUnionQueues<{

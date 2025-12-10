@@ -6,6 +6,3 @@ export type StateProvider<TContext extends BaseStateProviderContext> = {
   assertInTransaction: (context: TContext) => Promise<void>;
   runInTransaction: <T>(context: TContext, fn: (txContext: TContext) => Promise<T>) => Promise<T>;
 };
-
-export type GetStateProviderContext<TStateProvider> =
-  TStateProvider extends StateProvider<infer TContext> ? TContext : never;

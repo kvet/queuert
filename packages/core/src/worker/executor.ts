@@ -5,20 +5,21 @@ import { sleep } from "../helpers/timers.js";
 import { Log } from "../log.js";
 import { NotifyAdapter } from "../notify-adapter/notify-adapter.js";
 import { EnqueueBlockerJobChains, LeaseExpiredError, ProcessHelper } from "../queuert-helper.js";
-import { BaseStateProviderContext, StateProvider } from "../state-provider/state-provider.js";
+import { StateAdapter } from "../state-adapter/state-adapter.js";
+import { BaseStateProviderContext } from "../state-provider/state-provider.js";
 import { JobHandler, LeaseConfig, processJobHandler, RetryConfig } from "./job-handler.js";
 
 export type RegisteredQueues = Map<
   string,
   {
     enqueueBlockerJobChains?: EnqueueBlockerJobChains<
-      StateProvider<BaseStateProviderContext>,
+      StateAdapter<BaseStateProviderContext>,
       BaseQueueDefinitions,
       string,
       readonly JobChain<string, any, any>[]
     >;
     handler: JobHandler<
-      StateProvider<BaseStateProviderContext>,
+      StateAdapter<BaseStateProviderContext>,
       BaseQueueDefinitions,
       string,
       readonly JobChain<string, any, any>[]

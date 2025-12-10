@@ -3,14 +3,11 @@ import { BaseQueueDefinitions } from "./entities/queue.js";
 import { Log } from "./log.js";
 import { NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 import { EnqueueBlockerJobChains, queuertHelper } from "./queuert-helper.js";
-import { DeduplicationOptions, StateAdapter } from "./state-adapter/state-adapter.js";
-import { migrateSql, setupSql } from "./state-adapter/state-adapter.pg/sql.js";
-import { executeTypedSql } from "./state-adapter/state-adapter.pg/typed-sql.js";
 import {
-  BaseStateProviderContext,
-  GetStateProviderContext,
-  StateProvider,
-} from "./state-provider/state-provider.js";
+  DeduplicationOptions,
+  GetStateAdapterContext,
+  StateAdapter,
+} from "./state-adapter/state-adapter.js";
 import { createExecutor, Executor, RegisteredQueues } from "./worker/executor.js";
 import { JobHandler } from "./worker/job-handler.js";
 
@@ -22,15 +19,15 @@ export {
 } from "./entities/queue.js";
 export { type Log } from "./log.js";
 export { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
-export { type StateProvider as QueuerTStateProvider } from "./state-provider/state-provider.js";
 export {
   type DeduplicationOptions,
   type DeduplicationStrategy,
 } from "./state-adapter/state-adapter.js";
+export { type StateProvider as QueuerTStateProvider } from "./state-provider/state-provider.js";
 export { rescheduleJob, type LeaseConfig, type RetryConfig } from "./worker/job-handler.js";
 
 type QueuertWorkerDefinition<
-  TStateProvider extends StateProvider<BaseStateProviderContext>,
+  TStateAdapter extends StateAdapter<any>,
   TQueueDefinitions extends BaseQueueDefinitions,
 > = {
   setupQueueHandler: <
@@ -39,33 +36,33 @@ type QueuertWorkerDefinition<
   >(options: {
     name: TQueueName;
     enqueueBlockerJobChains?: EnqueueBlockerJobChains<
-      TStateProvider,
+      TStateAdapter,
       TQueueDefinitions,
       TQueueName,
       TBlockers
     >;
-    handler: JobHandler<TStateProvider, TQueueDefinitions, TQueueName, TBlockers>;
-  }) => QueuertWorkerDefinition<TStateProvider, TQueueDefinitions>;
+    handler: JobHandler<TStateAdapter, TQueueDefinitions, TQueueName, TBlockers>;
+  }) => QueuertWorkerDefinition<TStateAdapter, TQueueDefinitions>;
   start: Executor;
 };
 
 export type Queuert<
-  TStateProvider extends StateProvider<any>,
+  TStateAdapter extends StateAdapter<any>,
   TQueueDefinitions extends BaseQueueDefinitions,
 > = {
-  createWorker: () => QueuertWorkerDefinition<TStateProvider, TQueueDefinitions>;
+  createWorker: () => QueuertWorkerDefinition<TStateAdapter, TQueueDefinitions>;
   enqueueJobChain: <TChainName extends keyof TQueueDefinitions & string>(
     options: {
       chainName: TChainName;
       input: TQueueDefinitions[TChainName]["input"];
       deduplication?: DeduplicationOptions;
-    } & GetStateProviderContext<TStateProvider>,
+    } & GetStateAdapterContext<TStateAdapter>,
   ) => Promise<ResolvedJobChain<TQueueDefinitions, TChainName> & { deduplicated: boolean }>;
   getJobChain: <TChainName extends keyof TQueueDefinitions & string>(
     options: {
       chainName: TChainName;
       id: string;
-    } & GetStateProviderContext<TStateProvider>,
+    } & GetStateAdapterContext<TStateAdapter>,
   ) => Promise<ResolvedJobChain<TQueueDefinitions, TChainName> | null>;
   withNotify: <T, TArgs extends any[]>(
     cb: (...args: TArgs) => Promise<T>,
@@ -73,47 +70,20 @@ export type Queuert<
   ) => Promise<T>;
 };
 
-export const prepareQueuertSchema = async <TStateProvider extends StateProvider<any>>({
-  stateProvider,
-  ...context
-}: {
-  stateProvider: TStateProvider;
-} & GetStateProviderContext<TStateProvider>): Promise<void> => {
-  await executeTypedSql({
-    executeSql: (...args) => stateProvider.executeSql(context, ...args),
-    sql: setupSql,
-  });
-};
-
-export const migrateToLatest = async <TStateProvider extends StateProvider<any>>({
-  stateProvider,
-  ...context
-}: {
-  stateProvider: TStateProvider;
-} & GetStateProviderContext<TStateProvider>): Promise<void> => {
-  await executeTypedSql({
-    executeSql: (...args) => stateProvider.executeSql(context, ...args),
-    sql: migrateSql,
-  });
-};
-
 export const createQueuert = async <
-  TStateProvider extends StateProvider<any>,
+  TStateAdapter extends StateAdapter<any>,
   TQueueDefinitions extends BaseQueueDefinitions,
 >({
-  stateProvider,
   stateAdapter,
   notifyAdapter,
   log,
 }: {
-  stateProvider: TStateProvider;
-  stateAdapter: StateAdapter;
+  stateAdapter: TStateAdapter;
   notifyAdapter: NotifyAdapter;
   queueDefinitions: TQueueDefinitions;
   log: Log;
-}): Promise<Queuert<TStateProvider, TQueueDefinitions>> => {
+}): Promise<Queuert<TStateAdapter, TQueueDefinitions>> => {
   const helper = queuertHelper({
-    stateProvider,
     stateAdapter,
     notifyAdapter,
     log,
@@ -123,7 +93,7 @@ export const createQueuert = async <
     createWorker: () => {
       const createWorkerInstance = (
         registeredQueues: RegisteredQueues,
-      ): QueuertWorkerDefinition<TStateProvider, TQueueDefinitions> => {
+      ): QueuertWorkerDefinition<TStateAdapter, TQueueDefinitions> => {
         return {
           setupQueueHandler({ name: queueName, enqueueBlockerJobChains, handler }) {
             if (registeredQueues.has(queueName)) {

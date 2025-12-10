@@ -3,7 +3,8 @@ import { Client, Pool, PoolClient } from "pg";
 import { beforeAll, type TestAPI } from "vitest";
 
 import { createHash } from "crypto";
-import { migrateToLatest, prepareQueuertSchema } from "./index.js";
+import { StateAdapter } from "./state-adapter/state-adapter.js";
+import { createPgStateAdapter } from "./state-adapter/state-adapter.pg.js";
 import { StateProvider } from "./state-provider/state-provider.js";
 import { createPgPoolProvider, PgPoolProvider } from "./state-provider/state-provider.pg-pool.js";
 
@@ -12,7 +13,7 @@ const LABEL = "queuert-postgres-test";
 export const extendWithDb = <T>(
   api: TestAPI<T>,
   reuseId: string,
-): TestAPI<T & { stateProvider: PgPoolProvider }> => {
+): TestAPI<T & { stateProvider: PgPoolProvider; stateAdapter: PgStateAdapter }> => {
   const normalizedReuseId = createHash("sha1").update(reuseId).digest("hex");
 
   let container: StartedPostgreSqlContainer;
@@ -34,6 +35,7 @@ export const extendWithDb = <T>(
     _dbMigrateToLatest: void;
     _dbCleanup: void;
     stateProvider: StateProvider<{ client: PoolClient }>;
+    stateAdapter: StateAdapter<{ client: PoolClient }>;
   }>({
     _db: [
       // eslint-disable-next-line no-empty-pattern
@@ -51,13 +53,15 @@ export const extendWithDb = <T>(
 
         await client.end();
 
-        await use(
-          new Pool({
-            connectionString: container
-              .getConnectionUri()
-              .replace("base_database_for_tests", normalizedReuseId),
-          }),
-        );
+        const pool = new Pool({
+          connectionString: container
+            .getConnectionUri()
+            .replace("base_database_for_tests", normalizedReuseId),
+        });
+
+        await use(pool);
+
+        await pool.end();
       },
       { scope: "worker" },
     ],
@@ -67,21 +71,18 @@ export const extendWithDb = <T>(
         await client.query(`DROP SCHEMA IF EXISTS queuert CASCADE;`).catch(() => {
           // ignore
         });
-        client.release();
 
         const stateProvider = createPgPoolProvider({
           pool: _db,
         });
-        await stateProvider.provideContext(async ({ client }) => {
-          await prepareQueuertSchema({
-            stateProvider,
-            client,
-          });
-          await migrateToLatest({
-            stateProvider,
-            client,
-          });
+        const stateAdapter = createPgStateAdapter({
+          stateProvider,
         });
+
+        await stateAdapter.prepareSchema({ client });
+        await stateAdapter.migrateToLatest({ client });
+
+        client.release();
 
         await use();
       },
@@ -103,13 +104,17 @@ export const extendWithDb = <T>(
         void _dbMigrateToLatest;
         void _dbCleanup;
 
-        return use(
-          createPgPoolProvider({
-            pool: _db,
-          }),
-        );
+        return use(createPgPoolProvider({ pool: _db }));
+      },
+      { scope: "test" },
+    ],
+    stateAdapter: [
+      ({ stateProvider }, use) => {
+        return use(createPgStateAdapter({ stateProvider }));
       },
       { scope: "test" },
     ],
   }) as ReturnType<typeof extendWithDb<T>>;
 };
+
+export type PgStateAdapter = StateAdapter<{ client: PoolClient }>;

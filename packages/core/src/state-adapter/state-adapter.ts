@@ -30,18 +30,22 @@ export type StateJob = {
   updatedAt: Date;
 };
 
-export type StateAdapter = {
+export type StateAdapter<TContext extends BaseStateProviderContext = BaseStateProviderContext> = {
+  provideContext: <T>(fn: (context: TContext) => Promise<T>) => Promise<T>;
+  runInTransaction: <T>(context: TContext, fn: (txContext: TContext) => Promise<T>) => Promise<T>;
+  assertInTransaction: (context: TContext) => Promise<void>;
+
+  prepareSchema: (context: TContext) => Promise<void>;
+  migrateToLatest: (context: TContext) => Promise<void>;
+
   getJobChainById: (params: {
-    context: BaseStateProviderContext;
+    context: TContext;
     jobId: string;
   }) => Promise<[StateJob, StateJob | undefined] | undefined>;
-  getJobById: (params: {
-    context: BaseStateProviderContext;
-    jobId: string;
-  }) => Promise<StateJob | undefined>;
+  getJobById: (params: { context: TContext; jobId: string }) => Promise<StateJob | undefined>;
 
   createJob: (params: {
-    context: BaseStateProviderContext;
+    context: TContext;
     queueName: string;
     input: unknown;
     rootId: string | undefined;
@@ -51,58 +55,48 @@ export type StateAdapter = {
   }) => Promise<{ job: StateJob; deduplicated: boolean }>;
 
   addJobBlockers: (params: {
-    context: BaseStateProviderContext;
+    context: TContext;
     jobId: string;
     blockedByChainIds: string[];
   }) => Promise<[StateJob, StateJob | undefined][]>;
   scheduleBlockedJobs: (params: {
-    context: BaseStateProviderContext;
+    context: TContext;
     blockedByChainId: string;
   }) => Promise<StateJob[]>;
   getJobBlockers: (params: {
-    context: BaseStateProviderContext;
+    context: TContext;
     jobId: string;
   }) => Promise<[StateJob, StateJob | undefined][]>;
 
   getNextJobAvailableInMs: (params: {
-    context: BaseStateProviderContext;
+    context: TContext;
     queueNames: string[];
   }) => Promise<number | null>;
   acquireJob: (params: {
-    context: BaseStateProviderContext;
+    context: TContext;
     queueNames: string[];
   }) => Promise<StateJob | undefined>;
-  markJobAsWaiting: (params: {
-    context: BaseStateProviderContext;
-    jobId: string;
-  }) => Promise<StateJob>;
-  markJobAsPending: (params: {
-    context: BaseStateProviderContext;
-    jobId: string;
-  }) => Promise<StateJob>;
-  startJobAttempt: (params: {
-    context: BaseStateProviderContext;
-    jobId: string;
-  }) => Promise<StateJob>;
+  markJobAsWaiting: (params: { context: TContext; jobId: string }) => Promise<StateJob>;
+  markJobAsPending: (params: { context: TContext; jobId: string }) => Promise<StateJob>;
+  startJobAttempt: (params: { context: TContext; jobId: string }) => Promise<StateJob>;
   renewJobLease: (params: {
-    context: BaseStateProviderContext;
+    context: TContext;
     jobId: string;
     workerId: string;
     leaseDurationMs: number;
   }) => Promise<StateJob>;
   rescheduleJob: (params: {
-    context: BaseStateProviderContext;
+    context: TContext;
     jobId: string;
     afterMs: number;
     error: string;
   }) => Promise<StateJob>;
-  completeJob: (params: {
-    context: BaseStateProviderContext;
-    jobId: string;
-    output: unknown;
-  }) => Promise<StateJob>;
+  completeJob: (params: { context: TContext; jobId: string; output: unknown }) => Promise<StateJob>;
   removeExpiredJobLease: (params: {
-    context: BaseStateProviderContext;
+    context: TContext;
     queueNames: string[];
   }) => Promise<StateJob | undefined>;
 };
+
+export type GetStateAdapterContext<TStateAdapter> =
+  TStateAdapter extends StateAdapter<infer TContext> ? TContext : never;

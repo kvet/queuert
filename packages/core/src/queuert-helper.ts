@@ -17,12 +17,13 @@ import {
 import { BaseQueueDefinitions } from "./index.js";
 import { Log } from "./log.js";
 import { NotifyAdapter } from "./notify-adapter/notify-adapter.js";
-import { DeduplicationOptions, StateAdapter, StateJob } from "./state-adapter/state-adapter.js";
 import {
-  BaseStateProviderContext,
-  GetStateProviderContext,
-  StateProvider,
-} from "./state-provider/state-provider.js";
+  DeduplicationOptions,
+  GetStateAdapterContext,
+  StateAdapter,
+  StateJob,
+} from "./state-adapter/state-adapter.js";
+import { BaseStateProviderContext } from "./state-provider/state-provider.js";
 import { calculateBackoffMs, RescheduleJobError, RetryConfig } from "./worker/job-handler.js";
 
 const notifyQueueStorage = new AsyncLocalStorage<Set<string>>();
@@ -49,7 +50,7 @@ export type ResolvedQueueJobs<
 }[CompatibleQueueTargets<TQueueDefinitions, TQueueName>];
 
 export type EnqueueBlockerJobChains<
-  TStateProvider extends StateProvider<BaseStateProviderContext>,
+  TStateAdapter extends StateAdapter<BaseStateProviderContext>,
   TQueueDefinitions extends BaseQueueDefinitions,
   TQueueName extends keyof TQueueDefinitions & string,
   TBlockers extends readonly {
@@ -58,16 +59,14 @@ export type EnqueueBlockerJobChains<
 > = (
   enqueueBlockerJobChainsOptions: {
     job: Job<TQueueName, TQueueDefinitions[TQueueName]["input"]>;
-  } & GetStateProviderContext<TStateProvider>,
+  } & GetStateAdapterContext<TStateAdapter>,
 ) => Promise<TBlockers>;
 
 export const queuertHelper = ({
-  stateProvider,
   stateAdapter,
   notifyAdapter,
   log,
 }: {
-  stateProvider: StateProvider<BaseStateProviderContext>;
   stateAdapter: StateAdapter;
   notifyAdapter: NotifyAdapter;
   log: Log;
@@ -183,10 +182,10 @@ export const queuertHelper = ({
       return jobContextStorage.run(context, cb);
     },
     runInTransaction: async <T>(
-      cb: (context: GetStateProviderContext<StateProvider<BaseStateProviderContext>>) => Promise<T>,
+      cb: (context: BaseStateProviderContext) => Promise<T>,
     ): Promise<T> => {
-      return stateProvider.provideContext((context) =>
-        withNotifyQueueContext(() => stateProvider.runInTransaction(context, cb)),
+      return stateAdapter.provideContext((context) =>
+        withNotifyQueueContext(() => stateAdapter.runInTransaction(context, cb)),
       );
     },
     scheduleBlockerJobChains: async ({
@@ -196,7 +195,7 @@ export const queuertHelper = ({
     }: {
       job: StateJob;
       enqueueBlockerJobChains?: EnqueueBlockerJobChains<
-        StateProvider<BaseStateProviderContext>,
+        StateAdapter<BaseStateProviderContext>,
         BaseQueueDefinitions,
         string,
         readonly JobChain<any, any, any>[]
@@ -331,7 +330,7 @@ export const queuertHelper = ({
       deduplication?: DeduplicationOptions;
     }): Promise<JobChain<TChainName, TInput, TOutput> & { deduplicated: boolean }> => {
       // TODO: test
-      await stateProvider.assertInTransaction(context);
+      await stateAdapter.assertInTransaction(context);
 
       const { job, deduplicated } = await enqueueStateJob({
         queueName: chainName,
@@ -620,7 +619,7 @@ export const queuertHelper = ({
       queueNames: string[];
       pollIntervalMs: number;
     }): Promise<number> => {
-      const nextJobAvailableInMs = await stateProvider.provideContext((context) =>
+      const nextJobAvailableInMs = await stateAdapter.provideContext((context) =>
         stateAdapter.getNextJobAvailableInMs({
           context,
           queueNames,
@@ -674,7 +673,7 @@ export const queuertHelper = ({
       queueNames: string[];
       workerId: string;
     }): Promise<void> => {
-      const job = await stateProvider.provideContext((context) =>
+      const job = await stateAdapter.provideContext((context) =>
         stateAdapter.removeExpiredJobLease({ context, queueNames }),
       );
       if (job) {

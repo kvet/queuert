@@ -5,12 +5,8 @@ import { TypedAbortController, TypedAbortSignal } from "../helpers/abort.js";
 import { createSignal } from "../helpers/async.js";
 import { Branded } from "../helpers/typescript.js";
 import { LeaseExpiredError, ProcessHelper, ResolvedQueueJobs } from "../queuert-helper.js";
-import { StateJob } from "../state-adapter/state-adapter.js";
-import {
-  BaseStateProviderContext,
-  GetStateProviderContext,
-  StateProvider,
-} from "../state-provider/state-provider.js";
+import { GetStateAdapterContext, StateAdapter, StateJob } from "../state-adapter/state-adapter.js";
+import { BaseStateProviderContext } from "../state-provider/state-provider.js";
 
 export class RescheduleJobError extends Error {
   public readonly afterMs: number;
@@ -65,7 +61,7 @@ const DEFAULT_LEASE_CONFIG = {
 } satisfies LeaseConfig;
 
 export type FinalizeCallback<
-  TStateProvider extends StateProvider<BaseStateProviderContext>,
+  TStateAdapter extends StateAdapter<BaseStateProviderContext>,
   TQueueDefinitions extends BaseQueueDefinitions,
   TQueueName extends keyof TQueueDefinitions & string,
 > = (
@@ -76,9 +72,9 @@ export type FinalizeCallback<
       options: {
         queueName: TEnqueueQueueName;
         input: TQueueDefinitions[TEnqueueQueueName]["input"];
-      } & GetStateProviderContext<TStateProvider>,
+      } & GetStateAdapterContext<TStateAdapter>,
     ) => Promise<EnqueuedJob<TEnqueueQueueName, TQueueDefinitions[TEnqueueQueueName]["input"]>>;
-  } & GetStateProviderContext<TStateProvider>,
+  } & GetStateAdapterContext<TStateAdapter>,
 ) =>
   | TQueueDefinitions[TQueueName]["output"]
   | ResolvedQueueJobs<TQueueDefinitions, TQueueName>
@@ -87,11 +83,11 @@ export type FinalizeCallback<
     >;
 
 export type FinalizeFn<
-  TStateProvider extends StateProvider<BaseStateProviderContext>,
+  TStateAdapter extends StateAdapter<BaseStateProviderContext>,
   TQueueDefinitions extends BaseQueueDefinitions,
   TQueueName extends keyof TQueueDefinitions & string,
 > = (
-  finalizeCallback: FinalizeCallback<TStateProvider, TQueueDefinitions, TQueueName>,
+  finalizeCallback: FinalizeCallback<TStateAdapter, TQueueDefinitions, TQueueName>,
 ) => Promise<
   Branded<
     TQueueDefinitions[TQueueName]["output"] | ResolvedQueueJobs<TQueueDefinitions, TQueueName>,
@@ -100,12 +96,12 @@ export type FinalizeFn<
 >;
 
 export type PrepareResult<
-  TStateProvider extends StateProvider<BaseStateProviderContext>,
+  TStateAdapter extends StateAdapter<BaseStateProviderContext>,
   TQueueDefinitions extends BaseQueueDefinitions,
   TQueueName extends keyof TQueueDefinitions & string,
   TBlockers extends readonly JobChain<any, any, any>[],
 > = {
-  finalize: FinalizeFn<TStateProvider, TQueueDefinitions, TQueueName>;
+  finalize: FinalizeFn<TStateAdapter, TQueueDefinitions, TQueueName>;
   job: RunningJob<Job<TQueueName, TQueueDefinitions[TQueueName]["input"]>>;
   blockers: {
     [K in keyof TBlockers]: CompletedJobChain<TBlockers[K]>;
@@ -113,7 +109,7 @@ export type PrepareResult<
 };
 
 export type PrepareCallback<
-  TStateProvider extends StateProvider<BaseStateProviderContext>,
+  TStateAdapter extends StateAdapter<BaseStateProviderContext>,
   TQueueDefinitions extends BaseQueueDefinitions,
   TQueueName extends keyof TQueueDefinitions & string,
   TBlockers extends readonly JobChain<any, any, any>[],
@@ -124,30 +120,30 @@ export type PrepareCallback<
     blockers: {
       [K in keyof TBlockers]: CompletedJobChain<TBlockers[K]>;
     };
-  } & GetStateProviderContext<TStateProvider>,
+  } & GetStateAdapterContext<TStateAdapter>,
 ) => T | Promise<T>;
 
 export type PrepareFn<
-  TStateProvider extends StateProvider<BaseStateProviderContext>,
+  TStateAdapter extends StateAdapter<BaseStateProviderContext>,
   TQueueDefinitions extends BaseQueueDefinitions,
   TQueueName extends keyof TQueueDefinitions & string,
   TBlockers extends readonly JobChain<any, any, any>[],
 > = {
-  (): Promise<[PrepareResult<TStateProvider, TQueueDefinitions, TQueueName, TBlockers>]>;
+  (): Promise<[PrepareResult<TStateAdapter, TQueueDefinitions, TQueueName, TBlockers>]>;
   <T>(
-    prepareCallback: PrepareCallback<TStateProvider, TQueueDefinitions, TQueueName, TBlockers, T>,
-  ): Promise<[PrepareResult<TStateProvider, TQueueDefinitions, TQueueName, TBlockers>, T]>;
+    prepareCallback: PrepareCallback<TStateAdapter, TQueueDefinitions, TQueueName, TBlockers, T>,
+  ): Promise<[PrepareResult<TStateAdapter, TQueueDefinitions, TQueueName, TBlockers>, T]>;
 };
 
 export type JobHandler<
-  TStateProvider extends StateProvider<BaseStateProviderContext>,
+  TStateAdapter extends StateAdapter<BaseStateProviderContext>,
   TQueueDefinitions extends BaseQueueDefinitions,
   TQueueName extends keyof TQueueDefinitions & string,
   TBlockers extends readonly JobChain<any, any, any>[],
 > = (handlerOptions: {
   signal: TypedAbortSignal<"lease_expired">;
-  prepareStaged: PrepareFn<TStateProvider, TQueueDefinitions, TQueueName, TBlockers>;
-  prepareAtomic: PrepareFn<TStateProvider, TQueueDefinitions, TQueueName, TBlockers>;
+  prepareStaged: PrepareFn<TStateAdapter, TQueueDefinitions, TQueueName, TBlockers>;
+  prepareAtomic: PrepareFn<TStateAdapter, TQueueDefinitions, TQueueName, TBlockers>;
 }) => Promise<
   Branded<
     TQueueDefinitions[TQueueName]["output"] | ResolvedQueueJobs<TQueueDefinitions, TQueueName>,
@@ -166,12 +162,12 @@ export const processJobHandler = async ({
 }: {
   helper: ProcessHelper;
   handler: JobHandler<
-    StateProvider<BaseStateProviderContext>,
+    StateAdapter<BaseStateProviderContext>,
     BaseQueueDefinitions,
     string,
     readonly JobChain<string, unknown, unknown>[]
   >;
-  context: GetStateProviderContext<StateProvider<BaseStateProviderContext>>;
+  context: BaseStateProviderContext;
   job: StateJob;
   retryConfig: RetryConfig;
   leaseConfig: LeaseConfig;
@@ -183,7 +179,7 @@ export const processJobHandler = async ({
   const abortController = new AbortController() as TypedAbortController<"lease_expired">;
 
   const runInGuardedTransaction = async <T>(
-    cb: (context: GetStateProviderContext<StateProvider<BaseStateProviderContext>>) => Promise<T>,
+    cb: (context: BaseStateProviderContext) => Promise<T>,
   ): Promise<T> => {
     if (!firstLeaseCommitted.signalled) {
       return cb(context);
@@ -349,7 +345,7 @@ export const processJobHandler = async ({
             ? [typeof result]
             : [typeof result, T];
         }) as PrepareFn<
-          StateProvider<BaseStateProviderContext>,
+          StateAdapter<BaseStateProviderContext>,
           BaseQueueDefinitions,
           string,
           readonly JobChain<string, unknown, unknown>[]

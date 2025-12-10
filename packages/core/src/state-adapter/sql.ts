@@ -1,5 +1,5 @@
-import { DeduplicationStrategy } from "../../entities/job-chain.js";
-import { NamedParameter, TypedSql } from "./typed-sql.js";
+import { DeduplicationStrategy } from "../entities/job-chain.js";
+import { NamedParameter, TypedSql } from "./state-adapter.pg.js";
 
 // TODO: pgstattuple with partitioning
 export const setupSql = /* sql */ `

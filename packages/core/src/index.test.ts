@@ -1,6 +1,6 @@
 import { PoolClient } from "pg";
 import { test as baseTest, describe, expectTypeOf, MockedFunction, vi } from "vitest";
-import { extendWithDb } from "./db.spec-helper.js";
+import { extendWithDb, PgStateAdapter } from "./db.spec-helper.js";
 import { sleep } from "./helpers/timers.js";
 import {
   CompletedJobChain,
@@ -16,20 +16,16 @@ import {
 } from "./index.js";
 import { createInProcessNotifyAdapter } from "./notify-adapter/notify-adapter.in-process.js";
 import { LeaseExpiredError } from "./queuert-helper.js";
-import { StateAdapter } from "./state-adapter/state-adapter.js";
-import { createPgStateAdapter } from "./state-adapter/state-adapter.pg.js";
-import { PgPoolProvider } from "./state-provider/state-provider.pg-pool.js";
 
 const test = extendWithDb(baseTest, import.meta.url).extend<{
-  stateAdapter: StateAdapter;
   notifyAdapter: NotifyAdapter;
   runInTransactionWithNotify: <T>(
-    queuert: Queuert<PgPoolProvider, any>,
+    queuert: Queuert<PgStateAdapter, any>,
     cb: (context: { client: PoolClient }) => Promise<T>,
   ) => Promise<T>;
   withWorkers: <T>(workers: (() => Promise<void>)[], cb: () => Promise<T>) => Promise<T>;
   waitForJobChainsCompleted: <TChains extends JobChain<any, any, any>[]>(
-    queuert: Queuert<PgPoolProvider, any>,
+    queuert: Queuert<PgStateAdapter, any>,
     chains: TChains,
   ) => Promise<{ [K in keyof TChains]: CompletedJobChain<TChains[K]> }>;
   log: MockedFunction<Log>;
@@ -40,17 +36,6 @@ const test = extendWithDb(baseTest, import.meta.url).extend<{
     }[],
   ) => void;
 }>({
-  stateAdapter: [
-    // oxlint-disable-next-line no-empty-pattern
-    async ({ stateProvider }, use) => {
-      await use(
-        createPgStateAdapter({
-          stateProvider,
-        }),
-      );
-    },
-    { scope: "test" },
-  ],
   notifyAdapter: [
     // oxlint-disable-next-line no-empty-pattern
     async ({}, use) => {
@@ -155,7 +140,6 @@ const test = extendWithDb(baseTest, import.meta.url).extend<{
 
 describe("Handler", () => {
   test("executes long-running jobs", async ({
-    stateProvider,
     stateAdapter,
     notifyAdapter,
     runInTransactionWithNotify,
@@ -166,7 +150,6 @@ describe("Handler", () => {
     expect,
   }) => {
     const queuert = await createQueuert({
-      stateProvider,
       stateAdapter,
       notifyAdapter,
       log,
@@ -257,7 +240,6 @@ describe("Handler", () => {
   });
 
   test("throws error when prepare, finalize, or continueWith called multiple times", async ({
-    stateProvider,
     stateAdapter,
     notifyAdapter,
     runInTransactionWithNotify,
@@ -267,7 +249,6 @@ describe("Handler", () => {
     expect,
   }) => {
     const queuert = await createQueuert({
-      stateProvider,
       stateAdapter,
       notifyAdapter,
       log,
@@ -356,7 +337,6 @@ describe("Handler", () => {
   });
 
   test("allows to extend job lease after lease expiration if wasn't grabbed by another worker", async ({
-    stateProvider,
     stateAdapter,
     notifyAdapter,
     runInTransactionWithNotify,
@@ -366,7 +346,6 @@ describe("Handler", () => {
     expect,
   }) => {
     const queuert = await createQueuert({
-      stateProvider,
       stateAdapter,
       notifyAdapter,
       log,
@@ -414,7 +393,6 @@ describe("Handler", () => {
   });
 
   test("executes a job only once", async ({
-    stateProvider,
     stateAdapter,
     notifyAdapter,
     runInTransactionWithNotify,
@@ -430,7 +408,6 @@ describe("Handler", () => {
     });
 
     const queuert = await createQueuert({
-      stateProvider,
       stateAdapter,
       notifyAdapter,
       log,
@@ -463,7 +440,6 @@ describe("Handler", () => {
   });
 
   test("provides attempt information to job handler", async ({
-    stateProvider,
     stateAdapter,
     notifyAdapter,
     runInTransactionWithNotify,
@@ -473,7 +449,6 @@ describe("Handler", () => {
     expect,
   }) => {
     const queuert = await createQueuert({
-      stateProvider,
       stateAdapter,
       notifyAdapter,
       log,
@@ -531,7 +506,6 @@ describe("Handler", () => {
   });
 
   test("uses exponential backoff for unexpected errors in all phases", async ({
-    stateProvider,
     stateAdapter,
     notifyAdapter,
     runInTransactionWithNotify,
@@ -543,7 +517,6 @@ describe("Handler", () => {
     type ErrorPhase = "prepare" | "process" | "finalize";
 
     const queuert = await createQueuert({
-      stateProvider,
       stateAdapter,
       notifyAdapter,
       log,
@@ -620,7 +593,6 @@ describe("Handler", () => {
   });
 
   test("uses exponential backoff progression for repeated failures", async ({
-    stateProvider,
     stateAdapter,
     notifyAdapter,
     runInTransactionWithNotify,
@@ -631,7 +603,6 @@ describe("Handler", () => {
     expect,
   }) => {
     const queuert = await createQueuert({
-      stateProvider,
       stateAdapter,
       notifyAdapter,
       log,
@@ -705,7 +676,6 @@ describe("Handler", () => {
   });
 
   test("handles rescheduled errors in all phases", async ({
-    stateProvider,
     stateAdapter,
     notifyAdapter,
     runInTransactionWithNotify,
@@ -717,7 +687,6 @@ describe("Handler", () => {
     type ErrorPhase = "prepare" | "process" | "finalize";
 
     const queuert = await createQueuert({
-      stateProvider,
       stateAdapter,
       notifyAdapter,
       log,
@@ -785,7 +754,6 @@ describe("Handler", () => {
 
 describe("Reaper", () => {
   test("reaps abandoned jobs on heartbeat", async ({
-    stateProvider,
     stateAdapter,
     notifyAdapter,
     runInTransactionWithNotify,
@@ -795,7 +763,6 @@ describe("Reaper", () => {
     expect,
   }) => {
     const queuert = await createQueuert({
-      stateProvider,
       stateAdapter,
       notifyAdapter,
       log,
@@ -874,7 +841,6 @@ describe("Reaper", () => {
   });
 
   test("reaps abandoned jobs on finalize", async ({
-    stateProvider,
     stateAdapter,
     notifyAdapter,
     runInTransactionWithNotify,
@@ -884,7 +850,6 @@ describe("Reaper", () => {
     expect,
   }) => {
     const queuert = await createQueuert({
-      stateProvider,
       stateAdapter,
       notifyAdapter,
       log,
@@ -962,7 +927,6 @@ describe("Reaper", () => {
 
 describe("Worker", () => {
   test("processes jobs in order", async ({
-    stateProvider,
     stateAdapter,
     notifyAdapter,
     runInTransactionWithNotify,
@@ -974,7 +938,6 @@ describe("Worker", () => {
     const processedJobs: number[] = [];
 
     const queuert = await createQueuert({
-      stateProvider,
       stateAdapter,
       notifyAdapter,
       log,
@@ -1020,7 +983,6 @@ describe("Worker", () => {
   });
 
   test("processes jobs in order distributed across workers", async ({
-    stateProvider,
     stateAdapter,
     notifyAdapter,
     runInTransactionWithNotify,
@@ -1032,7 +994,6 @@ describe("Worker", () => {
     const processedJobs: number[] = [];
 
     const queuert = await createQueuert({
-      stateProvider,
       stateAdapter,
       notifyAdapter,
       log,
@@ -1080,7 +1041,6 @@ describe("Worker", () => {
 
 describe("Chains", () => {
   test("handles chained jobs", async ({
-    stateProvider,
     stateAdapter,
     notifyAdapter,
     runInTransactionWithNotify,
@@ -1091,7 +1051,6 @@ describe("Chains", () => {
     expect,
   }) => {
     const queuert = await createQueuert({
-      stateProvider,
       stateAdapter,
       notifyAdapter,
       log,
@@ -1235,7 +1194,6 @@ describe("Chains", () => {
   });
 
   test("handles branched chains", async ({
-    stateProvider,
     stateAdapter,
     notifyAdapter,
     runInTransactionWithNotify,
@@ -1245,7 +1203,6 @@ describe("Chains", () => {
     expect,
   }) => {
     const queuert = await createQueuert({
-      stateProvider,
       stateAdapter,
       notifyAdapter,
       log,
@@ -1334,7 +1291,6 @@ describe("Chains", () => {
   });
 
   test("handles loops", async ({
-    stateProvider,
     stateAdapter,
     notifyAdapter,
     runInTransactionWithNotify,
@@ -1344,7 +1300,6 @@ describe("Chains", () => {
     expect,
   }) => {
     const queuert = await createQueuert({
-      stateProvider,
       stateAdapter,
       notifyAdapter,
       log,
@@ -1392,7 +1347,6 @@ describe("Chains", () => {
   });
 
   test("handles go-to", async ({
-    stateProvider,
     stateAdapter,
     notifyAdapter,
     runInTransactionWithNotify,
@@ -1402,7 +1356,6 @@ describe("Chains", () => {
     expect,
   }) => {
     const queuert = await createQueuert({
-      stateProvider,
       stateAdapter,
       notifyAdapter,
       log,
@@ -1479,7 +1432,6 @@ describe("Chains", () => {
 
 describe("Blocker Chains", () => {
   test("handles long blocker chains", async ({
-    stateProvider,
     stateAdapter,
     notifyAdapter,
     runInTransactionWithNotify,
@@ -1490,7 +1442,6 @@ describe("Blocker Chains", () => {
     expectLogs,
   }) => {
     const queuert = await createQueuert({
-      stateProvider,
       stateAdapter,
       notifyAdapter,
       log,
@@ -1620,7 +1571,6 @@ describe("Blocker Chains", () => {
   });
 
   test("handles finalized blocker chains", async ({
-    stateProvider,
     stateAdapter,
     notifyAdapter,
     runInTransactionWithNotify,
@@ -1630,7 +1580,6 @@ describe("Blocker Chains", () => {
     expect,
   }) => {
     const queuert = await createQueuert({
-      stateProvider,
       stateAdapter,
       notifyAdapter,
       log,
@@ -1717,7 +1666,6 @@ describe("Blocker Chains", () => {
   });
 
   test("handles blocker chains spawned during processing", async ({
-    stateProvider,
     stateAdapter,
     notifyAdapter,
     runInTransactionWithNotify,
@@ -1727,7 +1675,6 @@ describe("Blocker Chains", () => {
     expect,
   }) => {
     const queuert = await createQueuert({
-      stateProvider,
       stateAdapter,
       notifyAdapter,
       log,
@@ -1822,7 +1769,6 @@ describe("Blocker Chains", () => {
   });
 
   test("handles chains that are distributed across workers", async ({
-    stateProvider,
     stateAdapter,
     notifyAdapter,
     runInTransactionWithNotify,
@@ -1832,7 +1778,6 @@ describe("Blocker Chains", () => {
     expect,
   }) => {
     const queuert = await createQueuert({
-      stateProvider,
       stateAdapter,
       notifyAdapter,
       log,
@@ -1888,7 +1833,6 @@ describe("Blocker Chains", () => {
   });
 
   test("handles multiple blocker chains", async ({
-    stateProvider,
     stateAdapter,
     notifyAdapter,
     runInTransactionWithNotify,
@@ -1898,7 +1842,6 @@ describe("Blocker Chains", () => {
     expect,
   }) => {
     const queuert = await createQueuert({
-      stateProvider,
       stateAdapter,
       notifyAdapter,
       log,
@@ -1965,7 +1908,6 @@ describe("Blocker Chains", () => {
 
 describe("Deduplication", () => {
   test("deduplicates job chains with same deduplication key", async ({
-    stateProvider,
     stateAdapter,
     notifyAdapter,
     runInTransactionWithNotify,
@@ -1975,7 +1917,6 @@ describe("Deduplication", () => {
     expect,
   }) => {
     const queuert = await createQueuert({
-      stateProvider,
       stateAdapter,
       notifyAdapter,
       log,
@@ -2039,7 +1980,6 @@ describe("Deduplication", () => {
   });
 
   test("deduplication strategies: 'all' vs 'finalized'", async ({
-    stateProvider,
     stateAdapter,
     notifyAdapter,
     runInTransactionWithNotify,
@@ -2049,7 +1989,6 @@ describe("Deduplication", () => {
     expect,
   }) => {
     const queuert = await createQueuert({
-      stateProvider,
       stateAdapter,
       notifyAdapter,
       log,
@@ -2122,7 +2061,6 @@ describe("Deduplication", () => {
   });
 
   test("deduplication with windowMs respects time window", async ({
-    stateProvider,
     stateAdapter,
     notifyAdapter,
     runInTransactionWithNotify,
@@ -2132,7 +2070,6 @@ describe("Deduplication", () => {
     expect,
   }) => {
     const queuert = await createQueuert({
-      stateProvider,
       stateAdapter,
       notifyAdapter,
       log,
