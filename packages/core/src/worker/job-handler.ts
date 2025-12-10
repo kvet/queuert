@@ -276,6 +276,7 @@ export const processJobHandler = async ({
 
       const createFinalizeFn = () => {
         let finalizeCalled = false;
+        let continueWithCalled = false;
         return async (
           finalizeCallback: (
             options: {
@@ -295,12 +296,17 @@ export const processJobHandler = async ({
           await withLease.stop();
           return runInGuardedTransaction(async (context) => {
             const output = await finalizeCallback({
-              continueWith: async ({ queueName, input, ...context }) =>
-                helper.continueWith({
+              continueWith: async ({ queueName, input, ...context }) => {
+                if (continueWithCalled) {
+                  throw new Error("continueWith can only be called once");
+                }
+                continueWithCalled = true;
+                return helper.continueWith({
                   queueName,
                   input,
                   context,
-                }),
+                });
+              },
               ...context,
             });
             await helper.finishJob({

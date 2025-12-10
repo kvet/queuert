@@ -3,7 +3,7 @@ import { BaseQueueDefinitions } from "./entities/queue.js";
 import { Log } from "./log.js";
 import { NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 import { EnqueueBlockerJobChains, queuertHelper } from "./queuert-helper.js";
-import { StateAdapter } from "./state-adapter/state-adapter.js";
+import { DeduplicationOptions, StateAdapter } from "./state-adapter/state-adapter.js";
 import { migrateSql, setupSql } from "./state-adapter/state-adapter.pg/sql.js";
 import { executeTypedSql } from "./state-adapter/state-adapter.pg/typed-sql.js";
 import {
@@ -23,6 +23,10 @@ export {
 export { type Log } from "./log.js";
 export { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 export { type StateProvider as QueuerTStateProvider } from "./state-provider/state-provider.js";
+export {
+  type DeduplicationOptions,
+  type DeduplicationStrategy,
+} from "./state-adapter/state-adapter.js";
 export { rescheduleJob, type LeaseConfig, type RetryConfig } from "./worker/job-handler.js";
 
 type QueuertWorkerDefinition<
@@ -54,8 +58,9 @@ export type Queuert<
     options: {
       chainName: TChainName;
       input: TQueueDefinitions[TChainName]["input"];
+      deduplication?: DeduplicationOptions;
     } & GetStateProviderContext<TStateProvider>,
-  ) => Promise<ResolvedJobChain<TQueueDefinitions, TChainName>>;
+  ) => Promise<ResolvedJobChain<TQueueDefinitions, TChainName> & { deduplicated: boolean }>;
   getJobChain: <TChainName extends keyof TQueueDefinitions & string>(
     options: {
       chainName: TChainName;
@@ -144,11 +149,12 @@ export const createQueuert = async <
 
       return createWorkerInstance(new Map());
     },
-    enqueueJobChain: async ({ input, chainName, ...context }) =>
+    enqueueJobChain: async ({ input, chainName, deduplication, ...context }) =>
       helper.enqueueJobChain({
         chainName,
         input,
         context,
+        deduplication,
       }),
     getJobChain: async ({ id, chainName, ...context }) =>
       helper.getJobChain({ id, chainName, context }),

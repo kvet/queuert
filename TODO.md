@@ -3,7 +3,6 @@
 # Long term
 
 - Withstand state layer errors in worker
-- Deduplication
 - Notify about long transactions
 - Finalize job externally (Cancellation)
 - Termination

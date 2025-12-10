@@ -1,6 +1,14 @@
 import { StateJob } from "../state-adapter/state-adapter.js";
 import { BaseQueueDefinitions, queueRefSymbol } from "./queue.js";
 
+export type DeduplicationStrategy = "finalized" | "all";
+
+export type DeduplicationOptions = {
+  key: string;
+  strategy?: DeduplicationStrategy;
+  windowMs?: number;
+};
+
 type MemberCompatibleTargets<TQueueDefinitions extends BaseQueueDefinitions, Out> = Out extends {
   [queueRefSymbol]: infer Ref;
 }

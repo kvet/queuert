@@ -256,7 +256,7 @@ describe("Handler", () => {
     ]);
   });
 
-  test("throws when prepare or finalize is called more than once", async ({
+  test("throws error when prepare, finalize, or continueWith called multiple times", async ({
     stateProvider,
     stateAdapter,
     notifyAdapter,
@@ -280,6 +280,14 @@ describe("Handler", () => {
           input: null;
           output: null;
         };
+        "test-continueWith": {
+          input: null;
+          output: DefineQueueRef<"test-next">;
+        };
+        "test-next": {
+          input: { value: number };
+          output: { result: number };
+        };
       }>(),
     });
 
@@ -301,18 +309,49 @@ describe("Handler", () => {
           await expect(finalize(() => null)).rejects.toThrow("Finalize can only be called once");
           return result;
         },
+      })
+      .setupQueueHandler({
+        name: "test-continueWith",
+        handler: async ({ prepareAtomic }) => {
+          const [{ finalize }] = await prepareAtomic();
+          return finalize(async ({ client, continueWith }) => {
+            const continuation1 = await continueWith({
+              client,
+              queueName: "test-next",
+              input: { value: 1 },
+            });
+            await expect(
+              continueWith({
+                client,
+                queueName: "test-next",
+                input: { value: 2 },
+              }),
+            ).rejects.toThrow("continueWith can only be called once");
+            return continuation1;
+          });
+        },
+      })
+      .setupQueueHandler({
+        name: "test-next",
+        handler: async ({ prepareAtomic }) => {
+          const [{ finalize, job }] = await prepareAtomic();
+          return finalize(() => ({ result: job.input.value }));
+        },
       });
 
     await withWorkers([await worker.start()], async () => {
-      const [prepareJobChain, finalizeJobChain] = await runInTransactionWithNotify(
-        queuert,
-        async ({ client }) => [
+      const [prepareJobChain, finalizeJobChain, continueWithJobChain] =
+        await runInTransactionWithNotify(queuert, async ({ client }) => [
           await queuert.enqueueJobChain({ client, chainName: "test-prepare", input: null }),
           await queuert.enqueueJobChain({ client, chainName: "test-finalize", input: null }),
-        ],
-      );
+          await queuert.enqueueJobChain({ client, chainName: "test-continueWith", input: null }),
+        ]);
 
-      await waitForJobChainsCompleted(queuert, [prepareJobChain, finalizeJobChain]);
+      await waitForJobChainsCompleted(queuert, [
+        prepareJobChain,
+        finalizeJobChain,
+        continueWithJobChain,
+      ]);
     });
   });
 
@@ -1920,6 +1959,249 @@ describe("Blocker Chains", () => {
       expect(succeededJobChain.output).toEqual({
         finalResult: Array.from({ length: 5 }, (_, i) => i + 1),
       });
+    });
+  });
+});
+
+describe("Deduplication", () => {
+  test("deduplicates job chains with same deduplication key", async ({
+    stateProvider,
+    stateAdapter,
+    notifyAdapter,
+    runInTransactionWithNotify,
+    withWorkers,
+    waitForJobChainsCompleted,
+    log,
+    expect,
+  }) => {
+    const queuert = await createQueuert({
+      stateProvider,
+      stateAdapter,
+      notifyAdapter,
+      log,
+      queueDefinitions: defineUnionQueues<{
+        test: {
+          input: { value: number };
+          output: { result: number };
+        };
+      }>(),
+    });
+
+    const worker = queuert.createWorker().setupQueueHandler({
+      name: "test",
+      handler: async ({ prepareAtomic }) => {
+        const [{ finalize, job }] = await prepareAtomic();
+        return finalize(() => ({ result: job.input.value }));
+      },
+    });
+
+    await withWorkers([await worker.start()], async () => {
+      const [chain1, chain2, chain3] = await runInTransactionWithNotify(
+        queuert,
+        async ({ client }) => [
+          await queuert.enqueueJobChain({
+            client,
+            chainName: "test",
+            input: { value: 1 },
+            deduplication: { key: "same-key" },
+          }),
+          await queuert.enqueueJobChain({
+            client,
+            chainName: "test",
+            input: { value: 2 },
+            deduplication: { key: "same-key" },
+          }),
+          await queuert.enqueueJobChain({
+            client,
+            chainName: "test",
+            input: { value: 3 },
+            deduplication: { key: "different-key" },
+          }),
+        ],
+      );
+
+      expect(chain1.deduplicated).toBe(false);
+      expect(chain2.deduplicated).toBe(true);
+      expect(chain2.id).toBe(chain1.id);
+      expect(chain3.deduplicated).toBe(false);
+      expect(chain3.id).not.toBe(chain1.id);
+
+      const [completed1, completed2, completed3] = await waitForJobChainsCompleted(queuert, [
+        chain1,
+        chain2,
+        chain3,
+      ]);
+
+      expect(completed1.output).toEqual({ result: 1 });
+      expect(completed2.output).toEqual({ result: 1 });
+      expect(completed3.output).toEqual({ result: 3 });
+    });
+  });
+
+  test("deduplication strategies: 'all' vs 'finalized'", async ({
+    stateProvider,
+    stateAdapter,
+    notifyAdapter,
+    runInTransactionWithNotify,
+    withWorkers,
+    waitForJobChainsCompleted,
+    log,
+    expect,
+  }) => {
+    const queuert = await createQueuert({
+      stateProvider,
+      stateAdapter,
+      notifyAdapter,
+      log,
+      queueDefinitions: defineUnionQueues<{
+        test: {
+          input: { value: number };
+          output: { result: number };
+        };
+      }>(),
+    });
+
+    const worker = queuert.createWorker().setupQueueHandler({
+      name: "test",
+      handler: async ({ prepareAtomic }) => {
+        const [{ finalize, job }] = await prepareAtomic();
+        return finalize(() => ({ result: job.input.value }));
+      },
+    });
+
+    await withWorkers([await worker.start()], async () => {
+      const allChain1 = await runInTransactionWithNotify(queuert, ({ client }) =>
+        queuert.enqueueJobChain({
+          client,
+          chainName: "test",
+          input: { value: 1 },
+          deduplication: { key: "all-key", strategy: "all" },
+        }),
+      );
+
+      await waitForJobChainsCompleted(queuert, [allChain1]);
+
+      const allChain2 = await runInTransactionWithNotify(queuert, ({ client }) =>
+        queuert.enqueueJobChain({
+          client,
+          chainName: "test",
+          input: { value: 2 },
+          deduplication: { key: "all-key", strategy: "all" },
+        }),
+      );
+
+      expect(allChain2.deduplicated).toBe(true);
+      expect(allChain2.id).toBe(allChain1.id);
+
+      const finalizedChain1 = await runInTransactionWithNotify(queuert, ({ client }) =>
+        queuert.enqueueJobChain({
+          client,
+          chainName: "test",
+          input: { value: 3 },
+          deduplication: { key: "finalized-key", strategy: "finalized" },
+        }),
+      );
+
+      await waitForJobChainsCompleted(queuert, [finalizedChain1]);
+
+      const finalizedChain2 = await runInTransactionWithNotify(queuert, ({ client }) =>
+        queuert.enqueueJobChain({
+          client,
+          chainName: "test",
+          input: { value: 4 },
+          deduplication: { key: "finalized-key", strategy: "finalized" },
+        }),
+      );
+
+      expect(finalizedChain2.deduplicated).toBe(false);
+      expect(finalizedChain2.id).not.toBe(finalizedChain1.id);
+
+      const [completed] = await waitForJobChainsCompleted(queuert, [finalizedChain2]);
+      expect(completed.output).toEqual({ result: 4 });
+    });
+  });
+
+  test("deduplication with windowMs respects time window", async ({
+    stateProvider,
+    stateAdapter,
+    notifyAdapter,
+    runInTransactionWithNotify,
+    withWorkers,
+    waitForJobChainsCompleted,
+    log,
+    expect,
+  }) => {
+    const queuert = await createQueuert({
+      stateProvider,
+      stateAdapter,
+      notifyAdapter,
+      log,
+      queueDefinitions: defineUnionQueues<{
+        test: {
+          input: { value: number };
+          output: { result: number };
+        };
+      }>(),
+    });
+
+    const worker = queuert.createWorker().setupQueueHandler({
+      name: "test",
+      handler: async ({ prepareAtomic }) => {
+        const [{ finalize, job }] = await prepareAtomic();
+        return finalize(() => ({ result: job.input.value }));
+      },
+    });
+
+    await withWorkers([await worker.start()], async () => {
+      const allChain1 = await runInTransactionWithNotify(queuert, ({ client }) =>
+        queuert.enqueueJobChain({
+          client,
+          chainName: "test",
+          input: { value: 1 },
+          deduplication: { key: "all-key", strategy: "all", windowMs: 50 },
+        }),
+      );
+
+      expect(allChain1.deduplicated).toBe(false);
+
+      await sleep(100);
+
+      const allChain2 = await runInTransactionWithNotify(queuert, ({ client }) =>
+        queuert.enqueueJobChain({
+          client,
+          chainName: "test",
+          input: { value: 2 },
+          deduplication: { key: "all-key", strategy: "all", windowMs: 50 },
+        }),
+      );
+
+      expect(allChain2.deduplicated).toBe(false);
+      expect(allChain2.id).not.toBe(allChain1.id);
+
+      const finalizedChain1 = await runInTransactionWithNotify(queuert, ({ client }) =>
+        queuert.enqueueJobChain({
+          client,
+          chainName: "test",
+          input: { value: 3 },
+          deduplication: { key: "finalized-key", strategy: "finalized", windowMs: 50 },
+        }),
+      );
+
+      await waitForJobChainsCompleted(queuert, [finalizedChain1]);
+
+      await sleep(100);
+
+      const finalizedChain2 = await runInTransactionWithNotify(queuert, ({ client }) =>
+        queuert.enqueueJobChain({
+          client,
+          chainName: "test",
+          input: { value: 4 },
+          deduplication: { key: "finalized-key", strategy: "finalized", windowMs: 50 },
+        }),
+      );
+
+      expect(finalizedChain2.deduplicated).toBe(false);
+      expect(finalizedChain2.id).not.toBe(finalizedChain1.id);
     });
   });
 });

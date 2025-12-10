@@ -1,4 +1,7 @@
+import { DeduplicationOptions, DeduplicationStrategy } from "../entities/job-chain.js";
 import { BaseStateProviderContext } from "../state-provider/state-provider.js";
+
+export type { DeduplicationOptions, DeduplicationStrategy };
 
 export type StateJob = {
   id: string;
@@ -22,6 +25,8 @@ export type StateJob = {
   leasedBy: string | null;
   leasedUntil: Date | null;
 
+  deduplicationKey: string | null;
+
   updatedAt: Date;
 };
 
@@ -42,7 +47,8 @@ export type StateAdapter = {
     rootId: string | undefined;
     chainId: string | undefined;
     originId: string | undefined;
-  }) => Promise<StateJob>;
+    deduplication?: DeduplicationOptions;
+  }) => Promise<{ job: StateJob; deduplicated: boolean }>;
 
   addJobBlockers: (params: {
     context: BaseStateProviderContext;

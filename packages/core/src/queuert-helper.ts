@@ -17,7 +17,7 @@ import {
 import { BaseQueueDefinitions } from "./index.js";
 import { Log } from "./log.js";
 import { NotifyAdapter } from "./notify-adapter/notify-adapter.js";
-import { StateAdapter, StateJob } from "./state-adapter/state-adapter.js";
+import { DeduplicationOptions, StateAdapter, StateJob } from "./state-adapter/state-adapter.js";
 import {
   BaseStateProviderContext,
   GetStateProviderContext,
@@ -77,21 +77,28 @@ export const queuertHelper = ({
     input,
     context,
     isChain,
+    deduplication,
   }: {
     queueName: string;
     input: unknown;
     context: BaseStateProviderContext;
     isChain: boolean;
-  }): Promise<StateJob> => {
+    deduplication?: DeduplicationOptions;
+  }): Promise<{ job: StateJob; deduplicated: boolean }> => {
     const jobContext = jobContextStorage.getStore();
-    const job = await stateAdapter.createJob({
+    const { job, deduplicated } = await stateAdapter.createJob({
       context,
       queueName,
       input,
       originId: jobContext?.originId,
       chainId: isChain ? undefined : jobContext?.chainId,
       rootId: jobContext?.rootId,
+      deduplication,
     });
+
+    if (deduplicated) {
+      return { job, deduplicated };
+    }
 
     if (isChain) {
       log({
@@ -147,7 +154,7 @@ export const queuertHelper = ({
       });
     }
 
-    return job;
+    return { job, deduplicated };
   };
 
   const withNotifyQueueContext = async <T, TArgs extends any[]>(
@@ -316,22 +323,25 @@ export const queuertHelper = ({
       chainName,
       input,
       context,
+      deduplication,
     }: {
       chainName: TChainName;
       input: TInput;
       context: any;
-    }): Promise<JobChain<TChainName, TInput, TOutput>> => {
+      deduplication?: DeduplicationOptions;
+    }): Promise<JobChain<TChainName, TInput, TOutput> & { deduplicated: boolean }> => {
       // TODO: test
       await stateProvider.assertInTransaction(context);
 
-      const job = await enqueueStateJob({
+      const { job, deduplicated } = await enqueueStateJob({
         queueName: chainName,
         input,
         context,
         isChain: true,
+        deduplication,
       });
 
-      return mapStateJobPairToJobChain([job, undefined]);
+      return { ...mapStateJobPairToJobChain([job, undefined]), deduplicated };
     },
     getJobChain: async <TChainName extends string, TInput, TOutput>({
       id,
@@ -348,7 +358,6 @@ export const queuertHelper = ({
 
       return jobChain ? mapStateJobPairToJobChain(jobChain) : null;
     },
-    // TODO: ensure only one job is enqueued per call and it should be returned
     continueWith: async <TQueueName extends string, TInput>({
       queueName,
       input,
@@ -358,7 +367,7 @@ export const queuertHelper = ({
       input: TInput;
       context: any;
     }): Promise<EnqueuedJob<TQueueName, TInput>> => {
-      let job = await enqueueStateJob({
+      const { job } = await enqueueStateJob({
         queueName,
         input,
         context,

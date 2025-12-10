@@ -26,6 +26,24 @@ Abstracts ORM/database client operations. Provides context management, transacti
 ### NotifyAdapter
 Handles worker notification when jobs are scheduled. Workers listen for notifications to wake up and process jobs immediately rather than polling. Enables efficient job processing with minimal latency.
 
+### Deduplication
+Two levels of deduplication prevent duplicate work:
+
+**Chain-level deduplication** (explicit): When enqueueing a job chain, provide `deduplication` options:
+- `key`: Unique identifier for deduplication matching
+- `strategy`: `'finalized'` (default) deduplicates against non-completed jobs; `'all'` includes completed jobs
+- `windowMs`: Optional time window; `undefined` means no time limit
+
+```typescript
+await queuert.enqueueJobChain({
+  chainName: "process",
+  input: { userId: 123 },
+  deduplication: { key: "user-123", strategy: "finalized", windowMs: 60000 }
+});
+```
+
+**Continuation restriction**: `continueWith` can only be called once per finalize callback. Calling it multiple times throws an error: "continueWith can only be called once". This ensures each job has a clear single continuation in the chain.
+
 ## Design Philosophy
 
 ### Consistent Terminology
@@ -42,6 +60,8 @@ Avoid asymmetric naming (e.g., `started`/`finished` vs `created`/`completed`) ev
 - `blockers`/`blocked`: Describes job dependencies (not `dependencies`/`dependents`)
 - `continueWith`: Chains jobs in finalize callback (not `enqueueJob`)
 - `lease`/`leased`: Time-bounded exclusive claim on a job during processing (not `lock`/`locked`). Use `leasedBy`, `leasedUntil`, `leaseMs`, `leaseDurationMs`. DB columns use `leased_by`, `leased_until`.
+- `deduplicationKey`: Explicit key for chain-level deduplication. DB column uses `deduplication_key`.
+- `deduplicated`: Boolean flag returned when a job/chain was deduplicated instead of created.
 
 ## Testing Patterns
 

@@ -43,6 +43,8 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
     leasedBy: dbJob.leased_by,
     leasedUntil: dbJob.leased_until ? new Date(dbJob.leased_until) : null,
 
+    deduplicationKey: dbJob.deduplication_key,
+
     updatedAt: new Date(dbJob.updated_at),
   };
 };
@@ -77,14 +79,23 @@ export const createPgStateAdapter = ({
       return job ? mapDbJobToStateJob(job) : undefined;
     },
 
-    createJob: async ({ context, queueName, input, rootId, chainId, originId }) => {
-      const [job] = await executeTypedSql({
+    createJob: async ({ context, queueName, input, rootId, chainId, originId, deduplication }) => {
+      const [result] = await executeTypedSql({
         executeSql: (...args) => stateProvider.executeSql(context, ...args),
         sql: createJobSql,
-        params: [queueName, input as any, rootId as any, chainId as any, originId as any],
+        params: [
+          queueName,
+          input as any,
+          rootId as any,
+          chainId as any,
+          originId as any,
+          (deduplication?.key ?? null) as any,
+          (deduplication ? (deduplication.strategy ?? "finalized") : null) as any,
+          (deduplication?.windowMs ?? null) as any,
+        ],
       });
 
-      return mapDbJobToStateJob(job);
+      return { job: mapDbJobToStateJob(result), deduplicated: result.deduplicated };
     },
 
     addJobBlockers: async ({ context, jobId, blockedByChainIds }) => {

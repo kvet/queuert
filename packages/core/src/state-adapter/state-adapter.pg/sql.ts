@@ -1,3 +1,4 @@
+import { DeduplicationStrategy } from "../../entities/job-chain.js";
 import { NamedParameter, TypedSql } from "./typed-sql.js";
 
 // TODO: pgstattuple with partitioning
@@ -43,6 +44,9 @@ CREATE TABLE IF NOT EXISTS queuert.job (
   leased_by                     text,
   leased_until                  timestamptz,
 
+  -- deduplication
+  deduplication_key             text,
+
   -- metadata
   updated_at                    timestamptz NOT NULL DEFAULT now()
 );
@@ -69,6 +73,34 @@ CREATE TRIGGER update_job_updated_at
 BEFORE UPDATE ON queuert.job
 FOR EACH ROW
 EXECUTE PROCEDURE queuert.update_updated_at_column();
+
+-- Constraints: continuation deduplication
+CREATE UNIQUE INDEX IF NOT EXISTS job_chain_origin_unique_idx
+ON queuert.job (chain_id, origin_id)
+WHERE origin_id IS NOT NULL;
+
+-- Indexes: job acquisition
+CREATE INDEX IF NOT EXISTS job_acquisition_idx
+ON queuert.job (queue_name, scheduled_at)
+WHERE status IN ('created', 'pending');
+
+-- Indexes: last chain job lookup
+CREATE INDEX IF NOT EXISTS job_chain_created_at_idx
+ON queuert.job (chain_id, created_at DESC);
+
+-- Indexes: deduplication lookup
+CREATE INDEX IF NOT EXISTS job_deduplication_idx
+ON queuert.job (deduplication_key, created_at DESC)
+WHERE deduplication_key IS NOT NULL;
+
+-- Indexes: expired lease reaping
+CREATE INDEX IF NOT EXISTS job_expired_lease_idx
+ON queuert.job (queue_name, leased_until)
+WHERE status = 'running' AND leased_until IS NOT NULL;
+
+-- Indexes: blocker lookup
+CREATE INDEX IF NOT EXISTS job_blocker_chain_idx
+ON queuert.job_blocker (blocked_by_chain_id);
 ` as TypedSql<[], void>;
 
 export type DbJob = {
@@ -93,16 +125,54 @@ export type DbJob = {
   leased_by: string | null;
   leased_until: string | null;
 
+  deduplication_key: string | null;
+
   updated_at: string;
 };
 
 export const createJobSql = /* sql */ `
-WITH new_id AS (SELECT gen_random_uuid() AS id)
-INSERT INTO queuert.job (id, queue_name, input, root_id, chain_id, origin_id)
-SELECT id, $1, $2, COALESCE($3, id), COALESCE($4, id), $5
-FROM new_id
-ON CONFLICT (id) DO NOTHING
-RETURNING *
+WITH existing_continuation AS (
+  SELECT *, TRUE AS deduplicated
+  FROM queuert.job
+  WHERE $4::uuid IS NOT NULL
+    AND $5::uuid IS NOT NULL
+    AND chain_id = $4::uuid
+    AND origin_id = $5::uuid
+  LIMIT 1
+),
+existing_deduplicated AS (
+  SELECT j.*, TRUE AS deduplicated
+  FROM queuert.job j
+  WHERE $6::text IS NOT NULL
+    AND j.deduplication_key = $6
+    AND j.id = j.chain_id
+    AND (
+      $7::text IS NULL
+      OR ($7::text = 'finalized' AND j.status != 'completed')
+      OR ($7::text = 'all')
+    )
+    AND (
+      $8::bigint IS NULL
+      OR j.created_at >= now() - ($8::bigint || ' milliseconds')::interval
+    )
+  ORDER BY j.created_at DESC
+  LIMIT 1
+),
+new_id AS (SELECT gen_random_uuid() AS id),
+inserted_job AS (
+  INSERT INTO queuert.job (id, queue_name, input, root_id, chain_id, origin_id, deduplication_key)
+  SELECT id, $1, $2, COALESCE($3, id), COALESCE($4, id), $5, $6
+  FROM new_id
+  WHERE NOT EXISTS (SELECT 1 FROM existing_continuation)
+    AND NOT EXISTS (SELECT 1 FROM existing_deduplicated)
+  RETURNING *, FALSE AS deduplicated
+)
+SELECT * FROM existing_continuation
+UNION ALL
+SELECT * FROM existing_deduplicated
+UNION ALL
+SELECT * FROM inserted_job
+LIMIT 1
 ` as TypedSql<
   readonly [
     NamedParameter<"queue_name", string>,
@@ -110,8 +180,11 @@ RETURNING *
     NamedParameter<"root_id", string | undefined>,
     NamedParameter<"chain_id", string | undefined>,
     NamedParameter<"origin_id", string | undefined>,
+    NamedParameter<"deduplication_key", string | null | undefined>,
+    NamedParameter<"deduplication_strategy", DeduplicationStrategy | null | undefined>,
+    NamedParameter<"deduplication_window_ms", number | null | undefined>,
   ],
-  [DbJob]
+  [DbJob & { deduplicated: boolean }]
 >;
 
 export const addJobBlockersSql = /* sql */ `
@@ -237,7 +310,7 @@ WHERE id = $1
 
 export const rescheduleJobSql = /* sql */ `
 UPDATE queuert.job
-SET scheduled_at = now() + ($2::text || ' milliseconds')::interval,
+SET scheduled_at = now() + ($2::bigint || ' milliseconds')::interval,
   last_attempt_at = now(),
   last_attempt_error = $3,
   leased_by = NULL,
@@ -257,7 +330,7 @@ RETURNING *
 export const renewJobLeaseSql = /* sql */ `
 UPDATE queuert.job
 SET leased_by = $2,
-  leased_until = now() + ($3::text || ' milliseconds')::interval,
+  leased_until = now() + ($3::bigint || ' milliseconds')::interval,
   status = 'running'
 WHERE id = $1
 RETURNING *
