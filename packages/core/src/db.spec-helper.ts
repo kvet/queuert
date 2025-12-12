@@ -5,15 +5,23 @@ import { beforeAll, type TestAPI } from "vitest";
 import { createHash } from "crypto";
 import { StateAdapter } from "./state-adapter/state-adapter.js";
 import { createPgStateAdapter } from "./state-adapter/state-adapter.pg.js";
-import { StateProvider } from "./state-provider/state-provider.js";
 import { createPgPoolProvider, PgPoolProvider } from "./state-provider/state-provider.pg-pool.js";
 
 const LABEL = "queuert-postgres-test";
 
+export type PgStateAdapter = StateAdapter<{ client: PoolClient }>;
+
 export const extendWithDb = <T>(
   api: TestAPI<T>,
   reuseId: string,
-): TestAPI<T & { stateProvider: PgPoolProvider; stateAdapter: PgStateAdapter }> => {
+): TestAPI<
+  T & {
+    stateProvider: PgPoolProvider;
+    flakyStateProvider: PgPoolProvider;
+    stateAdapter: PgStateAdapter;
+    flakyStateAdapter: PgStateAdapter;
+  }
+> => {
   const normalizedReuseId = createHash("sha1").update(reuseId).digest("hex");
 
   let container: StartedPostgreSqlContainer;
@@ -34,8 +42,10 @@ export const extendWithDb = <T>(
     _db: Pool;
     _dbMigrateToLatest: void;
     _dbCleanup: void;
-    stateProvider: StateProvider<{ client: PoolClient }>;
-    stateAdapter: StateAdapter<{ client: PoolClient }>;
+    stateProvider: PgPoolProvider;
+    flakyStateProvider: PgPoolProvider;
+    stateAdapter: PgStateAdapter;
+    flakyStateAdapter: PgStateAdapter;
   }>({
     _db: [
       // eslint-disable-next-line no-empty-pattern
@@ -108,13 +118,78 @@ export const extendWithDb = <T>(
       },
       { scope: "test" },
     ],
+    flakyStateProvider: [
+      async ({ stateProvider, expect }, use) => {
+        let queryCount = 0;
+        let errorCount = 0;
+
+        // Seeded PRNG (mulberry32) for reproducible randomness
+        const seed = 12345;
+        let state = seed;
+        const random = () => {
+          state = (state + 0x6d2b79f5) | 0;
+          let t = Math.imul(state ^ (state >>> 15), 1 | state);
+          t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+          return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+
+        // Generate batch sizes: alternate between success (5-15) and error (1-20) batches
+        let inErrorBatch = false;
+        let batchRemaining = Math.floor(random() * 11) + 5; // First success batch: 5-15
+
+        const originalExecuteSql = stateProvider.executeSql.bind(stateProvider);
+        const flakyStateProvider: typeof stateProvider = {
+          ...stateProvider,
+          executeSql: async (context, sql, params) => {
+            queryCount++;
+            batchRemaining--;
+
+            if (batchRemaining <= 0) {
+              inErrorBatch = !inErrorBatch;
+              batchRemaining = inErrorBatch
+                ? Math.floor(random() * 20) + 1 // Error batch: 1-20
+                : Math.floor(random() * 11) + 5; // Success batch: 5-15
+            }
+
+            if (inErrorBatch) {
+              errorCount++;
+              const error = new Error("connection reset") as Error & { code: string };
+              error.code = "ECONNRESET";
+              throw error;
+            }
+
+            return originalExecuteSql(context, sql, params);
+          },
+        };
+
+        await use(flakyStateProvider);
+
+        if (queryCount > 5) {
+          expect(errorCount).toBeGreaterThan(0);
+        }
+      },
+      { scope: "test" },
+    ],
     stateAdapter: [
       ({ stateProvider }, use) => {
         return use(createPgStateAdapter({ stateProvider }));
       },
       { scope: "test" },
     ],
+    flakyStateAdapter: [
+      ({ flakyStateProvider }, use) => {
+        return use(
+          createPgStateAdapter({
+            stateProvider: flakyStateProvider,
+            connectionRetryConfig: {
+              maxRetries: 3,
+              initialIntervalMs: 1,
+              backoffCoefficient: 1,
+            },
+          }),
+        );
+      },
+      { scope: "test" },
+    ],
   }) as ReturnType<typeof extendWithDb<T>>;
 };
-
-export type PgStateAdapter = StateAdapter<{ client: PoolClient }>;

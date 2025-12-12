@@ -1,4 +1,6 @@
+import { BoundedRetryConfig, withRetry } from "../helpers/retry.js";
 import { BaseStateProviderContext, StateProvider } from "../state-provider/state-provider.js";
+import { isTransientPgError } from "./errors.js";
 import {
   acquireJobSql,
   addJobBlockersSql,
@@ -20,6 +22,12 @@ import {
   startJobAttemptSql,
 } from "./sql.js";
 import { StateAdapter, StateJob } from "./state-adapter.js";
+
+const DEFAULT_CONNECTION_RETRY_CONFIG: BoundedRetryConfig = {
+  maxRetries: 3,
+  initialIntervalMs: 1000,
+  backoffCoefficient: 5.0,
+};
 
 export type NamedParameter<TParamName extends string, TParamValue> = TParamValue & {
   /* @deprecated - type-only */
@@ -69,8 +77,12 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
 
 export const createPgStateAdapter = <TContext extends BaseStateProviderContext>({
   stateProvider,
+  connectionRetryConfig = DEFAULT_CONNECTION_RETRY_CONFIG,
+  isTransientError = isTransientPgError,
 }: {
   stateProvider: StateProvider<TContext>;
+  connectionRetryConfig?: BoundedRetryConfig;
+  isTransientError?: (error: unknown) => boolean;
 }): StateAdapter<TContext> => {
   const executeTypedSql = async <
     TParams extends
@@ -87,7 +99,11 @@ export const createPgStateAdapter = <TContext extends BaseStateProviderContext>(
   } & (TParams extends readonly []
     ? { params?: undefined }
     : { params: TParams })): Promise<TResult> =>
-    stateProvider.executeSql<TResult>(context, sql, params as any);
+    withRetry(
+      () => stateProvider.executeSql<TResult>(context, sql, params as any),
+      connectionRetryConfig,
+      { isRetryableError: isTransientError },
+    );
 
   return {
     provideContext: (fn) => stateProvider.provideContext(fn),

@@ -1,13 +1,20 @@
 import { randomUUID } from "node:crypto";
 import { JobChain } from "../entities/job-chain.js";
 import { BaseQueueDefinitions } from "../entities/queue.js";
-import { sleep } from "../helpers/timers.js";
+import { RetryConfig, withRetry } from "../helpers/retry.js";
+import { sleep } from "../helpers/sleep.js";
 import { Log } from "../log.js";
 import { NotifyAdapter } from "../notify-adapter/notify-adapter.js";
 import { EnqueueBlockerJobChains, LeaseExpiredError, ProcessHelper } from "../queuert-helper.js";
 import { StateAdapter } from "../state-adapter/state-adapter.js";
 import { BaseStateProviderContext } from "../state-provider/state-provider.js";
-import { JobHandler, LeaseConfig, processJobHandler, RetryConfig } from "./job-handler.js";
+import { JobHandler, LeaseConfig, processJobHandler } from "./job-handler.js";
+
+const DEFAULT_WORKER_LOOP_RETRY_CONFIG: RetryConfig = {
+  initialIntervalMs: 10_000,
+  backoffCoefficient: 2.0,
+  maxIntervalMs: 300_000,
+};
 
 export type RegisteredQueues = Map<
   string,
@@ -41,16 +48,18 @@ export const createExecutor = ({
   workerId?: string;
   pollIntervalMs?: number;
   nextJobDelayMs?: number;
-  retryConfig?: RetryConfig;
+  jobRetryConfig?: RetryConfig;
   leaseConfig?: LeaseConfig;
+  workerLoopRetryConfig?: RetryConfig;
 }) => Promise<() => Promise<void>>) => {
   const queueNames = Array.from(registeredQueues.keys());
   return async ({
     workerId = randomUUID(),
     pollIntervalMs = 60_000,
     nextJobDelayMs = 0,
-    retryConfig = {},
+    jobRetryConfig = {},
     leaseConfig = {},
+    workerLoopRetryConfig,
   } = {}) => {
     log({
       type: "worker_started",
@@ -66,139 +75,160 @@ export const createExecutor = ({
 
     const stopController = new AbortController();
 
-    const performWorkIteration = async () => {
-      // TODO: make robust against crashes
-      while (true) {
-        await helper.removeExpiredJobLease({
-          queueNames,
-          workerId,
-        });
+    const waitForNextJob = async () => {
+      const pullDelayMs = await helper.getNextJobAvailableInMs({
+        queueNames,
+        pollIntervalMs,
+      });
 
-        const pullDelayMs = await helper.getNextJobAvailableInMs({
-          queueNames,
-          pollIntervalMs,
-        });
-
-        // TODO: messy
-        if (stopController.signal.aborted) {
-          return;
-        }
-        const notifyController = new AbortController();
-        const onStop = () => {
-          notifyController.abort();
-        };
-        stopController.signal.addEventListener("abort", onStop);
-        await Promise.any([
-          notifyAdapter
-            .listenJobScheduled(queueNames, {
-              signal: notifyController.signal,
-            })
-            .catch(() => {}),
-          sleep(pullDelayMs, {
-            jitterMs: pullDelayMs / 10,
-            signal: notifyController.signal,
-          }).catch(() => {}),
-        ]);
-        stopController.signal.removeEventListener("abort", onStop);
+      if (stopController.signal.aborted) {
+        return;
+      }
+      const notifyController = new AbortController();
+      const onStop = () => {
         notifyController.abort();
-        if (stopController.signal.aborted) {
-          return;
-        }
+      };
+      stopController.signal.addEventListener("abort", onStop);
+      await Promise.any([
+        notifyAdapter.listenJobScheduled(queueNames, {
+          signal: notifyController.signal,
+        }),
+        sleep(pullDelayMs, {
+          jitterMs: pullDelayMs / 10,
+          signal: notifyController.signal,
+        }),
+      ]);
+      stopController.signal.removeEventListener("abort", onStop);
+      notifyController.abort();
+    };
 
-        try {
-          while (
-            await (async () => {
-              let finalizePromise: () => Promise<void> = () => Promise.resolve();
+    const performJob = async (): Promise<boolean> => {
+      try {
+        const [hasMore, finalize] = await helper.runInTransaction(
+          async (context): Promise<[boolean, (() => Promise<void>) | undefined]> => {
+            let job = await helper.acquireJob({
+              queueNames,
+              context,
+              workerId,
+            });
+            if (!job) {
+              return [false, undefined];
+            }
 
-              const claimPromise = await helper.runInTransaction(async (context) => {
-                let job = await helper.acquireJob({
-                  queueNames,
+            const queue = registeredQueues.get(job.queueName);
+            if (!queue) {
+              throw new Error(`No handler registered for queue "${job.queueName}"`);
+            }
+
+            return helper.withJobContext(
+              {
+                rootId: job.rootId,
+                chainId: job.chainId,
+                originId: job.id,
+              },
+              async (): Promise<[boolean, (() => Promise<void>) | undefined]> => {
+                job = await helper.scheduleBlockerJobChains({
+                  job: job!,
+                  enqueueBlockerJobChains: queue.enqueueBlockerJobChains,
                   context,
-                  workerId,
                 });
-                if (!job) {
-                  return false;
+
+                if (job.status === "waiting") {
+                  return [true, undefined];
                 }
 
-                const queue = registeredQueues.get(job.queueName);
-                if (!queue) {
-                  throw new Error(`No handler registered for queue "${job.queueName}"`);
-                }
+                return [
+                  true,
+                  await processJobHandler({
+                    helper,
+                    handler: queue.handler,
+                    context,
+                    job,
+                    retryConfig: jobRetryConfig,
+                    leaseConfig,
+                    workerId,
+                  }),
+                ];
+              },
+            );
+          },
+        );
 
-                return helper.withJobContext(
-                  {
-                    rootId: job.rootId,
-                    chainId: job.chainId,
-                    originId: job.id,
-                  },
-                  async () => {
-                    job = await helper.scheduleBlockerJobChains({
-                      job: job!,
-                      enqueueBlockerJobChains: queue.enqueueBlockerJobChains,
-                      context,
-                    });
+        await finalize?.();
 
-                    if (job.status === "waiting") {
-                      return true;
-                    }
+        return hasMore;
+      } catch (error) {
+        if (error instanceof LeaseExpiredError) {
+          return true;
+        } else {
+          log({
+            type: "worker_error",
+            level: "error",
+            message: "Worker error",
+            args: [
+              {
+                workerId,
+              },
+              error,
+            ],
+          });
+          throw error;
+        }
+      }
+    };
 
-                    finalizePromise = await processJobHandler({
-                      helper,
-                      handler: queue.handler,
-                      context,
-                      job,
-                      retryConfig,
-                      leaseConfig,
-                      workerId,
-                    });
+    const runWorkerLoop = async () => {
+      while (true) {
+        try {
+          await helper.removeExpiredJobLease({
+            queueNames,
+            workerId,
+          });
 
-                    return true;
-                  },
-                );
-              });
+          await waitForNextJob();
+          if (stopController.signal.aborted) {
+            return;
+          }
 
-              await finalizePromise();
+          while (true) {
+            const hasMore = await performJob();
+            if (!hasMore) {
+              break;
+            }
 
-              return claimPromise;
-            })()
-          ) {
-            // NOTE: prevent tight loop if there are many jobs
             await sleep(nextJobDelayMs, {
               jitterMs: nextJobDelayMs / 10,
               signal: stopController.signal,
-            }).catch(() => {});
+            });
             if (stopController.signal.aborted) {
               return;
             }
           }
         } catch (error) {
-          if (error instanceof LeaseExpiredError) {
-            // empty
-          } else {
-            log({
-              type: "worker_error",
-              level: "error",
-              message: "Worker error",
-              args: [
-                {
-                  workerId,
-                },
-                error,
-              ],
-            });
-          }
-          await sleep(pollIntervalMs * 10, {
-            jitterMs: pollIntervalMs,
-            signal: stopController.signal,
-          }).catch(() => {});
-          if (stopController.signal.aborted) {
-            return;
-          }
+          log({
+            type: "worker_error",
+            level: "error",
+            message: "Worker error",
+            args: [
+              {
+                workerId,
+              },
+              error,
+            ],
+          });
+          throw error;
         }
       }
     };
 
-    const performWorkIterationPromise = performWorkIteration();
+    const runWorkerLoopPromise = withRetry(
+      () => runWorkerLoop(),
+      {
+        ...DEFAULT_WORKER_LOOP_RETRY_CONFIG,
+        ...workerLoopRetryConfig,
+      },
+      { signal: stopController.signal },
+    ).catch(() => {});
 
     return async () => {
       log({
@@ -212,7 +242,7 @@ export const createExecutor = ({
         ],
       });
       stopController.abort();
-      await performWorkIterationPromise;
+      await runWorkerLoopPromise;
       log({
         type: "worker_stopped",
         level: "info",

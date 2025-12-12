@@ -14,6 +14,7 @@ import {
   mapStateJobToJob,
   RunningJob,
 } from "./entities/job.js";
+import { calculateBackoffMs, RetryConfig } from "./helpers/retry.js";
 import { BaseQueueDefinitions } from "./index.js";
 import { Log } from "./log.js";
 import { NotifyAdapter } from "./notify-adapter/notify-adapter.js";
@@ -24,7 +25,7 @@ import {
   StateJob,
 } from "./state-adapter/state-adapter.js";
 import { BaseStateProviderContext } from "./state-provider/state-provider.js";
-import { calculateBackoffMs, RescheduleJobError, RetryConfig } from "./worker/job-handler.js";
+import { RescheduleJobError } from "./worker/job-handler.js";
 
 const notifyQueueStorage = new AsyncLocalStorage<Set<string>>();
 const jobContextStorage = new AsyncLocalStorage<{
@@ -329,7 +330,6 @@ export const queuertHelper = ({
       context: any;
       deduplication?: DeduplicationOptions;
     }): Promise<JobChain<TChainName, TInput, TOutput> & { deduplicated: boolean }> => {
-      // TODO: test
       await stateAdapter.assertInTransaction(context);
 
       const { job, deduplicated } = await enqueueStateJob({

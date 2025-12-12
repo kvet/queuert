@@ -12,15 +12,8 @@ export const createInProcessNotifyAdapter = (): NotifyAdapter => {
       }
     },
     listenJobScheduled: (queueNames: string[], { signal }: { signal?: AbortSignal }) => {
-      return new Promise<void>((resolve, reject) => {
-        const listener = (notifiedQueueName: string) => {
-          if (queueNames.includes(notifiedQueueName)) {
-            resolve();
-            return true;
-          }
-          return false;
-        };
-        listeners.push(listener);
+      return new Promise<void>((resolve) => {
+        if (signal?.aborted) return resolve();
 
         const cleanup = () => {
           const index = listeners.indexOf(listener);
@@ -29,12 +22,23 @@ export const createInProcessNotifyAdapter = (): NotifyAdapter => {
           }
         };
 
-        if (signal) {
-          signal.addEventListener("abort", () => {
+        const listener = (notifiedQueueName: string) => {
+          if (queueNames.includes(notifiedQueueName)) {
             cleanup();
-            reject(new Error("Listener aborted"));
-          });
-        }
+            signal?.removeEventListener("abort", onAbort);
+            resolve();
+            return true;
+          }
+          return false;
+        };
+
+        const onAbort = () => {
+          cleanup();
+          resolve();
+        };
+
+        listeners.push(listener);
+        signal?.addEventListener("abort", onAbort, { once: true });
       });
     },
   };

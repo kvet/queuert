@@ -24,7 +24,8 @@ export {
   type DeduplicationStrategy,
 } from "./state-adapter/state-adapter.js";
 export { type StateProvider as QueuerTStateProvider } from "./state-provider/state-provider.js";
-export { rescheduleJob, type LeaseConfig, type RetryConfig } from "./worker/job-handler.js";
+export { type RetryConfig } from "./helpers/retry.js";
+export { rescheduleJob, type LeaseConfig } from "./worker/job-handler.js";
 
 type QueuertWorkerDefinition<
   TStateAdapter extends StateAdapter<any>,

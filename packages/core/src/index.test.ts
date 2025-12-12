@@ -1,7 +1,7 @@
 import { PoolClient } from "pg";
 import { test as baseTest, describe, expectTypeOf, MockedFunction, vi } from "vitest";
 import { extendWithDb, PgStateAdapter } from "./db.spec-helper.js";
-import { sleep } from "./helpers/timers.js";
+import { sleep } from "./helpers/sleep.js";
 import {
   CompletedJobChain,
   createQueuert,
@@ -110,7 +110,7 @@ const test = extendWithDb(baseTest, import.meta.url).extend<{
     async ({}, use) => {
       await use(
         vi.fn<Log>(async ({ level, message, args }) => {
-          console[level](`[${level}] ${message}`, ...args);
+          // console[level](`[${level}] ${message}`, ...args);
         }),
       );
     },
@@ -562,7 +562,7 @@ describe("Handler", () => {
     await withWorkers(
       [
         await worker.start({
-          retryConfig: {
+          jobRetryConfig: {
             initialIntervalMs: 10,
             backoffCoefficient: 2.0,
             maxIntervalMs: 100,
@@ -633,29 +633,34 @@ describe("Handler", () => {
       },
     });
 
-    const retryConfig = {
-      initialIntervalMs: 10,
-      backoffCoefficient: 2.0,
-      maxIntervalMs: 100,
-    };
-
-    await withWorkers([await worker.start({ retryConfig })], async () => {
-      const job = await runInTransactionWithNotify(queuert, ({ client }) =>
-        queuert.enqueueJobChain({
-          client,
-          chainName: "test",
-          input: null,
+    await withWorkers(
+      [
+        await worker.start({
+          jobRetryConfig: {
+            initialIntervalMs: 10,
+            backoffCoefficient: 2.0,
+            maxIntervalMs: 100,
+          },
         }),
-      );
+      ],
+      async () => {
+        const job = await runInTransactionWithNotify(queuert, ({ client }) =>
+          queuert.enqueueJobChain({
+            client,
+            chainName: "test",
+            input: null,
+          }),
+        );
 
-      await waitForJobChainsCompleted(queuert, [job]);
+        await waitForJobChainsCompleted(queuert, [job]);
 
-      // Verify exponential backoff: 10ms, 20ms, 40ms
-      expect(errors).toHaveLength(3);
-      expect(errors[0]).toBe("Error: Unexpected error");
-      expect(errors[1]).toBe("Error: Unexpected error");
-      expect(errors[2]).toBe("Error: Unexpected error");
-    });
+        // Verify exponential backoff: 10ms, 20ms, 40ms
+        expect(errors).toHaveLength(3);
+        expect(errors[0]).toBe("Error: Unexpected error");
+        expect(errors[1]).toBe("Error: Unexpected error");
+        expect(errors[2]).toBe("Error: Unexpected error");
+      },
+    );
 
     expectLogs([
       { type: "worker_started" },
@@ -2140,5 +2145,104 @@ describe("Deduplication", () => {
       expect(finalizedChain2.deduplicated).toBe(false);
       expect(finalizedChain2.id).not.toBe(finalizedChain1.id);
     });
+  });
+});
+
+describe("Resilience", () => {
+  test("handles transient database errors gracefully", async ({
+    flakyStateAdapter,
+    stateAdapter,
+    notifyAdapter,
+    withWorkers,
+    waitForJobChainsCompleted,
+    runInTransactionWithNotify,
+    log,
+  }) => {
+    const queueDefinitions = defineUnionQueues<{
+      testAtomic: {
+        input: { value: number };
+        output: { result: number };
+      };
+      testStaged: {
+        input: { value: number };
+        output: { result: number };
+      };
+    }>();
+
+    const queuert = await createQueuert({
+      stateAdapter,
+      notifyAdapter,
+      log,
+      queueDefinitions,
+    });
+    const flakyQueuert = await createQueuert({
+      stateAdapter: flakyStateAdapter,
+      notifyAdapter,
+      log,
+      queueDefinitions,
+    });
+
+    const worker = flakyQueuert
+      .createWorker()
+      .setupQueueHandler({
+        name: "testAtomic",
+        handler: async ({ prepareAtomic }) => {
+          const [{ finalize, job }] = await prepareAtomic();
+          return finalize(() => ({ result: job.input.value * 2 }));
+        },
+      })
+      .setupQueueHandler({
+        name: "testStaged",
+        handler: async ({ prepareStaged }) => {
+          const [{ finalize, job }] = await prepareStaged();
+          return finalize(() => ({ result: job.input.value * 2 }));
+        },
+      });
+
+    const jobCountPerQueue = 5;
+
+    await withWorkers(
+      [
+        await worker.start({
+          nextJobDelayMs: 0,
+          leaseConfig: {
+            leaseMs: 10,
+            renewIntervalMs: 5,
+          },
+          jobRetryConfig: {
+            initialIntervalMs: 1,
+            backoffCoefficient: 1,
+            maxIntervalMs: 1,
+          },
+          workerLoopRetryConfig: {
+            initialIntervalMs: 1,
+            backoffCoefficient: 1,
+            maxIntervalMs: 1,
+          },
+        }),
+      ],
+      async () => {
+        const chains = await runInTransactionWithNotify(queuert, ({ client }) =>
+          Promise.all([
+            ...Array.from({ length: jobCountPerQueue }, async (_, i) =>
+              queuert.enqueueJobChain({
+                client,
+                chainName: "testAtomic",
+                input: { value: i },
+              }),
+            ),
+            ...Array.from({ length: jobCountPerQueue }, async (_, i) =>
+              queuert.enqueueJobChain({
+                client,
+                chainName: "testStaged",
+                input: { value: i + jobCountPerQueue },
+              }),
+            ),
+          ]),
+        );
+
+        await waitForJobChainsCompleted(queuert, chains);
+      },
+    );
   });
 });

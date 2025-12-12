@@ -2,11 +2,16 @@ import { CompatibleQueueTargets, CompletedJobChain, JobChain } from "../entities
 import { EnqueuedJob, Job, RunningJob } from "../entities/job.js";
 import { BaseQueueDefinitions } from "../entities/queue.js";
 import { TypedAbortController, TypedAbortSignal } from "../helpers/abort.js";
-import { createSignal } from "../helpers/async.js";
+import { type RetryConfig } from "../helpers/retry.js";
+import { createSignal } from "../helpers/signal.js";
 import { Branded } from "../helpers/typescript.js";
 import { LeaseExpiredError, ProcessHelper, ResolvedQueueJobs } from "../queuert-helper.js";
 import { GetStateAdapterContext, StateAdapter, StateJob } from "../state-adapter/state-adapter.js";
 import { BaseStateProviderContext } from "../state-provider/state-provider.js";
+import { createLeaseManager, type LeaseConfig } from "./lease.js";
+
+export type { RetryConfig } from "../helpers/retry.js";
+export type { LeaseConfig } from "./lease.js";
 
 export class RescheduleJobError extends Error {
   public readonly afterMs: number;
@@ -28,37 +33,6 @@ export const rescheduleJob = (afterMs: number, cause?: unknown): never => {
     cause,
   });
 };
-
-export type RetryConfig = {
-  initialIntervalMs?: number;
-  backoffCoefficient?: number;
-  maxIntervalMs?: number;
-};
-
-const DEFAULT_RETRY_CONFIG = {
-  initialIntervalMs: 1000,
-  backoffCoefficient: 2.0,
-  maxIntervalMs: 100 * 1000,
-} satisfies RetryConfig;
-
-export const calculateBackoffMs = (attempt: number, config: RetryConfig): number => {
-  const initialIntervalMs = config.initialIntervalMs ?? DEFAULT_RETRY_CONFIG.initialIntervalMs;
-  const backoffCoefficient = config.backoffCoefficient ?? DEFAULT_RETRY_CONFIG.backoffCoefficient;
-  const maxIntervalMs = config.maxIntervalMs ?? DEFAULT_RETRY_CONFIG.maxIntervalMs;
-
-  const backoffMs = initialIntervalMs * Math.pow(backoffCoefficient, attempt - 1);
-  return Math.min(backoffMs, maxIntervalMs);
-};
-
-export type LeaseConfig = {
-  leaseMs?: number;
-  renewIntervalMs?: number;
-};
-
-const DEFAULT_LEASE_CONFIG = {
-  leaseMs: 30 * 1000,
-  renewIntervalMs: 15 * 1000,
-} satisfies LeaseConfig;
 
 export type FinalizeCallback<
   TStateAdapter extends StateAdapter<BaseStateProviderContext>,
@@ -207,60 +181,30 @@ export const processJobHandler = async ({
   };
 
   const commitLease = async (leaseMs: number) => {
-    await runInGuardedTransaction(async (context) => {
-      await helper.renewJobLease({
-        context,
-        job,
-        leaseMs,
-        workerId,
+    try {
+      await runInGuardedTransaction(async (context) => {
+        await helper.renewJobLease({
+          context,
+          job,
+          leaseMs,
+          workerId,
+        });
       });
-    });
-
-    firstLeaseCommitted.signalOnce();
-    await claimTransactionClosed.onSignal;
+    } catch (error) {
+      if (error instanceof LeaseExpiredError) {
+        return;
+      }
+      throw error;
+    } finally {
+      firstLeaseCommitted.signalOnce();
+      await claimTransactionClosed.onSignal;
+    }
   };
 
-  const withLease = ((): {
-    start: () => Promise<void>;
-    stop: () => Promise<void>;
-  } => {
-    let stopped = false;
-    let commitLeasePromise: Promise<void>;
-    let timeout: NodeJS.Timeout;
-
-    const renewLease = async () => {
-      if (stopped) {
-        return;
-      }
-      commitLeasePromise = commitLease(leaseConfig.leaseMs ?? DEFAULT_LEASE_CONFIG.leaseMs).catch(
-        (error) => {
-          if (error instanceof LeaseExpiredError) {
-            return;
-          }
-          throw error;
-        },
-      );
-      await commitLeasePromise;
-      if (stopped) {
-        return;
-      }
-      timeout = setTimeout(
-        renewLease,
-        leaseConfig.renewIntervalMs ?? DEFAULT_LEASE_CONFIG.renewIntervalMs,
-      );
-    };
-
-    return {
-      start: async () => {
-        await renewLease();
-      },
-      stop: async () => {
-        stopped = true;
-        clearTimeout(timeout);
-        await commitLeasePromise;
-      },
-    };
-  })();
+  const leaseManager = createLeaseManager({
+    commitLease,
+    config: leaseConfig,
+  });
 
   const startProcessing = async (job: StateJob) => {
     try {
@@ -289,7 +233,7 @@ export const processJobHandler = async ({
             throw new Error("Finalize can only be called once");
           }
           finalizeCalled = true;
-          await withLease.stop();
+          await leaseManager.stop();
           return runInGuardedTransaction(async (context) => {
             const output = await finalizeCallback({
               continueWith: async ({ queueName, input, ...context }) => {
@@ -337,7 +281,7 @@ export const processJobHandler = async ({
               })
             : undefined;
           if (startLease) {
-            await withLease.start();
+            await leaseManager.start();
           }
           const finalize = createFinalizeFn();
           const result = { finalize, job: jobInput.job, blockers: jobInput.blockers };
@@ -358,7 +302,7 @@ export const processJobHandler = async ({
           prepareAtomic: createPrepareFn(false),
         });
       } finally {
-        await withLease.stop();
+        await leaseManager.stop();
       }
     } catch (error) {
       await runInGuardedTransaction(async (context) =>
@@ -375,7 +319,7 @@ export const processJobHandler = async ({
 
   const processingPromise = startProcessing(job);
 
-  await Promise.any([firstLeaseCommitted.onSignal, processingPromise]);
+  await Promise.race([firstLeaseCommitted.onSignal, processingPromise]);
 
   return async () => {
     claimTransactionClosed.signalOnce();
