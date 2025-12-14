@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { JobChain } from "../entities/job-chain.js";
 import { BaseQueueDefinitions } from "../entities/queue.js";
-import { RetryConfig, withRetry } from "../helpers/retry.js";
+import { BackoffConfig } from "../helpers/backoff.js";
+import { withRetry } from "../helpers/retry.js";
 import { sleep } from "../helpers/sleep.js";
 import { Log } from "../log.js";
 import { NotifyAdapter } from "../notify-adapter/notify-adapter.js";
@@ -9,12 +10,6 @@ import { EnqueueBlockerJobChains, LeaseExpiredError, ProcessHelper } from "../qu
 import { StateAdapter } from "../state-adapter/state-adapter.js";
 import { BaseStateProviderContext } from "../state-provider/state-provider.js";
 import { JobHandler, LeaseConfig, processJobHandler } from "./job-handler.js";
-
-const DEFAULT_WORKER_LOOP_RETRY_CONFIG: RetryConfig = {
-  initialIntervalMs: 10_000,
-  backoffCoefficient: 2.0,
-  maxIntervalMs: 300_000,
-};
 
 export type RegisteredQueues = Map<
   string,
@@ -31,6 +26,8 @@ export type RegisteredQueues = Map<
       string,
       readonly JobChain<string, any, any>[]
     >;
+    retryConfig?: BackoffConfig;
+    leaseConfig?: LeaseConfig;
   }
 >;
 
@@ -48,18 +45,29 @@ export const createExecutor = ({
   workerId?: string;
   pollIntervalMs?: number;
   nextJobDelayMs?: number;
-  jobRetryConfig?: RetryConfig;
-  leaseConfig?: LeaseConfig;
-  workerLoopRetryConfig?: RetryConfig;
+  defaultRetryConfig?: BackoffConfig;
+  defaultLeaseConfig?: LeaseConfig;
+  workerLoopRetryConfig?: BackoffConfig;
 }) => Promise<() => Promise<void>>) => {
   const queueNames = Array.from(registeredQueues.keys());
   return async ({
     workerId = randomUUID(),
     pollIntervalMs = 60_000,
     nextJobDelayMs = 0,
-    jobRetryConfig = {},
-    leaseConfig = {},
-    workerLoopRetryConfig,
+    defaultRetryConfig = {
+      initialDelayMs: 1_000,
+      multiplier: 2.0,
+      maxDelayMs: 60_000,
+    },
+    defaultLeaseConfig = {
+      leaseMs: 30_000,
+      renewIntervalMs: 10_000,
+    },
+    workerLoopRetryConfig = {
+      initialDelayMs: 10_000,
+      multiplier: 2.0,
+      maxDelayMs: 300_000,
+    },
   } = {}) => {
     log({
       type: "worker_started",
@@ -133,7 +141,7 @@ export const createExecutor = ({
                   context,
                 });
 
-                if (job.status === "waiting") {
+                if (job.status === "blocked") {
                   return [true, undefined];
                 }
 
@@ -144,8 +152,8 @@ export const createExecutor = ({
                     handler: queue.handler,
                     context,
                     job,
-                    retryConfig: jobRetryConfig,
-                    leaseConfig,
+                    retryConfig: queue.retryConfig ?? defaultRetryConfig,
+                    leaseConfig: queue.leaseConfig ?? defaultLeaseConfig,
                     workerId,
                   }),
                 ];
@@ -221,14 +229,9 @@ export const createExecutor = ({
       }
     };
 
-    const runWorkerLoopPromise = withRetry(
-      () => runWorkerLoop(),
-      {
-        ...DEFAULT_WORKER_LOOP_RETRY_CONFIG,
-        ...workerLoopRetryConfig,
-      },
-      { signal: stopController.signal },
-    ).catch(() => {});
+    const runWorkerLoopPromise = withRetry(() => runWorkerLoop(), workerLoopRetryConfig, {
+      signal: stopController.signal,
+    }).catch(() => {});
 
     return async () => {
       log({

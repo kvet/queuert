@@ -1,9 +1,8 @@
 # Short term
 
-- Make RetryConfig configuration with all required options
-
 # Long term
 
+- Make sure (sent a warning) that a job handler is resolved after lease expiry
 - Finalize job externally (Cancellation)
 - Termination
 - Custom ids + schema name

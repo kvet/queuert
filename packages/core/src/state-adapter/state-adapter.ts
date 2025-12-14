@@ -13,7 +13,7 @@ export type StateJob = {
   chainId: string;
   originId: string | null;
 
-  status: "created" | "waiting" | "pending" | "running" | "completed";
+  status: "created" | "blocked" | "pending" | "running" | "completed";
   createdAt: Date;
   scheduledAt: Date;
   completedAt: Date | null;
@@ -76,7 +76,7 @@ export type StateAdapter<TContext extends BaseStateProviderContext = BaseStatePr
     context: TContext;
     queueNames: string[];
   }) => Promise<StateJob | undefined>;
-  markJobAsWaiting: (params: { context: TContext; jobId: string }) => Promise<StateJob>;
+  markJobAsBlocked: (params: { context: TContext; jobId: string }) => Promise<StateJob>;
   markJobAsPending: (params: { context: TContext; jobId: string }) => Promise<StateJob>;
   startJobAttempt: (params: { context: TContext; jobId: string }) => Promise<StateJob>;
   renewJobLease: (params: {

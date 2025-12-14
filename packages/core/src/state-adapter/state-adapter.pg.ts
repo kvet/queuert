@@ -1,4 +1,4 @@
-import { BoundedRetryConfig, withRetry } from "../helpers/retry.js";
+import { RetryConfig, withRetry } from "../helpers/retry.js";
 import { BaseStateProviderContext, StateProvider } from "../state-provider/state-provider.js";
 import { isTransientPgError } from "./errors.js";
 import {
@@ -11,8 +11,8 @@ import {
   getJobByIdSql,
   getJobChainByIdSql,
   getNextJobAvailableInMsSql,
+  markJobAsBlockedSql,
   markJobAsPendingSql,
-  markJobAsWaitingSql,
   migrateSql,
   removeExpiredJobLeaseSql,
   renewJobLeaseSql,
@@ -22,12 +22,6 @@ import {
   startJobAttemptSql,
 } from "./sql.js";
 import { StateAdapter, StateJob } from "./state-adapter.js";
-
-const DEFAULT_CONNECTION_RETRY_CONFIG: BoundedRetryConfig = {
-  maxRetries: 3,
-  initialIntervalMs: 1000,
-  backoffCoefficient: 5.0,
-};
 
 export type NamedParameter<TParamName extends string, TParamValue> = TParamValue & {
   /* @deprecated - type-only */
@@ -77,11 +71,16 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
 
 export const createPgStateAdapter = <TContext extends BaseStateProviderContext>({
   stateProvider,
-  connectionRetryConfig = DEFAULT_CONNECTION_RETRY_CONFIG,
+  connectionRetryConfig = {
+    maxAttempts: 3,
+    initialDelayMs: 1000,
+    multiplier: 5.0,
+    maxDelayMs: 10 * 1000,
+  },
   isTransientError = isTransientPgError,
 }: {
   stateProvider: StateProvider<TContext>;
-  connectionRetryConfig?: BoundedRetryConfig;
+  connectionRetryConfig?: RetryConfig;
   isTransientError?: (error: unknown) => boolean;
 }): StateAdapter<TContext> => {
   const executeTypedSql = async <
@@ -205,8 +204,8 @@ export const createPgStateAdapter = <TContext extends BaseStateProviderContext>(
 
       return job ? mapDbJobToStateJob(job) : undefined;
     },
-    markJobAsWaiting: async ({ context, jobId }) => {
-      const [job] = await executeTypedSql({ context, sql: markJobAsWaitingSql, params: [jobId] });
+    markJobAsBlocked: async ({ context, jobId }) => {
+      const [job] = await executeTypedSql({ context, sql: markJobAsBlockedSql, params: [jobId] });
 
       return mapDbJobToStateJob(job);
     },

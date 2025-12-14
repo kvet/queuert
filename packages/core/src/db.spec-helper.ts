@@ -182,9 +182,10 @@ export const extendWithDb = <T>(
           createPgStateAdapter({
             stateProvider: flakyStateProvider,
             connectionRetryConfig: {
-              maxRetries: 3,
-              initialIntervalMs: 1,
-              backoffCoefficient: 1,
+              maxAttempts: 3,
+              initialDelayMs: 1,
+              multiplier: 1,
+              maxDelayMs: 1,
             },
           }),
         );

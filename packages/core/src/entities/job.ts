@@ -15,7 +15,10 @@ export type Job<TQueueName, TInput> = {
   lastAttemptError: string | null;
 } & (
   | {
-      status: "waiting";
+      status: "created";
+    }
+  | {
+      status: "blocked";
     }
   | {
       status: "pending";
@@ -60,9 +63,9 @@ export const mapStateJobToJob = (stateJob: StateJob): Job<any, any> => {
             leasedBy: stateJob.leasedBy ?? undefined,
             leasedUntil: stateJob.leasedUntil ?? undefined,
           }
-        : stateJob.status === "waiting"
+        : stateJob.status === "blocked"
           ? {
-              status: "waiting",
+              status: "blocked",
             }
           : {
               status: "pending",

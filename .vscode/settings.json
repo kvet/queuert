@@ -9,9 +9,6 @@
     "source.organizeImports": "explicit",
     "source.fixAll.oxc": "explicit"
   },
-  "[json]": {
-    "editor.defaultFormatter": "oxc.oxc-vscode"
-  },
   "[jsonc]": {
     "editor.defaultFormatter": "oxc.oxc-vscode"
   },

@@ -41,10 +41,10 @@ Later, a background worker picks up the job and processes it:
 
 ```ts
 queuert.createWorker()
-  .setupQueueHandler({
+  .implementQueue({
     name: "process-image",
-    handler: async ({ prepareStaged }) => {
-      const [{ finalize, job }, image] = await prepareStaged(async ({ tx, job }) => {
+    handler: async ({ job, prepare }) => {
+      const [{ finalize }, image] = await prepare({ mode: "staged" }, async ({ tx }) => {
         return tx.images.getById(job.input.imageId);
       });
 
@@ -61,10 +61,10 @@ queuert.createWorker()
       });
     },
   })
-  .setupQueueHandler({
+  .implementQueue({
     name: "distribute-image",
-    handler: async ({ prepareStaged }) => {
-      const [{ finalize, job }, [image, minifiedImage]] = await prepareStaged(async ({ tx, job }) => {
+    handler: async ({ job, prepare }) => {
+      const [{ finalize }, [image, minifiedImage]] = await prepare({ mode: "staged" }, async ({ tx }) => {
         return Promise.all([
           tx.images.getById(job.input.imageId),
           tx.minifiedImages.getById(job.input.minifiedImageId),

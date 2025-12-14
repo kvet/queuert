@@ -4,7 +4,16 @@ import { withRetry } from "./retry.js";
 describe("withRetry", () => {
   test("returns result on first success", async () => {
     const fn = vi.fn().mockResolvedValue("success");
-    const result = await withRetry(fn, { maxRetries: 3 }, { isRetryableError: () => true });
+    const result = await withRetry(
+      fn,
+      {
+        initialDelayMs: 1,
+        multiplier: 1,
+        maxDelayMs: 1,
+        maxAttempts: 3,
+      },
+      { isRetryableError: () => true },
+    );
     expect(result).toBe("success");
     expect(fn).toHaveBeenCalledTimes(1);
   });
@@ -21,9 +30,10 @@ describe("withRetry", () => {
     const result = await withRetry(
       fn,
       {
-        maxRetries: 3,
-        initialIntervalMs: 1,
-        backoffCoefficient: 1,
+        maxAttempts: 3,
+        initialDelayMs: 1,
+        multiplier: 1,
+        maxDelayMs: 1,
       },
       { isRetryableError: () => true },
     );
@@ -38,18 +48,26 @@ describe("withRetry", () => {
     const fn = vi.fn().mockRejectedValue(nonRetryableError);
 
     await expect(
-      withRetry(fn, { maxRetries: 3, initialIntervalMs: 1 }, { isRetryableError: () => false }),
+      withRetry(
+        fn,
+        { maxAttempts: 3, initialDelayMs: 1, maxDelayMs: 1, multiplier: 1 },
+        { isRetryableError: () => false },
+      ),
     ).rejects.toThrow("permanent failure");
     expect(fn).toHaveBeenCalledTimes(1);
   });
 
-  test("throws after maxRetries exhausted", async () => {
+  test("throws after maxAttempts exhausted", async () => {
     const retryableError = new Error("temporary failure");
 
     const fn = vi.fn().mockRejectedValue(retryableError);
 
     await expect(
-      withRetry(fn, { maxRetries: 3, initialIntervalMs: 1 }, { isRetryableError: () => true }),
+      withRetry(
+        fn,
+        { maxAttempts: 3, initialDelayMs: 1, maxDelayMs: 1, multiplier: 1 },
+        { isRetryableError: () => true },
+      ),
     ).rejects.toThrow("temporary failure");
     expect(fn).toHaveBeenCalledTimes(3);
   });
@@ -64,9 +82,10 @@ describe("withRetry", () => {
       withRetry(
         fn,
         {
-          maxRetries: 3,
-          initialIntervalMs: 10,
-          backoffCoefficient: 2,
+          maxAttempts: 3,
+          initialDelayMs: 10,
+          multiplier: 2,
+          maxDelayMs: 1000,
         },
         { isRetryableError: () => true },
       ),
@@ -90,7 +109,7 @@ describe("withRetry", () => {
     await expect(
       withRetry(
         fn,
-        { maxRetries: 10, initialIntervalMs: 50, backoffCoefficient: 1 },
+        { maxAttempts: 10, initialDelayMs: 50, multiplier: 1, maxDelayMs: 1 },
         { signal: controller.signal, isRetryableError: () => true },
       ),
     ).rejects.toThrow();
@@ -106,7 +125,7 @@ describe("withRetry", () => {
 
     const result = await withRetry(
       fn,
-      { maxRetries: 3, initialIntervalMs: 1 },
+      { maxAttempts: 3, initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
       { isRetryableError: (error) => error instanceof Error && error.message === "custom error" },
     );
 
@@ -119,9 +138,14 @@ describe("withRetry", () => {
 
     const fn = vi.fn().mockRejectedValue(error);
 
-    await expect(withRetry(fn, { maxRetries: 3, initialIntervalMs: 1 })).rejects.toThrow(
-      "any error",
-    );
+    await expect(
+      withRetry(fn, {
+        maxAttempts: 3,
+        initialDelayMs: 1,
+        multiplier: 1,
+        maxDelayMs: 1,
+      }),
+    ).rejects.toThrow("any error");
     expect(fn).toHaveBeenCalledTimes(3);
   });
 });

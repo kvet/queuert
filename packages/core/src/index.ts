@@ -1,5 +1,6 @@
 import { ResolvedJobChain } from "./entities/job-chain.js";
 import { BaseQueueDefinitions } from "./entities/queue.js";
+import { BackoffConfig } from "./helpers/backoff.js";
 import { Log } from "./log.js";
 import { NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 import { EnqueueBlockerJobChains, queuertHelper } from "./queuert-helper.js";
@@ -9,7 +10,7 @@ import {
   StateAdapter,
 } from "./state-adapter/state-adapter.js";
 import { createExecutor, Executor, RegisteredQueues } from "./worker/executor.js";
-import { JobHandler } from "./worker/job-handler.js";
+import { JobHandler, LeaseConfig } from "./worker/job-handler.js";
 
 export { type CompletedJobChain, type JobChain } from "./entities/job-chain.js";
 export {
@@ -17,6 +18,8 @@ export {
   type BaseQueueDefinitions,
   type DefineQueueRef,
 } from "./entities/queue.js";
+export { type BackoffConfig } from "./helpers/backoff.js";
+export { type RetryConfig } from "./helpers/retry.js";
 export { type Log } from "./log.js";
 export { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 export {
@@ -24,14 +27,13 @@ export {
   type DeduplicationStrategy,
 } from "./state-adapter/state-adapter.js";
 export { type StateProvider as QueuerTStateProvider } from "./state-provider/state-provider.js";
-export { type RetryConfig } from "./helpers/retry.js";
 export { rescheduleJob, type LeaseConfig } from "./worker/job-handler.js";
 
 type QueuertWorkerDefinition<
   TStateAdapter extends StateAdapter<any>,
   TQueueDefinitions extends BaseQueueDefinitions,
 > = {
-  setupQueueHandler: <
+  implementQueue: <
     TQueueName extends keyof TQueueDefinitions & string,
     TBlockers extends readonly ResolvedJobChain<TQueueDefinitions, keyof TQueueDefinitions>[],
   >(options: {
@@ -43,6 +45,8 @@ type QueuertWorkerDefinition<
       TBlockers
     >;
     handler: JobHandler<TStateAdapter, TQueueDefinitions, TQueueName, TBlockers>;
+    retryConfig?: BackoffConfig;
+    leaseConfig?: LeaseConfig;
   }) => QueuertWorkerDefinition<TStateAdapter, TQueueDefinitions>;
   start: Executor;
 };
@@ -96,7 +100,13 @@ export const createQueuert = async <
         registeredQueues: RegisteredQueues,
       ): QueuertWorkerDefinition<TStateAdapter, TQueueDefinitions> => {
         return {
-          setupQueueHandler({ name: queueName, enqueueBlockerJobChains, handler }) {
+          implementQueue({
+            name: queueName,
+            enqueueBlockerJobChains,
+            handler,
+            retryConfig,
+            leaseConfig,
+          }) {
             if (registeredQueues.has(queueName)) {
               throw new Error(`Queue with name "${queueName}" is already registered`);
             }
@@ -104,6 +114,8 @@ export const createQueuert = async <
             newRegisteredQueues.set(queueName, {
               enqueueBlockerJobChains: enqueueBlockerJobChains as any,
               handler: handler as any,
+              retryConfig,
+              leaseConfig,
             });
 
             return createWorkerInstance(newRegisteredQueues);

@@ -14,7 +14,7 @@ import {
   mapStateJobToJob,
   RunningJob,
 } from "./entities/job.js";
-import { calculateBackoffMs, RetryConfig } from "./helpers/retry.js";
+import { BackoffConfig, calculateBackoffMs } from "./helpers/backoff.js";
 import { BaseQueueDefinitions } from "./index.js";
 import { Log } from "./log.js";
 import { NotifyAdapter } from "./notify-adapter/notify-adapter.js";
@@ -246,7 +246,7 @@ export const queuertHelper = ({
         (b: JobChain<any, any, any>) => b.status !== "completed",
       );
       if (incompleteBlockers.length) {
-        job = await stateAdapter.markJobAsWaiting({
+        job = await stateAdapter.markJobAsBlocked({
           context,
           jobId: job.id,
         });
@@ -388,7 +388,7 @@ export const queuertHelper = ({
       job: StateJob;
       error: unknown;
       context: BaseStateProviderContext;
-      retryConfig: RetryConfig;
+      retryConfig: BackoffConfig;
       workerId: string;
     }): Promise<void> => {
       if (error instanceof LeaseExpiredError) {

@@ -3,16 +3,16 @@
 ## Core Concepts
 
 ### Job
-An individual unit of work. Jobs have a lifecycle: `created` → `waiting`/`pending` → `running` → `completed`. Each job belongs to a queue and contains typed input/output. Jobs track their execution attempts, scheduling, and provenance via `originId`.
+An individual unit of work. Jobs have a lifecycle: `created` → `blocked`/`pending` → `running` → `completed`. Each job belongs to a queue and contains typed input/output. Jobs track their execution attempts, scheduling, and provenance via `originId`.
 
 ### JobChain
 Like a Promise chain, a sequence of linked jobs where each job can `continueWith` to the next. The chain completes when its final job completes without continuing. Chains have a simple lifecycle: `created` → `completed`.
 
 ### Queue
-Defines a named job type with its input/output types and handler. Queues are registered with workers via `setupQueueHandler`. The handler receives the job, its resolved blockers, and a context for chaining jobs.
+Defines a named job type with its input/output types and handler. Queues are registered with workers via `implementQueue`. The handler receives the job, its resolved blockers, and a context for chaining jobs.
 
 ### Blockers
-Jobs can depend on other job chains. A job with blockers enters `waiting` status until all blocker chains complete. Once complete, the job transitions to `pending` and can be processed.
+Jobs can depend on other job chains. A job with blockers enters `blocked` status until all blocker chains complete. Once complete, the job transitions to `pending` and can be processed.
 
 ### Log
 A typed logging function for observability. All job lifecycle events are logged with structured data (job IDs, queue names, worker IDs, etc.). Consumers provide their own log implementation to integrate with their logging infrastructure.
@@ -25,6 +25,27 @@ Abstracts ORM/database client operations. Provides context management, transacti
 
 ### NotifyAdapter
 Handles worker notification when jobs are scheduled. Workers listen for notifications to wake up and process jobs immediately rather than polling. Enables efficient job processing with minimal latency.
+
+### Prepare/Finalize Pattern
+Job handlers use a prepare/finalize pattern that splits job processing into phases:
+
+**Handler signature**: `async ({ signal, job, blockers, prepare }) => { ... }`
+- `signal`: AbortSignal that fires when lease expires
+- `job`: The job being processed with typed input
+- `blockers`: Resolved blocker chains (typed by queue definition)
+- `prepare`: Function to enter prepare phase
+
+**Prepare phase**: `const [{ finalize }] = await prepare({ mode }, callback?)`
+- `mode`: `"atomic"` runs entirely in one transaction; `"staged"` allows long-running work between prepare and finalize with lease renewal
+- Optional callback receives `{ client }` for database operations during prepare
+- Returns finalize function (and callback result if provided)
+
+**Processing phase** (staged mode only): Between prepare and finalize, perform long-running work. The worker automatically renews the job lease. Implement idempotently as this phase may retry.
+
+**Finalize phase**: `return finalize(({ client, continueWith }) => { ... })`
+- Commits state changes in a transaction
+- `continueWith` chains to the next job in the chain
+- Return value becomes the job output
 
 ### Deduplication
 Two levels of deduplication prevent duplicate work:
@@ -59,6 +80,7 @@ Avoid asymmetric naming (e.g., `started`/`finished` vs `created`/`completed`) ev
 - `chainId`: The job chain this job belongs to, self-referential for the first job (equals own ID)
 - `blockers`/`blocked`: Describes job dependencies (not `dependencies`/`dependents`)
 - `continueWith`: Chains jobs in finalize callback (not `enqueueJob`)
+- `prepare`: Unified function for both atomic and staged modes via `mode` parameter (not separate `prepareAtomic`/`prepareStaged`)
 - `lease`/`leased`: Time-bounded exclusive claim on a job during processing (not `lock`/`locked`). Use `leasedBy`, `leasedUntil`, `leaseMs`, `leaseDurationMs`. DB columns use `leased_by`, `leased_until`.
 - `deduplicationKey`: Explicit key for chain-level deduplication. DB column uses `deduplication_key`.
 - `deduplicated`: Boolean flag returned when a job/chain was deduplicated instead of created.

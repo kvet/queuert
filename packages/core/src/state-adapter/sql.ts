@@ -12,7 +12,7 @@ export const migrateSql = /* sql */ `
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'job_status' AND typnamespace = 'queuert'::regnamespace) THEN
-    CREATE TYPE queuert.job_status AS ENUM ('created','waiting','pending','running','completed');
+    CREATE TYPE queuert.job_status AS ENUM ('created','blocked','pending','running','completed');
   END IF;
 END$$;
 
@@ -113,7 +113,7 @@ export type DbJob = {
   chain_id: string;
   origin_id: string | null;
 
-  status: "created" | "waiting" | "pending" | "running" | "completed";
+  status: "created" | "blocked" | "pending" | "running" | "completed";
   created_at: string;
   scheduled_at: string;
   completed_at: string | null;
@@ -196,9 +196,9 @@ FROM unnest($1::uuid[], $2::uuid[]) WITH ORDINALITY AS t(job_id, blocked_by_chai
   DbJob[]
 >;
 
-export const markJobAsWaitingSql = /* sql */ `
+export const markJobAsBlockedSql = /* sql */ `
 UPDATE queuert.job
-SET status = 'waiting'
+SET status = 'blocked'
 WHERE id = $1
 RETURNING *
 ` as TypedSql<readonly [NamedParameter<"id", string>], [DbJob]>;
@@ -259,7 +259,7 @@ UPDATE queuert.job j
 SET scheduled_at = now(),
   status = 'pending'
 WHERE j.id IN (SELECT job_id FROM ready_jobs)
-  AND j.status = 'waiting'
+  AND j.status = 'blocked'
 RETURNING j.*;
 ` as TypedSql<readonly [NamedParameter<"blocked_by_chain_id", string>], DbJob[]>;
 
