@@ -3,7 +3,7 @@ import {
   CompletedJobSequence,
   JobSequence,
 } from "../entities/job-sequence.js";
-import { BaseJobTypeDefinitions } from "../entities/job-type.js";
+import { BaseJobTypeDefinitions, UnwrapContinuationInput } from "../entities/job-type.js";
 import { EnqueuedJob, Job, RunningJob } from "../entities/job.js";
 import { TypedAbortController, TypedAbortSignal } from "../helpers/abort.js";
 import { type BackoffConfig } from "../helpers/backoff.js";
@@ -50,10 +50,13 @@ export type FinalizeCallback<
     >(
       options: {
         typeName: TEnqueueJobTypeName;
-        input: TJobTypeDefinitions[TEnqueueJobTypeName]["input"];
+        input: UnwrapContinuationInput<TJobTypeDefinitions[TEnqueueJobTypeName]["input"]>;
       } & GetStateAdapterContext<TStateAdapter>,
     ) => Promise<
-      EnqueuedJob<TEnqueueJobTypeName, TJobTypeDefinitions[TEnqueueJobTypeName]["input"]>
+      EnqueuedJob<
+        TEnqueueJobTypeName,
+        UnwrapContinuationInput<TJobTypeDefinitions[TEnqueueJobTypeName]["input"]>
+      >
     >;
   } & GetStateAdapterContext<TStateAdapter>,
 ) =>
@@ -113,7 +116,9 @@ export type JobHandler<
   TBlockers extends readonly JobSequence<any, any, any>[],
 > = (handlerOptions: {
   signal: TypedAbortSignal<"lease_expired" | "error">;
-  job: RunningJob<Job<TJobTypeName, TJobTypeDefinitions[TJobTypeName]["input"]>>;
+  job: RunningJob<
+    Job<TJobTypeName, UnwrapContinuationInput<TJobTypeDefinitions[TJobTypeName]["input"]>>
+  >;
   blockers: {
     [K in keyof TBlockers]: CompletedJobSequence<TBlockers[K]>;
   };

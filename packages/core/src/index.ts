@@ -1,5 +1,5 @@
 import { ResolvedJobSequence } from "./entities/job-sequence.js";
-import { BaseJobTypeDefinitions } from "./entities/job-type.js";
+import { BaseJobTypeDefinitions, FirstJobTypeDefinitions } from "./entities/job-type.js";
 import { BackoffConfig } from "./helpers/backoff.js";
 import { Log } from "./log.js";
 import { NotifyAdapter } from "./notify-adapter/notify-adapter.js";
@@ -16,7 +16,8 @@ export { type CompletedJobSequence, type JobSequence } from "./entities/job-sequ
 export {
   defineUnionJobTypes,
   type BaseJobTypeDefinitions,
-  type DefineJobTypeRef,
+  type DefineContinuationInput,
+  type DefineContinuationOutput,
 } from "./entities/job-type.js";
 export { type BackoffConfig } from "./helpers/backoff.js";
 export { type RetryConfig } from "./helpers/retry.js";
@@ -59,7 +60,9 @@ export type Queuert<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
 > = {
   createWorker: () => QueuertWorkerDefinition<TStateAdapter, TJobTypeDefinitions>;
-  startJobSequence: <TFirstJobTypeName extends keyof TJobTypeDefinitions & string>(
+  startJobSequence: <
+    TFirstJobTypeName extends keyof FirstJobTypeDefinitions<TJobTypeDefinitions> & string,
+  >(
     options: {
       firstJobTypeName: TFirstJobTypeName;
       input: TJobTypeDefinitions[TFirstJobTypeName]["input"];
@@ -68,7 +71,9 @@ export type Queuert<
   ) => Promise<
     ResolvedJobSequence<TJobTypeDefinitions, TFirstJobTypeName> & { deduplicated: boolean }
   >;
-  getJobSequence: <TFirstJobTypeName extends keyof TJobTypeDefinitions & string>(
+  getJobSequence: <
+    TFirstJobTypeName extends keyof FirstJobTypeDefinitions<TJobTypeDefinitions> & string,
+  >(
     options: {
       firstJobTypeName: TFirstJobTypeName;
       id: string;

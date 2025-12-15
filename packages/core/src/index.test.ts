@@ -5,7 +5,8 @@ import { sleep } from "./helpers/sleep.js";
 import {
   CompletedJobSequence,
   createQueuert,
-  DefineJobTypeRef,
+  DefineContinuationInput,
+  DefineContinuationOutput,
   defineUnionJobTypes,
   JobSequence,
   LeaseConfig,
@@ -263,7 +264,7 @@ describe("Handler", () => {
         };
         "test-continueWith": {
           input: null;
-          output: DefineJobTypeRef<"test-next">;
+          output: DefineContinuationOutput<"test-next">;
         };
         "test-next": {
           input: { value: number };
@@ -1078,14 +1079,14 @@ describe("Chains", () => {
       jobTypeDefinitions: defineUnionJobTypes<{
         linear: {
           input: { value: number };
-          output: DefineJobTypeRef<"linear_next">;
+          output: DefineContinuationOutput<"linear_next">;
         };
         linear_next: {
-          input: { valueNext: number };
-          output: DefineJobTypeRef<"linear_next_next">;
+          input: DefineContinuationInput<{ valueNext: number }>;
+          output: DefineContinuationOutput<"linear_next_next">;
         };
         linear_next_next: {
-          input: { valueNextNext: number };
+          input: DefineContinuationInput<{ valueNextNext: number }>;
           output: { result: number };
         };
       }>(),
@@ -1175,6 +1176,12 @@ describe("Chains", () => {
       expectTypeOf<CompletedJobSequence<typeof jobSequence>["output"]>().toEqualTypeOf<{
         result: number;
       }>();
+      expectTypeOf<
+        Parameters<(typeof queuert)["startJobSequence"]>[0]["firstJobTypeName"]
+      >().toEqualTypeOf<"linear">();
+      expectTypeOf<
+        Parameters<(typeof queuert)["getJobSequence"]>[0]["firstJobTypeName"]
+      >().toEqualTypeOf<"linear">();
 
       const [finishedJobSequence] = await waitForJobSequencesCompleted(queuert, [jobSequence]);
 
@@ -1235,14 +1242,14 @@ describe("Chains", () => {
       jobTypeDefinitions: defineUnionJobTypes<{
         main: {
           input: { value: number };
-          output: DefineJobTypeRef<"branch1"> | DefineJobTypeRef<"branch2">;
+          output: DefineContinuationOutput<"branch1"> | DefineContinuationOutput<"branch2">;
         };
         branch1: {
-          input: { valueBranched: number };
+          input: DefineContinuationInput<{ valueBranched: number }>;
           output: { result1: number };
         };
         branch2: {
-          input: { valueBranched: number };
+          input: DefineContinuationInput<{ valueBranched: number }>;
           output: { result2: number };
         };
       }>(),
@@ -1332,7 +1339,7 @@ describe("Chains", () => {
       jobTypeDefinitions: defineUnionJobTypes<{
         loop: {
           input: { counter: number };
-          output: DefineJobTypeRef<"loop"> | { done: true };
+          output: DefineContinuationOutput<"loop"> | { done: true };
         };
       }>(),
     });
@@ -1390,11 +1397,11 @@ describe("Chains", () => {
       jobTypeDefinitions: defineUnionJobTypes<{
         start: {
           input: { value: number };
-          output: DefineJobTypeRef<"end">;
+          output: DefineContinuationOutput<"end">;
         };
         end: {
-          input: { result: number };
-          output: DefineJobTypeRef<"start"> | { finalResult: number };
+          input: DefineContinuationInput<{ result: number }>;
+          output: DefineContinuationOutput<"start"> | { finalResult: number };
         };
       }>(),
     });
@@ -1474,7 +1481,7 @@ describe("Blocker Chains", () => {
       jobTypeDefinitions: defineUnionJobTypes<{
         blocker: {
           input: { value: number };
-          output: DefineJobTypeRef<"blocker"> | { done: true };
+          output: DefineContinuationOutput<"blocker"> | { done: true };
         };
         main: {
           input: { start: boolean };

@@ -1,5 +1,5 @@
 import { StateJob } from "../state-adapter/state-adapter.js";
-import { BaseJobTypeDefinitions, jobTypeRefSymbol } from "./job-type.js";
+import { BaseJobTypeDefinitions, continuationOutputSymbol } from "./job-type.js";
 
 export type DeduplicationStrategy = "finalized" | "all";
 
@@ -13,7 +13,7 @@ type MemberCompatibleTargets<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   Out,
 > = Out extends {
-  [jobTypeRefSymbol]: infer Ref;
+  [continuationOutputSymbol]: infer Ref;
 }
   ? Extract<Ref, keyof TJobTypeDefinitions>
   : {
@@ -54,7 +54,7 @@ type NonInternalReachableJobTypes<
   [Q in ReachableJobTypes<TJobTypeDefinitions, Start> & keyof TJobTypeDefinitions]: Q;
 }[ReachableJobTypes<TJobTypeDefinitions, Start> & keyof TJobTypeDefinitions];
 
-type StripJobTypeRefs<T> = Exclude<T, { [jobTypeRefSymbol]: any }>;
+type StripContinuationOutputs<T> = Exclude<T, { [continuationOutputSymbol]: any }>;
 
 export type ResolvedJobSequence<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
@@ -64,7 +64,7 @@ export type ResolvedJobSequence<
     keyof TJobTypeDefinitions]: JobSequence<
     Start,
     TJobTypeDefinitions[Q]["input"],
-    StripJobTypeRefs<TJobTypeDefinitions[Q]["output"]>
+    StripContinuationOutputs<TJobTypeDefinitions[Q]["output"]>
   >;
 }[NonInternalReachableJobTypes<TJobTypeDefinitions, Start> & keyof TJobTypeDefinitions];
 

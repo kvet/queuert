@@ -15,10 +15,10 @@ const queuert = createQueuert({
   jobTypeDefinitions: defineUnionJobTypes<{
     'process-image': {
       input: { imageId: string };
-      output: DefineJobTypeRef<"distribute-image">;
+      output: DefineContinuationOutput<"distribute-image">;
     };
     'distribute-image': {
-      input: { imageId: string; minifiedImageId: string };
+      input: DefineContinuationInput<{ imageId: string; minifiedImageId: string }>;
       output: { done: true };
     };
   }>(),

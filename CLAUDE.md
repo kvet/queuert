@@ -65,6 +65,27 @@ await queuert.startJobSequence({
 
 **Continuation restriction**: `continueWith` can only be called once per finalize callback. Calling it multiple times throws an error: "continueWith can only be called once". This ensures each job has a clear single continuation in the sequence.
 
+### Continuation Types
+Job types use two marker types to define their relationships:
+
+**`DefineContinuationOutput<T>`**: Marks that a job continues to another job type. Used in the `output` type:
+```typescript
+'process-image': {
+  input: { imageId: string };
+  output: DefineContinuationOutput<"distribute-image">;
+}
+```
+
+**`DefineContinuationInput<T>`**: Marks a job type as internal (can only be reached via `continueWith`, not `startJobSequence`). Wrap the input type:
+```typescript
+defineUnionJobTypes<{
+  'public-entry': { input: { id: string }; output: DefineContinuationOutput<"internal-step"> };
+  'internal-step': { input: DefineContinuationInput<{ result: number }>; output: { done: true } };
+}>()
+```
+
+TypeScript prevents calling `startJobSequence` with internal job types at compile-time.
+
 ## Design Philosophy
 
 ### Consistent Terminology
@@ -85,6 +106,8 @@ Avoid asymmetric naming (e.g., `started`/`finished` vs `created`/`completed`) ev
 - `lease`/`leased`: Time-bounded exclusive claim on a job during processing (not `lock`/`locked`). Use `leasedBy`, `leasedUntil`, `leaseMs`, `leaseDurationMs`. DB columns use `leased_by`, `leased_until`.
 - `deduplicationKey`: Explicit key for sequence-level deduplication. DB column uses `deduplication_key`.
 - `deduplicated`: Boolean flag returned when a job/sequence was deduplicated instead of created.
+- `DefineContinuationInput<T>`: Type wrapper marking job types as internal (only reachable via `continueWith`).
+- `DefineContinuationOutput<T>`: Type marker in output indicating continuation to another job type.
 
 ## Testing Patterns
 

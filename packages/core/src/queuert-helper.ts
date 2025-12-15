@@ -15,7 +15,7 @@ import {
   RunningJob,
 } from "./entities/job.js";
 import { BackoffConfig, calculateBackoffMs } from "./helpers/backoff.js";
-import { BaseJobTypeDefinitions } from "./index.js";
+import { BaseJobTypeDefinitions, UnwrapContinuationInput } from "./entities/job-type.js";
 import { Log } from "./log.js";
 import { NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 import {
@@ -46,7 +46,7 @@ export type ResolvedJobTypeJobs<
 > = {
   [K in CompatibleJobTypeTargets<TJobTypeDefinitions, TJobTypeName>]: Job<
     K,
-    TJobTypeDefinitions[K]["input"]
+    UnwrapContinuationInput<TJobTypeDefinitions[K]["input"]>
   >;
 }[CompatibleJobTypeTargets<TJobTypeDefinitions, TJobTypeName>];
 
