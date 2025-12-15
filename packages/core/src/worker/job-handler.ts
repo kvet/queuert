@@ -1,11 +1,15 @@
-import { CompatibleQueueTargets, CompletedJobChain, JobChain } from "../entities/job-chain.js";
+import {
+  CompatibleJobTypeTargets,
+  CompletedJobSequence,
+  JobSequence,
+} from "../entities/job-sequence.js";
+import { BaseJobTypeDefinitions } from "../entities/job-type.js";
 import { EnqueuedJob, Job, RunningJob } from "../entities/job.js";
-import { BaseQueueDefinitions } from "../entities/queue.js";
 import { TypedAbortController, TypedAbortSignal } from "../helpers/abort.js";
 import { type BackoffConfig } from "../helpers/backoff.js";
 import { createSignal } from "../helpers/signal.js";
 import { Branded } from "../helpers/typescript.js";
-import { LeaseExpiredError, ProcessHelper, ResolvedQueueJobs } from "../queuert-helper.js";
+import { LeaseExpiredError, ProcessHelper, ResolvedJobTypeJobs } from "../queuert-helper.js";
 import { GetStateAdapterContext, StateAdapter, StateJob } from "../state-adapter/state-adapter.js";
 import { BaseStateProviderContext } from "../state-provider/state-provider.js";
 import { createLeaseManager, type LeaseConfig } from "./lease.js";
@@ -36,45 +40,50 @@ export const rescheduleJob = (afterMs: number, cause?: unknown): never => {
 
 export type FinalizeCallback<
   TStateAdapter extends StateAdapter<BaseStateProviderContext>,
-  TQueueDefinitions extends BaseQueueDefinitions,
-  TQueueName extends keyof TQueueDefinitions & string,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TJobTypeName extends keyof TJobTypeDefinitions & string,
 > = (
   finalizeOptions: {
     continueWith: <
-      TEnqueueQueueName extends CompatibleQueueTargets<TQueueDefinitions, TQueueName> & string,
+      TEnqueueJobTypeName extends CompatibleJobTypeTargets<TJobTypeDefinitions, TJobTypeName> &
+        string,
     >(
       options: {
-        queueName: TEnqueueQueueName;
-        input: TQueueDefinitions[TEnqueueQueueName]["input"];
+        typeName: TEnqueueJobTypeName;
+        input: TJobTypeDefinitions[TEnqueueJobTypeName]["input"];
       } & GetStateAdapterContext<TStateAdapter>,
-    ) => Promise<EnqueuedJob<TEnqueueQueueName, TQueueDefinitions[TEnqueueQueueName]["input"]>>;
+    ) => Promise<
+      EnqueuedJob<TEnqueueJobTypeName, TJobTypeDefinitions[TEnqueueJobTypeName]["input"]>
+    >;
   } & GetStateAdapterContext<TStateAdapter>,
 ) =>
-  | TQueueDefinitions[TQueueName]["output"]
-  | ResolvedQueueJobs<TQueueDefinitions, TQueueName>
+  | TJobTypeDefinitions[TJobTypeName]["output"]
+  | ResolvedJobTypeJobs<TJobTypeDefinitions, TJobTypeName>
   | Promise<
-      TQueueDefinitions[TQueueName]["output"] | ResolvedQueueJobs<TQueueDefinitions, TQueueName>
+      | TJobTypeDefinitions[TJobTypeName]["output"]
+      | ResolvedJobTypeJobs<TJobTypeDefinitions, TJobTypeName>
     >;
 
 export type FinalizeFn<
   TStateAdapter extends StateAdapter<BaseStateProviderContext>,
-  TQueueDefinitions extends BaseQueueDefinitions,
-  TQueueName extends keyof TQueueDefinitions & string,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TJobTypeName extends keyof TJobTypeDefinitions & string,
 > = (
-  finalizeCallback: FinalizeCallback<TStateAdapter, TQueueDefinitions, TQueueName>,
+  finalizeCallback: FinalizeCallback<TStateAdapter, TJobTypeDefinitions, TJobTypeName>,
 ) => Promise<
   Branded<
-    TQueueDefinitions[TQueueName]["output"] | ResolvedQueueJobs<TQueueDefinitions, TQueueName>,
+    | TJobTypeDefinitions[TJobTypeName]["output"]
+    | ResolvedJobTypeJobs<TJobTypeDefinitions, TJobTypeName>,
     "finalize_result"
   >
 >;
 
 export type PrepareResult<
   TStateAdapter extends StateAdapter<BaseStateProviderContext>,
-  TQueueDefinitions extends BaseQueueDefinitions,
-  TQueueName extends keyof TQueueDefinitions & string,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TJobTypeName extends keyof TJobTypeDefinitions & string,
 > = {
-  finalize: FinalizeFn<TStateAdapter, TQueueDefinitions, TQueueName>;
+  finalize: FinalizeFn<TStateAdapter, TJobTypeDefinitions, TJobTypeName>;
 };
 
 export type PrepareConfig = { mode: "atomic" | "staged" };
@@ -85,31 +94,34 @@ export type PrepareCallback<TStateAdapter extends StateAdapter<BaseStateProvider
 
 export type PrepareFn<
   TStateAdapter extends StateAdapter<BaseStateProviderContext>,
-  TQueueDefinitions extends BaseQueueDefinitions,
-  TQueueName extends keyof TQueueDefinitions & string,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TJobTypeName extends keyof TJobTypeDefinitions & string,
 > = {
-  (config: PrepareConfig): Promise<[PrepareResult<TStateAdapter, TQueueDefinitions, TQueueName>]>;
+  (
+    config: PrepareConfig,
+  ): Promise<[PrepareResult<TStateAdapter, TJobTypeDefinitions, TJobTypeName>]>;
   <T>(
     config: PrepareConfig,
     prepareCallback: PrepareCallback<TStateAdapter, T>,
-  ): Promise<[PrepareResult<TStateAdapter, TQueueDefinitions, TQueueName>, T]>;
+  ): Promise<[PrepareResult<TStateAdapter, TJobTypeDefinitions, TJobTypeName>, T]>;
 };
 
 export type JobHandler<
   TStateAdapter extends StateAdapter<BaseStateProviderContext>,
-  TQueueDefinitions extends BaseQueueDefinitions,
-  TQueueName extends keyof TQueueDefinitions & string,
-  TBlockers extends readonly JobChain<any, any, any>[],
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TJobTypeName extends keyof TJobTypeDefinitions & string,
+  TBlockers extends readonly JobSequence<any, any, any>[],
 > = (handlerOptions: {
   signal: TypedAbortSignal<"lease_expired" | "error">;
-  job: RunningJob<Job<TQueueName, TQueueDefinitions[TQueueName]["input"]>>;
+  job: RunningJob<Job<TJobTypeName, TJobTypeDefinitions[TJobTypeName]["input"]>>;
   blockers: {
-    [K in keyof TBlockers]: CompletedJobChain<TBlockers[K]>;
+    [K in keyof TBlockers]: CompletedJobSequence<TBlockers[K]>;
   };
-  prepare: PrepareFn<TStateAdapter, TQueueDefinitions, TQueueName>;
+  prepare: PrepareFn<TStateAdapter, TJobTypeDefinitions, TJobTypeName>;
 }) => Promise<
   Branded<
-    TQueueDefinitions[TQueueName]["output"] | ResolvedQueueJobs<TQueueDefinitions, TQueueName>,
+    | TJobTypeDefinitions[TJobTypeName]["output"]
+    | ResolvedJobTypeJobs<TJobTypeDefinitions, TJobTypeName>,
     "finalize_result"
   >
 >;
@@ -126,9 +138,9 @@ export const processJobHandler = async ({
   helper: ProcessHelper;
   handler: JobHandler<
     StateAdapter<BaseStateProviderContext>,
-    BaseQueueDefinitions,
+    BaseJobTypeDefinitions,
     string,
-    readonly JobChain<string, unknown, unknown>[]
+    readonly JobSequence<string, unknown, unknown>[]
   >;
   context: BaseStateProviderContext;
   job: StateJob;
@@ -208,7 +220,7 @@ export const processJobHandler = async ({
           options: {
             continueWith: (
               options: {
-                queueName: string;
+                typeName: string;
                 input: unknown;
               } & BaseStateProviderContext,
             ) => Promise<unknown>;
@@ -222,13 +234,13 @@ export const processJobHandler = async ({
         await leaseManager.stop();
         return runInGuardedTransaction(async (context) => {
           const output = await finalizeCallback({
-            continueWith: async ({ queueName, input, ...context }) => {
+            continueWith: async ({ typeName, input, ...context }) => {
               if (continueWithCalled) {
                 throw new Error("continueWith can only be called once");
               }
               continueWithCalled = true;
               return helper.continueWith({
-                queueName,
+                typeName,
                 input,
                 context,
               });
@@ -276,7 +288,7 @@ export const processJobHandler = async ({
 
       const finalize = createFinalizeFn();
       return prepareCallback === undefined ? [{ finalize }] : [{ finalize }, callbackOutput];
-    }) as PrepareFn<StateAdapter<BaseStateProviderContext>, BaseQueueDefinitions, string>;
+    }) as PrepareFn<StateAdapter<BaseStateProviderContext>, BaseJobTypeDefinitions, string>;
 
     try {
       await handler({

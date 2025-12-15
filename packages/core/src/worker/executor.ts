@@ -1,30 +1,30 @@
 import { randomUUID } from "node:crypto";
-import { JobChain } from "../entities/job-chain.js";
-import { BaseQueueDefinitions } from "../entities/queue.js";
+import { JobSequence } from "../entities/job-sequence.js";
+import { BaseJobTypeDefinitions } from "../entities/job-type.js";
 import { BackoffConfig } from "../helpers/backoff.js";
 import { withRetry } from "../helpers/retry.js";
 import { sleep } from "../helpers/sleep.js";
 import { Log } from "../log.js";
 import { NotifyAdapter } from "../notify-adapter/notify-adapter.js";
-import { EnqueueBlockerJobChains, LeaseExpiredError, ProcessHelper } from "../queuert-helper.js";
+import { EnqueueBlockerJobSequences, LeaseExpiredError, ProcessHelper } from "../queuert-helper.js";
 import { StateAdapter } from "../state-adapter/state-adapter.js";
 import { BaseStateProviderContext } from "../state-provider/state-provider.js";
 import { JobHandler, LeaseConfig, processJobHandler } from "./job-handler.js";
 
-export type RegisteredQueues = Map<
+export type RegisteredJobTypes = Map<
   string,
   {
-    enqueueBlockerJobChains?: EnqueueBlockerJobChains<
+    enqueueBlockerJobSequences?: EnqueueBlockerJobSequences<
       StateAdapter<BaseStateProviderContext>,
-      BaseQueueDefinitions,
+      BaseJobTypeDefinitions,
       string,
-      readonly JobChain<string, any, any>[]
+      readonly JobSequence<string, any, any>[]
     >;
     handler: JobHandler<
       StateAdapter<BaseStateProviderContext>,
-      BaseQueueDefinitions,
+      BaseJobTypeDefinitions,
       string,
-      readonly JobChain<string, any, any>[]
+      readonly JobSequence<string, any, any>[]
     >;
     retryConfig?: BackoffConfig;
     leaseConfig?: LeaseConfig;
@@ -35,12 +35,12 @@ export const createExecutor = ({
   helper,
   notifyAdapter,
   log,
-  registeredQueues,
+  registeredJobTypes,
 }: {
   helper: ProcessHelper;
   notifyAdapter: NotifyAdapter;
   log: Log;
-  registeredQueues: RegisteredQueues;
+  registeredJobTypes: RegisteredJobTypes;
 }): ((startOptions?: {
   workerId?: string;
   pollIntervalMs?: number;
@@ -49,7 +49,8 @@ export const createExecutor = ({
   defaultLeaseConfig?: LeaseConfig;
   workerLoopRetryConfig?: BackoffConfig;
 }) => Promise<() => Promise<void>>) => {
-  const queueNames = Array.from(registeredQueues.keys());
+  const typeNames = Array.from(registeredJobTypes.keys());
+
   return async ({
     workerId = randomUUID(),
     pollIntervalMs = 60_000,
@@ -76,7 +77,7 @@ export const createExecutor = ({
       args: [
         {
           workerId,
-          queueNames,
+          jobTypeNames: typeNames,
         },
       ],
     });
@@ -85,7 +86,7 @@ export const createExecutor = ({
 
     const waitForNextJob = async () => {
       const pullDelayMs = await helper.getNextJobAvailableInMs({
-        queueNames,
+        typeNames,
         pollIntervalMs,
       });
 
@@ -98,7 +99,7 @@ export const createExecutor = ({
       };
       stopController.signal.addEventListener("abort", onStop);
       await Promise.any([
-        notifyAdapter.listenJobScheduled(queueNames, {
+        notifyAdapter.listenJobScheduled(typeNames, {
           signal: notifyController.signal,
         }),
         sleep(pullDelayMs, {
@@ -115,7 +116,7 @@ export const createExecutor = ({
         const [hasMore, finalize] = await helper.runInTransaction(
           async (context): Promise<[boolean, (() => Promise<void>) | undefined]> => {
             let job = await helper.acquireJob({
-              queueNames,
+              typeNames,
               context,
               workerId,
             });
@@ -123,21 +124,21 @@ export const createExecutor = ({
               return [false, undefined];
             }
 
-            const queue = registeredQueues.get(job.queueName);
-            if (!queue) {
-              throw new Error(`No handler registered for queue "${job.queueName}"`);
+            const jobType = registeredJobTypes.get(job.typeName);
+            if (!jobType) {
+              throw new Error(`No handler registered for job type "${job.typeName}"`);
             }
 
             return helper.withJobContext(
               {
                 rootId: job.rootId,
-                chainId: job.chainId,
+                sequenceId: job.sequenceId,
                 originId: job.id,
               },
               async (): Promise<[boolean, (() => Promise<void>) | undefined]> => {
-                job = await helper.scheduleBlockerJobChains({
+                job = await helper.scheduleBlockerJobSequences({
                   job: job!,
-                  enqueueBlockerJobChains: queue.enqueueBlockerJobChains,
+                  enqueueBlockerJobSequences: jobType.enqueueBlockerJobSequences,
                   context,
                 });
 
@@ -149,11 +150,11 @@ export const createExecutor = ({
                   true,
                   await processJobHandler({
                     helper,
-                    handler: queue.handler,
+                    handler: jobType.handler,
                     context,
                     job,
-                    retryConfig: queue.retryConfig ?? defaultRetryConfig,
-                    leaseConfig: queue.leaseConfig ?? defaultLeaseConfig,
+                    retryConfig: jobType.retryConfig ?? defaultRetryConfig,
+                    leaseConfig: jobType.leaseConfig ?? defaultLeaseConfig,
                     workerId,
                   }),
                 ];
@@ -189,7 +190,7 @@ export const createExecutor = ({
       while (true) {
         try {
           await helper.removeExpiredJobLease({
-            queueNames,
+            typeNames,
             workerId,
           });
 

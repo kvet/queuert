@@ -3,11 +3,11 @@ import { test as baseTest, describe, expectTypeOf, MockedFunction, vi } from "vi
 import { extendWithDb, PgStateAdapter } from "./db.spec-helper.js";
 import { sleep } from "./helpers/sleep.js";
 import {
-  CompletedJobChain,
+  CompletedJobSequence,
   createQueuert,
-  DefineQueueRef,
-  defineUnionQueues,
-  JobChain,
+  DefineJobTypeRef,
+  defineUnionJobTypes,
+  JobSequence,
   LeaseConfig,
   Log,
   NotifyAdapter,
@@ -24,10 +24,10 @@ const test = extendWithDb(baseTest, import.meta.url).extend<{
     cb: (context: { client: PoolClient }) => Promise<T>,
   ) => Promise<T>;
   withWorkers: <T>(workers: (() => Promise<void>)[], cb: () => Promise<T>) => Promise<T>;
-  waitForJobChainsCompleted: <TChains extends JobChain<any, any, any>[]>(
+  waitForJobSequencesCompleted: <TChains extends JobSequence<any, any, any>[]>(
     queuert: Queuert<PgStateAdapter, any>,
     chains: TChains,
-  ) => Promise<{ [K in keyof TChains]: CompletedJobChain<TChains[K]> }>;
+  ) => Promise<{ [K in keyof TChains]: CompletedJobSequence<TChains[K]> }>;
   log: MockedFunction<Log>;
   expectLogs: (
     expected: {
@@ -70,7 +70,7 @@ const test = extendWithDb(baseTest, import.meta.url).extend<{
     },
     { scope: "test" },
   ],
-  waitForJobChainsCompleted: [
+  waitForJobSequencesCompleted: [
     async ({ stateProvider, expect }, use) => {
       await use((queuert, chains) =>
         vi.waitFor(
@@ -78,10 +78,10 @@ const test = extendWithDb(baseTest, import.meta.url).extend<{
             const latestChains = await stateProvider.provideContext(({ client }) =>
               Promise.all(
                 chains.map(async (chain) =>
-                  queuert.getJobChain({
+                  queuert.getJobSequence({
                     client,
                     id: chain.id,
-                    chainName: chain.chainName,
+                    firstJobTypeName: chain.firstJobTypeName,
                   }),
                 ),
               ),
@@ -96,7 +96,7 @@ const test = extendWithDb(baseTest, import.meta.url).extend<{
               );
             }
             return latestChains as {
-              [K in keyof typeof chains]: CompletedJobChain<(typeof chains)[K]>;
+              [K in keyof typeof chains]: CompletedJobSequence<(typeof chains)[K]>;
             };
           },
           { timeout: 4000, interval: 10 },
@@ -144,7 +144,7 @@ describe("Handler", () => {
     notifyAdapter,
     runInTransactionWithNotify,
     withWorkers,
-    waitForJobChainsCompleted,
+    waitForJobSequencesCompleted,
     log,
     expectLogs,
     expect,
@@ -153,7 +153,7 @@ describe("Handler", () => {
       stateAdapter,
       notifyAdapter,
       log,
-      queueDefinitions: defineUnionQueues<{
+      jobTypeDefinitions: defineUnionJobTypes<{
         test: {
           input: { test: boolean };
           output: { result: boolean };
@@ -161,13 +161,13 @@ describe("Handler", () => {
       }>(),
     });
 
-    const worker = queuert.createWorker().implementQueue({
+    const worker = queuert.createWorker().implementJobType({
       name: "test",
       handler: async ({ job, prepare }) => {
         expectTypeOf(job.id).toEqualTypeOf<string>();
         expectTypeOf(job.input).toEqualTypeOf<{ test: boolean }>();
         expect(job.id).toBeDefined();
-        expect(job.chainId).toEqual(job.id);
+        expect(job.sequenceId).toEqual(job.id);
         expect(job.originId).toBeNull();
         expect(job.rootId).toEqual(job.id);
         expect(job.input.test).toBeDefined();
@@ -190,41 +190,41 @@ describe("Handler", () => {
       },
     });
 
-    const jobChain = await runInTransactionWithNotify(queuert, ({ client }) =>
-      queuert.enqueueJobChain({
+    const jobSequence = await runInTransactionWithNotify(queuert, ({ client }) =>
+      queuert.startJobSequence({
         client,
-        chainName: "test",
+        firstJobTypeName: "test",
         input: { test: true },
       }),
     );
-    expectTypeOf<CompletedJobChain<typeof jobChain>["output"]>().toEqualTypeOf<{
+    expectTypeOf<CompletedJobSequence<typeof jobSequence>["output"]>().toEqualTypeOf<{
       result: boolean;
     }>();
 
     await withWorkers([await worker.start({ workerId: "worker" })], async () => {
-      const [succeededJobChain] = await waitForJobChainsCompleted(queuert, [jobChain]);
+      const [succeededJobSequence] = await waitForJobSequencesCompleted(queuert, [jobSequence]);
 
-      expect(succeededJobChain.output).toEqual({ result: true });
+      expect(succeededJobSequence.output).toEqual({ result: true });
     });
 
     const workerArgs = { workerId: "worker" };
-    const jobChainArgs = {
-      chainName: "test",
-      chainId: jobChain.id,
-      rootId: jobChain.id,
+    const jobSequenceArgs = {
+      firstJobTypeName: "test",
+      sequenceId: jobSequence.id,
+      rootId: jobSequence.id,
       originId: null,
     };
     const jobArgs = {
-      queueName: "test",
-      jobId: jobChain.id,
-      rootId: jobChain.id,
+      typeName: "test",
+      id: jobSequence.id,
+      rootId: jobSequence.id,
       originId: null,
-      chainId: jobChain.id,
+      sequenceId: jobSequence.id,
     };
     expectLogs([
-      { type: "job_chain_created", args: [{ ...jobChainArgs, input: { test: true } }] },
+      { type: "job_sequence_created", args: [{ ...jobSequenceArgs, input: { test: true } }] },
       { type: "job_created", args: [{ ...jobArgs, input: { test: true } }] },
-      { type: "worker_started", args: [{ ...workerArgs, queueNames: ["test"] }] },
+      { type: "worker_started", args: [{ ...workerArgs, jobTypeNames: ["test"] }] },
       {
         type: "job_acquired",
         args: [{ ...jobArgs, status: "created", attempt: 0, ...workerArgs }],
@@ -233,7 +233,7 @@ describe("Handler", () => {
         type: "job_completed",
         args: [{ ...jobArgs, output: { result: true }, ...workerArgs }],
       },
-      { type: "job_chain_completed", args: [{ ...jobChainArgs, output: { result: true } }] },
+      { type: "job_sequence_completed", args: [{ ...jobSequenceArgs, output: { result: true } }] },
       { type: "worker_stopping", args: [{ ...workerArgs }] },
       { type: "worker_stopped", args: [{ ...workerArgs }] },
     ]);
@@ -244,7 +244,7 @@ describe("Handler", () => {
     notifyAdapter,
     runInTransactionWithNotify,
     withWorkers,
-    waitForJobChainsCompleted,
+    waitForJobSequencesCompleted,
     log,
     expect,
   }) => {
@@ -252,7 +252,7 @@ describe("Handler", () => {
       stateAdapter,
       notifyAdapter,
       log,
-      queueDefinitions: defineUnionQueues<{
+      jobTypeDefinitions: defineUnionJobTypes<{
         "test-prepare": {
           input: null;
           output: null;
@@ -263,7 +263,7 @@ describe("Handler", () => {
         };
         "test-continueWith": {
           input: null;
-          output: DefineQueueRef<"test-next">;
+          output: DefineJobTypeRef<"test-next">;
         };
         "test-next": {
           input: { value: number };
@@ -274,7 +274,7 @@ describe("Handler", () => {
 
     const worker = queuert
       .createWorker()
-      .implementQueue({
+      .implementJobType({
         name: "test-prepare",
         handler: async ({ prepare }) => {
           const [{ finalize }] = await prepare({ mode: "atomic" });
@@ -284,7 +284,7 @@ describe("Handler", () => {
           return finalize(() => null);
         },
       })
-      .implementQueue({
+      .implementJobType({
         name: "test-finalize",
         handler: async ({ prepare }) => {
           const [{ finalize }] = await prepare({ mode: "atomic" });
@@ -293,20 +293,20 @@ describe("Handler", () => {
           return result;
         },
       })
-      .implementQueue({
+      .implementJobType({
         name: "test-continueWith",
         handler: async ({ prepare }) => {
           const [{ finalize }] = await prepare({ mode: "atomic" });
           return finalize(async ({ client, continueWith }) => {
             const continuation1 = await continueWith({
               client,
-              queueName: "test-next",
+              typeName: "test-next",
               input: { value: 1 },
             });
             await expect(
               continueWith({
                 client,
-                queueName: "test-next",
+                typeName: "test-next",
                 input: { value: 2 },
               }),
             ).rejects.toThrow("continueWith can only be called once");
@@ -314,7 +314,7 @@ describe("Handler", () => {
           });
         },
       })
-      .implementQueue({
+      .implementJobType({
         name: "test-next",
         handler: async ({ job, prepare }) => {
           const [{ finalize }] = await prepare({ mode: "atomic" });
@@ -323,17 +323,29 @@ describe("Handler", () => {
       });
 
     await withWorkers([await worker.start()], async () => {
-      const [prepareJobChain, finalizeJobChain, continueWithJobChain] =
+      const [prepareJobSequence, finalizeJobSequence, continueWithJobSequence] =
         await runInTransactionWithNotify(queuert, async ({ client }) => [
-          await queuert.enqueueJobChain({ client, chainName: "test-prepare", input: null }),
-          await queuert.enqueueJobChain({ client, chainName: "test-finalize", input: null }),
-          await queuert.enqueueJobChain({ client, chainName: "test-continueWith", input: null }),
+          await queuert.startJobSequence({
+            client,
+            firstJobTypeName: "test-prepare",
+            input: null,
+          }),
+          await queuert.startJobSequence({
+            client,
+            firstJobTypeName: "test-finalize",
+            input: null,
+          }),
+          await queuert.startJobSequence({
+            client,
+            firstJobTypeName: "test-continueWith",
+            input: null,
+          }),
         ]);
 
-      await waitForJobChainsCompleted(queuert, [
-        prepareJobChain,
-        finalizeJobChain,
-        continueWithJobChain,
+      await waitForJobSequencesCompleted(queuert, [
+        prepareJobSequence,
+        finalizeJobSequence,
+        continueWithJobSequence,
       ]);
     });
   });
@@ -343,7 +355,7 @@ describe("Handler", () => {
     notifyAdapter,
     runInTransactionWithNotify,
     withWorkers,
-    waitForJobChainsCompleted,
+    waitForJobSequencesCompleted,
     log,
     expect,
   }) => {
@@ -351,7 +363,7 @@ describe("Handler", () => {
       stateAdapter,
       notifyAdapter,
       log,
-      queueDefinitions: defineUnionQueues<{
+      jobTypeDefinitions: defineUnionJobTypes<{
         test: {
           input: null;
           output: null;
@@ -359,7 +371,7 @@ describe("Handler", () => {
       }>(),
     });
 
-    const worker = queuert.createWorker().implementQueue({
+    const worker = queuert.createWorker().implementJobType({
       name: "test",
       handler: async ({ prepare }) => {
         const [{ finalize }] = await prepare({ mode: "staged" });
@@ -373,17 +385,17 @@ describe("Handler", () => {
     await withWorkers(
       [await worker.start({ defaultLeaseConfig: { leaseMs: 1, renewIntervalMs: 100 } })],
       async () => {
-        const jobChain = await runInTransactionWithNotify(queuert, ({ client }) =>
-          queuert.enqueueJobChain({
+        const jobSequence = await runInTransactionWithNotify(queuert, ({ client }) =>
+          queuert.startJobSequence({
             client,
-            chainName: "test",
+            firstJobTypeName: "test",
             input: null,
           }),
         );
 
-        const [succeededJobChain] = await waitForJobChainsCompleted(queuert, [jobChain]);
+        const [succeededJobSequence] = await waitForJobSequencesCompleted(queuert, [jobSequence]);
 
-        expect(succeededJobChain.output).toBeNull();
+        expect(succeededJobSequence.output).toBeNull();
         expect(log).toHaveBeenCalledWith(
           expect.objectContaining({
             level: "warn",
@@ -399,7 +411,7 @@ describe("Handler", () => {
     notifyAdapter,
     runInTransactionWithNotify,
     withWorkers,
-    waitForJobChainsCompleted,
+    waitForJobSequencesCompleted,
     log,
     expect,
   }) => {
@@ -413,7 +425,7 @@ describe("Handler", () => {
       stateAdapter,
       notifyAdapter,
       log,
-      queueDefinitions: defineUnionQueues<{
+      jobTypeDefinitions: defineUnionJobTypes<{
         test: {
           input: { test: boolean };
           output: { success: boolean };
@@ -421,21 +433,21 @@ describe("Handler", () => {
       }>(),
     });
 
-    const worker = queuert.createWorker().implementQueue({
+    const worker = queuert.createWorker().implementJobType({
       name: "test",
       handler: handler,
     });
 
     await withWorkers([await worker.start(), await worker.start()], async () => {
       const job = await runInTransactionWithNotify(queuert, ({ client }) =>
-        queuert.enqueueJobChain({
+        queuert.startJobSequence({
           client: client,
-          chainName: "test",
+          firstJobTypeName: "test",
           input: { test: true },
         }),
       );
 
-      await waitForJobChainsCompleted(queuert, [job]);
+      await waitForJobSequencesCompleted(queuert, [job]);
 
       expect(handler).toHaveBeenCalledTimes(1);
     });
@@ -446,7 +458,7 @@ describe("Handler", () => {
     notifyAdapter,
     runInTransactionWithNotify,
     withWorkers,
-    waitForJobChainsCompleted,
+    waitForJobSequencesCompleted,
     log,
     expect,
   }) => {
@@ -454,7 +466,7 @@ describe("Handler", () => {
       stateAdapter,
       notifyAdapter,
       log,
-      queueDefinitions: defineUnionQueues<{
+      jobTypeDefinitions: defineUnionJobTypes<{
         test: {
           input: null;
           output: null;
@@ -464,7 +476,7 @@ describe("Handler", () => {
 
     const attempts: number[] = [];
 
-    const worker = queuert.createWorker().implementQueue({
+    const worker = queuert.createWorker().implementJobType({
       name: "test",
       handler: async ({ job, prepare }) => {
         attempts.push(job.attempt);
@@ -494,14 +506,14 @@ describe("Handler", () => {
 
     await withWorkers([await worker.start()], async () => {
       const job = await runInTransactionWithNotify(queuert, ({ client }) =>
-        queuert.enqueueJobChain({
+        queuert.startJobSequence({
           client: client,
-          chainName: "test",
+          firstJobTypeName: "test",
           input: null,
         }),
       );
 
-      await waitForJobChainsCompleted(queuert, [job]);
+      await waitForJobSequencesCompleted(queuert, [job]);
 
       expect(attempts).toEqual([1, 2, 3]);
     });
@@ -512,7 +524,7 @@ describe("Handler", () => {
     notifyAdapter,
     runInTransactionWithNotify,
     withWorkers,
-    waitForJobChainsCompleted,
+    waitForJobSequencesCompleted,
     log,
     expect,
   }) => {
@@ -522,7 +534,7 @@ describe("Handler", () => {
       stateAdapter,
       notifyAdapter,
       log,
-      queueDefinitions: defineUnionQueues<{
+      jobTypeDefinitions: defineUnionJobTypes<{
         test: {
           input: { phase: ErrorPhase };
           output: null;
@@ -532,7 +544,7 @@ describe("Handler", () => {
 
     const errors: { phase: ErrorPhase; error: string }[] = [];
 
-    const worker = queuert.createWorker().implementQueue({
+    const worker = queuert.createWorker().implementJobType({
       name: "test",
       handler: async ({ job, prepare }) => {
         if (job.lastAttemptError) {
@@ -575,16 +587,16 @@ describe("Handler", () => {
         const jobs = await Promise.all(
           (["prepare", "process", "finalize"] as ErrorPhase[]).map((phase) =>
             runInTransactionWithNotify(queuert, ({ client }) =>
-              queuert.enqueueJobChain({
+              queuert.startJobSequence({
                 client,
-                chainName: "test",
+                firstJobTypeName: "test",
                 input: { phase },
               }),
             ),
           ),
         );
 
-        await waitForJobChainsCompleted(queuert, jobs);
+        await waitForJobSequencesCompleted(queuert, jobs);
 
         expect(errors).toHaveLength(3);
         expect(errors.find((e) => e.phase === "prepare")?.error).toBe("Error: Error in prepare");
@@ -599,7 +611,7 @@ describe("Handler", () => {
     notifyAdapter,
     runInTransactionWithNotify,
     withWorkers,
-    waitForJobChainsCompleted,
+    waitForJobSequencesCompleted,
     log,
     expectLogs,
     expect,
@@ -608,7 +620,7 @@ describe("Handler", () => {
       stateAdapter,
       notifyAdapter,
       log,
-      queueDefinitions: defineUnionQueues<{
+      jobTypeDefinitions: defineUnionJobTypes<{
         test: {
           input: null;
           output: null;
@@ -618,7 +630,7 @@ describe("Handler", () => {
 
     const errors: string[] = [];
 
-    const worker = queuert.createWorker().implementQueue({
+    const worker = queuert.createWorker().implementJobType({
       name: "test",
       handler: async ({ job, prepare }) => {
         if (job.lastAttemptError) {
@@ -647,14 +659,14 @@ describe("Handler", () => {
       ],
       async () => {
         const job = await runInTransactionWithNotify(queuert, ({ client }) =>
-          queuert.enqueueJobChain({
+          queuert.startJobSequence({
             client,
-            chainName: "test",
+            firstJobTypeName: "test",
             input: null,
           }),
         );
 
-        await waitForJobChainsCompleted(queuert, [job]);
+        await waitForJobSequencesCompleted(queuert, [job]);
 
         // Verify exponential backoff: 10ms, 20ms, 40ms
         expect(errors).toHaveLength(3);
@@ -666,7 +678,7 @@ describe("Handler", () => {
 
     expectLogs([
       { type: "worker_started" },
-      { type: "job_chain_created" },
+      { type: "job_sequence_created" },
       { type: "job_created" },
       { type: "job_acquired" },
       { type: "job_attempt_failed", args: [{ rescheduledAfterMs: 10 }, expect.anything()] },
@@ -676,7 +688,7 @@ describe("Handler", () => {
       { type: "job_attempt_failed", args: [{ rescheduledAfterMs: 40 }, expect.anything()] },
       { type: "job_acquired" },
       { type: "job_completed" },
-      { type: "job_chain_completed" },
+      { type: "job_sequence_completed" },
       { type: "worker_stopping" },
       { type: "worker_stopped" },
     ]);
@@ -687,7 +699,7 @@ describe("Handler", () => {
     notifyAdapter,
     runInTransactionWithNotify,
     withWorkers,
-    waitForJobChainsCompleted,
+    waitForJobSequencesCompleted,
     log,
     expect,
   }) => {
@@ -697,7 +709,7 @@ describe("Handler", () => {
       stateAdapter,
       notifyAdapter,
       log,
-      queueDefinitions: defineUnionQueues<{
+      jobTypeDefinitions: defineUnionJobTypes<{
         test: {
           input: { phase: ErrorPhase };
           output: null;
@@ -707,7 +719,7 @@ describe("Handler", () => {
 
     const errors: { phase: ErrorPhase; error: string }[] = [];
 
-    const worker = queuert.createWorker().implementQueue({
+    const worker = queuert.createWorker().implementJobType({
       name: "test",
       handler: async ({ job, prepare }) => {
         if (job.lastAttemptError) {
@@ -740,16 +752,16 @@ describe("Handler", () => {
       const jobs = await Promise.all(
         (["prepare", "process", "finalize"] as ErrorPhase[]).map((phase) =>
           runInTransactionWithNotify(queuert, ({ client }) =>
-            queuert.enqueueJobChain({
+            queuert.startJobSequence({
               client,
-              chainName: "test",
+              firstJobTypeName: "test",
               input: { phase },
             }),
           ),
         ),
       );
 
-      await waitForJobChainsCompleted(queuert, jobs);
+      await waitForJobSequencesCompleted(queuert, jobs);
 
       expect(errors).toHaveLength(3);
       expect(errors.find((e) => e.phase === "prepare")?.error).toBe("Rescheduled in prepare");
@@ -765,7 +777,7 @@ describe("Reaper", () => {
     notifyAdapter,
     runInTransactionWithNotify,
     withWorkers,
-    waitForJobChainsCompleted,
+    waitForJobSequencesCompleted,
     log,
     expect,
   }) => {
@@ -773,7 +785,7 @@ describe("Reaper", () => {
       stateAdapter,
       notifyAdapter,
       log,
-      queueDefinitions: defineUnionQueues<{
+      jobTypeDefinitions: defineUnionJobTypes<{
         test: {
           input: null;
           output: null;
@@ -786,7 +798,7 @@ describe("Reaper", () => {
     const { promise: endPromise, resolve: endResolve } = Promise.withResolvers<void>();
     const leaseConfig = { leaseMs: 1, renewIntervalMs: 100 } satisfies LeaseConfig;
 
-    const worker = queuert.createWorker().implementQueue({
+    const worker = queuert.createWorker().implementJobType({
       name: "test",
       handler: async ({ signal, prepare }) => {
         const [{ finalize }] = await prepare({ mode: "staged" });
@@ -814,31 +826,29 @@ describe("Reaper", () => {
         await worker.start({ defaultLeaseConfig: leaseConfig }),
       ],
       async () => {
-        const failJobChain = await runInTransactionWithNotify(queuert, ({ client }) =>
-          queuert.enqueueJobChain({
+        const failJobSequence = await runInTransactionWithNotify(queuert, ({ client }) =>
+          queuert.startJobSequence({
             client,
-            chainName: "test",
+            firstJobTypeName: "test",
             input: null,
           }),
         );
 
         await startPromise;
 
-        const successJobChain = await runInTransactionWithNotify(queuert, ({ client }) =>
-          queuert.enqueueJobChain({
+        const successJobSequence = await runInTransactionWithNotify(queuert, ({ client }) =>
+          queuert.startJobSequence({
             client,
-            chainName: "test",
+            firstJobTypeName: "test",
             input: null,
           }),
         );
 
-        const [succeededSuccessJobChain, succeededFailJobChain] = await waitForJobChainsCompleted(
-          queuert,
-          [successJobChain, failJobChain],
-        );
+        const [succeededSuccessJobSequence, succeededFailJobSequence] =
+          await waitForJobSequencesCompleted(queuert, [successJobSequence, failJobSequence]);
 
-        expect(succeededSuccessJobChain.output).toEqual(null);
-        expect(succeededFailJobChain.output).toEqual(null);
+        expect(succeededSuccessJobSequence.output).toEqual(null);
+        expect(succeededFailJobSequence.output).toEqual(null);
 
         await endPromise;
       },
@@ -855,7 +865,7 @@ describe("Reaper", () => {
     notifyAdapter,
     runInTransactionWithNotify,
     withWorkers,
-    waitForJobChainsCompleted,
+    waitForJobSequencesCompleted,
     log,
     expect,
   }) => {
@@ -863,7 +873,7 @@ describe("Reaper", () => {
       stateAdapter,
       notifyAdapter,
       log,
-      queueDefinitions: defineUnionQueues<{
+      jobTypeDefinitions: defineUnionJobTypes<{
         test: {
           input: null;
           output: null;
@@ -876,7 +886,7 @@ describe("Reaper", () => {
     const { promise: endPromise, resolve: endResolve } = Promise.withResolvers<void>();
     const leaseConfig = { leaseMs: 1, renewIntervalMs: 100 } satisfies LeaseConfig;
 
-    const worker = queuert.createWorker().implementQueue({
+    const worker = queuert.createWorker().implementJobType({
       name: "test",
       handler: async ({ prepare }) => {
         const [{ finalize }] = await prepare({ mode: "staged" });
@@ -900,31 +910,29 @@ describe("Reaper", () => {
         await worker.start({ defaultLeaseConfig: leaseConfig }),
       ],
       async () => {
-        const failJobChain = await runInTransactionWithNotify(queuert, ({ client }) =>
-          queuert.enqueueJobChain({
+        const failJobSequence = await runInTransactionWithNotify(queuert, ({ client }) =>
+          queuert.startJobSequence({
             client,
-            chainName: "test",
+            firstJobTypeName: "test",
             input: null,
           }),
         );
 
         await startPromise;
 
-        const successJobChain = await runInTransactionWithNotify(queuert, ({ client }) =>
-          queuert.enqueueJobChain({
+        const successJobSequence = await runInTransactionWithNotify(queuert, ({ client }) =>
+          queuert.startJobSequence({
             client,
-            chainName: "test",
+            firstJobTypeName: "test",
             input: null,
           }),
         );
 
-        const [succeededSuccessJobChain, succeededFailJobChain] = await waitForJobChainsCompleted(
-          queuert,
-          [successJobChain, failJobChain],
-        );
+        const [succeededSuccessJobSequence, succeededFailJobSequence] =
+          await waitForJobSequencesCompleted(queuert, [successJobSequence, failJobSequence]);
 
-        expect(succeededSuccessJobChain.output).toEqual(null);
-        expect(succeededFailJobChain.output).toEqual(null);
+        expect(succeededSuccessJobSequence.output).toEqual(null);
+        expect(succeededFailJobSequence.output).toEqual(null);
 
         await endPromise;
       },
@@ -944,7 +952,7 @@ describe("Worker", () => {
     notifyAdapter,
     runInTransactionWithNotify,
     withWorkers,
-    waitForJobChainsCompleted,
+    waitForJobSequencesCompleted,
     log,
     expect,
   }) => {
@@ -954,7 +962,7 @@ describe("Worker", () => {
       stateAdapter,
       notifyAdapter,
       log,
-      queueDefinitions: defineUnionQueues<{
+      jobTypeDefinitions: defineUnionJobTypes<{
         test: {
           input: { jobNumber: number };
           output: { success: boolean };
@@ -962,7 +970,7 @@ describe("Worker", () => {
       }>(),
     });
 
-    const worker = queuert.createWorker().implementQueue({
+    const worker = queuert.createWorker().implementJobType({
       name: "test",
       handler: async ({ job, prepare }) => {
         processedJobs.push(job.input.jobNumber);
@@ -980,16 +988,16 @@ describe("Worker", () => {
       for (let i = 0; i < 5; i++) {
         jobs.push(
           await runInTransactionWithNotify(queuert, ({ client }) =>
-            queuert.enqueueJobChain({
+            queuert.startJobSequence({
               client: client,
-              chainName: "test",
+              firstJobTypeName: "test",
               input: { jobNumber: i },
             }),
           ),
         );
       }
 
-      await waitForJobChainsCompleted(queuert, jobs);
+      await waitForJobSequencesCompleted(queuert, jobs);
 
       expect(processedJobs).toEqual([0, 1, 2, 3, 4]);
     });
@@ -1000,7 +1008,7 @@ describe("Worker", () => {
     notifyAdapter,
     runInTransactionWithNotify,
     withWorkers,
-    waitForJobChainsCompleted,
+    waitForJobSequencesCompleted,
     log,
     expect,
   }) => {
@@ -1010,7 +1018,7 @@ describe("Worker", () => {
       stateAdapter,
       notifyAdapter,
       log,
-      queueDefinitions: defineUnionQueues<{
+      jobTypeDefinitions: defineUnionJobTypes<{
         test: {
           input: { jobNumber: number };
           output: { success: boolean };
@@ -1018,7 +1026,7 @@ describe("Worker", () => {
       }>(),
     });
 
-    const worker = queuert.createWorker().implementQueue({
+    const worker = queuert.createWorker().implementJobType({
       name: "test",
       handler: async ({ job, prepare }) => {
         processedJobs.push(job.input.jobNumber);
@@ -1036,16 +1044,16 @@ describe("Worker", () => {
       for (let i = 0; i < 5; i++) {
         jobs.push(
           await runInTransactionWithNotify(queuert, ({ client }) =>
-            queuert.enqueueJobChain({
+            queuert.startJobSequence({
               client: client,
-              chainName: "test",
+              firstJobTypeName: "test",
               input: { jobNumber: i },
             }),
           ),
         );
       }
 
-      await waitForJobChainsCompleted(queuert, jobs);
+      await waitForJobSequencesCompleted(queuert, jobs);
 
       expect(processedJobs).toEqual([0, 1, 2, 3, 4]);
     });
@@ -1053,12 +1061,12 @@ describe("Worker", () => {
 });
 
 describe("Chains", () => {
-  test("handles chained jobs", async ({
+  test("handles sequenced jobs", async ({
     stateAdapter,
     notifyAdapter,
     runInTransactionWithNotify,
     withWorkers,
-    waitForJobChainsCompleted,
+    waitForJobSequencesCompleted,
     log,
     expectLogs,
     expect,
@@ -1067,14 +1075,14 @@ describe("Chains", () => {
       stateAdapter,
       notifyAdapter,
       log,
-      queueDefinitions: defineUnionQueues<{
+      jobTypeDefinitions: defineUnionJobTypes<{
         linear: {
           input: { value: number };
-          output: DefineQueueRef<"linear_next">;
+          output: DefineJobTypeRef<"linear_next">;
         };
         linear_next: {
           input: { valueNext: number };
-          output: DefineQueueRef<"linear_next_next">;
+          output: DefineJobTypeRef<"linear_next_next">;
         };
         linear_next_next: {
           input: { valueNextNext: number };
@@ -1083,66 +1091,66 @@ describe("Chains", () => {
       }>(),
     });
 
-    let chainId: string;
+    let sequenceId: string;
     const originIds: string[] = [];
 
     const worker = queuert
       .createWorker()
-      .implementQueue({
+      .implementJobType({
         name: "linear",
         handler: async ({ job, prepare }) => {
-          expect(job.id).toEqual(chainId);
-          expect(job.chainId).toEqual(chainId);
+          expect(job.id).toEqual(sequenceId);
+          expect(job.sequenceId).toEqual(sequenceId);
           expect(job.originId).toBeNull();
-          expect(job.rootId).toEqual(chainId);
+          expect(job.rootId).toEqual(sequenceId);
           originIds.push(job.id);
 
           const [{ finalize }] = await prepare({ mode: "atomic" });
 
           return finalize(({ client, continueWith }) => {
             expectTypeOf<
-              Parameters<typeof continueWith>[0]["queueName"]
+              Parameters<typeof continueWith>[0]["typeName"]
             >().toEqualTypeOf<"linear_next">();
 
             return continueWith({
               client,
-              queueName: "linear_next",
+              typeName: "linear_next",
               input: { valueNext: job.input.value + 1 },
             });
           });
         },
       })
-      .implementQueue({
+      .implementJobType({
         name: "linear_next",
         handler: async ({ job, prepare }) => {
-          expect(job.id).not.toEqual(chainId);
-          expect(job.chainId).toEqual(chainId);
+          expect(job.id).not.toEqual(sequenceId);
+          expect(job.sequenceId).toEqual(sequenceId);
           expect(job.originId).toEqual(originIds[0]);
-          expect(job.rootId).toEqual(chainId);
+          expect(job.rootId).toEqual(sequenceId);
           originIds.push(job.id);
 
           const [{ finalize }] = await prepare({ mode: "atomic" });
 
           return finalize(({ client, continueWith }) => {
             expectTypeOf<
-              Parameters<typeof continueWith>[0]["queueName"]
+              Parameters<typeof continueWith>[0]["typeName"]
             >().toEqualTypeOf<"linear_next_next">();
 
             return continueWith({
               client,
-              queueName: "linear_next_next",
+              typeName: "linear_next_next",
               input: { valueNextNext: job.input.valueNext + 1 },
             });
           });
         },
       })
-      .implementQueue({
+      .implementJobType({
         name: "linear_next_next",
         handler: async ({ job, prepare }) => {
-          expect(job.id).not.toEqual(chainId);
-          expect(job.chainId).toEqual(chainId);
+          expect(job.id).not.toEqual(sequenceId);
+          expect(job.sequenceId).toEqual(sequenceId);
           expect(job.originId).toEqual(originIds[1]);
-          expect(job.rootId).toEqual(chainId);
+          expect(job.rootId).toEqual(sequenceId);
 
           const [{ finalize }] = await prepare({ mode: "atomic" });
 
@@ -1153,65 +1161,70 @@ describe("Chains", () => {
       });
 
     await withWorkers([await worker.start()], async () => {
-      const jobChain = await runInTransactionWithNotify(queuert, async ({ client }) => {
-        const jobChain = await queuert.enqueueJobChain({
+      const jobSequence = await runInTransactionWithNotify(queuert, async ({ client }) => {
+        const jobSequence = await queuert.startJobSequence({
           client,
-          chainName: "linear",
+          firstJobTypeName: "linear",
           input: { value: 1 },
         });
 
-        chainId = jobChain.id;
+        sequenceId = jobSequence.id;
 
-        return jobChain;
+        return jobSequence;
       });
-      expectTypeOf<CompletedJobChain<typeof jobChain>["output"]>().toEqualTypeOf<{
+      expectTypeOf<CompletedJobSequence<typeof jobSequence>["output"]>().toEqualTypeOf<{
         result: number;
       }>();
 
-      const [finishedJobChain] = await waitForJobChainsCompleted(queuert, [jobChain]);
+      const [finishedJobSequence] = await waitForJobSequencesCompleted(queuert, [jobSequence]);
 
-      expect(finishedJobChain.output).toEqual({ result: 3 });
+      expect(finishedJobSequence.output).toEqual({ result: 3 });
     });
 
     expectLogs([
       { type: "worker_started" },
-      { type: "job_chain_created", args: [{ chainName: "linear" }] },
-      { type: "job_created", args: [{ queueName: "linear" }] },
-      { type: "job_acquired", args: [{ queueName: "linear" }] },
-      {
-        type: "job_created",
-        args: [
-          { queueName: "linear_next", chainId: chainId!, rootId: chainId!, originId: originIds[0] },
-        ],
-      },
-      { type: "job_completed", args: [{ queueName: "linear" }] },
-      { type: "job_acquired", args: [{ queueName: "linear_next" }] },
+      { type: "job_sequence_created", args: [{ firstJobTypeName: "linear" }] },
+      { type: "job_created", args: [{ typeName: "linear" }] },
+      { type: "job_acquired", args: [{ typeName: "linear" }] },
       {
         type: "job_created",
         args: [
           {
-            queueName: "linear_next_next",
-            chainId: chainId!,
-            rootId: chainId!,
+            typeName: "linear_next",
+            sequenceId: sequenceId!,
+            rootId: sequenceId!,
+            originId: originIds[0],
+          },
+        ],
+      },
+      { type: "job_completed", args: [{ typeName: "linear" }] },
+      { type: "job_acquired", args: [{ typeName: "linear_next" }] },
+      {
+        type: "job_created",
+        args: [
+          {
+            typeName: "linear_next_next",
+            sequenceId: sequenceId!,
+            rootId: sequenceId!,
             originId: originIds[1],
           },
         ],
       },
-      { type: "job_completed", args: [{ queueName: "linear_next" }] },
-      { type: "job_acquired", args: [{ queueName: "linear_next_next" }] },
-      { type: "job_completed", args: [{ queueName: "linear_next_next" }] },
-      { type: "job_chain_completed", args: [{ chainName: "linear" }] },
+      { type: "job_completed", args: [{ typeName: "linear_next" }] },
+      { type: "job_acquired", args: [{ typeName: "linear_next_next" }] },
+      { type: "job_completed", args: [{ typeName: "linear_next_next" }] },
+      { type: "job_sequence_completed", args: [{ firstJobTypeName: "linear" }] },
       { type: "worker_stopping" },
       { type: "worker_stopped" },
     ]);
   });
 
-  test("handles branched chains", async ({
+  test("handles branched sequences", async ({
     stateAdapter,
     notifyAdapter,
     runInTransactionWithNotify,
     withWorkers,
-    waitForJobChainsCompleted,
+    waitForJobSequencesCompleted,
     log,
     expect,
   }) => {
@@ -1219,10 +1232,10 @@ describe("Chains", () => {
       stateAdapter,
       notifyAdapter,
       log,
-      queueDefinitions: defineUnionQueues<{
+      jobTypeDefinitions: defineUnionJobTypes<{
         main: {
           input: { value: number };
-          output: DefineQueueRef<"branch1"> | DefineQueueRef<"branch2">;
+          output: DefineJobTypeRef<"branch1"> | DefineJobTypeRef<"branch2">;
         };
         branch1: {
           input: { valueBranched: number };
@@ -1237,24 +1250,24 @@ describe("Chains", () => {
 
     const worker = queuert
       .createWorker()
-      .implementQueue({
+      .implementJobType({
         name: "main",
         handler: async ({ job, prepare }) => {
           const [{ finalize }] = await prepare({ mode: "atomic" });
           return finalize(({ client, continueWith }) => {
-            expectTypeOf<Parameters<typeof continueWith>[0]["queueName"]>().toEqualTypeOf<
+            expectTypeOf<Parameters<typeof continueWith>[0]["typeName"]>().toEqualTypeOf<
               "branch1" | "branch2"
             >();
 
             return continueWith({
               client,
-              queueName: job.input.value % 2 === 0 ? "branch1" : "branch2",
+              typeName: job.input.value % 2 === 0 ? "branch1" : "branch2",
               input: { valueBranched: job.input.value },
             });
           });
         },
       })
-      .implementQueue({
+      .implementJobType({
         name: "branch1",
         handler: async ({ job, prepare }) => {
           const [{ finalize }] = await prepare({ mode: "atomic" });
@@ -1263,7 +1276,7 @@ describe("Chains", () => {
           }));
         },
       })
-      .implementQueue({
+      .implementJobType({
         name: "branch2",
         handler: async ({ job, prepare }) => {
           const [{ finalize }] = await prepare({ mode: "atomic" });
@@ -1274,28 +1287,28 @@ describe("Chains", () => {
       });
 
     await withWorkers([await worker.start()], async () => {
-      const evenJobChain = await runInTransactionWithNotify(queuert, ({ client }) =>
-        queuert.enqueueJobChain({
+      const evenJobSequence = await runInTransactionWithNotify(queuert, ({ client }) =>
+        queuert.startJobSequence({
           client,
-          chainName: "main",
+          firstJobTypeName: "main",
           input: { value: 2 },
         }),
       );
-      const oddJobChain = await runInTransactionWithNotify(queuert, ({ client }) =>
-        queuert.enqueueJobChain({
+      const oddJobSequence = await runInTransactionWithNotify(queuert, ({ client }) =>
+        queuert.startJobSequence({
           client,
-          chainName: "main",
+          firstJobTypeName: "main",
           input: { value: 3 },
         }),
       );
 
-      expectTypeOf<CompletedJobChain<typeof evenJobChain>["output"]>().toEqualTypeOf<
+      expectTypeOf<CompletedJobSequence<typeof evenJobSequence>["output"]>().toEqualTypeOf<
         { result1: number } | { result2: number }
       >();
 
-      const [succeededJobEven, succeededJobOdd] = await waitForJobChainsCompleted(queuert, [
-        evenJobChain,
-        oddJobChain,
+      const [succeededJobEven, succeededJobOdd] = await waitForJobSequencesCompleted(queuert, [
+        evenJobSequence,
+        oddJobSequence,
       ]);
 
       expect(succeededJobEven.output).toEqual({ result1: 2 });
@@ -1308,7 +1321,7 @@ describe("Chains", () => {
     notifyAdapter,
     runInTransactionWithNotify,
     withWorkers,
-    waitForJobChainsCompleted,
+    waitForJobSequencesCompleted,
     log,
     expect,
   }) => {
@@ -1316,25 +1329,25 @@ describe("Chains", () => {
       stateAdapter,
       notifyAdapter,
       log,
-      queueDefinitions: defineUnionQueues<{
+      jobTypeDefinitions: defineUnionJobTypes<{
         loop: {
           input: { counter: number };
-          output: DefineQueueRef<"loop"> | { done: true };
+          output: DefineJobTypeRef<"loop"> | { done: true };
         };
       }>(),
     });
 
-    const worker = queuert.createWorker().implementQueue({
+    const worker = queuert.createWorker().implementJobType({
       name: "loop",
       handler: async ({ job, prepare }) => {
         const [{ finalize }] = await prepare({ mode: "atomic" });
         return finalize(({ client, continueWith }) => {
-          expectTypeOf<Parameters<typeof continueWith>[0]["queueName"]>().toEqualTypeOf<"loop">();
+          expectTypeOf<Parameters<typeof continueWith>[0]["typeName"]>().toEqualTypeOf<"loop">();
 
           return job.input.counter < 3
             ? continueWith({
                 client,
-                queueName: "loop",
+                typeName: "loop",
                 input: { counter: job.input.counter + 1 },
               })
             : { done: true };
@@ -1343,19 +1356,21 @@ describe("Chains", () => {
     });
 
     await withWorkers([await worker.start()], async () => {
-      const jobChain = await runInTransactionWithNotify(queuert, ({ client }) =>
-        queuert.enqueueJobChain({
+      const jobSequence = await runInTransactionWithNotify(queuert, ({ client }) =>
+        queuert.startJobSequence({
           client,
-          chainName: "loop",
+          firstJobTypeName: "loop",
           input: { counter: 0 },
         }),
       );
 
-      expectTypeOf<CompletedJobChain<typeof jobChain>["output"]>().toEqualTypeOf<{ done: true }>();
+      expectTypeOf<CompletedJobSequence<typeof jobSequence>["output"]>().toEqualTypeOf<{
+        done: true;
+      }>();
 
-      const [succeededJobChain] = await waitForJobChainsCompleted(queuert, [jobChain]);
+      const [succeededJobSequence] = await waitForJobSequencesCompleted(queuert, [jobSequence]);
 
-      expect(succeededJobChain.output).toEqual({ done: true });
+      expect(succeededJobSequence.output).toEqual({ done: true });
     });
   });
 
@@ -1364,7 +1379,7 @@ describe("Chains", () => {
     notifyAdapter,
     runInTransactionWithNotify,
     withWorkers,
-    waitForJobChainsCompleted,
+    waitForJobSequencesCompleted,
     log,
     expect,
   }) => {
@@ -1372,48 +1387,46 @@ describe("Chains", () => {
       stateAdapter,
       notifyAdapter,
       log,
-      queueDefinitions: defineUnionQueues<{
+      jobTypeDefinitions: defineUnionJobTypes<{
         start: {
           input: { value: number };
-          output: DefineQueueRef<"end">;
+          output: DefineJobTypeRef<"end">;
         };
         end: {
           input: { result: number };
-          output: DefineQueueRef<"start"> | { finalResult: number };
+          output: DefineJobTypeRef<"start"> | { finalResult: number };
         };
       }>(),
     });
 
     const worker = queuert
       .createWorker()
-      .implementQueue({
+      .implementJobType({
         name: "start",
         handler: async ({ job, prepare }) => {
           const [{ finalize }] = await prepare({ mode: "atomic" });
           return finalize(({ client, continueWith }) => {
-            expectTypeOf<Parameters<typeof continueWith>[0]["queueName"]>().toEqualTypeOf<"end">();
+            expectTypeOf<Parameters<typeof continueWith>[0]["typeName"]>().toEqualTypeOf<"end">();
 
             return continueWith({
               client,
-              queueName: "end",
+              typeName: "end",
               input: { result: job.input.value + 1 },
             });
           });
         },
       })
-      .implementQueue({
+      .implementJobType({
         name: "end",
         handler: async ({ job, prepare }) => {
           const [{ finalize }] = await prepare({ mode: "atomic" });
           return finalize(({ client, continueWith }) => {
-            expectTypeOf<
-              Parameters<typeof continueWith>[0]["queueName"]
-            >().toEqualTypeOf<"start">();
+            expectTypeOf<Parameters<typeof continueWith>[0]["typeName"]>().toEqualTypeOf<"start">();
 
             if (job.input.result < 3) {
               return continueWith({
                 client,
-                queueName: "start",
+                typeName: "start",
                 input: { value: job.input.result },
               });
             } else {
@@ -1424,32 +1437,32 @@ describe("Chains", () => {
       });
 
     await withWorkers([await worker.start()], async () => {
-      const jobChain = await runInTransactionWithNotify(queuert, ({ client }) =>
-        queuert.enqueueJobChain({
+      const jobSequence = await runInTransactionWithNotify(queuert, ({ client }) =>
+        queuert.startJobSequence({
           client,
-          chainName: "start",
+          firstJobTypeName: "start",
           input: { value: 0 },
         }),
       );
 
-      expectTypeOf<CompletedJobChain<typeof jobChain>["output"]>().toEqualTypeOf<{
+      expectTypeOf<CompletedJobSequence<typeof jobSequence>["output"]>().toEqualTypeOf<{
         finalResult: number;
       }>();
 
-      const [succeededJobChain] = await waitForJobChainsCompleted(queuert, [jobChain]);
+      const [succeededJobSequence] = await waitForJobSequencesCompleted(queuert, [jobSequence]);
 
-      expect(succeededJobChain.output).toEqual({ finalResult: 3 });
+      expect(succeededJobSequence.output).toEqual({ finalResult: 3 });
     });
   });
 });
 
 describe("Blocker Chains", () => {
-  test("handles long blocker chains", async ({
+  test("handles long blocker sequences", async ({
     stateAdapter,
     notifyAdapter,
     runInTransactionWithNotify,
     withWorkers,
-    waitForJobChainsCompleted,
+    waitForJobSequencesCompleted,
     log,
     expect,
     expectLogs,
@@ -1458,10 +1471,10 @@ describe("Blocker Chains", () => {
       stateAdapter,
       notifyAdapter,
       log,
-      queueDefinitions: defineUnionQueues<{
+      jobTypeDefinitions: defineUnionJobTypes<{
         blocker: {
           input: { value: number };
-          output: DefineQueueRef<"blocker"> | { done: true };
+          output: DefineJobTypeRef<"blocker"> | { done: true };
         };
         main: {
           input: { start: boolean };
@@ -1476,10 +1489,10 @@ describe("Blocker Chains", () => {
 
     const worker = queuert
       .createWorker()
-      .implementQueue({
+      .implementJobType({
         name: "blocker",
         handler: async ({ job, prepare }) => {
-          expect(job.chainId).toEqual(dependencyChainId);
+          expect(job.sequenceId).toEqual(dependencyChainId);
           expect(job.rootId).toEqual(mainChainId);
           expect(job.originId).toEqual(originId);
           originId = job.id;
@@ -1490,26 +1503,26 @@ describe("Blocker Chains", () => {
             job.input.value < 1
               ? continueWith({
                   client,
-                  queueName: "blocker",
+                  typeName: "blocker",
                   input: { value: job.input.value + 1 },
                 })
               : { done: true },
           );
         },
       })
-      .implementQueue({
+      .implementJobType({
         name: "main",
-        enqueueBlockerJobChains: async ({ job, client }) => {
-          const dependencyJobChain = await queuert.enqueueJobChain({
+        enqueueBlockerJobSequences: async ({ job, client }) => {
+          const dependencyJobSequence = await queuert.startJobSequence({
             client,
-            chainName: "blocker",
+            firstJobTypeName: "blocker",
             input: { value: 0 },
           });
 
           originId = job.id;
-          dependencyChainId = dependencyJobChain.id;
+          dependencyChainId = dependencyJobSequence.id;
 
-          return [dependencyJobChain];
+          return [dependencyJobSequence];
         },
         handler: async ({ job, blockers: [blocker], prepare }) => {
           expectTypeOf<(typeof blocker)["output"]>().toEqualTypeOf<{
@@ -1528,61 +1541,61 @@ describe("Blocker Chains", () => {
       });
 
     await withWorkers([await worker.start()], async () => {
-      const jobChain = await runInTransactionWithNotify(queuert, async ({ client }) => {
-        const jobChain = await queuert.enqueueJobChain({
+      const jobSequence = await runInTransactionWithNotify(queuert, async ({ client }) => {
+        const jobSequence = await queuert.startJobSequence({
           client,
-          chainName: "main",
+          firstJobTypeName: "main",
           input: { start: true },
         });
 
-        mainChainId = jobChain.id;
+        mainChainId = jobSequence.id;
 
-        return jobChain;
+        return jobSequence;
       });
 
-      const [succeededJobChain] = await waitForJobChainsCompleted(queuert, [jobChain]);
+      const [succeededJobSequence] = await waitForJobSequencesCompleted(queuert, [jobSequence]);
 
-      expect(succeededJobChain.output).toEqual({ finalResult: 2 });
+      expect(succeededJobSequence.output).toEqual({ finalResult: 2 });
     });
 
     expectLogs([
       { type: "worker_started" },
       // main chain created
-      { type: "job_chain_created", args: [{ chainName: "main" }] },
-      { type: "job_created", args: [{ queueName: "main" }] },
-      { type: "job_acquired", args: [{ queueName: "main" }] },
+      { type: "job_sequence_created", args: [{ firstJobTypeName: "main" }] },
+      { type: "job_created", args: [{ typeName: "main" }] },
+      { type: "job_acquired", args: [{ typeName: "main" }] },
       // blocker chain created as dependency
       {
-        type: "job_chain_created",
-        args: [{ chainName: "blocker", rootId: mainChainId!, originId: mainChainId! }],
+        type: "job_sequence_created",
+        args: [{ firstJobTypeName: "blocker", rootId: mainChainId!, originId: mainChainId! }],
       },
-      { type: "job_created", args: [{ queueName: "blocker" }] },
-      { type: "job_blockers_added", args: [{ queueName: "main" }] },
-      { type: "job_blocked", args: [{ queueName: "main" }] },
+      { type: "job_created", args: [{ typeName: "blocker" }] },
+      { type: "job_blockers_added", args: [{ typeName: "main" }] },
+      { type: "job_blocked", args: [{ typeName: "main" }] },
       // first blocker job processed
-      { type: "job_acquired", args: [{ queueName: "blocker" }] },
-      { type: "job_created", args: [{ queueName: "blocker" }] },
-      { type: "job_completed", args: [{ queueName: "blocker" }] },
+      { type: "job_acquired", args: [{ typeName: "blocker" }] },
+      { type: "job_created", args: [{ typeName: "blocker" }] },
+      { type: "job_completed", args: [{ typeName: "blocker" }] },
       // second blocker job processed, chain completes
-      { type: "job_acquired", args: [{ queueName: "blocker" }] },
-      { type: "job_completed", args: [{ queueName: "blocker" }] },
-      { type: "job_chain_completed", args: [{ chainName: "blocker" }] },
+      { type: "job_acquired", args: [{ typeName: "blocker" }] },
+      { type: "job_completed", args: [{ typeName: "blocker" }] },
+      { type: "job_sequence_completed", args: [{ firstJobTypeName: "blocker" }] },
       // main job unblocked and completed
-      { type: "job_chain_unblocked_jobs", args: [{ chainName: "blocker" }] },
-      { type: "job_acquired", args: [{ queueName: "main" }] },
-      { type: "job_completed", args: [{ queueName: "main" }] },
-      { type: "job_chain_completed", args: [{ chainName: "main" }] },
+      { type: "job_sequence_unblocked_jobs", args: [{ firstJobTypeName: "blocker" }] },
+      { type: "job_acquired", args: [{ typeName: "main" }] },
+      { type: "job_completed", args: [{ typeName: "main" }] },
+      { type: "job_sequence_completed", args: [{ firstJobTypeName: "main" }] },
       { type: "worker_stopping" },
       { type: "worker_stopped" },
     ]);
   });
 
-  test("handles finalized blocker chains", async ({
+  test("handles finalized blocker sequences", async ({
     stateAdapter,
     notifyAdapter,
     runInTransactionWithNotify,
     withWorkers,
-    waitForJobChainsCompleted,
+    waitForJobSequencesCompleted,
     log,
     expect,
   }) => {
@@ -1590,7 +1603,7 @@ describe("Blocker Chains", () => {
       stateAdapter,
       notifyAdapter,
       log,
-      queueDefinitions: defineUnionQueues<{
+      jobTypeDefinitions: defineUnionJobTypes<{
         blocker: {
           input: { value: number };
           output: { result: number };
@@ -1604,7 +1617,7 @@ describe("Blocker Chains", () => {
 
     const worker = queuert
       .createWorker()
-      .implementQueue({
+      .implementJobType({
         name: "blocker",
         handler: async ({ job, prepare }) => {
           expect(job.originId).toBeNull();
@@ -1614,13 +1627,13 @@ describe("Blocker Chains", () => {
           return finalize(() => ({ result: job.input.value }));
         },
       })
-      .implementQueue({
+      .implementJobType({
         name: "main",
-        enqueueBlockerJobChains: async ({ job, client }) => {
-          const blockerJob = await queuert.getJobChain({
+        enqueueBlockerJobSequences: async ({ job, client }) => {
+          const blockerJob = await queuert.getJobSequence({
             client,
             id: job.input.blockerJobId,
-            chainName: "blocker",
+            firstJobTypeName: "blocker",
           });
           if (!blockerJob) {
             throw new Error("Blocker job not found");
@@ -1639,40 +1652,40 @@ describe("Blocker Chains", () => {
       });
 
     await withWorkers([await worker.start()], async () => {
-      const blockerJobChain = await runInTransactionWithNotify(queuert, ({ client }) =>
-        queuert.enqueueJobChain({
+      const blockerJobSequence = await runInTransactionWithNotify(queuert, ({ client }) =>
+        queuert.startJobSequence({
           client,
-          chainName: "blocker",
+          firstJobTypeName: "blocker",
           input: { value: 1 },
         }),
       );
 
-      const [succeededBlockerJobChain] = await waitForJobChainsCompleted(queuert, [
-        blockerJobChain,
+      const [succeededBlockerJobSequence] = await waitForJobSequencesCompleted(queuert, [
+        blockerJobSequence,
       ]);
 
-      const jobChain = await runInTransactionWithNotify(queuert, ({ client }) =>
-        queuert.enqueueJobChain({
+      const jobSequence = await runInTransactionWithNotify(queuert, ({ client }) =>
+        queuert.startJobSequence({
           client,
-          chainName: "main",
-          input: { blockerJobId: blockerJobChain.id },
+          firstJobTypeName: "main",
+          input: { blockerJobId: blockerJobSequence.id },
         }),
       );
 
-      const [succeededJobChain] = await waitForJobChainsCompleted(queuert, [jobChain]);
+      const [succeededJobSequence] = await waitForJobSequencesCompleted(queuert, [jobSequence]);
 
-      expect(succeededJobChain.output).toEqual({
-        finalResult: succeededBlockerJobChain.output.result,
+      expect(succeededJobSequence.output).toEqual({
+        finalResult: succeededBlockerJobSequence.output.result,
       });
     });
   });
 
-  test("handles blocker chains spawned during processing", async ({
+  test("handles blocker sequences spawned during processing", async ({
     stateAdapter,
     notifyAdapter,
     runInTransactionWithNotify,
     withWorkers,
-    waitForJobChainsCompleted,
+    waitForJobSequencesCompleted,
     log,
     expect,
   }) => {
@@ -1680,7 +1693,7 @@ describe("Blocker Chains", () => {
       stateAdapter,
       notifyAdapter,
       log,
-      queueDefinitions: defineUnionQueues<{
+      jobTypeDefinitions: defineUnionJobTypes<{
         inner: {
           input: null;
           output: null;
@@ -1692,12 +1705,12 @@ describe("Blocker Chains", () => {
       }>(),
     });
 
-    let childJobChains: JobChain<"inner", null, null>[] = [];
+    let childJobSequences: JobSequence<"inner", null, null>[] = [];
     let originId: string;
 
     const worker = queuert
       .createWorker()
-      .implementQueue({
+      .implementJobType({
         name: "inner",
         handler: async ({ job, prepare }) => {
           const [{ finalize }] = await prepare({ mode: "atomic" });
@@ -1707,40 +1720,40 @@ describe("Blocker Chains", () => {
           });
         },
       })
-      .implementQueue({
+      .implementJobType({
         name: "outer",
         handler: async ({ job, prepare }) => {
           expect(job.originId).toBeNull();
           originId = job.id;
 
           const [{ finalize }] = await prepare({ mode: "staged" }, async ({ client }) => {
-            childJobChains.push(
+            childJobSequences.push(
               await queuert.withNotify(() =>
-                queuert.enqueueJobChain({
+                queuert.startJobSequence({
                   client,
-                  chainName: "inner",
+                  firstJobTypeName: "inner",
                   input: null,
                 }),
               ),
             );
           });
 
-          childJobChains.push(
+          childJobSequences.push(
             await runInTransactionWithNotify(queuert, ({ client }) =>
-              queuert.enqueueJobChain({
+              queuert.startJobSequence({
                 client,
-                chainName: "inner",
+                firstJobTypeName: "inner",
                 input: null,
               }),
             ),
           );
 
           return finalize(async ({ client }) => {
-            childJobChains.push(
+            childJobSequences.push(
               await queuert.withNotify(() =>
-                queuert.enqueueJobChain({
+                queuert.startJobSequence({
                   client,
-                  chainName: "inner",
+                  firstJobTypeName: "inner",
                   input: null,
                 }),
               ),
@@ -1752,19 +1765,22 @@ describe("Blocker Chains", () => {
       });
 
     await withWorkers([await worker.start()], async () => {
-      const jobChain = await runInTransactionWithNotify(queuert, ({ client }) =>
-        queuert.enqueueJobChain({
+      const jobSequence = await runInTransactionWithNotify(queuert, ({ client }) =>
+        queuert.startJobSequence({
           client,
-          chainName: "outer",
+          firstJobTypeName: "outer",
           input: null,
         }),
       );
 
-      await waitForJobChainsCompleted(queuert, [jobChain]);
+      await waitForJobSequencesCompleted(queuert, [jobSequence]);
 
-      const succeededChildJobChains = await waitForJobChainsCompleted(queuert, childJobChains);
+      const succeededChildJobSequences = await waitForJobSequencesCompleted(
+        queuert,
+        childJobSequences,
+      );
 
-      expect(succeededChildJobChains).toHaveLength(3);
+      expect(succeededChildJobSequences).toHaveLength(3);
     });
   });
 
@@ -1773,7 +1789,7 @@ describe("Blocker Chains", () => {
     notifyAdapter,
     runInTransactionWithNotify,
     withWorkers,
-    waitForJobChainsCompleted,
+    waitForJobSequencesCompleted,
     log,
     expect,
   }) => {
@@ -1781,7 +1797,7 @@ describe("Blocker Chains", () => {
       stateAdapter,
       notifyAdapter,
       log,
-      queueDefinitions: defineUnionQueues<{
+      jobTypeDefinitions: defineUnionJobTypes<{
         test: {
           input: { value: number };
           output: { valueNext: number };
@@ -1793,21 +1809,21 @@ describe("Blocker Chains", () => {
       }>(),
     });
 
-    const worker1 = queuert.createWorker().implementQueue({
+    const worker1 = queuert.createWorker().implementJobType({
       name: "test",
       handler: async ({ job, prepare }) => {
         const [{ finalize }] = await prepare({ mode: "atomic" });
         return finalize(({ continueWith, client }) =>
           continueWith({
             client,
-            queueName: "finish",
+            typeName: "finish",
             input: { valueNext: job.input.value + 1 },
           }),
         );
       },
     });
 
-    const worker2 = queuert.createWorker().implementQueue({
+    const worker2 = queuert.createWorker().implementJobType({
       name: "finish",
       handler: async ({ job, prepare }) => {
         const [{ finalize }] = await prepare({ mode: "atomic" });
@@ -1818,26 +1834,26 @@ describe("Blocker Chains", () => {
     });
 
     await withWorkers([await worker1.start(), await worker2.start()], async () => {
-      const jobChain = await runInTransactionWithNotify(queuert, ({ client }) =>
-        queuert.enqueueJobChain({
+      const jobSequence = await runInTransactionWithNotify(queuert, ({ client }) =>
+        queuert.startJobSequence({
           client,
-          chainName: "test",
+          firstJobTypeName: "test",
           input: { value: 1 },
         }),
       );
 
-      const [finishedJobChain] = await waitForJobChainsCompleted(queuert, [jobChain]);
+      const [finishedJobSequence] = await waitForJobSequencesCompleted(queuert, [jobSequence]);
 
-      expect(finishedJobChain.output).toEqual({ result: 3 });
+      expect(finishedJobSequence.output).toEqual({ result: 3 });
     });
   });
 
-  test("handles multiple blocker chains", async ({
+  test("handles multiple blocker sequences", async ({
     stateAdapter,
     notifyAdapter,
     runInTransactionWithNotify,
     withWorkers,
-    waitForJobChainsCompleted,
+    waitForJobSequencesCompleted,
     log,
     expect,
   }) => {
@@ -1845,7 +1861,7 @@ describe("Blocker Chains", () => {
       stateAdapter,
       notifyAdapter,
       log,
-      queueDefinitions: defineUnionQueues<{
+      jobTypeDefinitions: defineUnionJobTypes<{
         blocker: {
           input: { value: number };
           output: { result: number };
@@ -1859,26 +1875,26 @@ describe("Blocker Chains", () => {
 
     const worker = queuert
       .createWorker()
-      .implementQueue({
+      .implementJobType({
         name: "blocker",
         handler: async ({ job, prepare }) => {
           const [{ finalize }] = await prepare({ mode: "atomic" });
           return finalize(() => ({ result: job.input.value }));
         },
       })
-      .implementQueue({
+      .implementJobType({
         name: "main",
-        enqueueBlockerJobChains: async ({ client, job }) => {
-          const blockerChains = await Promise.all(
+        enqueueBlockerJobSequences: async ({ client, job }) => {
+          const blockerSequences = await Promise.all(
             Array.from({ length: job.input.count }, (_, i) =>
-              queuert.enqueueJobChain({
+              queuert.startJobSequence({
                 client,
-                chainName: "blocker",
+                firstJobTypeName: "blocker",
                 input: { value: i + 1 },
               }),
             ),
           );
-          return blockerChains;
+          return blockerSequences;
         },
         handler: async ({ blockers, prepare }) => {
           const [{ finalize }] = await prepare({ mode: "atomic" });
@@ -1889,17 +1905,17 @@ describe("Blocker Chains", () => {
       });
 
     await withWorkers([await worker.start()], async () => {
-      const jobChain = await runInTransactionWithNotify(queuert, ({ client }) =>
-        queuert.enqueueJobChain({
+      const jobSequence = await runInTransactionWithNotify(queuert, ({ client }) =>
+        queuert.startJobSequence({
           client,
-          chainName: "main",
+          firstJobTypeName: "main",
           input: { count: 5 },
         }),
       );
 
-      const [succeededJobChain] = await waitForJobChainsCompleted(queuert, [jobChain]);
+      const [succeededJobSequence] = await waitForJobSequencesCompleted(queuert, [jobSequence]);
 
-      expect(succeededJobChain.output).toEqual({
+      expect(succeededJobSequence.output).toEqual({
         finalResult: Array.from({ length: 5 }, (_, i) => i + 1),
       });
     });
@@ -1912,7 +1928,7 @@ describe("Deduplication", () => {
     notifyAdapter,
     runInTransactionWithNotify,
     withWorkers,
-    waitForJobChainsCompleted,
+    waitForJobSequencesCompleted,
     log,
     expect,
   }) => {
@@ -1920,7 +1936,7 @@ describe("Deduplication", () => {
       stateAdapter,
       notifyAdapter,
       log,
-      queueDefinitions: defineUnionQueues<{
+      jobTypeDefinitions: defineUnionJobTypes<{
         test: {
           input: { value: number };
           output: { result: number };
@@ -1928,7 +1944,7 @@ describe("Deduplication", () => {
       }>(),
     });
 
-    const worker = queuert.createWorker().implementQueue({
+    const worker = queuert.createWorker().implementJobType({
       name: "test",
       handler: async ({ job, prepare }) => {
         const [{ finalize }] = await prepare({ mode: "atomic" });
@@ -1940,21 +1956,21 @@ describe("Deduplication", () => {
       const [chain1, chain2, chain3] = await runInTransactionWithNotify(
         queuert,
         async ({ client }) => [
-          await queuert.enqueueJobChain({
+          await queuert.startJobSequence({
             client,
-            chainName: "test",
+            firstJobTypeName: "test",
             input: { value: 1 },
             deduplication: { key: "same-key" },
           }),
-          await queuert.enqueueJobChain({
+          await queuert.startJobSequence({
             client,
-            chainName: "test",
+            firstJobTypeName: "test",
             input: { value: 2 },
             deduplication: { key: "same-key" },
           }),
-          await queuert.enqueueJobChain({
+          await queuert.startJobSequence({
             client,
-            chainName: "test",
+            firstJobTypeName: "test",
             input: { value: 3 },
             deduplication: { key: "different-key" },
           }),
@@ -1967,7 +1983,7 @@ describe("Deduplication", () => {
       expect(chain3.deduplicated).toBe(false);
       expect(chain3.id).not.toBe(chain1.id);
 
-      const [completed1, completed2, completed3] = await waitForJobChainsCompleted(queuert, [
+      const [completed1, completed2, completed3] = await waitForJobSequencesCompleted(queuert, [
         chain1,
         chain2,
         chain3,
@@ -1984,7 +2000,7 @@ describe("Deduplication", () => {
     notifyAdapter,
     runInTransactionWithNotify,
     withWorkers,
-    waitForJobChainsCompleted,
+    waitForJobSequencesCompleted,
     log,
     expect,
   }) => {
@@ -1992,7 +2008,7 @@ describe("Deduplication", () => {
       stateAdapter,
       notifyAdapter,
       log,
-      queueDefinitions: defineUnionQueues<{
+      jobTypeDefinitions: defineUnionJobTypes<{
         test: {
           input: { value: number };
           output: { result: number };
@@ -2000,7 +2016,7 @@ describe("Deduplication", () => {
       }>(),
     });
 
-    const worker = queuert.createWorker().implementQueue({
+    const worker = queuert.createWorker().implementJobType({
       name: "test",
       handler: async ({ job, prepare }) => {
         const [{ finalize }] = await prepare({ mode: "atomic" });
@@ -2010,20 +2026,20 @@ describe("Deduplication", () => {
 
     await withWorkers([await worker.start()], async () => {
       const allChain1 = await runInTransactionWithNotify(queuert, ({ client }) =>
-        queuert.enqueueJobChain({
+        queuert.startJobSequence({
           client,
-          chainName: "test",
+          firstJobTypeName: "test",
           input: { value: 1 },
           deduplication: { key: "all-key", strategy: "all" },
         }),
       );
 
-      await waitForJobChainsCompleted(queuert, [allChain1]);
+      await waitForJobSequencesCompleted(queuert, [allChain1]);
 
       const allChain2 = await runInTransactionWithNotify(queuert, ({ client }) =>
-        queuert.enqueueJobChain({
+        queuert.startJobSequence({
           client,
-          chainName: "test",
+          firstJobTypeName: "test",
           input: { value: 2 },
           deduplication: { key: "all-key", strategy: "all" },
         }),
@@ -2033,20 +2049,20 @@ describe("Deduplication", () => {
       expect(allChain2.id).toBe(allChain1.id);
 
       const finalizedChain1 = await runInTransactionWithNotify(queuert, ({ client }) =>
-        queuert.enqueueJobChain({
+        queuert.startJobSequence({
           client,
-          chainName: "test",
+          firstJobTypeName: "test",
           input: { value: 3 },
           deduplication: { key: "finalized-key", strategy: "finalized" },
         }),
       );
 
-      await waitForJobChainsCompleted(queuert, [finalizedChain1]);
+      await waitForJobSequencesCompleted(queuert, [finalizedChain1]);
 
       const finalizedChain2 = await runInTransactionWithNotify(queuert, ({ client }) =>
-        queuert.enqueueJobChain({
+        queuert.startJobSequence({
           client,
-          chainName: "test",
+          firstJobTypeName: "test",
           input: { value: 4 },
           deduplication: { key: "finalized-key", strategy: "finalized" },
         }),
@@ -2055,7 +2071,7 @@ describe("Deduplication", () => {
       expect(finalizedChain2.deduplicated).toBe(false);
       expect(finalizedChain2.id).not.toBe(finalizedChain1.id);
 
-      const [completed] = await waitForJobChainsCompleted(queuert, [finalizedChain2]);
+      const [completed] = await waitForJobSequencesCompleted(queuert, [finalizedChain2]);
       expect(completed.output).toEqual({ result: 4 });
     });
   });
@@ -2065,7 +2081,7 @@ describe("Deduplication", () => {
     notifyAdapter,
     runInTransactionWithNotify,
     withWorkers,
-    waitForJobChainsCompleted,
+    waitForJobSequencesCompleted,
     log,
     expect,
   }) => {
@@ -2073,7 +2089,7 @@ describe("Deduplication", () => {
       stateAdapter,
       notifyAdapter,
       log,
-      queueDefinitions: defineUnionQueues<{
+      jobTypeDefinitions: defineUnionJobTypes<{
         test: {
           input: { value: number };
           output: { result: number };
@@ -2081,7 +2097,7 @@ describe("Deduplication", () => {
       }>(),
     });
 
-    const worker = queuert.createWorker().implementQueue({
+    const worker = queuert.createWorker().implementJobType({
       name: "test",
       handler: async ({ job, prepare }) => {
         const [{ finalize }] = await prepare({ mode: "atomic" });
@@ -2091,9 +2107,9 @@ describe("Deduplication", () => {
 
     await withWorkers([await worker.start()], async () => {
       const allChain1 = await runInTransactionWithNotify(queuert, ({ client }) =>
-        queuert.enqueueJobChain({
+        queuert.startJobSequence({
           client,
-          chainName: "test",
+          firstJobTypeName: "test",
           input: { value: 1 },
           deduplication: { key: "all-key", strategy: "all", windowMs: 50 },
         }),
@@ -2104,9 +2120,9 @@ describe("Deduplication", () => {
       await sleep(100);
 
       const allChain2 = await runInTransactionWithNotify(queuert, ({ client }) =>
-        queuert.enqueueJobChain({
+        queuert.startJobSequence({
           client,
-          chainName: "test",
+          firstJobTypeName: "test",
           input: { value: 2 },
           deduplication: { key: "all-key", strategy: "all", windowMs: 50 },
         }),
@@ -2116,22 +2132,22 @@ describe("Deduplication", () => {
       expect(allChain2.id).not.toBe(allChain1.id);
 
       const finalizedChain1 = await runInTransactionWithNotify(queuert, ({ client }) =>
-        queuert.enqueueJobChain({
+        queuert.startJobSequence({
           client,
-          chainName: "test",
+          firstJobTypeName: "test",
           input: { value: 3 },
           deduplication: { key: "finalized-key", strategy: "finalized", windowMs: 50 },
         }),
       );
 
-      await waitForJobChainsCompleted(queuert, [finalizedChain1]);
+      await waitForJobSequencesCompleted(queuert, [finalizedChain1]);
 
       await sleep(100);
 
       const finalizedChain2 = await runInTransactionWithNotify(queuert, ({ client }) =>
-        queuert.enqueueJobChain({
+        queuert.startJobSequence({
           client,
-          chainName: "test",
+          firstJobTypeName: "test",
           input: { value: 4 },
           deduplication: { key: "finalized-key", strategy: "finalized", windowMs: 50 },
         }),
@@ -2149,11 +2165,11 @@ describe("Resilience", () => {
     stateAdapter,
     notifyAdapter,
     withWorkers,
-    waitForJobChainsCompleted,
+    waitForJobSequencesCompleted,
     runInTransactionWithNotify,
     log,
   }) => {
-    const queueDefinitions = defineUnionQueues<{
+    const jobTypeDefinitions = defineUnionJobTypes<{
       test: {
         input: { value: number; atomic: boolean };
         output: { result: number };
@@ -2164,16 +2180,16 @@ describe("Resilience", () => {
       stateAdapter,
       notifyAdapter,
       log,
-      queueDefinitions,
+      jobTypeDefinitions,
     });
     const flakyQueuert = await createQueuert({
       stateAdapter: flakyStateAdapter,
       notifyAdapter,
       log,
-      queueDefinitions,
+      jobTypeDefinitions,
     });
 
-    const flakyWorker = flakyQueuert.createWorker().implementQueue({
+    const flakyWorker = flakyQueuert.createWorker().implementJobType({
       name: "test",
       handler: async ({ job, prepare }) => {
         const [{ finalize }] = await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
@@ -2206,16 +2222,16 @@ describe("Resilience", () => {
         const chains = await runInTransactionWithNotify(queuert, ({ client }) =>
           Promise.all(
             Array.from({ length: 20 }, async (_, i) =>
-              queuert.enqueueJobChain({
+              queuert.startJobSequence({
                 client,
-                chainName: "test",
+                firstJobTypeName: "test",
                 input: { value: i, atomic: i % 2 === 0 },
               }),
             ),
           ),
         );
 
-        await waitForJobChainsCompleted(queuert, chains);
+        await waitForJobSequencesCompleted(queuert, chains);
       },
     );
   });

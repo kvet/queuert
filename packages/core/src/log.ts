@@ -18,7 +18,7 @@ type WorkerStartedLogEntry = LogEntry<
   "worker_started",
   "info",
   "Started worker",
-  [{ queueNames: string[] } & WorkerBasicArgs]
+  [{ jobTypeNames: string[] } & WorkerBasicArgs]
 >;
 type WorkerErrorLogEntry = LogEntry<
   "worker_error",
@@ -40,10 +40,10 @@ type WorkerStoppedLogEntry = LogEntry<
 >;
 
 type JobBasicArgs = {
-  jobId: string;
-  queueName: string;
+  id: string;
+  typeName: string;
   originId: string | null;
-  chainId: string;
+  sequenceId: string;
   rootId: string;
 };
 type JobProcessingArgs = JobBasicArgs & { status: StateJob["status"]; attempt: number };
@@ -84,37 +84,42 @@ type JobCompletedLogEntry = LogEntry<
   [{ output: unknown } & JobProcessingArgs & WorkerBasicArgs]
 >;
 
-type JobChainArgs = { chainId: string; chainName: string; originId: string | null; rootId: string };
-type JobChainCreatedLogEntry = LogEntry<
-  "job_chain_created",
+type JobSequenceArgs = {
+  sequenceId: string;
+  firstJobTypeName: string;
+  originId: string | null;
+  rootId: string;
+};
+type JobSequenceCreatedLogEntry = LogEntry<
+  "job_sequence_created",
   "info",
-  "Job chain created",
-  [JobChainArgs & { input: unknown }]
+  "Job sequence created",
+  [JobSequenceArgs & { input: unknown }]
 >;
-type JobChainCompletedLogEntry = LogEntry<
-  "job_chain_completed",
+type JobSequenceCompletedLogEntry = LogEntry<
+  "job_sequence_completed",
   "info",
-  "Job chain completed",
-  [{ output: unknown } & JobChainArgs]
+  "Job sequence completed",
+  [{ output: unknown } & JobSequenceArgs]
 >;
 
 type JobBlockersAddedLogEntry = LogEntry<
   "job_blockers_added",
   "info",
   "Job blockers added",
-  [{ blockers: JobChainArgs[] } & JobProcessingArgs]
+  [{ blockers: JobSequenceArgs[] } & JobProcessingArgs]
 >;
 type JobBlockedLogEntry = LogEntry<
   "job_blocked",
   "info",
   "Job is blocked",
-  [JobProcessingArgs & { incompleteBlockers: JobChainArgs[] }]
+  [JobProcessingArgs & { incompleteBlockers: JobSequenceArgs[] }]
 >;
-type JobChainUnblockedJobsLogEntry = LogEntry<
-  "job_chain_unblocked_jobs",
+type JobSequenceUnblockedJobsLogEntry = LogEntry<
+  "job_sequence_unblocked_jobs",
   "info",
-  "Job chain completed and unblocked jobs",
-  [{ unblockedJobs: JobBasicArgs[] } & JobChainArgs]
+  "Job sequence completed and unblocked jobs",
+  [{ unblockedJobs: JobBasicArgs[] } & JobSequenceArgs]
 >;
 
 type NotifyContextAbsenceLogEntry = LogEntry<
@@ -137,13 +142,13 @@ type TypedLogEntry =
   | JobReapedLogEntry
   | JobAttemptFailedLogEntry
   | JobCompletedLogEntry
-  // job chain
-  | JobChainCreatedLogEntry
-  | JobChainCompletedLogEntry
+  // job sequence
+  | JobSequenceCreatedLogEntry
+  | JobSequenceCompletedLogEntry
   // blockers
   | JobBlockersAddedLogEntry
   | JobBlockedLogEntry
-  | JobChainUnblockedJobsLogEntry
+  | JobSequenceUnblockedJobsLogEntry
   // notify
   | NotifyContextAbsenceLogEntry;
 

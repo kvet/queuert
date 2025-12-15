@@ -9,7 +9,7 @@ import {
   DbJob,
   getJobBlockersSql,
   getJobByIdSql,
-  getJobChainByIdSql,
+  getJobSequenceByIdSql,
   getNextJobAvailableInMsSql,
   markJobAsBlockedSql,
   markJobAsPendingSql,
@@ -43,12 +43,12 @@ export type TypedSql<
 const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
   return {
     id: dbJob.id,
-    queueName: dbJob.queue_name,
+    typeName: dbJob.type_name,
     input: dbJob.input,
     output: dbJob.output,
 
     rootId: dbJob.root_id,
-    chainId: dbJob.chain_id,
+    sequenceId: dbJob.sequence_id,
     originId: dbJob.origin_id,
 
     status: dbJob.status,
@@ -122,17 +122,19 @@ export const createPgStateAdapter = <TContext extends BaseStateProviderContext>(
       });
     },
 
-    getJobChainById: async ({ context, jobId }) => {
-      const [jobChain] = await executeTypedSql({
+    getJobSequenceById: async ({ context, jobId }) => {
+      const [jobSequence] = await executeTypedSql({
         context,
-        sql: getJobChainByIdSql,
+        sql: getJobSequenceByIdSql,
         params: [jobId],
       });
 
-      return jobChain
+      return jobSequence
         ? [
-            mapDbJobToStateJob(jobChain.root_job),
-            jobChain.last_chain_job ? mapDbJobToStateJob(jobChain.last_chain_job) : undefined,
+            mapDbJobToStateJob(jobSequence.root_job),
+            jobSequence.last_sequence_job
+              ? mapDbJobToStateJob(jobSequence.last_sequence_job)
+              : undefined,
           ]
         : undefined;
     },
@@ -146,15 +148,23 @@ export const createPgStateAdapter = <TContext extends BaseStateProviderContext>(
       return job ? mapDbJobToStateJob(job) : undefined;
     },
 
-    createJob: async ({ context, queueName, input, rootId, chainId, originId, deduplication }) => {
+    createJob: async ({
+      context,
+      typeName,
+      input,
+      rootId,
+      sequenceId,
+      originId,
+      deduplication,
+    }) => {
       const [result] = await executeTypedSql({
         context,
         sql: createJobSql,
         params: [
-          queueName,
+          typeName,
           input as any,
           rootId as any,
-          chainId as any,
+          sequenceId as any,
           originId as any,
           (deduplication?.key ?? null) as any,
           (deduplication ? (deduplication.strategy ?? "finalized") : null) as any,
@@ -165,42 +175,49 @@ export const createPgStateAdapter = <TContext extends BaseStateProviderContext>(
       return { job: mapDbJobToStateJob(result), deduplicated: result.deduplicated };
     },
 
-    addJobBlockers: async ({ context, jobId, blockedByChainIds }) => {
+    addJobBlockers: async ({ context, jobId, blockedBySequenceIds }) => {
       const jobs = await executeTypedSql({
         context,
         sql: addJobBlockersSql,
-        params: [Array.from({ length: blockedByChainIds.length }, () => jobId), blockedByChainIds],
+        params: [
+          Array.from({ length: blockedBySequenceIds.length }, () => jobId),
+          blockedBySequenceIds,
+        ],
       });
 
       return jobs.map(mapDbJobToStateJob).map((job) => [job, undefined]);
     },
-    scheduleBlockedJobs: async ({ context, blockedByChainId }) => {
+    scheduleBlockedJobs: async ({ context, blockedBySequenceId }) => {
       const jobs = await executeTypedSql({
         context,
         sql: scheduleBlockedJobsSql,
-        params: [blockedByChainId],
+        params: [blockedBySequenceId],
       });
       return jobs.map(mapDbJobToStateJob);
     },
     getJobBlockers: async ({ context, jobId }) => {
-      const jobChains = await executeTypedSql({ context, sql: getJobBlockersSql, params: [jobId] });
+      const jobSequences = await executeTypedSql({
+        context,
+        sql: getJobBlockersSql,
+        params: [jobId],
+      });
 
-      return jobChains.map(({ root_job, last_chain_job }) => [
+      return jobSequences.map(({ root_job, last_sequence_job }) => [
         mapDbJobToStateJob(root_job),
-        last_chain_job ? mapDbJobToStateJob(last_chain_job) : undefined,
+        last_sequence_job ? mapDbJobToStateJob(last_sequence_job) : undefined,
       ]);
     },
 
-    getNextJobAvailableInMs: async ({ context, queueNames }) => {
+    getNextJobAvailableInMs: async ({ context, typeNames }) => {
       const [result] = await executeTypedSql({
         context,
         sql: getNextJobAvailableInMsSql,
-        params: [queueNames],
+        params: [typeNames],
       });
       return result ? result.available_in_ms : null;
     },
-    acquireJob: async ({ context, queueNames }) => {
-      const [job] = await executeTypedSql({ context, sql: acquireJobSql, params: [queueNames] });
+    acquireJob: async ({ context, typeNames }) => {
+      const [job] = await executeTypedSql({ context, sql: acquireJobSql, params: [typeNames] });
 
       return job ? mapDbJobToStateJob(job) : undefined;
     },
@@ -246,11 +263,11 @@ export const createPgStateAdapter = <TContext extends BaseStateProviderContext>(
 
       return mapDbJobToStateJob(job);
     },
-    removeExpiredJobLease: async ({ context, queueNames }) => {
+    removeExpiredJobLease: async ({ context, typeNames }) => {
       const [job] = await executeTypedSql({
         context,
         sql: removeExpiredJobLeaseSql,
-        params: [queueNames],
+        params: [typeNames],
       });
       return job ? mapDbJobToStateJob(job) : undefined;
     },

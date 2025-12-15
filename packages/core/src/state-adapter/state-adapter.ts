@@ -1,16 +1,16 @@
-import { DeduplicationOptions, DeduplicationStrategy } from "../entities/job-chain.js";
+import { DeduplicationOptions, DeduplicationStrategy } from "../entities/job-sequence.js";
 import { BaseStateProviderContext } from "../state-provider/state-provider.js";
 
 export type { DeduplicationOptions, DeduplicationStrategy };
 
 export type StateJob = {
   id: string;
-  queueName: string;
+  typeName: string;
   input: unknown;
   output: unknown;
 
   rootId: string;
-  chainId: string;
+  sequenceId: string;
   originId: string | null;
 
   status: "created" | "blocked" | "pending" | "running" | "completed";
@@ -38,7 +38,7 @@ export type StateAdapter<TContext extends BaseStateProviderContext = BaseStatePr
   prepareSchema: (context: TContext) => Promise<void>;
   migrateToLatest: (context: TContext) => Promise<void>;
 
-  getJobChainById: (params: {
+  getJobSequenceById: (params: {
     context: TContext;
     jobId: string;
   }) => Promise<[StateJob, StateJob | undefined] | undefined>;
@@ -46,10 +46,10 @@ export type StateAdapter<TContext extends BaseStateProviderContext = BaseStatePr
 
   createJob: (params: {
     context: TContext;
-    queueName: string;
+    typeName: string;
     input: unknown;
     rootId: string | undefined;
-    chainId: string | undefined;
+    sequenceId: string | undefined;
     originId: string | undefined;
     deduplication?: DeduplicationOptions;
   }) => Promise<{ job: StateJob; deduplicated: boolean }>;
@@ -57,11 +57,11 @@ export type StateAdapter<TContext extends BaseStateProviderContext = BaseStatePr
   addJobBlockers: (params: {
     context: TContext;
     jobId: string;
-    blockedByChainIds: string[];
+    blockedBySequenceIds: string[];
   }) => Promise<[StateJob, StateJob | undefined][]>;
   scheduleBlockedJobs: (params: {
     context: TContext;
-    blockedByChainId: string;
+    blockedBySequenceId: string;
   }) => Promise<StateJob[]>;
   getJobBlockers: (params: {
     context: TContext;
@@ -70,12 +70,9 @@ export type StateAdapter<TContext extends BaseStateProviderContext = BaseStatePr
 
   getNextJobAvailableInMs: (params: {
     context: TContext;
-    queueNames: string[];
+    typeNames: string[];
   }) => Promise<number | null>;
-  acquireJob: (params: {
-    context: TContext;
-    queueNames: string[];
-  }) => Promise<StateJob | undefined>;
+  acquireJob: (params: { context: TContext; typeNames: string[] }) => Promise<StateJob | undefined>;
   markJobAsBlocked: (params: { context: TContext; jobId: string }) => Promise<StateJob>;
   markJobAsPending: (params: { context: TContext; jobId: string }) => Promise<StateJob>;
   startJobAttempt: (params: { context: TContext; jobId: string }) => Promise<StateJob>;
@@ -94,7 +91,7 @@ export type StateAdapter<TContext extends BaseStateProviderContext = BaseStatePr
   completeJob: (params: { context: TContext; jobId: string; output: unknown }) => Promise<StateJob>;
   removeExpiredJobLease: (params: {
     context: TContext;
-    queueNames: string[];
+    typeNames: string[];
   }) => Promise<StateJob | undefined>;
 };
 

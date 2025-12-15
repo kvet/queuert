@@ -1,23 +1,23 @@
-import { ResolvedJobChain } from "./entities/job-chain.js";
-import { BaseQueueDefinitions } from "./entities/queue.js";
+import { ResolvedJobSequence } from "./entities/job-sequence.js";
+import { BaseJobTypeDefinitions } from "./entities/job-type.js";
 import { BackoffConfig } from "./helpers/backoff.js";
 import { Log } from "./log.js";
 import { NotifyAdapter } from "./notify-adapter/notify-adapter.js";
-import { EnqueueBlockerJobChains, queuertHelper } from "./queuert-helper.js";
+import { EnqueueBlockerJobSequences, queuertHelper } from "./queuert-helper.js";
 import {
   DeduplicationOptions,
   GetStateAdapterContext,
   StateAdapter,
 } from "./state-adapter/state-adapter.js";
-import { createExecutor, Executor, RegisteredQueues } from "./worker/executor.js";
+import { createExecutor, Executor, RegisteredJobTypes } from "./worker/executor.js";
 import { JobHandler, LeaseConfig } from "./worker/job-handler.js";
 
-export { type CompletedJobChain, type JobChain } from "./entities/job-chain.js";
+export { type CompletedJobSequence, type JobSequence } from "./entities/job-sequence.js";
 export {
-  defineUnionQueues,
-  type BaseQueueDefinitions,
-  type DefineQueueRef,
-} from "./entities/queue.js";
+  defineUnionJobTypes,
+  type BaseJobTypeDefinitions,
+  type DefineJobTypeRef,
+} from "./entities/job-type.js";
 export { type BackoffConfig } from "./helpers/backoff.js";
 export { type RetryConfig } from "./helpers/retry.js";
 export { type Log } from "./log.js";
@@ -31,44 +31,49 @@ export { rescheduleJob, type LeaseConfig } from "./worker/job-handler.js";
 
 type QueuertWorkerDefinition<
   TStateAdapter extends StateAdapter<any>,
-  TQueueDefinitions extends BaseQueueDefinitions,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
 > = {
-  implementQueue: <
-    TQueueName extends keyof TQueueDefinitions & string,
-    TBlockers extends readonly ResolvedJobChain<TQueueDefinitions, keyof TQueueDefinitions>[],
+  implementJobType: <
+    TJobTypeName extends keyof TJobTypeDefinitions & string,
+    TBlockers extends readonly ResolvedJobSequence<
+      TJobTypeDefinitions,
+      keyof TJobTypeDefinitions
+    >[],
   >(options: {
-    name: TQueueName;
-    enqueueBlockerJobChains?: EnqueueBlockerJobChains<
+    name: TJobTypeName;
+    enqueueBlockerJobSequences?: EnqueueBlockerJobSequences<
       TStateAdapter,
-      TQueueDefinitions,
-      TQueueName,
+      TJobTypeDefinitions,
+      TJobTypeName,
       TBlockers
     >;
-    handler: JobHandler<TStateAdapter, TQueueDefinitions, TQueueName, TBlockers>;
+    handler: JobHandler<TStateAdapter, TJobTypeDefinitions, TJobTypeName, TBlockers>;
     retryConfig?: BackoffConfig;
     leaseConfig?: LeaseConfig;
-  }) => QueuertWorkerDefinition<TStateAdapter, TQueueDefinitions>;
+  }) => QueuertWorkerDefinition<TStateAdapter, TJobTypeDefinitions>;
   start: Executor;
 };
 
 export type Queuert<
   TStateAdapter extends StateAdapter<any>,
-  TQueueDefinitions extends BaseQueueDefinitions,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
 > = {
-  createWorker: () => QueuertWorkerDefinition<TStateAdapter, TQueueDefinitions>;
-  enqueueJobChain: <TChainName extends keyof TQueueDefinitions & string>(
+  createWorker: () => QueuertWorkerDefinition<TStateAdapter, TJobTypeDefinitions>;
+  startJobSequence: <TFirstJobTypeName extends keyof TJobTypeDefinitions & string>(
     options: {
-      chainName: TChainName;
-      input: TQueueDefinitions[TChainName]["input"];
+      firstJobTypeName: TFirstJobTypeName;
+      input: TJobTypeDefinitions[TFirstJobTypeName]["input"];
       deduplication?: DeduplicationOptions;
     } & GetStateAdapterContext<TStateAdapter>,
-  ) => Promise<ResolvedJobChain<TQueueDefinitions, TChainName> & { deduplicated: boolean }>;
-  getJobChain: <TChainName extends keyof TQueueDefinitions & string>(
+  ) => Promise<
+    ResolvedJobSequence<TJobTypeDefinitions, TFirstJobTypeName> & { deduplicated: boolean }
+  >;
+  getJobSequence: <TFirstJobTypeName extends keyof TJobTypeDefinitions & string>(
     options: {
-      chainName: TChainName;
+      firstJobTypeName: TFirstJobTypeName;
       id: string;
     } & GetStateAdapterContext<TStateAdapter>,
-  ) => Promise<ResolvedJobChain<TQueueDefinitions, TChainName> | null>;
+  ) => Promise<ResolvedJobSequence<TJobTypeDefinitions, TFirstJobTypeName> | null>;
   withNotify: <T, TArgs extends any[]>(
     cb: (...args: TArgs) => Promise<T>,
     ...args: TArgs
@@ -77,7 +82,7 @@ export type Queuert<
 
 export const createQueuert = async <
   TStateAdapter extends StateAdapter<any>,
-  TQueueDefinitions extends BaseQueueDefinitions,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
 >({
   stateAdapter,
   notifyAdapter,
@@ -85,9 +90,9 @@ export const createQueuert = async <
 }: {
   stateAdapter: TStateAdapter;
   notifyAdapter: NotifyAdapter;
-  queueDefinitions: TQueueDefinitions;
+  jobTypeDefinitions: TJobTypeDefinitions;
   log: Log;
-}): Promise<Queuert<TStateAdapter, TQueueDefinitions>> => {
+}): Promise<Queuert<TStateAdapter, TJobTypeDefinitions>> => {
   const helper = queuertHelper({
     stateAdapter,
     notifyAdapter,
@@ -97,52 +102,52 @@ export const createQueuert = async <
   return {
     createWorker: () => {
       const createWorkerInstance = (
-        registeredQueues: RegisteredQueues,
-      ): QueuertWorkerDefinition<TStateAdapter, TQueueDefinitions> => {
+        registeredJobTypes: RegisteredJobTypes,
+      ): QueuertWorkerDefinition<TStateAdapter, TJobTypeDefinitions> => {
         return {
-          implementQueue({
-            name: queueName,
-            enqueueBlockerJobChains,
+          implementJobType({
+            name: typeName,
+            enqueueBlockerJobSequences,
             handler,
             retryConfig,
             leaseConfig,
           }) {
-            if (registeredQueues.has(queueName)) {
-              throw new Error(`Queue with name "${queueName}" is already registered`);
+            if (registeredJobTypes.has(typeName)) {
+              throw new Error(`JobType with name "${typeName}" is already registered`);
             }
-            const newRegisteredQueues = new Map(registeredQueues);
-            newRegisteredQueues.set(queueName, {
-              enqueueBlockerJobChains: enqueueBlockerJobChains as any,
+            const newRegisteredJobTypes = new Map(registeredJobTypes);
+            newRegisteredJobTypes.set(typeName, {
+              enqueueBlockerJobSequences: enqueueBlockerJobSequences as any,
               handler: handler as any,
               retryConfig,
               leaseConfig,
             });
 
-            return createWorkerInstance(newRegisteredQueues);
+            return createWorkerInstance(newRegisteredJobTypes);
           },
           start: (startOptions) =>
             createExecutor({
               helper,
               notifyAdapter,
               log,
-              registeredQueues,
+              registeredJobTypes,
             })(startOptions),
         };
       };
 
       return createWorkerInstance(new Map());
     },
-    enqueueJobChain: async ({ input, chainName, deduplication, ...context }) =>
-      helper.enqueueJobChain({
-        chainName,
+    startJobSequence: async ({ input, firstJobTypeName, deduplication, ...context }) =>
+      helper.startJobSequence({
+        firstJobTypeName,
         input,
         context,
         deduplication,
       }),
-    getJobChain: async ({ id, chainName, ...context }) =>
-      helper.getJobChain({ id, chainName, context }),
+    getJobSequence: async ({ id, firstJobTypeName, ...context }) =>
+      helper.getJobSequence({ id, firstJobTypeName, context }),
     withNotify: async (cb, ...args) => {
-      return helper.withNotifyQueueContext(() => cb(...args));
+      return helper.withNotifyJobTypeContext(() => cb(...args));
     },
   };
 };

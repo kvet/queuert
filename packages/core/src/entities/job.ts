@@ -1,11 +1,11 @@
 import { StateJob } from "../state-adapter/state-adapter.js";
 
-export type Job<TQueueName, TInput> = {
+export type Job<TJobTypeName, TInput> = {
   id: string;
-  chainId: string;
+  sequenceId: string;
   originId: string | null;
   rootId: string;
-  queueName: TQueueName;
+  typeName: TJobTypeName;
   input: TInput;
   createdAt: Date;
   scheduledAt: Date;
@@ -41,10 +41,10 @@ export type RunningJob<TJob extends Job<any, any>> = TJob & {
 export const mapStateJobToJob = (stateJob: StateJob): Job<any, any> => {
   return {
     id: stateJob.id,
-    chainId: stateJob.chainId,
+    sequenceId: stateJob.sequenceId,
     originId: stateJob.originId,
     rootId: stateJob.rootId,
-    queueName: stateJob.queueName,
+    typeName: stateJob.typeName,
     input: stateJob.input,
     createdAt: stateJob.createdAt,
     scheduledAt: stateJob.scheduledAt,
@@ -75,7 +75,7 @@ export const mapStateJobToJob = (stateJob: StateJob): Job<any, any> => {
 
 export const enqueuedJobSymbol: unique symbol = Symbol("enqueuedJob");
 
-export type EnqueuedJob<TQueueName, TInput> = Job<TQueueName, TInput> & {
+export type EnqueuedJob<TJobTypeName, TInput> = Job<TJobTypeName, TInput> & {
   [enqueuedJobSymbol]: true;
 };
 

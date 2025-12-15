@@ -1,4 +1,4 @@
 export type NotifyAdapter = {
-  notifyJobScheduled: (queueName: string) => Promise<void>;
-  listenJobScheduled: (queueNames: string[], { signal }: { signal?: AbortSignal }) => Promise<void>;
+  notifyJobScheduled: (typeName: string) => Promise<void>;
+  listenJobScheduled: (typeNames: string[], { signal }: { signal?: AbortSignal }) => Promise<void>;
 };

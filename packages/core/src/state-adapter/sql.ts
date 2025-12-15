@@ -1,4 +1,4 @@
-import { DeduplicationStrategy } from "../entities/job-chain.js";
+import { DeduplicationStrategy } from "../entities/job-sequence.js";
 import { NamedParameter, TypedSql } from "./state-adapter.pg.js";
 
 // TODO: pgstattuple with partitioning
@@ -19,14 +19,14 @@ END$$;
 -- Tables: job table
 CREATE TABLE IF NOT EXISTS queuert.job (
   id                            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  queue_name                    text NOT NULL,
+  type_name                    text NOT NULL,
 
   input                         jsonb,
   output                        jsonb,
 
   -- lineage / tracing
   root_id                       uuid REFERENCES queuert.job(id) ON DELETE CASCADE, -- TODO: NOT NULL
-  chain_id                      uuid REFERENCES queuert.job(id) ON DELETE CASCADE, -- TODO: NOT NULL
+  sequence_id                   uuid REFERENCES queuert.job(id) ON DELETE CASCADE, -- TODO: NOT NULL
   origin_id                     uuid REFERENCES queuert.job(id) ON DELETE CASCADE,
 
   -- state
@@ -54,9 +54,9 @@ CREATE TABLE IF NOT EXISTS queuert.job (
 -- Tables: job_blocker table
 CREATE TABLE IF NOT EXISTS queuert.job_blocker (
   job_id                        uuid NOT NULL REFERENCES queuert.job(id) ON DELETE CASCADE,
-  blocked_by_chain_id           uuid NOT NULL REFERENCES queuert.job(id) ON DELETE CASCADE,
+  blocked_by_sequence_id        uuid NOT NULL REFERENCES queuert.job(id) ON DELETE CASCADE,
   index                         integer NOT NULL,
-  PRIMARY KEY (job_id, blocked_by_chain_id)
+  PRIMARY KEY (job_id, blocked_by_sequence_id)
 );
 
 -- Triggers: updated_at triggers
@@ -75,18 +75,18 @@ FOR EACH ROW
 EXECUTE PROCEDURE queuert.update_updated_at_column();
 
 -- Constraints: continuation deduplication
-CREATE UNIQUE INDEX IF NOT EXISTS job_chain_origin_unique_idx
-ON queuert.job (chain_id, origin_id)
+CREATE UNIQUE INDEX IF NOT EXISTS job_sequence_origin_unique_idx
+ON queuert.job (sequence_id, origin_id)
 WHERE origin_id IS NOT NULL;
 
 -- Indexes: job acquisition
 CREATE INDEX IF NOT EXISTS job_acquisition_idx
-ON queuert.job (queue_name, scheduled_at)
+ON queuert.job (type_name, scheduled_at)
 WHERE status IN ('created', 'pending');
 
--- Indexes: last chain job lookup
-CREATE INDEX IF NOT EXISTS job_chain_created_at_idx
-ON queuert.job (chain_id, created_at DESC);
+-- Indexes: last sequence job lookup
+CREATE INDEX IF NOT EXISTS job_sequence_created_at_idx
+ON queuert.job (sequence_id, created_at DESC);
 
 -- Indexes: deduplication lookup
 CREATE INDEX IF NOT EXISTS job_deduplication_idx
@@ -95,22 +95,22 @@ WHERE deduplication_key IS NOT NULL;
 
 -- Indexes: expired lease reaping
 CREATE INDEX IF NOT EXISTS job_expired_lease_idx
-ON queuert.job (queue_name, leased_until)
+ON queuert.job (type_name, leased_until)
 WHERE status = 'running' AND leased_until IS NOT NULL;
 
 -- Indexes: blocker lookup
-CREATE INDEX IF NOT EXISTS job_blocker_chain_idx
-ON queuert.job_blocker (blocked_by_chain_id);
+CREATE INDEX IF NOT EXISTS job_blocker_sequence_idx
+ON queuert.job_blocker (blocked_by_sequence_id);
 ` as TypedSql<[], void>;
 
 export type DbJob = {
   id: string;
-  queue_name: string;
+  type_name: string;
   input: unknown;
   output: unknown;
 
   root_id: string;
-  chain_id: string;
+  sequence_id: string;
   origin_id: string | null;
 
   status: "created" | "blocked" | "pending" | "running" | "completed";
@@ -136,7 +136,7 @@ WITH existing_continuation AS (
   FROM queuert.job
   WHERE $4::uuid IS NOT NULL
     AND $5::uuid IS NOT NULL
-    AND chain_id = $4::uuid
+    AND sequence_id = $4::uuid
     AND origin_id = $5::uuid
   LIMIT 1
 ),
@@ -145,7 +145,7 @@ existing_deduplicated AS (
   FROM queuert.job j
   WHERE $6::text IS NOT NULL
     AND j.deduplication_key = $6
-    AND j.id = j.chain_id
+    AND j.id = j.sequence_id
     AND (
       $7::text IS NULL
       OR ($7::text = 'finalized' AND j.status != 'completed')
@@ -160,7 +160,7 @@ existing_deduplicated AS (
 ),
 new_id AS (SELECT gen_random_uuid() AS id),
 inserted_job AS (
-  INSERT INTO queuert.job (id, queue_name, input, root_id, chain_id, origin_id, deduplication_key)
+  INSERT INTO queuert.job (id, type_name, input, root_id, sequence_id, origin_id, deduplication_key)
   SELECT id, $1, $2, COALESCE($3, id), COALESCE($4, id), $5, $6
   FROM new_id
   WHERE NOT EXISTS (SELECT 1 FROM existing_continuation)
@@ -175,10 +175,10 @@ SELECT * FROM inserted_job
 LIMIT 1
 ` as TypedSql<
   readonly [
-    NamedParameter<"queue_name", string>,
+    NamedParameter<"type_name", string>,
     NamedParameter<"input", unknown>,
     NamedParameter<"root_id", string | undefined>,
-    NamedParameter<"chain_id", string | undefined>,
+    NamedParameter<"sequence_id", string | undefined>,
     NamedParameter<"origin_id", string | undefined>,
     NamedParameter<"deduplication_key", string | null | undefined>,
     NamedParameter<"deduplication_strategy", DeduplicationStrategy | null | undefined>,
@@ -188,11 +188,11 @@ LIMIT 1
 >;
 
 export const addJobBlockersSql = /* sql */ `
-INSERT INTO queuert.job_blocker (job_id, blocked_by_chain_id, "index")
-SELECT job_id, blocked_by_chain_id, ord - 1 AS "index"
-FROM unnest($1::uuid[], $2::uuid[]) WITH ORDINALITY AS t(job_id, blocked_by_chain_id, ord)
+INSERT INTO queuert.job_blocker (job_id, blocked_by_sequence_id, "index")
+SELECT job_id, blocked_by_sequence_id, ord - 1 AS "index"
+FROM unnest($1::uuid[], $2::uuid[]) WITH ORDINALITY AS t(job_id, blocked_by_sequence_id, ord)
 ` as TypedSql<
-  readonly [NamedParameter<"job_id", string[]>, NamedParameter<"blocked_by_chain_id", string[]>],
+  readonly [NamedParameter<"job_id", string[]>, NamedParameter<"blocked_by_sequence_id", string[]>],
   DbJob[]
 >;
 
@@ -233,16 +233,16 @@ export const scheduleBlockedJobsSql = /* sql */ `
 WITH direct_blocked AS (
   SELECT DISTINCT jb.job_id
   FROM queuert.job_blocker jb
-  WHERE jb.blocked_by_chain_id = $1
+  WHERE jb.blocked_by_sequence_id = $1
 ),
 blockers_status AS (
   SELECT
     jb.job_id,
-    jb.blocked_by_chain_id,
+    jb.blocked_by_sequence_id,
     (
       SELECT j2.status
       FROM queuert.job j2
-      WHERE j2.chain_id = jb.blocked_by_chain_id
+      WHERE j2.sequence_id = jb.blocked_by_sequence_id
       ORDER BY j2.created_at DESC
       LIMIT 1
     ) AS blocker_status
@@ -261,37 +261,37 @@ SET scheduled_at = now(),
 WHERE j.id IN (SELECT job_id FROM ready_jobs)
   AND j.status = 'blocked'
 RETURNING j.*;
-` as TypedSql<readonly [NamedParameter<"blocked_by_chain_id", string>], DbJob[]>;
+` as TypedSql<readonly [NamedParameter<"blocked_by_sequence_id", string>], DbJob[]>;
 
-export const getJobChainByIdSql = /* sql */ `
+export const getJobSequenceByIdSql = /* sql */ `
 SELECT
   row_to_json(j)  AS root_job,
-  row_to_json(lc) AS last_chain_job
+  row_to_json(lc) AS last_sequence_job
 FROM queuert.job AS j
 LEFT JOIN LATERAL (
   SELECT *
   FROM queuert.job
-  WHERE chain_id = j.id
+  WHERE sequence_id = j.id
   ORDER BY created_at DESC
   LIMIT 1
 ) AS lc ON TRUE
 WHERE j.id = $1
 ` as TypedSql<
   readonly [NamedParameter<"id", string>],
-  [{ root_job: DbJob; last_chain_job: DbJob | null } | undefined]
+  [{ root_job: DbJob; last_sequence_job: DbJob | null } | undefined]
 >;
 
 export const getJobBlockersSql = /* sql */ `
 SELECT
   row_to_json(j)   AS root_job,
-  row_to_json(lc)  AS last_chain_job
+  row_to_json(lc)  AS last_sequence_job
 FROM queuert.job_blocker AS b
 JOIN queuert.job AS j
-  ON j.id = b.blocked_by_chain_id
+  ON j.id = b.blocked_by_sequence_id
 LEFT JOIN LATERAL (
   SELECT *
   FROM queuert.job
-  WHERE chain_id = j.id
+  WHERE sequence_id = j.id
   ORDER BY created_at DESC
   LIMIT 1
 ) AS lc ON TRUE
@@ -299,7 +299,7 @@ WHERE b.job_id = $1
 ORDER BY b.index ASC
 ` as TypedSql<
   readonly [NamedParameter<"id", string>],
-  { root_job: DbJob; last_chain_job: DbJob | null }[]
+  { root_job: DbJob; last_sequence_job: DbJob | null }[]
 >;
 
 export const getJobByIdSql = /* sql */ `
@@ -346,24 +346,24 @@ RETURNING *
 export const acquireJobSql = /* sql */ `
 SELECT job.*
 FROM queuert.job as job
-WHERE job.queue_name IN (SELECT unnest($1::text[]))
+WHERE job.type_name IN (SELECT unnest($1::text[]))
   AND job.status IN ('created', 'pending')
   AND job.scheduled_at <= now()
 ORDER BY job.scheduled_at ASC
 LIMIT 1
 FOR UPDATE SKIP LOCKED
-` as TypedSql<readonly [NamedParameter<"queue_names", string[]>], [DbJob | undefined]>;
+` as TypedSql<readonly [NamedParameter<"type_names", string[]>], [DbJob | undefined]>;
 
 export const getNextJobAvailableInMsSql = /* sql */ `
 SELECT GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (job.scheduled_at - now())) * 1000)::bigint) AS available_in_ms
 FROM queuert.job as job
-WHERE job.queue_name IN (SELECT unnest($1::text[]))
+WHERE job.type_name IN (SELECT unnest($1::text[]))
   AND job.status IN ('created', 'pending')
 ORDER BY job.scheduled_at ASC
 LIMIT 1
 FOR UPDATE SKIP LOCKED
 ` as TypedSql<
-  readonly [NamedParameter<"queue_names", string[]>],
+  readonly [NamedParameter<"type_names", string[]>],
   [{ available_in_ms: number } | undefined]
 >;
 
@@ -374,7 +374,7 @@ WITH job_to_unlock AS (
   WHERE leased_until IS NOT NULL
     AND leased_until < now()
     AND status = 'running'
-    AND queue_name IN (SELECT unnest($1::text[]))
+    AND type_name IN (SELECT unnest($1::text[]))
   ORDER BY leased_until ASC
   LIMIT 1
   FOR UPDATE SKIP LOCKED
@@ -386,4 +386,4 @@ SET leased_by = NULL,
 FROM job_to_unlock
 WHERE job.id = job_to_unlock.id
 RETURNING job.*
-` as TypedSql<readonly [NamedParameter<"queue_names", string[]>], [DbJob | undefined]>;
+` as TypedSql<readonly [NamedParameter<"type_names", string[]>], [DbJob | undefined]>;

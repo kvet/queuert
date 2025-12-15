@@ -12,10 +12,10 @@ Imagine you have some long-running process. For example, performing image proces
 const queuert = createQueuert({
   stateAdapter: ...,
   notifyAdapter: ...,
-  queueDefinitions: defineUnionQueues<{
+  jobTypeDefinitions: defineUnionJobTypes<{
     'process-image': {
       input: { imageId: string };
-      output: DefineQueueRef<"distribute-image">;
+      output: DefineJobTypeRef<"distribute-image">;
     };
     'distribute-image': {
       input: { imageId: string; minifiedImageId: string };
@@ -27,9 +27,9 @@ const queuert = createQueuert({
 db.transaction(queuert.withNotify(async (tx) => {
   const image = await tx.images.create({ ... });
 
-  await queuert.enqueueJobChain({
+  await queuert.startJobSequence({
     tx,
-    name: "process-image",
+    firstJobTypeName: "process-image",
     input: { imageId: image.id },
   });
 }));
@@ -41,7 +41,7 @@ Later, a background worker picks up the job and processes it:
 
 ```ts
 queuert.createWorker()
-  .implementQueue({
+  .implementJobType({
     name: "process-image",
     handler: async ({ job, prepare }) => {
       const [{ finalize }, image] = await prepare({ mode: "staged" }, async ({ tx }) => {
@@ -55,13 +55,13 @@ queuert.createWorker()
 
         return continueWith({
           tx,
-          queueName: "distribute-image",
+          typeName: "distribute-image",
           input: { imageId: job.input.imageId, minifiedImageId: saved.id },
         });
       });
     },
   })
-  .implementQueue({
+  .implementJobType({
     name: "distribute-image",
     handler: async ({ job, prepare }) => {
       const [{ finalize }, [image, minifiedImage]] = await prepare({ mode: "staged" }, async ({ tx }) => {

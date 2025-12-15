@@ -1,17 +1,17 @@
 import { NotifyAdapter } from "./notify-adapter.js";
 
 export const createInProcessNotifyAdapter = (): NotifyAdapter => {
-  const listeners: Array<(queueName: string) => boolean> = [];
+  const listeners: Array<(typeName: string) => boolean> = [];
 
   return {
-    notifyJobScheduled: async (queueName: string) => {
+    notifyJobScheduled: async (typeName: string) => {
       for (const listener of listeners) {
-        if (listener(queueName)) {
+        if (listener(typeName)) {
           break;
         }
       }
     },
-    listenJobScheduled: (queueNames: string[], { signal }: { signal?: AbortSignal }) => {
+    listenJobScheduled: (typeNames: string[], { signal }: { signal?: AbortSignal }) => {
       return new Promise<void>((resolve) => {
         if (signal?.aborted) return resolve();
 
@@ -22,8 +22,8 @@ export const createInProcessNotifyAdapter = (): NotifyAdapter => {
           }
         };
 
-        const listener = (notifiedQueueName: string) => {
-          if (queueNames.includes(notifiedQueueName)) {
+        const listener = (notifiedTypeName: string) => {
+          if (typeNames.includes(notifiedTypeName)) {
             cleanup();
             signal?.removeEventListener("abort", onAbort);
             resolve();
