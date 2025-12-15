@@ -102,6 +102,12 @@ type JobSequenceCompletedLogEntry = LogEntry<
   "Job sequence completed",
   [{ output: unknown } & JobSequenceArgs]
 >;
+type JobSequenceDeletedLogEntry = LogEntry<
+  "job_sequence_deleted",
+  "info",
+  "Job sequence deleted",
+  [{ deletedJobIds: string[] } & JobSequenceArgs]
+>;
 
 type JobBlockersAddedLogEntry = LogEntry<
   "job_blockers_added",
@@ -145,6 +151,7 @@ type TypedLogEntry =
   // job sequence
   | JobSequenceCreatedLogEntry
   | JobSequenceCompletedLogEntry
+  | JobSequenceDeletedLogEntry
   // blockers
   | JobBlockersAddedLogEntry
   | JobBlockedLogEntry

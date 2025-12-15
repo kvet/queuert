@@ -3,7 +3,7 @@
 ## Core Concepts
 
 ### Job
-An individual unit of work. Jobs have a lifecycle: `created` → `blocked`/`pending` → `running` → `completed`. Each job belongs to a JobType and contains typed input/output. Jobs track their execution attempts, scheduling, and provenance via `originId`.
+An individual unit of work. Jobs have a lifecycle: `created` → `blocked`/`pending` → `running` → `completed`. Jobs can be deleted (hard-deleted from the database). Each job belongs to a JobType and contains typed input/output. Jobs track their execution attempts, scheduling, and provenance via `originId`.
 
 ### JobSequence
 Like a Promise chain, a sequence of linked jobs where each job can `continueWith` to the next. The sequence completes when its final job completes without continuing. Sequences have a simple lifecycle: `created` → `completed`.
@@ -30,7 +30,7 @@ Handles worker notification when jobs are scheduled. Workers listen for notifica
 Job handlers use a prepare/finalize pattern that splits job processing into phases:
 
 **Handler signature**: `async ({ signal, job, blockers, prepare }) => { ... }`
-- `signal`: AbortSignal that fires when lease expires
+- `signal`: AbortSignal that fires when lease expires or job is deleted (reason: `"lease_expired"`, `"error"`, or `"deleted"`)
 - `job`: The job being processed with typed input
 - `blockers`: Resolved blocker sequences (typed by job type definition)
 - `prepare`: Function to enter prepare phase
@@ -108,6 +108,8 @@ Avoid asymmetric naming (e.g., `started`/`finished` vs `created`/`completed`) ev
 - `deduplicated`: Boolean flag returned when a job/sequence was deduplicated instead of created.
 - `DefineContinuationInput<T>`: Type wrapper marking job types as internal (only reachable via `continueWith`).
 - `DefineContinuationOutput<T>`: Type marker in output indicating continuation to another job type.
+- `deleteJobSequences`: Deletes entire job trees by `rootId`. Accepts array of sequence IDs. Must be called on root sequences. Throws error if external job sequences depend on sequences being deleted; include those dependents in the deletion set to proceed. Primarily intended for testing environments.
+- `JobDeletedError`: Error thrown when a running job detects it has been deleted during lease renewal.
 
 ## Testing Patterns
 

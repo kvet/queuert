@@ -9,7 +9,12 @@ import { TypedAbortController, TypedAbortSignal } from "../helpers/abort.js";
 import { type BackoffConfig } from "../helpers/backoff.js";
 import { createSignal } from "../helpers/signal.js";
 import { Branded } from "../helpers/typescript.js";
-import { LeaseExpiredError, ProcessHelper, ResolvedJobTypeJobs } from "../queuert-helper.js";
+import {
+  JobDeletedError,
+  LeaseExpiredError,
+  ProcessHelper,
+  ResolvedJobTypeJobs,
+} from "../queuert-helper.js";
 import { GetStateAdapterContext, StateAdapter, StateJob } from "../state-adapter/state-adapter.js";
 import { BaseStateProviderContext } from "../state-provider/state-provider.js";
 import { createLeaseManager, type LeaseConfig } from "./lease.js";
@@ -115,7 +120,7 @@ export type JobHandler<
   TJobTypeName extends keyof TJobTypeDefinitions & string,
   TBlockers extends readonly JobSequence<any, any, any>[],
 > = (handlerOptions: {
-  signal: TypedAbortSignal<"lease_expired" | "error">;
+  signal: TypedAbortSignal<"lease_expired" | "error" | "deleted">;
   job: RunningJob<
     Job<TJobTypeName, UnwrapContinuationInput<TJobTypeDefinitions[TJobTypeName]["input"]>>
   >;
@@ -156,7 +161,9 @@ export const processJobHandler = async ({
   const firstLeaseCommitted = createSignal<void>();
   const claimTransactionClosed = createSignal<void>();
 
-  const abortController = new AbortController() as TypedAbortController<"lease_expired" | "error">;
+  const abortController = new AbortController() as TypedAbortController<
+    "lease_expired" | "error" | "deleted"
+  >;
 
   const runInGuardedTransaction = async <T>(
     cb: (context: BaseStateProviderContext) => Promise<T>,
@@ -179,6 +186,11 @@ export const processJobHandler = async ({
               abortController.abort("lease_expired");
             }
           }
+          if (error instanceof JobDeletedError) {
+            if (!abortController.signal.aborted) {
+              abortController.abort("deleted");
+            }
+          }
           throw error;
         });
 
@@ -199,7 +211,7 @@ export const processJobHandler = async ({
           });
         });
       } catch (error) {
-        if (error instanceof LeaseExpiredError) {
+        if (error instanceof LeaseExpiredError || error instanceof JobDeletedError) {
           return;
         }
         abortController.abort("error");

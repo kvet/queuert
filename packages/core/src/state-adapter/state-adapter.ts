@@ -93,6 +93,11 @@ export type StateAdapter<TContext extends BaseStateProviderContext = BaseStatePr
     context: TContext;
     typeNames: string[];
   }) => Promise<StateJob | undefined>;
+  getExternalBlockers: (params: {
+    context: TContext;
+    rootIds: string[];
+  }) => Promise<{ jobId: string; blockedRootId: string }[]>;
+  deleteJobsByRootIds: (params: { context: TContext; rootIds: string[] }) => Promise<StateJob[]>;
 };
 
 export type GetStateAdapterContext<TStateAdapter> =

@@ -40,6 +40,12 @@ export class LeaseExpiredError extends Error {
   }
 }
 
+export class JobDeletedError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+  }
+}
+
 export type ResolvedJobTypeJobs<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions & string,
@@ -391,7 +397,7 @@ export const queuertHelper = ({
       retryConfig: BackoffConfig;
       workerId: string;
     }): Promise<void> => {
-      if (error instanceof LeaseExpiredError) {
+      if (error instanceof LeaseExpiredError || error instanceof JobDeletedError) {
         return;
       }
 
@@ -535,7 +541,11 @@ export const queuertHelper = ({
       });
 
       if (!fetchedJob) {
-        throw new Error(`Job with id ${job.id} not found`);
+        throw new JobDeletedError(`Job has been deleted`, {
+          cause: {
+            jobId: job.id,
+          },
+        });
       }
 
       if (
@@ -695,6 +705,79 @@ export const queuertHelper = ({
           ],
         });
       }
+    },
+    deleteJobSequences: async ({
+      sequenceIds,
+      context,
+    }: {
+      sequenceIds: string[];
+      context: BaseStateProviderContext;
+    }): Promise<StateJob[]> => {
+      await stateAdapter.assertInTransaction(context);
+
+      const sequenceJobs = await Promise.all(
+        sequenceIds.map((sequenceId) =>
+          stateAdapter.getJobById({
+            context,
+            jobId: sequenceId,
+          }),
+        ),
+      );
+
+      for (let i = 0; i < sequenceIds.length; i++) {
+        const sequenceJob = sequenceJobs[i];
+        const sequenceId = sequenceIds[i];
+
+        if (!sequenceJob) {
+          throw new Error(`Job sequence with id ${sequenceId} not found`);
+        }
+
+        if (sequenceJob.rootId !== sequenceJob.id) {
+          throw new Error(
+            `Cannot delete job sequence ${sequenceId}: must delete from the root sequence (rootId: ${sequenceJob.rootId})`,
+          );
+        }
+      }
+
+      const externalBlockers = await stateAdapter.getExternalBlockers({
+        context,
+        rootIds: sequenceIds,
+      });
+
+      if (externalBlockers.length > 0) {
+        const uniqueBlockedRootIds = [...new Set(externalBlockers.map((b) => b.blockedRootId))];
+        throw new Error(
+          `Cannot delete job sequences: external job sequences depend on them. ` +
+            `Include the following root sequences in the deletion: ${uniqueBlockedRootIds.join(", ")}`,
+        );
+      }
+
+      const deletedJobs = await stateAdapter.deleteJobsByRootIds({
+        context,
+        rootIds: sequenceIds,
+      });
+
+      for (const sequenceJob of sequenceJobs as StateJob[]) {
+        const deletedJobsForSequence = deletedJobs.filter((j) => j.rootId === sequenceJob.id);
+        if (deletedJobsForSequence.length > 0) {
+          log({
+            type: "job_sequence_deleted",
+            level: "info",
+            message: "Job sequence deleted",
+            args: [
+              {
+                sequenceId: sequenceJob.sequenceId,
+                firstJobTypeName: sequenceJob.typeName,
+                originId: sequenceJob.originId,
+                rootId: sequenceJob.rootId,
+                deletedJobIds: deletedJobsForSequence.map((j) => j.id),
+              },
+            ],
+          });
+        }
+      }
+
+      return deletedJobs;
     },
   };
 };

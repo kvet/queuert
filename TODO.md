@@ -4,7 +4,6 @@
 
 - Better StateJobSequence definition
 - Finalize job externally (Cancellation)
-- Termination (add deletedAt to jobs, worker skips those)
 - Custom ids + schema name for jobs
 - Redis NotifyAdapter
 - Metrics collection (Prometheus, OTEL)

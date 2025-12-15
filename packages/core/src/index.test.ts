@@ -2243,3 +2243,400 @@ describe("Resilience", () => {
     );
   });
 });
+
+describe("Deletion", () => {
+  test("deletes job sequence and all jobs in the tree", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransactionWithNotify,
+    log,
+    expectLogs,
+    expect,
+  }) => {
+    const queuert = await createQueuert({
+      stateAdapter,
+      notifyAdapter,
+      log,
+      jobTypeDefinitions: defineUnionJobTypes<{
+        test: {
+          input: { value: number };
+          output: { result: number };
+        };
+      }>(),
+    });
+
+    const jobSequence = await runInTransactionWithNotify(queuert, ({ client }) =>
+      queuert.startJobSequence({
+        client,
+        firstJobTypeName: "test",
+        input: { value: 1 },
+      }),
+    );
+
+    await runInTransactionWithNotify(queuert, ({ client }) =>
+      queuert.deleteJobSequences({
+        client,
+        sequenceIds: [jobSequence.id],
+      }),
+    );
+
+    await runInTransactionWithNotify(queuert, async ({ client }) => {
+      const fetchedJobSequence = await queuert.getJobSequence({
+        client,
+        id: jobSequence.id,
+        firstJobTypeName: "test",
+      });
+      expect(fetchedJobSequence).toBeNull();
+    });
+
+    expectLogs([
+      { type: "job_sequence_created" },
+      { type: "job_created" },
+      {
+        type: "job_sequence_deleted",
+        args: [{ sequenceId: jobSequence.id, deletedJobIds: [jobSequence.id] }],
+      },
+    ]);
+  });
+
+  test("running job receives deletion signal", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransactionWithNotify,
+    withWorkers,
+    log,
+    expect,
+  }) => {
+    const queuert = await createQueuert({
+      stateAdapter,
+      notifyAdapter,
+      log,
+      jobTypeDefinitions: defineUnionJobTypes<{
+        test: {
+          input: null;
+          output: null;
+        };
+      }>(),
+    });
+
+    const { promise: jobStarted, resolve: jobStartedResolve } = Promise.withResolvers<void>();
+    const { promise: deletionReceived, resolve: deletionReceivedResolve } =
+      Promise.withResolvers<void>();
+    let jobSequenceId: string;
+
+    const worker = queuert.createWorker().implementJobType({
+      name: "test",
+      handler: async ({ signal, prepare }) => {
+        const [{ finalize }] = await prepare({ mode: "staged" });
+
+        jobStartedResolve();
+
+        await sleep(5000, { signal });
+
+        if (signal.aborted) {
+          expect(signal.reason).toBe("deleted");
+          deletionReceivedResolve();
+        }
+
+        return finalize(() => null);
+      },
+      leaseConfig: { leaseMs: 100, renewIntervalMs: 10 },
+    });
+
+    await withWorkers([await worker.start()], async () => {
+      const jobSequence = await runInTransactionWithNotify(queuert, ({ client }) =>
+        queuert.startJobSequence({
+          client,
+          firstJobTypeName: "test",
+          input: null,
+        }),
+      );
+      jobSequenceId = jobSequence.id;
+
+      await jobStarted;
+
+      await runInTransactionWithNotify(queuert, ({ client }) =>
+        queuert.deleteJobSequences({
+          client,
+          sequenceIds: [jobSequenceId],
+        }),
+      );
+
+      await deletionReceived;
+    });
+  });
+
+  test("throws error when deleting sequence with external blockers", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransactionWithNotify,
+    withWorkers,
+    log,
+    expect,
+  }) => {
+    const queuert = await createQueuert({
+      stateAdapter,
+      notifyAdapter,
+      log,
+      jobTypeDefinitions: defineUnionJobTypes<{
+        blocker: {
+          input: { value: number };
+          output: { result: number };
+        };
+        main: {
+          input: { blockerSequenceId: string };
+          output: { finalResult: number };
+        };
+      }>(),
+    });
+
+    const { promise: blockerCanComplete, resolve: blockerCanCompleteResolve } =
+      Promise.withResolvers<void>();
+
+    const worker = queuert
+      .createWorker()
+      .implementJobType({
+        name: "blocker",
+        handler: async ({ job, prepare }) => {
+          const [{ finalize }] = await prepare({ mode: "staged" });
+          await blockerCanComplete;
+          return finalize(() => ({ result: job.input.value }));
+        },
+      })
+      .implementJobType({
+        name: "main",
+        enqueueBlockerJobSequences: async ({ job, client }) => {
+          const blockerSequence = await queuert.getJobSequence({
+            client,
+            id: job.input.blockerSequenceId,
+            firstJobTypeName: "blocker",
+          });
+          if (!blockerSequence) throw new Error("Blocker not found");
+          return [blockerSequence];
+        },
+        handler: async ({ blockers: [blocker], prepare }) => {
+          const [{ finalize }] = await prepare({ mode: "atomic" });
+          return finalize(() => ({ finalResult: blocker.output.result }));
+        },
+      });
+
+    await withWorkers([await worker.start(), await worker.start()], async () => {
+      // Create an independent blocker sequence first (it will wait before completing)
+      const blockerSequence = await runInTransactionWithNotify(queuert, ({ client }) =>
+        queuert.startJobSequence({
+          client,
+          firstJobTypeName: "blocker",
+          input: { value: 1 },
+        }),
+      );
+
+      // Create main sequence that depends on the blocker
+      const mainSequence = await runInTransactionWithNotify(queuert, ({ client }) =>
+        queuert.startJobSequence({
+          client,
+          firstJobTypeName: "main",
+          input: { blockerSequenceId: blockerSequence.id },
+        }),
+      );
+
+      // Wait for main to be marked as blocked (check log for job_blocked event)
+      await vi.waitFor(
+        () => {
+          const blockedCall = log.mock.calls.find(
+            (call) => call[0].type === "job_blocked" && call[0].args[0].typeName === "main",
+          );
+          expect(blockedCall).toBeDefined();
+        },
+        { timeout: 1000 },
+      );
+
+      // Trying to delete the blocker should fail because main depends on it
+      await expect(
+        runInTransactionWithNotify(queuert, ({ client }) =>
+          queuert.deleteJobSequences({
+            client,
+            sequenceIds: [blockerSequence.id],
+          }),
+        ),
+      ).rejects.toThrow("external job sequences depend on them");
+
+      // Deleting both together should work
+      await runInTransactionWithNotify(queuert, ({ client }) =>
+        queuert.deleteJobSequences({
+          client,
+          sequenceIds: [blockerSequence.id, mainSequence.id],
+        }),
+      );
+
+      // Allow blocker to complete (worker cleanup)
+      blockerCanCompleteResolve();
+
+      // Verify both are deleted
+      await runInTransactionWithNotify(queuert, async ({ client }) => {
+        const fetchedBlocker = await queuert.getJobSequence({
+          client,
+          id: blockerSequence.id,
+          firstJobTypeName: "blocker",
+        });
+        const fetchedMain = await queuert.getJobSequence({
+          client,
+          id: mainSequence.id,
+          firstJobTypeName: "main",
+        });
+        expect(fetchedBlocker).toBeNull();
+        expect(fetchedMain).toBeNull();
+      });
+    });
+  });
+
+  test("throws error when trying to delete non-root sequence", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransactionWithNotify,
+    withWorkers,
+    waitForJobSequencesCompleted,
+    log,
+    expect,
+  }) => {
+    const queuert = await createQueuert({
+      stateAdapter,
+      notifyAdapter,
+      log,
+      jobTypeDefinitions: defineUnionJobTypes<{
+        blocker: {
+          input: { value: number };
+          output: { result: number };
+        };
+        main: {
+          input: null;
+          output: { finalResult: number };
+        };
+      }>(),
+    });
+
+    let blockerSequenceId: string;
+
+    const worker = queuert
+      .createWorker()
+      .implementJobType({
+        name: "blocker",
+        handler: async ({ job, prepare }) => {
+          const [{ finalize }] = await prepare({ mode: "atomic" });
+          return finalize(() => ({ result: job.input.value }));
+        },
+      })
+      .implementJobType({
+        name: "main",
+        enqueueBlockerJobSequences: async ({ client }) => {
+          const blockerSequence = await queuert.startJobSequence({
+            client,
+            firstJobTypeName: "blocker",
+            input: { value: 1 },
+          });
+          blockerSequenceId = blockerSequence.id;
+          return [blockerSequence];
+        },
+        handler: async ({ blockers: [blocker], prepare }) => {
+          const [{ finalize }] = await prepare({ mode: "atomic" });
+          return finalize(() => ({ finalResult: blocker.output.result }));
+        },
+      });
+
+    await withWorkers([await worker.start()], async () => {
+      const mainSequence = await runInTransactionWithNotify(queuert, ({ client }) =>
+        queuert.startJobSequence({
+          client,
+          firstJobTypeName: "main",
+          input: null,
+        }),
+      );
+
+      await waitForJobSequencesCompleted(queuert, [mainSequence]);
+
+      await expect(
+        runInTransactionWithNotify(queuert, ({ client }) =>
+          queuert.deleteJobSequences({
+            client,
+            sequenceIds: [blockerSequenceId!],
+          }),
+        ),
+      ).rejects.toThrow("must delete from the root sequence");
+    });
+  });
+
+  test("deleted job during finalize is handled gracefully", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransactionWithNotify,
+    withWorkers,
+    log,
+    expect,
+  }) => {
+    const queuert = await createQueuert({
+      stateAdapter,
+      notifyAdapter,
+      log,
+      jobTypeDefinitions: defineUnionJobTypes<{
+        test: {
+          input: null;
+          output: null;
+        };
+      }>(),
+    });
+
+    const { promise: jobStarted, resolve: jobStartedResolve } = Promise.withResolvers<void>();
+    const { promise: handlerCompleted, resolve: handlerCompletedResolve } =
+      Promise.withResolvers<void>();
+
+    const worker = queuert.createWorker().implementJobType({
+      name: "test",
+      handler: async ({ prepare }) => {
+        const [{ finalize }] = await prepare({ mode: "staged" });
+
+        jobStartedResolve();
+        await sleep(200);
+
+        try {
+          return await finalize(() => null);
+        } catch (error) {
+          handlerCompletedResolve();
+          throw error;
+        }
+      },
+      leaseConfig: { leaseMs: 100, renewIntervalMs: 10 },
+    });
+
+    await withWorkers([await worker.start()], async () => {
+      const jobSequence = await runInTransactionWithNotify(queuert, ({ client }) =>
+        queuert.startJobSequence({
+          client,
+          firstJobTypeName: "test",
+          input: null,
+        }),
+      );
+
+      await jobStarted;
+
+      await runInTransactionWithNotify(queuert, ({ client }) =>
+        queuert.deleteJobSequences({
+          client,
+          sequenceIds: [jobSequence.id],
+        }),
+      );
+
+      await handlerCompleted;
+    });
+
+    expect(log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "job_sequence_deleted",
+      }),
+    );
+
+    expect(log).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "job_attempt_failed",
+      }),
+    );
+  });
+});

@@ -79,6 +79,11 @@ export type Queuert<
       id: string;
     } & GetStateAdapterContext<TStateAdapter>,
   ) => Promise<ResolvedJobSequence<TJobTypeDefinitions, TFirstJobTypeName> | null>;
+  deleteJobSequences: (
+    options: {
+      sequenceIds: string[];
+    } & GetStateAdapterContext<TStateAdapter>,
+  ) => Promise<void>;
   withNotify: <T, TArgs extends any[]>(
     cb: (...args: TArgs) => Promise<T>,
     ...args: TArgs
@@ -151,6 +156,9 @@ export const createQueuert = async <
       }),
     getJobSequence: async ({ id, firstJobTypeName, ...context }) =>
       helper.getJobSequence({ id, firstJobTypeName, context }),
+    deleteJobSequences: async ({ sequenceIds, ...context }) => {
+      await helper.deleteJobSequences({ sequenceIds, context });
+    },
     withNotify: async (cb, ...args) => {
       return helper.withNotifyJobTypeContext(() => cb(...args));
     },

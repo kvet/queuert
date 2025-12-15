@@ -7,6 +7,8 @@ import {
   completeJobSql,
   createJobSql,
   DbJob,
+  deleteJobsByRootIdsSql,
+  getExternalBlockersSql,
   getJobBlockersSql,
   getJobByIdSql,
   getJobSequenceByIdSql,
@@ -270,6 +272,22 @@ export const createPgStateAdapter = <TContext extends BaseStateProviderContext>(
         params: [typeNames],
       });
       return job ? mapDbJobToStateJob(job) : undefined;
+    },
+    getExternalBlockers: async ({ context, rootIds }) => {
+      const blockers = await executeTypedSql({
+        context,
+        sql: getExternalBlockersSql,
+        params: [rootIds],
+      });
+      return blockers.map((b) => ({ jobId: b.job_id, blockedRootId: b.blocked_root_id }));
+    },
+    deleteJobsByRootIds: async ({ context, rootIds }) => {
+      const jobs = await executeTypedSql({
+        context,
+        sql: deleteJobsByRootIdsSql,
+        params: [rootIds],
+      });
+      return jobs.map(mapDbJobToStateJob);
     },
   };
 };

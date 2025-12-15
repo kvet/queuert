@@ -387,3 +387,22 @@ FROM job_to_unlock
 WHERE job.id = job_to_unlock.id
 RETURNING job.*
 ` as TypedSql<readonly [NamedParameter<"type_names", string[]>], [DbJob | undefined]>;
+
+export const getExternalBlockersSql = /* sql */ `
+SELECT DISTINCT jb.job_id, j.root_id AS blocked_root_id
+FROM queuert.job_blocker jb
+JOIN queuert.job j ON j.id = jb.job_id
+WHERE jb.blocked_by_sequence_id IN (
+  SELECT id FROM queuert.job WHERE root_id = ANY($1::uuid[])
+)
+AND j.root_id != ALL($1::uuid[])
+` as TypedSql<
+  readonly [NamedParameter<"root_ids", string[]>],
+  { job_id: string; blocked_root_id: string }[]
+>;
+
+export const deleteJobsByRootIdsSql = /* sql */ `
+DELETE FROM queuert.job
+WHERE root_id = ANY($1::uuid[])
+RETURNING *
+` as TypedSql<readonly [NamedParameter<"root_ids", string[]>], DbJob[]>;
