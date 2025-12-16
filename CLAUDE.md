@@ -90,8 +90,8 @@ TypeScript prevents calling `startJobSequence` with internal job types at compil
 
 ### Consistent Terminology
 Parallel entities should use consistent lifecycle terminology to reduce cognitive load:
-- Job: `created` → `completed`
-- JobSequence: `created` → `completed`
+- Job: `created` → `blocked`/`pending` → `running` → `completed`
+- JobSequence: `created` → `blocked`/`pending` → `running` → `completed` (reflects status of current job in sequence)
 
 Avoid asymmetric naming (e.g., `started`/`finished` vs `created`/`completed`) even if individual terms seem natural - consistency across the API produces fewer questions.
 

@@ -76,9 +76,10 @@ export type JobSequence<TFirstJobTypeName, TInput, TOutput> = {
   input: TInput;
   createdAt: Date;
 } & (
-  | {
-      status: "created";
-    }
+  | { status: "created" }
+  | { status: "blocked" }
+  | { status: "pending" }
+  | { status: "running" }
   | {
       status: "completed";
       output: TOutput;
@@ -92,21 +93,33 @@ export type CompletedJobSequence<TJobSequence extends JobSequence<any, any, any>
 export const mapStateJobPairToJobSequence = (
   stateJobPair: [StateJob, StateJob | undefined],
 ): JobSequence<any, any, any> => {
-  return {
-    id: stateJobPair[0].id,
-    originId: stateJobPair[0].originId,
-    rootId: stateJobPair[0].rootId,
-    firstJobTypeName: stateJobPair[0].typeName,
-    input: stateJobPair[0].input,
-    createdAt: stateJobPair[0].createdAt,
-    ...(stateJobPair[1]?.status === "completed"
-      ? {
-          status: "completed",
-          output: stateJobPair[1].output,
-          completedAt: stateJobPair[1].completedAt!,
-        }
-      : {
-          status: "created",
-        }),
+  const [firstJob, currentJob] = stateJobPair;
+  const effectiveJob = currentJob ?? firstJob;
+
+  const base = {
+    id: firstJob.id,
+    originId: firstJob.originId,
+    rootId: firstJob.rootId,
+    firstJobTypeName: firstJob.typeName,
+    input: firstJob.input,
+    createdAt: firstJob.createdAt,
   };
+
+  switch (effectiveJob.status) {
+    case "completed":
+      return {
+        ...base,
+        status: "completed",
+        output: effectiveJob.output,
+        completedAt: effectiveJob.completedAt!,
+      };
+    case "running":
+      return { ...base, status: "running" };
+    case "pending":
+      return { ...base, status: "pending" };
+    case "blocked":
+      return { ...base, status: "blocked" };
+    default:
+      return { ...base, status: "created" };
+  }
 };

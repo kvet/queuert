@@ -39,7 +39,7 @@ export type RunningJob<TJob extends Job<any, any>> = TJob & {
 };
 
 export const mapStateJobToJob = (stateJob: StateJob): Job<any, any> => {
-  return {
+  const base = {
     id: stateJob.id,
     sequenceId: stateJob.sequenceId,
     originId: stateJob.originId,
@@ -52,25 +52,27 @@ export const mapStateJobToJob = (stateJob: StateJob): Job<any, any> => {
     attempt: stateJob.attempt,
     lastAttemptAt: stateJob.lastAttemptAt,
     lastAttemptError: stateJob.lastAttemptError,
-    ...(stateJob.status === "completed"
-      ? {
-          status: "completed",
-          completedAt: stateJob.completedAt!,
-        }
-      : stateJob.status === "running"
-        ? {
-            status: "running",
-            leasedBy: stateJob.leasedBy ?? undefined,
-            leasedUntil: stateJob.leasedUntil ?? undefined,
-          }
-        : stateJob.status === "blocked"
-          ? {
-              status: "blocked",
-            }
-          : {
-              status: "pending",
-            }),
   };
+
+  switch (stateJob.status) {
+    case "completed":
+      return {
+        ...base,
+        status: "completed",
+        completedAt: stateJob.completedAt!,
+      };
+    case "running":
+      return {
+        ...base,
+        status: "running",
+        leasedBy: stateJob.leasedBy ?? undefined,
+        leasedUntil: stateJob.leasedUntil ?? undefined,
+      };
+    case "blocked":
+      return { ...base, status: "blocked" };
+    default:
+      return { ...base, status: "pending" };
+  }
 };
 
 export const continuedJobSymbol: unique symbol = Symbol("continuedJob");
