@@ -6,16 +6,16 @@ import {
   mapStateJobPairToJobSequence,
   ResolvedJobSequence,
 } from "./entities/job-sequence.js";
+import { BaseJobTypeDefinitions, UnwrapContinuationInput } from "./entities/job-type.js";
 import {
-  EnqueuedJob,
-  enqueuedJobSymbol,
-  isEnqueuedJob,
+  ContinuedJob,
+  continuedJobSymbol,
+  isContinuedJob,
   Job,
   mapStateJobToJob,
   RunningJob,
 } from "./entities/job.js";
 import { BackoffConfig, calculateBackoffMs } from "./helpers/backoff.js";
-import { BaseJobTypeDefinitions, UnwrapContinuationInput } from "./entities/job-type.js";
 import { Log } from "./log.js";
 import { NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 import {
@@ -56,7 +56,7 @@ export type ResolvedJobTypeJobs<
   >;
 }[CompatibleJobTypeTargets<TJobTypeDefinitions, TJobTypeName>];
 
-export type EnqueueBlockerJobSequences<
+export type StartBlockers<
   TStateAdapter extends StateAdapter<BaseStateProviderContext>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions & string,
@@ -64,7 +64,7 @@ export type EnqueueBlockerJobSequences<
     [K in keyof TJobTypeDefinitions]: ResolvedJobSequence<TJobTypeDefinitions, K>;
   }[keyof TJobTypeDefinitions][],
 > = (
-  enqueueBlockerJobSequencesOptions: {
+  startBlockersOptions: {
     job: Job<TJobTypeName, TJobTypeDefinitions[TJobTypeName]["input"]>;
   } & GetStateAdapterContext<TStateAdapter>,
 ) => Promise<TBlockers>;
@@ -78,7 +78,7 @@ export const queuertHelper = ({
   notifyAdapter: NotifyAdapter;
   log: Log;
 }) => {
-  const enqueueStateJob = async ({
+  const createStateJob = async ({
     typeName,
     input,
     context,
@@ -147,7 +147,7 @@ export const queuertHelper = ({
         type: "notify_context_absence",
         level: "warn",
         message:
-          "Not withNotify context when enqueueing job for queue. The job processing may be delayed.",
+          "Not withNotify context when creating job for queue. The job processing may be delayed.",
         args: [
           {
             id: job.id,
@@ -197,11 +197,11 @@ export const queuertHelper = ({
     },
     scheduleBlockerJobSequences: async ({
       job,
-      enqueueBlockerJobSequences,
+      startBlockers,
       context,
     }: {
       job: StateJob;
-      enqueueBlockerJobSequences?: EnqueueBlockerJobSequences<
+      startBlockers?: StartBlockers<
         StateAdapter<BaseStateProviderContext>,
         BaseJobTypeDefinitions,
         string,
@@ -213,8 +213,8 @@ export const queuertHelper = ({
         return job;
       }
 
-      const blockerJobSequences = enqueueBlockerJobSequences
-        ? await enqueueBlockerJobSequences({
+      const blockerJobSequences = startBlockers
+        ? await startBlockers({
             job: mapStateJobToJob(job),
             ...context,
           })
@@ -338,7 +338,7 @@ export const queuertHelper = ({
     }): Promise<JobSequence<TFirstJobTypeName, TInput, TOutput> & { deduplicated: boolean }> => {
       await stateAdapter.assertInTransaction(context);
 
-      const { job, deduplicated } = await enqueueStateJob({
+      const { job, deduplicated } = await createStateJob({
         typeName: firstJobTypeName,
         input,
         context,
@@ -371,8 +371,8 @@ export const queuertHelper = ({
       typeName: TJobTypeName;
       input: TInput;
       context: any;
-    }): Promise<EnqueuedJob<TJobTypeName, TInput>> => {
-      const { job } = await enqueueStateJob({
+    }): Promise<ContinuedJob<TJobTypeName, TInput>> => {
+      const { job } = await createStateJob({
         typeName,
         input,
         context,
@@ -381,7 +381,7 @@ export const queuertHelper = ({
 
       return {
         ...mapStateJobToJob(job),
-        [enqueuedJobSymbol]: true,
+        [continuedJobSymbol]: true,
       };
     },
     handleJobHandlerError: async ({
@@ -443,7 +443,7 @@ export const queuertHelper = ({
       context: BaseStateProviderContext;
       workerId: string;
     }): Promise<void> => {
-      const hasContinuedJob = isEnqueuedJob(output);
+      const hasContinuedJob = isContinuedJob(output);
 
       job = await stateAdapter.completeJob({
         context,

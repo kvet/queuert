@@ -1519,7 +1519,7 @@ describe("Blocker Chains", () => {
       })
       .implementJobType({
         name: "main",
-        enqueueBlockerJobSequences: async ({ job, client }) => {
+        startBlockers: async ({ job, client }) => {
           const dependencyJobSequence = await queuert.startJobSequence({
             client,
             firstJobTypeName: "blocker",
@@ -1636,7 +1636,7 @@ describe("Blocker Chains", () => {
       })
       .implementJobType({
         name: "main",
-        enqueueBlockerJobSequences: async ({ job, client }) => {
+        startBlockers: async ({ job, client }) => {
           const blockerJob = await queuert.getJobSequence({
             client,
             id: job.input.blockerJobId,
@@ -1891,8 +1891,8 @@ describe("Blocker Chains", () => {
       })
       .implementJobType({
         name: "main",
-        enqueueBlockerJobSequences: async ({ client, job }) => {
-          const blockerSequences = await Promise.all(
+        startBlockers: ({ client, job }) => {
+          return Promise.all(
             Array.from({ length: job.input.count }, (_, i) =>
               queuert.startJobSequence({
                 client,
@@ -1901,7 +1901,6 @@ describe("Blocker Chains", () => {
               }),
             ),
           );
-          return blockerSequences;
         },
         handler: async ({ blockers, prepare }) => {
           const [{ finalize }] = await prepare({ mode: "atomic" });
@@ -2405,7 +2404,7 @@ describe("Deletion", () => {
       })
       .implementJobType({
         name: "main",
-        enqueueBlockerJobSequences: async ({ job, client }) => {
+        startBlockers: async ({ job, client }) => {
           const blockerSequence = await queuert.getJobSequence({
             client,
             id: job.input.blockerSequenceId,
@@ -2527,7 +2526,7 @@ describe("Deletion", () => {
       })
       .implementJobType({
         name: "main",
-        enqueueBlockerJobSequences: async ({ client }) => {
+        startBlockers: async ({ client }) => {
           const blockerSequence = await queuert.startJobSequence({
             client,
             firstJobTypeName: "blocker",

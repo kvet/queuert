@@ -73,12 +73,12 @@ export const mapStateJobToJob = (stateJob: StateJob): Job<any, any> => {
   };
 };
 
-export const enqueuedJobSymbol: unique symbol = Symbol("enqueuedJob");
+export const continuedJobSymbol: unique symbol = Symbol("continuedJob");
 
-export type EnqueuedJob<TJobTypeName, TInput> = Job<TJobTypeName, TInput> & {
-  [enqueuedJobSymbol]: true;
+export type ContinuedJob<TJobTypeName, TInput> = Job<TJobTypeName, TInput> & {
+  [continuedJobSymbol]: true;
 };
 
-export const isEnqueuedJob = (obj: unknown): obj is EnqueuedJob<any, any> => {
-  return typeof obj === "object" && obj !== null && (obj as any)[enqueuedJobSymbol] === true;
+export const isContinuedJob = (obj: unknown): obj is ContinuedJob<any, any> => {
+  return typeof obj === "object" && obj !== null && (obj as any)[continuedJobSymbol] === true;
 };

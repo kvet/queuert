@@ -6,7 +6,7 @@ import { withRetry } from "../helpers/retry.js";
 import { sleep } from "../helpers/sleep.js";
 import { Log } from "../log.js";
 import { NotifyAdapter } from "../notify-adapter/notify-adapter.js";
-import { EnqueueBlockerJobSequences, LeaseExpiredError, ProcessHelper } from "../queuert-helper.js";
+import { LeaseExpiredError, ProcessHelper, StartBlockers } from "../queuert-helper.js";
 import { StateAdapter } from "../state-adapter/state-adapter.js";
 import { BaseStateProviderContext } from "../state-provider/state-provider.js";
 import { JobHandler, LeaseConfig, processJobHandler } from "./job-handler.js";
@@ -14,7 +14,7 @@ import { JobHandler, LeaseConfig, processJobHandler } from "./job-handler.js";
 export type RegisteredJobTypes = Map<
   string,
   {
-    enqueueBlockerJobSequences?: EnqueueBlockerJobSequences<
+    startBlockers?: StartBlockers<
       StateAdapter<BaseStateProviderContext>,
       BaseJobTypeDefinitions,
       string,
@@ -138,7 +138,7 @@ export const createExecutor = ({
               async (): Promise<[boolean, (() => Promise<void>) | undefined]> => {
                 job = await helper.scheduleBlockerJobSequences({
                   job: job!,
-                  enqueueBlockerJobSequences: jobType.enqueueBlockerJobSequences,
+                  startBlockers: jobType.startBlockers,
                   context,
                 });
 

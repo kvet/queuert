@@ -2,7 +2,7 @@
 
 Control flow library for your persistency layer driven applications.
 
-Run your application logic as a series of background jobs that is enqueued alongside state change transaction in your persistency layer. Perform long-running tasks with side-effects reliably in the background and keep track of their progress in your database. Own your stack and avoid vendor lock-in by using the tools you trust.
+Run your application logic as a series of background jobs that are started alongside state change transactions in your persistency layer. Perform long-running tasks with side-effects reliably in the background and keep track of their progress in your database. Own your stack and avoid vendor lock-in by using the tools you trust.
 
 ## Sorry, what?
 
@@ -35,7 +35,7 @@ db.transaction(queuert.withNotify(async (tx) => {
 }));
 ```
 
-We scheduled the task inside a database transaction. This ensures that if the transaction rolls back, the job is not enqueued. (Refer to transactional outbox pattern.)
+We scheduled the task inside a database transaction. This ensures that if the transaction rolls back, the job is not started. (Refer to transactional outbox pattern.)
 
 Later, a background worker picks up the job and processes it:
 
@@ -92,7 +92,7 @@ In the prepare phase you can read data and perform non side-effecting operations
 
 Between prepare and finalize, you can perform long-running work (CPU-intensive processing, network calls, etc.). The worker automatically renews the job lease at configured intervals. Make sure to implement this phase in an idempotent way, as it may be retried if the worker crashes or the lease expires.
 
-In the finalize phase you can commit state changes and enqueue further jobs. If the worker crashes during finalize, the whole job is retried from the beginning.
+In the finalize phase you can commit state changes and continue to the next job. If the worker crashes during finalize, the whole job is retried from the beginning.
 
 ## It looks familiar, right?
 

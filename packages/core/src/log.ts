@@ -131,7 +131,7 @@ type JobSequenceUnblockedJobsLogEntry = LogEntry<
 type NotifyContextAbsenceLogEntry = LogEntry<
   "notify_context_absence",
   "warn",
-  "Not withNotify context when enqueueing job for queue. The job processing may be delayed.",
+  "Not withNotify context when creating job for queue. The job processing may be delayed.",
   [JobBasicArgs]
 >;
 

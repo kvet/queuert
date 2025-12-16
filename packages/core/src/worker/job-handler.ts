@@ -4,7 +4,7 @@ import {
   JobSequence,
 } from "../entities/job-sequence.js";
 import { BaseJobTypeDefinitions, UnwrapContinuationInput } from "../entities/job-type.js";
-import { EnqueuedJob, Job, RunningJob } from "../entities/job.js";
+import { ContinuedJob, Job, RunningJob } from "../entities/job.js";
 import { TypedAbortController, TypedAbortSignal } from "../helpers/abort.js";
 import { type BackoffConfig } from "../helpers/backoff.js";
 import { createSignal } from "../helpers/signal.js";
@@ -50,17 +50,17 @@ export type FinalizeCallback<
 > = (
   finalizeOptions: {
     continueWith: <
-      TEnqueueJobTypeName extends CompatibleJobTypeTargets<TJobTypeDefinitions, TJobTypeName> &
+      TContinueJobTypeName extends CompatibleJobTypeTargets<TJobTypeDefinitions, TJobTypeName> &
         string,
     >(
       options: {
-        typeName: TEnqueueJobTypeName;
-        input: UnwrapContinuationInput<TJobTypeDefinitions[TEnqueueJobTypeName]["input"]>;
+        typeName: TContinueJobTypeName;
+        input: UnwrapContinuationInput<TJobTypeDefinitions[TContinueJobTypeName]["input"]>;
       } & GetStateAdapterContext<TStateAdapter>,
     ) => Promise<
-      EnqueuedJob<
-        TEnqueueJobTypeName,
-        UnwrapContinuationInput<TJobTypeDefinitions[TEnqueueJobTypeName]["input"]>
+      ContinuedJob<
+        TContinueJobTypeName,
+        UnwrapContinuationInput<TJobTypeDefinitions[TContinueJobTypeName]["input"]>
       >
     >;
   } & GetStateAdapterContext<TStateAdapter>,

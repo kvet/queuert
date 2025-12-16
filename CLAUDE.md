@@ -101,7 +101,7 @@ Avoid asymmetric naming (e.g., `started`/`finished` vs `created`/`completed`) ev
 - `sequenceId`: The job sequence this job belongs to, self-referential for the first job (equals own ID)
 - `firstJobTypeName`: The job type name of the first job in a sequence (correlates with `sequenceId` - both reference the starting job)
 - `blockers`/`blocked`: Describes job dependencies (not `dependencies`/`dependents`)
-- `continueWith`: Continues to next job in finalize callback (not `enqueueJob`)
+- `continueWith`: Continues to next job in finalize callback
 - `prepare`: Unified function for both atomic and staged modes via `mode` parameter (not separate `prepareAtomic`/`prepareStaged`)
 - `lease`/`leased`: Time-bounded exclusive claim on a job during processing (not `lock`/`locked`). Use `leasedBy`, `leasedUntil`, `leaseMs`, `leaseDurationMs`. DB columns use `leased_by`, `leased_until`.
 - `deduplicationKey`: Explicit key for sequence-level deduplication. DB column uses `deduplication_key`.

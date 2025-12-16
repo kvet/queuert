@@ -3,7 +3,7 @@ import { BaseJobTypeDefinitions, FirstJobTypeDefinitions } from "./entities/job-
 import { BackoffConfig } from "./helpers/backoff.js";
 import { Log } from "./log.js";
 import { NotifyAdapter } from "./notify-adapter/notify-adapter.js";
-import { EnqueueBlockerJobSequences, queuertHelper } from "./queuert-helper.js";
+import { queuertHelper, StartBlockers } from "./queuert-helper.js";
 import {
   DeduplicationOptions,
   GetStateAdapterContext,
@@ -42,12 +42,7 @@ type QueuertWorkerDefinition<
     >[],
   >(options: {
     name: TJobTypeName;
-    enqueueBlockerJobSequences?: EnqueueBlockerJobSequences<
-      TStateAdapter,
-      TJobTypeDefinitions,
-      TJobTypeName,
-      TBlockers
-    >;
+    startBlockers?: StartBlockers<TStateAdapter, TJobTypeDefinitions, TJobTypeName, TBlockers>;
     handler: JobHandler<TStateAdapter, TJobTypeDefinitions, TJobTypeName, TBlockers>;
     retryConfig?: BackoffConfig;
     leaseConfig?: LeaseConfig;
@@ -115,19 +110,13 @@ export const createQueuert = async <
         registeredJobTypes: RegisteredJobTypes,
       ): QueuertWorkerDefinition<TStateAdapter, TJobTypeDefinitions> => {
         return {
-          implementJobType({
-            name: typeName,
-            enqueueBlockerJobSequences,
-            handler,
-            retryConfig,
-            leaseConfig,
-          }) {
+          implementJobType({ name: typeName, startBlockers, handler, retryConfig, leaseConfig }) {
             if (registeredJobTypes.has(typeName)) {
               throw new Error(`JobType with name "${typeName}" is already registered`);
             }
             const newRegisteredJobTypes = new Map(registeredJobTypes);
             newRegisteredJobTypes.set(typeName, {
-              enqueueBlockerJobSequences: enqueueBlockerJobSequences as any,
+              startBlockers: startBlockers as any,
               handler: handler as any,
               retryConfig,
               leaseConfig,
