@@ -13,7 +13,7 @@ export type StateJob = {
   sequenceId: string;
   originId: string | null;
 
-  status: "created" | "blocked" | "pending" | "running" | "completed";
+  status: "blocked" | "pending" | "running" | "completed";
   createdAt: Date;
   scheduledAt: Date;
   completedAt: Date | null;
@@ -58,7 +58,7 @@ export type StateAdapter<TContext extends BaseStateProviderContext = BaseStatePr
     context: TContext;
     jobId: string;
     blockedBySequenceIds: string[];
-  }) => Promise<[StateJob, StateJob | undefined][]>;
+  }) => Promise<StateJob>;
   scheduleBlockedJobs: (params: {
     context: TContext;
     blockedBySequenceId: string;
@@ -73,9 +73,6 @@ export type StateAdapter<TContext extends BaseStateProviderContext = BaseStatePr
     typeNames: string[];
   }) => Promise<number | null>;
   acquireJob: (params: { context: TContext; typeNames: string[] }) => Promise<StateJob | undefined>;
-  markJobAsBlocked: (params: { context: TContext; jobId: string }) => Promise<StateJob>;
-  markJobAsPending: (params: { context: TContext; jobId: string }) => Promise<StateJob>;
-  startJobAttempt: (params: { context: TContext; jobId: string }) => Promise<StateJob>;
   renewJobLease: (params: {
     context: TContext;
     jobId: string;

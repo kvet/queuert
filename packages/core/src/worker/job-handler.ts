@@ -2,9 +2,11 @@ import {
   CompatibleJobTypeTargets,
   CompletedJobSequence,
   JobSequence,
+  mapStateJobPairToJobSequence,
+  ResolveCompletedBlockerSequences,
 } from "../entities/job-sequence.js";
 import { BaseJobTypeDefinitions, UnwrapContinuationInput } from "../entities/job-type.js";
-import { ContinuedJob, Job, RunningJob } from "../entities/job.js";
+import { ContinuedJob, Job, mapStateJobToJob, RunningJob } from "../entities/job.js";
 import { TypedAbortController, TypedAbortSignal } from "../helpers/abort.js";
 import { type BackoffConfig } from "../helpers/backoff.js";
 import { createSignal } from "../helpers/signal.js";
@@ -14,6 +16,7 @@ import {
   LeaseExpiredError,
   ProcessHelper,
   ResolvedJobTypeJobs,
+  StartBlockersFn,
 } from "../queuert-helper.js";
 import { GetStateAdapterContext, StateAdapter, StateJob } from "../state-adapter/state-adapter.js";
 import { BaseStateProviderContext } from "../state-provider/state-provider.js";
@@ -56,6 +59,7 @@ export type FinalizeCallback<
       options: {
         typeName: TContinueJobTypeName;
         input: UnwrapContinuationInput<TJobTypeDefinitions[TContinueJobTypeName]["input"]>;
+        startBlockers?: StartBlockersFn<TJobTypeDefinitions, TContinueJobTypeName>;
       } & GetStateAdapterContext<TStateAdapter>,
     ) => Promise<
       ContinuedJob<
@@ -118,15 +122,12 @@ export type JobHandler<
   TStateAdapter extends StateAdapter<BaseStateProviderContext>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions & string,
-  TBlockers extends readonly JobSequence<any, any, any>[],
 > = (handlerOptions: {
   signal: TypedAbortSignal<"lease_expired" | "error" | "deleted">;
   job: RunningJob<
     Job<TJobTypeName, UnwrapContinuationInput<TJobTypeDefinitions[TJobTypeName]["input"]>>
   >;
-  blockers: {
-    [K in keyof TBlockers]: CompletedJobSequence<TBlockers[K]>;
-  };
+  blockers: ResolveCompletedBlockerSequences<TJobTypeDefinitions, TJobTypeName>;
   prepare: PrepareFn<TStateAdapter, TJobTypeDefinitions, TJobTypeName>;
 }) => Promise<
   Branded<
@@ -146,12 +147,7 @@ export const processJobHandler = async ({
   workerId,
 }: {
   helper: ProcessHelper;
-  handler: JobHandler<
-    StateAdapter<BaseStateProviderContext>,
-    BaseJobTypeDefinitions,
-    string,
-    readonly JobSequence<string, unknown, unknown>[]
-  >;
+  handler: JobHandler<StateAdapter<BaseStateProviderContext>, BaseJobTypeDefinitions, string>;
   context: BaseStateProviderContext;
   job: StateJob;
   retryConfig: BackoffConfig;
@@ -223,11 +219,11 @@ export const processJobHandler = async ({
   });
 
   const startProcessing = async (job: StateJob) => {
-    const jobInput = await helper.getJobHandlerInput({
-      job,
-      context,
-    });
-    job = { ...job, attempt: jobInput.job.attempt };
+    const blockerPairs = await helper.getJobBlockers({ jobId: job.id, context });
+    const runningJob = mapStateJobToJob(job) as RunningJob<Job<any, any>>;
+    const blockers = blockerPairs.map(mapStateJobPairToJobSequence) as CompletedJobSequence<
+      JobSequence<any, any, any>
+    >[];
 
     const createFinalizeFn = () => {
       let finalizeCalled = false;
@@ -239,6 +235,7 @@ export const processJobHandler = async ({
               options: {
                 typeName: string;
                 input: unknown;
+                startBlockers?: StartBlockersFn<BaseJobTypeDefinitions, string>;
               } & BaseStateProviderContext,
             ) => Promise<unknown>;
           } & BaseStateProviderContext,
@@ -251,7 +248,7 @@ export const processJobHandler = async ({
         await leaseManager.stop();
         return runInGuardedTransaction(async (context) => {
           const output = await finalizeCallback({
-            continueWith: async ({ typeName, input, ...context }) => {
+            continueWith: async ({ typeName, input, startBlockers, ...context }) => {
               if (continueWithCalled) {
                 throw new Error("continueWith can only be called once");
               }
@@ -260,6 +257,7 @@ export const processJobHandler = async ({
                 typeName,
                 input,
                 context,
+                startBlockers: startBlockers as any,
               });
             },
             ...context,
@@ -284,11 +282,7 @@ export const processJobHandler = async ({
       }
       prepareCalled = true;
 
-      const callbackOutput = await prepareCallback?.({
-        ...context,
-        job: jobInput.job,
-        blockers: jobInput.blockers,
-      });
+      const callbackOutput = await prepareCallback?.({ ...context });
 
       await helper.renewJobLease({
         context,
@@ -310,8 +304,8 @@ export const processJobHandler = async ({
     try {
       await handler({
         signal: abortController.signal,
-        job: jobInput.job,
-        blockers: jobInput.blockers,
+        job: runningJob,
+        blockers: blockers as any,
         prepare,
       });
     } catch (error) {

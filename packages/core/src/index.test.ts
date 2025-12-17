@@ -5,6 +5,7 @@ import { sleep } from "./helpers/sleep.js";
 import {
   CompletedJobSequence,
   createQueuert,
+  DefineBlocker,
   DefineContinuationInput,
   DefineContinuationOutput,
   defineUnionJobTypes,
@@ -227,8 +228,8 @@ describe("Handler", () => {
       { type: "job_created", args: [{ ...jobArgs, input: { test: true } }] },
       { type: "worker_started", args: [{ ...workerArgs, jobTypeNames: ["test"] }] },
       {
-        type: "job_acquired",
-        args: [{ ...jobArgs, status: "created", attempt: 0, ...workerArgs }],
+        type: "job_attempt_started",
+        args: [{ ...jobArgs, status: "running", attempt: 1, ...workerArgs }],
       },
       {
         type: "job_completed",
@@ -681,13 +682,13 @@ describe("Handler", () => {
       { type: "worker_started" },
       { type: "job_sequence_created" },
       { type: "job_created" },
-      { type: "job_acquired" },
+      { type: "job_attempt_started" },
       { type: "job_attempt_failed", args: [{ rescheduledAfterMs: 10 }, expect.anything()] },
-      { type: "job_acquired" },
+      { type: "job_attempt_started" },
       { type: "job_attempt_failed", args: [{ rescheduledAfterMs: 20 }, expect.anything()] },
-      { type: "job_acquired" },
+      { type: "job_attempt_started" },
       { type: "job_attempt_failed", args: [{ rescheduledAfterMs: 40 }, expect.anything()] },
-      { type: "job_acquired" },
+      { type: "job_attempt_started" },
       { type: "job_completed" },
       { type: "job_sequence_completed" },
       { type: "worker_stopping" },
@@ -1192,7 +1193,7 @@ describe("Chains", () => {
       { type: "worker_started" },
       { type: "job_sequence_created", args: [{ firstJobTypeName: "linear" }] },
       { type: "job_created", args: [{ typeName: "linear" }] },
-      { type: "job_acquired", args: [{ typeName: "linear" }] },
+      { type: "job_attempt_started", args: [{ typeName: "linear" }] },
       {
         type: "job_created",
         args: [
@@ -1205,7 +1206,7 @@ describe("Chains", () => {
         ],
       },
       { type: "job_completed", args: [{ typeName: "linear" }] },
-      { type: "job_acquired", args: [{ typeName: "linear_next" }] },
+      { type: "job_attempt_started", args: [{ typeName: "linear_next" }] },
       {
         type: "job_created",
         args: [
@@ -1218,7 +1219,7 @@ describe("Chains", () => {
         ],
       },
       { type: "job_completed", args: [{ typeName: "linear_next" }] },
-      { type: "job_acquired", args: [{ typeName: "linear_next_next" }] },
+      { type: "job_attempt_started", args: [{ typeName: "linear_next_next" }] },
       { type: "job_completed", args: [{ typeName: "linear_next_next" }] },
       { type: "job_sequence_completed", args: [{ firstJobTypeName: "linear" }] },
       { type: "worker_stopping" },
@@ -1486,12 +1487,13 @@ describe("Blocker Chains", () => {
         main: {
           input: { start: boolean };
           output: { finalResult: number };
+          blockers: [DefineBlocker<"blocker">];
         };
       }>(),
     });
 
-    let mainChainId: string;
-    let dependencyChainId: string;
+    let mainSequenceId: string;
+    let dependencySequenceId: string;
     let originId: string;
 
     const worker = queuert
@@ -1499,8 +1501,8 @@ describe("Blocker Chains", () => {
       .implementJobType({
         name: "blocker",
         handler: async ({ job, prepare }) => {
-          expect(job.sequenceId).toEqual(dependencyChainId);
-          expect(job.rootId).toEqual(mainChainId);
+          expect(job.sequenceId).toEqual(dependencySequenceId);
+          expect(job.rootId).toEqual(mainSequenceId);
           expect(job.originId).toEqual(originId);
           originId = job.id;
 
@@ -1519,18 +1521,6 @@ describe("Blocker Chains", () => {
       })
       .implementJobType({
         name: "main",
-        startBlockers: async ({ job, client }) => {
-          const dependencyJobSequence = await queuert.startJobSequence({
-            client,
-            firstJobTypeName: "blocker",
-            input: { value: 0 },
-          });
-
-          originId = job.id;
-          dependencyChainId = dependencyJobSequence.id;
-
-          return [dependencyJobSequence];
-        },
         handler: async ({ job, blockers: [blocker], prepare }) => {
           expectTypeOf<(typeof blocker)["output"]>().toEqualTypeOf<{
             done: true;
@@ -1553,9 +1543,19 @@ describe("Blocker Chains", () => {
           client,
           firstJobTypeName: "main",
           input: { start: true },
+          startBlockers: async () => {
+            const dependencyJobSequence = await queuert.startJobSequence({
+              client,
+              firstJobTypeName: "blocker",
+              input: { value: 0 },
+            });
+            dependencySequenceId = dependencyJobSequence.id;
+            return [dependencyJobSequence];
+          },
         });
 
-        mainChainId = jobSequence.id;
+        mainSequenceId = jobSequence.id;
+        originId = jobSequence.id;
 
         return jobSequence;
       });
@@ -1567,29 +1567,41 @@ describe("Blocker Chains", () => {
 
     expectLogs([
       { type: "worker_started" },
-      // main chain created
-      { type: "job_sequence_created", args: [{ firstJobTypeName: "main" }] },
-      { type: "job_created", args: [{ typeName: "main" }] },
-      { type: "job_acquired", args: [{ typeName: "main" }] },
-      // blocker chain created as dependency
+      // blocker chain created
       {
         type: "job_sequence_created",
-        args: [{ firstJobTypeName: "blocker", rootId: mainChainId!, originId: mainChainId! }],
+        args: [{ firstJobTypeName: "blocker", rootId: mainSequenceId!, originId: mainSequenceId! }],
       },
       { type: "job_created", args: [{ typeName: "blocker" }] },
-      { type: "job_blockers_added", args: [{ typeName: "main" }] },
-      { type: "job_blocked", args: [{ typeName: "main" }] },
+      // main chain created
+      { type: "job_sequence_created", args: [{ firstJobTypeName: "main" }] },
+      {
+        type: "job_created",
+        args: [
+          {
+            typeName: "main",
+            blockers: [
+              {
+                sequenceId: dependencySequenceId!,
+                firstJobTypeName: "blocker",
+                originId: mainSequenceId!,
+                rootId: mainSequenceId!,
+              },
+            ],
+          },
+        ],
+      },
       // first blocker job processed
-      { type: "job_acquired", args: [{ typeName: "blocker" }] },
+      { type: "job_attempt_started", args: [{ typeName: "blocker" }] },
       { type: "job_created", args: [{ typeName: "blocker" }] },
       { type: "job_completed", args: [{ typeName: "blocker" }] },
       // second blocker job processed, chain completes
-      { type: "job_acquired", args: [{ typeName: "blocker" }] },
+      { type: "job_attempt_started", args: [{ typeName: "blocker" }] },
       { type: "job_completed", args: [{ typeName: "blocker" }] },
       { type: "job_sequence_completed", args: [{ firstJobTypeName: "blocker" }] },
       // main job unblocked and completed
       { type: "job_sequence_unblocked_jobs", args: [{ firstJobTypeName: "blocker" }] },
-      { type: "job_acquired", args: [{ typeName: "main" }] },
+      { type: "job_attempt_started", args: [{ typeName: "main" }] },
       { type: "job_completed", args: [{ typeName: "main" }] },
       { type: "job_sequence_completed", args: [{ firstJobTypeName: "main" }] },
       { type: "worker_stopping" },
@@ -1616,8 +1628,9 @@ describe("Blocker Chains", () => {
           output: { result: number };
         };
         main: {
-          input: { blockerJobId: string };
+          input: null;
           output: { finalResult: number };
+          blockers: [DefineBlocker<"blocker">];
         };
       }>(),
     });
@@ -1636,18 +1649,8 @@ describe("Blocker Chains", () => {
       })
       .implementJobType({
         name: "main",
-        startBlockers: async ({ job, client }) => {
-          const blockerJob = await queuert.getJobSequence({
-            client,
-            id: job.input.blockerJobId,
-            firstJobTypeName: "blocker",
-          });
-          if (!blockerJob) {
-            throw new Error("Blocker job not found");
-          }
-          return [blockerJob];
-        },
         handler: async ({ blockers: [blocker], prepare }) => {
+          // Blocker originId is null since it was created independently
           expect(blocker.originId).toBeNull();
 
           const [{ finalize }] = await prepare({ mode: "atomic" });
@@ -1671,11 +1674,13 @@ describe("Blocker Chains", () => {
         blockerJobSequence,
       ]);
 
+      // Reference the already-completed blocker in startBlockers callback
       const jobSequence = await runInTransactionWithNotify(queuert, ({ client }) =>
         queuert.startJobSequence({
           client,
           firstJobTypeName: "main",
-          input: { blockerJobId: blockerJobSequence.id },
+          input: null,
+          startBlockers: async () => [succeededBlockerJobSequence],
         }),
       );
 
@@ -1874,8 +1879,9 @@ describe("Blocker Chains", () => {
           output: { result: number };
         };
         main: {
-          input: { count: number };
+          input: null;
           output: { finalResult: number[] };
+          blockers: DefineBlocker<"blocker">[];
         };
       }>(),
     });
@@ -1891,17 +1897,6 @@ describe("Blocker Chains", () => {
       })
       .implementJobType({
         name: "main",
-        startBlockers: ({ client, job }) => {
-          return Promise.all(
-            Array.from({ length: job.input.count }, (_, i) =>
-              queuert.startJobSequence({
-                client,
-                firstJobTypeName: "blocker",
-                input: { value: i + 1 },
-              }),
-            ),
-          );
-        },
         handler: async ({ blockers, prepare }) => {
           const [{ finalize }] = await prepare({ mode: "atomic" });
           return finalize(() => ({
@@ -1915,7 +1910,17 @@ describe("Blocker Chains", () => {
         queuert.startJobSequence({
           client,
           firstJobTypeName: "main",
-          input: { count: 5 },
+          input: null,
+          startBlockers: () =>
+            Promise.all(
+              Array.from({ length: 5 }, (_, i) =>
+                queuert.startJobSequence({
+                  client,
+                  firstJobTypeName: "blocker",
+                  input: { value: i + 1 },
+                }),
+              ),
+            ),
         }),
       );
 
@@ -1924,6 +1929,101 @@ describe("Blocker Chains", () => {
       expect(succeededJobSequence.output).toEqual({
         finalResult: Array.from({ length: 5 }, (_, i) => i + 1),
       });
+    });
+  });
+
+  test("continueWith supports blockers", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransactionWithNotify,
+    withWorkers,
+    waitForJobSequencesCompleted,
+    log,
+    expect,
+  }) => {
+    const queuert = await createQueuert({
+      stateAdapter,
+      notifyAdapter,
+      log,
+      jobTypeDefinitions: defineUnionJobTypes<{
+        blocker: {
+          input: { value: number };
+          output: { result: number };
+        };
+        first: {
+          input: { id: string };
+          output: DefineContinuationOutput<"second">;
+        };
+        second: {
+          input: DefineContinuationInput<{ fromFirst: string }>;
+          output: { finalResult: number };
+          blockers: [DefineBlocker<"blocker">];
+        };
+      }>(),
+    });
+
+    let blockerRootId: string;
+    let blockerOriginId: string | null;
+    let secondJobId: string;
+
+    const worker = queuert
+      .createWorker()
+      .implementJobType({
+        name: "blocker",
+        handler: async ({ job, prepare }) => {
+          blockerRootId = job.rootId;
+          blockerOriginId = job.originId;
+          const [{ finalize }] = await prepare({ mode: "atomic" });
+          return finalize(() => ({ result: job.input.value * 10 }));
+        },
+      })
+      .implementJobType({
+        name: "first",
+        handler: async ({ job, prepare }) => {
+          const [{ finalize }] = await prepare({ mode: "atomic" });
+          return finalize(async ({ client, continueWith }) => {
+            const continuedJob = await continueWith({
+              client,
+              typeName: "second",
+              input: { fromFirst: job.input.id },
+              startBlockers: async () => [
+                await queuert.startJobSequence({
+                  client,
+                  firstJobTypeName: "blocker",
+                  input: { value: 5 },
+                }),
+              ],
+            });
+            secondJobId = continuedJob.id;
+            return continuedJob;
+          });
+        },
+      })
+      .implementJobType({
+        name: "second",
+        handler: async ({ blockers: [blocker], prepare }) => {
+          const [{ finalize }] = await prepare({ mode: "atomic" });
+          return finalize(() => ({ finalResult: blocker.output.result }));
+        },
+      });
+
+    await withWorkers([await worker.start()], async () => {
+      const jobSequence = await runInTransactionWithNotify(queuert, ({ client }) =>
+        queuert.startJobSequence({
+          client,
+          firstJobTypeName: "first",
+          input: { id: "test-123" },
+        }),
+      );
+
+      const [succeededJobSequence] = await waitForJobSequencesCompleted(queuert, [jobSequence]);
+
+      expect(succeededJobSequence.output).toEqual({ finalResult: 50 });
+
+      // Blocker should have the second job as originId (created in continueWith context)
+      // and the first job's rootId (since continueWith runs in first job's sequence)
+      expect(blockerOriginId).toEqual(secondJobId);
+      expect(blockerRootId).toEqual(jobSequence.id);
     });
   });
 });
@@ -2383,8 +2483,9 @@ describe("Deletion", () => {
           output: { result: number };
         };
         main: {
-          input: { blockerSequenceId: string };
+          input: null;
           output: { finalResult: number };
+          blockers: [DefineBlocker<"blocker">];
         };
       }>(),
     });
@@ -2404,15 +2505,6 @@ describe("Deletion", () => {
       })
       .implementJobType({
         name: "main",
-        startBlockers: async ({ job, client }) => {
-          const blockerSequence = await queuert.getJobSequence({
-            client,
-            id: job.input.blockerSequenceId,
-            firstJobTypeName: "blocker",
-          });
-          if (!blockerSequence) throw new Error("Blocker not found");
-          return [blockerSequence];
-        },
         handler: async ({ blockers: [blocker], prepare }) => {
           const [{ finalize }] = await prepare({ mode: "atomic" });
           return finalize(() => ({ finalResult: blocker.output.result }));
@@ -2429,25 +2521,18 @@ describe("Deletion", () => {
         }),
       );
 
-      // Create main sequence that depends on the blocker
+      // Create main sequence that depends on the blocker (references existing blocker)
       const mainSequence = await runInTransactionWithNotify(queuert, ({ client }) =>
         queuert.startJobSequence({
           client,
           firstJobTypeName: "main",
-          input: { blockerSequenceId: blockerSequence.id },
+          input: null,
+          startBlockers: async () => [blockerSequence],
         }),
       );
 
-      // Wait for main to be marked as blocked (check log for job_blocked event)
-      await vi.waitFor(
-        () => {
-          const blockedCall = log.mock.calls.find(
-            (call) => call[0].type === "job_blocked" && call[0].args[0].typeName === "main",
-          );
-          expect(blockedCall).toBeDefined();
-        },
-        { timeout: 1000 },
-      );
+      // Main should be blocked immediately since blocker is not yet complete
+      expect(mainSequence.status).toBe("blocked");
 
       // Trying to delete the blocker should fail because main depends on it
       await expect(
@@ -2509,6 +2594,7 @@ describe("Deletion", () => {
         main: {
           input: null;
           output: { finalResult: number };
+          blockers: [DefineBlocker<"blocker">];
         };
       }>(),
     });
@@ -2526,15 +2612,6 @@ describe("Deletion", () => {
       })
       .implementJobType({
         name: "main",
-        startBlockers: async ({ client }) => {
-          const blockerSequence = await queuert.startJobSequence({
-            client,
-            firstJobTypeName: "blocker",
-            input: { value: 1 },
-          });
-          blockerSequenceId = blockerSequence.id;
-          return [blockerSequence];
-        },
         handler: async ({ blockers: [blocker], prepare }) => {
           const [{ finalize }] = await prepare({ mode: "atomic" });
           return finalize(() => ({ finalResult: blocker.output.result }));
@@ -2547,6 +2624,15 @@ describe("Deletion", () => {
           client,
           firstJobTypeName: "main",
           input: null,
+          startBlockers: async () => {
+            const blockerSequence = await queuert.startJobSequence({
+              client,
+              firstJobTypeName: "blocker",
+              input: { value: 1 },
+            });
+            blockerSequenceId = blockerSequence.id;
+            return [blockerSequence];
+          },
         }),
       );
 

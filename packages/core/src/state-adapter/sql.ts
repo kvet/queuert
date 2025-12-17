@@ -12,7 +12,7 @@ export const migrateSql = /* sql */ `
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'job_status' AND typnamespace = 'queuert'::regnamespace) THEN
-    CREATE TYPE queuert.job_status AS ENUM ('created','blocked','pending','running','completed');
+    CREATE TYPE queuert.job_status AS ENUM ('blocked','pending','running','completed');
   END IF;
 END$$;
 
@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS queuert.job (
   origin_id                     uuid REFERENCES queuert.job(id) ON DELETE CASCADE,
 
   -- state
-  status                        queuert.job_status NOT NULL DEFAULT 'created',
+  status                        queuert.job_status NOT NULL DEFAULT 'pending',
   created_at                    timestamptz NOT NULL DEFAULT now(),
   scheduled_at                  timestamptz NOT NULL DEFAULT now(),
   completed_at                  timestamptz,
@@ -82,7 +82,7 @@ WHERE origin_id IS NOT NULL;
 -- Indexes: job acquisition
 CREATE INDEX IF NOT EXISTS job_acquisition_idx
 ON queuert.job (type_name, scheduled_at)
-WHERE status IN ('created', 'pending');
+WHERE status = 'pending';
 
 -- Indexes: last sequence job lookup
 CREATE INDEX IF NOT EXISTS job_sequence_created_at_idx
@@ -113,7 +113,7 @@ export type DbJob = {
   sequence_id: string;
   origin_id: string | null;
 
-  status: "created" | "blocked" | "pending" | "running" | "completed";
+  status: "blocked" | "pending" | "running" | "completed";
   created_at: string;
   scheduled_at: string;
   completed_at: string | null;
@@ -188,35 +188,47 @@ LIMIT 1
 >;
 
 export const addJobBlockersSql = /* sql */ `
-INSERT INTO queuert.job_blocker (job_id, blocked_by_sequence_id, "index")
-SELECT job_id, blocked_by_sequence_id, ord - 1 AS "index"
-FROM unnest($1::uuid[], $2::uuid[]) WITH ORDINALITY AS t(job_id, blocked_by_sequence_id, ord)
+WITH inserted_blockers AS (
+  INSERT INTO queuert.job_blocker (job_id, blocked_by_sequence_id, "index")
+  SELECT job_id, blocked_by_sequence_id, ord - 1 AS "index"
+  FROM unnest($1::uuid[], $2::uuid[]) WITH ORDINALITY AS t(job_id, blocked_by_sequence_id, ord)
+  RETURNING job_id, blocked_by_sequence_id
+),
+blockers_status AS (
+  SELECT
+    ib.job_id,
+    ib.blocked_by_sequence_id,
+    (
+      SELECT j2.status
+      FROM queuert.job j2
+      WHERE j2.sequence_id = ib.blocked_by_sequence_id
+      ORDER BY j2.created_at DESC
+      LIMIT 1
+    ) AS blocker_status
+  FROM inserted_blockers ib
+),
+has_incomplete_blockers AS (
+  SELECT DISTINCT job_id
+  FROM blockers_status
+  WHERE blocker_status != 'completed'
+),
+updated_job AS (
+  UPDATE queuert.job j
+  SET status = 'blocked'
+  WHERE j.id IN (SELECT job_id FROM has_incomplete_blockers)
+    AND j.status = 'pending'
+  RETURNING j.*
+)
+SELECT * FROM updated_job
+UNION ALL
+SELECT j.* FROM queuert.job j
+WHERE j.id = (SELECT DISTINCT job_id FROM inserted_blockers LIMIT 1)
+  AND NOT EXISTS (SELECT 1 FROM updated_job)
+LIMIT 1;
 ` as TypedSql<
   readonly [NamedParameter<"job_id", string[]>, NamedParameter<"blocked_by_sequence_id", string[]>],
-  DbJob[]
+  [DbJob]
 >;
-
-export const markJobAsBlockedSql = /* sql */ `
-UPDATE queuert.job
-SET status = 'blocked'
-WHERE id = $1
-RETURNING *
-` as TypedSql<readonly [NamedParameter<"id", string>], [DbJob]>;
-
-export const markJobAsPendingSql = /* sql */ `
-UPDATE queuert.job
-SET status = 'pending'
-WHERE id = $1
-RETURNING *
-` as TypedSql<readonly [NamedParameter<"id", string>], [DbJob]>;
-
-export const startJobAttemptSql = /* sql */ `
-UPDATE queuert.job
-SET status = 'running',
-    attempt = attempt + 1
-WHERE id = $1
-RETURNING *
-` as TypedSql<readonly [NamedParameter<"id", string>], [DbJob]>;
 
 export const completeJobSql = /* sql */ `
 UPDATE queuert.job
@@ -344,21 +356,28 @@ RETURNING *
 >;
 
 export const acquireJobSql = /* sql */ `
-SELECT job.*
-FROM queuert.job as job
-WHERE job.type_name IN (SELECT unnest($1::text[]))
-  AND job.status IN ('created', 'pending')
-  AND job.scheduled_at <= now()
-ORDER BY job.scheduled_at ASC
-LIMIT 1
-FOR UPDATE SKIP LOCKED
+WITH acquired_job AS (
+  SELECT id
+  FROM queuert.job
+  WHERE type_name IN (SELECT unnest($1::text[]))
+    AND status = 'pending'
+    AND scheduled_at <= now()
+  ORDER BY scheduled_at ASC
+  LIMIT 1
+  FOR UPDATE SKIP LOCKED
+)
+UPDATE queuert.job
+SET status = 'running',
+    attempt = attempt + 1
+WHERE id = (SELECT id FROM acquired_job)
+RETURNING *
 ` as TypedSql<readonly [NamedParameter<"type_names", string[]>], [DbJob | undefined]>;
 
 export const getNextJobAvailableInMsSql = /* sql */ `
 SELECT GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (job.scheduled_at - now())) * 1000)::bigint) AS available_in_ms
 FROM queuert.job as job
 WHERE job.type_name IN (SELECT unnest($1::text[]))
-  AND job.status IN ('created', 'pending')
+  AND job.status = 'pending'
 ORDER BY job.scheduled_at ASC
 LIMIT 1
 FOR UPDATE SKIP LOCKED

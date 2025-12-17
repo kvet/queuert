@@ -1,5 +1,10 @@
 import { StateJob } from "../state-adapter/state-adapter.js";
-import { BaseJobTypeDefinitions, continuationOutputSymbol } from "./job-type.js";
+import {
+  BaseJobTypeDefinitions,
+  blockerSymbol,
+  continuationOutputSymbol,
+  FirstJobTypeDefinitions,
+} from "./job-type.js";
 
 export type DeduplicationStrategy = "finalized" | "all";
 
@@ -68,6 +73,49 @@ export type ResolvedJobSequence<
   >;
 }[NonInternalReachableJobTypes<TJobTypeDefinitions, Start> & keyof TJobTypeDefinitions];
 
+type ResolveBlockerSequence<
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TBlockerSpec,
+> = TBlockerSpec extends { [blockerSymbol]: infer TName }
+  ? TName extends keyof FirstJobTypeDefinitions<TJobTypeDefinitions> & string
+    ? ResolvedJobSequence<TJobTypeDefinitions, TName>
+    : never
+  : TBlockerSpec extends object
+    ? {
+        [K in keyof FirstJobTypeDefinitions<TJobTypeDefinitions>]: TJobTypeDefinitions[K]["input"] extends TBlockerSpec
+          ? TBlockerSpec extends TJobTypeDefinitions[K]["input"]
+            ? ResolvedJobSequence<TJobTypeDefinitions, K>
+            : never
+          : never;
+      }[keyof FirstJobTypeDefinitions<TJobTypeDefinitions>]
+    : never;
+
+export type ResolveBlockerSequences<
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TJobTypeName extends keyof TJobTypeDefinitions,
+> = TJobTypeDefinitions[TJobTypeName] extends { blockers: infer TBlockers }
+  ? TBlockers extends readonly [infer First, ...infer Rest]
+    ? readonly [
+        ResolveBlockerSequence<TJobTypeDefinitions, First>,
+        ...ResolveBlockerSequencesArray<TJobTypeDefinitions, Rest>,
+      ]
+    : TBlockers extends readonly (infer TElement)[]
+      ? readonly ResolveBlockerSequence<TJobTypeDefinitions, TElement>[]
+      : readonly []
+  : readonly [];
+
+type ResolveBlockerSequencesArray<
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TBlockers,
+> = TBlockers extends readonly [infer First, ...infer Rest]
+  ? readonly [
+      ResolveBlockerSequence<TJobTypeDefinitions, First>,
+      ...ResolveBlockerSequencesArray<TJobTypeDefinitions, Rest>,
+    ]
+  : TBlockers extends readonly (infer TElement)[]
+    ? readonly ResolveBlockerSequence<TJobTypeDefinitions, TElement>[]
+    : readonly [];
+
 export type JobSequence<TFirstJobTypeName, TInput, TOutput> = {
   id: string;
   originId: string | null;
@@ -76,7 +124,6 @@ export type JobSequence<TFirstJobTypeName, TInput, TOutput> = {
   input: TInput;
   createdAt: Date;
 } & (
-  | { status: "created" }
   | { status: "blocked" }
   | { status: "pending" }
   | { status: "running" }
@@ -89,6 +136,20 @@ export type JobSequence<TFirstJobTypeName, TInput, TOutput> = {
 export type CompletedJobSequence<TJobSequence extends JobSequence<any, any, any>> = TJobSequence & {
   status: "completed";
 };
+
+type MapToCompletedSequences<TBlockers> = TBlockers extends readonly [
+  infer First extends JobSequence<any, any, any>,
+  ...infer Rest,
+]
+  ? readonly [CompletedJobSequence<First>, ...MapToCompletedSequences<Rest>]
+  : TBlockers extends readonly (infer TElement extends JobSequence<any, any, any>)[]
+    ? readonly CompletedJobSequence<TElement>[]
+    : readonly [];
+
+export type ResolveCompletedBlockerSequences<
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TJobTypeName extends keyof TJobTypeDefinitions,
+> = MapToCompletedSequences<ResolveBlockerSequences<TJobTypeDefinitions, TJobTypeName>>;
 
 export const mapStateJobPairToJobSequence = (
   stateJobPair: [StateJob, StateJob | undefined],
@@ -115,11 +176,9 @@ export const mapStateJobPairToJobSequence = (
       };
     case "running":
       return { ...base, status: "running" };
-    case "pending":
-      return { ...base, status: "pending" };
     case "blocked":
       return { ...base, status: "blocked" };
     default:
-      return { ...base, status: "created" };
+      return { ...base, status: "pending" };
   }
 };

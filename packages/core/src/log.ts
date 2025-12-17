@@ -51,12 +51,12 @@ type JobCreatedLogEntry = LogEntry<
   "job_created",
   "info",
   "Job created",
-  [{ input: unknown } & JobBasicArgs]
+  [{ input: unknown; blockers: JobSequenceArgs[] } & JobBasicArgs]
 >;
-type JobAcquiredLogEntry = LogEntry<
-  "job_acquired",
+type JobAttemptStartedLogEntry = LogEntry<
+  "job_attempt_started",
   "info",
-  "Job acquired",
+  "Job attempt started",
   [JobProcessingArgs & WorkerBasicArgs]
 >;
 type JobLeaseExpiredLogEntry = LogEntry<
@@ -108,19 +108,6 @@ type JobSequenceDeletedLogEntry = LogEntry<
   "Job sequence deleted",
   [{ deletedJobIds: string[] } & JobSequenceArgs]
 >;
-
-type JobBlockersAddedLogEntry = LogEntry<
-  "job_blockers_added",
-  "info",
-  "Job blockers added",
-  [{ blockers: JobSequenceArgs[] } & JobProcessingArgs]
->;
-type JobBlockedLogEntry = LogEntry<
-  "job_blocked",
-  "info",
-  "Job is blocked",
-  [JobProcessingArgs & { incompleteBlockers: JobSequenceArgs[] }]
->;
 type JobSequenceUnblockedJobsLogEntry = LogEntry<
   "job_sequence_unblocked_jobs",
   "info",
@@ -143,7 +130,7 @@ type TypedLogEntry =
   | WorkerStoppedLogEntry
   // job
   | JobCreatedLogEntry
-  | JobAcquiredLogEntry
+  | JobAttemptStartedLogEntry
   | JobLeaseExpiredLogEntry
   | JobReapedLogEntry
   | JobAttemptFailedLogEntry
@@ -153,8 +140,6 @@ type TypedLogEntry =
   | JobSequenceCompletedLogEntry
   | JobSequenceDeletedLogEntry
   // blockers
-  | JobBlockersAddedLogEntry
-  | JobBlockedLogEntry
   | JobSequenceUnblockedJobsLogEntry
   // notify
   | NotifyContextAbsenceLogEntry;

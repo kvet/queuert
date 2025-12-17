@@ -3,7 +3,7 @@ import { BaseJobTypeDefinitions, FirstJobTypeDefinitions } from "./entities/job-
 import { BackoffConfig } from "./helpers/backoff.js";
 import { Log } from "./log.js";
 import { NotifyAdapter } from "./notify-adapter/notify-adapter.js";
-import { queuertHelper, StartBlockers } from "./queuert-helper.js";
+import { queuertHelper, StartBlockersFn } from "./queuert-helper.js";
 import {
   DeduplicationOptions,
   GetStateAdapterContext,
@@ -16,6 +16,7 @@ export { type CompletedJobSequence, type JobSequence } from "./entities/job-sequ
 export {
   defineUnionJobTypes,
   type BaseJobTypeDefinitions,
+  type DefineBlocker,
   type DefineContinuationInput,
   type DefineContinuationOutput,
 } from "./entities/job-type.js";
@@ -34,16 +35,9 @@ type QueuertWorkerDefinition<
   TStateAdapter extends StateAdapter<any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
 > = {
-  implementJobType: <
-    TJobTypeName extends keyof TJobTypeDefinitions & string,
-    TBlockers extends readonly ResolvedJobSequence<
-      TJobTypeDefinitions,
-      keyof TJobTypeDefinitions
-    >[],
-  >(options: {
+  implementJobType: <TJobTypeName extends keyof TJobTypeDefinitions & string>(options: {
     name: TJobTypeName;
-    startBlockers?: StartBlockers<TStateAdapter, TJobTypeDefinitions, TJobTypeName, TBlockers>;
-    handler: JobHandler<TStateAdapter, TJobTypeDefinitions, TJobTypeName, TBlockers>;
+    handler: JobHandler<TStateAdapter, TJobTypeDefinitions, TJobTypeName>;
     retryConfig?: BackoffConfig;
     leaseConfig?: LeaseConfig;
   }) => QueuertWorkerDefinition<TStateAdapter, TJobTypeDefinitions>;
@@ -62,6 +56,7 @@ export type Queuert<
       firstJobTypeName: TFirstJobTypeName;
       input: TJobTypeDefinitions[TFirstJobTypeName]["input"];
       deduplication?: DeduplicationOptions;
+      startBlockers?: StartBlockersFn<TJobTypeDefinitions, TFirstJobTypeName>;
     } & GetStateAdapterContext<TStateAdapter>,
   ) => Promise<
     ResolvedJobSequence<TJobTypeDefinitions, TFirstJobTypeName> & { deduplicated: boolean }
@@ -110,13 +105,12 @@ export const createQueuert = async <
         registeredJobTypes: RegisteredJobTypes,
       ): QueuertWorkerDefinition<TStateAdapter, TJobTypeDefinitions> => {
         return {
-          implementJobType({ name: typeName, startBlockers, handler, retryConfig, leaseConfig }) {
+          implementJobType({ name: typeName, handler, retryConfig, leaseConfig }) {
             if (registeredJobTypes.has(typeName)) {
               throw new Error(`JobType with name "${typeName}" is already registered`);
             }
             const newRegisteredJobTypes = new Map(registeredJobTypes);
             newRegisteredJobTypes.set(typeName, {
-              startBlockers: startBlockers as any,
               handler: handler as any,
               retryConfig,
               leaseConfig,
@@ -136,12 +130,19 @@ export const createQueuert = async <
 
       return createWorkerInstance(new Map());
     },
-    startJobSequence: async ({ input, firstJobTypeName, deduplication, ...context }) =>
+    startJobSequence: async ({
+      input,
+      firstJobTypeName,
+      deduplication,
+      startBlockers,
+      ...context
+    }) =>
       helper.startJobSequence({
         firstJobTypeName,
         input,
         context,
         deduplication,
+        startBlockers,
       }),
     getJobSequence: async ({ id, firstJobTypeName, ...context }) =>
       helper.getJobSequence({ id, firstJobTypeName, context }),

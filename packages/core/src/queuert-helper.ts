@@ -1,10 +1,9 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import {
   CompatibleJobTypeTargets,
-  CompletedJobSequence,
   JobSequence,
   mapStateJobPairToJobSequence,
-  ResolvedJobSequence,
+  ResolveBlockerSequences,
 } from "./entities/job-sequence.js";
 import { BaseJobTypeDefinitions, UnwrapContinuationInput } from "./entities/job-type.js";
 import {
@@ -13,19 +12,23 @@ import {
   isContinuedJob,
   Job,
   mapStateJobToJob,
-  RunningJob,
+  PendingJob,
 } from "./entities/job.js";
 import { BackoffConfig, calculateBackoffMs } from "./helpers/backoff.js";
 import { Log } from "./log.js";
 import { NotifyAdapter } from "./notify-adapter/notify-adapter.js";
-import {
-  DeduplicationOptions,
-  GetStateAdapterContext,
-  StateAdapter,
-  StateJob,
-} from "./state-adapter/state-adapter.js";
+import { DeduplicationOptions, StateAdapter, StateJob } from "./state-adapter/state-adapter.js";
 import { BaseStateProviderContext } from "./state-provider/state-provider.js";
 import { RescheduleJobError } from "./worker/job-handler.js";
+
+export type StartBlockersFn<
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TJobTypeName extends keyof TJobTypeDefinitions & string,
+> = (options: {
+  job: PendingJob<
+    Job<TJobTypeName, UnwrapContinuationInput<TJobTypeDefinitions[TJobTypeName]["input"]>>
+  >;
+}) => Promise<ResolveBlockerSequences<TJobTypeDefinitions, TJobTypeName>>;
 
 const notifyJobTypeStorage = new AsyncLocalStorage<Set<string>>();
 const jobContextStorage = new AsyncLocalStorage<{
@@ -56,19 +59,6 @@ export type ResolvedJobTypeJobs<
   >;
 }[CompatibleJobTypeTargets<TJobTypeDefinitions, TJobTypeName>];
 
-export type StartBlockers<
-  TStateAdapter extends StateAdapter<BaseStateProviderContext>,
-  TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TJobTypeName extends keyof TJobTypeDefinitions & string,
-  TBlockers extends readonly {
-    [K in keyof TJobTypeDefinitions]: ResolvedJobSequence<TJobTypeDefinitions, K>;
-  }[keyof TJobTypeDefinitions][],
-> = (
-  startBlockersOptions: {
-    job: Job<TJobTypeName, TJobTypeDefinitions[TJobTypeName]["input"]>;
-  } & GetStateAdapterContext<TStateAdapter>,
-) => Promise<TBlockers>;
-
 export const queuertHelper = ({
   stateAdapter,
   notifyAdapter,
@@ -82,17 +72,19 @@ export const queuertHelper = ({
     typeName,
     input,
     context,
+    startBlockers,
     isSequence,
     deduplication,
   }: {
     typeName: string;
     input: unknown;
     context: BaseStateProviderContext;
+    startBlockers?: StartBlockersFn<BaseJobTypeDefinitions, string>;
     isSequence: boolean;
     deduplication?: DeduplicationOptions;
   }): Promise<{ job: StateJob; deduplicated: boolean }> => {
     const jobContext = jobContextStorage.getStore();
-    const { job, deduplicated } = await stateAdapter.createJob({
+    const createJobResult = await stateAdapter.createJob({
       context,
       typeName,
       input,
@@ -101,9 +93,32 @@ export const queuertHelper = ({
       rootId: jobContext?.rootId,
       deduplication,
     });
+    let job = createJobResult.job;
+    const deduplicated = createJobResult.deduplicated;
 
     if (deduplicated) {
       return { job, deduplicated };
+    }
+
+    let blockerSequences: JobSequence<any, any, any>[] = [];
+    if (startBlockers) {
+      const blockers = await withJobContext(
+        {
+          originId: job.id,
+          sequenceId: job.sequenceId,
+          rootId: job.rootId,
+        },
+        () => startBlockers({ job: mapStateJobToJob(job) as any }),
+      );
+
+      blockerSequences = [...blockers] as JobSequence<any, any, any>[];
+      const blockerSequenceIds = blockerSequences.map((b) => b.id);
+
+      job = await stateAdapter.addJobBlockers({
+        context,
+        jobId: job.id,
+        blockedBySequenceIds: blockerSequenceIds,
+      });
     }
 
     if (isSequence) {
@@ -135,6 +150,12 @@ export const queuertHelper = ({
           sequenceId: job.sequenceId,
           rootId: job.rootId,
           input,
+          blockers: blockerSequences.map((b) => ({
+            sequenceId: b.id,
+            firstJobTypeName: b.firstJobTypeName,
+            originId: b.originId,
+            rootId: b.rootId,
+          })),
         },
       ],
     });
@@ -180,14 +201,19 @@ export const queuertHelper = ({
     });
   };
 
+  const withJobContext = async <T>(
+    context: { originId: string; sequenceId: string; rootId: string },
+    cb: () => Promise<T>,
+  ): Promise<T> => {
+    return jobContextStorage.run(context, cb);
+  };
+
   return {
     withNotifyJobTypeContext: withNotifyJobTypeContext as <T>(cb: () => Promise<T>) => Promise<T>,
-    withJobContext: async <T>(
+    withJobContext: withJobContext as <T>(
       context: { originId: string; sequenceId: string; rootId: string },
       cb: () => Promise<T>,
-    ): Promise<T> => {
-      return jobContextStorage.run(context, cb);
-    },
+    ) => Promise<T>,
     runInTransaction: async <T>(
       cb: (context: BaseStateProviderContext) => Promise<T>,
     ): Promise<T> => {
@@ -195,146 +221,26 @@ export const queuertHelper = ({
         withNotifyJobTypeContext(() => stateAdapter.runInTransaction(context, cb)),
       );
     },
-    scheduleBlockerJobSequences: async ({
-      job,
-      startBlockers,
+    getJobBlockers: async ({
+      jobId,
       context,
     }: {
-      job: StateJob;
-      startBlockers?: StartBlockers<
-        StateAdapter<BaseStateProviderContext>,
-        BaseJobTypeDefinitions,
-        string,
-        readonly JobSequence<any, any, any>[]
-      >;
+      jobId: string;
       context: BaseStateProviderContext;
-    }): Promise<StateJob> => {
-      if (job.status !== "created") {
-        return job;
-      }
-
-      const blockerJobSequences = startBlockers
-        ? await startBlockers({
-            job: mapStateJobToJob(job),
-            ...context,
-          })
-        : [];
-      if (blockerJobSequences.length) {
-        await stateAdapter.addJobBlockers({
-          context,
-          jobId: job.id,
-          blockedBySequenceIds: blockerJobSequences.map((b: JobSequence<any, any, any>) => b.id),
-        });
-        log({
-          type: "job_blockers_added",
-          level: "info",
-          message: "Job blockers added",
-          args: [
-            {
-              id: job.id,
-              typeName: job.typeName,
-              status: job.status,
-              attempt: job.attempt,
-              originId: job.originId,
-              sequenceId: job.sequenceId,
-              rootId: job.rootId,
-              blockers: blockerJobSequences.map((b: JobSequence<any, any, any>) => ({
-                sequenceId: b.id,
-                firstJobTypeName: b.firstJobTypeName,
-                rootId: b.rootId,
-                originId: b.originId,
-              })),
-            },
-          ],
-        });
-      }
-      const incompleteBlockers = blockerJobSequences.filter(
-        (b: JobSequence<any, any, any>) => b.status !== "completed",
-      );
-      if (incompleteBlockers.length) {
-        job = await stateAdapter.markJobAsBlocked({
-          context,
-          jobId: job.id,
-        });
-        log({
-          type: "job_blocked",
-          level: "info",
-          message: "Job is blocked",
-          args: [
-            {
-              id: job.id,
-              typeName: job.typeName,
-              status: job.status,
-              attempt: job.attempt,
-              originId: job.originId,
-              sequenceId: job.sequenceId,
-              rootId: job.rootId,
-              incompleteBlockers: incompleteBlockers.map((b: JobSequence<any, any, any>) => ({
-                sequenceId: b.id,
-                firstJobTypeName: b.firstJobTypeName,
-                rootId: b.rootId,
-                originId: b.originId,
-              })),
-            },
-          ],
-        });
-      } else {
-        job = await stateAdapter.markJobAsPending({
-          context,
-          jobId: job.id,
-        });
-      }
-      return job;
-    },
-    getJobHandlerInput: async ({
-      job,
-      context,
-    }: {
-      job: StateJob;
-      context: BaseStateProviderContext;
-    }): Promise<{
-      job: RunningJob<Job<any, any>>;
-      blockers: CompletedJobSequence<JobSequence<any, any, any>>[];
-    }> => {
-      const runningJob = await stateAdapter.startJobAttempt({
-        context,
-        jobId: job.id,
-      });
-
-      const blockers = await stateAdapter.getJobBlockers({
-        context,
-        jobId: job.id,
-      });
-
-      if (blockers.some((blocker) => blocker[1]?.status !== "completed")) {
-        throw new Error("Some blockers are not completed", {
-          cause: {
-            jobId: job.id,
-            blockerIds: blockers.map((blocker) => blocker[0]?.id),
-            incompleteBlockerIds: blockers
-              .filter((blocker) => blocker[1]?.status !== "completed")
-              .map((blocker) => blocker[0]?.id),
-          },
-        });
-      }
-
-      return {
-        job: mapStateJobToJob(runningJob) as RunningJob<Job<any, any>>,
-        blockers: blockers.map(mapStateJobPairToJobSequence) as CompletedJobSequence<
-          JobSequence<any, any, any>
-        >[],
-      };
-    },
+    }): Promise<[StateJob, StateJob | undefined][]> =>
+      stateAdapter.getJobBlockers({ context, jobId }),
     startJobSequence: async <TFirstJobTypeName extends string, TInput, TOutput>({
       firstJobTypeName,
       input,
       context,
       deduplication,
+      startBlockers,
     }: {
       firstJobTypeName: TFirstJobTypeName;
       input: TInput;
       context: any;
       deduplication?: DeduplicationOptions;
+      startBlockers?: StartBlockersFn<BaseJobTypeDefinitions, string>;
     }): Promise<JobSequence<TFirstJobTypeName, TInput, TOutput> & { deduplicated: boolean }> => {
       await stateAdapter.assertInTransaction(context);
 
@@ -342,6 +248,7 @@ export const queuertHelper = ({
         typeName: firstJobTypeName,
         input,
         context,
+        startBlockers,
         isSequence: true,
         deduplication,
       });
@@ -367,22 +274,22 @@ export const queuertHelper = ({
       typeName,
       input,
       context,
+      startBlockers,
     }: {
       typeName: TJobTypeName;
       input: TInput;
       context: any;
+      startBlockers?: StartBlockersFn<BaseJobTypeDefinitions, string>;
     }): Promise<ContinuedJob<TJobTypeName, TInput>> => {
       const { job } = await createStateJob({
         typeName,
         input,
         context,
+        startBlockers,
         isSequence: false,
       });
 
-      return {
-        ...mapStateJobToJob(job),
-        [continuedJobSymbol]: true,
-      };
+      return { ...mapStateJobToJob(job), [continuedJobSymbol]: true };
     },
     handleJobHandlerError: async ({
       job,
@@ -656,9 +563,9 @@ export const queuertHelper = ({
 
       if (job) {
         log({
-          type: "job_acquired",
+          type: "job_attempt_started",
           level: "info",
-          message: `Job acquired`,
+          message: "Job attempt started",
           args: [
             {
               status: job.status,

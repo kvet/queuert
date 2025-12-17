@@ -3,16 +3,37 @@
 ## Core Concepts
 
 ### Job
-An individual unit of work. Jobs have a lifecycle: `created` → `blocked`/`pending` → `running` → `completed`. Jobs can be deleted (hard-deleted from the database). Each job belongs to a JobType and contains typed input/output. Jobs track their execution attempts, scheduling, and provenance via `originId`.
+An individual unit of work. Jobs have a lifecycle: `blocked`/`pending` → `running` → `completed`. Jobs start as `blocked` if they have incomplete blockers, otherwise `pending`. Jobs can be deleted (hard-deleted from the database). Each job belongs to a JobType and contains typed input/output. Jobs track their execution attempts, scheduling, and provenance via `originId`.
 
 ### JobSequence
-Like a Promise chain, a sequence of linked jobs where each job can `continueWith` to the next. The sequence completes when its final job completes without continuing. Sequences have a simple lifecycle: `created` → `completed`.
+Like a Promise chain, a sequence of linked jobs where each job can `continueWith` to the next. The sequence completes when its final job completes without continuing. Sequence status reflects the current job in the sequence: `blocked`/`pending` → `running` → `completed`.
 
 ### JobType
 Defines a named job type with its input/output types and handler. JobTypes are registered with workers via `implementJobType`. The handler receives the job, its resolved blockers, and a context for continuing the sequence.
 
 ### Blockers
-Jobs can depend on other job sequences. A job with blockers enters `blocked` status until all blocker sequences complete. Once complete, the job transitions to `pending` and can be processed.
+Jobs can depend on other job sequences. Blockers are declared at the type level with `DefineBlocker<T>` and provided via `startBlockers` callback:
+
+```typescript
+// Type declaration
+defineUnionJobTypes<{
+  blocker: { input: {...}; output: {...} };
+  main: { input: {...}; output: {...}; blockers: [DefineBlocker<'blocker'>] };
+}>()
+
+// Usage - startBlockers callback creates blockers via startJobSequence
+await queuert.startJobSequence({
+  client,
+  firstJobTypeName: 'main',
+  input: {...},
+  startBlockers: async () => {
+    const blocker = await queuert.startJobSequence({ client, firstJobTypeName: 'blocker', input: {...} });
+    return [blocker];  // Can also return existing sequences
+  },
+});
+```
+
+Blockers created within `startBlockers` automatically inherit the main job's `rootId` and `originId` via context propagation. Existing sequences returned from the callback keep their own `rootId`. Same pattern applies to `continueWith`. A job with incomplete blockers starts as `blocked` and transitions to `pending` when all blockers complete.
 
 ### Log
 A typed logging function for observability. All job lifecycle events are logged with structured data (job IDs, queue names, worker IDs, etc.). Consumers provide their own log implementation to integrate with their logging infrastructure.
@@ -90,8 +111,8 @@ TypeScript prevents calling `startJobSequence` with internal job types at compil
 
 ### Consistent Terminology
 Parallel entities should use consistent lifecycle terminology to reduce cognitive load:
-- Job: `created` → `blocked`/`pending` → `running` → `completed`
-- JobSequence: `created` → `blocked`/`pending` → `running` → `completed` (reflects status of current job in sequence)
+- Job: `blocked`/`pending` → `running` → `completed`
+- JobSequence: `blocked`/`pending` → `running` → `completed` (reflects status of current job in sequence)
 
 Avoid asymmetric naming (e.g., `started`/`finished` vs `created`/`completed`) even if individual terms seem natural - consistency across the API produces fewer questions.
 
@@ -108,6 +129,8 @@ Avoid asymmetric naming (e.g., `started`/`finished` vs `created`/`completed`) ev
 - `deduplicated`: Boolean flag returned when a job/sequence was deduplicated instead of created.
 - `DefineContinuationInput<T>`: Type wrapper marking job types as internal (only reachable via `continueWith`).
 - `DefineContinuationOutput<T>`: Type marker in output indicating continuation to another job type.
+- `DefineBlocker<T>`: Type marker for declaring blocker dependencies. Used in `blockers` field of job type definitions.
+- `startBlockers`: Callback parameter in `startJobSequence` and `continueWith` for providing blockers. Create new blocker sequences via `startJobSequence` within the callback - they automatically inherit rootId/originId from the main job via context propagation. Can also return existing sequences.
 - `deleteJobSequences`: Deletes entire job trees by `rootId`. Accepts array of sequence IDs. Must be called on root sequences. Throws error if external job sequences depend on sequences being deleted; include those dependents in the deletion set to proceed. Primarily intended for testing environments.
 - `JobDeletedError`: Error thrown when a running job detects it has been deleted during lease renewal.
 

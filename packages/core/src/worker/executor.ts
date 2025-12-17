@@ -1,12 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { JobSequence } from "../entities/job-sequence.js";
 import { BaseJobTypeDefinitions } from "../entities/job-type.js";
 import { BackoffConfig } from "../helpers/backoff.js";
 import { withRetry } from "../helpers/retry.js";
 import { sleep } from "../helpers/sleep.js";
 import { Log } from "../log.js";
 import { NotifyAdapter } from "../notify-adapter/notify-adapter.js";
-import { LeaseExpiredError, ProcessHelper, StartBlockers } from "../queuert-helper.js";
+import { LeaseExpiredError, ProcessHelper } from "../queuert-helper.js";
 import { StateAdapter } from "../state-adapter/state-adapter.js";
 import { BaseStateProviderContext } from "../state-provider/state-provider.js";
 import { JobHandler, LeaseConfig, processJobHandler } from "./job-handler.js";
@@ -14,18 +13,7 @@ import { JobHandler, LeaseConfig, processJobHandler } from "./job-handler.js";
 export type RegisteredJobTypes = Map<
   string,
   {
-    startBlockers?: StartBlockers<
-      StateAdapter<BaseStateProviderContext>,
-      BaseJobTypeDefinitions,
-      string,
-      readonly JobSequence<string, any, any>[]
-    >;
-    handler: JobHandler<
-      StateAdapter<BaseStateProviderContext>,
-      BaseJobTypeDefinitions,
-      string,
-      readonly JobSequence<string, any, any>[]
-    >;
+    handler: JobHandler<StateAdapter<BaseStateProviderContext>, BaseJobTypeDefinitions, string>;
     retryConfig?: BackoffConfig;
     leaseConfig?: LeaseConfig;
   }
@@ -135,30 +123,18 @@ export const createExecutor = ({
                 sequenceId: job.sequenceId,
                 originId: job.id,
               },
-              async (): Promise<[boolean, (() => Promise<void>) | undefined]> => {
-                job = await helper.scheduleBlockerJobSequences({
-                  job: job!,
-                  startBlockers: jobType.startBlockers,
+              async () => [
+                true,
+                await processJobHandler({
+                  helper,
+                  handler: jobType.handler,
                   context,
-                });
-
-                if (job.status === "blocked") {
-                  return [true, undefined];
-                }
-
-                return [
-                  true,
-                  await processJobHandler({
-                    helper,
-                    handler: jobType.handler,
-                    context,
-                    job,
-                    retryConfig: jobType.retryConfig ?? defaultRetryConfig,
-                    leaseConfig: jobType.leaseConfig ?? defaultLeaseConfig,
-                    workerId,
-                  }),
-                ];
-              },
+                  job,
+                  retryConfig: jobType.retryConfig ?? defaultRetryConfig,
+                  leaseConfig: jobType.leaseConfig ?? defaultLeaseConfig,
+                  workerId,
+                }),
+              ],
             );
           },
         );

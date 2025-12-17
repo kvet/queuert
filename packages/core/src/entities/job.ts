@@ -15,9 +15,6 @@ export type Job<TJobTypeName, TInput> = {
   lastAttemptError: string | null;
 } & (
   | {
-      status: "created";
-    }
-  | {
       status: "blocked";
     }
   | {
@@ -36,6 +33,10 @@ export type Job<TJobTypeName, TInput> = {
 
 export type RunningJob<TJob extends Job<any, any>> = TJob & {
   status: "running";
+};
+
+export type PendingJob<TJob extends Job<any, any>> = TJob & {
+  status: "pending";
 };
 
 export const mapStateJobToJob = (stateJob: StateJob): Job<any, any> => {

@@ -3,6 +3,7 @@ export type BaseJobTypeDefinitions = Record<
   {
     input: any;
     output: any;
+    blockers?: readonly any[];
   }
 >;
 
@@ -25,3 +26,7 @@ export type FirstJobTypeDefinitions<T extends BaseJobTypeDefinitions> = {
 export const continuationOutputSymbol: unique symbol = Symbol("continuationOutput");
 
 export type DefineContinuationOutput<T extends string> = { [continuationOutputSymbol]: T };
+
+export const blockerSymbol: unique symbol = Symbol("blocker");
+
+export type DefineBlocker<T extends string> = { [blockerSymbol]: T };

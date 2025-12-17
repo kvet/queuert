@@ -13,15 +13,12 @@ import {
   getJobByIdSql,
   getJobSequenceByIdSql,
   getNextJobAvailableInMsSql,
-  markJobAsBlockedSql,
-  markJobAsPendingSql,
   migrateSql,
   removeExpiredJobLeaseSql,
   renewJobLeaseSql,
   rescheduleJobSql,
   scheduleBlockedJobsSql,
   setupSql,
-  startJobAttemptSql,
 } from "./sql.js";
 import { StateAdapter, StateJob } from "./state-adapter.js";
 
@@ -178,7 +175,7 @@ export const createPgStateAdapter = <TContext extends BaseStateProviderContext>(
     },
 
     addJobBlockers: async ({ context, jobId, blockedBySequenceIds }) => {
-      const jobs = await executeTypedSql({
+      const [job] = await executeTypedSql({
         context,
         sql: addJobBlockersSql,
         params: [
@@ -187,7 +184,7 @@ export const createPgStateAdapter = <TContext extends BaseStateProviderContext>(
         ],
       });
 
-      return jobs.map(mapDbJobToStateJob).map((job) => [job, undefined]);
+      return mapDbJobToStateJob(job);
     },
     scheduleBlockedJobs: async ({ context, blockedBySequenceId }) => {
       const jobs = await executeTypedSql({
@@ -222,21 +219,6 @@ export const createPgStateAdapter = <TContext extends BaseStateProviderContext>(
       const [job] = await executeTypedSql({ context, sql: acquireJobSql, params: [typeNames] });
 
       return job ? mapDbJobToStateJob(job) : undefined;
-    },
-    markJobAsBlocked: async ({ context, jobId }) => {
-      const [job] = await executeTypedSql({ context, sql: markJobAsBlockedSql, params: [jobId] });
-
-      return mapDbJobToStateJob(job);
-    },
-    markJobAsPending: async ({ context, jobId }) => {
-      const [job] = await executeTypedSql({ context, sql: markJobAsPendingSql, params: [jobId] });
-
-      return mapDbJobToStateJob(job);
-    },
-    startJobAttempt: async ({ context, jobId }) => {
-      const [job] = await executeTypedSql({ context, sql: startJobAttemptSql, params: [jobId] });
-
-      return mapDbJobToStateJob(job);
     },
     renewJobLease: async ({ context, jobId, workerId, leaseDurationMs }) => {
       const [job] = await executeTypedSql({
