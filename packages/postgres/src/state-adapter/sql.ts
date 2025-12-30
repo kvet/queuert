@@ -1,4 +1,4 @@
-import { DeduplicationStrategy } from "../entities/deduplication.js";
+import { type DeduplicationStrategy } from "@queuert/core";
 import { NamedParameter, TypedSql } from "./state-adapter.pg.js";
 
 // TODO: pgstattuple with partitioning

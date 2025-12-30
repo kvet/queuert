@@ -1,16 +1,19 @@
 import { describe, it, TestAPI } from "vitest";
-import { StateAdapter } from "../state-adapter/state-adapter.js";
+import { type StateAdapter } from "@queuert/core";
+import {
+  blockerSequencesTestSuite,
+  extendWithCommon,
+  extendWithInProcessNotify,
+  notifyTestSuite,
+  processTestSuite,
+  reaperTestSuite,
+  sequencesTestSuite,
+  stateResilienceTestSuite,
+  waitSequenceCompletionTestSuite,
+  workerTestSuite,
+  workerlessCompletionTestSuite,
+} from "@queuert/core/testing";
 import { extendWithStatePostgres } from "../state-adapter/state-adapter.pg.spec-helper.js";
-import { blockerSequencesTestSuite } from "../suites/blocker-sequences.test-suite.js";
-import { processTestSuite } from "../suites/process.test-suite.js";
-import { notifyTestSuite } from "../suites/notify.test-suite.js";
-import { reaperTestSuite } from "../suites/reaper.test-suite.js";
-import { sequencesTestSuite } from "../suites/sequences.test-suite.js";
-import { extendWithCommon, extendWithInProcessNotify } from "../suites/spec-context.spec-helper.js";
-import { stateResilienceTestSuite } from "../suites/state-resilience.test-suite.js";
-import { waitSequenceCompletionTestSuite } from "../suites/wait-sequence-completion.test-suite.js";
-import { workerTestSuite } from "../suites/worker.test-suite.js";
-import { workerlessCompletionTestSuite } from "../suites/workerless-completion.test-suite.js";
 
 const postgresInProcessIt = extendWithInProcessNotify(
   extendWithCommon(

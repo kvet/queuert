@@ -1,5 +1,11 @@
-import { RetryConfig, withRetry } from "../helpers/retry.js";
-import { BaseStateProviderContext, StateProvider } from "../state-provider/state-provider.js";
+import {
+  type RetryConfig,
+  type BaseStateProviderContext,
+  type StateProvider,
+  type StateAdapter,
+  type StateJob,
+} from "@queuert/core";
+import { withRetry } from "@queuert/core/internal";
 import { isTransientPgError } from "./errors.js";
 import {
   acquireJobSql,
@@ -22,7 +28,6 @@ import {
   scheduleBlockedJobsSql,
   setupSql,
 } from "./sql.js";
-import { StateAdapter, StateJob } from "./state-adapter.js";
 
 export const namedParameterSymbol: unique symbol = Symbol("namedParameter");
 
@@ -301,3 +306,6 @@ export const createPgStateAdapter = <TContext extends BaseStateProviderContext>(
     },
   };
 };
+
+export type PgStateAdapter<TContext extends BaseStateProviderContext = BaseStateProviderContext> =
+  StateAdapter<TContext>;

@@ -4,6 +4,34 @@
 
 MIT License - see [LICENSE](LICENSE) for details.
 
+## Project Structure
+
+Queuert is a monorepo with two packages:
+
+### `@queuert/core`
+
+Core abstractions, interfaces, and in-memory implementations for testing.
+
+**Exports:**
+
+- `.` (main): `createQueuert`, adapter interfaces (`StateAdapter`, `NotifyAdapter`), type definitions, error classes, in-process adapters (`createInProcessStateAdapter`, `createInProcessNotifyAdapter`, `createNoopNotifyAdapter`)
+- `./testing`: Test suites and context helpers for adapter packages (`processTestSuite`, `sequencesTestSuite`, etc., `extendWithCommon`, `extendWithStateInProcess`)
+- `./internal`: Internal utilities for adapter packages only (`withRetry`)
+
+### `@queuert/postgres`
+
+PostgreSQL state adapter implementation. Users provide their own `pg` client.
+
+**Exports:**
+
+- `.` (main): `createPgStateAdapter`, `PgStateAdapter` type
+- `./testing`: Test helper for PostgreSQL tests (`extendWithStatePostgres`)
+
+**Dependencies:**
+
+- `@queuert/core` as peer dependency
+- `pg` is a dev dependency - users bring their own `pg` client
+
 ## Core Concepts
 
 ### Job
@@ -53,7 +81,7 @@ Abstracts database operations for job persistence. Allows different database imp
 
 ### StateProvider
 
-Abstracts ORM/database client operations. Provides context management, transaction handling, and SQL execution. Allows integration with different ORMs (e.g., Drizzle, Prisma, raw pg).
+Abstracts ORM/database client operations, providing context management, transaction handling, and SQL execution. Users create their own `StateProvider` implementation to integrate with their preferred client (raw `pg`, Drizzle, Prisma, etc.) and pass it to `createPgStateAdapter`.
 
 ### NotifyAdapter
 
@@ -273,9 +301,10 @@ describe("MyFeature", () => {
 
 **File organization:**
 
-- `src/suites/` - Test suite files (`*.test-suite.ts`) and shared context helpers (`spec-context.spec-helper.ts`)
-- `src/specs/` - Spec files (`*.spec.ts`) that configure and run test suites
-- Adapter-specific test helpers live alongside their adapters (e.g., `state-adapter/state-adapter.pg.spec-helper.ts`)
+- `packages/core/src/suites/` - Reusable test suite files (`*.test-suite.ts`) and shared context helpers (`spec-context.spec-helper.ts`), exported via `@queuert/core/testing`
+- `packages/core/src/specs/` - Spec files (`*.spec.ts`) that run test suites with in-process adapters
+- `packages/postgres/src/specs/` - Spec files that run the same test suites with PostgreSQL adapter
+- State adapter test helpers (`extendWithStateInProcess`, `extendWithStatePostgres`) configure the test context with the appropriate adapter
 
 ## Code Style
 

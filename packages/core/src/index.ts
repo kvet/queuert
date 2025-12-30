@@ -43,9 +43,23 @@ export {
 export {
   type DeduplicationOptions,
   type DeduplicationStrategy,
+  type StateAdapter,
+  type StateJob,
 } from "./state-adapter/state-adapter.js";
-export { type StateProvider as QueuerTStateProvider } from "./state-provider/state-provider.js";
+export {
+  type StateProvider,
+  type BaseStateProviderContext,
+} from "./state-provider/state-provider.js";
 export { rescheduleJob, type LeaseConfig } from "./worker/job-process.js";
+
+// In-process adapters
+export {
+  createInProcessStateAdapter,
+  type InProcessStateAdapter,
+  type InProcessContext,
+} from "./state-adapter/state-adapter.in-process.js";
+export { createInProcessNotifyAdapter } from "./notify-adapter/notify-adapter.in-process.js";
+export { createNoopNotifyAdapter } from "./notify-adapter/notify-adapter.noop.js";
 
 type QueuertWorkerDefinition<
   TStateAdapter extends StateAdapter<any>,

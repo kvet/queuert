@@ -3,7 +3,7 @@ import { Client, Pool, PoolClient } from "pg";
 import { beforeAll, type TestAPI } from "vitest";
 
 import { createHash } from "crypto";
-import { StateAdapter } from "./state-adapter.js";
+import { type StateAdapter } from "@queuert/core";
 import { createPgStateAdapter } from "./state-adapter.pg.js";
 import { createPgPoolProvider, PgPoolProvider } from "../state-provider/state-provider.pg-pool.js";
 

@@ -1,5 +1,5 @@
 import { Pool, PoolClient } from "pg";
-import { StateProvider } from "./state-provider.js";
+import { type StateProvider } from "@queuert/core";
 
 export const createPgPoolProvider = ({
   pool,
