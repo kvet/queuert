@@ -1,0 +1,27 @@
+{
+  "name": "@queuert/testcontainers",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Testcontainers utilities for Queuert",
+  "license": "MIT",
+  "author": "kvet",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "dockerode": "^4.0.6",
+    "proper-lockfile": "^4.1.2",
+    "testcontainers": "^11.10.0"
+  },
+  "devDependencies": {
+    "@types/dockerode": "^3.3.38",
+    "@types/node": "^24.10.4",
+    "@types/proper-lockfile": "^4.1.4",
+    "typescript": "^5.9.3"
+  }
+}

@@ -42,6 +42,9 @@ importers:
       '@queuert/core':
         specifier: workspace:*
         version: link:../core
+      '@queuert/testcontainers':
+        specifier: workspace:*
+        version: link:../testcontainers
       '@testcontainers/postgresql':
         specifier: ^11.10.0
         version: 11.10.0
@@ -54,6 +57,9 @@ importers:
       pg:
         specifier: ^8.16.3
         version: 8.16.3
+      testcontainers:
+        specifier: ^11.10.0
+        version: 11.10.0
       tsdown:
         specifier: ^0.18.3
         version: 0.18.3(typescript@5.9.3)
@@ -63,6 +69,31 @@ importers:
       vitest:
         specifier: ^4.0.16
         version: 4.0.16(@types/node@24.10.4)(jiti@2.6.1)(yaml@2.8.2)
+
+  packages/testcontainers:
+    dependencies:
+      dockerode:
+        specifier: ^4.0.6
+        version: 4.0.9
+      proper-lockfile:
+        specifier: ^4.1.2
+        version: 4.1.2
+      testcontainers:
+        specifier: ^11.10.0
+        version: 11.10.0
+    devDependencies:
+      '@types/dockerode':
+        specifier: ^3.3.38
+        version: 3.3.47
+      '@types/node':
+        specifier: ^24.10.4
+        version: 24.10.4
+      '@types/proper-lockfile':
+        specifier: ^4.1.4
+        version: 4.1.4
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
 
 packages:
 
@@ -667,6 +698,12 @@ packages:
 
   '@types/pg@8.16.0':
     resolution: {integrity: sha512-RmhMd/wD+CF8Dfo+cVIy3RR5cl8CyfXQ0tGgW6XBL8L4LM/UTEbNXYRbLwU6w+CgrKBNbrQWt4FUtTfaU5jSYQ==}
+
+  '@types/proper-lockfile@4.1.4':
+    resolution: {integrity: sha512-uo2ABllncSqg9F1D4nugVl9v93RmjxF6LJzQLMLDdPaXCUIDPeOJ21Gbqi43xNKzBi/WQ0Q0dICqufzQbMjipQ==}
+
+  '@types/retry@0.12.5':
+    resolution: {integrity: sha512-3xSjTp3v03X/lSQLkczaN9UIEwJMoMCA1+Nb5HfbJEQWogdeQIyVtTvxPXDQjZ5zws8rFQfVfRdz03ARihPJgw==}
 
   '@types/ssh2-streams@0.1.13':
     resolution: {integrity: sha512-faHyY3brO9oLEA0QlcO8N2wT7R0+1sHWZvQ+y3rMLwdY1ZyS1z0W3t65j9PqT4HmQ6ALzNe7RZlNuCNE0wBSWA==}
@@ -2019,6 +2056,12 @@ snapshots:
       '@types/node': 24.10.4
       pg-protocol: 1.10.3
       pg-types: 2.2.0
+
+  '@types/proper-lockfile@4.1.4':
+    dependencies:
+      '@types/retry': 0.12.5
+
+  '@types/retry@0.12.5': {}
 
   '@types/ssh2-streams@0.1.13':
     dependencies:

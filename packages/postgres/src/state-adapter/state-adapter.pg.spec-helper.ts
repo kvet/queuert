@@ -1,13 +1,13 @@
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
+import { withContainerLock } from "@queuert/testcontainers";
 import { Client, Pool, PoolClient } from "pg";
 import { beforeAll, type TestAPI } from "vitest";
-
 import { createHash } from "crypto";
 import { type StateAdapter } from "@queuert/core";
 import { createPgStateAdapter } from "./state-adapter.pg.js";
 import { createPgPoolProvider, PgPoolProvider } from "../state-provider/state-provider.pg-pool.js";
 
-const LABEL = "queuert-postgres-test";
+const CONTAINER_NAME = "queuert-postgres-test";
 
 export type PgStateAdapter = StateAdapter<{ client: PoolClient }>;
 
@@ -25,15 +25,19 @@ export const extendWithStatePostgres = <T>(
   let container: StartedPostgreSqlContainer;
 
   beforeAll(async () => {
-    container = await new PostgreSqlContainer("postgres:14")
-      .withName("queuert-postgres-test")
-      .withDatabase("base_database_for_tests")
-      .withLabels({
-        label: LABEL,
-      })
-      .withExposedPorts(5432)
-      .withReuse()
-      .start();
+    container = await withContainerLock({
+      containerName: CONTAINER_NAME,
+      start: async () =>
+        new PostgreSqlContainer("postgres:14")
+          .withName(CONTAINER_NAME)
+          .withDatabase("base_database_for_tests")
+          .withLabels({
+            label: CONTAINER_NAME,
+          })
+          .withExposedPorts(5432)
+          .withReuse()
+          .start(),
+    });
   }, 60_000);
 
   return api.extend<{

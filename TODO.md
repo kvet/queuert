@@ -2,7 +2,6 @@
 
 # Long term
 
-- Setup testcontainers with proper-lockfile
 - SQLite state adapter
 - Documentation
 - Custom ids + schema name for jobs
