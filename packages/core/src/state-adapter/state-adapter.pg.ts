@@ -8,6 +8,8 @@ import {
   createJobSql,
   DbJob,
   deleteJobsByRootIdsSql,
+  getCurrentJobForUpdateSql,
+  getJobForUpdateSql,
   getExternalBlockersSql,
   getJobBlockersSql,
   getJobByIdSql,
@@ -22,9 +24,18 @@ import {
 } from "./sql.js";
 import { StateAdapter, StateJob } from "./state-adapter.js";
 
-export type NamedParameter<TParamName extends string, TParamValue> = TParamValue & {
-  /* @deprecated - type-only */
-  $paramName?: TParamName;
+export const namedParameterSymbol: unique symbol = Symbol("namedParameter");
+
+export type NamedParameter<TParamName extends string, TParamValue> = {
+  [namedParameterSymbol]: true;
+  $paramName: TParamName;
+  $paramValue: TParamValue;
+};
+
+type UnwrapNamedParameter<T> = T extends NamedParameter<string, infer V> ? V : T;
+
+type UnwrapNamedParameters<T extends readonly unknown[]> = {
+  -readonly [K in keyof T]: UnwrapNamedParameter<T[K]>;
 };
 
 export type TypedSql<
@@ -33,10 +44,10 @@ export type TypedSql<
     | readonly [],
   TResult,
 > = string & {
-  /* @deprecated - type-only */
-  $paramsType?: TParams;
-  /* @deprecated - type-only */
-  $resultType?: TResult;
+  [namedParameterSymbol]: true;
+  $paramsType: TParams;
+  $resultType: TResult;
+  $unwrappedParamsType: UnwrapNamedParameters<TParams>;
 };
 
 const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
@@ -54,6 +65,7 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
     createdAt: new Date(dbJob.created_at),
     scheduledAt: new Date(dbJob.scheduled_at),
     completedAt: dbJob.completed_at ? new Date(dbJob.completed_at) : null,
+    completedBy: dbJob.completed_by,
 
     attempt: dbJob.attempt,
     lastAttemptError: dbJob.last_attempt_error,
@@ -96,17 +108,17 @@ export const createPgStateAdapter = <TContext extends BaseStateProviderContext>(
     sql: TypedSql<TParams, TResult>;
   } & (TParams extends readonly []
     ? { params?: undefined }
-    : { params: TParams })): Promise<TResult> =>
+    : { params: UnwrapNamedParameters<TParams> })): Promise<TResult> =>
     withRetry(
-      () => stateProvider.executeSql<TResult>(context, sql, params as any),
+      async () => stateProvider.executeSql<TResult>(context, sql, params),
       connectionRetryConfig,
       { isRetryableError: isTransientError },
     );
 
   return {
-    provideContext: (fn) => stateProvider.provideContext(fn),
-    runInTransaction: (context, fn) => stateProvider.runInTransaction(context, fn),
-    assertInTransaction: (context) => stateProvider.assertInTransaction(context),
+    provideContext: async (fn) => stateProvider.provideContext(fn),
+    runInTransaction: async (context, fn) => stateProvider.runInTransaction(context, fn),
+    assertInTransaction: async (context) => stateProvider.assertInTransaction(context),
 
     prepareSchema: async (context) => {
       await executeTypedSql({
@@ -161,13 +173,13 @@ export const createPgStateAdapter = <TContext extends BaseStateProviderContext>(
         sql: createJobSql,
         params: [
           typeName,
-          input as any,
-          rootId as any,
-          sequenceId as any,
-          originId as any,
-          (deduplication?.key ?? null) as any,
-          (deduplication ? (deduplication.strategy ?? "finalized") : null) as any,
-          (deduplication?.windowMs ?? null) as any,
+          input,
+          rootId,
+          sequenceId,
+          originId,
+          deduplication?.key ?? null,
+          deduplication ? (deduplication.strategy ?? "completed") : null,
+          deduplication?.windowMs ?? null,
         ],
       });
 
@@ -238,11 +250,11 @@ export const createPgStateAdapter = <TContext extends BaseStateProviderContext>(
 
       return mapDbJobToStateJob(job);
     },
-    completeJob: async ({ context, jobId, output }) => {
+    completeJob: async ({ context, jobId, output, workerId }) => {
       const [job] = await executeTypedSql({
         context,
         sql: completeJobSql,
-        params: [jobId, output as any],
+        params: [jobId, output, workerId],
       });
 
       return mapDbJobToStateJob(job);
@@ -270,6 +282,22 @@ export const createPgStateAdapter = <TContext extends BaseStateProviderContext>(
         params: [rootIds],
       });
       return jobs.map(mapDbJobToStateJob);
+    },
+    getJobForUpdate: async ({ context, jobId }) => {
+      const [job] = await executeTypedSql({
+        context,
+        sql: getJobForUpdateSql,
+        params: [jobId],
+      });
+      return job ? mapDbJobToStateJob(job) : undefined;
+    },
+    getCurrentJobForUpdate: async ({ context, sequenceId }) => {
+      const [job] = await executeTypedSql({
+        context,
+        sql: getCurrentJobForUpdateSql,
+        params: [sequenceId],
+      });
+      return job ? mapDbJobToStateJob(job) : undefined;
     },
   };
 };

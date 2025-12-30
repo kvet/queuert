@@ -43,14 +43,14 @@ Later, a background worker picks up the job and processes it:
 queuert.createWorker()
   .implementJobType({
     name: "process-image",
-    handler: async ({ job, prepare }) => {
-      const [{ finalize }, image] = await prepare({ mode: "staged" }, async ({ tx }) => {
+    process: async ({ job, prepare, complete }) => {
+      const image = await prepare({ mode: "staged" }, async ({ tx }) => {
         return tx.images.getById(job.input.imageId);
       });
 
       const minifiedImage = await minifyImage(image);
 
-      return finalize(async ({ tx, continueWith }) => {
+      return complete(async ({ tx, continueWith }) => {
         const saved = await tx.minifiedImages.create({ image: minifiedImage });
 
         return continueWith({
@@ -63,8 +63,8 @@ queuert.createWorker()
   })
   .implementJobType({
     name: "distribute-image",
-    handler: async ({ job, prepare }) => {
-      const [{ finalize }, [image, minifiedImage]] = await prepare({ mode: "staged" }, async ({ tx }) => {
+    process: async ({ job, prepare, complete }) => {
+      const [image, minifiedImage] = await prepare({ mode: "staged" }, async ({ tx }) => {
         return Promise.all([
           tx.images.getById(job.input.imageId),
           tx.minifiedImages.getById(job.input.minifiedImageId),
@@ -73,7 +73,7 @@ queuert.createWorker()
 
       const cdnUrl = await distributeImageToCDN(minifiedImage, 'some-cdn');
 
-      return finalize(async ({ tx }) => {
+      return complete(async ({ tx }) => {
         await tx.distributions.create({
           imageId: image.id,
           minifiedImageId: minifiedImage.id,
@@ -86,13 +86,13 @@ queuert.createWorker()
   })
 ```
 
-Each task is performed in a database transaction, so you can safely read and write data as part of your job processing. Task is split into prepare and finalize phases, with automatic lease renewal in between.
+Each task is performed in a database transaction, so you can safely read and write data as part of your job processing. Task is split into prepare and complete phases, with automatic lease renewal in between.
 
 In the prepare phase you can read data and perform non side-effecting operations within a transaction.
 
-Between prepare and finalize, you can perform long-running work (CPU-intensive processing, network calls, etc.). The worker automatically renews the job lease at configured intervals. Make sure to implement this phase in an idempotent way, as it may be retried if the worker crashes or the lease expires.
+Between prepare and complete, you can perform long-running work (CPU-intensive processing, network calls, etc.). The worker automatically renews the job lease at configured intervals. Make sure to implement this phase in an idempotent way, as it may be retried if the worker crashes or the lease expires.
 
-In the finalize phase you can commit state changes and continue to the next job. If the worker crashes during finalize, the whole job is retried from the beginning.
+In the complete phase you can commit state changes and continue to the next job. If the worker crashes during complete, the whole job is retried from the beginning.
 
 ## It looks familiar, right?
 

@@ -1,26 +1,29 @@
 {
   "name": "@queuert/core",
   "version": "0.0.1",
-  "license": "MIT",
-  "author": "kvet",
   "description": "Core package for Queuert job queue system",
   "keywords": [
+    "background-jobs",
     "job-queue",
+    "postgresql",
     "queue",
     "task-queue",
-    "workflow-engine",
-    "workflow",
+    "transactional",
     "transactional-outbox-pattern",
-    "postgresql"
+    "typescript",
+    "workflow",
+    "workflow-engine"
   ],
+  "license": "MIT",
+  "author": "kvet",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/kvet/queuert.git"
   },
   "type": "module",
   "main": "./dist/index.mjs",
-  "types": "./dist/index.d.mts",
   "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
   "exports": {
     ".": "./src/index.ts",
     "./package.json": "./package.json"
@@ -36,16 +39,16 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@testcontainers/postgresql": "^11.9.0",
-    "@testcontainers/redis": "^11.9.0",
-    "@types/node": "^24.10.1",
-    "@types/pg": "^8.15.6",
+    "@testcontainers/postgresql": "^11.10.0",
+    "@testcontainers/redis": "^11.10.0",
+    "@types/node": "^24.10.4",
+    "@types/pg": "^8.16.0",
     "@types/proper-lockfile": "^4.1.4",
     "pg": "^8.16.3",
     "proper-lockfile": "^4.1.2",
-    "testcontainers": "^11.9.0",
-    "tsdown": "^0.17.0",
+    "testcontainers": "^11.10.0",
+    "tsdown": "^0.18.3",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.15"
+    "vitest": "^4.0.16"
   }
 }

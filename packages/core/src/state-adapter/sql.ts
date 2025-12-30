@@ -1,4 +1,4 @@
-import { DeduplicationStrategy } from "../entities/job-sequence.js";
+import { DeduplicationStrategy } from "../entities/deduplication.js";
 import { NamedParameter, TypedSql } from "./state-adapter.pg.js";
 
 // TODO: pgstattuple with partitioning
@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS queuert.job (
   created_at                    timestamptz NOT NULL DEFAULT now(),
   scheduled_at                  timestamptz NOT NULL DEFAULT now(),
   completed_at                  timestamptz,
+  completed_by                  text,
 
   -- attempts
   attempt                       integer NOT NULL DEFAULT 0,
@@ -117,6 +118,7 @@ export type DbJob = {
   created_at: string;
   scheduled_at: string;
   completed_at: string | null;
+  completed_by: string | null;
 
   attempt: number;
   last_attempt_error: string | null;
@@ -148,7 +150,7 @@ existing_deduplicated AS (
     AND j.id = j.sequence_id
     AND (
       $7::text IS NULL
-      OR ($7::text = 'finalized' AND j.status != 'completed')
+      OR ($7::text = 'completed' AND j.status != 'completed')
       OR ($7::text = 'all')
     )
     AND (
@@ -234,12 +236,20 @@ export const completeJobSql = /* sql */ `
 UPDATE queuert.job
 SET status = 'completed',
   completed_at = now(),
+  completed_by = $3,
   output = $2,
   leased_by = NULL,
   leased_until = NULL
 WHERE id = $1
 RETURNING *
-` as TypedSql<readonly [NamedParameter<"id", string>, NamedParameter<"output", unknown>], [DbJob]>;
+` as TypedSql<
+  readonly [
+    NamedParameter<"id", string>,
+    NamedParameter<"output", unknown>,
+    NamedParameter<"completed_by", string | null>,
+  ],
+  [DbJob]
+>;
 
 export const scheduleBlockedJobsSql = /* sql */ `
 WITH direct_blocked AS (
@@ -425,3 +435,19 @@ DELETE FROM queuert.job
 WHERE root_id = ANY($1::uuid[])
 RETURNING *
 ` as TypedSql<readonly [NamedParameter<"root_ids", string[]>], DbJob[]>;
+
+export const getJobForUpdateSql = /* sql */ `
+SELECT *
+FROM queuert.job
+WHERE id = $1
+FOR UPDATE
+` as TypedSql<readonly [NamedParameter<"id", string>], [DbJob | undefined]>;
+
+export const getCurrentJobForUpdateSql = /* sql */ `
+SELECT *
+FROM queuert.job
+WHERE sequence_id = $1
+ORDER BY created_at DESC
+LIMIT 1
+FOR UPDATE
+` as TypedSql<readonly [NamedParameter<"sequence_id", string>], [DbJob | undefined]>;

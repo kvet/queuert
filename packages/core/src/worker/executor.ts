@@ -5,15 +5,19 @@ import { withRetry } from "../helpers/retry.js";
 import { sleep } from "../helpers/sleep.js";
 import { Log } from "../log.js";
 import { NotifyAdapter } from "../notify-adapter/notify-adapter.js";
-import { LeaseExpiredError, ProcessHelper } from "../queuert-helper.js";
+import {
+  JobAlreadyCompletedError,
+  JobTakenByAnotherWorkerError,
+  ProcessHelper,
+} from "../queuert-helper.js";
 import { StateAdapter } from "../state-adapter/state-adapter.js";
 import { BaseStateProviderContext } from "../state-provider/state-provider.js";
-import { JobHandler, LeaseConfig, processJobHandler } from "./job-handler.js";
+import { JobProcessFn, LeaseConfig, runJobProcess } from "./job-process.js";
 
 export type RegisteredJobTypes = Map<
   string,
   {
-    handler: JobHandler<StateAdapter<BaseStateProviderContext>, BaseJobTypeDefinitions, string>;
+    process: JobProcessFn<StateAdapter<BaseStateProviderContext>, BaseJobTypeDefinitions, string>;
     retryConfig?: BackoffConfig;
     leaseConfig?: LeaseConfig;
   }
@@ -44,13 +48,13 @@ export const createExecutor = ({
     pollIntervalMs = 60_000,
     nextJobDelayMs = 0,
     defaultRetryConfig = {
-      initialDelayMs: 1_000,
+      initialDelayMs: 10_000,
       multiplier: 2.0,
-      maxDelayMs: 60_000,
+      maxDelayMs: 300_000,
     },
     defaultLeaseConfig = {
-      leaseMs: 30_000,
-      renewIntervalMs: 10_000,
+      leaseMs: 60_000,
+      renewIntervalMs: 30_000,
     },
     workerLoopRetryConfig = {
       initialDelayMs: 10_000,
@@ -101,7 +105,7 @@ export const createExecutor = ({
 
     const performJob = async (): Promise<boolean> => {
       try {
-        const [hasMore, finalize] = await helper.runInTransaction(
+        const [hasMore, continueProcessing] = await helper.runInTransaction(
           async (context): Promise<[boolean, (() => Promise<void>) | undefined]> => {
             let job = await helper.acquireJob({
               typeNames,
@@ -114,7 +118,7 @@ export const createExecutor = ({
 
             const jobType = registeredJobTypes.get(job.typeName);
             if (!jobType) {
-              throw new Error(`No handler registered for job type "${job.typeName}"`);
+              throw new Error(`No process function registered for job type "${job.typeName}"`);
             }
 
             return helper.withJobContext(
@@ -125,25 +129,29 @@ export const createExecutor = ({
               },
               async () => [
                 true,
-                await processJobHandler({
+                await runJobProcess({
                   helper,
-                  handler: jobType.handler,
+                  process: jobType.process,
                   context,
                   job,
                   retryConfig: jobType.retryConfig ?? defaultRetryConfig,
                   leaseConfig: jobType.leaseConfig ?? defaultLeaseConfig,
                   workerId,
+                  notifyAdapter,
                 }),
               ],
             );
           },
         );
 
-        await finalize?.();
+        await continueProcessing?.();
 
         return hasMore;
       } catch (error) {
-        if (error instanceof LeaseExpiredError) {
+        if (
+          error instanceof JobTakenByAnotherWorkerError ||
+          error instanceof JobAlreadyCompletedError
+        ) {
           return true;
         } else {
           log({
@@ -206,7 +214,7 @@ export const createExecutor = ({
       }
     };
 
-    const runWorkerLoopPromise = withRetry(() => runWorkerLoop(), workerLoopRetryConfig, {
+    const runWorkerLoopPromise = withRetry(async () => runWorkerLoop(), workerLoopRetryConfig, {
       signal: stopController.signal,
     }).catch(() => {});
 

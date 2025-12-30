@@ -1,17 +1,27 @@
-import { ResolvedJobSequence } from "./entities/job-sequence.js";
-import { BaseJobTypeDefinitions, FirstJobTypeDefinitions } from "./entities/job-type.js";
+import {
+  BaseJobTypeDefinitions,
+  FirstJobTypeDefinitions,
+  HasBlockers,
+  JobSequenceOf,
+} from "./entities/job-type.js";
 import { BackoffConfig } from "./helpers/backoff.js";
 import { Log } from "./log.js";
 import { NotifyAdapter } from "./notify-adapter/notify-adapter.js";
-import { queuertHelper, StartBlockersFn } from "./queuert-helper.js";
+import {
+  CompleteJobSequenceResult,
+  JobSequenceCompleteOptions,
+  queuertHelper,
+  StartBlockersFn,
+} from "./queuert-helper.js";
 import {
   DeduplicationOptions,
   GetStateAdapterContext,
   StateAdapter,
 } from "./state-adapter/state-adapter.js";
 import { createExecutor, Executor, RegisteredJobTypes } from "./worker/executor.js";
-import { JobHandler, LeaseConfig } from "./worker/job-handler.js";
+import { JobProcessFn, LeaseConfig } from "./worker/job-process.js";
 
+import { CompletedJobSequence } from "./entities/job-sequence.js";
 export { type CompletedJobSequence, type JobSequence } from "./entities/job-sequence.js";
 export {
   defineUnionJobTypes,
@@ -25,11 +35,17 @@ export { type RetryConfig } from "./helpers/retry.js";
 export { type Log } from "./log.js";
 export { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 export {
+  JobAlreadyCompletedError,
+  JobNotFoundError,
+  JobTakenByAnotherWorkerError,
+  WaitForJobSequenceCompletionTimeoutError,
+} from "./queuert-helper.js";
+export {
   type DeduplicationOptions,
   type DeduplicationStrategy,
 } from "./state-adapter/state-adapter.js";
 export { type StateProvider as QueuerTStateProvider } from "./state-provider/state-provider.js";
-export { rescheduleJob, type LeaseConfig } from "./worker/job-handler.js";
+export { rescheduleJob, type LeaseConfig } from "./worker/job-process.js";
 
 type QueuertWorkerDefinition<
   TStateAdapter extends StateAdapter<any>,
@@ -37,7 +53,7 @@ type QueuertWorkerDefinition<
 > = {
   implementJobType: <TJobTypeName extends keyof TJobTypeDefinitions & string>(options: {
     name: TJobTypeName;
-    handler: JobHandler<TStateAdapter, TJobTypeDefinitions, TJobTypeName>;
+    process: JobProcessFn<TStateAdapter, TJobTypeDefinitions, TJobTypeName>;
     retryConfig?: BackoffConfig;
     leaseConfig?: LeaseConfig;
   }) => QueuertWorkerDefinition<TStateAdapter, TJobTypeDefinitions>;
@@ -56,11 +72,11 @@ export type Queuert<
       firstJobTypeName: TFirstJobTypeName;
       input: TJobTypeDefinitions[TFirstJobTypeName]["input"];
       deduplication?: DeduplicationOptions;
-      startBlockers?: StartBlockersFn<TJobTypeDefinitions, TFirstJobTypeName>;
-    } & GetStateAdapterContext<TStateAdapter>,
-  ) => Promise<
-    ResolvedJobSequence<TJobTypeDefinitions, TFirstJobTypeName> & { deduplicated: boolean }
-  >;
+    } & (HasBlockers<TJobTypeDefinitions, TFirstJobTypeName> extends true
+      ? { startBlockers: StartBlockersFn<TJobTypeDefinitions, TFirstJobTypeName> }
+      : { startBlockers?: never }) &
+      GetStateAdapterContext<TStateAdapter>,
+  ) => Promise<JobSequenceOf<TJobTypeDefinitions, TFirstJobTypeName> & { deduplicated: boolean }>;
   getJobSequence: <
     TFirstJobTypeName extends keyof FirstJobTypeDefinitions<TJobTypeDefinitions> & string,
   >(
@@ -68,16 +84,40 @@ export type Queuert<
       firstJobTypeName: TFirstJobTypeName;
       id: string;
     } & GetStateAdapterContext<TStateAdapter>,
-  ) => Promise<ResolvedJobSequence<TJobTypeDefinitions, TFirstJobTypeName> | null>;
+  ) => Promise<JobSequenceOf<TJobTypeDefinitions, TFirstJobTypeName> | null>;
   deleteJobSequences: (
     options: {
       sequenceIds: string[];
     } & GetStateAdapterContext<TStateAdapter>,
   ) => Promise<void>;
+  completeJobSequence: <
+    TFirstJobTypeName extends keyof FirstJobTypeDefinitions<TJobTypeDefinitions> & string,
+    TCompleteReturn,
+  >(
+    options: {
+      firstJobTypeName: TFirstJobTypeName;
+      id: string;
+      complete: JobSequenceCompleteOptions<
+        TStateAdapter,
+        TJobTypeDefinitions,
+        TFirstJobTypeName,
+        TCompleteReturn
+      >;
+    } & GetStateAdapterContext<TStateAdapter>,
+  ) => Promise<CompleteJobSequenceResult<TJobTypeDefinitions, TFirstJobTypeName, TCompleteReturn>>;
   withNotify: <T, TArgs extends any[]>(
     cb: (...args: TArgs) => Promise<T>,
     ...args: TArgs
   ) => Promise<T>;
+  waitForJobSequenceCompletion: <
+    TFirstJobTypeName extends keyof FirstJobTypeDefinitions<TJobTypeDefinitions> & string,
+  >(options: {
+    firstJobTypeName: TFirstJobTypeName;
+    id: string;
+    timeoutMs: number;
+    pollIntervalMs?: number;
+    signal?: AbortSignal;
+  }) => Promise<CompletedJobSequence<JobSequenceOf<TJobTypeDefinitions, TFirstJobTypeName>>>;
 };
 
 export const createQueuert = async <
@@ -105,20 +145,20 @@ export const createQueuert = async <
         registeredJobTypes: RegisteredJobTypes,
       ): QueuertWorkerDefinition<TStateAdapter, TJobTypeDefinitions> => {
         return {
-          implementJobType({ name: typeName, handler, retryConfig, leaseConfig }) {
+          implementJobType({ name: typeName, process, retryConfig, leaseConfig }) {
             if (registeredJobTypes.has(typeName)) {
               throw new Error(`JobType with name "${typeName}" is already registered`);
             }
             const newRegisteredJobTypes = new Map(registeredJobTypes);
             newRegisteredJobTypes.set(typeName, {
-              handler: handler as any,
+              process: process as any,
               retryConfig,
               leaseConfig,
             });
 
             return createWorkerInstance(newRegisteredJobTypes);
           },
-          start: (startOptions) =>
+          start: async (startOptions) =>
             createExecutor({
               helper,
               notifyAdapter,
@@ -146,11 +186,24 @@ export const createQueuert = async <
       }),
     getJobSequence: async ({ id, firstJobTypeName, ...context }) =>
       helper.getJobSequence({ id, firstJobTypeName, context }),
-    deleteJobSequences: async ({ sequenceIds, ...context }) => {
-      await helper.deleteJobSequences({ sequenceIds, context });
-    },
-    withNotify: async (cb, ...args) => {
-      return helper.withNotifyJobTypeContext(() => cb(...args));
-    },
+    deleteJobSequences: async ({ sequenceIds, ...context }) =>
+      helper.deleteJobSequences({ sequenceIds, context }),
+    completeJobSequence: ({ id, firstJobTypeName, complete, ...context }) =>
+      helper.completeJobSequence({ id, firstJobTypeName, context, complete }) as any,
+    waitForJobSequenceCompletion: async ({
+      id,
+      firstJobTypeName,
+      timeoutMs,
+      pollIntervalMs,
+      signal,
+    }) =>
+      helper.waitForJobSequenceCompletion({
+        id,
+        firstJobTypeName,
+        timeoutMs,
+        pollIntervalMs,
+        signal,
+      }),
+    withNotify: async (cb, ...args) => helper.withNotifyContext(async () => cb(...args)),
   };
 };

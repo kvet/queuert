@@ -1,45 +1,9 @@
 import { StateJob } from "../state-adapter/state-adapter.js";
+import { Job, JobWithoutBlockers } from "./job.types.js";
 
-export type Job<TJobTypeName, TInput> = {
-  id: string;
-  sequenceId: string;
-  originId: string | null;
-  rootId: string;
-  typeName: TJobTypeName;
-  input: TInput;
-  createdAt: Date;
-  scheduledAt: Date;
-  updatedAt: Date;
-  attempt: number;
-  lastAttemptAt: Date | null;
-  lastAttemptError: string | null;
-} & (
-  | {
-      status: "blocked";
-    }
-  | {
-      status: "pending";
-    }
-  | {
-      status: "running";
-      leasedBy?: string;
-      leasedUntil?: Date;
-    }
-  | {
-      status: "completed";
-      completedAt: Date;
-    }
-);
+export * from "./job.types.js";
 
-export type RunningJob<TJob extends Job<any, any>> = TJob & {
-  status: "running";
-};
-
-export type PendingJob<TJob extends Job<any, any>> = TJob & {
-  status: "pending";
-};
-
-export const mapStateJobToJob = (stateJob: StateJob): Job<any, any> => {
+export const mapStateJobToJob = (stateJob: StateJob): JobWithoutBlockers<Job<any, any, any>> => {
   const base = {
     id: stateJob.id,
     sequenceId: stateJob.sequenceId,
@@ -61,6 +25,7 @@ export const mapStateJobToJob = (stateJob: StateJob): Job<any, any> => {
         ...base,
         status: "completed",
         completedAt: stateJob.completedAt!,
+        completedBy: stateJob.completedBy,
       };
     case "running":
       return {
@@ -71,17 +36,7 @@ export const mapStateJobToJob = (stateJob: StateJob): Job<any, any> => {
       };
     case "blocked":
       return { ...base, status: "blocked" };
-    default:
+    case "pending":
       return { ...base, status: "pending" };
   }
-};
-
-export const continuedJobSymbol: unique symbol = Symbol("continuedJob");
-
-export type ContinuedJob<TJobTypeName, TInput> = Job<TJobTypeName, TInput> & {
-  [continuedJobSymbol]: true;
-};
-
-export const isContinuedJob = (obj: unknown): obj is ContinuedJob<any, any> => {
-  return typeof obj === "object" && obj !== null && (obj as any)[continuedJobSymbol] === true;
 };

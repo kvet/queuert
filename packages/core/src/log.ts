@@ -13,7 +13,7 @@ type LogEntry<
   args: TArgs;
 };
 
-type WorkerBasicArgs = { workerId: string };
+type WorkerBasicArgs = { workerId: string | null };
 type WorkerStartedLogEntry = LogEntry<
   "worker_started",
   "info",
@@ -39,14 +39,14 @@ type WorkerStoppedLogEntry = LogEntry<
   [WorkerBasicArgs]
 >;
 
-type JobBasicArgs = {
+export type JobBasicArgs = {
   id: string;
   typeName: string;
   originId: string | null;
   sequenceId: string;
   rootId: string;
 };
-type JobProcessingArgs = JobBasicArgs & { status: StateJob["status"]; attempt: number };
+export type JobProcessingArgs = JobBasicArgs & { status: StateJob["status"]; attempt: number };
 type JobCreatedLogEntry = LogEntry<
   "job_created",
   "info",
@@ -58,6 +58,12 @@ type JobAttemptStartedLogEntry = LogEntry<
   "info",
   "Job attempt started",
   [JobProcessingArgs & WorkerBasicArgs]
+>;
+type JobTakenByAnotherWorkerLogEntry = LogEntry<
+  "job_taken_by_another_worker",
+  "warn",
+  "Job taken by another worker",
+  [{ leasedBy: string; leasedUntil: Date } & JobProcessingArgs & WorkerBasicArgs]
 >;
 type JobLeaseExpiredLogEntry = LogEntry<
   "job_lease_expired",
@@ -81,10 +87,10 @@ type JobCompletedLogEntry = LogEntry<
   "job_completed",
   "info",
   "Job completed",
-  [{ output: unknown } & JobProcessingArgs & WorkerBasicArgs]
+  [{ output?: unknown; continuedWith?: JobBasicArgs } & JobProcessingArgs & WorkerBasicArgs]
 >;
 
-type JobSequenceArgs = {
+export type JobSequenceArgs = {
   sequenceId: string;
   firstJobTypeName: string;
   originId: string | null;
@@ -131,6 +137,7 @@ type TypedLogEntry =
   // job
   | JobCreatedLogEntry
   | JobAttemptStartedLogEntry
+  | JobTakenByAnotherWorkerLogEntry
   | JobLeaseExpiredLogEntry
   | JobReapedLogEntry
   | JobAttemptFailedLogEntry

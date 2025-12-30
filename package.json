@@ -1,23 +1,23 @@
 {
-  "private": true,
   "name": "queuert",
-  "author": "kvet",
-  "license": "MIT",
+  "private": true,
   "keywords": [],
-  "packageManager": "pnpm@10.17.0",
-  "devDependencies": {
-    "oxfmt": "^0.16.0",
-    "oxlint": "^1.31.0",
-    "oxlint-tsgolint": "^0.8.3",
-    "vitest": "^4.0.15"
-  },
+  "license": "MIT",
+  "author": "kvet",
   "scripts": {
-    "lint": "oxlint",
+    "lint": "oxlint --type-aware",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check",
     "test": "vitest",
     "typecheck": "pnpm -r typecheck",
     "check": "pnpm lint && pnpm fmt:check && pnpm typecheck && vitest --run",
     "modules:clean": "rm -rf $(find . -name node_modules -type d)"
-  }
+  },
+  "devDependencies": {
+    "oxfmt": "^0.20.0",
+    "oxlint": "^1.35.0",
+    "oxlint-tsgolint": "^0.10.0",
+    "vitest": "^4.0.16"
+  },
+  "packageManager": "pnpm@10.17.0"
 }

@@ -31,7 +31,7 @@ describe("createSignal", () => {
   });
 
   test("works with void type (no value)", async () => {
-    const signal = createSignal<void>();
+    const signal = createSignal();
     signal.signalOnce();
     await signal.onSignal;
     expect(signal.signalled).toBe(true);
@@ -41,7 +41,9 @@ describe("createSignal", () => {
     const signal = createSignal<string>();
     const resultPromise = signal.onSignal;
 
-    setTimeout(() => signal.signalOnce("delayed"), 10);
+    setTimeout(() => {
+      signal.signalOnce("delayed");
+    }, 10);
 
     const result = await resultPromise;
     expect(result).toBe("delayed");

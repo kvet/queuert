@@ -2,11 +2,14 @@
 
 # Long term
 
-- Finalize job externally (Cancellation)
+- SQLite state adapter
 - Custom ids + schema name for jobs
 - Redis NotifyAdapter
+- Open GitHub repo
+- Add donations link
 - Publish to NPM
 - Zod job type definitions
+- MongoDB state adapter
 
 # Maybe
 

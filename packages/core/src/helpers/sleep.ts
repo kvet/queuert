@@ -1,9 +1,12 @@
-export const sleep = (
+export const sleep = async (
   ms: number,
   { jitterMs = 0, signal }: { jitterMs?: number; signal?: AbortSignal } = {},
 ): Promise<void> =>
   new Promise((resolve) => {
-    if (signal?.aborted) return resolve();
+    if (signal?.aborted) {
+      resolve();
+      return;
+    }
 
     const onAbort = () => {
       clearTimeout(timeoutId);

@@ -104,7 +104,9 @@ describe("withRetry", () => {
     const controller = new AbortController();
 
     // Abort after a short delay
-    setTimeout(() => controller.abort(), 5);
+    setTimeout(() => {
+      controller.abort();
+    }, 5);
 
     await expect(
       withRetry(

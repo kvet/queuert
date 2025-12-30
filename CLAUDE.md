@@ -1,17 +1,25 @@
 # Queuert Code Style Guide
 
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.
+
 ## Core Concepts
 
 ### Job
+
 An individual unit of work. Jobs have a lifecycle: `blocked`/`pending` → `running` → `completed`. Jobs start as `blocked` if they have incomplete blockers, otherwise `pending`. Jobs can be deleted (hard-deleted from the database). Each job belongs to a JobType and contains typed input/output. Jobs track their execution attempts, scheduling, and provenance via `originId`.
 
 ### JobSequence
+
 Like a Promise chain, a sequence of linked jobs where each job can `continueWith` to the next. The sequence completes when its final job completes without continuing. Sequence status reflects the current job in the sequence: `blocked`/`pending` → `running` → `completed`.
 
 ### JobType
-Defines a named job type with its input/output types and handler. JobTypes are registered with workers via `implementJobType`. The handler receives the job, its resolved blockers, and a context for continuing the sequence.
+
+Defines a named job type with its input/output types and process function. JobTypes are registered with workers via `implementJobType`. The process function receives the job (with resolved blockers accessible via `job.blockers`) and a context for continuing the sequence.
 
 ### Blockers
+
 Jobs can depend on other job sequences. Blockers are declared at the type level with `DefineBlocker<T>` and provided via `startBlockers` callback:
 
 ```typescript
@@ -36,60 +44,97 @@ await queuert.startJobSequence({
 Blockers created within `startBlockers` automatically inherit the main job's `rootId` and `originId` via context propagation. Existing sequences returned from the callback keep their own `rootId`. Same pattern applies to `continueWith`. A job with incomplete blockers starts as `blocked` and transitions to `pending` when all blockers complete.
 
 ### Log
+
 A typed logging function for observability. All job lifecycle events are logged with structured data (job IDs, queue names, worker IDs, etc.). Consumers provide their own log implementation to integrate with their logging infrastructure.
 
 ### StateAdapter
+
 Abstracts database operations for job persistence. Allows different database implementations (currently PostgreSQL). Handles job creation, status transitions, leasing, and queries.
 
 ### StateProvider
+
 Abstracts ORM/database client operations. Provides context management, transaction handling, and SQL execution. Allows integration with different ORMs (e.g., Drizzle, Prisma, raw pg).
 
 ### NotifyAdapter
-Handles worker notification when jobs are scheduled. Workers listen for notifications to wake up and process jobs immediately rather than polling. Enables efficient job processing with minimal latency.
 
-### Prepare/Finalize Pattern
-Job handlers use a prepare/finalize pattern that splits job processing into phases:
+Handles pub/sub notifications for job scheduling and sequence completion. Workers listen for job scheduling notifications to wake up and process jobs immediately rather than polling. Sequence completion notifications enable `waitForJobSequenceCompletion` to respond promptly when sequences complete. Enables efficient job processing with minimal latency.
 
-**Handler signature**: `async ({ signal, job, blockers, prepare }) => { ... }`
-- `signal`: AbortSignal that fires when lease expires or job is deleted (reason: `"lease_expired"`, `"error"`, or `"deleted"`)
-- `job`: The job being processed with typed input
-- `blockers`: Resolved blocker sequences (typed by job type definition)
-- `prepare`: Function to enter prepare phase
+### Worker
 
-**Prepare phase**: `const [{ finalize }] = await prepare({ mode }, callback?)`
-- `mode`: `"atomic"` runs entirely in one transaction; `"staged"` allows long-running work between prepare and finalize with lease renewal
+Processes jobs by polling for available work. Created via `queuert.createWorker()`, configured with `implementJobType()` for each job type it handles, then started with `start({ workerId })`. Workers automatically renew leases during staged processing and handle retries with configurable backoff.
+
+### Reaper
+
+Background process that reclaims expired job leases. Runs periodically to find jobs where `leased_until < now()` and resets them to `pending` status so they can be retried by any worker.
+
+### Prepare/Complete Pattern
+
+Job process functions use a prepare/complete pattern that splits job processing into phases:
+
+**Process function signature**: `async ({ signal, job, prepare, complete }) => { ... }`
+
+- `signal`: AbortSignal that fires when job is taken by another worker, job is not found, or job is completed externally (reason: `"taken_by_another_worker"`, `"error"`, `"not_found"`, or `"already_completed"`)
+- `job`: The job being processed with typed input. Access resolved blockers via `job.blockers` (typed by job type definition).
+- `prepare`: Function to configure prepare phase (optional - staged mode runs automatically if not called)
+- `complete`: Function to complete the job (always available from process options)
+
+**Simple process function** (staged by default):
+
+```typescript
+process: async ({ job, complete }) => {
+  // Transaction already closed, lease renewal running
+  return complete(() => output);
+}
+```
+
+If `prepare` is not accessed, auto-setup runs in staged mode. If `complete` is called before `prepare`, auto-setup runs in atomic mode instead (entire process function runs in one transaction).
+
+**Auto-setup behaviors**:
+
+- If `prepare` is not accessed and `complete` is not called synchronously, auto-setup runs in staged mode
+- If `complete` is called before `prepare`, auto-setup runs in atomic mode (no lease renewal between prepare and complete)
+- Accessing `prepare` after auto-setup throws: "Prepare cannot be accessed after auto-setup"
+
+**Prepare phase**: `const result = await prepare({ mode }, callback?)`
+
+- `mode`: `"atomic"` runs entirely in one transaction; `"staged"` allows long-running work between prepare and complete with lease renewal
 - Optional callback receives `{ client }` for database operations during prepare
-- Returns finalize function (and callback result if provided)
+- Returns callback result directly (or void if no callback)
 
-**Processing phase** (staged mode only): Between prepare and finalize, perform long-running work. The worker automatically renews the job lease. Implement idempotently as this phase may retry.
+**Processing phase** (staged mode only): Between prepare and complete, perform long-running work. The worker automatically renews the job lease. Implement idempotently as this phase may retry.
 
-**Finalize phase**: `return finalize(({ client, continueWith }) => { ... })`
+**Complete phase**: `return complete(({ client, continueWith }) => { ... })`
+
 - Commits state changes in a transaction
 - `continueWith` continues to the next job in the sequence
 - Return value becomes the job output
 
 ### Deduplication
+
 Two levels of deduplication prevent duplicate work:
 
 **Sequence-level deduplication** (explicit): When starting a job sequence, provide `deduplication` options:
+
 - `key`: Unique identifier for deduplication matching
-- `strategy`: `'finalized'` (default) deduplicates against non-completed jobs; `'all'` includes completed jobs
+- `strategy`: `'completed'` (default) deduplicates against non-completed jobs; `'all'` includes completed jobs
 - `windowMs`: Optional time window; `undefined` means no time limit
 
 ```typescript
 await queuert.startJobSequence({
   firstJobTypeName: "process",
   input: { userId: 123 },
-  deduplication: { key: "user-123", strategy: "finalized", windowMs: 60000 }
+  deduplication: { key: "user-123", strategy: "completed", windowMs: 60000 }
 });
 ```
 
-**Continuation restriction**: `continueWith` can only be called once per finalize callback. Calling it multiple times throws an error: "continueWith can only be called once". This ensures each job has a clear single continuation in the sequence.
+**Continuation restriction**: `continueWith` can only be called once per complete callback. Calling it multiple times throws an error: "continueWith can only be called once". This ensures each job has a clear single continuation in the sequence.
 
 ### Continuation Types
+
 Job types use two marker types to define their relationships:
 
 **`DefineContinuationOutput<T>`**: Marks that a job continues to another job type. Used in the `output` type:
+
 ```typescript
 'process-image': {
   input: { imageId: string };
@@ -98,6 +143,7 @@ Job types use two marker types to define their relationships:
 ```
 
 **`DefineContinuationInput<T>`**: Marks a job type as internal (can only be reached via `continueWith`, not `startJobSequence`). Wrap the input type:
+
 ```typescript
 defineUnionJobTypes<{
   'public-entry': { input: { id: string }; output: DefineContinuationOutput<"internal-step"> };
@@ -107,48 +153,141 @@ defineUnionJobTypes<{
 
 TypeScript prevents calling `startJobSequence` with internal job types at compile-time.
 
+### Workerless Completion
+
+Jobs can be completed without a worker using `completeJobSequence` (sets `workerId: null`). This enables approval workflows, webhook-triggered completions, and other patterns where jobs wait for events outside worker processing.
+
+```typescript
+await queuert.completeJobSequence({
+  client,
+  firstJobTypeName: "awaiting-approval",
+  id: jobSequence.id,
+  complete: async ({ job, complete }) => {
+    // Inspect current job state
+    if (job.status === "blocked") {
+      // Can complete blockers first if needed
+    }
+
+    // Complete with output (completes the job)
+    await complete(job, async () => ({ approved: true }));
+
+    // Or continue to next job in sequence
+    await complete(job, async ({ continueWith }) =>
+      continueWith({ typeName: "process-approved", input: { ... } })
+    );
+  },
+});
+```
+
+**Key behaviors**:
+
+- Must be called within a transaction (uses `FOR UPDATE` lock on current job)
+- `complete` callback receives current job, can call inner `complete` multiple times for multi-step sequences
+- Partial completion supported: complete one job and leave the next pending
+- Can complete blocked jobs (user's responsibility to handle/compensate blockers)
+- Running workers detect completion by others via `JobAlreadyCompletedError` and abort signal with reason `"already_completed"`
+
 ## Design Philosophy
 
 ### Consistent Terminology
+
 Parallel entities should use consistent lifecycle terminology to reduce cognitive load:
+
 - Job: `blocked`/`pending` → `running` → `completed`
 - JobSequence: `blocked`/`pending` → `running` → `completed` (reflects status of current job in sequence)
 
 Avoid asymmetric naming (e.g., `started`/`finished` vs `created`/`completed`) even if individual terms seem natural - consistency across the API produces fewer questions.
 
 ### Naming Conventions
+
 - `originId`: Tracks provenance (which job triggered this one), null for root jobs
 - `rootId`: Ultimate ancestor of a job tree, self-referential for root jobs (equals own ID, not null)
 - `sequenceId`: The job sequence this job belongs to, self-referential for the first job (equals own ID)
 - `firstJobTypeName`: The job type name of the first job in a sequence (correlates with `sequenceId` - both reference the starting job)
 - `blockers`/`blocked`: Describes job dependencies (not `dependencies`/`dependents`)
-- `continueWith`: Continues to next job in finalize callback
+- `continueWith`: Continues to next job in complete callback
+- `process`: The job processing function provided to `implementJobType` (not `handler`). Receives `{ signal, job, prepare, complete }` and returns the completed job or continuation.
 - `prepare`: Unified function for both atomic and staged modes via `mode` parameter (not separate `prepareAtomic`/`prepareStaged`)
 - `lease`/`leased`: Time-bounded exclusive claim on a job during processing (not `lock`/`locked`). Use `leasedBy`, `leasedUntil`, `leaseMs`, `leaseDurationMs`. DB columns use `leased_by`, `leased_until`.
+- `completedBy`: Records which worker completed the job (`workerId` string), or `null` for workerless completion. DB column uses `completed_by`. Available on completed jobs.
 - `deduplicationKey`: Explicit key for sequence-level deduplication. DB column uses `deduplication_key`.
 - `deduplicated`: Boolean flag returned when a job/sequence was deduplicated instead of created.
 - `DefineContinuationInput<T>`: Type wrapper marking job types as internal (only reachable via `continueWith`).
 - `DefineContinuationOutput<T>`: Type marker in output indicating continuation to another job type.
 - `DefineBlocker<T>`: Type marker for declaring blocker dependencies. Used in `blockers` field of job type definitions.
-- `startBlockers`: Callback parameter in `startJobSequence` and `continueWith` for providing blockers. Create new blocker sequences via `startJobSequence` within the callback - they automatically inherit rootId/originId from the main job via context propagation. Can also return existing sequences.
+- `startBlockers`: Callback parameter in `startJobSequence` and `continueWith` for providing blockers. Required when job type has blockers defined; must not be provided when job type has no blockers. Create new blocker sequences via `startJobSequence` within the callback - they automatically inherit rootId/originId from the main job via context propagation. Can also return existing sequences.
 - `deleteJobSequences`: Deletes entire job trees by `rootId`. Accepts array of sequence IDs. Must be called on root sequences. Throws error if external job sequences depend on sequences being deleted; include those dependents in the deletion set to proceed. Primarily intended for testing environments.
-- `JobDeletedError`: Error thrown when a running job detects it has been deleted during lease renewal.
+- `completeJobSequence`: Completes jobs without a worker (`workerId: null`). Takes a `complete` callback that receives the current job and can complete it (with output or continuation). Supports partial completion and multi-step sequences.
+- `waitForJobSequenceCompletion`: Waits for a job sequence to complete. Uses a hybrid polling/notification approach with 100ms poll intervals for reliability. Throws `WaitForJobSequenceCompletionTimeoutError` on timeout. Throws immediately if sequence doesn't exist.
+- `withNotify`: Wraps a callback to collect and dispatch notifications after successful completion. Used to batch job scheduling and sequence completion notifications within a transaction.
+- `notifyJobOwnershipLost` / `listenJobOwnershipLost`: Notification channel for job ownership loss. When a job's ownership is lost outside its process function (reaper reaps it, workerless completion), the process function is notified immediately via this channel. Workers in staged mode listen for these notifications and abort their signal with the appropriate reason (`"taken_by_another_worker"` or `"already_completed"`).
+- `JobNotFoundError`: Error thrown when a job or job sequence is not found (e.g., deleted during processing, or waiting for non-existent sequence).
+- `JobTakenByAnotherWorkerError`: Error thrown when a worker detects another worker has taken over the job (lease was acquired by someone else).
+- `JobAlreadyCompletedError`: Error thrown when attempting to complete a job that was already completed (by another worker or workerless completion).
+- `WaitForJobSequenceCompletionTimeoutError`: Error thrown when `waitForJobSequenceCompletion` times out before the sequence completes.
+
+### Type Helpers
+
+- `JobOf<TJobTypeDefinitions, TJobTypeName>`: Resolves to `Job<TJobTypeName, Input, BlockerSequences>` from job type definitions. Automatically unwraps `DefineContinuationInput` markers and includes typed blocker sequences.
+- `JobWithoutBlockers<TJob>`: Strips the `blockers` field from a `Job` type. Used in `startBlockers` callback where blockers haven't been created yet. Example: `JobWithoutBlockers<JobOf<Defs, "process">>`.
+- `PendingJob<TJob>`, `BlockedJob<TJob>`, `RunningJob<TJob>`, `CompletedJob<TJob>`, `CreatedJob<TJob>`: Job status types that take a `Job` type and narrow by status. Example: `PendingJob<JobOf<Defs, "process">>`.
+- `SequenceJobTypes<TJobTypeDefinitions, TFirstJobTypeName>`: Union of all job type names reachable in a sequence starting from `TFirstJobTypeName`.
+- `ContinuationJobTypes<TJobTypeDefinitions, TJobTypeName>`: Job type names that `TJobTypeName` can continue to.
+- `FirstJobTypeDefinitions<T>`: Filters job type definitions to only those that can start a sequence (excludes `DefineContinuationInput` types).
+- `HasBlockers<TJobTypeDefinitions, TJobTypeName>`: Returns `true` if the job type has blockers defined, `false` otherwise. Used internally to enforce `startBlockers` requirement.
+
+### Type Organization
+
+- `job-type.ts`: Public marker types (`DefineContinuationInput`, `DefineContinuationOutput`, `DefineBlocker`) and their symbols. Re-exports navigation types.
+- `job-type.navigation.ts`: Type-level navigation logic (`JobOf`, `SequenceJobTypes`, `ContinuationJobTypes`, `FirstJobTypeDefinitions`, blocker resolution types).
+- `job-sequence.types.ts`: Core entity types (`JobSequence`, `CompletedJobSequence`, `JobSequenceStatus`).
+- `job.types.ts`: Core job entity types (`Job`, `JobWithoutBlockers`) and status narrowing types (`PendingJob`, `RunningJob`, etc.).
 
 ## Testing Patterns
 
 - Embed small verification tests into existing related tests rather than creating separate ones
-- Test all relevant phases: `prepare`, `process`, `finalize`
+- Test all relevant phases: `prepare`, `process`, `complete`
 - Prefer descriptive test names that match what's being tested
+
+### Test Suites
+
+Test suites are reusable test collections exported as functions. They receive Vitest's `it` function and a typed context, allowing the same tests to run across different configurations (e.g., different database adapters).
+
+```typescript
+// Define a test suite
+export const myFeatureTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
+  it("does something", async ({ stateAdapter, runInTransaction, expect }) => {
+    // test implementation
+  });
+
+  it("does something else", async ({ stateAdapter, expect }) => {
+    // test implementation
+  });
+};
+
+// Use the test suite in a spec file
+describe("MyFeature", () => {
+  myFeatureTestSuite({ it });
+});
+```
+
+**File organization:**
+
+- `src/suites/` - Test suite files (`*.test-suite.ts`) and shared context helpers (`spec-context.spec-helper.ts`)
+- `src/specs/` - Spec files (`*.spec.ts`) that configure and run test suites
+- Adapter-specific test helpers live alongside their adapters (e.g., `state-adapter/state-adapter.pg.spec-helper.ts`)
 
 ## Code Style
 
 - Inline types used in only one place
 - Remove obvious comments
 - Merge similar functionality
+- Before implementing new features, search for similar existing implementations and ask if refactoring/reuse is preferred
+- Use typed error classes instead of generic `new Error()`. All public-facing errors should be properly typed (e.g., `JobNotFoundError`, `JobAlreadyCompletedError`) to enable proper error handling by consumers. Internal assertion errors (e.g., "Prepare can only be called once") can remain as generic errors.
 
 ## Session Requirements
 
-- End each agentic session only when all checks pass: `pnpm check` (runs lint, fmt:check, typecheck, test); run `pnpm fmt` before running checks to fix formatting issues
+- End each agentic session only when all checks pass: `pnpm check` (runs lint, fmt:check, typecheck, test); run `pnpm fmt` before running checks to fix formatting issues. There are separate commands like `pnpm lint`, `pnpm typecheck` and `pnpm test`.
 - Update documentation in README.md if there were changes to public API
 - Update knowledge base in CLAUDE.md if there were architectural changes
 - Update todos in TODO.md if any were addressed

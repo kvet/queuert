@@ -3,21 +3,19 @@ import { Client, Pool, PoolClient } from "pg";
 import { beforeAll, type TestAPI } from "vitest";
 
 import { createHash } from "crypto";
-import { StateAdapter } from "./state-adapter/state-adapter.js";
-import { createPgStateAdapter } from "./state-adapter/state-adapter.pg.js";
-import { createPgPoolProvider, PgPoolProvider } from "./state-provider/state-provider.pg-pool.js";
+import { StateAdapter } from "./state-adapter.js";
+import { createPgStateAdapter } from "./state-adapter.pg.js";
+import { createPgPoolProvider, PgPoolProvider } from "../state-provider/state-provider.pg-pool.js";
 
 const LABEL = "queuert-postgres-test";
 
 export type PgStateAdapter = StateAdapter<{ client: PoolClient }>;
 
-export const extendWithDb = <T>(
+export const extendWithStatePostgres = <T>(
   api: TestAPI<T>,
   reuseId: string,
 ): TestAPI<
   T & {
-    stateProvider: PgPoolProvider;
-    flakyStateProvider: PgPoolProvider;
     stateAdapter: PgStateAdapter;
     flakyStateAdapter: PgStateAdapter;
   }
@@ -110,9 +108,11 @@ export const extendWithDb = <T>(
       { scope: "test" },
     ],
     stateProvider: [
-      ({ _db, _dbMigrateToLatest, _dbCleanup }, use) => {
-        void _dbMigrateToLatest;
-        void _dbCleanup;
+      async ({ _db, _dbMigrateToLatest, _dbCleanup }, use) => {
+        // oxlint-disable-next-line no-unused-expressions
+        _dbMigrateToLatest;
+        // oxlint-disable-next-line no-unused-expressions
+        _dbCleanup;
 
         return use(createPgPoolProvider({ pool: _db }));
       },
@@ -171,13 +171,13 @@ export const extendWithDb = <T>(
       { scope: "test" },
     ],
     stateAdapter: [
-      ({ stateProvider }, use) => {
+      async ({ stateProvider }, use) => {
         return use(createPgStateAdapter({ stateProvider }));
       },
       { scope: "test" },
     ],
     flakyStateAdapter: [
-      ({ flakyStateProvider }, use) => {
+      async ({ flakyStateProvider }, use) => {
         return use(
           createPgStateAdapter({
             stateProvider: flakyStateProvider,
@@ -192,5 +192,5 @@ export const extendWithDb = <T>(
       },
       { scope: "test" },
     ],
-  }) as ReturnType<typeof extendWithDb<T>>;
+  }) as ReturnType<typeof extendWithStatePostgres<T>>;
 };

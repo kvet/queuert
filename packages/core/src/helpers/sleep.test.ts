@@ -51,7 +51,9 @@ describe("sleep", () => {
     const controller = new AbortController();
 
     const start = Date.now();
-    setTimeout(() => controller.abort(), 30);
+    setTimeout(() => {
+      controller.abort();
+    }, 30);
     await sleep(1000, { signal: controller.signal });
     const elapsed = Date.now() - start;
 

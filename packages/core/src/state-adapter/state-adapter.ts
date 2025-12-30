@@ -1,4 +1,4 @@
-import { DeduplicationOptions, DeduplicationStrategy } from "../entities/job-sequence.js";
+import { DeduplicationOptions, DeduplicationStrategy } from "../entities/deduplication.js";
 import { BaseStateProviderContext } from "../state-provider/state-provider.js";
 
 export type { DeduplicationOptions, DeduplicationStrategy };
@@ -17,6 +17,7 @@ export type StateJob = {
   createdAt: Date;
   scheduledAt: Date;
   completedAt: Date | null;
+  completedBy: string | null;
 
   attempt: number;
   lastAttemptError: string | null;
@@ -30,7 +31,7 @@ export type StateJob = {
   updatedAt: Date;
 };
 
-export type StateAdapter<TContext extends BaseStateProviderContext = BaseStateProviderContext> = {
+export type StateAdapter<TContext extends BaseStateProviderContext> = {
   provideContext: <T>(fn: (context: TContext) => Promise<T>) => Promise<T>;
   runInTransaction: <T>(context: TContext, fn: (txContext: TContext) => Promise<T>) => Promise<T>;
   assertInTransaction: (context: TContext) => Promise<void>;
@@ -85,7 +86,12 @@ export type StateAdapter<TContext extends BaseStateProviderContext = BaseStatePr
     afterMs: number;
     error: string;
   }) => Promise<StateJob>;
-  completeJob: (params: { context: TContext; jobId: string; output: unknown }) => Promise<StateJob>;
+  completeJob: (params: {
+    context: TContext;
+    jobId: string;
+    output: unknown;
+    workerId: string | null;
+  }) => Promise<StateJob>;
   removeExpiredJobLease: (params: {
     context: TContext;
     typeNames: string[];
@@ -95,6 +101,11 @@ export type StateAdapter<TContext extends BaseStateProviderContext = BaseStatePr
     rootIds: string[];
   }) => Promise<{ jobId: string; blockedRootId: string }[]>;
   deleteJobsByRootIds: (params: { context: TContext; rootIds: string[] }) => Promise<StateJob[]>;
+  getJobForUpdate: (params: { context: TContext; jobId: string }) => Promise<StateJob | undefined>;
+  getCurrentJobForUpdate: (params: {
+    context: TContext;
+    sequenceId: string;
+  }) => Promise<StateJob | undefined>;
 };
 
 export type GetStateAdapterContext<TStateAdapter> =
