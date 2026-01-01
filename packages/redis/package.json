@@ -1,0 +1,54 @@
+{
+  "name": "@queuert/redis",
+  "version": "0.0.1",
+  "description": "Redis notify adapter for Queuert job queue system",
+  "keywords": [
+    "background-jobs",
+    "job-queue",
+    "pub-sub",
+    "queue",
+    "redis",
+    "task-queue",
+    "typescript"
+  ],
+  "license": "MIT",
+  "author": "kvet",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kvet/queuert.git"
+  },
+  "type": "module",
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing.ts",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": "./dist/index.mjs",
+      "./testing": "./dist/testing.mjs",
+      "./package.json": "./package.json"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@queuert/core": "workspace:*",
+    "@queuert/testcontainers": "workspace:*",
+    "@testcontainers/redis": "^11.10.0",
+    "@types/node": "^24.10.4",
+    "redis": "^5.0.0",
+    "testcontainers": "^11.10.0",
+    "tsdown": "^0.18.3",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.16"
+  },
+  "peerDependencies": {
+    "@queuert/core": "workspace:*"
+  }
+}

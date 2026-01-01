@@ -44,6 +44,19 @@ SQLite state adapter implementation using better-sqlite3.
 
 - `@queuert/core` as peer dependency
 
+### `@queuert/redis`
+
+Redis notify adapter implementation for distributed pub/sub notifications.
+
+**Exports:**
+
+- `.` (main): `createRedisNotifyAdapter`, `CreateRedisNotifyAdapterOptions` type
+- `./testing`: Test helper for Redis tests (`extendWithNotifyRedis`)
+
+**Dependencies:**
+
+- `@queuert/core` as peer dependency
+
 ## Core Concepts
 
 ### Job
@@ -98,6 +111,37 @@ Abstracts ORM/database client operations, providing context management, transact
 ### NotifyAdapter
 
 Handles pub/sub notifications for job scheduling and sequence completion. Workers listen for job scheduling notifications to wake up and process jobs immediately rather than polling. Sequence completion notifications enable `waitForJobSequenceCompletion` to respond promptly when sequences complete. Enables efficient job processing with minimal latency.
+
+**IMPORTANT - Two notification primitives with different semantics (must be consistent across all adapter implementations):**
+
+1. **Queue primitive** (`listenJobScheduled`): Only ONE waiting worker receives each notification. Workers compete via the notification layer itself (e.g., Redis `lpush`/`brpop`), not just the database lock. This prevents thundering herd when many workers are idle.
+
+2. **Pub/Sub primitive** (`listenJobSequenceCompleted`, `listenJobOwnershipLost`): All listeners for the matching ID receive the notification (e.g., Redis `publish`/`subscribe`). Used for targeted notifications where a specific listener needs to wake up.
+
+**Listener pattern**: All `listen*` methods return a `Listener<T>` with:
+
+- Async setup: `await notifyAdapter.listenJobScheduled(typeNames)` - subscription is active when promise resolves
+- `wait(opts?)`: Waits for an event, returns `{ received: true, value: T }` or `{ received: false }` (aborted/disposed)
+- `dispose()`: Cleans up the subscription (also aborts pending `wait()` calls)
+- `[Symbol.asyncDispose]`: Supports `await using` for automatic cleanup
+
+```typescript
+// Usage with await using (recommended)
+await using listener = await notifyAdapter.listenJobScheduled(typeNames);
+const result = await listener.wait({ signal });
+if (result.received) {
+  // Event happened, result.value contains the data
+}
+// Auto-disposed at block end
+
+// Usage with explicit dispose
+const listener = await notifyAdapter.listenJobScheduled(typeNames);
+try {
+  const result = await listener.wait({ signal });
+} finally {
+  await listener.dispose();
+}
+```
 
 ### Worker
 
@@ -261,6 +305,8 @@ Avoid asymmetric naming (e.g., `started`/`finished` vs `created`/`completed`) ev
 - `waitForJobSequenceCompletion`: Waits for a job sequence to complete. Uses a hybrid polling/notification approach with 100ms poll intervals for reliability. Throws `WaitForJobSequenceCompletionTimeoutError` on timeout. Throws immediately if sequence doesn't exist.
 - `withNotify`: Wraps a callback to collect and dispatch notifications after successful completion. Used to batch job scheduling and sequence completion notifications within a transaction.
 - `notifyJobOwnershipLost` / `listenJobOwnershipLost`: Notification channel for job ownership loss. When a job's ownership is lost outside its process function (reaper reaps it, workerless completion), the process function is notified immediately via this channel. Workers in staged mode listen for these notifications and abort their signal with the appropriate reason (`"taken_by_another_worker"` or `"already_completed"`).
+- `Listener<T>`: Subscription handle returned by `listen*` methods. Has `wait()` for receiving events, `dispose()` for cleanup, and supports `await using`.
+- `ListenResult<T>`: Return type of `Listener.wait()`. Either `{ received: true, value: T }` or `{ received: false }`.
 - `JobNotFoundError`: Error thrown when a job or job sequence is not found (e.g., deleted during processing, or waiting for non-existent sequence).
 - `JobTakenByAnotherWorkerError`: Error thrown when a worker detects another worker has taken over the job (lease was acquired by someone else).
 - `JobAlreadyCompletedError`: Error thrown when attempting to complete a job that was already completed (by another worker or workerless completion).
@@ -318,7 +364,9 @@ describe("MyFeature", () => {
 - `packages/core/src/specs/` - Spec files (`*.spec.ts`) that run test suites with in-process adapters
 - `packages/postgres/src/specs/` - Spec files that run the same test suites with PostgreSQL adapter
 - `packages/sqlite/src/specs/` - Spec files that run the same test suites with SQLite adapter
-- State adapter test helpers (`extendWithStateInProcess`, `extendWithStatePostgres`, `extendWithStateSqlite`) configure the test context with the appropriate adapter
+- `packages/redis/src/specs/` - Spec files that run the same test suites with Redis notify adapter
+- State adapter test helpers (`extendWithStateInProcess`, `extendWithStatePostgres`, `extendWithStateSqlite`) configure the test context with the appropriate state adapter
+- Notify adapter test helpers (`extendWithNotifyInProcess`, `extendWithNotifyNoop`, `extendWithNotifyRedis`) configure the test context with the appropriate notify adapter
 
 ## Code Style
 

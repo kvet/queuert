@@ -2,9 +2,8 @@
 
 # Long term
 
-- Documentation
 - Custom ids + schema name for jobs
-- Redis NotifyAdapter
+- Documentation
 - Open GitHub repo
 - Add donations link
 - Publish to NPM

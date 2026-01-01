@@ -14,7 +14,7 @@ import { CompletedJob, CreatedJob, Job, mapStateJobToJob, RunningJob } from "../
 import { TypedAbortController, TypedAbortSignal } from "../helpers/abort.js";
 import { type BackoffConfig } from "../helpers/backoff.js";
 import { createSignal } from "../helpers/signal.js";
-import { NotifyAdapter } from "../notify-adapter/notify-adapter.js";
+import type { Listener, NotifyAdapter } from "../notify-adapter/notify-adapter.js";
 import {
   JobAlreadyCompletedError,
   JobNotFoundError,
@@ -218,22 +218,7 @@ export const runJobProcess = async ({
     config: leaseConfig,
   });
 
-  const ownershipLostListenerController = new AbortController();
-  const startOwnershipLostListener = () => {
-    notifyAdapter
-      .listenJobOwnershipLost([job.id], {
-        signal: ownershipLostListenerController.signal,
-      })
-      .then(async (lostJobId) => {
-        if (lostJobId && !abortController.signal.aborted) {
-          await runInGuardedTransaction(async () => Promise.resolve());
-        }
-      })
-      .catch(() => {});
-  };
-  const stopOwnershipLostListener = () => {
-    ownershipLostListenerController.abort();
-  };
+  let ownershipListener: Listener<void> | null = null;
 
   const startProcessing = async (job: StateJob) => {
     const blockerPairs = await helper.getJobBlockers({ jobId: job.id, context });
@@ -268,7 +253,14 @@ export const runJobProcess = async ({
 
       if (config.mode === "staged") {
         await leaseManager.start();
-        startOwnershipLostListener();
+        ownershipListener = await notifyAdapter.listenJobOwnershipLost(job.id);
+
+        void (async () => {
+          const result = await ownershipListener.wait();
+          if (result.received && !abortController.signal.aborted) {
+            await runInGuardedTransaction(async () => Promise.resolve());
+          }
+        })().catch(() => {});
       }
 
       return callbackOutput;
@@ -298,7 +290,7 @@ export const runJobProcess = async ({
         throw new Error("Complete can only be called once");
       }
       completeCalled = true;
-      stopOwnershipLostListener();
+      await ownershipListener?.dispose();
       await leaseManager.stop();
       const result = await runInGuardedTransaction(async (context) => {
         let continuedJob: Job<any, any, any> | null = null;
@@ -371,7 +363,7 @@ export const runJobProcess = async ({
         }),
       );
     } finally {
-      stopOwnershipLostListener();
+      await ownershipListener?.dispose();
       await leaseManager.stop();
     }
   };

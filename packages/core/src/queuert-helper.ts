@@ -729,12 +729,11 @@ export const queuertHelper = ({
       const timeoutSignal = AbortSignal.timeout(timeoutMs);
       const combinedSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
 
+      await using listener = await notifyAdapter.listenJobSequenceCompleted(id);
       while (!combinedSignal.aborted) {
-        await notifyAdapter
-          .listenJobSequenceCompleted([id], {
-            signal: AbortSignal.any([combinedSignal, AbortSignal.timeout(pollIntervalMs)]),
-          })
-          .catch(() => {});
+        await listener.wait({
+          signal: AbortSignal.any([combinedSignal, AbortSignal.timeout(pollIntervalMs)]),
+        });
 
         const sequence = await checkSequence();
         if (sequence) return sequence;

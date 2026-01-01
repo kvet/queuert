@@ -84,22 +84,15 @@ export const createExecutor = ({
       if (stopController.signal.aborted) {
         return;
       }
-      const notifyController = new AbortController();
-      const onStop = () => {
-        notifyController.abort();
-      };
-      stopController.signal.addEventListener("abort", onStop);
+
+      await using listener = await notifyAdapter.listenJobScheduled(typeNames);
       await Promise.any([
-        notifyAdapter.listenJobScheduled(typeNames, {
-          signal: notifyController.signal,
-        }),
+        listener.wait({ signal: stopController.signal }),
         sleep(pullDelayMs, {
           jitterMs: pullDelayMs / 10,
-          signal: notifyController.signal,
+          signal: stopController.signal,
         }),
       ]);
-      stopController.signal.removeEventListener("abort", onStop);
-      notifyController.abort();
     };
 
     const performJob = async (): Promise<boolean> => {

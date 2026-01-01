@@ -1,127 +1,194 @@
-import { NotifyAdapter } from "./notify-adapter.js";
+import type { ListenResult, NotifyAdapter } from "./notify-adapter.js";
+
+type JobScheduledWaiter = {
+  typeNames: string[];
+  resolve: (result: ListenResult<string>) => void;
+};
 
 export const createInProcessNotifyAdapter = (): NotifyAdapter => {
-  const jobScheduledListeners: Array<(typeName: string) => boolean> = [];
-  const sequenceCompletedListeners: Array<(sequenceId: string) => boolean> = [];
-  const jobOwnershipLostListeners: Array<(jobId: string) => boolean> = [];
+  // Job scheduled uses queue semantics - only ONE worker gets each notification
+  const jobScheduledWaiters: JobScheduledWaiter[] = [];
+
+  // Sequence completed and ownership lost use broadcast semantics - all listeners get notified
+  const sequenceCompletedListeners: Array<(sequenceId: string) => void> = [];
+  const jobOwnershipLostListeners: Array<(jobId: string) => void> = [];
 
   return {
     notifyJobScheduled: async (typeName: string) => {
-      for (const listener of jobScheduledListeners.slice()) {
-        listener(typeName);
+      // Find first waiter interested in this type and notify only that one
+      const index = jobScheduledWaiters.findIndex((w) => w.typeNames.includes(typeName));
+      if (index !== -1) {
+        const waiter = jobScheduledWaiters.splice(index, 1)[0];
+        waiter.resolve({ received: true, value: typeName });
       }
     },
-    listenJobScheduled: async (typeNames: string[], { signal }: { signal?: AbortSignal }) => {
-      return new Promise<void>((resolve) => {
-        if (signal?.aborted) {
-          resolve();
-          return;
-        }
+    listenJobScheduled: async (typeNames: string[]) => {
+      let resolve: ((result: ListenResult<string>) => void) | null = null;
+      let disposed = false;
 
-        const cleanup = () => {
-          const index = jobScheduledListeners.indexOf(listener);
+      const dispose = async () => {
+        if (disposed) return;
+        disposed = true;
+        if (resolve) {
+          const index = jobScheduledWaiters.findIndex((w) => w.resolve === resolve);
           if (index !== -1) {
-            jobScheduledListeners.splice(index, 1);
+            jobScheduledWaiters.splice(index, 1);
           }
-        };
+          resolve({ received: false });
+          resolve = null;
+        }
+      };
 
-        const listener = (notifiedTypeName: string) => {
-          if (typeNames.includes(notifiedTypeName)) {
-            cleanup();
-            signal?.removeEventListener("abort", onAbort);
-            resolve();
-            return true;
+      return {
+        wait: async (opts?: { signal?: AbortSignal }): Promise<ListenResult<string>> => {
+          if (disposed) {
+            return { received: false };
           }
-          return false;
-        };
 
-        const onAbort = () => {
-          cleanup();
-          resolve();
-        };
+          return new Promise<ListenResult<string>>((res) => {
+            if (opts?.signal?.aborted) {
+              res({ received: false });
+              return;
+            }
 
-        jobScheduledListeners.push(listener);
-        signal?.addEventListener("abort", onAbort, { once: true });
-      });
+            resolve = res;
+            jobScheduledWaiters.push({ typeNames, resolve: res });
+
+            const onAbort = () => {
+              if (resolve === res) {
+                const index = jobScheduledWaiters.findIndex((w) => w.resolve === res);
+                if (index !== -1) {
+                  jobScheduledWaiters.splice(index, 1);
+                }
+                resolve = null;
+                res({ received: false });
+              }
+            };
+
+            opts?.signal?.addEventListener("abort", onAbort, { once: true });
+          });
+        },
+        dispose,
+        [Symbol.asyncDispose]: dispose,
+      };
     },
     notifyJobSequenceCompleted: async (sequenceId: string) => {
       for (const listener of sequenceCompletedListeners.slice()) {
         listener(sequenceId);
       }
     },
-    listenJobSequenceCompleted: async (
-      sequenceIds: string[],
-      { signal }: { signal?: AbortSignal },
-    ) => {
-      return new Promise<string | undefined>((resolve) => {
-        if (signal?.aborted) {
-          resolve(undefined);
-          return;
+    listenJobSequenceCompleted: async (targetSequenceId: string) => {
+      let resolve: ((result: ListenResult<void>) => void) | null = null;
+      let disposed = false;
+
+      const listener = (sequenceId: string) => {
+        if (sequenceId === targetSequenceId && resolve) {
+          resolve({ received: true, value: undefined });
+          resolve = null;
         }
+      };
 
-        const cleanup = () => {
-          const index = sequenceCompletedListeners.indexOf(listener);
-          if (index !== -1) {
-            sequenceCompletedListeners.splice(index, 1);
+      sequenceCompletedListeners.push(listener);
+
+      const dispose = async () => {
+        if (disposed) return;
+        disposed = true;
+        const index = sequenceCompletedListeners.indexOf(listener);
+        if (index !== -1) {
+          sequenceCompletedListeners.splice(index, 1);
+        }
+        if (resolve) {
+          resolve({ received: false });
+          resolve = null;
+        }
+      };
+
+      return {
+        wait: async (opts?: { signal?: AbortSignal }): Promise<ListenResult<void>> => {
+          if (disposed) {
+            return { received: false };
           }
-        };
 
-        const listener = (completedSequenceId: string) => {
-          if (sequenceIds.includes(completedSequenceId)) {
-            cleanup();
-            signal?.removeEventListener("abort", onAbort);
-            resolve(completedSequenceId);
-            return true;
-          }
-          return false;
-        };
+          return new Promise<ListenResult<void>>((res) => {
+            if (opts?.signal?.aborted) {
+              res({ received: false });
+              return;
+            }
 
-        const onAbort = () => {
-          cleanup();
-          resolve(undefined);
-        };
+            resolve = res;
 
-        sequenceCompletedListeners.push(listener);
-        signal?.addEventListener("abort", onAbort, { once: true });
-      });
+            const onAbort = () => {
+              if (resolve === res) {
+                resolve = null;
+                res({ received: false });
+              }
+            };
+
+            opts?.signal?.addEventListener("abort", onAbort, { once: true });
+          });
+        },
+        dispose,
+        [Symbol.asyncDispose]: dispose,
+      };
     },
     notifyJobOwnershipLost: async (jobId: string) => {
       for (const listener of jobOwnershipLostListeners.slice()) {
         listener(jobId);
       }
     },
-    listenJobOwnershipLost: async (jobIds: string[], { signal }: { signal?: AbortSignal }) => {
-      return new Promise<string | undefined>((resolve) => {
-        if (signal?.aborted) {
-          resolve(undefined);
-          return;
+    listenJobOwnershipLost: async (targetJobId: string) => {
+      let resolve: ((result: ListenResult<void>) => void) | null = null;
+      let disposed = false;
+
+      const listener = (jobId: string) => {
+        if (jobId === targetJobId && resolve) {
+          resolve({ received: true, value: undefined });
+          resolve = null;
         }
+      };
 
-        const cleanup = () => {
-          const index = jobOwnershipLostListeners.indexOf(listener);
-          if (index !== -1) {
-            jobOwnershipLostListeners.splice(index, 1);
+      jobOwnershipLostListeners.push(listener);
+
+      const dispose = async () => {
+        if (disposed) return;
+        disposed = true;
+        const index = jobOwnershipLostListeners.indexOf(listener);
+        if (index !== -1) {
+          jobOwnershipLostListeners.splice(index, 1);
+        }
+        if (resolve) {
+          resolve({ received: false });
+          resolve = null;
+        }
+      };
+
+      return {
+        wait: async (opts?: { signal?: AbortSignal }): Promise<ListenResult<void>> => {
+          if (disposed) {
+            return { received: false };
           }
-        };
 
-        const listener = (lostJobId: string) => {
-          if (jobIds.includes(lostJobId)) {
-            cleanup();
-            signal?.removeEventListener("abort", onAbort);
-            resolve(lostJobId);
-            return true;
-          }
-          return false;
-        };
+          return new Promise<ListenResult<void>>((res) => {
+            if (opts?.signal?.aborted) {
+              res({ received: false });
+              return;
+            }
 
-        const onAbort = () => {
-          cleanup();
-          resolve(undefined);
-        };
+            resolve = res;
 
-        jobOwnershipLostListeners.push(listener);
-        signal?.addEventListener("abort", onAbort, { once: true });
-      });
+            const onAbort = () => {
+              if (resolve === res) {
+                resolve = null;
+                res({ received: false });
+              }
+            };
+
+            opts?.signal?.addEventListener("abort", onAbort, { once: true });
+          });
+        },
+        dispose,
+        [Symbol.asyncDispose]: dispose,
+      };
     },
   };
 };
