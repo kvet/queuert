@@ -2,7 +2,6 @@
 
 # Long term
 
-- SQLite state adapter
 - Documentation
 - Custom ids + schema name for jobs
 - Redis NotifyAdapter

@@ -1,11 +1,9 @@
 import { Pool, PoolClient } from "pg";
-import { type StateProvider } from "@queuert/core";
+import { PgStateProvider } from "./state-provider.pg.js";
 
-export const createPgPoolProvider = ({
-  pool,
-}: {
-  pool: Pool;
-}): StateProvider<{ client: PoolClient }> => {
+export type PgContext = { client: PoolClient };
+
+export const createPgPoolProvider = ({ pool }: { pool: Pool }): PgStateProvider<PgContext> => {
   const inTransaction = new WeakSet<PoolClient>();
 
   return {
@@ -43,4 +41,4 @@ export const createPgPoolProvider = ({
   };
 };
 
-export type PgPoolProvider = StateProvider<{ client: PoolClient }>;
+export type PgPoolProvider = PgStateProvider<{ client: PoolClient }>;

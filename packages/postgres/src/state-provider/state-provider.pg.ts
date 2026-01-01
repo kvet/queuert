@@ -1,6 +1,6 @@
-export type BaseStateProviderContext = Record<string, unknown>;
+import { BaseStateAdapterContext } from "@queuert/core";
 
-export type StateProvider<TContext extends BaseStateProviderContext> = {
+export type PgStateProvider<TContext extends BaseStateAdapterContext> = {
   provideContext: <T>(fn: (context: TContext) => Promise<T>) => Promise<T>;
   executeSql: <T>(context: TContext, query: string, params?: unknown[]) => Promise<T>;
   assertInTransaction: (context: TContext) => Promise<void>;

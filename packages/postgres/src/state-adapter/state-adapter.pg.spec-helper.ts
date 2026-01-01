@@ -1,11 +1,11 @@
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
+import { type StateAdapter } from "@queuert/core";
 import { withContainerLock } from "@queuert/testcontainers";
+import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
+import { createHash } from "crypto";
 import { Client, Pool, PoolClient } from "pg";
 import { beforeAll, type TestAPI } from "vitest";
-import { createHash } from "crypto";
-import { type StateAdapter } from "@queuert/core";
-import { createPgStateAdapter } from "./state-adapter.pg.js";
 import { createPgPoolProvider, PgPoolProvider } from "../state-provider/state-provider.pg-pool.js";
+import { createPgStateAdapter } from "./state-adapter.pg.js";
 
 const CONTAINER_NAME = "queuert-postgres-test";
 
@@ -91,7 +91,12 @@ export const extendWithStatePostgres = <T>(
           stateProvider,
         });
 
-        await stateAdapter.prepareSchema({ client });
+        await stateAdapter.provideContext(async ({ client }) =>
+          client.query(`
+            CREATE SCHEMA IF NOT EXISTS queuert;
+            GRANT USAGE ON SCHEMA queuert TO test;
+          `),
+        );
         await stateAdapter.migrateToLatest({ client });
 
         client.release();

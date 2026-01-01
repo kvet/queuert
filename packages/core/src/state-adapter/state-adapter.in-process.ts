@@ -128,9 +128,6 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       }
     },
 
-    prepareSchema: async () => {},
-    migrateToLatest: async () => {},
-
     getJobSequenceById: async ({ jobId }) => {
       const rootJob = store.jobs.get(jobId);
       if (!rootJob) return undefined;

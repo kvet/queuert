@@ -16,11 +16,15 @@ import {
 } from "./entities/job-type.js";
 import { Job, JobWithoutBlockers, mapStateJobToJob, PendingJob } from "./entities/job.js";
 import { BackoffConfig, calculateBackoffMs } from "./helpers/backoff.js";
-import { Log } from "./log.js";
 import { createLogHelper } from "./log-helper.js";
+import { Log } from "./log.js";
 import { NotifyAdapter } from "./notify-adapter/notify-adapter.js";
-import { DeduplicationOptions, StateAdapter, StateJob } from "./state-adapter/state-adapter.js";
-import { BaseStateProviderContext } from "./state-provider/state-provider.js";
+import {
+  BaseStateAdapterContext,
+  DeduplicationOptions,
+  StateAdapter,
+  StateJob,
+} from "./state-adapter/state-adapter.js";
 import { CompleteCallbackOptions, RescheduleJobError } from "./worker/job-process.js";
 
 export type StartBlockersFn<
@@ -72,7 +76,7 @@ export const queuertHelper = ({
   notifyAdapter,
   log,
 }: {
-  stateAdapter: StateAdapter<BaseStateProviderContext>;
+  stateAdapter: StateAdapter<BaseStateAdapterContext>;
   notifyAdapter: NotifyAdapter;
   log: Log;
 }) => {
@@ -87,7 +91,7 @@ export const queuertHelper = ({
   }: {
     typeName: string;
     input: unknown;
-    context: BaseStateProviderContext;
+    context: BaseStateAdapterContext;
     startBlockers?: StartBlockersFn<BaseJobTypeDefinitions, string>;
     isSequence: boolean;
     deduplication?: DeduplicationOptions;
@@ -217,7 +221,7 @@ export const queuertHelper = ({
     ...rest
   }: {
     job: StateJob;
-    context: BaseStateProviderContext;
+    context: BaseStateAdapterContext;
     workerId: string | null;
   } & (
     | { type: "completeSequence"; output: unknown }
@@ -276,7 +280,7 @@ export const queuertHelper = ({
       cb: () => Promise<T>,
     ) => Promise<T>,
     runInTransaction: async <T>(
-      cb: (context: BaseStateProviderContext) => Promise<T>,
+      cb: (context: BaseStateAdapterContext) => Promise<T>,
     ): Promise<T> => {
       return stateAdapter.provideContext(async (context) =>
         stateAdapter.runInTransaction(context, cb),
@@ -287,7 +291,7 @@ export const queuertHelper = ({
       context,
     }: {
       jobId: string;
-      context: BaseStateProviderContext;
+      context: BaseStateAdapterContext;
     }): Promise<[StateJob, StateJob | undefined][]> =>
       stateAdapter.getJobBlockers({ context, jobId }),
     startJobSequence: async <TFirstJobTypeName extends string, TInput, TOutput>({
@@ -361,7 +365,7 @@ export const queuertHelper = ({
     }: {
       job: StateJob;
       error: unknown;
-      context: BaseStateProviderContext;
+      context: BaseStateAdapterContext;
       retryConfig: BackoffConfig;
       workerId: string;
     }): Promise<void> => {
@@ -389,7 +393,7 @@ export const queuertHelper = ({
     finishJob: finishJob as (
       options: {
         job: StateJob;
-        context: BaseStateProviderContext;
+        context: BaseStateAdapterContext;
         workerId: string | null;
       } & (
         | { type: "completeSequence"; output: unknown }
@@ -402,7 +406,7 @@ export const queuertHelper = ({
       workerId,
       allowEmptyWorker,
     }: {
-      context: BaseStateProviderContext;
+      context: BaseStateAdapterContext;
       job: StateJob;
       workerId: string;
       allowEmptyWorker: boolean;
@@ -450,7 +454,7 @@ export const queuertHelper = ({
       leaseMs,
       workerId,
     }: {
-      context: BaseStateProviderContext;
+      context: BaseStateAdapterContext;
       job: StateJob;
       leaseMs: number;
       workerId: string;
@@ -486,7 +490,7 @@ export const queuertHelper = ({
       workerId,
     }: {
       typeNames: string[];
-      context: BaseStateProviderContext;
+      context: BaseStateAdapterContext;
       workerId: string;
     }): Promise<StateJob | undefined> => {
       const job = await stateAdapter.acquireJob({
@@ -522,7 +526,7 @@ export const queuertHelper = ({
       context,
     }: {
       sequenceIds: string[];
-      context: BaseStateProviderContext;
+      context: BaseStateAdapterContext;
     }): Promise<void> => {
       await stateAdapter.assertInTransaction(context);
 
@@ -584,7 +588,7 @@ export const queuertHelper = ({
     }: {
       id: string;
       firstJobTypeName: TFirstJobTypeName;
-      context: BaseStateProviderContext;
+      context: BaseStateAdapterContext;
       complete: (options: {
         job: StateJob;
         complete: (
@@ -596,7 +600,7 @@ export const queuertHelper = ({
                 input: unknown;
                 startBlockers?: StartBlockersFn<BaseJobTypeDefinitions, string>;
               }) => Promise<unknown>;
-            } & BaseStateProviderContext,
+            } & BaseStateAdapterContext,
           ) => unknown,
         ) => Promise<unknown>;
       }) => Promise<void>;
@@ -621,7 +625,7 @@ export const queuertHelper = ({
               input: unknown;
               startBlockers?: StartBlockersFn<BaseJobTypeDefinitions, string>;
             }) => Promise<unknown>;
-          } & BaseStateProviderContext,
+          } & BaseStateAdapterContext,
         ) => unknown,
       ): Promise<unknown> => {
         if (job.status === "completed") {

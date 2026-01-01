@@ -7,4 +7,6 @@ export default defineConfig({
   exports: {
     devExports: true,
   },
+  // TODO: rework later
+  external: ["vitest"],
 });

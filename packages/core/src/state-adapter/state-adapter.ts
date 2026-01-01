@@ -1,5 +1,4 @@
 import { DeduplicationOptions, DeduplicationStrategy } from "../entities/deduplication.js";
-import { BaseStateProviderContext } from "../state-provider/state-provider.js";
 
 export type { DeduplicationOptions, DeduplicationStrategy };
 
@@ -31,13 +30,12 @@ export type StateJob = {
   updatedAt: Date;
 };
 
-export type StateAdapter<TContext extends BaseStateProviderContext> = {
+export type BaseStateAdapterContext = {};
+
+export type StateAdapter<TContext extends BaseStateAdapterContext> = {
   provideContext: <T>(fn: (context: TContext) => Promise<T>) => Promise<T>;
   runInTransaction: <T>(context: TContext, fn: (txContext: TContext) => Promise<T>) => Promise<T>;
   assertInTransaction: (context: TContext) => Promise<void>;
-
-  prepareSchema: (context: TContext) => Promise<void>;
-  migrateToLatest: (context: TContext) => Promise<void>;
 
   getJobSequenceById: (params: {
     context: TContext;

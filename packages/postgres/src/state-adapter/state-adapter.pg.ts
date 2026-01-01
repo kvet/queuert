@@ -1,11 +1,12 @@
 import {
+  type BaseStateAdapterContext,
   type RetryConfig,
-  type BaseStateProviderContext,
-  type StateProvider,
   type StateAdapter,
   type StateJob,
 } from "@queuert/core";
 import { withRetry } from "@queuert/core/internal";
+import { type NamedParameter, type TypedSql, type UnwrapNamedParameters } from "@queuert/typed-sql";
+import { PgStateProvider } from "../state-provider/state-provider.pg.js";
 import { isTransientPgError } from "./errors.js";
 import {
   acquireJobSql,
@@ -15,10 +16,10 @@ import {
   DbJob,
   deleteJobsByRootIdsSql,
   getCurrentJobForUpdateSql,
-  getJobForUpdateSql,
   getExternalBlockersSql,
   getJobBlockersSql,
   getJobByIdSql,
+  getJobForUpdateSql,
   getJobSequenceByIdSql,
   getNextJobAvailableInMsSql,
   migrateSql,
@@ -26,34 +27,7 @@ import {
   renewJobLeaseSql,
   rescheduleJobSql,
   scheduleBlockedJobsSql,
-  setupSql,
 } from "./sql.js";
-
-export const namedParameterSymbol: unique symbol = Symbol("namedParameter");
-
-export type NamedParameter<TParamName extends string, TParamValue> = {
-  [namedParameterSymbol]: true;
-  $paramName: TParamName;
-  $paramValue: TParamValue;
-};
-
-type UnwrapNamedParameter<T> = T extends NamedParameter<string, infer V> ? V : T;
-
-type UnwrapNamedParameters<T extends readonly unknown[]> = {
-  -readonly [K in keyof T]: UnwrapNamedParameter<T[K]>;
-};
-
-export type TypedSql<
-  TParams extends
-    | readonly [NamedParameter<string, unknown>, ...NamedParameter<string, unknown>[]]
-    | readonly [],
-  TResult,
-> = string & {
-  [namedParameterSymbol]: true;
-  $paramsType: TParams;
-  $resultType: TResult;
-  $unwrappedParamsType: UnwrapNamedParameters<TParams>;
-};
 
 const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
   return {
@@ -85,7 +59,7 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
   };
 };
 
-export const createPgStateAdapter = <TContext extends BaseStateProviderContext>({
+export const createPgStateAdapter = <TContext extends BaseStateAdapterContext>({
   stateProvider,
   connectionRetryConfig = {
     maxAttempts: 3,
@@ -95,10 +69,12 @@ export const createPgStateAdapter = <TContext extends BaseStateProviderContext>(
   },
   isTransientError = isTransientPgError,
 }: {
-  stateProvider: StateProvider<TContext>;
+  stateProvider: PgStateProvider<TContext>;
   connectionRetryConfig?: RetryConfig;
   isTransientError?: (error: unknown) => boolean;
-}): StateAdapter<TContext> => {
+}): StateAdapter<TContext> & {
+  migrateToLatest: (context: TContext) => Promise<void>;
+} => {
   const executeTypedSql = async <
     TParams extends
       | readonly [NamedParameter<string, unknown>, ...NamedParameter<string, unknown>[]]
@@ -115,7 +91,7 @@ export const createPgStateAdapter = <TContext extends BaseStateProviderContext>(
     ? { params?: undefined }
     : { params: UnwrapNamedParameters<TParams> })): Promise<TResult> =>
     withRetry(
-      async () => stateProvider.executeSql<TResult>(context, sql, params),
+      async () => stateProvider.executeSql<TResult>(context, sql.sql, params),
       connectionRetryConfig,
       { isRetryableError: isTransientError },
     );
@@ -125,12 +101,6 @@ export const createPgStateAdapter = <TContext extends BaseStateProviderContext>(
     runInTransaction: async (context, fn) => stateProvider.runInTransaction(context, fn),
     assertInTransaction: async (context) => stateProvider.assertInTransaction(context),
 
-    prepareSchema: async (context) => {
-      await executeTypedSql({
-        context,
-        sql: setupSql,
-      });
-    },
     migrateToLatest: async (context) => {
       await executeTypedSql({
         context,
@@ -307,5 +277,5 @@ export const createPgStateAdapter = <TContext extends BaseStateProviderContext>(
   };
 };
 
-export type PgStateAdapter<TContext extends BaseStateProviderContext = BaseStateProviderContext> =
+export type PgStateAdapter<TContext extends BaseStateAdapterContext = BaseStateAdapterContext> =
   StateAdapter<TContext>;

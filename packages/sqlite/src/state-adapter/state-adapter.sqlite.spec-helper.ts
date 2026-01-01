@@ -1,0 +1,152 @@
+import { type StateAdapter } from "@queuert/core";
+import Database from "better-sqlite3";
+import { type TestAPI } from "vitest";
+import {
+  BetterSqlite3Provider,
+  createBetterSqlite3Provider,
+  SqliteContext,
+} from "../state-provider/state-provider.better-sqlite3.js";
+import { createSqliteStateAdapter } from "./state-adapter.sqlite.js";
+
+export type SqliteStateAdapter = StateAdapter<SqliteContext>;
+
+export const extendWithStateSqlite = <T>(
+  api: TestAPI<T>,
+  _reuseId: string,
+): TestAPI<
+  T & {
+    stateAdapter: SqliteStateAdapter;
+    flakyStateAdapter: SqliteStateAdapter;
+  }
+> => {
+  return api.extend<{
+    _db: Database.Database;
+    _dbMigrateToLatest: void;
+    _dbCleanup: void;
+    stateProvider: BetterSqlite3Provider;
+    flakyStateProvider: BetterSqlite3Provider;
+    stateAdapter: SqliteStateAdapter;
+    flakyStateAdapter: SqliteStateAdapter;
+  }>({
+    _db: [
+      // eslint-disable-next-line no-empty-pattern
+      async ({}, use) => {
+        const db = new Database(":memory:");
+        db.pragma("journal_mode = WAL");
+        db.pragma("foreign_keys = ON");
+
+        await use(db);
+
+        db.close();
+      },
+      { scope: "worker" },
+    ],
+    _dbMigrateToLatest: [
+      async ({ _db }, use) => {
+        const stateProvider = createBetterSqlite3Provider({ db: _db });
+        const stateAdapter = createSqliteStateAdapter({ stateProvider });
+
+        await stateAdapter.migrateToLatest({ db: _db });
+
+        await use();
+      },
+      { scope: "worker" },
+    ],
+    _dbCleanup: [
+      async ({ _db }, use) => {
+        await use();
+
+        _db.exec("DELETE FROM queuert_job_blocker;");
+        _db.exec("DELETE FROM queuert_job;");
+      },
+      { scope: "test" },
+    ],
+    stateProvider: [
+      async ({ _db, _dbMigrateToLatest, _dbCleanup }, use) => {
+        // oxlint-disable-next-line no-unused-expressions
+        _dbMigrateToLatest;
+        // oxlint-disable-next-line no-unused-expressions
+        _dbCleanup;
+
+        return use(createBetterSqlite3Provider({ db: _db }));
+      },
+      { scope: "test" },
+    ],
+    flakyStateProvider: [
+      async ({ stateProvider, expect }, use) => {
+        let queryCount = 0;
+        let errorCount = 0;
+
+        // Seeded PRNG (mulberry32) for reproducible randomness
+        const seed = 12345;
+        let state = seed;
+        const random = () => {
+          state = (state + 0x6d2b79f5) | 0;
+          let t = Math.imul(state ^ (state >>> 15), 1 | state);
+          t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+          return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+
+        // Generate batch sizes: alternate between success (5-15) and error (1-20) batches
+        let inErrorBatch = false;
+        let batchRemaining = Math.floor(random() * 11) + 5; // First success batch: 5-15
+
+        const originalExecuteSql = stateProvider.executeSql.bind(stateProvider);
+        const flakyStateProvider: typeof stateProvider = {
+          ...stateProvider,
+          executeSql: async (context, sql, params, returns) => {
+            queryCount++;
+            batchRemaining--;
+
+            if (batchRemaining <= 0) {
+              inErrorBatch = !inErrorBatch;
+              batchRemaining = inErrorBatch
+                ? Math.floor(random() * 20) + 1 // Error batch: 1-20
+                : Math.floor(random() * 11) + 5; // Success batch: 5-15
+            }
+
+            if (inErrorBatch) {
+              errorCount++;
+              const error = new Error("SQLITE_BUSY: database is locked") as Error & {
+                code: string;
+              };
+              error.code = "SQLITE_BUSY";
+              throw error;
+            }
+
+            return originalExecuteSql(context, sql, params, returns);
+          },
+        };
+
+        await use(flakyStateProvider);
+
+        if (queryCount > 5) {
+          expect(errorCount).toBeGreaterThan(0);
+        }
+      },
+      { scope: "test" },
+    ],
+    stateAdapter: [
+      async ({ stateProvider }, use) => {
+        return use(createSqliteStateAdapter({ stateProvider }));
+      },
+      { scope: "test" },
+    ],
+    flakyStateAdapter: [
+      async ({ flakyStateProvider }, use) => {
+        return use(
+          createSqliteStateAdapter({
+            stateProvider: flakyStateProvider,
+            connectionRetryConfig: {
+              maxAttempts: 3,
+              initialDelayMs: 1,
+              multiplier: 1,
+              maxDelayMs: 1,
+            },
+          }),
+        );
+      },
+      { scope: "test" },
+    ],
+  }) as ReturnType<typeof extendWithStateSqlite<T>>;
+};

@@ -1,13 +1,8 @@
 import { type DeduplicationStrategy } from "@queuert/core";
-import { NamedParameter, TypedSql } from "./state-adapter.pg.js";
+import { type NamedParameter, sql, type TypedSql } from "@queuert/typed-sql";
 
-// TODO: pgstattuple with partitioning
-export const setupSql = /* sql */ `
-CREATE SCHEMA IF NOT EXISTS queuert;
-GRANT USAGE ON SCHEMA queuert TO test;
-` as TypedSql<readonly [], void>;
-
-export const migrateSql = /* sql */ `
+export const migrateSql: TypedSql<[], void> = sql(
+  /* sql */ `
 -- Types: job_status enum
 DO $$
 BEGIN
@@ -102,7 +97,9 @@ WHERE status = 'running' AND leased_until IS NOT NULL;
 -- Indexes: blocker lookup
 CREATE INDEX IF NOT EXISTS job_blocker_sequence_idx
 ON queuert.job_blocker (blocked_by_sequence_id);
-` as TypedSql<[], void>;
+`,
+  false,
+);
 
 export type DbJob = {
   id: string;
@@ -132,7 +129,20 @@ export type DbJob = {
   updated_at: string;
 };
 
-export const createJobSql = /* sql */ `
+export const createJobSql: TypedSql<
+  readonly [
+    NamedParameter<"type_name", string>,
+    NamedParameter<"input", unknown>,
+    NamedParameter<"root_id", string | undefined>,
+    NamedParameter<"sequence_id", string | undefined>,
+    NamedParameter<"origin_id", string | undefined>,
+    NamedParameter<"deduplication_key", string | null | undefined>,
+    NamedParameter<"deduplication_strategy", DeduplicationStrategy | null | undefined>,
+    NamedParameter<"deduplication_window_ms", number | null | undefined>,
+  ],
+  [DbJob & { deduplicated: boolean }]
+> = sql(
+  /* sql */ `
 WITH existing_continuation AS (
   SELECT *, TRUE AS deduplicated
   FROM queuert.job
@@ -175,21 +185,15 @@ SELECT * FROM existing_deduplicated
 UNION ALL
 SELECT * FROM inserted_job
 LIMIT 1
-` as TypedSql<
-  readonly [
-    NamedParameter<"type_name", string>,
-    NamedParameter<"input", unknown>,
-    NamedParameter<"root_id", string | undefined>,
-    NamedParameter<"sequence_id", string | undefined>,
-    NamedParameter<"origin_id", string | undefined>,
-    NamedParameter<"deduplication_key", string | null | undefined>,
-    NamedParameter<"deduplication_strategy", DeduplicationStrategy | null | undefined>,
-    NamedParameter<"deduplication_window_ms", number | null | undefined>,
-  ],
-  [DbJob & { deduplicated: boolean }]
->;
+`,
+  true,
+);
 
-export const addJobBlockersSql = /* sql */ `
+export const addJobBlockersSql: TypedSql<
+  readonly [NamedParameter<"job_id", string[]>, NamedParameter<"blocked_by_sequence_id", string[]>],
+  [DbJob]
+> = sql(
+  /* sql */ `
 WITH inserted_blockers AS (
   INSERT INTO queuert.job_blocker (job_id, blocked_by_sequence_id, "index")
   SELECT job_id, blocked_by_sequence_id, ord - 1 AS "index"
@@ -227,12 +231,19 @@ SELECT j.* FROM queuert.job j
 WHERE j.id = (SELECT DISTINCT job_id FROM inserted_blockers LIMIT 1)
   AND NOT EXISTS (SELECT 1 FROM updated_job)
 LIMIT 1;
-` as TypedSql<
-  readonly [NamedParameter<"job_id", string[]>, NamedParameter<"blocked_by_sequence_id", string[]>],
-  [DbJob]
->;
+`,
+  true,
+);
 
-export const completeJobSql = /* sql */ `
+export const completeJobSql: TypedSql<
+  readonly [
+    NamedParameter<"id", string>,
+    NamedParameter<"output", unknown>,
+    NamedParameter<"completed_by", string | null>,
+  ],
+  [DbJob]
+> = sql(
+  /* sql */ `
 UPDATE queuert.job
 SET status = 'completed',
   completed_at = now(),
@@ -242,16 +253,15 @@ SET status = 'completed',
   leased_until = NULL
 WHERE id = $1
 RETURNING *
-` as TypedSql<
-  readonly [
-    NamedParameter<"id", string>,
-    NamedParameter<"output", unknown>,
-    NamedParameter<"completed_by", string | null>,
-  ],
-  [DbJob]
->;
+`,
+  true,
+);
 
-export const scheduleBlockedJobsSql = /* sql */ `
+export const scheduleBlockedJobsSql: TypedSql<
+  readonly [NamedParameter<"blocked_by_sequence_id", string>],
+  DbJob[]
+> = sql(
+  /* sql */ `
 WITH direct_blocked AS (
   SELECT DISTINCT jb.job_id
   FROM queuert.job_blocker jb
@@ -283,9 +293,15 @@ SET scheduled_at = now(),
 WHERE j.id IN (SELECT job_id FROM ready_jobs)
   AND j.status = 'blocked'
 RETURNING j.*;
-` as TypedSql<readonly [NamedParameter<"blocked_by_sequence_id", string>], DbJob[]>;
+`,
+  true,
+);
 
-export const getJobSequenceByIdSql = /* sql */ `
+export const getJobSequenceByIdSql: TypedSql<
+  readonly [NamedParameter<"id", string>],
+  [{ root_job: DbJob; last_sequence_job: DbJob | null } | undefined]
+> = sql(
+  /* sql */ `
 SELECT
   row_to_json(j)  AS root_job,
   row_to_json(lc) AS last_sequence_job
@@ -298,12 +314,15 @@ LEFT JOIN LATERAL (
   LIMIT 1
 ) AS lc ON TRUE
 WHERE j.id = $1
-` as TypedSql<
-  readonly [NamedParameter<"id", string>],
-  [{ root_job: DbJob; last_sequence_job: DbJob | null } | undefined]
->;
+`,
+  true,
+);
 
-export const getJobBlockersSql = /* sql */ `
+export const getJobBlockersSql: TypedSql<
+  readonly [NamedParameter<"id", string>],
+  { root_job: DbJob; last_sequence_job: DbJob | null }[]
+> = sql(
+  /* sql */ `
 SELECT
   row_to_json(j)   AS root_job,
   row_to_json(lc)  AS last_sequence_job
@@ -319,18 +338,29 @@ LEFT JOIN LATERAL (
 ) AS lc ON TRUE
 WHERE b.job_id = $1
 ORDER BY b.index ASC
-` as TypedSql<
-  readonly [NamedParameter<"id", string>],
-  { root_job: DbJob; last_sequence_job: DbJob | null }[]
->;
+`,
+  true,
+);
 
-export const getJobByIdSql = /* sql */ `
+export const getJobByIdSql: TypedSql<readonly [NamedParameter<"id", string>], [DbJob | undefined]> =
+  sql(
+    /* sql */ `
 SELECT *
 FROM queuert.job
 WHERE id = $1
-` as TypedSql<readonly [NamedParameter<"id", string>], [DbJob | undefined]>;
+`,
+    true,
+  );
 
-export const rescheduleJobSql = /* sql */ `
+export const rescheduleJobSql: TypedSql<
+  readonly [
+    NamedParameter<"id", string>,
+    NamedParameter<"delay_ms", number>,
+    NamedParameter<"error", string>,
+  ],
+  [DbJob]
+> = sql(
+  /* sql */ `
 UPDATE queuert.job
 SET scheduled_at = now() + ($2::bigint || ' milliseconds')::interval,
   last_attempt_at = now(),
@@ -340,32 +370,34 @@ SET scheduled_at = now() + ($2::bigint || ' milliseconds')::interval,
   status = 'pending'
 WHERE id = $1
 RETURNING *
-` as TypedSql<
-  readonly [
-    NamedParameter<"id", string>,
-    NamedParameter<"delay_ms", number>,
-    NamedParameter<"error", string>,
-  ],
-  [DbJob]
->;
+`,
+  true,
+);
 
-export const renewJobLeaseSql = /* sql */ `
-UPDATE queuert.job
-SET leased_by = $2,
-  leased_until = now() + ($3::bigint || ' milliseconds')::interval,
-  status = 'running'
-WHERE id = $1
-RETURNING *
-` as TypedSql<
+export const renewJobLeaseSql: TypedSql<
   readonly [
     NamedParameter<"id", string>,
     NamedParameter<"leased_by", string>,
     NamedParameter<"lease_duration_ms", number>,
   ],
   [DbJob]
->;
+> = sql(
+  /* sql */ `
+UPDATE queuert.job
+SET leased_by = $2,
+  leased_until = now() + ($3::bigint || ' milliseconds')::interval,
+  status = 'running'
+WHERE id = $1
+RETURNING *
+`,
+  true,
+);
 
-export const acquireJobSql = /* sql */ `
+export const acquireJobSql: TypedSql<
+  readonly [NamedParameter<"type_names", string[]>],
+  [DbJob | undefined]
+> = sql(
+  /* sql */ `
 WITH acquired_job AS (
   SELECT id
   FROM queuert.job
@@ -381,9 +413,15 @@ SET status = 'running',
     attempt = attempt + 1
 WHERE id = (SELECT id FROM acquired_job)
 RETURNING *
-` as TypedSql<readonly [NamedParameter<"type_names", string[]>], [DbJob | undefined]>;
+`,
+  true,
+);
 
-export const getNextJobAvailableInMsSql = /* sql */ `
+export const getNextJobAvailableInMsSql: TypedSql<
+  readonly [NamedParameter<"type_names", string[]>],
+  [{ available_in_ms: number } | undefined]
+> = sql(
+  /* sql */ `
 SELECT GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (job.scheduled_at - now())) * 1000)::bigint) AS available_in_ms
 FROM queuert.job as job
 WHERE job.type_name IN (SELECT unnest($1::text[]))
@@ -391,12 +429,15 @@ WHERE job.type_name IN (SELECT unnest($1::text[]))
 ORDER BY job.scheduled_at ASC
 LIMIT 1
 FOR UPDATE SKIP LOCKED
-` as TypedSql<
-  readonly [NamedParameter<"type_names", string[]>],
-  [{ available_in_ms: number } | undefined]
->;
+`,
+  true,
+);
 
-export const removeExpiredJobLeaseSql = /* sql */ `
+export const removeExpiredJobLeaseSql: TypedSql<
+  readonly [NamedParameter<"type_names", string[]>],
+  [DbJob | undefined]
+> = sql(
+  /* sql */ `
 WITH job_to_unlock AS (
   SELECT id
   FROM queuert.job
@@ -415,9 +456,15 @@ SET leased_by = NULL,
 FROM job_to_unlock
 WHERE job.id = job_to_unlock.id
 RETURNING job.*
-` as TypedSql<readonly [NamedParameter<"type_names", string[]>], [DbJob | undefined]>;
+`,
+  true,
+);
 
-export const getExternalBlockersSql = /* sql */ `
+export const getExternalBlockersSql: TypedSql<
+  readonly [NamedParameter<"root_ids", string[]>],
+  { job_id: string; blocked_root_id: string }[]
+> = sql(
+  /* sql */ `
 SELECT DISTINCT jb.job_id, j.root_id AS blocked_root_id
 FROM queuert.job_blocker jb
 JOIN queuert.job j ON j.id = jb.job_id
@@ -425,29 +472,46 @@ WHERE jb.blocked_by_sequence_id IN (
   SELECT id FROM queuert.job WHERE root_id = ANY($1::uuid[])
 )
 AND j.root_id != ALL($1::uuid[])
-` as TypedSql<
-  readonly [NamedParameter<"root_ids", string[]>],
-  { job_id: string; blocked_root_id: string }[]
->;
+`,
+  true,
+);
 
-export const deleteJobsByRootIdsSql = /* sql */ `
+export const deleteJobsByRootIdsSql: TypedSql<
+  readonly [NamedParameter<"root_ids", string[]>],
+  DbJob[]
+> = sql(
+  /* sql */ `
 DELETE FROM queuert.job
 WHERE root_id = ANY($1::uuid[])
 RETURNING *
-` as TypedSql<readonly [NamedParameter<"root_ids", string[]>], DbJob[]>;
+`,
+  true,
+);
 
-export const getJobForUpdateSql = /* sql */ `
+export const getJobForUpdateSql: TypedSql<
+  readonly [NamedParameter<"id", string>],
+  [DbJob | undefined]
+> = sql(
+  /* sql */ `
 SELECT *
 FROM queuert.job
 WHERE id = $1
 FOR UPDATE
-` as TypedSql<readonly [NamedParameter<"id", string>], [DbJob | undefined]>;
+`,
+  true,
+);
 
-export const getCurrentJobForUpdateSql = /* sql */ `
+export const getCurrentJobForUpdateSql: TypedSql<
+  readonly [NamedParameter<"sequence_id", string>],
+  [DbJob | undefined]
+> = sql(
+  /* sql */ `
 SELECT *
 FROM queuert.job
 WHERE sequence_id = $1
 ORDER BY created_at DESC
 LIMIT 1
 FOR UPDATE
-` as TypedSql<readonly [NamedParameter<"sequence_id", string>], [DbJob | undefined]>;
+`,
+  true,
+);

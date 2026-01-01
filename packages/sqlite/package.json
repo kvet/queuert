@@ -1,18 +1,14 @@
 {
-  "name": "@queuert/postgres",
+  "name": "@queuert/sqlite",
   "version": "0.0.1",
-  "description": "PostgreSQL adapter for Queuert job queue system",
+  "description": "SQLite adapter for Queuert job queue system",
   "keywords": [
     "background-jobs",
     "job-queue",
-    "postgresql",
     "queue",
+    "sqlite",
     "task-queue",
-    "transactional",
-    "transactional-outbox-pattern",
-    "typescript",
-    "workflow",
-    "workflow-engine"
+    "typescript"
   ],
   "license": "MIT",
   "author": "kvet",
@@ -42,13 +38,10 @@
   },
   "devDependencies": {
     "@queuert/core": "workspace:*",
-    "@queuert/testcontainers": "workspace:*",
     "@queuert/typed-sql": "workspace:*",
-    "@testcontainers/postgresql": "^11.10.0",
+    "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^24.10.4",
-    "@types/pg": "^8.16.0",
-    "pg": "^8.16.3",
-    "testcontainers": "^11.10.0",
+    "better-sqlite3": "^11.0.0",
     "tsdown": "^0.18.3",
     "typescript": "^5.9.3",
     "vitest": "^4.0.16"

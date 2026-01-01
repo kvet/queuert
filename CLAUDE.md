@@ -6,7 +6,7 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ## Project Structure
 
-Queuert is a monorepo with two packages:
+Queuert is a monorepo with the following packages:
 
 ### `@queuert/core`
 
@@ -30,7 +30,19 @@ PostgreSQL state adapter implementation. Users provide their own `pg` client.
 **Dependencies:**
 
 - `@queuert/core` as peer dependency
-- `pg` is a dev dependency - users bring their own `pg` client
+
+### `@queuert/sqlite`
+
+SQLite state adapter implementation using better-sqlite3.
+
+**Exports:**
+
+- `.` (main): `createSqliteStateAdapter`, `SqliteStateAdapter` type
+- `./testing`: Test helper for SQLite tests (`extendWithStateSqlite`)
+
+**Dependencies:**
+
+- `@queuert/core` as peer dependency
 
 ## Core Concepts
 
@@ -77,11 +89,11 @@ A typed logging function for observability. All job lifecycle events are logged 
 
 ### StateAdapter
 
-Abstracts database operations for job persistence. Allows different database implementations (currently PostgreSQL). Handles job creation, status transitions, leasing, and queries.
+Abstracts database operations for job persistence. Allows different database implementations (PostgreSQL and SQLite). Handles job creation, status transitions, leasing, and queries.
 
 ### StateProvider
 
-Abstracts ORM/database client operations, providing context management, transaction handling, and SQL execution. Users create their own `StateProvider` implementation to integrate with their preferred client (raw `pg`, Drizzle, Prisma, etc.) and pass it to `createPgStateAdapter`.
+Abstracts ORM/database client operations, providing context management, transaction handling, and SQL execution. Users create their own `StateProvider` implementation to integrate with their preferred client (raw `pg`, Drizzle, Prisma, better-sqlite3, etc.) and pass it to the state adapter factory (`createPgStateAdapter` or `createSqliteStateAdapter`).
 
 ### NotifyAdapter
 
@@ -276,6 +288,7 @@ Avoid asymmetric naming (e.g., `started`/`finished` vs `created`/`completed`) ev
 - Embed small verification tests into existing related tests rather than creating separate ones
 - Test all relevant phases: `prepare`, `process`, `complete`
 - Prefer descriptive test names that match what's being tested
+- To enable verbose logging when debugging tests, run with `DEBUG=1` environment variable (e.g., `DEBUG=1 pnpm test`)
 
 ### Test Suites
 
@@ -304,7 +317,8 @@ describe("MyFeature", () => {
 - `packages/core/src/suites/` - Reusable test suite files (`*.test-suite.ts`) and shared context helpers (`spec-context.spec-helper.ts`), exported via `@queuert/core/testing`
 - `packages/core/src/specs/` - Spec files (`*.spec.ts`) that run test suites with in-process adapters
 - `packages/postgres/src/specs/` - Spec files that run the same test suites with PostgreSQL adapter
-- State adapter test helpers (`extendWithStateInProcess`, `extendWithStatePostgres`) configure the test context with the appropriate adapter
+- `packages/sqlite/src/specs/` - Spec files that run the same test suites with SQLite adapter
+- State adapter test helpers (`extendWithStateInProcess`, `extendWithStatePostgres`, `extendWithStateSqlite`) configure the test context with the appropriate adapter
 
 ## Code Style
 

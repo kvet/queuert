@@ -41,25 +41,22 @@ export {
   WaitForJobSequenceCompletionTimeoutError,
 } from "./queuert-helper.js";
 export {
+  type BaseStateAdapterContext,
   type DeduplicationOptions,
   type DeduplicationStrategy,
   type StateAdapter,
   type StateJob,
 } from "./state-adapter/state-adapter.js";
-export {
-  type StateProvider,
-  type BaseStateProviderContext,
-} from "./state-provider/state-provider.js";
 export { rescheduleJob, type LeaseConfig } from "./worker/job-process.js";
 
 // In-process adapters
-export {
-  createInProcessStateAdapter,
-  type InProcessStateAdapter,
-  type InProcessContext,
-} from "./state-adapter/state-adapter.in-process.js";
 export { createInProcessNotifyAdapter } from "./notify-adapter/notify-adapter.in-process.js";
 export { createNoopNotifyAdapter } from "./notify-adapter/notify-adapter.noop.js";
+export {
+  createInProcessStateAdapter,
+  type InProcessContext,
+  type InProcessStateAdapter,
+} from "./state-adapter/state-adapter.in-process.js";
 
 type QueuertWorkerDefinition<
   TStateAdapter extends StateAdapter<any>,

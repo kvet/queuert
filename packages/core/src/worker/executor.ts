@@ -10,14 +10,13 @@ import {
   JobTakenByAnotherWorkerError,
   ProcessHelper,
 } from "../queuert-helper.js";
-import { StateAdapter } from "../state-adapter/state-adapter.js";
-import { BaseStateProviderContext } from "../state-provider/state-provider.js";
+import { BaseStateAdapterContext, StateAdapter } from "../state-adapter/state-adapter.js";
 import { JobProcessFn, LeaseConfig, runJobProcess } from "./job-process.js";
 
 export type RegisteredJobTypes = Map<
   string,
   {
-    process: JobProcessFn<StateAdapter<BaseStateProviderContext>, BaseJobTypeDefinitions, string>;
+    process: JobProcessFn<StateAdapter<BaseStateAdapterContext>, BaseJobTypeDefinitions, string>;
     retryConfig?: BackoffConfig;
     leaseConfig?: LeaseConfig;
   }
