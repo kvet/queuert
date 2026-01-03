@@ -16,7 +16,11 @@ import { JobProcessFn, LeaseConfig, runJobProcess } from "./job-process.js";
 export type RegisteredJobTypes = Map<
   string,
   {
-    process: JobProcessFn<StateAdapter<BaseStateAdapterContext>, BaseJobTypeDefinitions, string>;
+    process: JobProcessFn<
+      StateAdapter<BaseStateAdapterContext, any>,
+      BaseJobTypeDefinitions,
+      string
+    >;
     retryConfig?: BackoffConfig;
     leaseConfig?: LeaseConfig;
   }

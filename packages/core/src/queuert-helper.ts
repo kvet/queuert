@@ -22,17 +22,19 @@ import { NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 import {
   BaseStateAdapterContext,
   DeduplicationOptions,
+  GetStateAdapterJobId,
   StateAdapter,
   StateJob,
 } from "./state-adapter/state-adapter.js";
 import { CompleteCallbackOptions, RescheduleJobError } from "./worker/job-process.js";
 
 export type StartBlockersFn<
+  TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions & string,
 > = (options: {
-  job: PendingJob<JobWithoutBlockers<JobOf<TJobTypeDefinitions, TJobTypeName>>>;
-}) => Promise<BlockerSequences<TJobTypeDefinitions, TJobTypeName>>;
+  job: PendingJob<JobWithoutBlockers<JobOf<TJobId, TJobTypeDefinitions, TJobTypeName>>>;
+}) => Promise<BlockerSequences<TJobId, TJobTypeDefinitions, TJobTypeName>>;
 
 const notifyCompletionStorage = new AsyncLocalStorage<{
   storeId: UUID;
@@ -76,7 +78,7 @@ export const queuertHelper = ({
   notifyAdapter,
   log,
 }: {
-  stateAdapter: StateAdapter<BaseStateAdapterContext>;
+  stateAdapter: StateAdapter<BaseStateAdapterContext, any>;
   notifyAdapter: NotifyAdapter;
   log: Log;
 }) => {
@@ -92,7 +94,7 @@ export const queuertHelper = ({
     typeName: string;
     input: unknown;
     context: BaseStateAdapterContext;
-    startBlockers?: StartBlockersFn<BaseJobTypeDefinitions, string>;
+    startBlockers?: StartBlockersFn<string, BaseJobTypeDefinitions, string>;
     isSequence: boolean;
     deduplication?: DeduplicationOptions;
   }): Promise<{ job: StateJob; deduplicated: boolean }> => {
@@ -113,7 +115,7 @@ export const queuertHelper = ({
       return { job, deduplicated };
     }
 
-    let blockerSequences: JobSequence<any, any, any>[] = [];
+    let blockerSequences: JobSequence<any, any, any, any>[] = [];
     if (startBlockers) {
       const blockers = await withJobContext(
         {
@@ -124,7 +126,7 @@ export const queuertHelper = ({
         async () => startBlockers({ job: mapStateJobToJob(job) as any }),
       );
 
-      blockerSequences = [...blockers] as JobSequence<any, any, any>[];
+      blockerSequences = [...blockers] as JobSequence<any, any, any, any>[];
       const blockerSequenceIds = blockerSequences.map((b) => b.id);
 
       job = await stateAdapter.addJobBlockers({
@@ -225,7 +227,7 @@ export const queuertHelper = ({
     workerId: string | null;
   } & (
     | { type: "completeSequence"; output: unknown }
-    | { type: "continueWith"; continuedJob: Job<any, any, any> }
+    | { type: "continueWith"; continuedJob: Job<any, any, any, any> }
   )): Promise<StateJob> => {
     const hasContinuedJob = rest.type === "continueWith";
     const output = hasContinuedJob ? null : rest.output;
@@ -305,8 +307,10 @@ export const queuertHelper = ({
       input: TInput;
       context: any;
       deduplication?: DeduplicationOptions;
-      startBlockers?: StartBlockersFn<BaseJobTypeDefinitions, string>;
-    }): Promise<JobSequence<TFirstJobTypeName, TInput, TOutput> & { deduplicated: boolean }> => {
+      startBlockers?: StartBlockersFn<string, BaseJobTypeDefinitions, string>;
+    }): Promise<
+      JobSequence<string, TFirstJobTypeName, TInput, TOutput> & { deduplicated: boolean }
+    > => {
       await stateAdapter.assertInTransaction(context);
 
       const { job, deduplicated } = await createStateJob({
@@ -327,7 +331,7 @@ export const queuertHelper = ({
       id: string;
       firstJobTypeName: TFirstJobTypeName;
       context: any;
-    }): Promise<JobSequence<TFirstJobTypeName, TInput, TOutput> | null> => {
+    }): Promise<JobSequence<string, TFirstJobTypeName, TInput, TOutput> | null> => {
       const jobSequence = await stateAdapter.getJobSequenceById({
         context,
         jobId: id,
@@ -344,8 +348,8 @@ export const queuertHelper = ({
       typeName: TJobTypeName;
       input: TInput;
       context: any;
-      startBlockers?: StartBlockersFn<BaseJobTypeDefinitions, string>;
-    }): Promise<JobOf<BaseJobTypeDefinitions, TJobTypeName>> => {
+      startBlockers?: StartBlockersFn<string, BaseJobTypeDefinitions, string>;
+    }): Promise<JobOf<string, BaseJobTypeDefinitions, TJobTypeName>> => {
       const { job } = await createStateJob({
         typeName,
         input,
@@ -354,7 +358,7 @@ export const queuertHelper = ({
         isSequence: false,
       });
 
-      return mapStateJobToJob(job) as JobOf<BaseJobTypeDefinitions, TJobTypeName>;
+      return mapStateJobToJob(job) as JobOf<string, BaseJobTypeDefinitions, TJobTypeName>;
     },
     handleJobHandlerError: async ({
       job,
@@ -397,7 +401,7 @@ export const queuertHelper = ({
         workerId: string | null;
       } & (
         | { type: "completeSequence"; output: unknown }
-        | { type: "continueWith"; continuedJob: Job<any, any, any> }
+        | { type: "continueWith"; continuedJob: Job<any, any, any, any> }
       ),
     ) => Promise<StateJob>,
     refetchJobForUpdate: async ({
@@ -598,13 +602,13 @@ export const queuertHelper = ({
               continueWith: (options: {
                 typeName: string;
                 input: unknown;
-                startBlockers?: StartBlockersFn<BaseJobTypeDefinitions, string>;
+                startBlockers?: StartBlockersFn<string, BaseJobTypeDefinitions, string>;
               }) => Promise<unknown>;
             } & BaseStateAdapterContext,
           ) => unknown,
         ) => Promise<unknown>;
       }) => Promise<void>;
-    }): Promise<JobSequence<TFirstJobTypeName, TInput, TOutput>> => {
+    }): Promise<JobSequence<string, TFirstJobTypeName, TInput, TOutput>> => {
       await stateAdapter.assertInTransaction(context);
 
       const currentJob = await stateAdapter.getCurrentJobForUpdate({
@@ -623,7 +627,7 @@ export const queuertHelper = ({
             continueWith: (options: {
               typeName: string;
               input: unknown;
-              startBlockers?: StartBlockersFn<BaseJobTypeDefinitions, string>;
+              startBlockers?: StartBlockersFn<string, BaseJobTypeDefinitions, string>;
             }) => Promise<unknown>;
           } & BaseStateAdapterContext,
         ) => unknown,
@@ -634,7 +638,7 @@ export const queuertHelper = ({
           );
         }
 
-        let continuedJob: Job<any, any, any> | null = null;
+        let continuedJob: Job<any, any, any, any> | null = null;
 
         const output = await jobCompleteCallback({
           continueWith: async ({ typeName, input, startBlockers }) => {
@@ -657,7 +661,7 @@ export const queuertHelper = ({
                   isSequence: false,
                 });
 
-                return mapStateJobToJob(newJob) as Job<any, any, any>;
+                return mapStateJobToJob(newJob) as Job<any, any, any, any>;
               },
             );
 
@@ -705,9 +709,9 @@ export const queuertHelper = ({
       timeoutMs: number;
       pollIntervalMs?: number;
       signal?: AbortSignal;
-    }): Promise<CompletedJobSequence<JobSequence<TFirstJobTypeName, TInput, TOutput>>> => {
+    }): Promise<CompletedJobSequence<JobSequence<string, TFirstJobTypeName, TInput, TOutput>>> => {
       const checkSequence = async (): Promise<CompletedJobSequence<
-        JobSequence<TFirstJobTypeName, TInput, TOutput>
+        JobSequence<string, TFirstJobTypeName, TInput, TOutput>
       > | null> => {
         const sequence = await stateAdapter.provideContext(async (context) =>
           stateAdapter.getJobSequenceById({ context, jobId: id }),
@@ -717,7 +721,9 @@ export const queuertHelper = ({
         }
         const jobSequence = mapStateJobPairToJobSequence(sequence);
         return jobSequence.status === "completed"
-          ? (jobSequence as CompletedJobSequence<JobSequence<TFirstJobTypeName, TInput, TOutput>>)
+          ? (jobSequence as CompletedJobSequence<
+              JobSequence<string, TFirstJobTypeName, TInput, TOutput>
+            >)
           : null;
       };
 
@@ -753,21 +759,23 @@ export const queuertHelper = ({
 export type ProcessHelper = ReturnType<typeof queuertHelper>;
 
 export type JobSequenceCompleteOptions<
-  TStateAdapter extends StateAdapter<any>,
+  TStateAdapter extends StateAdapter<any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TFirstJobTypeName extends string,
   TCompleteReturn,
 > = (options: {
-  job: SequenceJobs<TJobTypeDefinitions, TFirstJobTypeName>;
+  job: SequenceJobs<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TFirstJobTypeName>;
   complete: <
     TJobTypeName extends SequenceJobTypes<TJobTypeDefinitions, TFirstJobTypeName> & string,
     TReturn extends
       | TJobTypeDefinitions[TJobTypeName]["output"]
-      | ContinuationJobs<TJobTypeDefinitions, TJobTypeName>
+      | ContinuationJobs<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TJobTypeName>
       | Promise<TJobTypeDefinitions[TJobTypeName]["output"]>
-      | Promise<ContinuationJobs<TJobTypeDefinitions, TJobTypeName>>,
+      | Promise<
+          ContinuationJobs<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TJobTypeName>
+        >,
   >(
-    job: JobOf<TJobTypeDefinitions, TJobTypeName>,
+    job: JobOf<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TJobTypeName>,
     completeCallback: (
       completeOptions: CompleteCallbackOptions<TStateAdapter, TJobTypeDefinitions, TJobTypeName>,
     ) => TReturn,
@@ -775,15 +783,17 @@ export type JobSequenceCompleteOptions<
 }) => Promise<TCompleteReturn>;
 
 export type CompleteJobSequenceResult<
+  TStateAdapter extends StateAdapter<any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TFirstJobTypeName extends keyof TJobTypeDefinitions & string,
   TCompleteReturn,
 > = [TCompleteReturn] extends [void]
-  ? JobSequenceOf<TJobTypeDefinitions, TFirstJobTypeName>
-  : TCompleteReturn extends Job<any, any, any>
-    ? JobSequenceOf<TJobTypeDefinitions, TFirstJobTypeName>
+  ? JobSequenceOf<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TFirstJobTypeName>
+  : TCompleteReturn extends Job<any, any, any, any>
+    ? JobSequenceOf<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TFirstJobTypeName>
     : CompletedJobSequence<
         JobSequence<
+          GetStateAdapterJobId<TStateAdapter>,
           TFirstJobTypeName,
           TJobTypeDefinitions[TFirstJobTypeName]["input"],
           TCompleteReturn

@@ -1,5 +1,6 @@
 import { type StateAdapter } from "@queuert/core";
 import Database from "better-sqlite3";
+import { UUID } from "crypto";
 import { type TestAPI } from "vitest";
 import {
   BetterSqlite3Provider,
@@ -8,19 +9,19 @@ import {
 } from "../state-provider/state-provider.better-sqlite3.js";
 import { createSqliteStateAdapter } from "./state-adapter.sqlite.js";
 
-export type SqliteStateAdapter = StateAdapter<SqliteContext>;
+export type SqliteStateAdapter = StateAdapter<SqliteContext, UUID>;
 
 export const extendWithStateSqlite = <T>(
   api: TestAPI<T>,
-  _reuseId: string,
 ): TestAPI<
   T & {
+    db: Database.Database;
     stateAdapter: SqliteStateAdapter;
     flakyStateAdapter: SqliteStateAdapter;
   }
 > => {
   return api.extend<{
-    _db: Database.Database;
+    db: Database.Database;
     _dbMigrateToLatest: void;
     _dbCleanup: void;
     stateProvider: BetterSqlite3Provider;
@@ -28,7 +29,7 @@ export const extendWithStateSqlite = <T>(
     stateAdapter: SqliteStateAdapter;
     flakyStateAdapter: SqliteStateAdapter;
   }>({
-    _db: [
+    db: [
       // eslint-disable-next-line no-empty-pattern
       async ({}, use) => {
         const db = new Database(":memory:");
@@ -42,33 +43,33 @@ export const extendWithStateSqlite = <T>(
       { scope: "worker" },
     ],
     _dbMigrateToLatest: [
-      async ({ _db }, use) => {
-        const stateProvider = createBetterSqlite3Provider({ db: _db });
+      async ({ db }, use) => {
+        const stateProvider = createBetterSqlite3Provider({ db: db });
         const stateAdapter = createSqliteStateAdapter({ stateProvider });
 
-        await stateAdapter.migrateToLatest({ db: _db });
+        await stateAdapter.migrateToLatest({ db: db });
 
         await use();
       },
       { scope: "worker" },
     ],
     _dbCleanup: [
-      async ({ _db }, use) => {
+      async ({ db }, use) => {
         await use();
 
-        _db.exec("DELETE FROM queuert_job_blocker;");
-        _db.exec("DELETE FROM queuert_job;");
+        db.exec("DELETE FROM queuert_job_blocker;");
+        db.exec("DELETE FROM queuert_job;");
       },
       { scope: "test" },
     ],
     stateProvider: [
-      async ({ _db, _dbMigrateToLatest, _dbCleanup }, use) => {
+      async ({ db, _dbMigrateToLatest, _dbCleanup }, use) => {
         // oxlint-disable-next-line no-unused-expressions
         _dbMigrateToLatest;
         // oxlint-disable-next-line no-unused-expressions
         _dbCleanup;
 
-        return use(createBetterSqlite3Provider({ db: _db }));
+        return use(createBetterSqlite3Provider({ db }));
       },
       { scope: "test" },
     ],

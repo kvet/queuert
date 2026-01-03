@@ -163,7 +163,7 @@ describe("DefineContinuationInput", () => {
       second: { input: DefineContinuationInput<null>; output: { done: true } };
     }>();
 
-    type SecondJob = JobOf<typeof defs, "second">;
+    type SecondJob = JobOf<string, typeof defs, "second">;
     expectTypeOf<SecondJob["input"]>().toEqualTypeOf<null>();
   });
 
@@ -176,7 +176,7 @@ describe("DefineContinuationInput", () => {
       };
     }>();
 
-    type SecondJob = JobOf<typeof defs, "second">;
+    type SecondJob = JobOf<string, typeof defs, "second">;
     expectTypeOf<SecondJob["input"]>().toEqualTypeOf<{ value: number; name: string }>();
   });
 
@@ -186,7 +186,7 @@ describe("DefineContinuationInput", () => {
       second: { input: DefineContinuationInput<number>; output: { done: true } };
     }>();
 
-    type SecondJob = JobOf<typeof defs, "second">;
+    type SecondJob = JobOf<string, typeof defs, "second">;
     expectTypeOf<SecondJob["input"]>().toEqualTypeOf<number>();
   });
 
@@ -196,7 +196,7 @@ describe("DefineContinuationInput", () => {
       second: { input: DefineContinuationInput<string[]>; output: { done: true } };
     }>();
 
-    type SecondJob = JobOf<typeof defs, "second">;
+    type SecondJob = JobOf<string, typeof defs, "second">;
     expectTypeOf<SecondJob["input"]>().toEqualTypeOf<string[]>();
   });
 
@@ -252,8 +252,8 @@ describe("JobOf", () => {
       };
     }>();
 
-    type FirstJob = JobOf<typeof defs, "first">;
-    type SecondJob = JobOf<typeof defs, "second">;
+    type FirstJob = JobOf<string, typeof defs, "first">;
+    type SecondJob = JobOf<string, typeof defs, "second">;
 
     expectTypeOf<FirstJob["input"]>().toEqualTypeOf<{ value: number }>();
     expectTypeOf<SecondJob["input"]>().toEqualTypeOf<{ continued: boolean }>();
@@ -264,7 +264,7 @@ describe("JobOf", () => {
       test: { input: { id: string }; output: { result: number } };
     }>();
 
-    type TestJob = JobOf<typeof defs, "test">;
+    type TestJob = JobOf<string, typeof defs, "test">;
 
     expectTypeOf<TestJob["id"]>().toEqualTypeOf<string>();
     expectTypeOf<TestJob["sequenceId"]>().toEqualTypeOf<string>();
@@ -353,7 +353,7 @@ describe("BlockerSequences", () => {
       };
     }>();
 
-    type MainBlockers = BlockerSequences<typeof defs, "main">;
+    type MainBlockers = BlockerSequences<string, typeof defs, "main">;
 
     // Should be a tuple with one blocker sequence - verify it's an array type
     expectTypeOf<MainBlockers>().toBeArray();
@@ -364,7 +364,7 @@ describe("BlockerSequences", () => {
       simple: { input: null; output: { done: true } };
     }>();
 
-    type SimpleBlockers = BlockerSequences<typeof defs, "simple">;
+    type SimpleBlockers = BlockerSequences<string, typeof defs, "simple">;
 
     expectTypeOf<SimpleBlockers>().toEqualTypeOf<[]>();
   });
@@ -380,7 +380,7 @@ describe("JobSequenceOf", () => {
       };
     }>();
 
-    type Seq = JobSequenceOf<typeof defs, "first">;
+    type Seq = JobSequenceOf<string, typeof defs, "first">;
 
     // The sequence input should be the unwrapped type
     type SeqInput = Seq extends { input: infer I } ? I : never;

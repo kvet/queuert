@@ -1,21 +1,25 @@
 # Short term
 
+- Open GitHub repo
+- Publish to NPM
+
+# Medium term
+
+- Deferred start - Use `scheduledAt` field; job created transactionally but not processable until specified time
+- Soft timeout - Signal via AbortSignal + stop lease renewal; cooperative but covers most cases
+- Documentation
+- Metrics collection (Prometheus, OTEL)
+
 # Long term
 
-- Custom ids + schema name for jobs
-- Documentation
-- Open GitHub repo
-- Add donations link
-- Publish to NPM
-- Zod job type definitions
-- MongoDB state adapter
+- MongoDB state adapter - Extends "use your existing database" promise; ACID transactions supported since MongoDB 4.0
+- Hard timeout (worker threads) - True isolation with `terminate()`; enables memory limits and untrusted code sandboxing
 - Rework InProcess StateAdapter context handling
 
-# Maybe
+# ???
 
-- Deferred start
-- Metrics collection (Prometheus, OTEL)
-- Sandboxed execution (worker threads)
-- Hard timeout support
-- Partitioning
-- Singletons/concurrency limit
+- Support more job id types (integers)
+- Zod job type definitions - TypeScript types already strong at compile-time; runtime validation is user's concern at system boundaries
+- Singletons/concurrency limit - Achievable in userland via blocker-based semaphore pattern; document the pattern instead
+- Partitioning - Scaling concern; defer until users hit limits
+- Add donations link - Premature until adoption; revisit later

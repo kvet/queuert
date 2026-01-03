@@ -1,44 +1,37 @@
 import { Pool, PoolClient } from "pg";
 import { PgStateProvider } from "./state-provider.pg.js";
 
-export type PgContext = { client: PoolClient };
+export type PgPoolContext = { poolClient: PoolClient };
+export type PgPoolProvider = PgStateProvider<PgPoolContext>;
 
-export const createPgPoolProvider = ({ pool }: { pool: Pool }): PgStateProvider<PgContext> => {
-  const inTransaction = new WeakSet<PoolClient>();
-
+export const createPgPoolProvider = ({ pool }: { pool: Pool }): PgPoolProvider => {
   return {
     provideContext: async (fn) => {
-      const client = await pool.connect();
+      const poolClient = await pool.connect();
       try {
-        return await fn({ client });
+        return await fn({ poolClient });
       } finally {
-        client.release();
+        poolClient.release();
       }
     },
-    executeSql: async ({ client }, sql, params) => {
-      const result = await client.query(sql, params);
+    executeSql: async ({ poolClient }, sql, params) => {
+      const result = await poolClient.query(sql, params);
       return result.rows as any;
     },
-    assertInTransaction: async ({ client }) => {
-      if (!inTransaction.has(client)) {
-        throw new Error("Expected to be in a transaction");
-      }
+    assertInTransaction: async () => {
+      // NOTE: pg PoolClient does not expose transaction state,
+      // so we cannot assert whether we are in a transaction or not.
     },
-    runInTransaction: async ({ client }, fn) => {
-      await client.query("BEGIN");
-      inTransaction.add(client);
+    runInTransaction: async ({ poolClient }, fn) => {
+      await poolClient.query("BEGIN");
       try {
-        const result = await fn({ client });
-        await client.query("COMMIT");
+        const result = await fn({ poolClient });
+        await poolClient.query("COMMIT");
         return result;
       } catch (error) {
-        await client.query("ROLLBACK").catch(() => {});
+        await poolClient.query("ROLLBACK").catch(() => {});
         throw error;
-      } finally {
-        inTransaction.delete(client);
       }
     },
   };
 };
-
-export type PgPoolProvider = PgStateProvider<{ client: PoolClient }>;

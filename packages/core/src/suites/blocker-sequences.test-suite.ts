@@ -289,7 +289,7 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       }>(),
     });
 
-    const childJobSequences: JobSequence<"inner", null, null>[] = [];
+    const childJobSequences: JobSequence<string, "inner", null, null>[] = [];
     let originId: string;
 
     const worker = queuert

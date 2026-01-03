@@ -25,6 +25,7 @@ import {
 import {
   BaseStateAdapterContext,
   GetStateAdapterContext,
+  GetStateAdapterJobId,
   StateAdapter,
   StateJob,
 } from "../state-adapter/state-adapter.js";
@@ -55,7 +56,7 @@ export const rescheduleJob = (afterMs: number, cause?: unknown): never => {
 };
 
 export type CompleteCallbackOptions<
-  TStateAdapter extends StateAdapter<BaseStateAdapterContext>,
+  TStateAdapter extends StateAdapter<BaseStateAdapterContext, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions & string,
 > = {
@@ -64,15 +65,29 @@ export type CompleteCallbackOptions<
   >(
     options: {
       typeName: TContinueJobTypeName;
-      input: JobOf<TJobTypeDefinitions, TContinueJobTypeName>["input"];
+      input: JobOf<
+        GetStateAdapterJobId<TStateAdapter>,
+        TJobTypeDefinitions,
+        TContinueJobTypeName
+      >["input"];
     } & (HasBlockers<TJobTypeDefinitions, TContinueJobTypeName> extends true
-      ? { startBlockers: StartBlockersFn<TJobTypeDefinitions, TContinueJobTypeName> }
+      ? {
+          startBlockers: StartBlockersFn<
+            GetStateAdapterJobId<TStateAdapter>,
+            TJobTypeDefinitions,
+            TContinueJobTypeName
+          >;
+        }
       : { startBlockers?: never }),
-  ) => Promise<CreatedJob<JobOf<TJobTypeDefinitions, TContinueJobTypeName>>>;
+  ) => Promise<
+    CreatedJob<
+      JobOf<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TContinueJobTypeName>
+    >
+  >;
 } & GetStateAdapterContext<TStateAdapter>;
 
 export type CompleteCallback<
-  TStateAdapter extends StateAdapter<BaseStateAdapterContext>,
+  TStateAdapter extends StateAdapter<BaseStateAdapterContext, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions & string,
   TResult,
@@ -81,30 +96,30 @@ export type CompleteCallback<
 ) => Promise<TResult>;
 
 export type CompleteFn<
-  TStateAdapter extends StateAdapter<BaseStateAdapterContext>,
+  TStateAdapter extends StateAdapter<BaseStateAdapterContext, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions & string,
 > = <
   TReturn extends
     | TJobTypeDefinitions[TJobTypeName]["output"]
-    | ContinuationJobs<TJobTypeDefinitions, TJobTypeName>,
+    | ContinuationJobs<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TJobTypeName>,
 >(
   completeCallback: (
     completeOptions: CompleteCallbackOptions<TStateAdapter, TJobTypeDefinitions, TJobTypeName>,
   ) => Promise<TReturn>,
 ) => Promise<
   TReturn extends TJobTypeDefinitions[TJobTypeName]["output"]
-    ? CompletedJob<JobOf<TJobTypeDefinitions, TJobTypeName>>
-    : ContinuationJobs<TJobTypeDefinitions, TJobTypeName>
+    ? CompletedJob<JobOf<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TJobTypeName>>
+    : ContinuationJobs<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TJobTypeName>
 >;
 
 export type PrepareConfig = { mode: "atomic" | "staged" };
 
-export type PrepareCallback<TStateAdapter extends StateAdapter<BaseStateAdapterContext>, T> = (
+export type PrepareCallback<TStateAdapter extends StateAdapter<BaseStateAdapterContext, any>, T> = (
   prepareCallbackOptions: GetStateAdapterContext<TStateAdapter>,
 ) => T | Promise<T>;
 
-export type PrepareFn<TStateAdapter extends StateAdapter<BaseStateAdapterContext>> = {
+export type PrepareFn<TStateAdapter extends StateAdapter<BaseStateAdapterContext, any>> = {
   (config: PrepareConfig): Promise<void>;
   <T>(
     config: PrepareConfig,
@@ -113,17 +128,17 @@ export type PrepareFn<TStateAdapter extends StateAdapter<BaseStateAdapterContext
 };
 
 export type JobProcessFn<
-  TStateAdapter extends StateAdapter<BaseStateAdapterContext>,
+  TStateAdapter extends StateAdapter<BaseStateAdapterContext, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions & string,
 > = (processOptions: {
   signal: TypedAbortSignal<"taken_by_another_worker" | "error" | "not_found" | "already_completed">;
-  job: RunningJob<JobOf<TJobTypeDefinitions, TJobTypeName>>;
+  job: RunningJob<JobOf<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TJobTypeName>>;
   prepare: PrepareFn<TStateAdapter>;
   complete: CompleteFn<TStateAdapter, TJobTypeDefinitions, TJobTypeName>;
 }) => Promise<
-  | CompletedJob<JobOf<TJobTypeDefinitions, TJobTypeName>>
-  | ContinuationJobs<TJobTypeDefinitions, TJobTypeName>
+  | CompletedJob<JobOf<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TJobTypeName>>
+  | ContinuationJobs<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TJobTypeName>
 >;
 
 export const runJobProcess = async ({
@@ -137,7 +152,7 @@ export const runJobProcess = async ({
   notifyAdapter,
 }: {
   helper: ProcessHelper;
-  process: JobProcessFn<StateAdapter<BaseStateAdapterContext>, BaseJobTypeDefinitions, string>;
+  process: JobProcessFn<StateAdapter<BaseStateAdapterContext, any>, BaseJobTypeDefinitions, string>;
   context: BaseStateAdapterContext;
   job: StateJob;
   retryConfig: BackoffConfig;
@@ -225,9 +240,9 @@ export const runJobProcess = async ({
     const runningJob = {
       ...mapStateJobToJob(job),
       blockers: blockerPairs.map(mapStateJobPairToJobSequence) as CompletedJobSequence<
-        JobSequence<any, any, any>
+        JobSequence<any, any, any, any>
       >[],
-    } as RunningJob<Job<any, any, any>>;
+    } as RunningJob<Job<any, any, any, any>>;
 
     let prepareAccessed = false;
     let prepareCalled = false;
@@ -264,7 +279,7 @@ export const runJobProcess = async ({
       }
 
       return callbackOutput;
-    }) as PrepareFn<StateAdapter<BaseStateAdapterContext>>;
+    }) as PrepareFn<StateAdapter<BaseStateAdapterContext, any>>;
 
     let completeCalled = false;
     let completeSucceeded = false;
@@ -276,7 +291,7 @@ export const runJobProcess = async ({
             options: {
               typeName: string;
               input: unknown;
-              startBlockers?: StartBlockersFn<BaseJobTypeDefinitions, string>;
+              startBlockers?: StartBlockersFn<any, BaseJobTypeDefinitions, string>;
             } & BaseStateAdapterContext,
           ) => Promise<unknown>;
         } & BaseStateAdapterContext,
@@ -293,7 +308,7 @@ export const runJobProcess = async ({
       await ownershipListener?.dispose();
       await leaseManager.stop();
       const result = await runInGuardedTransaction(async (context) => {
-        let continuedJob: Job<any, any, any> | null = null;
+        let continuedJob: Job<any, any, any, any> | null = null;
         const output = await completeCallback({
           continueWith: async ({ typeName, input, startBlockers }) => {
             if (continuedJob) {
@@ -323,7 +338,7 @@ export const runJobProcess = async ({
       });
       completeSucceeded = true;
       return result;
-    }) as CompleteFn<StateAdapter<BaseStateAdapterContext>, BaseJobTypeDefinitions, string>;
+    }) as CompleteFn<StateAdapter<BaseStateAdapterContext, any>, BaseJobTypeDefinitions, string>;
 
     let autoSetupDone = false;
     try {

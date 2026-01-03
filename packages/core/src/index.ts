@@ -16,6 +16,7 @@ import {
 import {
   DeduplicationOptions,
   GetStateAdapterContext,
+  GetStateAdapterJobId,
   StateAdapter,
 } from "./state-adapter/state-adapter.js";
 import { createExecutor, Executor, RegisteredJobTypes } from "./worker/executor.js";
@@ -44,6 +45,7 @@ export {
   type BaseStateAdapterContext,
   type DeduplicationOptions,
   type DeduplicationStrategy,
+  type GetStateAdapterJobId,
   type StateAdapter,
   type StateJob,
 } from "./state-adapter/state-adapter.js";
@@ -59,7 +61,7 @@ export {
 } from "./state-adapter/state-adapter.in-process.js";
 
 type QueuertWorkerDefinition<
-  TStateAdapter extends StateAdapter<any>,
+  TStateAdapter extends StateAdapter<any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
 > = {
   implementJobType: <TJobTypeName extends keyof TJobTypeDefinitions & string>(options: {
@@ -72,7 +74,7 @@ type QueuertWorkerDefinition<
 };
 
 export type Queuert<
-  TStateAdapter extends StateAdapter<any>,
+  TStateAdapter extends StateAdapter<any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
 > = {
   createWorker: () => QueuertWorkerDefinition<TStateAdapter, TJobTypeDefinitions>;
@@ -84,21 +86,35 @@ export type Queuert<
       input: TJobTypeDefinitions[TFirstJobTypeName]["input"];
       deduplication?: DeduplicationOptions;
     } & (HasBlockers<TJobTypeDefinitions, TFirstJobTypeName> extends true
-      ? { startBlockers: StartBlockersFn<TJobTypeDefinitions, TFirstJobTypeName> }
+      ? {
+          startBlockers: StartBlockersFn<
+            GetStateAdapterJobId<TStateAdapter>,
+            TJobTypeDefinitions,
+            TFirstJobTypeName
+          >;
+        }
       : { startBlockers?: never }) &
       GetStateAdapterContext<TStateAdapter>,
-  ) => Promise<JobSequenceOf<TJobTypeDefinitions, TFirstJobTypeName> & { deduplicated: boolean }>;
+  ) => Promise<
+    JobSequenceOf<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TFirstJobTypeName> & {
+      deduplicated: boolean;
+    }
+  >;
   getJobSequence: <
     TFirstJobTypeName extends keyof FirstJobTypeDefinitions<TJobTypeDefinitions> & string,
   >(
     options: {
       firstJobTypeName: TFirstJobTypeName;
-      id: string;
+      id: GetStateAdapterJobId<TStateAdapter>;
     } & GetStateAdapterContext<TStateAdapter>,
-  ) => Promise<JobSequenceOf<TJobTypeDefinitions, TFirstJobTypeName> | null>;
+  ) => Promise<JobSequenceOf<
+    GetStateAdapterJobId<TStateAdapter>,
+    TJobTypeDefinitions,
+    TFirstJobTypeName
+  > | null>;
   deleteJobSequences: (
     options: {
-      sequenceIds: string[];
+      sequenceIds: GetStateAdapterJobId<TStateAdapter>[];
     } & GetStateAdapterContext<TStateAdapter>,
   ) => Promise<void>;
   completeJobSequence: <
@@ -107,7 +123,7 @@ export type Queuert<
   >(
     options: {
       firstJobTypeName: TFirstJobTypeName;
-      id: string;
+      id: GetStateAdapterJobId<TStateAdapter>;
       complete: JobSequenceCompleteOptions<
         TStateAdapter,
         TJobTypeDefinitions,
@@ -115,7 +131,14 @@ export type Queuert<
         TCompleteReturn
       >;
     } & GetStateAdapterContext<TStateAdapter>,
-  ) => Promise<CompleteJobSequenceResult<TJobTypeDefinitions, TFirstJobTypeName, TCompleteReturn>>;
+  ) => Promise<
+    CompleteJobSequenceResult<
+      TStateAdapter,
+      TJobTypeDefinitions,
+      TFirstJobTypeName,
+      TCompleteReturn
+    >
+  >;
   withNotify: <T, TArgs extends any[]>(
     cb: (...args: TArgs) => Promise<T>,
     ...args: TArgs
@@ -124,15 +147,19 @@ export type Queuert<
     TFirstJobTypeName extends keyof FirstJobTypeDefinitions<TJobTypeDefinitions> & string,
   >(options: {
     firstJobTypeName: TFirstJobTypeName;
-    id: string;
+    id: GetStateAdapterJobId<TStateAdapter>;
     timeoutMs: number;
     pollIntervalMs?: number;
     signal?: AbortSignal;
-  }) => Promise<CompletedJobSequence<JobSequenceOf<TJobTypeDefinitions, TFirstJobTypeName>>>;
+  }) => Promise<
+    CompletedJobSequence<
+      JobSequenceOf<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TFirstJobTypeName>
+    >
+  >;
 };
 
 export const createQueuert = async <
-  TStateAdapter extends StateAdapter<any>,
+  TStateAdapter extends StateAdapter<any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
 >({
   stateAdapter,
@@ -181,7 +208,7 @@ export const createQueuert = async <
 
       return createWorkerInstance(new Map());
     },
-    startJobSequence: async ({
+    startJobSequence: (async ({
       input,
       firstJobTypeName,
       deduplication,
@@ -194,14 +221,20 @@ export const createQueuert = async <
         context,
         deduplication,
         startBlockers,
-      }),
-    getJobSequence: async ({ id, firstJobTypeName, ...context }) =>
-      helper.getJobSequence({ id, firstJobTypeName, context }),
+      })) as Queuert<TStateAdapter, TJobTypeDefinitions>["startJobSequence"],
+    getJobSequence: (async ({ id, firstJobTypeName, ...context }) =>
+      helper.getJobSequence({ id, firstJobTypeName, context })) as Queuert<
+      TStateAdapter,
+      TJobTypeDefinitions
+    >["getJobSequence"],
     deleteJobSequences: async ({ sequenceIds, ...context }) =>
       helper.deleteJobSequences({ sequenceIds, context }),
-    completeJobSequence: ({ id, firstJobTypeName, complete, ...context }) =>
-      helper.completeJobSequence({ id, firstJobTypeName, context, complete }) as any,
-    waitForJobSequenceCompletion: async ({
+    completeJobSequence: (async ({ id, firstJobTypeName, complete, ...context }) =>
+      helper.completeJobSequence({ id, firstJobTypeName, context, complete })) as Queuert<
+      TStateAdapter,
+      TJobTypeDefinitions
+    >["completeJobSequence"],
+    waitForJobSequenceCompletion: (async ({
       id,
       firstJobTypeName,
       timeoutMs,
@@ -214,7 +247,7 @@ export const createQueuert = async <
         timeoutMs,
         pollIntervalMs,
         signal,
-      }),
+      })) as Queuert<TStateAdapter, TJobTypeDefinitions>["waitForJobSequenceCompletion"],
     withNotify: async (cb, ...args) => helper.withNotifyContext(async () => cb(...args)),
   };
 };

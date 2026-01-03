@@ -19,12 +19,14 @@ type UnwrapContinuationInput<T> = T extends {
   : T;
 
 export type JobOf<
+  TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions,
 > = Job<
+  TJobId,
   TJobTypeName,
   UnwrapContinuationInput<TJobTypeDefinitions[TJobTypeName]["input"]>,
-  CompletedBlockerSequences<TJobTypeDefinitions, TJobTypeName & string>
+  CompletedBlockerSequences<TJobId, TJobTypeDefinitions, TJobTypeName & string>
 >;
 
 type MemberContinuationJobTypes<
@@ -67,22 +69,25 @@ export type SequenceJobTypes<
         }[ContinuationJobTypes<TJobTypeDefinitions, TJobTypeName>];
 
 export type ContinuationJobs<
+  TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions & string,
 > = {
   [K in ContinuationJobTypes<TJobTypeDefinitions, TJobTypeName>]: CreatedJob<
-    JobWithoutBlockers<JobOf<TJobTypeDefinitions, K>>
+    JobWithoutBlockers<JobOf<TJobId, TJobTypeDefinitions, K>>
   >;
 }[ContinuationJobTypes<TJobTypeDefinitions, TJobTypeName>];
 
 type StripContinuationOutputs<T> = Exclude<T, { [continuationOutputSymbol]: any }>;
 
 export type JobSequenceOf<
+  TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions,
 > = {
   [K in SequenceJobTypes<TJobTypeDefinitions, TJobTypeName> &
     keyof TJobTypeDefinitions]: JobSequence<
+    TJobId,
     TJobTypeName,
     UnwrapContinuationInput<TJobTypeDefinitions[K]["input"]>,
     StripContinuationOutputs<TJobTypeDefinitions[K]["output"]>
@@ -90,64 +95,69 @@ export type JobSequenceOf<
 }[SequenceJobTypes<TJobTypeDefinitions, TJobTypeName> & keyof TJobTypeDefinitions];
 
 type BlockerSequenceOf<
+  TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TBlockerSpec,
 > = TBlockerSpec extends { [blockerSymbol]: infer TName }
   ? TName extends keyof FirstJobTypeDefinitions<TJobTypeDefinitions> & string
-    ? JobSequenceOf<TJobTypeDefinitions, TName>
+    ? JobSequenceOf<TJobId, TJobTypeDefinitions, TName>
     : never
   : TBlockerSpec extends object
     ? {
         [K in keyof FirstJobTypeDefinitions<TJobTypeDefinitions>]: TJobTypeDefinitions[K]["input"] extends TBlockerSpec
           ? TBlockerSpec extends TJobTypeDefinitions[K]["input"]
-            ? JobSequenceOf<TJobTypeDefinitions, K>
+            ? JobSequenceOf<TJobId, TJobTypeDefinitions, K>
             : never
           : never;
       }[keyof FirstJobTypeDefinitions<TJobTypeDefinitions>]
     : never;
 
 type MapBlockerSequences<
+  TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TBlockers,
 > = TBlockers extends readonly [infer First, ...infer Rest]
   ? [
-      BlockerSequenceOf<TJobTypeDefinitions, First>,
-      ...MapBlockerSequences<TJobTypeDefinitions, Rest>,
+      BlockerSequenceOf<TJobId, TJobTypeDefinitions, First>,
+      ...MapBlockerSequences<TJobId, TJobTypeDefinitions, Rest>,
     ]
   : TBlockers extends readonly (infer TElement)[]
-    ? BlockerSequenceOf<TJobTypeDefinitions, TElement>[]
+    ? BlockerSequenceOf<TJobId, TJobTypeDefinitions, TElement>[]
     : [];
 
 export type BlockerSequences<
+  TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions,
 > = TJobTypeDefinitions[TJobTypeName] extends { blockers: infer TBlockers }
-  ? MapBlockerSequences<TJobTypeDefinitions, TBlockers>
+  ? MapBlockerSequences<TJobId, TJobTypeDefinitions, TBlockers>
   : [];
 
 export type HasBlockers<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions,
-> = BlockerSequences<TJobTypeDefinitions, TJobTypeName> extends [] ? false : true;
+> = BlockerSequences<string, TJobTypeDefinitions, TJobTypeName> extends [] ? false : true;
 
 type MapToCompletedSequences<TBlockers> = TBlockers extends [
-  infer First extends JobSequence<any, any, any>,
+  infer First extends JobSequence<any, any, any, any>,
   ...infer Rest,
 ]
   ? [CompletedJobSequence<First>, ...MapToCompletedSequences<Rest>]
-  : TBlockers extends (infer TElement extends JobSequence<any, any, any>)[]
+  : TBlockers extends (infer TElement extends JobSequence<any, any, any, any>)[]
     ? CompletedJobSequence<TElement>[]
     : [];
 
 export type CompletedBlockerSequences<
+  TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions,
-> = MapToCompletedSequences<BlockerSequences<TJobTypeDefinitions, TJobTypeName>>;
+> = MapToCompletedSequences<BlockerSequences<TJobId, TJobTypeDefinitions, TJobTypeName>>;
 
 export type SequenceJobs<
+  TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TFirstJobTypeName extends string,
 > = {
   [K in SequenceJobTypes<TJobTypeDefinitions, TFirstJobTypeName> &
-    keyof TJobTypeDefinitions]: JobOf<TJobTypeDefinitions, K>;
+    keyof TJobTypeDefinitions]: JobOf<TJobId, TJobTypeDefinitions, K>;
 }[SequenceJobTypes<TJobTypeDefinitions, TFirstJobTypeName> & keyof TJobTypeDefinitions];

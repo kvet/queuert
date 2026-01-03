@@ -5,7 +5,7 @@ export * from "./job-sequence.types.js";
 
 export const mapStateJobPairToJobSequence = (
   stateJobPair: [StateJob, StateJob | undefined],
-): JobSequence<any, any, any> => {
+): JobSequence<any, any, any, any> => {
   const [firstJob, currentJob] = stateJobPair;
   const effectiveJob = currentJob ?? firstJob;
 

@@ -1,9 +1,9 @@
 export type JobSequenceStatus = "blocked" | "pending" | "running" | "completed";
 
-export type JobSequence<TFirstJobTypeName, TInput, TOutput> = {
-  id: string;
-  originId: string | null;
-  rootId: string;
+export type JobSequence<TJobId, TFirstJobTypeName, TInput, TOutput> = {
+  id: TJobId;
+  originId: TJobId | null;
+  rootId: TJobId;
   firstJobTypeName: TFirstJobTypeName;
   input: TInput;
   createdAt: Date;
@@ -14,6 +14,7 @@ export type JobSequence<TFirstJobTypeName, TInput, TOutput> = {
   | { status: "completed"; output: TOutput; completedAt: Date }
 );
 
-export type CompletedJobSequence<TJobSequence extends JobSequence<any, any, any>> = TJobSequence & {
-  status: "completed";
-};
+export type CompletedJobSequence<TJobSequence extends JobSequence<any, any, any, any>> =
+  TJobSequence & {
+    status: "completed";
+  };

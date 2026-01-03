@@ -32,39 +32,39 @@ export type StateJob = {
 
 export type BaseStateAdapterContext = {};
 
-export type StateAdapter<TContext extends BaseStateAdapterContext> = {
+export type StateAdapter<TContext extends BaseStateAdapterContext, TJobId> = {
   provideContext: <T>(fn: (context: TContext) => Promise<T>) => Promise<T>;
   runInTransaction: <T>(context: TContext, fn: (txContext: TContext) => Promise<T>) => Promise<T>;
   assertInTransaction: (context: TContext) => Promise<void>;
 
   getJobSequenceById: (params: {
     context: TContext;
-    jobId: string;
+    jobId: TJobId;
   }) => Promise<[StateJob, StateJob | undefined] | undefined>;
-  getJobById: (params: { context: TContext; jobId: string }) => Promise<StateJob | undefined>;
+  getJobById: (params: { context: TContext; jobId: TJobId }) => Promise<StateJob | undefined>;
 
   createJob: (params: {
     context: TContext;
     typeName: string;
     input: unknown;
-    rootId: string | undefined;
-    sequenceId: string | undefined;
-    originId: string | undefined;
+    rootId: TJobId | undefined;
+    sequenceId: TJobId | undefined;
+    originId: TJobId | undefined;
     deduplication?: DeduplicationOptions;
   }) => Promise<{ job: StateJob; deduplicated: boolean }>;
 
   addJobBlockers: (params: {
     context: TContext;
-    jobId: string;
-    blockedBySequenceIds: string[];
+    jobId: TJobId;
+    blockedBySequenceIds: TJobId[];
   }) => Promise<StateJob>;
   scheduleBlockedJobs: (params: {
     context: TContext;
-    blockedBySequenceId: string;
+    blockedBySequenceId: TJobId;
   }) => Promise<StateJob[]>;
   getJobBlockers: (params: {
     context: TContext;
-    jobId: string;
+    jobId: TJobId;
   }) => Promise<[StateJob, StateJob | undefined][]>;
 
   getNextJobAvailableInMs: (params: {
@@ -74,19 +74,19 @@ export type StateAdapter<TContext extends BaseStateAdapterContext> = {
   acquireJob: (params: { context: TContext; typeNames: string[] }) => Promise<StateJob | undefined>;
   renewJobLease: (params: {
     context: TContext;
-    jobId: string;
+    jobId: TJobId;
     workerId: string;
     leaseDurationMs: number;
   }) => Promise<StateJob>;
   rescheduleJob: (params: {
     context: TContext;
-    jobId: string;
+    jobId: TJobId;
     afterMs: number;
     error: string;
   }) => Promise<StateJob>;
   completeJob: (params: {
     context: TContext;
-    jobId: string;
+    jobId: TJobId;
     output: unknown;
     workerId: string | null;
   }) => Promise<StateJob>;
@@ -96,15 +96,18 @@ export type StateAdapter<TContext extends BaseStateAdapterContext> = {
   }) => Promise<StateJob | undefined>;
   getExternalBlockers: (params: {
     context: TContext;
-    rootIds: string[];
-  }) => Promise<{ jobId: string; blockedRootId: string }[]>;
-  deleteJobsByRootIds: (params: { context: TContext; rootIds: string[] }) => Promise<StateJob[]>;
-  getJobForUpdate: (params: { context: TContext; jobId: string }) => Promise<StateJob | undefined>;
+    rootIds: TJobId[];
+  }) => Promise<{ jobId: TJobId; blockedRootId: TJobId }[]>;
+  deleteJobsByRootIds: (params: { context: TContext; rootIds: TJobId[] }) => Promise<StateJob[]>;
+  getJobForUpdate: (params: { context: TContext; jobId: TJobId }) => Promise<StateJob | undefined>;
   getCurrentJobForUpdate: (params: {
     context: TContext;
-    sequenceId: string;
+    sequenceId: TJobId;
   }) => Promise<StateJob | undefined>;
 };
 
 export type GetStateAdapterContext<TStateAdapter> =
-  TStateAdapter extends StateAdapter<infer TContext> ? TContext : never;
+  TStateAdapter extends StateAdapter<infer TContext, infer _TJobId> ? TContext : never;
+
+export type GetStateAdapterJobId<TStateAdapter> =
+  TStateAdapter extends StateAdapter<infer _TContext, infer TJobId> ? TJobId : never;

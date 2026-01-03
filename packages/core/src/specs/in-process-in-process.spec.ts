@@ -1,9 +1,9 @@
 import { describe, it, TestAPI } from "vitest";
-import { StateAdapter } from "../state-adapter/state-adapter.js";
 import { extendWithStateInProcess } from "../state-adapter/state-adapter.in-process.spec-helper.js";
+import { StateAdapter } from "../state-adapter/state-adapter.js";
 import { blockerSequencesTestSuite } from "../suites/blocker-sequences.test-suite.js";
-import { processTestSuite } from "../suites/process.test-suite.js";
 import { notifyTestSuite } from "../suites/notify.test-suite.js";
+import { processTestSuite } from "../suites/process.test-suite.js";
 import { reaperTestSuite } from "../suites/reaper.test-suite.js";
 import { sequencesTestSuite } from "../suites/sequences.test-suite.js";
 import { extendWithCommon, extendWithInProcessNotify } from "../suites/spec-context.spec-helper.js";
@@ -14,8 +14,8 @@ import { workerlessCompletionTestSuite } from "../suites/workerless-completion.t
 const inProcessInProcessIt = extendWithInProcessNotify(
   extendWithCommon(
     extendWithStateInProcess(it) as unknown as TestAPI<{
-      stateAdapter: StateAdapter<{ $test: true }>;
-      flakyStateAdapter: StateAdapter<{ $test: true }>;
+      stateAdapter: StateAdapter<{ $test: true }, string>;
+      flakyStateAdapter: StateAdapter<{ $test: true }, string>;
     }>,
   ),
 );

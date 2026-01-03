@@ -1,106 +1,6 @@
 import { type DeduplicationStrategy } from "@queuert/core";
 import { type NamedParameter, sql, type TypedSql } from "@queuert/typed-sql";
 
-export const migrateSql: TypedSql<[], void> = sql(
-  /* sql */ `
--- Types: job_status enum
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'job_status' AND typnamespace = 'queuert'::regnamespace) THEN
-    CREATE TYPE queuert.job_status AS ENUM ('blocked','pending','running','completed');
-  END IF;
-END$$;
-
--- Tables: job table
-CREATE TABLE IF NOT EXISTS queuert.job (
-  id                            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  type_name                    text NOT NULL,
-
-  input                         jsonb,
-  output                        jsonb,
-
-  -- lineage / tracing
-  root_id                       uuid REFERENCES queuert.job(id) ON DELETE CASCADE, -- TODO: NOT NULL
-  sequence_id                   uuid REFERENCES queuert.job(id) ON DELETE CASCADE, -- TODO: NOT NULL
-  origin_id                     uuid REFERENCES queuert.job(id) ON DELETE CASCADE,
-
-  -- state
-  status                        queuert.job_status NOT NULL DEFAULT 'pending',
-  created_at                    timestamptz NOT NULL DEFAULT now(),
-  scheduled_at                  timestamptz NOT NULL DEFAULT now(),
-  completed_at                  timestamptz,
-  completed_by                  text,
-
-  -- attempts
-  attempt                       integer NOT NULL DEFAULT 0,
-  last_attempt_at               timestamptz,
-  last_attempt_error            jsonb,
-
-  -- leasing
-  leased_by                     text,
-  leased_until                  timestamptz,
-
-  -- deduplication
-  deduplication_key             text,
-
-  -- metadata
-  updated_at                    timestamptz NOT NULL DEFAULT now()
-);
-
--- Tables: job_blocker table
-CREATE TABLE IF NOT EXISTS queuert.job_blocker (
-  job_id                        uuid NOT NULL REFERENCES queuert.job(id) ON DELETE CASCADE,
-  blocked_by_sequence_id        uuid NOT NULL REFERENCES queuert.job(id) ON DELETE CASCADE,
-  index                         integer NOT NULL,
-  PRIMARY KEY (job_id, blocked_by_sequence_id)
-);
-
--- Triggers: updated_at triggers
-CREATE OR REPLACE FUNCTION queuert.update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-   NEW.updated_at = now();
-   RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-DROP TRIGGER IF EXISTS update_job_updated_at ON queuert.job;
-CREATE TRIGGER update_job_updated_at
-BEFORE UPDATE ON queuert.job
-FOR EACH ROW
-EXECUTE PROCEDURE queuert.update_updated_at_column();
-
--- Constraints: continuation deduplication
-CREATE UNIQUE INDEX IF NOT EXISTS job_sequence_origin_unique_idx
-ON queuert.job (sequence_id, origin_id)
-WHERE origin_id IS NOT NULL;
-
--- Indexes: job acquisition
-CREATE INDEX IF NOT EXISTS job_acquisition_idx
-ON queuert.job (type_name, scheduled_at)
-WHERE status = 'pending';
-
--- Indexes: last sequence job lookup
-CREATE INDEX IF NOT EXISTS job_sequence_created_at_idx
-ON queuert.job (sequence_id, created_at DESC);
-
--- Indexes: deduplication lookup
-CREATE INDEX IF NOT EXISTS job_deduplication_idx
-ON queuert.job (deduplication_key, created_at DESC)
-WHERE deduplication_key IS NOT NULL;
-
--- Indexes: expired lease reaping
-CREATE INDEX IF NOT EXISTS job_expired_lease_idx
-ON queuert.job (type_name, leased_until)
-WHERE status = 'running' AND leased_until IS NOT NULL;
-
--- Indexes: blocker lookup
-CREATE INDEX IF NOT EXISTS job_blocker_sequence_idx
-ON queuert.job_blocker (blocked_by_sequence_id);
-`,
-  false,
-);
-
 export type DbJob = {
   id: string;
   type_name: string;
@@ -129,6 +29,106 @@ export type DbJob = {
   updated_at: string;
 };
 
+export const migrateSql: TypedSql<[], void> = sql(
+  /* sql */ `
+-- Types: job_status enum
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'job_status' AND typnamespace = '{{schema}}'::regnamespace) THEN
+    CREATE TYPE {{schema}}.job_status AS ENUM ('blocked','pending','running','completed');
+  END IF;
+END$$;
+
+-- Tables: job table
+CREATE TABLE IF NOT EXISTS {{schema}}.job (
+  id                            {{id_type}} PRIMARY KEY DEFAULT {{id_default}},
+  type_name                    text NOT NULL,
+
+  input                         jsonb,
+  output                        jsonb,
+
+  -- lineage / tracing
+  root_id                       {{id_type}} REFERENCES {{schema}}.job(id) ON DELETE CASCADE,
+  sequence_id                   {{id_type}} REFERENCES {{schema}}.job(id) ON DELETE CASCADE,
+  origin_id                     {{id_type}} REFERENCES {{schema}}.job(id) ON DELETE CASCADE,
+
+  -- state
+  status                        {{schema}}.job_status NOT NULL DEFAULT 'pending',
+  created_at                    timestamptz NOT NULL DEFAULT now(),
+  scheduled_at                  timestamptz NOT NULL DEFAULT now(),
+  completed_at                  timestamptz,
+  completed_by                  text,
+
+  -- attempts
+  attempt                       integer NOT NULL DEFAULT 0,
+  last_attempt_at               timestamptz,
+  last_attempt_error            jsonb,
+
+  -- leasing
+  leased_by                     text,
+  leased_until                  timestamptz,
+
+  -- deduplication
+  deduplication_key             text,
+
+  -- metadata
+  updated_at                    timestamptz NOT NULL DEFAULT now()
+);
+
+-- Tables: job_blocker table
+CREATE TABLE IF NOT EXISTS {{schema}}.job_blocker (
+  job_id                        {{id_type}} NOT NULL REFERENCES {{schema}}.job(id) ON DELETE CASCADE,
+  blocked_by_sequence_id        {{id_type}} NOT NULL REFERENCES {{schema}}.job(id) ON DELETE CASCADE,
+  index                         integer NOT NULL,
+  PRIMARY KEY (job_id, blocked_by_sequence_id)
+);
+
+-- Triggers: updated_at triggers
+CREATE OR REPLACE FUNCTION {{schema}}.update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+   NEW.updated_at = now();
+   RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS update_job_updated_at ON {{schema}}.job;
+CREATE TRIGGER update_job_updated_at
+BEFORE UPDATE ON {{schema}}.job
+FOR EACH ROW
+EXECUTE PROCEDURE {{schema}}.update_updated_at_column();
+
+-- Constraints: continuation deduplication
+CREATE UNIQUE INDEX IF NOT EXISTS job_sequence_origin_unique_idx
+ON {{schema}}.job (sequence_id, origin_id)
+WHERE origin_id IS NOT NULL;
+
+-- Indexes: job acquisition
+CREATE INDEX IF NOT EXISTS job_acquisition_idx
+ON {{schema}}.job (type_name, scheduled_at)
+WHERE status = 'pending';
+
+-- Indexes: last sequence job lookup
+CREATE INDEX IF NOT EXISTS job_sequence_created_at_idx
+ON {{schema}}.job (sequence_id, created_at DESC);
+
+-- Indexes: deduplication lookup
+CREATE INDEX IF NOT EXISTS job_deduplication_idx
+ON {{schema}}.job (deduplication_key, created_at DESC)
+WHERE deduplication_key IS NOT NULL;
+
+-- Indexes: expired lease reaping
+CREATE INDEX IF NOT EXISTS job_expired_lease_idx
+ON {{schema}}.job (type_name, leased_until)
+WHERE status = 'running' AND leased_until IS NOT NULL;
+
+-- Indexes: blocker lookup
+CREATE INDEX IF NOT EXISTS job_blocker_sequence_idx
+ON {{schema}}.job_blocker (blocked_by_sequence_id);
+`,
+  false,
+);
+
 export const createJobSql: TypedSql<
   readonly [
     NamedParameter<"type_name", string>,
@@ -145,16 +145,16 @@ export const createJobSql: TypedSql<
   /* sql */ `
 WITH existing_continuation AS (
   SELECT *, TRUE AS deduplicated
-  FROM queuert.job
-  WHERE $4::uuid IS NOT NULL
-    AND $5::uuid IS NOT NULL
-    AND sequence_id = $4::uuid
-    AND origin_id = $5::uuid
+  FROM {{schema}}.job
+  WHERE $4::{{id_type}} IS NOT NULL
+    AND $5::{{id_type}} IS NOT NULL
+    AND sequence_id = $4::{{id_type}}
+    AND origin_id = $5::{{id_type}}
   LIMIT 1
 ),
 existing_deduplicated AS (
   SELECT j.*, TRUE AS deduplicated
-  FROM queuert.job j
+  FROM {{schema}}.job j
   WHERE $6::text IS NOT NULL
     AND j.deduplication_key = $6
     AND j.id = j.sequence_id
@@ -170,9 +170,9 @@ existing_deduplicated AS (
   ORDER BY j.created_at DESC
   LIMIT 1
 ),
-new_id AS (SELECT gen_random_uuid() AS id),
+new_id AS (SELECT {{id_default}} AS id),
 inserted_job AS (
-  INSERT INTO queuert.job (id, type_name, input, root_id, sequence_id, origin_id, deduplication_key)
+  INSERT INTO {{schema}}.job (id, type_name, input, root_id, sequence_id, origin_id, deduplication_key)
   SELECT id, $1, $2, COALESCE($3, id), COALESCE($4, id), $5, $6
   FROM new_id
   WHERE NOT EXISTS (SELECT 1 FROM existing_continuation)
@@ -195,9 +195,9 @@ export const addJobBlockersSql: TypedSql<
 > = sql(
   /* sql */ `
 WITH inserted_blockers AS (
-  INSERT INTO queuert.job_blocker (job_id, blocked_by_sequence_id, "index")
+  INSERT INTO {{schema}}.job_blocker (job_id, blocked_by_sequence_id, "index")
   SELECT job_id, blocked_by_sequence_id, ord - 1 AS "index"
-  FROM unnest($1::uuid[], $2::uuid[]) WITH ORDINALITY AS t(job_id, blocked_by_sequence_id, ord)
+  FROM unnest($1::{{id_type}}[], $2::{{id_type}}[]) WITH ORDINALITY AS t(job_id, blocked_by_sequence_id, ord)
   RETURNING job_id, blocked_by_sequence_id
 ),
 blockers_status AS (
@@ -206,7 +206,7 @@ blockers_status AS (
     ib.blocked_by_sequence_id,
     (
       SELECT j2.status
-      FROM queuert.job j2
+      FROM {{schema}}.job j2
       WHERE j2.sequence_id = ib.blocked_by_sequence_id
       ORDER BY j2.created_at DESC
       LIMIT 1
@@ -219,7 +219,7 @@ has_incomplete_blockers AS (
   WHERE blocker_status != 'completed'
 ),
 updated_job AS (
-  UPDATE queuert.job j
+  UPDATE {{schema}}.job j
   SET status = 'blocked'
   WHERE j.id IN (SELECT job_id FROM has_incomplete_blockers)
     AND j.status = 'pending'
@@ -227,7 +227,7 @@ updated_job AS (
 )
 SELECT * FROM updated_job
 UNION ALL
-SELECT j.* FROM queuert.job j
+SELECT j.* FROM {{schema}}.job j
 WHERE j.id = (SELECT DISTINCT job_id FROM inserted_blockers LIMIT 1)
   AND NOT EXISTS (SELECT 1 FROM updated_job)
 LIMIT 1;
@@ -244,7 +244,7 @@ export const completeJobSql: TypedSql<
   [DbJob]
 > = sql(
   /* sql */ `
-UPDATE queuert.job
+UPDATE {{schema}}.job
 SET status = 'completed',
   completed_at = now(),
   completed_by = $3,
@@ -264,7 +264,7 @@ export const scheduleBlockedJobsSql: TypedSql<
   /* sql */ `
 WITH direct_blocked AS (
   SELECT DISTINCT jb.job_id
-  FROM queuert.job_blocker jb
+  FROM {{schema}}.job_blocker jb
   WHERE jb.blocked_by_sequence_id = $1
 ),
 blockers_status AS (
@@ -273,12 +273,12 @@ blockers_status AS (
     jb.blocked_by_sequence_id,
     (
       SELECT j2.status
-      FROM queuert.job j2
+      FROM {{schema}}.job j2
       WHERE j2.sequence_id = jb.blocked_by_sequence_id
       ORDER BY j2.created_at DESC
       LIMIT 1
     ) AS blocker_status
-  FROM queuert.job_blocker jb
+  FROM {{schema}}.job_blocker jb
   WHERE jb.job_id IN (SELECT job_id FROM direct_blocked)
 ),
 ready_jobs AS (
@@ -287,7 +287,7 @@ ready_jobs AS (
   GROUP BY job_id
   HAVING bool_and(blocker_status = 'completed')
 )
-UPDATE queuert.job j
+UPDATE {{schema}}.job j
 SET scheduled_at = now(),
   status = 'pending'
 WHERE j.id IN (SELECT job_id FROM ready_jobs)
@@ -305,10 +305,10 @@ export const getJobSequenceByIdSql: TypedSql<
 SELECT
   row_to_json(j)  AS root_job,
   row_to_json(lc) AS last_sequence_job
-FROM queuert.job AS j
+FROM {{schema}}.job AS j
 LEFT JOIN LATERAL (
   SELECT *
-  FROM queuert.job
+  FROM {{schema}}.job
   WHERE sequence_id = j.id
   ORDER BY created_at DESC
   LIMIT 1
@@ -326,12 +326,12 @@ export const getJobBlockersSql: TypedSql<
 SELECT
   row_to_json(j)   AS root_job,
   row_to_json(lc)  AS last_sequence_job
-FROM queuert.job_blocker AS b
-JOIN queuert.job AS j
+FROM {{schema}}.job_blocker AS b
+JOIN {{schema}}.job AS j
   ON j.id = b.blocked_by_sequence_id
 LEFT JOIN LATERAL (
   SELECT *
-  FROM queuert.job
+  FROM {{schema}}.job
   WHERE sequence_id = j.id
   ORDER BY created_at DESC
   LIMIT 1
@@ -346,7 +346,7 @@ export const getJobByIdSql: TypedSql<readonly [NamedParameter<"id", string>], [D
   sql(
     /* sql */ `
 SELECT *
-FROM queuert.job
+FROM {{schema}}.job
 WHERE id = $1
 `,
     true,
@@ -361,7 +361,7 @@ export const rescheduleJobSql: TypedSql<
   [DbJob]
 > = sql(
   /* sql */ `
-UPDATE queuert.job
+UPDATE {{schema}}.job
 SET scheduled_at = now() + ($2::bigint || ' milliseconds')::interval,
   last_attempt_at = now(),
   last_attempt_error = $3,
@@ -383,7 +383,7 @@ export const renewJobLeaseSql: TypedSql<
   [DbJob]
 > = sql(
   /* sql */ `
-UPDATE queuert.job
+UPDATE {{schema}}.job
 SET leased_by = $2,
   leased_until = now() + ($3::bigint || ' milliseconds')::interval,
   status = 'running'
@@ -400,7 +400,7 @@ export const acquireJobSql: TypedSql<
   /* sql */ `
 WITH acquired_job AS (
   SELECT id
-  FROM queuert.job
+  FROM {{schema}}.job
   WHERE type_name IN (SELECT unnest($1::text[]))
     AND status = 'pending'
     AND scheduled_at <= now()
@@ -408,7 +408,7 @@ WITH acquired_job AS (
   LIMIT 1
   FOR UPDATE SKIP LOCKED
 )
-UPDATE queuert.job
+UPDATE {{schema}}.job
 SET status = 'running',
     attempt = attempt + 1
 WHERE id = (SELECT id FROM acquired_job)
@@ -423,7 +423,7 @@ export const getNextJobAvailableInMsSql: TypedSql<
 > = sql(
   /* sql */ `
 SELECT GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (job.scheduled_at - now())) * 1000)::bigint) AS available_in_ms
-FROM queuert.job as job
+FROM {{schema}}.job as job
 WHERE job.type_name IN (SELECT unnest($1::text[]))
   AND job.status = 'pending'
 ORDER BY job.scheduled_at ASC
@@ -440,7 +440,7 @@ export const removeExpiredJobLeaseSql: TypedSql<
   /* sql */ `
 WITH job_to_unlock AS (
   SELECT id
-  FROM queuert.job
+  FROM {{schema}}.job
   WHERE leased_until IS NOT NULL
     AND leased_until < now()
     AND status = 'running'
@@ -449,7 +449,7 @@ WITH job_to_unlock AS (
   LIMIT 1
   FOR UPDATE SKIP LOCKED
 )
-UPDATE queuert.job as job
+UPDATE {{schema}}.job as job
 SET leased_by = NULL,
   leased_until = NULL,
   status = 'pending'
@@ -466,12 +466,12 @@ export const getExternalBlockersSql: TypedSql<
 > = sql(
   /* sql */ `
 SELECT DISTINCT jb.job_id, j.root_id AS blocked_root_id
-FROM queuert.job_blocker jb
-JOIN queuert.job j ON j.id = jb.job_id
+FROM {{schema}}.job_blocker jb
+JOIN {{schema}}.job j ON j.id = jb.job_id
 WHERE jb.blocked_by_sequence_id IN (
-  SELECT id FROM queuert.job WHERE root_id = ANY($1::uuid[])
+  SELECT id FROM {{schema}}.job WHERE root_id = ANY($1::{{id_type}}[])
 )
-AND j.root_id != ALL($1::uuid[])
+AND j.root_id != ALL($1::{{id_type}}[])
 `,
   true,
 );
@@ -481,8 +481,8 @@ export const deleteJobsByRootIdsSql: TypedSql<
   DbJob[]
 > = sql(
   /* sql */ `
-DELETE FROM queuert.job
-WHERE root_id = ANY($1::uuid[])
+DELETE FROM {{schema}}.job
+WHERE root_id = ANY($1::{{id_type}}[])
 RETURNING *
 `,
   true,
@@ -494,7 +494,7 @@ export const getJobForUpdateSql: TypedSql<
 > = sql(
   /* sql */ `
 SELECT *
-FROM queuert.job
+FROM {{schema}}.job
 WHERE id = $1
 FOR UPDATE
 `,
@@ -507,7 +507,7 @@ export const getCurrentJobForUpdateSql: TypedSql<
 > = sql(
   /* sql */ `
 SELECT *
-FROM queuert.job
+FROM {{schema}}.job
 WHERE sequence_id = $1
 ORDER BY created_at DESC
 LIMIT 1

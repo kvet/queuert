@@ -1,6 +1,6 @@
 import { describe, it, TestAPI } from "vitest";
-import { StateAdapter } from "../state-adapter/state-adapter.js";
 import { extendWithStateInProcess } from "../state-adapter/state-adapter.in-process.spec-helper.js";
+import { StateAdapter } from "../state-adapter/state-adapter.js";
 import { blockerSequencesTestSuite } from "../suites/blocker-sequences.test-suite.js";
 import { deduplicationTestSuite } from "../suites/deduplication.test-suite.js";
 import { deletionTestSuite } from "../suites/deletion.test-suite.js";
@@ -15,8 +15,8 @@ import { workerlessCompletionTestSuite } from "../suites/workerless-completion.t
 const inProcessNoopIt = extendWithNoopNotify(
   extendWithCommon(
     extendWithStateInProcess(it) as unknown as TestAPI<{
-      stateAdapter: StateAdapter<{ $test: true }>;
-      flakyStateAdapter: StateAdapter<{ $test: true }>;
+      stateAdapter: StateAdapter<{ $test: true }, string>;
+      flakyStateAdapter: StateAdapter<{ $test: true }, string>;
     }>,
   ),
 );

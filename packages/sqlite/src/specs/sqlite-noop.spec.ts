@@ -1,4 +1,3 @@
-import { describe, it, TestAPI } from "vitest";
 import { type StateAdapter } from "@queuert/core";
 import {
   blockerSequencesTestSuite,
@@ -9,16 +8,17 @@ import {
   sequencesTestSuite,
   stateResilienceTestSuite,
   waitSequenceCompletionTestSuite,
-  workerTestSuite,
   workerlessCompletionTestSuite,
+  workerTestSuite,
 } from "@queuert/core/testing";
+import { describe, it, TestAPI } from "vitest";
 import { extendWithStateSqlite } from "../state-adapter/state-adapter.sqlite.spec-helper.js";
 
 const sqliteNoopIt = extendWithNoopNotify(
   extendWithCommon(
-    extendWithStateSqlite(it, import.meta.url) as unknown as TestAPI<{
-      stateAdapter: StateAdapter<{ $test: true }>;
-      flakyStateAdapter: StateAdapter<{ $test: true }>;
+    extendWithStateSqlite(it) as unknown as TestAPI<{
+      stateAdapter: StateAdapter<{ $test: true }, string>;
+      flakyStateAdapter: StateAdapter<{ $test: true }, string>;
     }>,
   ),
 );

@@ -3,7 +3,9 @@ import { Job, JobWithoutBlockers } from "./job.types.js";
 
 export * from "./job.types.js";
 
-export const mapStateJobToJob = (stateJob: StateJob): JobWithoutBlockers<Job<any, any, any>> => {
+export const mapStateJobToJob = (
+  stateJob: StateJob,
+): JobWithoutBlockers<Job<any, any, any, any>> => {
   const base = {
     id: stateJob.id,
     sequenceId: stateJob.sequenceId,

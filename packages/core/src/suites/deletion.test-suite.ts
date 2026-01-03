@@ -256,7 +256,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       }>(),
     });
 
-    let blockerSequence: JobSequence<"blocker", { value: number }, { result: number }>;
+    let blockerSequence: JobSequence<string, "blocker", { value: number }, { result: number }>;
     const mainSequence = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
         queuert.startJobSequence({

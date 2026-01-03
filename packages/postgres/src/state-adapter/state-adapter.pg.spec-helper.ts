@@ -2,20 +2,25 @@ import { type StateAdapter } from "@queuert/core";
 import { withContainerLock } from "@queuert/testcontainers";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import { createHash } from "crypto";
-import { Client, Pool, PoolClient } from "pg";
+import { Client, Pool } from "pg";
 import { beforeAll, type TestAPI } from "vitest";
-import { createPgPoolProvider, PgPoolProvider } from "../state-provider/state-provider.pg-pool.js";
+import {
+  createPgPoolProvider,
+  PgPoolContext,
+  PgPoolProvider,
+} from "../state-provider/state-provider.pg-pool.js";
 import { createPgStateAdapter } from "./state-adapter.pg.js";
 
 const CONTAINER_NAME = "queuert-postgres-test";
 
-export type PgStateAdapter = StateAdapter<{ client: PoolClient }>;
+export type PgStateAdapter = StateAdapter<PgPoolContext, string>;
 
 export const extendWithStatePostgres = <T>(
   api: TestAPI<T>,
   reuseId: string,
 ): TestAPI<
   T & {
+    pool: Pool;
     stateAdapter: PgStateAdapter;
     flakyStateAdapter: PgStateAdapter;
   }
@@ -41,7 +46,7 @@ export const extendWithStatePostgres = <T>(
   }, 60_000);
 
   return api.extend<{
-    _db: Pool;
+    pool: Pool;
     _dbMigrateToLatest: void;
     _dbCleanup: void;
     stateProvider: PgPoolProvider;
@@ -49,7 +54,7 @@ export const extendWithStatePostgres = <T>(
     stateAdapter: PgStateAdapter;
     flakyStateAdapter: PgStateAdapter;
   }>({
-    _db: [
+    pool: [
       // eslint-disable-next-line no-empty-pattern
       async ({}, use) => {
         const client = new Client({
@@ -78,26 +83,26 @@ export const extendWithStatePostgres = <T>(
       { scope: "worker" },
     ],
     _dbMigrateToLatest: [
-      async ({ _db }, use) => {
-        const client = await _db.connect();
+      async ({ pool: pood }, use) => {
+        const client = await pood.connect();
         await client.query(`DROP SCHEMA IF EXISTS queuert CASCADE;`).catch(() => {
           // ignore
         });
 
         const stateProvider = createPgPoolProvider({
-          pool: _db,
+          pool: pood,
         });
         const stateAdapter = createPgStateAdapter({
           stateProvider,
         });
 
-        await stateAdapter.provideContext(async ({ client }) =>
+        await stateAdapter.provideContext(async ({ poolClient: client }) =>
           client.query(`
             CREATE SCHEMA IF NOT EXISTS queuert;
             GRANT USAGE ON SCHEMA queuert TO test;
           `),
         );
-        await stateAdapter.migrateToLatest({ client });
+        await stateAdapter.migrateToLatest({ poolClient: client });
 
         client.release();
 
@@ -106,10 +111,10 @@ export const extendWithStatePostgres = <T>(
       { scope: "worker" },
     ],
     _dbCleanup: [
-      async ({ _db }, use) => {
+      async ({ pool: pood }, use) => {
         await use();
 
-        const client = await _db.connect();
+        const client = await pood.connect();
         await client.query(`DELETE FROM queuert.job_blocker;`);
         await client.query(`DELETE FROM queuert.job;`);
         client.release();
@@ -117,13 +122,13 @@ export const extendWithStatePostgres = <T>(
       { scope: "test" },
     ],
     stateProvider: [
-      async ({ _db, _dbMigrateToLatest, _dbCleanup }, use) => {
+      async ({ pool, _dbMigrateToLatest, _dbCleanup }, use) => {
         // oxlint-disable-next-line no-unused-expressions
         _dbMigrateToLatest;
         // oxlint-disable-next-line no-unused-expressions
         _dbCleanup;
 
-        return use(createPgPoolProvider({ pool: _db }));
+        return use(createPgPoolProvider({ pool }));
       },
       { scope: "test" },
     ],

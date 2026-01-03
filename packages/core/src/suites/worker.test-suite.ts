@@ -136,7 +136,8 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       },
     });
 
-    const jobSequences: JobSequence<"test", { jobNumber: number }, { success: boolean }>[] = [];
+    const jobSequences: JobSequence<string, "test", { jobNumber: number }, { success: boolean }>[] =
+      [];
     for (let i = 0; i < 5; i++) {
       jobSequences.push(
         await queuert.withNotify(async () =>
@@ -197,7 +198,8 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       },
     });
 
-    const jobSequences: JobSequence<"test", { jobNumber: number }, { success: boolean }>[] = [];
+    const jobSequences: JobSequence<string, "test", { jobNumber: number }, { success: boolean }>[] =
+      [];
     for (let i = 0; i < 5; i++) {
       jobSequences.push(
         await queuert.withNotify(async () =>

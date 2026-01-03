@@ -104,9 +104,34 @@ A typed logging function for observability. All job lifecycle events are logged 
 
 Abstracts database operations for job persistence. Allows different database implementations (PostgreSQL and SQLite). Handles job creation, status transitions, leasing, and queries.
 
+The `StateAdapter` type accepts two generic parameters:
+
+- `TContext extends BaseStateAdapterContext`: The context type containing database client
+- `TJobId`: The job ID type used for input parameters (e.g., `jobId`, `rootIds`)
+
+**Internal type design**: `StateJob` is a non-generic type with `string` for all ID fields (`id`, `rootId`, `sequenceId`, `originId`). The `StateAdapter` methods accept `TJobId` for input parameters but return plain `StateJob`. This simplifies internal code while allowing adapters to expose typed IDs to consumers via `GetStateAdapterJobId<TStateAdapter>`.
+
 ### StateProvider
 
 Abstracts ORM/database client operations, providing context management, transaction handling, and SQL execution. Users create their own `StateProvider` implementation to integrate with their preferred client (raw `pg`, Drizzle, Prisma, better-sqlite3, etc.) and pass it to the state adapter factory (`createPgStateAdapter` or `createSqliteStateAdapter`).
+
+**PostgreSQL adapter configuration** (`createPgStateAdapter` options):
+
+- `stateProvider`: The PostgreSQL state provider implementation
+- `schema`: Schema name for job tables (default: `"queuert"`)
+- `idType`: SQL type for job IDs (default: `"uuid"`)
+- `idDefault`: SQL DEFAULT expression for job IDs (default: `"gen_random_uuid()"`)
+- `connectionRetryConfig`: Retry configuration for transient connection errors
+- `isTransientError`: Custom function to identify transient errors
+
+**SQLite adapter configuration** (`createSqliteStateAdapter` options):
+
+- `stateProvider`: The SQLite state provider implementation
+- `tablePrefix`: Prefix for table names (default: `"queuert_"`, set to `""` for no prefix)
+- `idType`: SQL type for job ID columns (default: `"TEXT"`)
+- `idGenerator`: Function returning job ID strings (default: `() => crypto.randomUUID()`). **Note:** Unlike PostgreSQL where IDs are generated in SQL, SQLite generates IDs in application code. If a custom generator returns a duplicate ID, the INSERT will fail with a PRIMARY KEY violation. The default `crypto.randomUUID()` is practically collision-free.
+- `connectionRetryConfig`: Retry configuration for transient connection errors
+- `isTransientError`: Custom function to identify transient errors
 
 ### NotifyAdapter
 
@@ -314,13 +339,15 @@ Avoid asymmetric naming (e.g., `started`/`finished` vs `created`/`completed`) ev
 
 ### Type Helpers
 
-- `JobOf<TJobTypeDefinitions, TJobTypeName>`: Resolves to `Job<TJobTypeName, Input, BlockerSequences>` from job type definitions. Automatically unwraps `DefineContinuationInput` markers and includes typed blocker sequences.
-- `JobWithoutBlockers<TJob>`: Strips the `blockers` field from a `Job` type. Used in `startBlockers` callback where blockers haven't been created yet. Example: `JobWithoutBlockers<JobOf<Defs, "process">>`.
-- `PendingJob<TJob>`, `BlockedJob<TJob>`, `RunningJob<TJob>`, `CompletedJob<TJob>`, `CreatedJob<TJob>`: Job status types that take a `Job` type and narrow by status. Example: `PendingJob<JobOf<Defs, "process">>`.
+- `JobOf<TJobId, TJobTypeDefinitions, TJobTypeName>`: Resolves to `Job<TJobId, TJobTypeName, Input, BlockerSequences>` from job type definitions. Automatically unwraps `DefineContinuationInput` markers and includes typed blocker sequences.
+- `JobWithoutBlockers<TJob>`: Strips the `blockers` field from a `Job` type. Used in `startBlockers` callback where blockers haven't been created yet. Example: `JobWithoutBlockers<JobOf<string, Defs, "process">>`.
+- `PendingJob<TJob>`, `BlockedJob<TJob>`, `RunningJob<TJob>`, `CompletedJob<TJob>`, `CreatedJob<TJob>`: Job status types that take a `Job` type and narrow by status. Example: `PendingJob<JobOf<string, Defs, "process">>`.
 - `SequenceJobTypes<TJobTypeDefinitions, TFirstJobTypeName>`: Union of all job type names reachable in a sequence starting from `TFirstJobTypeName`.
 - `ContinuationJobTypes<TJobTypeDefinitions, TJobTypeName>`: Job type names that `TJobTypeName` can continue to.
 - `FirstJobTypeDefinitions<T>`: Filters job type definitions to only those that can start a sequence (excludes `DefineContinuationInput` types).
 - `HasBlockers<TJobTypeDefinitions, TJobTypeName>`: Returns `true` if the job type has blockers defined, `false` otherwise. Used internally to enforce `startBlockers` requirement.
+- `JobSequenceOf<TJobId, TJobTypeDefinitions, TJobTypeName>`: Resolves to `JobSequence<TJobId, TJobTypeName, Input, Output>` for all jobs reachable in the sequence.
+- `BlockerSequences<TJobId, TJobTypeDefinitions, TJobTypeName>`: Tuple of `JobSequence` types for all declared blockers of a job type.
 
 ### Type Organization
 

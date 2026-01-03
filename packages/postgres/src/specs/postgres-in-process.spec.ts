@@ -1,4 +1,3 @@
-import { describe, it, TestAPI } from "vitest";
 import { type StateAdapter } from "@queuert/core";
 import {
   blockerSequencesTestSuite,
@@ -10,16 +9,17 @@ import {
   sequencesTestSuite,
   stateResilienceTestSuite,
   waitSequenceCompletionTestSuite,
-  workerTestSuite,
   workerlessCompletionTestSuite,
+  workerTestSuite,
 } from "@queuert/core/testing";
+import { describe, it, TestAPI } from "vitest";
 import { extendWithStatePostgres } from "../state-adapter/state-adapter.pg.spec-helper.js";
 
 const postgresInProcessIt = extendWithInProcessNotify(
   extendWithCommon(
     extendWithStatePostgres(it, import.meta.url) as unknown as TestAPI<{
-      stateAdapter: StateAdapter<{ $test: true }>;
-      flakyStateAdapter: StateAdapter<{ $test: true }>;
+      stateAdapter: StateAdapter<{ $test: true }, string>;
+      flakyStateAdapter: StateAdapter<{ $test: true }, string>;
     }>,
   ),
 );

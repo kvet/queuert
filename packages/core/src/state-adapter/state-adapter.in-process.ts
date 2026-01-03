@@ -6,7 +6,7 @@ export type InProcessContext = {};
 
 type InProcessStore = {
   jobs: Map<string, StateJob>;
-  jobBlockers: Map<string, Map<string, number>>; // jobId -> (blockedBySeqId -> index)
+  jobBlockers: Map<string, Map<string, number>>;
 };
 
 const deepCloneStore = (store: InProcessStore): InProcessStore => ({
@@ -14,7 +14,7 @@ const deepCloneStore = (store: InProcessStore): InProcessStore => ({
   jobBlockers: new Map(Array.from(store.jobBlockers).map(([k, v]) => [k, new Map(v)])),
 });
 
-export type InProcessStateAdapter = StateAdapter<InProcessContext>;
+export type InProcessStateAdapter = StateAdapter<InProcessContext, string>;
 
 export const createInProcessStateAdapter = (): InProcessStateAdapter => {
   const store: InProcessStore = {

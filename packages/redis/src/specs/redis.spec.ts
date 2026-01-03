@@ -17,8 +17,8 @@ import { extendWithRedisNotify } from "../notify-adapter/notify-adapter.redis.sp
 const inProcessInProcessIt = extendWithRedisNotify(
   extendWithCommon(
     extendWithStateInProcess(it) as unknown as TestAPI<{
-      stateAdapter: StateAdapter<{ $test: true }>;
-      flakyStateAdapter: StateAdapter<{ $test: true }>;
+      stateAdapter: StateAdapter<{ $test: true }, string>;
+      flakyStateAdapter: StateAdapter<{ $test: true }, string>;
     }>,
   ),
   import.meta.url,

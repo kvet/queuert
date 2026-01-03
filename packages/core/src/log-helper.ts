@@ -1,5 +1,5 @@
-import { Job } from "./entities/job.js";
 import { JobSequence } from "./entities/job-sequence.js";
+import { Job } from "./entities/job.js";
 import { JobBasicArgs, JobProcessingArgs, JobSequenceArgs, Log } from "./log.js";
 import { StateJob } from "./state-adapter/state-adapter.js";
 
@@ -24,14 +24,14 @@ const mapStateJobToJobSequenceLogArgs = (job: StateJob): JobSequenceArgs => ({
   rootId: job.rootId,
 });
 
-const mapJobSequenceToLogArgs = (seq: JobSequence<any, any, any>): JobSequenceArgs => ({
+const mapJobSequenceToLogArgs = (seq: JobSequence<any, any, any, any>): JobSequenceArgs => ({
   sequenceId: seq.id,
   firstJobTypeName: seq.firstJobTypeName,
   originId: seq.originId,
   rootId: seq.rootId,
 });
 
-const mapJobToJobBasicLogArgs = (job: Job<any, any, any>): JobBasicArgs => ({
+const mapJobToJobBasicLogArgs = (job: Job<any, any, any, any>): JobBasicArgs => ({
   id: job.id,
   typeName: job.typeName,
   originId: job.originId,
@@ -43,12 +43,12 @@ export type LogHelper = {
   jobSequenceCreated: (job: StateJob, options: { input: unknown }) => void;
   jobCreated: (
     job: StateJob,
-    options: { input: unknown; blockers: JobSequence<any, any, any>[] },
+    options: { input: unknown; blockers: JobSequence<any, any, any, any>[] },
   ) => void;
   notifyContextAbsence: (job: StateJob) => void;
   jobCompleted: (
     job: StateJob,
-    options: { output: unknown; continuedWith?: Job<any, any, any>; workerId: string | null },
+    options: { output: unknown; continuedWith?: Job<any, any, any, any>; workerId: string | null },
   ) => void;
   jobSequenceCompleted: (jobSequenceStartJob: StateJob, options: { output: unknown }) => void;
   jobSequenceUnblockedJobs: (

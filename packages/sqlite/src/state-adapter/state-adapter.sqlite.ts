@@ -5,6 +5,13 @@ import {
   type StateJob,
 } from "@queuert/core";
 import { withRetry } from "@queuert/core/internal";
+import {
+  createTemplateApplier,
+  type NamedParameter,
+  type TypedSql,
+  type UnwrapNamedParameters,
+} from "@queuert/typed-sql";
+import { UUID } from "crypto";
 import { SqliteStateProvider } from "../state-provider/state-provider.sqlite.js";
 import { isTransientSqliteError } from "./errors.js";
 import {
@@ -26,6 +33,8 @@ import {
   getNextJobAvailableInMsSql,
   insertJobBlockerSql,
   insertJobSql,
+  jobColumnsPrefixedSelect,
+  jobColumnsSelect,
   migrateSql,
   removeExpiredJobLeaseSql,
   renewJobLeaseSql,
@@ -33,7 +42,6 @@ import {
   scheduleBlockedJobSql,
   updateJobToBlockedSql,
 } from "./sql.js";
-import { type NamedParameter, type TypedSql, type UnwrapNamedParameters } from "@queuert/typed-sql";
 
 const parseJson = (value: string | null): unknown => {
   if (value === null) return null;
@@ -77,13 +85,59 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
 const parseDbJobSequenceRow = (
   row: DbJobSequenceRow,
 ): { rootJob: DbJob; lastSequenceJob: DbJob | null } => {
-  return {
-    rootJob: JSON.parse(row.root_job) as DbJob,
-    lastSequenceJob: row.last_sequence_job ? (JSON.parse(row.last_sequence_job) as DbJob) : null,
+  const rootJob: DbJob = {
+    id: row.id,
+    type_name: row.type_name,
+    input: row.input,
+    output: row.output,
+    root_id: row.root_id,
+    sequence_id: row.sequence_id,
+    origin_id: row.origin_id,
+    status: row.status,
+    created_at: row.created_at,
+    scheduled_at: row.scheduled_at,
+    completed_at: row.completed_at,
+    completed_by: row.completed_by,
+    attempt: row.attempt,
+    last_attempt_at: row.last_attempt_at,
+    last_attempt_error: row.last_attempt_error,
+    leased_by: row.leased_by,
+    leased_until: row.leased_until,
+    deduplication_key: row.deduplication_key,
+    updated_at: row.updated_at,
   };
+
+  const lastSequenceJob: DbJob | null = row.lc_id
+    ? {
+        id: row.lc_id,
+        type_name: row.lc_type_name!,
+        input: row.lc_input,
+        output: row.lc_output,
+        root_id: row.lc_root_id!,
+        sequence_id: row.lc_sequence_id!,
+        origin_id: row.lc_origin_id,
+        status: row.lc_status!,
+        created_at: row.lc_created_at!,
+        scheduled_at: row.lc_scheduled_at!,
+        completed_at: row.lc_completed_at,
+        completed_by: row.lc_completed_by,
+        attempt: row.lc_attempt!,
+        last_attempt_at: row.lc_last_attempt_at,
+        last_attempt_error: row.lc_last_attempt_error,
+        leased_by: row.lc_leased_by,
+        leased_until: row.lc_leased_until,
+        deduplication_key: row.lc_deduplication_key,
+        updated_at: row.lc_updated_at!,
+      }
+    : null;
+
+  return { rootJob, lastSequenceJob };
 };
 
-export const createSqliteStateAdapter = <TContext extends BaseStateAdapterContext>({
+export const createSqliteStateAdapter = <
+  TContext extends BaseStateAdapterContext,
+  TIdType extends string = UUID,
+>({
   stateProvider,
   connectionRetryConfig = {
     maxAttempts: 3,
@@ -92,13 +146,27 @@ export const createSqliteStateAdapter = <TContext extends BaseStateAdapterContex
     maxDelayMs: 10 * 1000,
   },
   isTransientError = isTransientSqliteError,
+  tablePrefix = "queuert_",
+  idType = "TEXT",
+  idGenerator = () => crypto.randomUUID() as TIdType,
 }: {
   stateProvider: SqliteStateProvider<TContext>;
   connectionRetryConfig?: RetryConfig;
   isTransientError?: (error: unknown) => boolean;
-}): StateAdapter<TContext> & {
+  tablePrefix?: string;
+  idType?: string;
+  idGenerator?: () => TIdType;
+}): StateAdapter<TContext, TIdType> & {
   migrateToLatest: (context: TContext) => Promise<void>;
 } => {
+  const applyTemplate = createTemplateApplier(
+    { table_prefix: tablePrefix, id_type: idType },
+    {
+      job_columns: jobColumnsSelect,
+      job_columns_prefixed: jobColumnsPrefixedSelect,
+    },
+  );
+
   const executeTypedSql = async <
     TParams extends
       | readonly [NamedParameter<string, unknown>, ...NamedParameter<string, unknown>[]]
@@ -113,12 +181,15 @@ export const createSqliteStateAdapter = <TContext extends BaseStateAdapterContex
     sql: TypedSql<TParams, TResult>;
   } & (TParams extends readonly []
     ? { params?: undefined }
-    : { params: UnwrapNamedParameters<TParams> })): Promise<TResult> =>
-    withRetry(
-      async () => stateProvider.executeSql<TResult>(context, sql.sql, params, sql.returns),
+    : { params: UnwrapNamedParameters<TParams> })): Promise<TResult> => {
+    const resolvedSql = applyTemplate(sql);
+    return withRetry(
+      async () =>
+        stateProvider.executeSql<TResult>(context, resolvedSql.sql, params, resolvedSql.returns),
       connectionRetryConfig,
       { isRetryableError: isTransientError },
     );
+  };
 
   return {
     provideContext: async (fn) => stateProvider.provideContext(fn),
@@ -126,12 +197,11 @@ export const createSqliteStateAdapter = <TContext extends BaseStateAdapterContex
     assertInTransaction: async (context) => stateProvider.assertInTransaction(context),
 
     migrateToLatest: async (context) => {
-      const db = (context as unknown as { db: { exec: (sql: string) => void } }).db;
-      db.exec(migrateSql.sql);
+      const db = (context as unknown as { db: { exec: (sqlStr: string) => void } }).db;
+      db.exec(applyTemplate(migrateSql).sql);
     },
 
     getJobSequenceById: async ({ context, jobId }) => {
-      // Anonymous ? params: jobId (for sequence_id), jobId (for j.id)
       const [row] = await executeTypedSql({
         context,
         sql: getJobSequenceByIdSql,
@@ -168,21 +238,16 @@ export const createSqliteStateAdapter = <TContext extends BaseStateAdapterContex
       originId,
       deduplication,
     }) => {
-      const newId = crypto.randomUUID();
+      const newId = idGenerator();
       const inputJson = input !== undefined ? JSON.stringify(input) : null;
       const deduplicationKey = deduplication?.key ?? null;
       const deduplicationStrategy = deduplication ? (deduplication.strategy ?? "completed") : null;
       const deduplicationWindowMs = deduplication?.windowMs ?? null;
 
-      // Convert undefined to null for SQLite compatibility
       const sequenceIdOrNull = sequenceId ?? null;
       const originIdOrNull = originId ?? null;
       const rootIdOrNull = rootId ?? null;
 
-      // First, check for existing job (continuation or deduplication)
-      // Anonymous ? params: sequenceId, originId, sequenceId, originId, deduplicationKey, deduplicationKey,
-      //                     deduplicationStrategy, deduplicationStrategy, deduplicationStrategy,
-      //                     deduplicationWindowMs, deduplicationWindowMs
       const [existing] = await executeTypedSql({
         context,
         sql: findExistingJobSql,
@@ -205,8 +270,6 @@ export const createSqliteStateAdapter = <TContext extends BaseStateAdapterContex
         return { job: mapDbJobToStateJob(existing), deduplicated: true };
       }
 
-      // No existing job, insert new one
-      // Anonymous ? params: newId, typeName, inputJson, rootId, newId, sequenceId, newId, originId, deduplicationKey
       const [result] = await executeTypedSql({
         context,
         sql: insertJobSql,
@@ -227,7 +290,6 @@ export const createSqliteStateAdapter = <TContext extends BaseStateAdapterContex
     },
 
     addJobBlockers: async ({ context, jobId, blockedBySequenceIds }) => {
-      // Insert blockers one by one (SQLite doesn't support INSERT inside CTE)
       for (let i = 0; i < blockedBySequenceIds.length; i++) {
         await executeTypedSql({
           context,
@@ -236,7 +298,6 @@ export const createSqliteStateAdapter = <TContext extends BaseStateAdapterContex
         });
       }
 
-      // Check if any blockers are incomplete
       const blockerStatuses = await executeTypedSql({
         context,
         sql: checkBlockersStatusSql,
@@ -246,7 +307,6 @@ export const createSqliteStateAdapter = <TContext extends BaseStateAdapterContex
       const hasIncompleteBlockers = blockerStatuses.some((b) => b.blocker_status !== "completed");
 
       if (hasIncompleteBlockers) {
-        // Update job to blocked status
         const [updatedJob] = await executeTypedSql({
           context,
           sql: updateJobToBlockedSql,
@@ -257,7 +317,6 @@ export const createSqliteStateAdapter = <TContext extends BaseStateAdapterContex
         }
       }
 
-      // Return the job as-is
       const [job] = await executeTypedSql({
         context,
         sql: getJobByIdForBlockersSql,
@@ -266,14 +325,12 @@ export const createSqliteStateAdapter = <TContext extends BaseStateAdapterContex
       return mapDbJobToStateJob(job);
     },
     scheduleBlockedJobs: async ({ context, blockedBySequenceId }) => {
-      // Find jobs that are ready to be unblocked
       const readyJobs = await executeTypedSql({
         context,
         sql: findReadyJobsSql,
         params: [blockedBySequenceId],
       });
 
-      // Update each ready job
       const scheduledJobs: StateJob[] = [];
       for (const { job_id } of readyJobs) {
         const [job] = await executeTypedSql({
@@ -302,7 +359,7 @@ export const createSqliteStateAdapter = <TContext extends BaseStateAdapterContex
           lastSequenceJob && lastSequenceJob.id !== rootJob.id
             ? mapDbJobToStateJob(lastSequenceJob)
             : undefined,
-        ] as [StateJob, StateJob | undefined];
+        ];
       });
     },
 
@@ -324,7 +381,6 @@ export const createSqliteStateAdapter = <TContext extends BaseStateAdapterContex
       return job ? mapDbJobToStateJob(job) : undefined;
     },
     renewJobLease: async ({ context, jobId, workerId, leaseDurationMs }) => {
-      // Anonymous ? params: leased_by, lease_duration_ms, id
       const [job] = await executeTypedSql({
         context,
         sql: renewJobLeaseSql,
@@ -334,7 +390,6 @@ export const createSqliteStateAdapter = <TContext extends BaseStateAdapterContex
       return mapDbJobToStateJob(job);
     },
     rescheduleJob: async ({ context, jobId, afterMs, error }) => {
-      // Anonymous ? params: delay_ms, error, id
       const [job] = await executeTypedSql({
         context,
         sql: rescheduleJobSql,
@@ -344,7 +399,6 @@ export const createSqliteStateAdapter = <TContext extends BaseStateAdapterContex
       return mapDbJobToStateJob(job);
     },
     completeJob: async ({ context, jobId, output, workerId }) => {
-      // Anonymous ? params: completed_by, output, id
       const [job] = await executeTypedSql({
         context,
         sql: completeJobSql,
@@ -363,13 +417,15 @@ export const createSqliteStateAdapter = <TContext extends BaseStateAdapterContex
     },
     getExternalBlockers: async ({ context, rootIds }) => {
       const rootIdsJson = JSON.stringify(rootIds);
-      // Anonymous ? params: rootIdsJson (for first json_each), rootIdsJson (for second json_each)
       const blockers = await executeTypedSql({
         context,
         sql: getExternalBlockersSql,
         params: [rootIdsJson, rootIdsJson],
       });
-      return blockers.map((b) => ({ jobId: b.job_id, blockedRootId: b.blocked_root_id }));
+      return blockers.map((b) => ({
+        jobId: b.job_id as TIdType,
+        blockedRootId: b.blocked_root_id as TIdType,
+      }));
     },
     deleteJobsByRootIds: async ({ context, rootIds }) => {
       const jobs = await executeTypedSql({
@@ -398,5 +454,7 @@ export const createSqliteStateAdapter = <TContext extends BaseStateAdapterContex
   };
 };
 
-export type SqliteStateAdapter<TContext extends BaseStateAdapterContext = BaseStateAdapterContext> =
-  StateAdapter<TContext>;
+export type SqliteStateAdapter<TContext extends BaseStateAdapterContext, TJobId> = StateAdapter<
+  TContext,
+  TJobId
+>;
