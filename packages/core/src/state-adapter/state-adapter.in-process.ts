@@ -1,8 +1,6 @@
 import { DeduplicationOptions, StateAdapter, StateJob } from "./state-adapter.js";
 
-const inTransactionSymbol = Symbol("inTransaction");
-
-export type InProcessContext = {};
+export type InProcessContext = { inTransaction?: boolean };
 
 type InProcessStore = {
   jobs: Map<string, StateJob>;
@@ -101,15 +99,14 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
     },
 
     runInTransaction: async (context, fn) => {
-      // TODO: Rework
-      if ((context as Record<symbol, boolean>)[inTransactionSymbol]) {
+      if (context.inTransaction) {
         return fn(context);
       }
 
       await acquireLock();
 
       const snapshot = deepCloneStore(store);
-      const txContext = { [inTransactionSymbol]: true } as InProcessContext;
+      const txContext: InProcessContext = { inTransaction: true };
 
       try {
         return await fn(txContext);
@@ -123,7 +120,7 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
     },
 
     assertInTransaction: async (context) => {
-      if (!(context as Record<symbol, boolean>)[inTransactionSymbol]) {
+      if (!context.inTransaction) {
         throw new Error("Not in transaction");
       }
     },

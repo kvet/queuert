@@ -14,7 +14,6 @@
 
 - MongoDB state adapter - Extends "use your existing database" promise; ACID transactions supported since MongoDB 4.0
 - Hard timeout (worker threads) - True isolation with `terminate()`; enables memory limits and untrusted code sandboxing
-- Rework InProcess StateAdapter context handling
 
 # ???
 
