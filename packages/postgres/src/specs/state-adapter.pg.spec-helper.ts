@@ -4,12 +4,8 @@ import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testconta
 import { createHash } from "crypto";
 import { Client, Pool } from "pg";
 import { beforeAll, type TestAPI } from "vitest";
-import {
-  createPgPoolProvider,
-  PgPoolContext,
-  PgPoolProvider,
-} from "../state-provider/state-provider.pg-pool.js";
-import { createPgStateAdapter } from "./state-adapter.pg.js";
+import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.js";
+import { createPgPoolProvider, PgPoolContext, PgPoolProvider } from "./state-provider.pg-pool.js";
 
 const CONTAINER_NAME = "queuert-postgres-test";
 

@@ -3,8 +3,8 @@ import { withContainerLock } from "@queuert/testcontainers";
 import { RedisContainer, type StartedRedisContainer } from "@testcontainers/redis";
 import { createClient, RedisClientType } from "redis";
 import { beforeAll, type TestAPI } from "vitest";
-import { createNodeRedisNotifyProvider } from "../notify-provider/notify-provider.node-redis.js";
-import { createRedisNotifyAdapter } from "./notify-adapter.redis.js";
+import { createRedisNotifyAdapter } from "../notify-adapter/notify-adapter.redis.js";
+import { createNodeRedisNotifyProvider } from "./notify-provider.node-redis.js";
 
 const CONTAINER_NAME = "queuert-redis-test";
 

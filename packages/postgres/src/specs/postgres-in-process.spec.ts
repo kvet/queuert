@@ -13,7 +13,7 @@ import {
   workerTestSuite,
 } from "@queuert/core/testing";
 import { describe, it, TestAPI } from "vitest";
-import { extendWithStatePostgres } from "../state-adapter/state-adapter.pg.spec-helper.js";
+import { extendWithStatePostgres } from "./state-adapter.pg.spec-helper.js";
 
 const postgresInProcessIt = extendWithInProcessNotify(
   extendWithCommon(

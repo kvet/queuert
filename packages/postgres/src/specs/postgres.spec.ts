@@ -2,8 +2,8 @@ import { createInProcessNotifyAdapter, createQueuert, defineUnionJobTypes } from
 import { UUID } from "crypto";
 import { it as baseIt, expectTypeOf, vi } from "vitest";
 import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.js";
-import { createPgPoolProvider } from "../state-provider/state-provider.pg-pool.js";
-import { extendWithStatePostgres } from "../testing.js";
+import { extendWithStatePostgres } from "./state-adapter.pg.spec-helper.js";
+import { createPgPoolProvider } from "./state-provider.pg-pool.js";
 
 const it = extendWithStatePostgres(baseIt, import.meta.url);
 

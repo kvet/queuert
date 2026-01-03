@@ -1,5 +1,5 @@
 import { RedisClientType } from "redis";
-import type { RedisNotifyProvider } from "./notify-provider.redis.js";
+import type { RedisNotifyProvider } from "../notify-provider/notify-provider.redis.js";
 
 export type RedisContext = { client: RedisClientType };
 
@@ -21,15 +21,16 @@ export const createNodeRedisNotifyProvider = ({
     }
     if (type === "brpop" && brpopClient) {
       return fn({ client: brpopClient });
-    } else {
+    } else if (type === "brpop") {
       const createdBrpopClient = client.duplicate();
       await createdBrpopClient.connect();
       try {
         return await fn({ client: createdBrpopClient });
       } finally {
-        await createdBrpopClient.disconnect();
+        await createdBrpopClient.close();
       }
     }
+    throw new Error(`Unknown context type: ${type}`);
   },
   publish: async ({ client }, channel, message) => {
     await client.publish(channel, message);

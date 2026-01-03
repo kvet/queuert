@@ -2,12 +2,12 @@ import { type StateAdapter } from "@queuert/core";
 import Database from "better-sqlite3";
 import { UUID } from "crypto";
 import { type TestAPI } from "vitest";
+import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
 import {
   BetterSqlite3Provider,
   createBetterSqlite3Provider,
   SqliteContext,
-} from "../state-provider/state-provider.better-sqlite3.js";
-import { createSqliteStateAdapter } from "./state-adapter.sqlite.js";
+} from "./state-provider.better-sqlite3.js";
 
 export type SqliteStateAdapter = StateAdapter<SqliteContext, UUID>;
 

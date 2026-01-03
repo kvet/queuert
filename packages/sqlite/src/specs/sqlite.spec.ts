@@ -2,8 +2,8 @@ import { createInProcessNotifyAdapter, createQueuert, defineUnionJobTypes } from
 import { UUID } from "crypto";
 import { it as baseIt, expectTypeOf, vi } from "vitest";
 import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
-import { createBetterSqlite3Provider } from "../state-provider/state-provider.better-sqlite3.js";
 import { extendWithStateSqlite } from "../testing.js";
+import { createBetterSqlite3Provider } from "./state-provider.better-sqlite3.js";
 
 const it = extendWithStateSqlite(baseIt);
 

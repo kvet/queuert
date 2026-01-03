@@ -13,7 +13,7 @@ import {
   workerTestSuite,
 } from "@queuert/core/testing";
 import { describe, it, TestAPI } from "vitest";
-import { extendWithStateSqlite } from "../state-adapter/state-adapter.sqlite.spec-helper.js";
+import { extendWithStateSqlite } from "./state-adapter.sqlite.spec-helper.js";
 
 const sqliteInProcessIt = extendWithInProcessNotify(
   extendWithCommon(

@@ -1,1 +1,1 @@
-export { extendWithStateSqlite } from "./state-adapter/state-adapter.sqlite.spec-helper.js";
+export { extendWithStateSqlite } from "./specs/state-adapter.sqlite.spec-helper.js";

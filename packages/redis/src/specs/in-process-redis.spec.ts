@@ -12,7 +12,7 @@ import {
   workerTestSuite,
 } from "@queuert/core/testing";
 import { describe, it, TestAPI } from "vitest";
-import { extendWithRedisNotify } from "../notify-adapter/notify-adapter.redis.spec-helper.js";
+import { extendWithRedisNotify } from "./notify-adapter.redis.spec-helper.js";
 
 const inProcessInProcessIt = extendWithRedisNotify(
   extendWithCommon(
