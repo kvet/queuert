@@ -44,13 +44,10 @@ importers:
         version: link:../core
       '@queuert/testcontainers':
         specifier: workspace:*
-        version: link:../testcontainers
+        version: file:packages/testcontainers(@types/node@24.10.4)(jiti@2.6.1)(yaml@2.8.2)
       '@queuert/typed-sql':
         specifier: workspace:*
         version: link:../typed-sql
-      '@testcontainers/postgresql':
-        specifier: ^11.10.0
-        version: 11.10.0
       '@types/node':
         specifier: ^24.10.4
         version: 24.10.4
@@ -60,9 +57,6 @@ importers:
       pg:
         specifier: ^8.16.3
         version: 8.16.3
-      testcontainers:
-        specifier: ^11.10.0
-        version: 11.10.0
       tsdown:
         specifier: ^0.18.3
         version: 0.18.3(typescript@5.9.3)
@@ -80,19 +74,13 @@ importers:
         version: link:../core
       '@queuert/testcontainers':
         specifier: workspace:*
-        version: link:../testcontainers
-      '@testcontainers/redis':
-        specifier: ^11.10.0
-        version: 11.11.0
+        version: file:packages/testcontainers(@types/node@24.10.4)(jiti@2.6.1)(yaml@2.8.2)
       '@types/node':
         specifier: ^24.10.4
         version: 24.10.4
       redis:
         specifier: ^5.0.0
         version: 5.10.0
-      testcontainers:
-        specifier: ^11.10.0
-        version: 11.10.0
       tsdown:
         specifier: ^0.18.3
         version: 0.18.3(typescript@5.9.3)
@@ -132,15 +120,27 @@ importers:
 
   packages/testcontainers:
     dependencies:
+      '@testcontainers/postgresql':
+        specifier: ^11.10.0
+        version: 11.10.0
+      '@testcontainers/redis':
+        specifier: ^11.10.0
+        version: 11.11.0
       dockerode:
         specifier: ^4.0.6
         version: 4.0.9
+      pg:
+        specifier: ^8.16.3
+        version: 8.16.3
       proper-lockfile:
         specifier: ^4.1.2
         version: 4.1.2
       testcontainers:
         specifier: ^11.10.0
         version: 11.10.0
+      vitest:
+        specifier: ^4.0.16
+        version: 4.0.16(@types/node@24.10.4)(jiti@2.6.1)(yaml@2.8.2)
     devDependencies:
       '@types/dockerode':
         specifier: ^3.3.38
@@ -148,6 +148,9 @@ importers:
       '@types/node':
         specifier: ^24.10.4
         version: 24.10.4
+      '@types/pg':
+        specifier: ^8.16.0
+        version: 8.16.0
       '@types/proper-lockfile':
         specifier: ^4.1.4
         version: 4.1.4
@@ -538,6 +541,9 @@ packages:
 
   '@quansync/fs@1.0.0':
     resolution: {integrity: sha512-4TJ3DFtlf1L5LDMaM6CanJ/0lckGNtJcMjQ1NAV6zDmA0tEHKZtxNKin8EgPaVX1YzljbxckyT2tJrpQKAtngQ==}
+
+  '@queuert/testcontainers@file:packages/testcontainers':
+    resolution: {directory: packages/testcontainers, type: directory}
 
   '@redis/bloom@5.10.0':
     resolution: {integrity: sha512-doIF37ob+l47n0rkpRNgU8n4iacBlKM9xLiP1LtTZTvz8TloJB8qx/MgvhMhKdYG+CvCY2aPBnN2706izFn/4A==}
@@ -2071,6 +2077,42 @@ snapshots:
     dependencies:
       quansync: 1.0.0
 
+  '@queuert/testcontainers@file:packages/testcontainers(@types/node@24.10.4)(jiti@2.6.1)(yaml@2.8.2)':
+    dependencies:
+      '@testcontainers/postgresql': 11.10.0
+      '@testcontainers/redis': 11.11.0
+      dockerode: 4.0.9
+      pg: 8.16.3
+      proper-lockfile: 4.1.2
+      testcontainers: 11.11.0
+      vitest: 4.0.16(@types/node@24.10.4)(jiti@2.6.1)(yaml@2.8.2)
+    transitivePeerDependencies:
+      - '@edge-runtime/vm'
+      - '@opentelemetry/api'
+      - '@types/node'
+      - '@vitest/browser-playwright'
+      - '@vitest/browser-preview'
+      - '@vitest/browser-webdriverio'
+      - '@vitest/ui'
+      - bare-abort-controller
+      - bare-buffer
+      - happy-dom
+      - jiti
+      - jsdom
+      - less
+      - lightningcss
+      - msw
+      - pg-native
+      - react-native-b4a
+      - sass
+      - sass-embedded
+      - stylus
+      - sugarss
+      - supports-color
+      - terser
+      - tsx
+      - yaml
+
   '@redis/bloom@5.10.0(@redis/client@5.10.0)':
     dependencies:
       '@redis/client': 5.10.0
@@ -2204,7 +2246,7 @@ snapshots:
 
   '@testcontainers/postgresql@11.10.0':
     dependencies:
-      testcontainers: 11.10.0
+      testcontainers: 11.11.0
     transitivePeerDependencies:
       - bare-abort-controller
       - bare-buffer

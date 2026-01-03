@@ -1,42 +1,23 @@
 import type { NotifyAdapter } from "@queuert/core";
-import { withContainerLock } from "@queuert/testcontainers";
-import { RedisContainer, type StartedRedisContainer } from "@testcontainers/redis";
 import { createClient, RedisClientType } from "redis";
-import { beforeAll, type TestAPI } from "vitest";
+import { type TestAPI } from "vitest";
 import { createRedisNotifyAdapter } from "../notify-adapter/notify-adapter.redis.js";
 import { createNodeRedisNotifyProvider } from "./notify-provider.node-redis.js";
 
-const CONTAINER_NAME = "queuert-redis-test";
-
-export const extendWithRedisNotify = <T>(
+export const extendWithRedisNotify = <
+  T extends {
+    redisConnectionUrl: string;
+  },
+>(
   api: TestAPI<T>,
-  _reuseId: string,
 ): TestAPI<T & { notifyAdapter: NotifyAdapter }> => {
-  let container: StartedRedisContainer;
-
-  beforeAll(async () => {
-    container = await withContainerLock({
-      containerName: CONTAINER_NAME,
-      start: async () =>
-        new RedisContainer("redis:7")
-          .withName(CONTAINER_NAME)
-          .withLabels({
-            label: CONTAINER_NAME,
-          })
-          .withExposedPorts(6379)
-          .withReuse()
-          .start(),
-    });
-  }, 60_000);
-
   return api.extend<{
     notifyAdapter: NotifyAdapter;
   }>({
     notifyAdapter: [
-      async ({}, use) => {
-        const connectionUrl = container.getConnectionUrl();
-        const client = createClient({ url: connectionUrl }) as RedisClientType;
-        const subscribeClient = createClient({ url: connectionUrl }) as RedisClientType;
+      async ({ redisConnectionUrl }, use) => {
+        const client = createClient({ url: redisConnectionUrl }) as RedisClientType;
+        const subscribeClient = createClient({ url: redisConnectionUrl }) as RedisClientType;
         await client.connect();
         await subscribeClient.connect();
 

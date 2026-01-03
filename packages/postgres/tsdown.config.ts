@@ -8,5 +8,5 @@ export default defineConfig({
     devExports: true,
   },
   // TODO: rework later
-  external: ["vitest", "pg", "testcontainers", "@testcontainers/postgresql", "dockerode"],
+  external: ["vitest", "pg", "@queuert/testcontainers"],
 });

@@ -11,17 +11,20 @@ import {
   workerlessCompletionTestSuite,
   workerTestSuite,
 } from "@queuert/core/testing";
+import { extendWithRedis } from "@queuert/testcontainers";
 import { describe, it, TestAPI } from "vitest";
 import { extendWithRedisNotify } from "./notify-adapter.redis.spec-helper.js";
 
 const inProcessInProcessIt = extendWithRedisNotify(
-  extendWithCommon(
-    extendWithStateInProcess(it) as unknown as TestAPI<{
-      stateAdapter: StateAdapter<{ $test: true }, string>;
-      flakyStateAdapter: StateAdapter<{ $test: true }, string>;
-    }>,
+  extendWithRedis(
+    extendWithCommon(
+      extendWithStateInProcess(it) as unknown as TestAPI<{
+        stateAdapter: StateAdapter<{ $test: true }, string>;
+        flakyStateAdapter: StateAdapter<{ $test: true }, string>;
+      }>,
+    ),
+    import.meta.url,
   ),
-  import.meta.url,
 );
 
 describe("Process", () => {

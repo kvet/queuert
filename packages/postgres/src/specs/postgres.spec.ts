@@ -1,13 +1,18 @@
 import { createInProcessNotifyAdapter, createQueuert, defineUnionJobTypes } from "@queuert/core";
+import { extendWithPostgres } from "@queuert/testcontainers";
 import { UUID } from "crypto";
+import { Pool } from "pg";
 import { it as baseIt, expectTypeOf, vi } from "vitest";
 import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.js";
-import { extendWithStatePostgres } from "./state-adapter.pg.spec-helper.js";
 import { createPgPoolProvider } from "./state-provider.pg-pool.js";
 
-const it = extendWithStatePostgres(baseIt, import.meta.url);
+const it = extendWithPostgres(baseIt, import.meta.url);
 
-it("should infer types correctly with custom ID", async ({ pool }) => {
+it("should infer types correctly with custom ID", async ({ postgresConnectionString }) => {
+  const pool = new Pool({
+    connectionString: postgresConnectionString,
+  });
+
   const stateProvider = createPgPoolProvider({ pool });
   const stateAdapter = createPgStateAdapter({
     stateProvider,
@@ -67,4 +72,6 @@ it("should infer types correctly with custom ID", async ({ pool }) => {
   await queuert.waitForJobSequenceCompletion({ ...jobSequence, timeoutMs: 1000 });
 
   await stopWorker();
+
+  await pool.end();
 });

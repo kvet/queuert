@@ -7,5 +7,5 @@ export default defineConfig({
   exports: {
     devExports: true,
   },
-  external: ["vitest", "redis", "testcontainers", "@testcontainers/redis", "dockerode"],
+  external: ["vitest", "redis", "@queuert/testcontainers"],
 });

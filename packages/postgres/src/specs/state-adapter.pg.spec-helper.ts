@@ -1,19 +1,17 @@
 import { type StateAdapter } from "@queuert/core";
-import { withContainerLock } from "@queuert/testcontainers";
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
-import { createHash } from "crypto";
-import { Client, Pool } from "pg";
-import { beforeAll, type TestAPI } from "vitest";
+import { Pool } from "pg";
+import { type TestAPI } from "vitest";
 import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.js";
 import { createPgPoolProvider, PgPoolContext, PgPoolProvider } from "./state-provider.pg-pool.js";
 
-const CONTAINER_NAME = "queuert-postgres-test";
-
 export type PgStateAdapter = StateAdapter<PgPoolContext, string>;
 
-export const extendWithStatePostgres = <T>(
+export const extendWithStatePostgres = <
+  T extends {
+    postgresConnectionString: string;
+  },
+>(
   api: TestAPI<T>,
-  reuseId: string,
 ): TestAPI<
   T & {
     pool: Pool;
@@ -21,26 +19,6 @@ export const extendWithStatePostgres = <T>(
     flakyStateAdapter: PgStateAdapter;
   }
 > => {
-  const normalizedReuseId = createHash("sha1").update(reuseId).digest("hex");
-
-  let container: StartedPostgreSqlContainer;
-
-  beforeAll(async () => {
-    container = await withContainerLock({
-      containerName: CONTAINER_NAME,
-      start: async () =>
-        new PostgreSqlContainer("postgres:14")
-          .withName(CONTAINER_NAME)
-          .withDatabase("base_database_for_tests")
-          .withLabels({
-            label: CONTAINER_NAME,
-          })
-          .withExposedPorts(5432)
-          .withReuse()
-          .start(),
-    });
-  }, 60_000);
-
   return api.extend<{
     pool: Pool;
     _dbMigrateToLatest: void;
@@ -51,25 +29,9 @@ export const extendWithStatePostgres = <T>(
     flakyStateAdapter: PgStateAdapter;
   }>({
     pool: [
-      // eslint-disable-next-line no-empty-pattern
-      async ({}, use) => {
-        const client = new Client({
-          connectionString: container.getConnectionUri(),
-        });
-
-        await client.connect();
-
-        await client.query(`DROP DATABASE IF EXISTS "${normalizedReuseId}";`);
-        await client.query(
-          `CREATE DATABASE "${normalizedReuseId}" WITH OWNER "${container.getUsername()}" TEMPLATE template0`,
-        );
-
-        await client.end();
-
+      async ({ postgresConnectionString }, use) => {
         const pool = new Pool({
-          connectionString: container
-            .getConnectionUri()
-            .replace("base_database_for_tests", normalizedReuseId),
+          connectionString: postgresConnectionString,
         });
 
         await use(pool);

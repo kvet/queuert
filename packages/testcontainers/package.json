@@ -14,13 +14,18 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@testcontainers/postgresql": "^11.10.0",
+    "@testcontainers/redis": "^11.10.0",
     "dockerode": "^4.0.6",
+    "pg": "^8.16.3",
     "proper-lockfile": "^4.1.2",
-    "testcontainers": "^11.10.0"
+    "testcontainers": "^11.10.0",
+    "vitest": "^4.0.16"
   },
   "devDependencies": {
     "@types/dockerode": "^3.3.38",
     "@types/node": "^24.10.4",
+    "@types/pg": "^8.16.0",
     "@types/proper-lockfile": "^4.1.4",
     "typescript": "^5.9.3"
   }

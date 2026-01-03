@@ -1,1 +1,2 @@
-export { withContainerLock } from "./with-container-lock.js";
+export { extendWithPostgres } from "./postgres.js";
+export { extendWithRedis } from "./redis.js";

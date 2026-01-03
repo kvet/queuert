@@ -40,10 +40,8 @@
   "devDependencies": {
     "@queuert/core": "workspace:*",
     "@queuert/testcontainers": "workspace:*",
-    "@testcontainers/redis": "^11.10.0",
     "@types/node": "^24.10.4",
     "redis": "^5.0.0",
-    "testcontainers": "^11.10.0",
     "tsdown": "^0.18.3",
     "typescript": "^5.9.3",
     "vitest": "^4.0.16"

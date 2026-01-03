@@ -12,12 +12,13 @@ import {
   workerlessCompletionTestSuite,
   workerTestSuite,
 } from "@queuert/core/testing";
+import { extendWithPostgres } from "@queuert/testcontainers";
 import { describe, it, TestAPI } from "vitest";
 import { extendWithStatePostgres } from "./state-adapter.pg.spec-helper.js";
 
 const postgresInProcessIt = extendWithInProcessNotify(
   extendWithCommon(
-    extendWithStatePostgres(it, import.meta.url) as unknown as TestAPI<{
+    extendWithStatePostgres(extendWithPostgres(it, import.meta.url)) as unknown as TestAPI<{
       stateAdapter: StateAdapter<{ $test: true }, string>;
       flakyStateAdapter: StateAdapter<{ $test: true }, string>;
     }>,
