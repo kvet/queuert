@@ -5,12 +5,13 @@
   "license": "MIT",
   "author": "kvet",
   "scripts": {
+    "build": "pnpm -r build",
     "lint": "oxlint --type-aware",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check",
     "test": "vitest",
     "typecheck": "pnpm -r typecheck",
-    "check": "pnpm lint && pnpm fmt:check && pnpm typecheck && vitest --run",
+    "check": "pnpm fmt:check && pnpm lint && pnpm build && pnpm typecheck && vitest --run",
     "modules:clean": "rm -rf $(find . -name node_modules -type d)"
   },
   "devDependencies": {
