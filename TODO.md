@@ -1,8 +1,8 @@
 # Medium term
 
+- Notify adapter resiliency
 - Deferred start - Use `scheduledAt` field; job created transactionally but not processable until specified time
 - Soft timeout - Signal via AbortSignal + stop lease renewal; cooperative but covers most cases
-- Documentation
 - Metrics collection (Prometheus, OTEL)
 
 # Long term

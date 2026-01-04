@@ -1,5 +1,5 @@
-# Queuert
+# @queuert/postgres
 
-Core package for Queuert - a TypeScript library for managing job queues with database-backed persistence.
+PostgreSQL state adapter for Queuert job queue system.
 
 For full documentation and usage examples, see the [main repository README](https://github.com/kvet/queuert#readme).

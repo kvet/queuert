@@ -409,3 +409,4 @@ describe("MyFeature", () => {
 - Update documentation in README.md if there were changes to public API
 - Update knowledge base in CLAUDE.md if there were architectural changes
 - Update todos in TODO.md if any were addressed
+- Use one-liner commit messages (no multi-line descriptions)

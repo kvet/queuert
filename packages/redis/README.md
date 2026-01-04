@@ -1,5 +1,5 @@
-# Queuert
+# @queuert/redis
 
-Core package for Queuert - a TypeScript library for managing job queues with database-backed persistence.
+Redis notify adapter for Queuert job queue system.
 
 For full documentation and usage examples, see the [main repository README](https://github.com/kvet/queuert#readme).
