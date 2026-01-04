@@ -1,0 +1,33 @@
+name: Setup repo
+description: Installs dependencies and prepares the environment for execution
+
+inputs:
+  install_dependencies:
+    description: Whether to install dependencies
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@v4
+      name: Install pnpm
+      with:
+        run_install: false
+
+    - name: Install Node.js
+      if: inputs.install_dependencies == 'true'
+      uses: actions/setup-node@v4
+      with:
+        cache: pnpm
+        node-version: 24.11.1
+    - name: Install Node.js
+      if: inputs.install_dependencies == 'false'
+      uses: actions/setup-node@v4
+      with:
+        node-version: 24.11.1
+
+    - name: Install dependencies
+      if: inputs.install_dependencies == 'true'
+      shell: bash
+      run: pnpm install --frozen-lockfile

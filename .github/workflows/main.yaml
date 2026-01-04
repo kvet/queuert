@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  combined-checks:
+    name: Checks
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup-repo
+
+      - name: Check
+        run: pnpm check
+
+  # PR CHECKS
+
+  required-collector-job:
+    needs: [combined-checks]
+    if: github.event_name == 'pull_request' && always()
+
+    name: Required Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for failures
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: echo "One of the dependent jobs have failed. You may need to re-run it." && exit 1
+
+  # END PR CHECKS
