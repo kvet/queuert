@@ -17,7 +17,7 @@ jobs:
 
     permissions:
       contents: read
-      id-token: write
+      id-token: write  # Required for OIDC trusted publishing
 
     steps:
       - uses: actions/checkout@v4
@@ -32,6 +32,4 @@ jobs:
         run: pnpm check
 
       - name: Publish packages
-        run: pnpm -r publish --access public --no-git-checks
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: pnpm -r publish --access public --no-git-checks --provenance
