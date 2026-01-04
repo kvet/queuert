@@ -1,6 +1,6 @@
 {
   "name": "@queuert/redis",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Redis notify adapter for Queuert job queue system",
   "keywords": [
     "background-jobs",
@@ -34,6 +34,7 @@
     }
   },
   "scripts": {
+    "prepublishOnly": "pnpm build",
     "build": "tsdown",
     "typecheck": "tsc --noEmit"
   },

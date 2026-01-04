@@ -1,6 +1,6 @@
 {
   "name": "@queuert/sqlite",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "SQLite adapter for Queuert job queue system",
   "keywords": [
     "background-jobs",
@@ -33,6 +33,7 @@
     }
   },
   "scripts": {
+    "prepublishOnly": "pnpm build",
     "build": "tsdown",
     "typecheck": "tsc --noEmit"
   },
