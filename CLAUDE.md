@@ -8,7 +8,7 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 Queuert is a monorepo with the following packages:
 
-### `@queuert/core`
+### `queuert`
 
 Core abstractions, interfaces, and in-memory implementations for testing.
 
@@ -29,7 +29,7 @@ PostgreSQL state adapter implementation. Users provide their own `pg` client.
 
 **Dependencies:**
 
-- `@queuert/core` as peer dependency
+- `queuert` as peer dependency
 
 ### `@queuert/sqlite`
 
@@ -42,7 +42,7 @@ SQLite state adapter implementation using better-sqlite3.
 
 **Dependencies:**
 
-- `@queuert/core` as peer dependency
+- `queuert` as peer dependency
 
 ### `@queuert/redis`
 
@@ -55,7 +55,7 @@ Redis notify adapter implementation for distributed pub/sub notifications.
 
 **Dependencies:**
 
-- `@queuert/core` as peer dependency
+- `queuert` as peer dependency
 
 ## Core Concepts
 
@@ -387,7 +387,7 @@ describe("MyFeature", () => {
 
 **File organization:**
 
-- `packages/core/src/suites/` - Reusable test suite files (`*.test-suite.ts`) and shared context helpers (`spec-context.spec-helper.ts`), exported via `@queuert/core/testing`
+- `packages/core/src/suites/` - Reusable test suite files (`*.test-suite.ts`) and shared context helpers (`spec-context.spec-helper.ts`), exported via `queuert/testing`
 - `packages/core/src/specs/` - Spec files (`*.spec.ts`) that run test suites with in-process adapters
 - `packages/postgres/src/specs/` - Spec files that run the same test suites with PostgreSQL adapter
 - `packages/sqlite/src/specs/` - Spec files that run the same test suites with SQLite adapter

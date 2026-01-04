@@ -1,4 +1,4 @@
-import { type StateAdapter } from "@queuert/core";
+import { type StateAdapter } from "queuert";
 import {
   blockerSequencesTestSuite,
   extendWithCommon,
@@ -11,7 +11,7 @@ import {
   waitSequenceCompletionTestSuite,
   workerlessCompletionTestSuite,
   workerTestSuite,
-} from "@queuert/core/testing";
+} from "queuert/testing";
 import { describe, it, TestAPI } from "vitest";
 import { extendWithStateSqlite } from "./state-adapter.sqlite.spec-helper.js";
 

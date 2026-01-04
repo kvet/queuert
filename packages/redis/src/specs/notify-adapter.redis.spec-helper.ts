@@ -1,4 +1,4 @@
-import type { NotifyAdapter } from "@queuert/core";
+import type { NotifyAdapter } from "queuert";
 import { createClient, RedisClientType } from "redis";
 import { type TestAPI } from "vitest";
 import { createRedisNotifyAdapter } from "../notify-adapter/notify-adapter.redis.js";

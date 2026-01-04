@@ -1,4 +1,4 @@
-import { createInProcessNotifyAdapter, createQueuert, defineUnionJobTypes } from "@queuert/core";
+import { createInProcessNotifyAdapter, createQueuert, defineUnionJobTypes } from "queuert";
 import { extendWithPostgres } from "@queuert/testcontainers";
 import { UUID } from "crypto";
 import { Pool } from "pg";

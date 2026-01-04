@@ -3,8 +3,8 @@ import {
   type RetryConfig,
   type StateAdapter,
   type StateJob,
-} from "@queuert/core";
-import { withRetry } from "@queuert/core/internal";
+} from "queuert";
+import { withRetry } from "queuert/internal";
 import {
   createTemplateApplier,
   type NamedParameter,

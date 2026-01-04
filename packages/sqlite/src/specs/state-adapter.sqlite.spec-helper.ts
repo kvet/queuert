@@ -1,4 +1,4 @@
-import { type StateAdapter } from "@queuert/core";
+import { type StateAdapter } from "queuert";
 import Database from "better-sqlite3";
 import { UUID } from "crypto";
 import { type TestAPI } from "vitest";

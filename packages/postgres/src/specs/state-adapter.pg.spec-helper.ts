@@ -1,4 +1,4 @@
-import { type StateAdapter } from "@queuert/core";
+import { type StateAdapter } from "queuert";
 import { Pool } from "pg";
 import { type TestAPI } from "vitest";
 import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.js";

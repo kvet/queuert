@@ -1,4 +1,4 @@
-import { type DeduplicationStrategy } from "@queuert/core";
+import { type DeduplicationStrategy } from "queuert";
 import { type NamedParameter, sql, type TypedSql } from "@queuert/typed-sql";
 
 export type DbJob = {

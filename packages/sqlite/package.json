@@ -37,16 +37,16 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@queuert/core": "workspace:*",
     "@queuert/typed-sql": "workspace:*",
     "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^24.10.4",
     "better-sqlite3": "^11.0.0",
+    "queuert": "workspace:*",
     "tsdown": "^0.18.3",
     "typescript": "^5.9.3",
     "vitest": "^4.0.16"
   },
   "peerDependencies": {
-    "@queuert/core": "workspace:*"
+    "queuert": "workspace:*"
   }
 }

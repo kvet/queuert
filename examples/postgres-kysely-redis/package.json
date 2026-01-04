@@ -15,7 +15,6 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@queuert/core": "workspace:*",
     "@queuert/postgres": "workspace:*",
     "@queuert/redis": "workspace:*",
     "@testcontainers/postgresql": "^11.10.0",
@@ -24,6 +23,7 @@
     "@types/pg": "^8.16.0",
     "kysely": "^0.28.9",
     "pg": "^8.16.3",
+    "queuert": "workspace:*",
     "redis": "^5.0.0",
     "testcontainers": "^11.10.0",
     "tsx": "^4.21.0",

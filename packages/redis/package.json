@@ -38,15 +38,15 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@queuert/core": "workspace:*",
     "@queuert/testcontainers": "workspace:*",
     "@types/node": "^24.10.4",
+    "queuert": "workspace:*",
     "redis": "^5.0.0",
     "tsdown": "^0.18.3",
     "typescript": "^5.9.3",
     "vitest": "^4.0.16"
   },
   "peerDependencies": {
-    "@queuert/core": "workspace:*"
+    "queuert": "workspace:*"
   }
 }

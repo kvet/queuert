@@ -1,5 +1,5 @@
-import type { NotifyAdapter } from "@queuert/core";
-import type { Listener, ListenResult } from "@queuert/core/internal";
+import type { NotifyAdapter } from "queuert";
+import type { Listener, ListenResult } from "queuert/internal";
 import type { RedisNotifyProvider } from "../notify-provider/notify-provider.redis.js";
 
 export type CreateRedisNotifyAdapterOptions<TContext> = {

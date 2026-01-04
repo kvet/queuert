@@ -1,4 +1,4 @@
-import { BaseStateAdapterContext } from "@queuert/core";
+import { BaseStateAdapterContext } from "queuert";
 
 export type SqliteStateProvider<TContext extends BaseStateAdapterContext> = {
   provideContext: (fn: (context: TContext) => Promise<unknown>) => Promise<unknown>;

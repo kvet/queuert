@@ -1,4 +1,4 @@
-import { DefineJobTypeDefinitions, defineUnionJobTypes } from "@queuert/core";
+import { DefineJobTypeDefinitions, defineUnionJobTypes } from "queuert";
 
 export type QrtJobDefinitions = DefineJobTypeDefinitions<{
   add_pet_to_user: {

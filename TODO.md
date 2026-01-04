@@ -1,8 +1,3 @@
-# Short term
-
-- Open GitHub repo
-- Publish to NPM
-
 # Medium term
 
 - Deferred start - Use `scheduledAt` field; job created transactionally but not processable until specified time

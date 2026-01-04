@@ -1,5 +1,5 @@
 {
-  "name": "queuert",
+  "name": "queuert-monorepo",
   "private": true,
   "keywords": [],
   "license": "MIT",
@@ -12,9 +12,13 @@
     "test": "vitest",
     "typecheck": "pnpm -r typecheck",
     "check": "pnpm fmt:check && pnpm lint && pnpm build && pnpm typecheck && vitest --run",
-    "modules:clean": "rm -rf $(find . -name node_modules -type d)"
+    "modules:clean": "rm -rf $(find . -name node_modules -type d)",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "release": "pnpm build && changeset publish"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.29.8",
     "oxfmt": "^0.20.0",
     "oxlint": "^1.35.0",
     "oxlint-tsgolint": "^0.10.0",

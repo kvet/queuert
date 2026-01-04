@@ -1,4 +1,4 @@
-import { createQueuert } from "@queuert/core";
+import { createQueuert } from "queuert";
 import { createPgStateAdapter, PgStateProvider } from "@queuert/postgres";
 import { createRedisNotifyAdapter, RedisNotifyProvider } from "@queuert/redis";
 import assert from "assert";

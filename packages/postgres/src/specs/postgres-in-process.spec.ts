@@ -1,4 +1,4 @@
-import { type StateAdapter } from "@queuert/core";
+import { type StateAdapter } from "queuert";
 import {
   blockerSequencesTestSuite,
   extendWithCommon,
@@ -11,7 +11,7 @@ import {
   waitSequenceCompletionTestSuite,
   workerlessCompletionTestSuite,
   workerTestSuite,
-} from "@queuert/core/testing";
+} from "queuert/testing";
 import { extendWithPostgres } from "@queuert/testcontainers";
 import { describe, it, TestAPI } from "vitest";
 import { extendWithStatePostgres } from "./state-adapter.pg.spec-helper.js";

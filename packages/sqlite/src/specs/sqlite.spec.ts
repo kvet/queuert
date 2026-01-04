@@ -1,4 +1,4 @@
-import { createInProcessNotifyAdapter, createQueuert, defineUnionJobTypes } from "@queuert/core";
+import { createInProcessNotifyAdapter, createQueuert, defineUnionJobTypes } from "queuert";
 import { UUID } from "crypto";
 import { it as baseIt, expectTypeOf, vi } from "vitest";
 import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
