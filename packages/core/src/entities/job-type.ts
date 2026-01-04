@@ -7,6 +7,8 @@ export type BaseJobTypeDefinitions = Record<
   }
 >;
 
+export type DefineJobTypeDefinitions<T extends BaseJobTypeDefinitions> = T;
+
 export const continuationInputSymbol: unique symbol = Symbol("continuationInput");
 
 export type DefineContinuationInput<T> = {

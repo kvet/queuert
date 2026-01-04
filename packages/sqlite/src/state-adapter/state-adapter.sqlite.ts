@@ -185,15 +185,21 @@ export const createSqliteStateAdapter = <
     const resolvedSql = applyTemplate(sql);
     return withRetry(
       async () =>
-        stateProvider.executeSql<TResult>(context, resolvedSql.sql, params, resolvedSql.returns),
+        stateProvider.executeSql(
+          context,
+          resolvedSql.sql,
+          params,
+          resolvedSql.returns,
+        ) as Promise<TResult>,
       connectionRetryConfig,
       { isRetryableError: isTransientError },
     );
   };
 
   return {
-    provideContext: async (fn) => stateProvider.provideContext(fn),
-    runInTransaction: async (context, fn) => stateProvider.runInTransaction(context, fn),
+    provideContext: async (fn) => stateProvider.provideContext(fn) as ReturnType<typeof fn>,
+    runInTransaction: async (context, fn) =>
+      stateProvider.runInTransaction(context, fn) as ReturnType<typeof fn>,
     assertInTransaction: async (context) => stateProvider.assertInTransaction(context),
 
     migrateToLatest: async (context) => {

@@ -111,15 +111,16 @@ export const createPgStateAdapter = <
     : { params: UnwrapNamedParameters<TParams> })): Promise<TResult> => {
     const resolvedSql = applyTemplate(sql);
     return withRetry(
-      async () => stateProvider.executeSql<TResult>(context, resolvedSql.sql, params),
+      async () => stateProvider.executeSql(context, resolvedSql.sql, params) as Promise<TResult>,
       connectionRetryConfig,
       { isRetryableError: isTransientError },
     );
   };
 
   return {
-    provideContext: async (fn) => stateProvider.provideContext(fn),
-    runInTransaction: async (context, fn) => stateProvider.runInTransaction(context, fn),
+    provideContext: async (fn) => stateProvider.provideContext(fn) as ReturnType<typeof fn>,
+    runInTransaction: async (context, fn) =>
+      stateProvider.runInTransaction(context, fn) as ReturnType<typeof fn>,
     assertInTransaction: async (context) => stateProvider.assertInTransaction(context),
 
     migrateToLatest: async (context) => {

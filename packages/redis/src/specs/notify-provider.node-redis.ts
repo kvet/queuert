@@ -35,7 +35,7 @@ export const createNodeRedisNotifyProvider = ({
   publish: async ({ client }, channel, message) => {
     await client.publish(channel, message);
   },
-  subscribe: async ({ client }, channel, onMessage): Promise<() => Promise<void>> => {
+  subscribe: async ({ client }, channel, onMessage) => {
     await client.subscribe(channel, onMessage);
     return async () => {
       await client.unsubscribe(channel);
@@ -44,11 +44,7 @@ export const createNodeRedisNotifyProvider = ({
   lpush: async ({ client }, queue, message) => {
     await client.lPush(queue, message);
   },
-  brpop: async (
-    { client },
-    queues,
-    timeoutMs,
-  ): Promise<{ queue: string; message: string } | undefined> => {
+  brpop: async ({ client }, queues, timeoutMs) => {
     const result = await client.brPop(queues, timeoutMs / 1000);
     return result ? { queue: result.key, message: result.element } : undefined;
   },

@@ -30,7 +30,9 @@ export {
   type DefineBlocker,
   type DefineContinuationInput,
   type DefineContinuationOutput,
+  type DefineJobTypeDefinitions,
 } from "./entities/job-type.js";
+export { type ValidatedJobTypeDefinitions } from "./entities/job-type.validation.js";
 export { type BackoffConfig } from "./helpers/backoff.js";
 export { type RetryConfig } from "./helpers/retry.js";
 export { type Log } from "./log.js";
@@ -60,7 +62,7 @@ export {
   type InProcessStateAdapter,
 } from "./state-adapter/state-adapter.in-process.js";
 
-type QueuertWorkerDefinition<
+export type QueuertWorkerDefinition<
   TStateAdapter extends StateAdapter<any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
 > = {
