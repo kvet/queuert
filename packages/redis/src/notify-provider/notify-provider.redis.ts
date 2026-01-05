@@ -1,4 +1,4 @@
-export type RedisNotifyProviderContextType = "command" | "subscribe" | "brpop";
+export type RedisNotifyProviderContextType = "command" | "subscribe";
 
 export type RedisNotifyProvider<TContext> = {
   provideContext: <T>(
@@ -11,10 +11,5 @@ export type RedisNotifyProvider<TContext> = {
     channel: string,
     onMessage: (message: string) => void,
   ) => Promise<() => Promise<void>>;
-  lpush: (context: TContext, queue: string, message: string) => Promise<void>;
-  brpop: (
-    context: TContext,
-    queues: string[],
-    timeoutMs: number,
-  ) => Promise<{ queue: string; message: string } | undefined>;
+  eval: (context: TContext, script: string, keys: string[], args: string[]) => Promise<unknown>;
 };

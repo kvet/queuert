@@ -1,9 +1,9 @@
 # Medium term
 
 - Notify adapter resiliency
+- Optional notify adapter
 - Soft timeout - Signal via AbortSignal + stop lease renewal; cooperative but covers most cases
 - Metrics collection (Prometheus, OTEL)
-- Get rid of BRPOP
 
 # Long term
 
@@ -12,6 +12,7 @@
 
 # ???
 
+- Postgres notify adapter - LISTEN/NOTIFY not reliable enough for production use; requires periodic polling to guarantee delivery
 - Support more job id types (integers)
 - Zod job type definitions - TypeScript types already strong at compile-time; runtime validation is user's concern at system boundaries
 - Singletons/concurrency limit - Achievable in userland via blocker-based semaphore pattern; document the pattern instead

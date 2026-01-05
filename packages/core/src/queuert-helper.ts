@@ -192,8 +192,8 @@ export const queuertHelper = ({
       const result = await cb(...args);
 
       await Promise.all([
-        ...Array.from(store.jobTypeCounts.entries()).flatMap(([typeName, count]) =>
-          Array.from({ length: count }, async () => notifyAdapter.notifyJobScheduled(typeName)),
+        ...Array.from(store.jobTypeCounts.entries()).map(async ([typeName, count]) =>
+          notifyAdapter.notifyJobScheduled(typeName, count),
         ),
         ...Array.from(store.sequenceIds).map(async (sequenceId) =>
           notifyAdapter.notifyJobSequenceCompleted(sequenceId),
@@ -533,7 +533,7 @@ export const queuertHelper = ({
       if (job) {
         logHelper.jobReaped(job, { workerId });
 
-        await notifyAdapter.notifyJobScheduled(job.typeName);
+        await notifyAdapter.notifyJobScheduled(job.typeName, 1);
         await notifyAdapter.notifyJobOwnershipLost(job.id);
       }
     },
@@ -749,24 +749,28 @@ export const queuertHelper = ({
       const timeoutSignal = AbortSignal.timeout(timeoutMs);
       const combinedSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
 
-      await using listener = await notifyAdapter.listenJobSequenceCompleted(id);
-      while (!combinedSignal.aborted) {
-        await listener.wait({
-          signal: AbortSignal.any([combinedSignal, AbortSignal.timeout(pollIntervalMs)]),
-        });
+      const listener = await notifyAdapter.listenJobSequenceCompleted(id);
+      try {
+        while (!combinedSignal.aborted) {
+          await listener.wait({
+            signal: AbortSignal.any([combinedSignal, AbortSignal.timeout(pollIntervalMs)]),
+          });
 
-        const sequence = await checkSequence();
-        if (sequence) return sequence;
+          const sequence = await checkSequence();
+          if (sequence) return sequence;
 
-        if (combinedSignal.aborted) break;
+          if (combinedSignal.aborted) break;
+        }
+
+        throw new WaitForJobSequenceCompletionTimeoutError(
+          signal?.aborted
+            ? `Wait for job sequence ${id} was aborted`
+            : `Timeout waiting for job sequence ${id} to complete after ${timeoutMs}ms`,
+          { cause: { sequenceId: id, timeoutMs } },
+        );
+      } finally {
+        await listener.dispose();
       }
-
-      throw new WaitForJobSequenceCompletionTimeoutError(
-        signal?.aborted
-          ? `Wait for job sequence ${id} was aborted`
-          : `Timeout waiting for job sequence ${id} to complete after ${timeoutMs}ms`,
-        { cause: { sequenceId: id, timeoutMs } },
-      );
     },
   };
 };

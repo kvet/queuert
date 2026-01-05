@@ -38,7 +38,6 @@ const createNoopListener = <T>() => {
       });
     },
     dispose,
-    [Symbol.asyncDispose]: dispose,
   };
 };
 

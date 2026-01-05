@@ -80,23 +80,26 @@ export const createExecutor = ({
     const stopController = new AbortController();
 
     const waitForNextJob = async () => {
-      const pullDelayMs = await helper.getNextJobAvailableInMs({
-        typeNames,
-        pollIntervalMs,
-      });
+      const listener = await notifyAdapter.listenJobScheduled(typeNames);
+      try {
+        const pullDelayMs = await helper.getNextJobAvailableInMs({
+          typeNames,
+          pollIntervalMs,
+        });
 
-      if (stopController.signal.aborted) {
-        return;
+        if (stopController.signal.aborted) {
+          return;
+        }
+        await Promise.any([
+          listener.wait({ signal: stopController.signal }),
+          sleep(pullDelayMs, {
+            jitterMs: pullDelayMs / 10,
+            signal: stopController.signal,
+          }),
+        ]);
+      } finally {
+        await listener.dispose();
       }
-
-      await using listener = await notifyAdapter.listenJobScheduled(typeNames);
-      await Promise.any([
-        listener.wait({ signal: stopController.signal }),
-        sleep(pullDelayMs, {
-          jitterMs: pullDelayMs / 10,
-          signal: stopController.signal,
-        }),
-      ]);
     };
 
     const performJob = async (): Promise<boolean> => {

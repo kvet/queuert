@@ -36,25 +36,12 @@ export const createQrt = async ({
 
   const notifyProvider: RedisNotifyProvider<{ redis: Redis }> = {
     provideContext: async (type, cb) => {
-      if (type === "command") {
-        return cb({ redis });
+      switch (type) {
+        case "command":
+          return cb({ redis });
+        case "subscribe":
+          return cb({ redis: redisSubscription });
       }
-      if (type === "subscribe") {
-        return cb({ redis: redisSubscription });
-      }
-      if (type === "brpop") {
-        const brpopClient = redis.duplicate();
-        await brpopClient.connect();
-        brpopClient.on("error", (err) => {
-          console.error("Redis BRPOP Client Error", err);
-        });
-        try {
-          return await cb({ redis: brpopClient });
-        } finally {
-          await brpopClient.close();
-        }
-      }
-      throw new Error(`Unknown notify context type: ${type}`);
     },
     publish: async ({ redis }, channel, message) => {
       await redis.publish(channel, message);
@@ -65,12 +52,8 @@ export const createQrt = async ({
         await redis.unsubscribe(channel);
       };
     },
-    lpush: async ({ redis }, queue, message) => {
-      await redis.lPush(queue, message);
-    },
-    brpop: async ({ redis }, queues, timeoutMs) => {
-      const result = await redis.brPop(queues, timeoutMs / 1000);
-      return result ? { queue: result.key, message: result.element } : undefined;
+    eval: async ({ redis }, script, keys, args) => {
+      return redis.eval(script, { keys, arguments: args });
     },
   };
   const notifyAdapter = await createRedisNotifyAdapter({

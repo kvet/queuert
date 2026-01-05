@@ -1,39 +1,57 @@
 import type { ListenResult, NotifyAdapter } from "./notify-adapter.js";
 
-type JobScheduledWaiter = {
-  typeNames: string[];
-  resolve: (result: ListenResult<string>) => void;
-};
+type JobScheduledNotification = { typeName: string; hintId: string };
 
 export const createInProcessNotifyAdapter = (): NotifyAdapter => {
-  // Job scheduled uses queue semantics - only ONE worker gets each notification
-  const jobScheduledWaiters: JobScheduledWaiter[] = [];
+  const hintCounts = new Map<string, number>();
 
-  // Sequence completed and ownership lost use broadcast semantics - all listeners get notified
+  const jobScheduledListeners: Array<(notification: JobScheduledNotification) => void> = [];
   const sequenceCompletedListeners: Array<(sequenceId: string) => void> = [];
   const jobOwnershipLostListeners: Array<(jobId: string) => void> = [];
 
+  const tryConsumeHint = (hintId: string): boolean => {
+    const count = hintCounts.get(hintId) ?? 0;
+    if (count > 0) {
+      hintCounts.set(hintId, count - 1);
+      return true;
+    }
+    return false;
+  };
+
   return {
-    notifyJobScheduled: async (typeName: string) => {
-      // Find first waiter interested in this type and notify only that one
-      const index = jobScheduledWaiters.findIndex((w) => w.typeNames.includes(typeName));
-      if (index !== -1) {
-        const waiter = jobScheduledWaiters.splice(index, 1)[0];
-        waiter.resolve({ received: true, value: typeName });
+    notifyJobScheduled: async (typeName: string, count: number) => {
+      const hintId = crypto.randomUUID();
+      hintCounts.set(hintId, count);
+
+      setTimeout(() => hintCounts.delete(hintId), 60_000);
+
+      for (const listener of jobScheduledListeners.slice()) {
+        listener({ typeName, hintId });
       }
     },
     listenJobScheduled: async (typeNames: string[]) => {
       let resolve: ((result: ListenResult<string>) => void) | null = null;
       let disposed = false;
 
+      const listener = ({ typeName, hintId }: JobScheduledNotification) => {
+        if (typeNames.includes(typeName) && resolve) {
+          if (tryConsumeHint(hintId)) {
+            resolve({ received: true, value: typeName });
+            resolve = null;
+          }
+        }
+      };
+
+      jobScheduledListeners.push(listener);
+
       const dispose = async () => {
         if (disposed) return;
         disposed = true;
+        const index = jobScheduledListeners.indexOf(listener);
+        if (index !== -1) {
+          jobScheduledListeners.splice(index, 1);
+        }
         if (resolve) {
-          const index = jobScheduledWaiters.findIndex((w) => w.resolve === resolve);
-          if (index !== -1) {
-            jobScheduledWaiters.splice(index, 1);
-          }
           resolve({ received: false });
           resolve = null;
         }
@@ -52,14 +70,9 @@ export const createInProcessNotifyAdapter = (): NotifyAdapter => {
             }
 
             resolve = res;
-            jobScheduledWaiters.push({ typeNames, resolve: res });
 
             const onAbort = () => {
               if (resolve === res) {
-                const index = jobScheduledWaiters.findIndex((w) => w.resolve === res);
-                if (index !== -1) {
-                  jobScheduledWaiters.splice(index, 1);
-                }
                 resolve = null;
                 res({ received: false });
               }
@@ -69,7 +82,6 @@ export const createInProcessNotifyAdapter = (): NotifyAdapter => {
           });
         },
         dispose,
-        [Symbol.asyncDispose]: dispose,
       };
     },
     notifyJobSequenceCompleted: async (sequenceId: string) => {
@@ -128,7 +140,6 @@ export const createInProcessNotifyAdapter = (): NotifyAdapter => {
           });
         },
         dispose,
-        [Symbol.asyncDispose]: dispose,
       };
     },
     notifyJobOwnershipLost: async (jobId: string) => {
@@ -187,7 +198,6 @@ export const createInProcessNotifyAdapter = (): NotifyAdapter => {
           });
         },
         dispose,
-        [Symbol.asyncDispose]: dispose,
       };
     },
   };

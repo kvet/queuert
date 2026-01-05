@@ -137,32 +137,28 @@ Abstracts ORM/database client operations, providing context management, transact
 
 Handles pub/sub notifications for job scheduling and sequence completion. Workers listen for job scheduling notifications to wake up and process jobs immediately rather than polling. Sequence completion notifications enable `waitForJobSequenceCompletion` to respond promptly when sequences complete. Enables efficient job processing with minimal latency.
 
-**IMPORTANT - Two notification primitives with different semantics (must be consistent across all adapter implementations):**
+**All notifications use broadcast (pub/sub) semantics with hint-based optimization:**
 
-1. **Queue primitive** (`listenJobScheduled`): Only ONE waiting worker receives each notification. Workers compete via the notification layer itself (e.g., Redis `lpush`/`brpop`), not just the database lock. This prevents thundering herd when many workers are idle.
+- `notifyJobScheduled(typeName, count)`: Broadcasts notification with a hint count. Creates a hint key with the count and publishes the message with a unique hintId.
+- `listenJobScheduled`: Workers receive the notification and atomically decrement the hint count. Only workers that successfully decrement (hint > 0) proceed to query the database. This prevents thundering herd when many workers are idle.
+- `listenJobSequenceCompleted`: All listeners for the matching sequence ID receive the notification
+- `listenJobOwnershipLost`: All listeners for the matching job ID receive the notification
 
-2. **Pub/Sub primitive** (`listenJobSequenceCompleted`, `listenJobOwnershipLost`): All listeners for the matching ID receive the notification (e.g., Redis `publish`/`subscribe`). Used for targeted notifications where a specific listener needs to wake up.
+**Hint-based optimization**: When N jobs are scheduled, the hint count is set to N. When workers receive the notification, they atomically check-and-decrement the hint using Lua scripts (Redis) or synchronous operations (in-process). Only N workers will proceed to query the database; others skip and wait for the next notification. This reduces database contention while maintaining low latency.
 
 **Listener pattern**: All `listen*` methods return a `Listener<T>` with:
 
 - Async setup: `await notifyAdapter.listenJobScheduled(typeNames)` - subscription is active when promise resolves
 - `wait(opts?)`: Waits for an event, returns `{ received: true, value: T }` or `{ received: false }` (aborted/disposed)
 - `dispose()`: Cleans up the subscription (also aborts pending `wait()` calls)
-- `[Symbol.asyncDispose]`: Supports `await using` for automatic cleanup
 
 ```typescript
-// Usage with await using (recommended)
-await using listener = await notifyAdapter.listenJobScheduled(typeNames);
-const result = await listener.wait({ signal });
-if (result.received) {
-  // Event happened, result.value contains the data
-}
-// Auto-disposed at block end
-
-// Usage with explicit dispose
 const listener = await notifyAdapter.listenJobScheduled(typeNames);
 try {
   const result = await listener.wait({ signal });
+  if (result.received) {
+    // Event happened, result.value contains the data
+  }
 } finally {
   await listener.dispose();
 }
@@ -330,7 +326,7 @@ Avoid asymmetric naming (e.g., `started`/`finished` vs `created`/`completed`) ev
 - `waitForJobSequenceCompletion`: Waits for a job sequence to complete. Uses a hybrid polling/notification approach with 100ms poll intervals for reliability. Throws `WaitForJobSequenceCompletionTimeoutError` on timeout. Throws immediately if sequence doesn't exist.
 - `withNotify`: Wraps a callback to collect and dispatch notifications after successful completion. Used to batch job scheduling and sequence completion notifications within a transaction.
 - `notifyJobOwnershipLost` / `listenJobOwnershipLost`: Notification channel for job ownership loss. When a job's ownership is lost outside its process function (reaper reaps it, workerless completion), the process function is notified immediately via this channel. Workers in staged mode listen for these notifications and abort their signal with the appropriate reason (`"taken_by_another_worker"` or `"already_completed"`).
-- `Listener<T>`: Subscription handle returned by `listen*` methods. Has `wait()` for receiving events, `dispose()` for cleanup, and supports `await using`.
+- `Listener<T>`: Subscription handle returned by `listen*` methods. Has `wait()` for receiving events and `dispose()` for cleanup.
 - `ListenResult<T>`: Return type of `Listener.wait()`. Either `{ received: true, value: T }` or `{ received: false }`.
 - `JobNotFoundError`: Error thrown when a job or job sequence is not found (e.g., deleted during processing, or waiting for non-existent sequence).
 - `JobTakenByAnotherWorkerError`: Error thrown when a worker detects another worker has taken over the job (lease was acquired by someone else).
