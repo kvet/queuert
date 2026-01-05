@@ -577,7 +577,7 @@ Test suites available in [`packages/core/src/suites/`](./packages/core/src/suite
 - [`sequences.test-suite.ts`](./packages/core/src/suites/sequences.test-suite.ts) — Linear, branched, loop, go-to patterns
 - [`blocker-sequences.test-suite.ts`](./packages/core/src/suites/blocker-sequences.test-suite.ts) — Job dependencies and blocking
 - [`workerless-completion.test-suite.ts`](./packages/core/src/suites/workerless-completion.test-suite.ts) — External job completion
-- [`deferred-start.test-suite.ts`](./packages/core/src/suites/deferred-start.test-suite.ts) — Scheduled job execution
+- [`scheduling.test-suite.ts`](./packages/core/src/suites/scheduling.test-suite.ts) — Scheduled job execution and rescheduling
 - [`deduplication.test-suite.ts`](./packages/core/src/suites/deduplication.test-suite.ts) — Duplicate job prevention
 - [`state-resilience.test-suite.ts`](./packages/core/src/suites/state-resilience.test-suite.ts) — Transient error handling
 - [`reaper.test-suite.ts`](./packages/core/src/suites/reaper.test-suite.ts) — Expired lease reclamation

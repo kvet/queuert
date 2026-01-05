@@ -3,7 +3,7 @@ import { extendWithStateInProcess } from "../state-adapter/state-adapter.in-proc
 import { StateAdapter } from "../state-adapter/state-adapter.js";
 import { blockerSequencesTestSuite } from "../suites/blocker-sequences.test-suite.js";
 import { deduplicationTestSuite } from "../suites/deduplication.test-suite.js";
-import { deferredStartTestSuite } from "../suites/deferred-start.test-suite.js";
+import { schedulingTestSuite } from "../suites/scheduling.test-suite.js";
 import { deletionTestSuite } from "../suites/deletion.test-suite.js";
 import { processTestSuite } from "../suites/process.test-suite.js";
 import { reaperTestSuite } from "../suites/reaper.test-suite.js";
@@ -58,6 +58,6 @@ describe("Workerless Completion", () => {
   workerlessCompletionTestSuite({ it: inProcessNoopIt });
 });
 
-describe("Deferred Start", () => {
-  deferredStartTestSuite({ it: inProcessNoopIt });
+describe("Scheduling", () => {
+  schedulingTestSuite({ it: inProcessNoopIt });
 });

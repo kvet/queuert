@@ -1,20 +1,20 @@
+import { extendWithPostgres } from "@queuert/testcontainers";
 import { type StateAdapter } from "queuert";
 import {
   blockerSequencesTestSuite,
   deduplicationTestSuite,
-  deferredStartTestSuite,
   deletionTestSuite,
   extendWithCommon,
   extendWithNoopNotify,
   processTestSuite,
   reaperTestSuite,
+  schedulingTestSuite,
   sequencesTestSuite,
   stateResilienceTestSuite,
   waitSequenceCompletionTestSuite,
   workerlessCompletionTestSuite,
   workerTestSuite,
 } from "queuert/testing";
-import { extendWithPostgres } from "@queuert/testcontainers";
 import { describe, it, TestAPI } from "vitest";
 import { extendWithStatePostgres } from "./state-adapter.pg.spec-helper.js";
 
@@ -67,6 +67,6 @@ describe("Workerless Completion", () => {
   workerlessCompletionTestSuite({ it: postgresNoopIt });
 });
 
-describe("Deferred Start", () => {
-  deferredStartTestSuite({ it: postgresNoopIt });
+describe("Scheduling", () => {
+  schedulingTestSuite({ it: postgresNoopIt });
 });

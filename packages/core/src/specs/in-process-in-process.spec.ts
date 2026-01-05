@@ -2,7 +2,7 @@ import { describe, it, TestAPI } from "vitest";
 import { extendWithStateInProcess } from "../state-adapter/state-adapter.in-process.spec-helper.js";
 import { StateAdapter } from "../state-adapter/state-adapter.js";
 import { blockerSequencesTestSuite } from "../suites/blocker-sequences.test-suite.js";
-import { deferredStartTestSuite } from "../suites/deferred-start.test-suite.js";
+import { schedulingTestSuite } from "../suites/scheduling.test-suite.js";
 import { notifyTestSuite } from "../suites/notify.test-suite.js";
 import { processTestSuite } from "../suites/process.test-suite.js";
 import { reaperTestSuite } from "../suites/reaper.test-suite.js";
@@ -53,6 +53,6 @@ describe("Workerless Completion", () => {
   workerlessCompletionTestSuite({ it: inProcessInProcessIt });
 });
 
-describe("Deferred Start", () => {
-  deferredStartTestSuite({ it: inProcessInProcessIt });
+describe("Scheduling", () => {
+  schedulingTestSuite({ it: inProcessInProcessIt });
 });

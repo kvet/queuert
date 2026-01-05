@@ -1,7 +1,7 @@
 import { type StateAdapter } from "queuert";
 import {
   blockerSequencesTestSuite,
-  deferredStartTestSuite,
+  schedulingTestSuite,
   extendWithCommon,
   extendWithInProcessNotify,
   notifyTestSuite,
@@ -62,6 +62,6 @@ describe("Workerless Completion", () => {
   workerlessCompletionTestSuite({ it: postgresInProcessIt });
 });
 
-describe("Deferred Start", () => {
-  deferredStartTestSuite({ it: postgresInProcessIt });
+describe("Scheduling", () => {
+  schedulingTestSuite({ it: postgresInProcessIt });
 });

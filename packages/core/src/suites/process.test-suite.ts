@@ -1,6 +1,6 @@
 import { expectTypeOf, TestAPI, vi } from "vitest";
 import { sleep } from "../helpers/sleep.js";
-import { createQueuert, defineUnionJobTypes, rescheduleJob } from "../index.js";
+import { createQueuert, defineUnionJobTypes } from "../index.js";
 import { TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -566,14 +566,14 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
         expect(job.attempt).toBeGreaterThan(0);
         if (job.attempt > 1) {
           expect(job.lastAttemptAt).toBeInstanceOf(Date);
-          expect(job.lastAttemptError).toBe("Simulated failure");
+          expect(job.lastAttemptError).toBe("Error: Simulated failure");
         } else {
           expect(job.lastAttemptAt).toBeNull();
           expect(job.lastAttemptError).toBeNull();
         }
 
         if (job.attempt < 3) {
-          throw rescheduleJob({ afterMs: 1 }, "Simulated failure");
+          throw new Error("Simulated failure");
         }
 
         await prepare({ mode: "atomic" });
@@ -582,7 +582,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       },
     });
 
-    const job = await queuert.withNotify(async () =>
+    const jobSequence = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
@@ -591,9 +591,20 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
         }),
       ),
     );
-    await withWorkers([await worker.start()], async () => {
-      await queuert.waitForJobSequenceCompletion({ ...job, ...completionOptions });
-    });
+    await withWorkers(
+      [
+        await worker.start({
+          defaultRetryConfig: {
+            initialDelayMs: 1,
+            multiplier: 1,
+            maxDelayMs: 1,
+          },
+        }),
+      ],
+      async () => {
+        await queuert.waitForJobSequenceCompletion({ ...jobSequence, ...completionOptions });
+      },
+    );
 
     expect(attempts).toEqual([1, 2, 3]);
   });
@@ -683,7 +694,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     ]);
   });
 
-  it("handles rescheduled errors in all phases", async ({
+  it("handles errors in all phases", async ({
     stateAdapter,
     notifyAdapter,
     runInTransaction,
@@ -719,17 +730,17 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
 
         await prepare({ mode: "staged" }, () => {
           if (job.input.phase === "prepare" && job.attempt === 1) {
-            throw rescheduleJob({ afterMs: 1 }, "Rescheduled in prepare");
+            throw new Error("Simulated failure in prepare");
           }
         });
 
         if (job.input.phase === "process" && job.attempt === 1) {
-          throw rescheduleJob({ afterMs: 1 }, "Rescheduled in process");
+          throw new Error("Simulated failure in process");
         }
 
         return complete(async () => {
           if (job.input.phase === "complete" && job.attempt === 1) {
-            throw rescheduleJob({ afterMs: 1 }, "Rescheduled in complete");
+            throw new Error("Simulated failure in complete");
           }
 
           return null;
@@ -751,18 +762,35 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       ),
     );
 
-    await withWorkers([await worker.start()], async () => {
-      await Promise.all(
-        jobSequences.map(async (job) =>
-          queuert.waitForJobSequenceCompletion({ ...job, ...completionOptions }),
-        ),
-      );
-    });
+    await withWorkers(
+      [
+        await worker.start({
+          defaultRetryConfig: {
+            initialDelayMs: 1,
+            multiplier: 1,
+            maxDelayMs: 1,
+          },
+        }),
+      ],
+      async () => {
+        await Promise.all(
+          jobSequences.map(async (job) =>
+            queuert.waitForJobSequenceCompletion({ ...job, ...completionOptions }),
+          ),
+        );
+      },
+    );
 
     expect(errors).toHaveLength(3);
-    expect(errors.find((e) => e.phase === "prepare")?.error).toBe("Rescheduled in prepare");
-    expect(errors.find((e) => e.phase === "process")?.error).toBe("Rescheduled in process");
-    expect(errors.find((e) => e.phase === "complete")?.error).toBe("Rescheduled in complete");
+    expect(errors.find((e) => e.phase === "prepare")?.error).toBe(
+      "Error: Simulated failure in prepare",
+    );
+    expect(errors.find((e) => e.phase === "process")?.error).toBe(
+      "Error: Simulated failure in process",
+    );
+    expect(errors.find((e) => e.phase === "complete")?.error).toBe(
+      "Error: Simulated failure in complete",
+    );
   });
 
   it("reschedules job when error thrown after complete callback finishes", async ({
