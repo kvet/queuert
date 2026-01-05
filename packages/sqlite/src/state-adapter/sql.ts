@@ -200,12 +200,18 @@ export const insertJobSql: TypedSql<
     NamedParameter<"id_for_sequence", string>,
     NamedParameter<"origin_id", string | null>,
     NamedParameter<"deduplication_key", string | null>,
+    NamedParameter<"scheduled_at", string | null>,
+    NamedParameter<"schedule_after_ms_check", number | null>,
+    NamedParameter<"schedule_after_ms", number | null>,
   ],
   [DbJob & { deduplicated: number }]
 > = sql(
   /* sql */ `
-INSERT INTO {{table_prefix}}job (id, type_name, input, root_id, sequence_id, origin_id, deduplication_key)
-VALUES (?, ?, ?, COALESCE(?, ?), COALESCE(?, ?), ?, ?)
+INSERT INTO {{table_prefix}}job (id, type_name, input, root_id, sequence_id, origin_id, deduplication_key, scheduled_at)
+VALUES (?, ?, ?, COALESCE(?, ?), COALESCE(?, ?), ?, ?,
+  COALESCE(?,
+    CASE WHEN ? IS NOT NULL THEN datetime('now', 'subsec', '+' || (? / 1000.0) || ' seconds') ELSE NULL END,
+    datetime('now', 'subsec')))
 RETURNING *, 0 AS deduplicated
 `,
   true,
@@ -391,7 +397,9 @@ WHERE id = ?
 
 export const rescheduleJobSql: TypedSql<
   readonly [
-    NamedParameter<"delay_ms", number>,
+    NamedParameter<"scheduled_at", string | null>,
+    NamedParameter<"schedule_after_ms_check", number | null>,
+    NamedParameter<"schedule_after_ms", number | null>,
     NamedParameter<"error", string>,
     NamedParameter<"id", string>,
   ],
@@ -399,7 +407,9 @@ export const rescheduleJobSql: TypedSql<
 > = sql(
   /* sql */ `
 UPDATE {{table_prefix}}job
-SET scheduled_at = datetime('now', 'subsec', '+' || (? / 1000.0) || ' seconds'),
+SET scheduled_at = COALESCE(?,
+    CASE WHEN ? IS NOT NULL THEN datetime('now', 'subsec', '+' || (? / 1000.0) || ' seconds') ELSE NULL END,
+    datetime('now', 'subsec')),
   last_attempt_at = datetime('now', 'subsec'),
   last_attempt_error = ?,
   leased_by = NULL,

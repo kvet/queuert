@@ -439,30 +439,92 @@ type Definitions = DefineJobTypeDefinitions<{
 }>;
 ```
 
+## Deferred Start
+
+Jobs can be scheduled to start at a future time using the `schedule` option. The job is created transactionally but won't be processed until the specified time.
+
+```ts
+// Schedule a job to run in 5 minutes
+await queuert.startJobSequence({
+  firstJobTypeName: 'send-reminder',
+  input: { userId: '123' },
+  schedule: { afterMs: 5 * 60 * 1000 }, // 5 minutes from now
+});
+
+// Or schedule at a specific time
+await queuert.startJobSequence({
+  firstJobTypeName: 'send-reminder',
+  input: { userId: '123' },
+  schedule: { at: new Date('2025-01-15T09:00:00Z') },
+});
+```
+
+The same `schedule` option works with `continueWith` for deferred continuations:
+
+```ts
+await complete(job, async ({ continueWith }) =>
+  continueWith({
+    typeName: 'follow-up',
+    input: { userId: job.input.userId },
+    schedule: { afterMs: 24 * 60 * 60 * 1000 }, // 24 hours later
+  })
+);
+```
+
 ## Workerless Completion
 
-Jobs can be completed without a worker using `completeJobSequence`. This enables approval workflows, webhook-triggered completions, and patterns where jobs wait for external events.
+Jobs can be completed without a worker using `completeJobSequence`. This enables approval workflows, webhook-triggered completions, and patterns where jobs wait for external events. Deferred start pairs well with this — schedule a job to auto-reject after a timeout, but allow early completion based on user action.
 
 ```ts
 type Definitions = DefineJobTypeDefinitions<{
   'await-approval': {
     input: { requestId: string };
-    output: { approved: boolean };
+    output: { rejected: true } | DefineContinuationOutput<'process-request'>;
+  };
+  'process-request': {
+    input: DefineContinuationInput<{ requestId: string }>;
+    output: { processed: true };
   };
 }>;
 
-// Start a job that waits for approval
+// Start a job that auto-rejects in 2 hours if not handled
 const sequence = await queuert.startJobSequence({
   firstJobTypeName: 'await-approval',
   input: { requestId: '123' },
+  schedule: { afterMs: 2 * 60 * 60 * 1000 }, // 2 hours
 });
 
-// Later, when the user approves (e.g., via webhook or API call)
+// The worker handles the timeout case (auto-reject, sequence ends)
+worker.implementJobType({
+  name: 'await-approval',
+  process: async ({ complete }) => complete(() => ({ rejected: true })),
+});
+
+// The worker processes approved requests
+worker.implementJobType({
+  name: 'process-request',
+  process: async ({ job, complete }) => {
+    await doSomethingWith(job.input.requestId);
+    return complete(() => ({ processed: true }));
+  },
+});
+
+// The job can be completed early without a worker (e.g., via API call)
 await queuert.completeJobSequence({
   id: sequence.id,
   firstJobTypeName: 'await-approval',
   complete: async ({ job, complete }) => {
-    await complete(job, async () => ({ approved: true }));
+    if (job.typeName !== 'await-approval') {
+      return; // Already past approval stage
+    }
+    // If approved, continue to process-request; otherwise just reject
+    if (userApproved) {
+      await complete(job, ({ continueWith }) =>
+        continueWith({ typeName: 'process-request', input: { requestId: job.input.requestId } })
+      );
+    } else {
+      await complete(job, () => ({ rejected: true }));
+    }
   },
 });
 ```
@@ -515,6 +577,7 @@ Test suites available in [`packages/core/src/suites/`](./packages/core/src/suite
 - [`sequences.test-suite.ts`](./packages/core/src/suites/sequences.test-suite.ts) — Linear, branched, loop, go-to patterns
 - [`blocker-sequences.test-suite.ts`](./packages/core/src/suites/blocker-sequences.test-suite.ts) — Job dependencies and blocking
 - [`workerless-completion.test-suite.ts`](./packages/core/src/suites/workerless-completion.test-suite.ts) — External job completion
+- [`deferred-start.test-suite.ts`](./packages/core/src/suites/deferred-start.test-suite.ts) — Scheduled job execution
 - [`deduplication.test-suite.ts`](./packages/core/src/suites/deduplication.test-suite.ts) — Duplicate job prevention
 - [`state-resilience.test-suite.ts`](./packages/core/src/suites/state-resilience.test-suite.ts) — Transient error handling
 - [`reaper.test-suite.ts`](./packages/core/src/suites/reaper.test-suite.ts) — Expired lease reclamation

@@ -1,6 +1,7 @@
 // Test Suites
 export { blockerSequencesTestSuite } from "./suites/blocker-sequences.test-suite.js";
 export { deduplicationTestSuite } from "./suites/deduplication.test-suite.js";
+export { deferredStartTestSuite } from "./suites/deferred-start.test-suite.js";
 export { deletionTestSuite } from "./suites/deletion.test-suite.js";
 export { notifyTestSuite } from "./suites/notify.test-suite.js";
 export { processTestSuite } from "./suites/process.test-suite.js";

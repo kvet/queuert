@@ -1,6 +1,7 @@
 import { DeduplicationOptions, DeduplicationStrategy } from "../entities/deduplication.js";
+import { ScheduleOptions } from "../entities/schedule.js";
 
-export type { DeduplicationOptions, DeduplicationStrategy };
+export type { DeduplicationOptions, DeduplicationStrategy, ScheduleOptions };
 
 export type StateJob = {
   id: string;
@@ -51,6 +52,7 @@ export type StateAdapter<TContext extends BaseStateAdapterContext, TJobId> = {
     sequenceId: TJobId | undefined;
     originId: TJobId | undefined;
     deduplication?: DeduplicationOptions;
+    schedule?: ScheduleOptions;
   }) => Promise<{ job: StateJob; deduplicated: boolean }>;
 
   addJobBlockers: (params: {
@@ -81,7 +83,7 @@ export type StateAdapter<TContext extends BaseStateAdapterContext, TJobId> = {
   rescheduleJob: (params: {
     context: TContext;
     jobId: TJobId;
-    afterMs: number;
+    schedule: ScheduleOptions;
     error: string;
   }) => Promise<StateJob>;
   completeJob: (params: {

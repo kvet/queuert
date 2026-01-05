@@ -1,6 +1,7 @@
 import { type StateAdapter } from "queuert";
 import {
   blockerSequencesTestSuite,
+  deferredStartTestSuite,
   extendWithCommon,
   extendWithInProcessNotify,
   notifyTestSuite,
@@ -58,4 +59,8 @@ describe("Notify", () => {
 
 describe("Workerless Completion", () => {
   workerlessCompletionTestSuite({ it: sqliteInProcessIt });
+});
+
+describe("Deferred Start", () => {
+  deferredStartTestSuite({ it: sqliteInProcessIt });
 });

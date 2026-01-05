@@ -1,5 +1,6 @@
 import { JobSequence } from "./entities/job-sequence.js";
 import { Job } from "./entities/job.js";
+import { ScheduleOptions } from "./entities/schedule.js";
 import { JobBasicArgs, JobProcessingArgs, JobSequenceArgs, Log } from "./log.js";
 import { StateJob } from "./state-adapter/state-adapter.js";
 
@@ -43,7 +44,11 @@ export type LogHelper = {
   jobSequenceCreated: (job: StateJob, options: { input: unknown }) => void;
   jobCreated: (
     job: StateJob,
-    options: { input: unknown; blockers: JobSequence<any, any, any, any>[] },
+    options: {
+      input: unknown;
+      blockers: JobSequence<any, any, any, any>[];
+      schedule?: ScheduleOptions;
+    },
   ) => void;
   notifyContextAbsence: (job: StateJob) => void;
   jobCompleted: (
@@ -57,7 +62,7 @@ export type LogHelper = {
   ) => void;
   jobAttemptFailed: (
     job: StateJob,
-    options: { workerId: string; rescheduledAfterMs: number; error: unknown },
+    options: { workerId: string; rescheduledSchedule: ScheduleOptions; error: unknown },
   ) => void;
   jobTakenByAnotherWorker: (job: StateJob, options: { workerId: string }) => void;
   jobLeaseExpired: (job: StateJob, options: { workerId: string }) => void;
@@ -86,6 +91,8 @@ export const createLogHelper = ({ log }: { log: Log }): LogHelper => ({
           ...mapStateJobToJobBasicLogArgs(job),
           input: options.input,
           blockers: options.blockers.map(mapJobSequenceToLogArgs),
+          ...(options.schedule?.at && { scheduledAt: options.schedule.at }),
+          ...(options.schedule?.afterMs && { scheduleAfterMs: options.schedule.afterMs }),
         },
       ],
     });
@@ -151,7 +158,10 @@ export const createLogHelper = ({ log }: { log: Log }): LogHelper => ({
         {
           ...mapStateJobToJobProcessingLogArgs(job),
           workerId: options.workerId,
-          rescheduledAfterMs: options.rescheduledAfterMs,
+          ...(options.rescheduledSchedule.at && { rescheduledAt: options.rescheduledSchedule.at }),
+          ...(options.rescheduledSchedule.afterMs && {
+            rescheduledAfterMs: options.rescheduledSchedule.afterMs,
+          }),
         },
         options.error,
       ],

@@ -336,6 +336,10 @@ Avoid asymmetric naming (e.g., `started`/`finished` vs `created`/`completed`) ev
 - `JobTakenByAnotherWorkerError`: Error thrown when a worker detects another worker has taken over the job (lease was acquired by someone else).
 - `JobAlreadyCompletedError`: Error thrown when attempting to complete a job that was already completed (by another worker or workerless completion).
 - `WaitForJobSequenceCompletionTimeoutError`: Error thrown when `waitForJobSequenceCompletion` times out before the sequence completes.
+- `ScheduleOptions`: Discriminated union type for deferred scheduling: `{ at: Date; afterMs?: never }` or `{ at?: never; afterMs: number }`. Used with `schedule` parameter in `startJobSequence` and `continueWith`.
+- `schedule`: Optional parameter in `startJobSequence` and `continueWith` for deferred job execution. Accepts `ScheduleOptions`. Jobs are created transactionally but not processable until the specified time. `afterMs` is computed at the database level using `now() + interval` to avoid clock skew.
+- `rescheduleJob`: Helper function to reschedule a job from within a process function. Takes `ScheduleOptions` and optional cause. Throws `RescheduleJobError`.
+- `RescheduleJobError`: Error class with `schedule: ScheduleOptions` property. Used by `rescheduleJob` helper.
 
 ### Type Helpers
 

@@ -573,7 +573,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
         }
 
         if (job.attempt < 3) {
-          throw rescheduleJob(1, "Simulated failure");
+          throw rescheduleJob({ afterMs: 1 }, "Simulated failure");
         }
 
         await prepare({ mode: "atomic" });
@@ -719,17 +719,17 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
 
         await prepare({ mode: "staged" }, () => {
           if (job.input.phase === "prepare" && job.attempt === 1) {
-            throw rescheduleJob(1, "Rescheduled in prepare");
+            throw rescheduleJob({ afterMs: 1 }, "Rescheduled in prepare");
           }
         });
 
         if (job.input.phase === "process" && job.attempt === 1) {
-          throw rescheduleJob(1, "Rescheduled in process");
+          throw rescheduleJob({ afterMs: 1 }, "Rescheduled in process");
         }
 
         return complete(async () => {
           if (job.input.phase === "complete" && job.attempt === 1) {
-            throw rescheduleJob(1, "Rescheduled in complete");
+            throw rescheduleJob({ afterMs: 1 }, "Rescheduled in complete");
           }
 
           return null;

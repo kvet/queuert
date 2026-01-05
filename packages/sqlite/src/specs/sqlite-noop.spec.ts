@@ -1,6 +1,7 @@
 import { type StateAdapter } from "queuert";
 import {
   blockerSequencesTestSuite,
+  deferredStartTestSuite,
   extendWithCommon,
   extendWithNoopNotify,
   processTestSuite,
@@ -53,4 +54,8 @@ describe("State Resilience", () => {
 
 describe("Workerless Completion", () => {
   workerlessCompletionTestSuite({ it: sqliteNoopIt });
+});
+
+describe("Deferred Start", () => {
+  deferredStartTestSuite({ it: sqliteNoopIt });
 });

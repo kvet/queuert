@@ -137,7 +137,15 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       return store.jobs.get(jobId);
     },
 
-    createJob: async ({ typeName, input, rootId, sequenceId, originId, deduplication }) => {
+    createJob: async ({
+      typeName,
+      input,
+      rootId,
+      sequenceId,
+      originId,
+      deduplication,
+      schedule,
+    }) => {
       const existingContinuation = findExistingContinuation(sequenceId, originId);
       if (existingContinuation) {
         return { job: existingContinuation, deduplicated: true };
@@ -152,6 +160,8 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
 
       const id = crypto.randomUUID();
       const now = new Date();
+      const resolvedScheduledAt =
+        schedule?.at ?? (schedule?.afterMs ? new Date(now.getTime() + schedule.afterMs) : now);
 
       const job: StateJob = {
         id,
@@ -163,7 +173,7 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
         originId: originId ?? null,
         status: "pending",
         createdAt: now,
-        scheduledAt: now,
+        scheduledAt: resolvedScheduledAt,
         completedAt: null,
         completedBy: null,
         attempt: 0,
@@ -325,14 +335,16 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       return updatedJob;
     },
 
-    rescheduleJob: async ({ jobId, afterMs, error }) => {
+    rescheduleJob: async ({ jobId, schedule, error }) => {
       const job = store.jobs.get(jobId);
       if (!job) throw new Error("Job not found");
 
       const now = new Date();
+      const resolvedScheduledAt =
+        schedule.at ?? (schedule.afterMs ? new Date(now.getTime() + schedule.afterMs) : now);
       const updatedJob: StateJob = {
         ...job,
-        scheduledAt: new Date(now.getTime() + afterMs),
+        scheduledAt: resolvedScheduledAt,
         lastAttemptAt: now,
         lastAttemptError: error,
         leasedBy: null,

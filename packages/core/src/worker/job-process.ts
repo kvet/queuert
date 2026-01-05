@@ -11,6 +11,7 @@ import {
   JobOf,
 } from "../entities/job-type.js";
 import { CompletedJob, CreatedJob, Job, mapStateJobToJob, RunningJob } from "../entities/job.js";
+import { ScheduleOptions } from "../entities/schedule.js";
 import { TypedAbortController, TypedAbortSignal } from "../helpers/abort.js";
 import { type BackoffConfig } from "../helpers/backoff.js";
 import { createSignal } from "../helpers/signal.js";
@@ -35,22 +36,22 @@ export type { BackoffConfig } from "../helpers/backoff.js";
 export type { LeaseConfig } from "./lease.js";
 
 export class RescheduleJobError extends Error {
-  public readonly afterMs: number;
+  public readonly schedule: ScheduleOptions;
   constructor(
     message: string,
     options: {
-      afterMs: number;
+      schedule: ScheduleOptions;
       cause?: unknown;
     },
   ) {
     super(message, { cause: options.cause });
-    this.afterMs = options.afterMs;
+    this.schedule = options.schedule;
   }
 }
 
-export const rescheduleJob = (afterMs: number, cause?: unknown): never => {
-  throw new RescheduleJobError(`Reschedule job after ${afterMs}ms`, {
-    afterMs,
+export const rescheduleJob = (schedule: ScheduleOptions, cause?: unknown): never => {
+  throw new RescheduleJobError(`Reschedule job`, {
+    schedule,
     cause,
   });
 };
@@ -70,6 +71,7 @@ export type CompleteCallbackOptions<
         TJobTypeDefinitions,
         TContinueJobTypeName
       >["input"];
+      schedule?: ScheduleOptions;
     } & (HasBlockers<TJobTypeDefinitions, TContinueJobTypeName> extends true
       ? {
           startBlockers: StartBlockersFn<
@@ -291,6 +293,7 @@ export const runJobProcess = async ({
             options: {
               typeName: string;
               input: unknown;
+              schedule?: ScheduleOptions;
               startBlockers?: StartBlockersFn<any, BaseJobTypeDefinitions, string>;
             } & BaseStateAdapterContext,
           ) => Promise<unknown>;
@@ -310,7 +313,7 @@ export const runJobProcess = async ({
       const result = await runInGuardedTransaction(async (context) => {
         let continuedJob: Job<any, any, any, any> | null = null;
         const output = await completeCallback({
-          continueWith: async ({ typeName, input, startBlockers }) => {
+          continueWith: async ({ typeName, input, schedule, startBlockers }) => {
             if (continuedJob) {
               throw new Error("continueWith can only be called once");
             }
@@ -318,6 +321,7 @@ export const runJobProcess = async ({
               typeName,
               input,
               context,
+              schedule,
               startBlockers: startBlockers as any,
             });
             return continuedJob;

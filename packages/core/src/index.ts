@@ -4,6 +4,7 @@ import {
   HasBlockers,
   JobSequenceOf,
 } from "./entities/job-type.js";
+import { ScheduleOptions } from "./entities/schedule.js";
 import { BackoffConfig } from "./helpers/backoff.js";
 import { Log } from "./log.js";
 import { NotifyAdapter } from "./notify-adapter/notify-adapter.js";
@@ -33,6 +34,7 @@ export {
   type DefineJobTypeDefinitions,
 } from "./entities/job-type.js";
 export { type ValidatedJobTypeDefinitions } from "./entities/job-type.validation.js";
+export { type ScheduleOptions } from "./entities/schedule.js";
 export { type BackoffConfig } from "./helpers/backoff.js";
 export { type RetryConfig } from "./helpers/retry.js";
 export { type Log } from "./log.js";
@@ -87,6 +89,7 @@ export type Queuert<
       firstJobTypeName: TFirstJobTypeName;
       input: TJobTypeDefinitions[TFirstJobTypeName]["input"];
       deduplication?: DeduplicationOptions;
+      schedule?: ScheduleOptions;
     } & (HasBlockers<TJobTypeDefinitions, TFirstJobTypeName> extends true
       ? {
           startBlockers: StartBlockersFn<
@@ -214,6 +217,7 @@ export const createQueuert = async <
       input,
       firstJobTypeName,
       deduplication,
+      schedule,
       startBlockers,
       ...context
     }) =>
@@ -222,6 +226,7 @@ export const createQueuert = async <
         input,
         context,
         deduplication,
+        schedule,
         startBlockers,
       })) as Queuert<TStateAdapter, TJobTypeDefinitions>["startJobSequence"],
     getJobSequence: (async ({ id, firstJobTypeName, ...context }) =>

@@ -51,7 +51,14 @@ type JobCreatedLogEntry = LogEntry<
   "job_created",
   "info",
   "Job created",
-  [{ input: unknown; blockers: JobSequenceArgs[] } & JobBasicArgs]
+  [
+    {
+      input: unknown;
+      blockers: JobSequenceArgs[];
+      scheduledAt?: Date;
+      scheduleAfterMs?: number;
+    } & JobBasicArgs,
+  ]
 >;
 type JobAttemptStartedLogEntry = LogEntry<
   "job_attempt_started",
@@ -81,7 +88,10 @@ type JobAttemptFailedLogEntry = LogEntry<
   "job_attempt_failed",
   "error",
   "Job attempt failed",
-  [{ rescheduledAfterMs: number } & JobProcessingArgs & WorkerBasicArgs, unknown]
+  [
+    { rescheduledAfterMs?: number; rescheduledAt?: Date } & JobProcessingArgs & WorkerBasicArgs,
+    unknown,
+  ]
 >;
 type JobCompletedLogEntry = LogEntry<
   "job_completed",

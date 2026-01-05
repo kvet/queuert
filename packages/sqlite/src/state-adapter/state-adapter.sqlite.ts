@@ -243,6 +243,7 @@ export const createSqliteStateAdapter = <
       sequenceId,
       originId,
       deduplication,
+      schedule,
     }) => {
       const newId = idGenerator();
       const inputJson = input !== undefined ? JSON.stringify(input) : null;
@@ -253,6 +254,8 @@ export const createSqliteStateAdapter = <
       const sequenceIdOrNull = sequenceId ?? null;
       const originIdOrNull = originId ?? null;
       const rootIdOrNull = rootId ?? null;
+      const scheduledAtIso = schedule?.at?.toISOString().replace("T", " ").replace("Z", "") ?? null;
+      const scheduleAfterMsOrNull = schedule?.afterMs ?? null;
 
       const [existing] = await executeTypedSql({
         context,
@@ -289,6 +292,9 @@ export const createSqliteStateAdapter = <
           newId,
           originIdOrNull,
           deduplicationKey,
+          scheduledAtIso,
+          scheduleAfterMsOrNull,
+          scheduleAfterMsOrNull,
         ],
       });
 
@@ -395,11 +401,19 @@ export const createSqliteStateAdapter = <
 
       return mapDbJobToStateJob(job);
     },
-    rescheduleJob: async ({ context, jobId, afterMs, error }) => {
+    rescheduleJob: async ({ context, jobId, schedule, error }) => {
+      const scheduledAtIso = schedule.at?.toISOString().replace("T", " ").replace("Z", "") ?? null;
+      const scheduleAfterMsOrNull = schedule.afterMs ?? null;
       const [job] = await executeTypedSql({
         context,
         sql: rescheduleJobSql,
-        params: [afterMs, JSON.stringify(error), jobId],
+        params: [
+          scheduledAtIso,
+          scheduleAfterMsOrNull,
+          scheduleAfterMsOrNull,
+          JSON.stringify(error),
+          jobId,
+        ],
       });
 
       return mapDbJobToStateJob(job);

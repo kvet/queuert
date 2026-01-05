@@ -164,6 +164,7 @@ export const createPgStateAdapter = <
       sequenceId,
       originId,
       deduplication,
+      schedule,
     }) => {
       const [result] = await executeTypedSql({
         context,
@@ -177,6 +178,8 @@ export const createPgStateAdapter = <
           deduplication?.key ?? null,
           deduplication ? (deduplication.strategy ?? "completed") : null,
           deduplication?.windowMs ?? null,
+          schedule?.at ?? null,
+          schedule?.afterMs ?? null,
         ],
       });
 
@@ -238,11 +241,11 @@ export const createPgStateAdapter = <
 
       return mapDbJobToStateJob(job);
     },
-    rescheduleJob: async ({ context, jobId, afterMs, error }) => {
+    rescheduleJob: async ({ context, jobId, schedule, error }) => {
       const [job] = await executeTypedSql({
         context,
         sql: rescheduleJobSql,
-        params: [jobId, afterMs, JSON.stringify(error)],
+        params: [jobId, schedule.at ?? null, schedule.afterMs ?? null, JSON.stringify(error)],
       });
 
       return mapDbJobToStateJob(job);

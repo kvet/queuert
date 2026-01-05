@@ -2,6 +2,7 @@ import { type StateAdapter } from "queuert";
 import {
   blockerSequencesTestSuite,
   deduplicationTestSuite,
+  deferredStartTestSuite,
   deletionTestSuite,
   extendWithCommon,
   extendWithNoopNotify,
@@ -64,4 +65,8 @@ describe("State Resilience", () => {
 
 describe("Workerless Completion", () => {
   workerlessCompletionTestSuite({ it: postgresNoopIt });
+});
+
+describe("Deferred Start", () => {
+  deferredStartTestSuite({ it: postgresNoopIt });
 });

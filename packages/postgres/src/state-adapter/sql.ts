@@ -139,6 +139,8 @@ export const createJobSql: TypedSql<
     NamedParameter<"deduplication_key", string | null | undefined>,
     NamedParameter<"deduplication_strategy", DeduplicationStrategy | null | undefined>,
     NamedParameter<"deduplication_window_ms", number | null | undefined>,
+    NamedParameter<"scheduled_at", Date | null>,
+    NamedParameter<"schedule_after_ms", number | null>,
   ],
   [DbJob & { deduplicated: boolean }]
 > = sql(
@@ -172,8 +174,9 @@ existing_deduplicated AS (
 ),
 new_id AS (SELECT {{id_default}} AS id),
 inserted_job AS (
-  INSERT INTO {{schema}}.job (id, type_name, input, root_id, sequence_id, origin_id, deduplication_key)
-  SELECT id, $1, $2, COALESCE($3, id), COALESCE($4, id), $5, $6
+  INSERT INTO {{schema}}.job (id, type_name, input, root_id, sequence_id, origin_id, deduplication_key, scheduled_at)
+  SELECT id, $1, $2, COALESCE($3, id), COALESCE($4, id), $5, $6,
+    COALESCE($9::timestamptz, now() + ($10::bigint || ' milliseconds')::interval, now())
   FROM new_id
   WHERE NOT EXISTS (SELECT 1 FROM existing_continuation)
     AND NOT EXISTS (SELECT 1 FROM existing_deduplicated)
@@ -355,16 +358,17 @@ WHERE id = $1
 export const rescheduleJobSql: TypedSql<
   readonly [
     NamedParameter<"id", string>,
-    NamedParameter<"delay_ms", number>,
+    NamedParameter<"scheduled_at", Date | null>,
+    NamedParameter<"schedule_after_ms", number | null>,
     NamedParameter<"error", string>,
   ],
   [DbJob]
 > = sql(
   /* sql */ `
 UPDATE {{schema}}.job
-SET scheduled_at = now() + ($2::bigint || ' milliseconds')::interval,
+SET scheduled_at = COALESCE($2::timestamptz, now() + ($3::bigint || ' milliseconds')::interval, now()),
   last_attempt_at = now(),
-  last_attempt_error = $3,
+  last_attempt_error = $4,
   leased_by = NULL,
   leased_until = NULL,
   status = 'pending'
@@ -422,7 +426,7 @@ export const getNextJobAvailableInMsSql: TypedSql<
   [{ available_in_ms: number } | undefined]
 > = sql(
   /* sql */ `
-SELECT GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (job.scheduled_at - now())) * 1000)::bigint) AS available_in_ms
+SELECT GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (job.scheduled_at - now())) * 1000))::integer AS available_in_ms
 FROM {{schema}}.job as job
 WHERE job.type_name IN (SELECT unnest($1::text[]))
   AND job.status = 'pending'

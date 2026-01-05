@@ -15,6 +15,7 @@ import {
   SequenceJobTypes,
 } from "./entities/job-type.js";
 import { Job, JobWithoutBlockers, mapStateJobToJob, PendingJob } from "./entities/job.js";
+import { ScheduleOptions } from "./entities/schedule.js";
 import { BackoffConfig, calculateBackoffMs } from "./helpers/backoff.js";
 import { createLogHelper } from "./log-helper.js";
 import { Log } from "./log.js";
@@ -90,6 +91,7 @@ export const queuertHelper = ({
     startBlockers,
     isSequence,
     deduplication,
+    schedule,
   }: {
     typeName: string;
     input: unknown;
@@ -97,6 +99,7 @@ export const queuertHelper = ({
     startBlockers?: StartBlockersFn<string, BaseJobTypeDefinitions, string>;
     isSequence: boolean;
     deduplication?: DeduplicationOptions;
+    schedule?: ScheduleOptions;
   }): Promise<{ job: StateJob; deduplicated: boolean }> => {
     const jobContext = jobContextStorage.getStore();
     const createJobResult = await stateAdapter.createJob({
@@ -107,6 +110,7 @@ export const queuertHelper = ({
       sequenceId: isSequence ? undefined : jobContext?.sequenceId,
       rootId: jobContext?.rootId,
       deduplication,
+      schedule,
     });
     let job = createJobResult.job;
     const deduplicated = createJobResult.deduplicated;
@@ -140,7 +144,7 @@ export const queuertHelper = ({
       logHelper.jobSequenceCreated(job, { input });
     }
 
-    logHelper.jobCreated(job, { input, blockers: blockerSequences });
+    logHelper.jobCreated(job, { input, blockers: blockerSequences, schedule });
 
     notifyJobScheduled(job);
 
@@ -301,12 +305,14 @@ export const queuertHelper = ({
       input,
       context,
       deduplication,
+      schedule,
       startBlockers,
     }: {
       firstJobTypeName: TFirstJobTypeName;
       input: TInput;
       context: any;
       deduplication?: DeduplicationOptions;
+      schedule?: ScheduleOptions;
       startBlockers?: StartBlockersFn<string, BaseJobTypeDefinitions, string>;
     }): Promise<
       JobSequence<string, TFirstJobTypeName, TInput, TOutput> & { deduplicated: boolean }
@@ -320,6 +326,7 @@ export const queuertHelper = ({
         startBlockers,
         isSequence: true,
         deduplication,
+        schedule,
       });
 
       return { ...mapStateJobPairToJobSequence([job, undefined]), deduplicated };
@@ -343,11 +350,13 @@ export const queuertHelper = ({
       typeName,
       input,
       context,
+      schedule,
       startBlockers,
     }: {
       typeName: TJobTypeName;
       input: TInput;
       context: any;
+      schedule?: ScheduleOptions;
       startBlockers?: StartBlockersFn<string, BaseJobTypeDefinitions, string>;
     }): Promise<JobOf<string, BaseJobTypeDefinitions, TJobTypeName>> => {
       const { job } = await createStateJob({
@@ -356,6 +365,7 @@ export const queuertHelper = ({
         context,
         startBlockers,
         isSequence: false,
+        schedule,
       });
 
       return mapStateJobToJob(job) as JobOf<string, BaseJobTypeDefinitions, TJobTypeName>;
@@ -382,15 +392,17 @@ export const queuertHelper = ({
       }
 
       const isRescheduled = error instanceof RescheduleJobError;
-      const afterMs = isRescheduled ? error.afterMs : calculateBackoffMs(job.attempt, retryConfig);
+      const schedule: ScheduleOptions = isRescheduled
+        ? error.schedule
+        : { afterMs: calculateBackoffMs(job.attempt, retryConfig) };
       const errorString = isRescheduled ? String(error.cause) : String(error);
 
-      logHelper.jobAttemptFailed(job, { workerId, rescheduledAfterMs: afterMs, error });
+      logHelper.jobAttemptFailed(job, { workerId, rescheduledSchedule: schedule, error });
 
       await stateAdapter.rescheduleJob({
         context,
         jobId: job.id,
-        afterMs,
+        schedule,
         error: errorString,
       });
     },
@@ -627,6 +639,7 @@ export const queuertHelper = ({
             continueWith: (options: {
               typeName: string;
               input: unknown;
+              schedule?: ScheduleOptions;
               startBlockers?: StartBlockersFn<string, BaseJobTypeDefinitions, string>;
             }) => Promise<unknown>;
           } & BaseStateAdapterContext,
@@ -641,7 +654,7 @@ export const queuertHelper = ({
         let continuedJob: Job<any, any, any, any> | null = null;
 
         const output = await jobCompleteCallback({
-          continueWith: async ({ typeName, input, startBlockers }) => {
+          continueWith: async ({ typeName, input, schedule, startBlockers }) => {
             if (continuedJob) {
               throw new Error("continueWith can only be called once");
             }
@@ -659,6 +672,7 @@ export const queuertHelper = ({
                   context,
                   startBlockers: startBlockers as any,
                   isSequence: false,
+                  schedule,
                 });
 
                 return mapStateJobToJob(newJob) as Job<any, any, any, any>;

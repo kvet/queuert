@@ -183,6 +183,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       const signal = AbortSignal.timeout(100);
       await queuert.waitForJobSequenceCompletion({
         ...jobSequence,
+        signal,
         timeoutMs: 200,
       });
       if (signal.aborted) {
