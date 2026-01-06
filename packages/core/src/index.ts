@@ -8,6 +8,7 @@ import { ScheduleOptions } from "./entities/schedule.js";
 import { BackoffConfig } from "./helpers/backoff.js";
 import { Log } from "./log.js";
 import { NotifyAdapter } from "./notify-adapter/notify-adapter.js";
+import { createNoopNotifyAdapter } from "./notify-adapter/notify-adapter.noop.js";
 import {
   CompleteJobSequenceResult,
   JobSequenceCompleteOptions,
@@ -34,6 +35,7 @@ export {
   type DefineJobTypeDefinitions,
 } from "./entities/job-type.js";
 export { type ValidatedJobTypeDefinitions } from "./entities/job-type.validation.js";
+export { type CompletedJob, type Job } from "./entities/job.js";
 export { type ScheduleOptions } from "./entities/schedule.js";
 export { type BackoffConfig } from "./helpers/backoff.js";
 export { type RetryConfig } from "./helpers/retry.js";
@@ -57,7 +59,6 @@ export { rescheduleJob, type LeaseConfig } from "./worker/job-process.js";
 
 // In-process adapters
 export { createInProcessNotifyAdapter } from "./notify-adapter/notify-adapter.in-process.js";
-export { createNoopNotifyAdapter } from "./notify-adapter/notify-adapter.noop.js";
 export {
   createInProcessStateAdapter,
   type InProcessContext,
@@ -65,23 +66,23 @@ export {
 } from "./state-adapter/state-adapter.in-process.js";
 
 export type QueuertWorkerDefinition<
-  TStateAdapter extends StateAdapter<any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TStateAdapter extends StateAdapter<any, any>,
 > = {
   implementJobType: <TJobTypeName extends keyof TJobTypeDefinitions & string>(options: {
     name: TJobTypeName;
     process: JobProcessFn<TStateAdapter, TJobTypeDefinitions, TJobTypeName>;
     retryConfig?: BackoffConfig;
     leaseConfig?: LeaseConfig;
-  }) => QueuertWorkerDefinition<TStateAdapter, TJobTypeDefinitions>;
+  }) => QueuertWorkerDefinition<TJobTypeDefinitions, TStateAdapter>;
   start: Executor;
 };
 
 export type Queuert<
-  TStateAdapter extends StateAdapter<any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TStateAdapter extends StateAdapter<any, any>,
 > = {
-  createWorker: () => QueuertWorkerDefinition<TStateAdapter, TJobTypeDefinitions>;
+  createWorker: () => QueuertWorkerDefinition<TJobTypeDefinitions, TStateAdapter>;
   startJobSequence: <
     TFirstJobTypeName extends keyof FirstJobTypeDefinitions<TJobTypeDefinitions> & string,
   >(
@@ -164,18 +165,18 @@ export type Queuert<
 };
 
 export const createQueuert = async <
-  TStateAdapter extends StateAdapter<any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TStateAdapter extends StateAdapter<any, any>,
 >({
   stateAdapter,
-  notifyAdapter,
+  notifyAdapter = createNoopNotifyAdapter(),
   log,
 }: {
   stateAdapter: TStateAdapter;
-  notifyAdapter: NotifyAdapter;
+  notifyAdapter?: NotifyAdapter;
   jobTypeDefinitions: TJobTypeDefinitions;
   log: Log;
-}): Promise<Queuert<TStateAdapter, TJobTypeDefinitions>> => {
+}): Promise<Queuert<TJobTypeDefinitions, TStateAdapter>> => {
   const helper = queuertHelper({
     stateAdapter,
     notifyAdapter,
@@ -186,7 +187,7 @@ export const createQueuert = async <
     createWorker: () => {
       const createWorkerInstance = (
         registeredJobTypes: RegisteredJobTypes,
-      ): QueuertWorkerDefinition<TStateAdapter, TJobTypeDefinitions> => {
+      ): QueuertWorkerDefinition<TJobTypeDefinitions, TStateAdapter> => {
         return {
           implementJobType({ name: typeName, process, retryConfig, leaseConfig }) {
             if (registeredJobTypes.has(typeName)) {
@@ -228,18 +229,18 @@ export const createQueuert = async <
         deduplication,
         schedule,
         startBlockers,
-      })) as Queuert<TStateAdapter, TJobTypeDefinitions>["startJobSequence"],
+      })) as Queuert<TJobTypeDefinitions, TStateAdapter>["startJobSequence"],
     getJobSequence: (async ({ id, firstJobTypeName, ...context }) =>
       helper.getJobSequence({ id, firstJobTypeName, context })) as Queuert<
-      TStateAdapter,
-      TJobTypeDefinitions
+      TJobTypeDefinitions,
+      TStateAdapter
     >["getJobSequence"],
     deleteJobSequences: async ({ sequenceIds, ...context }) =>
       helper.deleteJobSequences({ sequenceIds, context }),
     completeJobSequence: (async ({ id, firstJobTypeName, complete, ...context }) =>
       helper.completeJobSequence({ id, firstJobTypeName, context, complete })) as Queuert<
-      TStateAdapter,
-      TJobTypeDefinitions
+      TJobTypeDefinitions,
+      TStateAdapter
     >["completeJobSequence"],
     waitForJobSequenceCompletion: (async ({
       id,
@@ -254,7 +255,7 @@ export const createQueuert = async <
         timeoutMs,
         pollIntervalMs,
         signal,
-      })) as Queuert<TStateAdapter, TJobTypeDefinitions>["waitForJobSequenceCompletion"],
+      })) as Queuert<TJobTypeDefinitions, TStateAdapter>["waitForJobSequenceCompletion"],
     withNotify: async (cb, ...args) => helper.withNotifyContext(async () => cb(...args)),
   };
 };

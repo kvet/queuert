@@ -11,7 +11,6 @@ Imagine you have some long-running process. For example, performing image proces
 ```ts
 const queuert = createQueuert({
   stateAdapter: ...,
-  notifyAdapter: ...,
   jobTypeDefinitions: defineUnionJobTypes<{
     'process-image': {
       input: { imageId: string };
@@ -144,7 +143,7 @@ Handles pub/sub notifications for efficient job scheduling. When a job is create
 - `@queuert/redis` - Redis notify adapter (recommended for production, includes hint-based optimization)
 - `@queuert/postgres` - PostgreSQL notify adapter (uses LISTEN/NOTIFY, no additional infrastructure)
 - `createInProcessNotifyAdapter()` - In-memory adapter (for single-process apps)
-- `createNoopNotifyAdapter()` - No-op adapter (polling only)
+- None (default) - polling only, no real-time notifications
 
 ### Notify Provider
 
