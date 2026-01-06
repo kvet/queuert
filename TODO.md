@@ -1,7 +1,6 @@
 # Medium term
 
 - Notify adapter resiliency
-- Soft timeout - Signal via AbortSignal + stop lease renewal; cooperative but covers most cases
 - Metrics collection (Prometheus, OTEL)
 
 # Long term

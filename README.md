@@ -532,6 +532,36 @@ await queuert.completeJobSequence({
 
 This pattern lets you interweave external actions with your job sequences — waiting for user input, third-party callbacks, or manual approval steps.
 
+## Timeouts
+
+For cooperative timeouts, combine `AbortSignal.timeout()` with the provided `signal`:
+
+```ts
+worker.implementJobType({
+  name: 'fetch-data',
+  process: async ({ signal, job, complete }) => {
+    const timeout = AbortSignal.timeout(30_000); // 30 seconds
+    const combined = AbortSignal.any([signal, timeout]);
+
+    // Use combined signal for cancellable operations
+    const response = await fetch(job.input.url, { signal: combined });
+    const data = await response.json();
+
+    return complete(() => ({ data }));
+  },
+});
+```
+
+For hard timeouts, configure `leaseMs` — if a job doesn't complete or renew its lease in time, the reaper reclaims it for retry:
+
+```ts
+worker.implementJobType({
+  name: 'long-running-job',
+  leaseConfig: { leaseMs: 300_000, renewIntervalMs: 60_000 }, // 5 min lease
+  process: async ({ job, complete }) => { ... },
+});
+```
+
 ## Configuration
 
 Workers support various configuration options when started:

@@ -265,6 +265,29 @@ defineUnionJobTypes<{
 
 TypeScript prevents calling `startJobSequence` with internal job types at compile-time.
 
+### Timeouts
+
+Queuert does not provide built-in soft timeout functionality because:
+
+1. **Userland solution is trivial**: Combine `AbortSignal.timeout()` with the existing `signal` parameter using `AbortSignal.any()`
+2. **Lease mechanism is the hard timeout**: If a job doesn't complete within `leaseMs`, the reaper reclaims it and another worker retries
+
+Users implement cooperative timeouts in their process functions:
+
+```typescript
+process: async ({ signal, job, complete }) => {
+  const timeout = AbortSignal.timeout(30_000);
+  const combined = AbortSignal.any([signal, timeout]);
+
+  // Use combined signal for cancellable operations
+  await fetch(url, { signal: combined });
+
+  return complete(() => output);
+}
+```
+
+For hard timeouts (forceful termination), the lease mechanism already handles this - configure `leaseMs` appropriately for the job type.
+
 ### Workerless Completion
 
 Jobs can be completed without a worker using `completeJobSequence` (sets `workerId: null`). This enables approval workflows, webhook-triggered completions, and other patterns where jobs wait for events outside worker processing.
