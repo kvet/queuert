@@ -1,15 +1,17 @@
-export type ListenResult<T> = { received: true; value: T } | { received: false };
-
-export type Listener<T> = {
-  wait: (opts?: { signal?: AbortSignal }) => Promise<ListenResult<T>>;
-  dispose: () => Promise<void>;
-};
-
 export type NotifyAdapter = {
   notifyJobScheduled: (typeName: string, count: number) => Promise<void>;
-  listenJobScheduled: (typeNames: string[]) => Promise<Listener<string>>;
+  listenJobScheduled: (
+    typeNames: string[],
+    onNotification: (typeName: string) => void,
+  ) => Promise<() => Promise<void>>;
   notifyJobSequenceCompleted: (sequenceId: string) => Promise<void>;
-  listenJobSequenceCompleted: (sequenceId: string) => Promise<Listener<void>>;
+  listenJobSequenceCompleted: (
+    sequenceId: string,
+    onNotification: () => void,
+  ) => Promise<() => Promise<void>>;
   notifyJobOwnershipLost: (jobId: string) => Promise<void>;
-  listenJobOwnershipLost: (jobId: string) => Promise<Listener<void>>;
+  listenJobOwnershipLost: (
+    jobId: string,
+    onNotification: () => void,
+  ) => Promise<() => Promise<void>>;
 };

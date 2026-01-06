@@ -17,6 +17,7 @@ import {
 import { Job, JobWithoutBlockers, mapStateJobToJob, PendingJob } from "./entities/job.js";
 import { ScheduleOptions } from "./entities/schedule.js";
 import { BackoffConfig, calculateBackoffMs } from "./helpers/backoff.js";
+import { sleep } from "./helpers/sleep.js";
 import { createLogHelper } from "./log-helper.js";
 import { Log } from "./log.js";
 import { NotifyAdapter } from "./notify-adapter/notify-adapter.js";
@@ -749,12 +750,25 @@ export const queuertHelper = ({
       const timeoutSignal = AbortSignal.timeout(timeoutMs);
       const combinedSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
 
-      const listener = await notifyAdapter.listenJobSequenceCompleted(id);
+      let resolveNotification: (() => void) | null = null;
+      let notificationPromise!: Promise<void>;
+      const resetNotificationPromise = (): void => {
+        const { promise, resolve } = Promise.withResolvers<void>();
+        notificationPromise = promise;
+        resolveNotification = resolve;
+      };
+      resetNotificationPromise();
+
+      const dispose = await notifyAdapter.listenJobSequenceCompleted(id, () => {
+        resolveNotification?.();
+      });
       try {
         while (!combinedSignal.aborted) {
-          await listener.wait({
-            signal: AbortSignal.any([combinedSignal, AbortSignal.timeout(pollIntervalMs)]),
-          });
+          await Promise.race([
+            notificationPromise,
+            sleep(pollIntervalMs, { signal: combinedSignal }),
+          ]);
+          resetNotificationPromise();
 
           const sequence = await checkSequence();
           if (sequence) return sequence;
@@ -769,7 +783,7 @@ export const queuertHelper = ({
           { cause: { sequenceId: id, timeoutMs } },
         );
       } finally {
-        await listener.dispose();
+        await dispose();
       }
     },
   };

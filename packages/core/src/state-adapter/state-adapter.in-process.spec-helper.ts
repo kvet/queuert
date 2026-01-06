@@ -12,6 +12,7 @@ export const extendWithStateInProcess = <T>(
     stateAdapter: InProcessStateAdapter;
   }>({
     stateAdapter: [
+      // oxlint-disable-next-line no-empty-pattern
       async ({}, use) => {
         await use(createInProcessStateAdapter());
       },

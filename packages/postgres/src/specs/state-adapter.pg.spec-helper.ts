@@ -1,5 +1,5 @@
-import { type StateAdapter } from "queuert";
 import { Pool } from "pg";
+import { type StateAdapter } from "queuert";
 import { type TestAPI } from "vitest";
 import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.js";
 import { createPgPoolProvider, PgPoolContext, PgPoolProvider } from "./state-provider.pg-pool.js";
@@ -41,14 +41,14 @@ export const extendWithStatePostgres = <
       { scope: "worker" },
     ],
     _dbMigrateToLatest: [
-      async ({ pool: pood }, use) => {
-        const client = await pood.connect();
+      async ({ pool }, use) => {
+        const client = await pool.connect();
         await client.query(`DROP SCHEMA IF EXISTS queuert CASCADE;`).catch(() => {
           // ignore
         });
 
         const stateProvider = createPgPoolProvider({
-          pool: pood,
+          pool: pool,
         });
         const stateAdapter = createPgStateAdapter({
           stateProvider,
@@ -69,10 +69,10 @@ export const extendWithStatePostgres = <
       { scope: "worker" },
     ],
     _dbCleanup: [
-      async ({ pool: pood }, use) => {
+      async ({ pool }, use) => {
         await use();
 
-        const client = await pood.connect();
+        const client = await pool.connect();
         await client.query(`DELETE FROM queuert.job_blocker;`);
         await client.query(`DELETE FROM queuert.job;`);
         client.release();

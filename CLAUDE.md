@@ -20,16 +20,20 @@ Core abstractions, interfaces, and in-memory implementations for testing.
 
 ### `@queuert/postgres`
 
-PostgreSQL state adapter implementation. Users provide their own `pg` client.
+PostgreSQL state adapter and notify adapter implementations. Users provide their own `pg` client.
 
 **Exports:**
 
-- `.` (main): `createPgStateAdapter`, `PgStateAdapter` type
-- `./testing`: Test helper for PostgreSQL tests (`extendWithStatePostgres`)
+- `.` (main): `createPgStateAdapter`, `PgStateAdapter` type, `createPgNotifyAdapter`, `PgNotifyProvider` type
+- `./testing`: Test helpers for PostgreSQL tests (`extendWithStatePostgres`, `extendWithPostgresNotify`, `createPgPoolNotifyProvider`)
 
 **Dependencies:**
 
 - `queuert` as peer dependency
+
+**Notify adapter notes:**
+
+The PostgreSQL notify adapter uses LISTEN/NOTIFY for pub/sub. Does not implement hint-based thundering herd optimization - all listeners query the database when a job is scheduled. Uses 3 fixed channels with payload-based filtering. LISTEN/NOTIFY is fire-and-forget; the existing polling fallback in workers ensures reliability.
 
 ### `@queuert/sqlite`
 
@@ -50,12 +54,16 @@ Redis notify adapter implementation for distributed pub/sub notifications.
 
 **Exports:**
 
-- `.` (main): `createRedisNotifyAdapter`, `CreateRedisNotifyAdapterOptions` type
+- `.` (main): `createRedisNotifyAdapter`
 - `./testing`: Test helper for Redis tests (`extendWithNotifyRedis`)
 
 **Dependencies:**
 
 - `queuert` as peer dependency
+
+**Notify adapter notes:**
+
+Uses 3 fixed channels with payload-based filtering (same pattern as PostgreSQL). Implements hint-based thundering herd optimization using Lua scripts for atomic decrement operations. Requires two Redis connections: one for commands (PUBLISH, EVAL) and one for subscriptions (SUBSCRIBE).
 
 ## Core Concepts
 
@@ -146,21 +154,20 @@ Handles pub/sub notifications for job scheduling and sequence completion. Worker
 
 **Hint-based optimization**: When N jobs are scheduled, the hint count is set to N. When workers receive the notification, they atomically check-and-decrement the hint using Lua scripts (Redis) or synchronous operations (in-process). Only N workers will proceed to query the database; others skip and wait for the next notification. This reduces database contention while maintaining low latency.
 
-**Listener pattern**: All `listen*` methods return a `Listener<T>` with:
+**Callback pattern**: All `listen*` methods accept a callback and return a dispose function:
 
-- Async setup: `await notifyAdapter.listenJobScheduled(typeNames)` - subscription is active when promise resolves
-- `wait(opts?)`: Waits for an event, returns `{ received: true, value: T }` or `{ received: false }` (aborted/disposed)
-- `dispose()`: Cleans up the subscription (also aborts pending `wait()` calls)
+- Async setup: `await notifyAdapter.listenJobScheduled(typeNames, callback)` - subscription is active when promise resolves
+- Callback is called synchronously when a notification arrives (no race condition between setup and listening)
+- Dispose function cleans up the subscription
 
 ```typescript
-const listener = await notifyAdapter.listenJobScheduled(typeNames);
+const dispose = await notifyAdapter.listenJobScheduled(typeNames, (typeName) => {
+  // Called when notification arrives
+});
 try {
-  const result = await listener.wait({ signal });
-  if (result.received) {
-    // Event happened, result.value contains the data
-  }
+  // ... do work ...
 } finally {
-  await listener.dispose();
+  await dispose();
 }
 ```
 
@@ -326,8 +333,6 @@ Avoid asymmetric naming (e.g., `started`/`finished` vs `created`/`completed`) ev
 - `waitForJobSequenceCompletion`: Waits for a job sequence to complete. Uses a hybrid polling/notification approach with 100ms poll intervals for reliability. Throws `WaitForJobSequenceCompletionTimeoutError` on timeout. Throws immediately if sequence doesn't exist.
 - `withNotify`: Wraps a callback to collect and dispatch notifications after successful completion. Used to batch job scheduling and sequence completion notifications within a transaction.
 - `notifyJobOwnershipLost` / `listenJobOwnershipLost`: Notification channel for job ownership loss. When a job's ownership is lost outside its process function (reaper reaps it, workerless completion), the process function is notified immediately via this channel. Workers in staged mode listen for these notifications and abort their signal with the appropriate reason (`"taken_by_another_worker"` or `"already_completed"`).
-- `Listener<T>`: Subscription handle returned by `listen*` methods. Has `wait()` for receiving events and `dispose()` for cleanup.
-- `ListenResult<T>`: Return type of `Listener.wait()`. Either `{ received: true, value: T }` or `{ received: false }`.
 - `JobNotFoundError`: Error thrown when a job or job sequence is not found (e.g., deleted during processing, or waiting for non-existent sequence).
 - `JobTakenByAnotherWorkerError`: Error thrown when a worker detects another worker has taken over the job (lease was acquired by someone else).
 - `JobAlreadyCompletedError`: Error thrown when attempting to complete a job that was already completed (by another worker or workerless completion).

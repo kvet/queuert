@@ -99,11 +99,12 @@ However, instead of introducing a new persistence layer, Queuert leverages your 
 npm install queuert
 
 # State adapters (pick one)
-npm install @queuert/postgres  # PostgreSQL
+npm install @queuert/postgres  # PostgreSQL (also includes notify adapter)
 npm install @queuert/sqlite    # SQLite
 
 # Notify adapters (optional, for reduced latency)
-npm install @queuert/redis     # Redis pub/sub
+npm install @queuert/redis     # Redis pub/sub (recommended for production)
+# Or use PostgreSQL LISTEN/NOTIFY via @queuert/postgres (no extra infra)
 ```
 
 ## Core Concepts
@@ -140,13 +141,14 @@ Handles pub/sub notifications for efficient job scheduling. When a job is create
 
 **Available adapters:**
 
-- `@queuert/redis` - Redis notify adapter (recommended for production)
+- `@queuert/redis` - Redis notify adapter (recommended for production, includes hint-based optimization)
+- `@queuert/postgres` - PostgreSQL notify adapter (uses LISTEN/NOTIFY, no additional infrastructure)
 - `createInProcessNotifyAdapter()` - In-memory adapter (for single-process apps)
 - `createNoopNotifyAdapter()` - No-op adapter (polling only)
 
 ### Notify Provider
 
-Bridges your Redis client (or other pub/sub system) with the notify adapter. Similar to state providers, you implement an interface for publishing messages and subscribing to channels.
+Bridges your pub/sub client (Redis, PostgreSQL, etc.) with the notify adapter. Similar to state providers, you implement an interface for publishing messages and subscribing to channels.
 
 ### Worker
 

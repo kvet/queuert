@@ -12,7 +12,6 @@
 
 # ???
 
-- Postgres notify adapter - LISTEN/NOTIFY not reliable enough for production use; requires periodic polling to guarantee delivery
 - Support more job id types (integers)
 - Zod job type definitions - TypeScript types already strong at compile-time; runtime validation is user's concern at system boundaries
 - Singletons/concurrency limit - Achievable in userland via blocker-based semaphore pattern; document the pattern instead

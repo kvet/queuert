@@ -1,11 +1,5 @@
 import type { NotifyAdapter } from "queuert";
-import type { RedisNotifyProvider } from "../notify-provider/notify-provider.redis.js";
-import { DECR_IF_POSITIVE_SCRIPT, SET_AND_PUBLISH_SCRIPT } from "./lua.js";
-
-export type CreateRedisNotifyAdapterOptions<TContext> = {
-  provider: RedisNotifyProvider<TContext>;
-  channelPrefix?: string;
-};
+import type { PgNotifyProvider } from "../notify-provider/notify-provider.pg.js";
 
 type SharedListenerState =
   | { status: "idle" }
@@ -14,11 +8,13 @@ type SharedListenerState =
       status: "running";
       callbacks: Set<(payload: string) => void>;
       unsubscribe: () => Promise<void>;
+      signalClose: () => void;
+      connectionPromise: Promise<void>;
     }
   | { status: "stopping"; stoppedPromise: Promise<void> };
 
 const createSharedListener = <TContext>(
-  provider: RedisNotifyProvider<TContext>,
+  provider: PgNotifyProvider<TContext>,
   channel: string,
 ): {
   subscribe: (callback: (payload: string) => void) => Promise<() => Promise<void>>;
@@ -30,22 +26,33 @@ const createSharedListener = <TContext>(
       if (state.status === "idle") {
         const callbacks = new Set<(payload: string) => void>();
         const { promise: readyPromise, resolve: resolveReady } = Promise.withResolvers<void>();
+        const { promise: closeSignal, resolve: signalClose } = Promise.withResolvers<void>();
 
         state = { status: "starting", readyPromise };
 
-        const unsubscribe = await provider.provideContext("subscribe", async (ctx) => {
-          const unsub = await provider.subscribe(ctx, channel, (payload) => {
+        let unsubscribe: () => Promise<void>;
+        const connectionPromise = provider.provideContext("listen", async (ctx) => {
+          unsubscribe = await provider.subscribe(ctx, channel, (payload) => {
             if (state.status === "running") {
               for (const cb of state.callbacks) {
                 cb(payload);
               }
             }
           });
+
           resolveReady();
-          return unsub;
+          await closeSignal;
+          await unsubscribe();
         });
 
-        state = { status: "running", callbacks, unsubscribe };
+        await readyPromise;
+        state = {
+          status: "running",
+          callbacks,
+          unsubscribe: unsubscribe!,
+          signalClose,
+          connectionPromise,
+        };
         return callbacks;
       }
 
@@ -71,11 +78,12 @@ const createSharedListener = <TContext>(
     if (state.status !== "running") return;
     if (state.callbacks.size > 0) return;
 
-    const { unsubscribe } = state;
-    const stoppedPromise = unsubscribe();
-    state = { status: "stopping", stoppedPromise };
+    const { signalClose, connectionPromise } = state;
+    state = { status: "stopping", stoppedPromise: connectionPromise };
 
-    await stoppedPromise;
+    signalClose();
+    await connectionPromise;
+
     state = { status: "idle" };
   };
 
@@ -92,58 +100,39 @@ const createSharedListener = <TContext>(
   };
 };
 
-export const createRedisNotifyAdapter = async <TContext>({
+export const createPgNotifyAdapter = async <TContext>({
   provider,
   channelPrefix = "queuert",
-}: CreateRedisNotifyAdapterOptions<TContext>): Promise<NotifyAdapter> => {
-  const jobScheduledChannel = `${channelPrefix}:sched`;
-  const sequenceCompletedChannel = `${channelPrefix}:seqc`;
-  const ownershipLostChannel = `${channelPrefix}:owls`;
-  const hintKeyPrefix = `${channelPrefix}:hint:`;
+}: {
+  provider: PgNotifyProvider<TContext>;
+  channelPrefix?: string;
+}): Promise<NotifyAdapter> => {
+  const jobScheduledChannel = `${channelPrefix}_sched`;
+  const sequenceCompletedChannel = `${channelPrefix}_seqc`;
+  const ownershipLostChannel = `${channelPrefix}_owls`;
 
   const jobScheduledListener = createSharedListener(provider, jobScheduledChannel);
   const sequenceCompletedListener = createSharedListener(provider, sequenceCompletedChannel);
   const ownershipLostListener = createSharedListener(provider, ownershipLostChannel);
 
   return {
-    notifyJobScheduled: async (typeName, count) => {
-      const hintId = crypto.randomUUID();
-      const hintKey = `${hintKeyPrefix}${hintId}`;
-
-      await provider.provideContext("command", async (ctx) => {
-        await provider.eval(
-          ctx,
-          SET_AND_PUBLISH_SCRIPT,
-          [hintKey, jobScheduledChannel],
-          [String(count), `${hintId}:${typeName}`],
-        );
+    notifyJobScheduled: async (typeName, _count) => {
+      await provider.provideContext("query", async (ctx) => {
+        await provider.publish(ctx, jobScheduledChannel, typeName);
       });
     },
 
     listenJobScheduled: async (typeNames, onNotification) => {
       const typeNameSet = new Set(typeNames);
-
       return jobScheduledListener.subscribe((payload) => {
-        const separatorIndex = payload.indexOf(":");
-        if (separatorIndex === -1) return;
-
-        const hintId = payload.slice(0, separatorIndex);
-        const typeName = payload.slice(separatorIndex + 1);
-
-        if (!typeNameSet.has(typeName)) return;
-
-        const hintKey = `${hintKeyPrefix}${hintId}`;
-        void provider.provideContext("command", async (ctx) => {
-          const result = await provider.eval(ctx, DECR_IF_POSITIVE_SCRIPT, [hintKey], []);
-          if (result === 1) {
-            onNotification(typeName);
-          }
-        });
+        if (typeNameSet.has(payload)) {
+          onNotification(payload);
+        }
       });
     },
 
     notifyJobSequenceCompleted: async (sequenceId) => {
-      await provider.provideContext("command", async (ctx) => {
+      await provider.provideContext("query", async (ctx) => {
         await provider.publish(ctx, sequenceCompletedChannel, sequenceId);
       });
     },
@@ -157,7 +146,7 @@ export const createRedisNotifyAdapter = async <TContext>({
     },
 
     notifyJobOwnershipLost: async (jobId) => {
-      await provider.provideContext("command", async (ctx) => {
+      await provider.provideContext("query", async (ctx) => {
         await provider.publish(ctx, ownershipLostChannel, jobId);
       });
     },

@@ -80,7 +80,10 @@ export const createExecutor = ({
     const stopController = new AbortController();
 
     const waitForNextJob = async () => {
-      const listener = await notifyAdapter.listenJobScheduled(typeNames);
+      const { promise: notified, resolve: onNotification } = Promise.withResolvers<void>();
+      const dispose = await notifyAdapter.listenJobScheduled(typeNames, () => {
+        onNotification();
+      });
       try {
         const pullDelayMs = await helper.getNextJobAvailableInMs({
           typeNames,
@@ -91,14 +94,14 @@ export const createExecutor = ({
           return;
         }
         await Promise.any([
-          listener.wait({ signal: stopController.signal }),
+          notified,
           sleep(pullDelayMs, {
             jitterMs: pullDelayMs / 10,
             signal: stopController.signal,
           }),
         ]);
       } finally {
-        await listener.dispose();
+        await dispose();
       }
     };
 
