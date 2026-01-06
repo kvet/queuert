@@ -137,6 +137,12 @@ type NotifyContextAbsenceLogEntry = LogEntry<
   "Not withNotify context when creating job for queue. The job processing may be delayed.",
   [JobBasicArgs]
 >;
+type NotifyAdapterErrorLogEntry = LogEntry<
+  "notify_adapter_error",
+  "warn",
+  "Notify adapter error",
+  [{ operation: string }, unknown]
+>;
 
 type TypedLogEntry =
   // worker
@@ -159,6 +165,7 @@ type TypedLogEntry =
   // blockers
   | JobSequenceUnblockedJobsLogEntry
   // notify
-  | NotifyContextAbsenceLogEntry;
+  | NotifyContextAbsenceLogEntry
+  | NotifyAdapterErrorLogEntry;
 
 export type Log = (options: TypedLogEntry) => void;

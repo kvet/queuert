@@ -51,6 +51,7 @@ export type LogHelper = {
     },
   ) => void;
   notifyContextAbsence: (job: StateJob) => void;
+  notifyAdapterError: (operation: string, error: unknown) => void;
   jobCompleted: (
     job: StateJob,
     options: { output: unknown; continuedWith?: Job<any, any, any, any>; workerId: string | null },
@@ -69,6 +70,10 @@ export type LogHelper = {
   jobAttemptStarted: (job: StateJob, options: { workerId: string }) => void;
   jobReaped: (job: StateJob, options: { workerId: string }) => void;
   jobSequenceDeleted: (sequenceJob: StateJob, options: { deletedJobIds: string[] }) => void;
+  workerStarted: (options: { workerId: string; jobTypeNames: string[] }) => void;
+  workerError: (options: { workerId: string }, error: unknown) => void;
+  workerStopping: (options: { workerId: string }) => void;
+  workerStopped: (options: { workerId: string }) => void;
 };
 
 export const createLogHelper = ({ log }: { log: Log }): LogHelper => ({
@@ -105,6 +110,15 @@ export const createLogHelper = ({ log }: { log: Log }): LogHelper => ({
       message:
         "Not withNotify context when creating job for queue. The job processing may be delayed.",
       args: [mapStateJobToJobBasicLogArgs(job)],
+    });
+  },
+
+  notifyAdapterError(operation, error) {
+    log({
+      type: "notify_adapter_error",
+      level: "warn",
+      message: "Notify adapter error",
+      args: [{ operation }, error],
     });
   },
 
@@ -236,6 +250,42 @@ export const createLogHelper = ({ log }: { log: Log }): LogHelper => ({
           deletedJobIds: options.deletedJobIds,
         },
       ],
+    });
+  },
+
+  workerStarted(options) {
+    log({
+      type: "worker_started",
+      level: "info",
+      message: "Started worker",
+      args: [options],
+    });
+  },
+
+  workerError(options, error) {
+    log({
+      type: "worker_error",
+      level: "error",
+      message: "Worker error",
+      args: [options, error],
+    });
+  },
+
+  workerStopping(options) {
+    log({
+      type: "worker_stopping",
+      level: "info",
+      message: "Stopping worker...",
+      args: [options],
+    });
+  },
+
+  workerStopped(options) {
+    log({
+      type: "worker_stopped",
+      level: "info",
+      message: "Worker has been stopped",
+      args: [options],
     });
   },
 });

@@ -1,28 +1,20 @@
-import { type StateAdapter } from "queuert";
 import {
   blockerSequencesTestSuite,
-  schedulingTestSuite,
   extendWithCommon,
   extendWithNoopNotify,
   processTestSuite,
   reaperTestSuite,
+  schedulingTestSuite,
   sequencesTestSuite,
   stateResilienceTestSuite,
   waitSequenceCompletionTestSuite,
   workerlessCompletionTestSuite,
   workerTestSuite,
 } from "queuert/testing";
-import { describe, it, TestAPI } from "vitest";
+import { describe, it } from "vitest";
 import { extendWithStateSqlite } from "./state-adapter.sqlite.spec-helper.js";
 
-const sqliteNoopIt = extendWithNoopNotify(
-  extendWithCommon(
-    extendWithStateSqlite(it) as unknown as TestAPI<{
-      stateAdapter: StateAdapter<{ $test: true }, string>;
-      flakyStateAdapter: StateAdapter<{ $test: true }, string>;
-    }>,
-  ),
-);
+const sqliteNoopIt = extendWithNoopNotify(extendWithCommon(extendWithStateSqlite(it)));
 
 describe("Process", () => {
   processTestSuite({ it: sqliteNoopIt });

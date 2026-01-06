@@ -1,16 +1,15 @@
 import { TestAPI } from "vitest";
-import { createQueuert, defineUnionJobTypes, StateAdapter } from "../index.js";
+import { createQueuert, defineUnionJobTypes, NotifyAdapter } from "../index.js";
 import { TestSuiteContext } from "./spec-context.spec-helper.js";
 
-export const stateResilienceTestSuite = ({
+export const notifyResilienceTestSuite = ({
   it,
 }: {
-  it: TestAPI<TestSuiteContext & { flakyStateAdapter: StateAdapter<{ $test: true }, string> }>;
+  it: TestAPI<TestSuiteContext & { flakyNotifyAdapter: NotifyAdapter }>;
 }): void => {
-  it("handles transient database errors gracefully", async ({
-    flakyStateAdapter,
+  it("handles transient notify adapter errors gracefully", async ({
     stateAdapter,
-    notifyAdapter,
+    flakyNotifyAdapter,
     withWorkers,
     runInTransaction,
     log,
@@ -24,18 +23,12 @@ export const stateResilienceTestSuite = ({
 
     const queuert = await createQueuert({
       stateAdapter,
-      notifyAdapter,
-      log,
-      jobTypeDefinitions,
-    });
-    const flakyQueuert = await createQueuert({
-      stateAdapter: flakyStateAdapter,
-      notifyAdapter,
+      notifyAdapter: flakyNotifyAdapter,
       log,
       jobTypeDefinitions,
     });
 
-    const flakyWorker = flakyQueuert.createWorker().implementJobType({
+    const worker = queuert.createWorker().implementJobType({
       name: "test",
       process: async ({ job, prepare, complete }) => {
         await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
@@ -43,23 +36,9 @@ export const stateResilienceTestSuite = ({
       },
     });
 
-    const jobSequences = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
-        Promise.all(
-          Array.from({ length: 20 }, async (_, i) =>
-            queuert.startJobSequence({
-              ...context,
-              firstJobTypeName: "test",
-              input: { value: i, atomic: i % 2 === 0 },
-            }),
-          ),
-        ),
-      ),
-    );
-
     await withWorkers(
       [
-        await flakyWorker.start({
+        await worker.start({
           pollIntervalMs: 1_000_000, // should be processed in a single loop invocations
           nextJobDelayMs: 0,
           defaultLeaseConfig: {
@@ -79,9 +58,25 @@ export const stateResilienceTestSuite = ({
         }),
       ],
       async () => {
+        // at least one notify pushes worker to process jobs
+        const jobSequences = await queuert.withNotify(async () =>
+          runInTransaction(async (context) =>
+            Promise.all(
+              Array.from({ length: 20 }, async (_, i) =>
+                queuert.startJobSequence({
+                  ...context,
+                  firstJobTypeName: "test",
+                  input: { value: i, atomic: i % 2 === 0 },
+                }),
+              ),
+            ),
+          ),
+        );
+
         await Promise.all(
           jobSequences.map(async (seq) =>
-            queuert.waitForJobSequenceCompletion({ ...seq, timeoutMs: 1000 }),
+            // we have to rely on polling here since notify adapter is flaky
+            queuert.waitForJobSequenceCompletion({ ...seq, pollIntervalMs: 1000, timeoutMs: 5000 }),
           ),
         );
       },

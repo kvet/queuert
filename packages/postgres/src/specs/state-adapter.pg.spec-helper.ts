@@ -15,8 +15,8 @@ export const extendWithStatePostgres = <
 ): TestAPI<
   T & {
     pool: Pool;
-    stateAdapter: PgStateAdapter;
-    flakyStateAdapter: PgStateAdapter;
+    stateAdapter: StateAdapter<{ $test: true }, string>;
+    flakyStateAdapter: StateAdapter<{ $test: true }, string>;
   }
 > => {
   return api.extend<{

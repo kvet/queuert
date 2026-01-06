@@ -1,6 +1,6 @@
-import { type StateAdapter } from "queuert";
 import Database from "better-sqlite3";
 import { UUID } from "crypto";
+import { type StateAdapter } from "queuert";
 import { type TestAPI } from "vitest";
 import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
 import {
@@ -16,8 +16,8 @@ export const extendWithStateSqlite = <T>(
 ): TestAPI<
   T & {
     db: Database.Database;
-    stateAdapter: SqliteStateAdapter;
-    flakyStateAdapter: SqliteStateAdapter;
+    stateAdapter: StateAdapter<{ $test: true }, string>;
+    flakyStateAdapter: StateAdapter<{ $test: true }, string>;
   }
 > => {
   return api.extend<{

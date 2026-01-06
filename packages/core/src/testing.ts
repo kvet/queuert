@@ -1,11 +1,12 @@
 // Test Suites
 export { blockerSequencesTestSuite } from "./suites/blocker-sequences.test-suite.js";
 export { deduplicationTestSuite } from "./suites/deduplication.test-suite.js";
-export { schedulingTestSuite } from "./suites/scheduling.test-suite.js";
 export { deletionTestSuite } from "./suites/deletion.test-suite.js";
+export { notifyResilienceTestSuite } from "./suites/notify-resilience.test-suite.js";
 export { notifyTestSuite } from "./suites/notify.test-suite.js";
 export { processTestSuite } from "./suites/process.test-suite.js";
 export { reaperTestSuite } from "./suites/reaper.test-suite.js";
+export { schedulingTestSuite } from "./suites/scheduling.test-suite.js";
 export { sequencesTestSuite } from "./suites/sequences.test-suite.js";
 export { stateResilienceTestSuite } from "./suites/state-resilience.test-suite.js";
 export { waitSequenceCompletionTestSuite } from "./suites/wait-sequence-completion.test-suite.js";

@@ -206,7 +206,6 @@ export const createQueuert = async <
             createExecutor({
               helper,
               notifyAdapter,
-              log,
               registeredJobTypes,
             })(startOptions),
         };

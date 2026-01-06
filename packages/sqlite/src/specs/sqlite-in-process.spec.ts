@@ -1,29 +1,21 @@
-import { type StateAdapter } from "queuert";
 import {
   blockerSequencesTestSuite,
-  schedulingTestSuite,
   extendWithCommon,
   extendWithInProcessNotify,
   notifyTestSuite,
   processTestSuite,
   reaperTestSuite,
+  schedulingTestSuite,
   sequencesTestSuite,
   stateResilienceTestSuite,
   waitSequenceCompletionTestSuite,
   workerlessCompletionTestSuite,
   workerTestSuite,
 } from "queuert/testing";
-import { describe, it, TestAPI } from "vitest";
+import { describe, it } from "vitest";
 import { extendWithStateSqlite } from "./state-adapter.sqlite.spec-helper.js";
 
-const sqliteInProcessIt = extendWithInProcessNotify(
-  extendWithCommon(
-    extendWithStateSqlite(it) as unknown as TestAPI<{
-      stateAdapter: StateAdapter<{ $test: true }, string>;
-      flakyStateAdapter: StateAdapter<{ $test: true }, string>;
-    }>,
-  ),
-);
+const sqliteInProcessIt = extendWithInProcessNotify(extendWithCommon(extendWithStateSqlite(it)));
 
 describe("Process", () => {
   processTestSuite({ it: sqliteInProcessIt });
@@ -53,14 +45,14 @@ describe("State Resilience", () => {
   stateResilienceTestSuite({ it: sqliteInProcessIt });
 });
 
-describe("Notify", () => {
-  notifyTestSuite({ it: sqliteInProcessIt });
-});
-
 describe("Workerless Completion", () => {
   workerlessCompletionTestSuite({ it: sqliteInProcessIt });
 });
 
 describe("Scheduling", () => {
   schedulingTestSuite({ it: sqliteInProcessIt });
+});
+
+describe("Notify", () => {
+  notifyTestSuite({ it: sqliteInProcessIt });
 });

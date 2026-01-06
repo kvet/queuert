@@ -1,5 +1,4 @@
 import { extendWithPostgres } from "@queuert/testcontainers";
-import { type StateAdapter } from "queuert";
 import {
   blockerSequencesTestSuite,
   deduplicationTestSuite,
@@ -15,16 +14,11 @@ import {
   workerlessCompletionTestSuite,
   workerTestSuite,
 } from "queuert/testing";
-import { describe, it, TestAPI } from "vitest";
+import { describe, it } from "vitest";
 import { extendWithStatePostgres } from "./state-adapter.pg.spec-helper.js";
 
 const postgresNoopIt = extendWithNoopNotify(
-  extendWithCommon(
-    extendWithStatePostgres(extendWithPostgres(it, import.meta.url)) as unknown as TestAPI<{
-      stateAdapter: StateAdapter<{ $test: true }, string>;
-      flakyStateAdapter: StateAdapter<{ $test: true }, string>;
-    }>,
-  ),
+  extendWithCommon(extendWithStatePostgres(extendWithPostgres(it, import.meta.url))),
 );
 
 describe("Process", () => {

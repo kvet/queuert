@@ -3,7 +3,6 @@ import { BaseJobTypeDefinitions } from "../entities/job-type.js";
 import { BackoffConfig } from "../helpers/backoff.js";
 import { withRetry } from "../helpers/retry.js";
 import { sleep } from "../helpers/sleep.js";
-import { Log } from "../log.js";
 import { NotifyAdapter } from "../notify-adapter/notify-adapter.js";
 import {
   JobAlreadyCompletedError,
@@ -29,12 +28,10 @@ export type RegisteredJobTypes = Map<
 export const createExecutor = ({
   helper,
   notifyAdapter,
-  log,
   registeredJobTypes,
 }: {
   helper: ProcessHelper;
   notifyAdapter: NotifyAdapter;
-  log: Log;
   registeredJobTypes: RegisteredJobTypes;
 }): ((startOptions?: {
   workerId?: string;
@@ -45,6 +42,7 @@ export const createExecutor = ({
   workerLoopRetryConfig?: BackoffConfig;
 }) => Promise<() => Promise<void>>) => {
   const typeNames = Array.from(registeredJobTypes.keys());
+  const { logHelper } = helper;
 
   return async ({
     workerId = randomUUID(),
@@ -65,25 +63,20 @@ export const createExecutor = ({
       maxDelayMs: 300_000,
     },
   } = {}) => {
-    log({
-      type: "worker_started",
-      level: "info",
-      message: "Started worker",
-      args: [
-        {
-          workerId,
-          jobTypeNames: typeNames,
-        },
-      ],
-    });
+    logHelper.workerStarted({ workerId, jobTypeNames: typeNames });
 
     const stopController = new AbortController();
 
     const waitForNextJob = async () => {
       const { promise: notified, resolve: onNotification } = Promise.withResolvers<void>();
-      const dispose = await notifyAdapter.listenJobScheduled(typeNames, () => {
-        onNotification();
-      });
+      let dispose: () => Promise<void> = async () => {};
+      try {
+        dispose = await notifyAdapter.listenJobScheduled(typeNames, () => {
+          onNotification();
+        });
+      } catch (error) {
+        logHelper.notifyAdapterError("listenJobScheduled", error);
+      }
       try {
         const pullDelayMs = await helper.getNextJobAvailableInMs({
           typeNames,
@@ -156,17 +149,7 @@ export const createExecutor = ({
         ) {
           return true;
         } else {
-          log({
-            type: "worker_error",
-            level: "error",
-            message: "Worker error",
-            args: [
-              {
-                workerId,
-              },
-              error,
-            ],
-          });
+          logHelper.workerError({ workerId }, error);
           throw error;
         }
       }
@@ -200,17 +183,7 @@ export const createExecutor = ({
             }
           }
         } catch (error) {
-          log({
-            type: "worker_error",
-            level: "error",
-            message: "Worker error",
-            args: [
-              {
-                workerId,
-              },
-              error,
-            ],
-          });
+          logHelper.workerError({ workerId }, error);
           throw error;
         }
       }
@@ -221,28 +194,10 @@ export const createExecutor = ({
     }).catch(() => {});
 
     return async () => {
-      log({
-        type: "worker_stopping",
-        level: "info",
-        message: "Stopping worker...",
-        args: [
-          {
-            workerId,
-          },
-        ],
-      });
+      logHelper.workerStopping({ workerId });
       stopController.abort();
       await runWorkerLoopPromise;
-      log({
-        type: "worker_stopped",
-        level: "info",
-        message: "Worker has been stopped",
-        args: [
-          {
-            workerId,
-          },
-        ],
-      });
+      logHelper.workerStopped({ workerId });
     };
   };
 };

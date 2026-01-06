@@ -18,7 +18,7 @@ import { Job, JobWithoutBlockers, mapStateJobToJob, PendingJob } from "./entitie
 import { ScheduleOptions } from "./entities/schedule.js";
 import { BackoffConfig, calculateBackoffMs } from "./helpers/backoff.js";
 import { sleep } from "./helpers/sleep.js";
-import { createLogHelper } from "./log-helper.js";
+import { createLogHelper, LogHelper } from "./log-helper.js";
 import { Log } from "./log.js";
 import { NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 import {
@@ -193,15 +193,27 @@ export const queuertHelper = ({
       const result = await cb(...args);
 
       await Promise.all([
-        ...Array.from(store.jobTypeCounts.entries()).map(async ([typeName, count]) =>
-          notifyAdapter.notifyJobScheduled(typeName, count),
-        ),
-        ...Array.from(store.sequenceIds).map(async (sequenceId) =>
-          notifyAdapter.notifyJobSequenceCompleted(sequenceId),
-        ),
-        ...Array.from(store.jobOwnershipLostIds).map(async (jobId) =>
-          notifyAdapter.notifyJobOwnershipLost(jobId),
-        ),
+        ...Array.from(store.jobTypeCounts.entries()).map(async ([typeName, count]) => {
+          try {
+            await notifyAdapter.notifyJobScheduled(typeName, count);
+          } catch (error) {
+            logHelper.notifyAdapterError("notifyJobScheduled", error);
+          }
+        }),
+        ...Array.from(store.sequenceIds).map(async (sequenceId) => {
+          try {
+            await notifyAdapter.notifyJobSequenceCompleted(sequenceId);
+          } catch (error) {
+            logHelper.notifyAdapterError("notifyJobSequenceCompleted", error);
+          }
+        }),
+        ...Array.from(store.jobOwnershipLostIds).map(async (jobId) => {
+          try {
+            await notifyAdapter.notifyJobOwnershipLost(jobId);
+          } catch (error) {
+            logHelper.notifyAdapterError("notifyJobOwnershipLost", error);
+          }
+        }),
       ]);
 
       return result;
@@ -281,6 +293,8 @@ export const queuertHelper = ({
   };
 
   return {
+    // oxlint-disable-next-line no-unnecessary-type-assertion -- needed for --isolatedDeclarations
+    logHelper: logHelper as LogHelper,
     withNotifyContext: withNotifyContext as <T>(cb: () => Promise<T>) => Promise<T>,
     withJobContext: withJobContext as <T>(
       context: { originId: string; sequenceId: string; rootId: string },
@@ -534,8 +548,16 @@ export const queuertHelper = ({
       if (job) {
         logHelper.jobReaped(job, { workerId });
 
-        await notifyAdapter.notifyJobScheduled(job.typeName, 1);
-        await notifyAdapter.notifyJobOwnershipLost(job.id);
+        try {
+          await notifyAdapter.notifyJobScheduled(job.typeName, 1);
+        } catch (error) {
+          logHelper.notifyAdapterError("notifyJobScheduled", error);
+        }
+        try {
+          await notifyAdapter.notifyJobOwnershipLost(job.id);
+        } catch (error) {
+          logHelper.notifyAdapterError("notifyJobOwnershipLost", error);
+        }
       }
     },
     deleteJobSequences: async ({
@@ -759,9 +781,14 @@ export const queuertHelper = ({
       };
       resetNotificationPromise();
 
-      const dispose = await notifyAdapter.listenJobSequenceCompleted(id, () => {
-        resolveNotification?.();
-      });
+      let dispose: () => Promise<void> = async () => {};
+      try {
+        dispose = await notifyAdapter.listenJobSequenceCompleted(id, () => {
+          resolveNotification?.();
+        });
+      } catch (error) {
+        logHelper.notifyAdapterError("listenJobSequenceCompleted", error);
+      }
       try {
         while (!combinedSignal.aborted) {
           await Promise.race([

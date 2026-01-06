@@ -8,7 +8,6 @@ import { StateAdapter } from "../state-adapter/state-adapter.js";
 
 export type TestSuiteContext = {
   stateAdapter: StateAdapter<{ $test: true }, string>;
-  flakyStateAdapter: StateAdapter<{ $test: true }, string>;
   notifyAdapter: NotifyAdapter;
   runInTransaction: <T>(cb: (context: { $test: true }) => Promise<T>) => Promise<T>;
   withWorkers: <T>(workers: (() => Promise<void>)[], cb: () => Promise<T>) => Promise<T>;
@@ -44,9 +43,6 @@ export const extendWithCommon = <
         await use(async (workers, cb) => {
           try {
             return await cb();
-          } catch (error) {
-            console.error("Error during withWorkers execution:", error);
-            throw error;
           } finally {
             await Promise.all(workers.map(async (w) => w()));
           }

@@ -162,6 +162,7 @@ export const runJobProcess = async ({
   workerId: string;
   notifyAdapter: NotifyAdapter;
 }): Promise<() => Promise<void>> => {
+  const { logHelper } = helper;
   const firstLeaseCommitted = createSignal();
   const claimTransactionClosed = createSignal();
 
@@ -270,11 +271,15 @@ export const runJobProcess = async ({
 
       if (config.mode === "staged") {
         await leaseManager.start();
-        disposeOwnershipListener = await notifyAdapter.listenJobOwnershipLost(job.id, () => {
-          if (!abortController.signal.aborted) {
-            void runInGuardedTransaction(async () => Promise.resolve()).catch(() => {});
-          }
-        });
+        try {
+          disposeOwnershipListener = await notifyAdapter.listenJobOwnershipLost(job.id, () => {
+            if (!abortController.signal.aborted) {
+              void runInGuardedTransaction(async () => Promise.resolve()).catch(() => {});
+            }
+          });
+        } catch (error) {
+          logHelper.notifyAdapterError("listenJobOwnershipLost", error);
+        }
       }
 
       return callbackOutput;

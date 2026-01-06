@@ -1,29 +1,23 @@
-import { type StateAdapter } from "queuert";
+import { extendWithPostgres } from "@queuert/testcontainers";
 import {
   blockerSequencesTestSuite,
-  schedulingTestSuite,
   extendWithCommon,
   extendWithInProcessNotify,
   notifyTestSuite,
   processTestSuite,
   reaperTestSuite,
+  schedulingTestSuite,
   sequencesTestSuite,
   stateResilienceTestSuite,
   waitSequenceCompletionTestSuite,
   workerlessCompletionTestSuite,
   workerTestSuite,
 } from "queuert/testing";
-import { extendWithPostgres } from "@queuert/testcontainers";
-import { describe, it, TestAPI } from "vitest";
+import { describe, it } from "vitest";
 import { extendWithStatePostgres } from "./state-adapter.pg.spec-helper.js";
 
 const postgresInProcessIt = extendWithInProcessNotify(
-  extendWithCommon(
-    extendWithStatePostgres(extendWithPostgres(it, import.meta.url)) as unknown as TestAPI<{
-      stateAdapter: StateAdapter<{ $test: true }, string>;
-      flakyStateAdapter: StateAdapter<{ $test: true }, string>;
-    }>,
-  ),
+  extendWithCommon(extendWithStatePostgres(extendWithPostgres(it, import.meta.url))),
 );
 
 describe("Process", () => {
@@ -54,14 +48,14 @@ describe("State Resilience", () => {
   stateResilienceTestSuite({ it: postgresInProcessIt });
 });
 
-describe("Notify", () => {
-  notifyTestSuite({ it: postgresInProcessIt });
-});
-
 describe("Workerless Completion", () => {
   workerlessCompletionTestSuite({ it: postgresInProcessIt });
 });
 
 describe("Scheduling", () => {
   schedulingTestSuite({ it: postgresInProcessIt });
+});
+
+describe("Notify", () => {
+  notifyTestSuite({ it: postgresInProcessIt });
 });

@@ -1,11 +1,10 @@
-import { describe, it, TestAPI } from "vitest";
+import { describe, it } from "vitest";
 import { extendWithStateInProcess } from "../state-adapter/state-adapter.in-process.spec-helper.js";
-import { StateAdapter } from "../state-adapter/state-adapter.js";
 import { blockerSequencesTestSuite } from "../suites/blocker-sequences.test-suite.js";
-import { schedulingTestSuite } from "../suites/scheduling.test-suite.js";
 import { notifyTestSuite } from "../suites/notify.test-suite.js";
 import { processTestSuite } from "../suites/process.test-suite.js";
 import { reaperTestSuite } from "../suites/reaper.test-suite.js";
+import { schedulingTestSuite } from "../suites/scheduling.test-suite.js";
 import { sequencesTestSuite } from "../suites/sequences.test-suite.js";
 import { extendWithCommon, extendWithInProcessNotify } from "../suites/spec-context.spec-helper.js";
 import { waitSequenceCompletionTestSuite } from "../suites/wait-sequence-completion.test-suite.js";
@@ -13,12 +12,7 @@ import { workerTestSuite } from "../suites/worker.test-suite.js";
 import { workerlessCompletionTestSuite } from "../suites/workerless-completion.test-suite.js";
 
 const inProcessInProcessIt = extendWithInProcessNotify(
-  extendWithCommon(
-    extendWithStateInProcess(it) as unknown as TestAPI<{
-      stateAdapter: StateAdapter<{ $test: true }, string>;
-      flakyStateAdapter: StateAdapter<{ $test: true }, string>;
-    }>,
-  ),
+  extendWithCommon(extendWithStateInProcess(it)),
 );
 
 describe("Process", () => {
@@ -45,14 +39,14 @@ describe("Wait Sequence Completion", () => {
   waitSequenceCompletionTestSuite({ it: inProcessInProcessIt });
 });
 
-describe("Notify", () => {
-  notifyTestSuite({ it: inProcessInProcessIt });
-});
-
 describe("Workerless Completion", () => {
   workerlessCompletionTestSuite({ it: inProcessInProcessIt });
 });
 
 describe("Scheduling", () => {
   schedulingTestSuite({ it: inProcessInProcessIt });
+});
+
+describe("Notify", () => {
+  notifyTestSuite({ it: inProcessInProcessIt });
 });
