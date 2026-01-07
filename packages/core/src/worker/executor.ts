@@ -3,7 +3,6 @@ import { BaseJobTypeDefinitions } from "../entities/job-type.js";
 import { BackoffConfig } from "../helpers/backoff.js";
 import { withRetry } from "../helpers/retry.js";
 import { sleep } from "../helpers/sleep.js";
-import { NotifyAdapter } from "../notify-adapter/notify-adapter.js";
 import {
   JobAlreadyCompletedError,
   JobTakenByAnotherWorkerError,
@@ -27,11 +26,9 @@ export type RegisteredJobTypes = Map<
 
 export const createExecutor = ({
   helper,
-  notifyAdapter,
   registeredJobTypes,
 }: {
   helper: ProcessHelper;
-  notifyAdapter: NotifyAdapter;
   registeredJobTypes: RegisteredJobTypes;
 }): ((startOptions?: {
   workerId?: string;
@@ -42,7 +39,7 @@ export const createExecutor = ({
   workerLoopRetryConfig?: BackoffConfig;
 }) => Promise<() => Promise<void>>) => {
   const typeNames = Array.from(registeredJobTypes.keys());
-  const { logHelper } = helper;
+  const { notifyAdapter, logHelper } = helper;
 
   return async ({
     workerId = randomUUID(),

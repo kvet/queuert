@@ -1,6 +1,5 @@
 # Medium term
 
-- notify_context_absence shouldn't be fired when notify adapter is not set
 - introduce state_adapter_error log to properly track state adapter errors
 - Metrics collection - design complete (see docs/metrics-adapter-design.md), implementation pending
 

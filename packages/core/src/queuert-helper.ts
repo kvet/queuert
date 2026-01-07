@@ -21,6 +21,7 @@ import { sleep } from "./helpers/sleep.js";
 import { createLogHelper, LogHelper } from "./log-helper.js";
 import { Log } from "./log.js";
 import { NotifyAdapter } from "./notify-adapter/notify-adapter.js";
+import { createNoopNotifyAdapter } from "./notify-adapter/notify-adapter.noop.js";
 import {
   BaseStateAdapterContext,
   DeduplicationOptions,
@@ -77,13 +78,14 @@ export class WaitForJobSequenceCompletionTimeoutError extends Error {
 
 export const queuertHelper = ({
   stateAdapter,
-  notifyAdapter,
+  notifyAdapter: notifyAdapterOption,
   log,
 }: {
   stateAdapter: StateAdapter<BaseStateAdapterContext, any>;
-  notifyAdapter: NotifyAdapter;
+  notifyAdapter?: NotifyAdapter;
   log: Log;
 }) => {
+  const notifyAdapter = notifyAdapterOption ?? createNoopNotifyAdapter();
   const logHelper = createLogHelper({ log });
   const createStateJob = async ({
     typeName,
@@ -156,7 +158,7 @@ export const queuertHelper = ({
     const store = notifyCompletionStorage.getStore();
     if (store) {
       store.jobTypeCounts.set(job.typeName, (store.jobTypeCounts.get(job.typeName) ?? 0) + 1);
-    } else {
+    } else if (notifyAdapterOption) {
       logHelper.notifyContextAbsence(job);
     }
   };
@@ -293,6 +295,8 @@ export const queuertHelper = ({
   };
 
   return {
+    // oxlint-disable-next-line no-unnecessary-type-assertion -- needed for --isolatedDeclarations
+    notifyAdapter: notifyAdapter as NotifyAdapter,
     // oxlint-disable-next-line no-unnecessary-type-assertion -- needed for --isolatedDeclarations
     logHelper: logHelper as LogHelper,
     withNotifyContext: withNotifyContext as <T>(cb: () => Promise<T>) => Promise<T>,

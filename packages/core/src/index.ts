@@ -8,7 +8,6 @@ import { ScheduleOptions } from "./entities/schedule.js";
 import { BackoffConfig } from "./helpers/backoff.js";
 import { Log } from "./log.js";
 import { NotifyAdapter } from "./notify-adapter/notify-adapter.js";
-import { createNoopNotifyAdapter } from "./notify-adapter/notify-adapter.noop.js";
 import {
   CompleteJobSequenceResult,
   JobSequenceCompleteOptions,
@@ -169,7 +168,7 @@ export const createQueuert = async <
   TStateAdapter extends StateAdapter<any, any>,
 >({
   stateAdapter,
-  notifyAdapter = createNoopNotifyAdapter(),
+  notifyAdapter,
   log,
 }: {
   stateAdapter: TStateAdapter;
@@ -205,7 +204,6 @@ export const createQueuert = async <
           start: async (startOptions) =>
             createExecutor({
               helper,
-              notifyAdapter,
               registeredJobTypes,
             })(startOptions),
         };
