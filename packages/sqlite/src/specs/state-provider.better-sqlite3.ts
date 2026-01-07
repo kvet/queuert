@@ -21,10 +21,8 @@ export const createBetterSqlite3Provider = ({
         return [] as any;
       }
     },
-    assertInTransaction: async ({ db }) => {
-      if (!db.inTransaction) {
-        throw new Error("Expected to be in a transaction");
-      }
+    isInTransaction: async ({ db }) => {
+      return db.inTransaction;
     },
     runInTransaction: async ({ db }, fn) => {
       if (db.inTransaction) {

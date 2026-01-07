@@ -1,7 +1,6 @@
 import { createQueuert } from "queuert";
 import { createPgStateAdapter, PgStateProvider } from "@queuert/postgres";
 import { createRedisNotifyAdapter, RedisNotifyProvider } from "@queuert/redis";
-import assert from "assert";
 import { CompiledQuery } from "kysely";
 import { Db } from "./db.js";
 import { qrtJobDefinitions } from "./qrt-schema.js";
@@ -18,8 +17,8 @@ export const createQrt = async ({
 }) => {
   const stateProvider: PgStateProvider<{ db: Db }> = {
     provideContext: async (cb) => cb({ db }),
-    assertInTransaction: async ({ db }) => {
-      assert(db.isTransaction);
+    isInTransaction: async ({ db }) => {
+      return db.isTransaction;
     },
     runInTransaction: async ({ db }, cb) => db.transaction().execute(async (db) => cb({ db })),
     executeSql: async ({ db }, sql, params) => {

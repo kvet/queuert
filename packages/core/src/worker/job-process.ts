@@ -162,7 +162,6 @@ export const runJobProcess = async ({
   workerId: string;
   notifyAdapter: NotifyAdapter;
 }): Promise<() => Promise<void>> => {
-  const { logHelper } = helper;
   const firstLeaseCommitted = createSignal();
   const claimTransactionClosed = createSignal();
 
@@ -277,9 +276,7 @@ export const runJobProcess = async ({
               void runInGuardedTransaction(async () => Promise.resolve()).catch(() => {});
             }
           });
-        } catch (error) {
-          logHelper.notifyAdapterError("listenJobOwnershipLost", error);
-        }
+        } catch {}
       }
 
       return callbackOutput;

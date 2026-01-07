@@ -1,7 +1,7 @@
 # Medium term
 
-- introduce state_adapter_error log to properly track state adapter errors
-- Metrics collection - design complete (see docs/metrics-adapter-design.md), implementation pending
+- Job blocked/unblocked log symmetry - Improves observability for jobs waiting on blockers
+- Metrics collection & OTEL
 
 # Long term
 

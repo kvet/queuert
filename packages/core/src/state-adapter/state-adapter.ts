@@ -36,7 +36,7 @@ export type BaseStateAdapterContext = {};
 export type StateAdapter<TContext extends BaseStateAdapterContext, TJobId> = {
   provideContext: <T>(fn: (context: TContext) => Promise<T>) => Promise<T>;
   runInTransaction: <T>(context: TContext, fn: (txContext: TContext) => Promise<T>) => Promise<T>;
-  assertInTransaction: (context: TContext) => Promise<void>;
+  isInTransaction: (context: TContext) => Promise<boolean>;
 
   getJobSequenceById: (params: {
     context: TContext;

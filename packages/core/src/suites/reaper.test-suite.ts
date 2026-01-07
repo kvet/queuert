@@ -132,7 +132,9 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
     const worker = queuert.createWorker().implementJobType({
       name: "test",
-      process: async ({ complete }) => {
+      process: async ({ prepare, complete }) => {
+        await prepare({ mode: "staged" });
+
         if (!failed) {
           failed = true;
 
@@ -143,6 +145,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
           );
           jobCompleted.resolve();
         }
+        await sleep(10);
 
         return complete(async () => null);
       },
@@ -165,6 +168,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       ]),
       async () => {
         await jobStarted.promise;
+        await sleep(10);
 
         const successJobSequence = await queuert.withNotify(async () =>
           runInTransaction(async (context) =>

@@ -18,9 +18,11 @@ export const createPgPoolProvider = ({ pool }: { pool: Pool }): PgPoolProvider =
       const result = await poolClient.query(sql, params);
       return result.rows as any;
     },
-    assertInTransaction: async () => {
+    isInTransaction: async () => {
       // NOTE: pg PoolClient does not expose transaction state,
-      // so we cannot assert whether we are in a transaction or not.
+      // so we cannot determine whether we are in a transaction or not.
+      // Return true to allow operations that require transactions to proceed.
+      return true;
     },
     runInTransaction: async ({ poolClient }, fn) => {
       await poolClient.query("BEGIN");

@@ -22,6 +22,7 @@ import { createLogHelper, LogHelper } from "./log-helper.js";
 import { Log } from "./log.js";
 import { NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 import { createNoopNotifyAdapter } from "./notify-adapter/notify-adapter.noop.js";
+import { wrapNotifyAdapter } from "./notify-adapter/notify-adapter.wrapper.js";
 import {
   BaseStateAdapterContext,
   DeduplicationOptions,
@@ -29,6 +30,7 @@ import {
   StateAdapter,
   StateJob,
 } from "./state-adapter/state-adapter.js";
+import { wrapStateAdapter } from "./state-adapter/state-adapter.wrapper.js";
 import { CompleteCallbackOptions, RescheduleJobError } from "./worker/job-process.js";
 
 export type StartBlockersFn<
@@ -76,8 +78,14 @@ export class WaitForJobSequenceCompletionTimeoutError extends Error {
   }
 }
 
+export class StateNotInTransactionError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+  }
+}
+
 export const queuertHelper = ({
-  stateAdapter,
+  stateAdapter: stateAdapterOption,
   notifyAdapter: notifyAdapterOption,
   log,
 }: {
@@ -85,8 +93,22 @@ export const queuertHelper = ({
   notifyAdapter?: NotifyAdapter;
   log: Log;
 }) => {
-  const notifyAdapter = notifyAdapterOption ?? createNoopNotifyAdapter();
   const logHelper = createLogHelper({ log });
+  const stateAdapter = wrapStateAdapter({
+    stateAdapter: stateAdapterOption,
+    logHelper,
+  });
+  const notifyAdapter = wrapNotifyAdapter({
+    notifyAdapter: notifyAdapterOption ?? createNoopNotifyAdapter(),
+    logHelper,
+  });
+
+  const assertInTransaction = async (context: BaseStateAdapterContext): Promise<void> => {
+    if (!(await stateAdapter.isInTransaction(context))) {
+      throw new StateNotInTransactionError("Operation must be called within a transaction");
+    }
+  };
+
   const createStateJob = async ({
     typeName,
     input,
@@ -198,23 +220,17 @@ export const queuertHelper = ({
         ...Array.from(store.jobTypeCounts.entries()).map(async ([typeName, count]) => {
           try {
             await notifyAdapter.notifyJobScheduled(typeName, count);
-          } catch (error) {
-            logHelper.notifyAdapterError("notifyJobScheduled", error);
-          }
+          } catch {}
         }),
         ...Array.from(store.sequenceIds).map(async (sequenceId) => {
           try {
             await notifyAdapter.notifyJobSequenceCompleted(sequenceId);
-          } catch (error) {
-            logHelper.notifyAdapterError("notifyJobSequenceCompleted", error);
-          }
+          } catch {}
         }),
         ...Array.from(store.jobOwnershipLostIds).map(async (jobId) => {
           try {
             await notifyAdapter.notifyJobOwnershipLost(jobId);
-          } catch (error) {
-            logHelper.notifyAdapterError("notifyJobOwnershipLost", error);
-          }
+          } catch {}
         }),
       ]);
 
@@ -336,7 +352,7 @@ export const queuertHelper = ({
     }): Promise<
       JobSequence<string, TFirstJobTypeName, TInput, TOutput> & { deduplicated: boolean }
     > => {
-      await stateAdapter.assertInTransaction(context);
+      await assertInTransaction(context);
 
       const { job, deduplicated } = await createStateJob({
         typeName: firstJobTypeName,
@@ -554,14 +570,10 @@ export const queuertHelper = ({
 
         try {
           await notifyAdapter.notifyJobScheduled(job.typeName, 1);
-        } catch (error) {
-          logHelper.notifyAdapterError("notifyJobScheduled", error);
-        }
+        } catch {}
         try {
           await notifyAdapter.notifyJobOwnershipLost(job.id);
-        } catch (error) {
-          logHelper.notifyAdapterError("notifyJobOwnershipLost", error);
-        }
+        } catch {}
       }
     },
     deleteJobSequences: async ({
@@ -571,7 +583,7 @@ export const queuertHelper = ({
       sequenceIds: string[];
       context: BaseStateAdapterContext;
     }): Promise<void> => {
-      await stateAdapter.assertInTransaction(context);
+      await assertInTransaction(context);
 
       const sequenceJobs = await Promise.all(
         sequenceIds.map(async (sequenceId) =>
@@ -648,7 +660,7 @@ export const queuertHelper = ({
         ) => Promise<unknown>;
       }) => Promise<void>;
     }): Promise<JobSequence<string, TFirstJobTypeName, TInput, TOutput>> => {
-      await stateAdapter.assertInTransaction(context);
+      await assertInTransaction(context);
 
       const currentJob = await stateAdapter.getCurrentJobForUpdate({
         context,
@@ -790,9 +802,7 @@ export const queuertHelper = ({
         dispose = await notifyAdapter.listenJobSequenceCompleted(id, () => {
           resolveNotification?.();
         });
-      } catch (error) {
-        logHelper.notifyAdapterError("listenJobSequenceCompleted", error);
-      }
+      } catch {}
       try {
         while (!combinedSignal.aborted) {
           await Promise.race([

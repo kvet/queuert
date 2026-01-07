@@ -44,6 +44,7 @@ export {
   JobAlreadyCompletedError,
   JobNotFoundError,
   JobTakenByAnotherWorkerError,
+  StateNotInTransactionError,
   WaitForJobSequenceCompletionTimeoutError,
 } from "./queuert-helper.js";
 export {

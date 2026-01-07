@@ -200,7 +200,7 @@ export const createSqliteStateAdapter = <
     provideContext: async (fn) => stateProvider.provideContext(fn) as ReturnType<typeof fn>,
     runInTransaction: async (context, fn) =>
       stateProvider.runInTransaction(context, fn) as ReturnType<typeof fn>,
-    assertInTransaction: async (context) => stateProvider.assertInTransaction(context),
+    isInTransaction: async (context) => stateProvider.isInTransaction(context),
 
     migrateToLatest: async (context) => {
       const db = (context as unknown as { db: { exec: (sqlStr: string) => void } }).db;

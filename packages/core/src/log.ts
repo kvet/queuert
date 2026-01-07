@@ -144,6 +144,13 @@ type NotifyAdapterErrorLogEntry = LogEntry<
   [{ operation: string }, unknown]
 >;
 
+type StateAdapterErrorLogEntry = LogEntry<
+  "state_adapter_error",
+  "warn",
+  "State adapter error",
+  [{ operation: string }, unknown]
+>;
+
 type TypedLogEntry =
   // worker
   | WorkerStartedLogEntry
@@ -164,8 +171,10 @@ type TypedLogEntry =
   | JobSequenceDeletedLogEntry
   // blockers
   | JobSequenceUnblockedJobsLogEntry
-  // notify
+  // notify adapter
   | NotifyContextAbsenceLogEntry
-  | NotifyAdapterErrorLogEntry;
+  | NotifyAdapterErrorLogEntry
+  // state adapter
+  | StateAdapterErrorLogEntry;
 
 export type Log = (options: TypedLogEntry) => void;

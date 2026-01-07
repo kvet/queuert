@@ -358,9 +358,10 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       name: "test",
       process: async ({ signal, job, prepare, complete }) => {
         await prepare({ mode: "staged" });
+
         if (job.attempt > 1) {
           await jobCompleted.promise;
-          await sleep(5);
+          await sleep(10);
 
           return complete(async () => ({ result: "recovered" }));
         }
@@ -389,7 +390,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       );
 
       await jobStarted.promise;
-      await sleep(5);
+      await sleep(10);
 
       await withWorkers([await worker.start()], async () => {
         await queuert.waitForJobSequenceCompletion({

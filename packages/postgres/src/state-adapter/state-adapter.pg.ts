@@ -121,7 +121,7 @@ export const createPgStateAdapter = <
     provideContext: async (fn) => stateProvider.provideContext(fn) as ReturnType<typeof fn>,
     runInTransaction: async (context, fn) =>
       stateProvider.runInTransaction(context, fn) as ReturnType<typeof fn>,
-    assertInTransaction: async (context) => stateProvider.assertInTransaction(context),
+    isInTransaction: async (context) => stateProvider.isInTransaction(context),
 
     migrateToLatest: async (context) => {
       await executeTypedSql({

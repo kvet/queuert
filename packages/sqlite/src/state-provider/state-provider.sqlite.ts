@@ -8,7 +8,7 @@ export type SqliteStateProvider<TContext extends BaseStateAdapterContext> = {
     params: unknown[] | undefined,
     returns: boolean,
   ) => Promise<unknown[]>;
-  assertInTransaction: (context: TContext) => Promise<void>;
+  isInTransaction: (context: TContext) => Promise<boolean>;
   runInTransaction: (
     context: TContext,
     fn: (context: TContext) => Promise<unknown>,

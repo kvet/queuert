@@ -71,9 +71,7 @@ export const createExecutor = ({
         dispose = await notifyAdapter.listenJobScheduled(typeNames, () => {
           onNotification();
         });
-      } catch (error) {
-        logHelper.notifyAdapterError("listenJobScheduled", error);
-      }
+      } catch {}
       try {
         const pullDelayMs = await helper.getNextJobAvailableInMs({
           typeNames,

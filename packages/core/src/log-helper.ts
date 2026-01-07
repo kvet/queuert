@@ -52,6 +52,7 @@ export type LogHelper = {
   ) => void;
   notifyContextAbsence: (job: StateJob) => void;
   notifyAdapterError: (operation: string, error: unknown) => void;
+  stateAdapterError: (operation: string, error: unknown) => void;
   jobCompleted: (
     job: StateJob,
     options: { output: unknown; continuedWith?: Job<any, any, any, any>; workerId: string | null },
@@ -118,6 +119,15 @@ export const createLogHelper = ({ log }: { log: Log }): LogHelper => ({
       type: "notify_adapter_error",
       level: "warn",
       message: "Notify adapter error",
+      args: [{ operation }, error],
+    });
+  },
+
+  stateAdapterError(operation, error) {
+    log({
+      type: "state_adapter_error",
+      level: "warn",
+      message: "State adapter error",
       args: [{ operation }, error],
     });
   },

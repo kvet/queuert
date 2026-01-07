@@ -9,7 +9,10 @@ export const withRetry = async <T>(
   {
     signal,
     isRetryableError = () => true,
-  }: { signal?: AbortSignal; isRetryableError?: (error: unknown) => boolean } = {},
+  }: {
+    signal?: AbortSignal;
+    isRetryableError?: (error: unknown) => boolean;
+  } = {},
 ): Promise<T> => {
   let lastError: unknown;
 

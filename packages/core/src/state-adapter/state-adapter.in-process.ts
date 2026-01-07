@@ -119,10 +119,8 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       }
     },
 
-    assertInTransaction: async (context) => {
-      if (!context.inTransaction) {
-        throw new Error("Not in transaction");
-      }
+    isInTransaction: async (context) => {
+      return context.inTransaction === true;
     },
 
     getJobSequenceById: async ({ jobId }) => {
