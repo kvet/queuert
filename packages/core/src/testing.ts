@@ -21,5 +21,11 @@ export {
   type TestSuiteContext,
 } from "./suites/spec-context.spec-helper.js";
 
+// Flaky Test Helpers
+export {
+  createFlakyBatchGenerator,
+  createSeededRandom,
+} from "./suites/flaky-test-helper.spec-helper.js";
+
 // State Adapter Test Helper
 export { extendWithStateInProcess } from "./state-adapter/state-adapter.in-process.spec-helper.js";
