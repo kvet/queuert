@@ -217,28 +217,29 @@ RETURNING *, 0 AS deduplicated
   true,
 );
 
-export const insertJobBlockerSql: TypedSql<
+export const insertJobBlockersSql: TypedSql<
   readonly [
     NamedParameter<"job_id", string>,
-    NamedParameter<"blocked_by_sequence_id", string>,
-    NamedParameter<"index", number>,
+    NamedParameter<"blocked_by_sequence_ids_json", string>,
   ],
   void
 > = sql(
   /* sql */ `
 INSERT INTO {{table_prefix}}job_blocker (job_id, blocked_by_sequence_id, "index")
-VALUES (?, ?, ?)
+SELECT ?, je.value, je.key
+FROM json_each(?) AS je
 `,
   false,
 );
 
 export const checkBlockersStatusSql: TypedSql<
   readonly [NamedParameter<"job_id", string>],
-  { job_id: string; blocker_status: string }[]
+  { job_id: string; blocked_by_sequence_id: string; blocker_status: string }[]
 > = sql(
   /* sql */ `
 SELECT
   jb.job_id,
+  jb.blocked_by_sequence_id,
   (
     SELECT j2.status
     FROM {{table_prefix}}job j2

@@ -1,6 +1,6 @@
 # Medium term
 
-- Job blocked/unblocked log symmetry - Improves observability for jobs waiting on blockers
+- Add firstJobTypeName to state - Simplifies job type discovery for UIs and monitoring tools
 - Metrics collection & OTEL
 
 # Long term

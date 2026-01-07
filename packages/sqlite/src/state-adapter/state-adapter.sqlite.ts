@@ -31,7 +31,7 @@ import {
   getJobForUpdateSql,
   getJobSequenceByIdSql,
   getNextJobAvailableInMsSql,
-  insertJobBlockerSql,
+  insertJobBlockersSql,
   insertJobSql,
   jobColumnsPrefixedSelect,
   jobColumnsSelect,
@@ -302,13 +302,11 @@ export const createSqliteStateAdapter = <
     },
 
     addJobBlockers: async ({ context, jobId, blockedBySequenceIds }) => {
-      for (let i = 0; i < blockedBySequenceIds.length; i++) {
-        await executeTypedSql({
-          context,
-          sql: insertJobBlockerSql,
-          params: [jobId, blockedBySequenceIds[i], i],
-        });
-      }
+      await executeTypedSql({
+        context,
+        sql: insertJobBlockersSql,
+        params: [jobId, JSON.stringify(blockedBySequenceIds)],
+      });
 
       const blockerStatuses = await executeTypedSql({
         context,
@@ -316,16 +314,18 @@ export const createSqliteStateAdapter = <
         params: [jobId],
       });
 
-      const hasIncompleteBlockers = blockerStatuses.some((b) => b.blocker_status !== "completed");
+      const incompleteBlockerSequenceIds = blockerStatuses
+        .filter((b) => b.blocker_status !== "completed")
+        .map((b) => b.blocked_by_sequence_id);
 
-      if (hasIncompleteBlockers) {
+      if (incompleteBlockerSequenceIds.length > 0) {
         const [updatedJob] = await executeTypedSql({
           context,
           sql: updateJobToBlockedSql,
           params: [jobId],
         });
         if (updatedJob) {
-          return mapDbJobToStateJob(updatedJob);
+          return { job: mapDbJobToStateJob(updatedJob), incompleteBlockerSequenceIds };
         }
       }
 
@@ -334,7 +334,7 @@ export const createSqliteStateAdapter = <
         sql: getJobByIdForBlockersSql,
         params: [jobId],
       });
-      return mapDbJobToStateJob(job);
+      return { job: mapDbJobToStateJob(job), incompleteBlockerSequenceIds: [] };
     },
     scheduleBlockedJobs: async ({ context, blockedBySequenceId }) => {
       const readyJobs = await executeTypedSql({

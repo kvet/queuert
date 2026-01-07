@@ -145,6 +145,7 @@ export const queuertHelper = ({
     }
 
     let blockerSequences: JobSequence<any, any, any, any>[] = [];
+    let incompleteBlockerSequenceIds: string[] = [];
     if (startBlockers) {
       const blockers = await withJobContext(
         {
@@ -158,11 +159,13 @@ export const queuertHelper = ({
       blockerSequences = [...blockers] as JobSequence<any, any, any, any>[];
       const blockerSequenceIds = blockerSequences.map((b) => b.id);
 
-      job = await stateAdapter.addJobBlockers({
+      const addBlockersResult = await stateAdapter.addJobBlockers({
         context,
         jobId: job.id,
         blockedBySequenceIds: blockerSequenceIds,
       });
+      job = addBlockersResult.job;
+      incompleteBlockerSequenceIds = addBlockersResult.incompleteBlockerSequenceIds;
     }
 
     if (isSequence) {
@@ -170,6 +173,14 @@ export const queuertHelper = ({
     }
 
     logHelper.jobCreated(job, { input, blockers: blockerSequences, schedule });
+
+    if (incompleteBlockerSequenceIds.length > 0) {
+      const incompleteBlockerSet = new Set(incompleteBlockerSequenceIds);
+      const incompleteBlockerSequences = blockerSequences.filter((b) =>
+        incompleteBlockerSet.has(b.id),
+      );
+      logHelper.jobBlocked(job, { blockedBySequences: incompleteBlockerSequences });
+    }
 
     notifyJobScheduled(job);
 
@@ -301,9 +312,8 @@ export const queuertHelper = ({
       if (unblockedJobs.length > 0) {
         unblockedJobs.forEach((unblockedJob) => {
           notifyJobScheduled(unblockedJob);
+          logHelper.jobUnblocked(unblockedJob, { unblockedBySequence: jobSequenceStartJob });
         });
-
-        logHelper.jobSequenceUnblockedJobs(jobSequenceStartJob, { unblockedJobs });
       }
     }
 

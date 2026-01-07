@@ -59,7 +59,7 @@ export type StateAdapter<TContext extends BaseStateAdapterContext, TJobId> = {
     context: TContext;
     jobId: TJobId;
     blockedBySequenceIds: TJobId[];
-  }) => Promise<StateJob>;
+  }) => Promise<{ job: StateJob; incompleteBlockerSequenceIds: string[] }>;
   scheduleBlockedJobs: (params: {
     context: TContext;
     blockedBySequenceId: TJobId;

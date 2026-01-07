@@ -197,22 +197,21 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       });
       store.jobBlockers.set(jobId, blockerMap);
 
-      let hasIncompleteBlocker = false;
+      const incompleteBlockerSequenceIds: string[] = [];
       for (const seqId of blockedBySequenceIds) {
         const lastJob = getLastJobInSequence(seqId);
         if (!lastJob || lastJob.status !== "completed") {
-          hasIncompleteBlocker = true;
-          break;
+          incompleteBlockerSequenceIds.push(seqId);
         }
       }
 
-      if (hasIncompleteBlocker && job.status === "pending") {
+      if (incompleteBlockerSequenceIds.length > 0 && job.status === "pending") {
         const updatedJob: StateJob = { ...job, status: "blocked", updatedAt: new Date() };
         store.jobs.set(jobId, updatedJob);
-        return updatedJob;
+        return { job: updatedJob, incompleteBlockerSequenceIds };
       }
 
-      return job;
+      return { job, incompleteBlockerSequenceIds: [] };
     },
 
     scheduleBlockedJobs: async ({ blockedBySequenceId }) => {

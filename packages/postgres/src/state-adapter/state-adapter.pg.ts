@@ -187,7 +187,7 @@ export const createPgStateAdapter = <
     },
 
     addJobBlockers: async ({ context, jobId, blockedBySequenceIds }) => {
-      const [job] = await executeTypedSql({
+      const [result] = await executeTypedSql({
         context,
         sql: addJobBlockersSql,
         params: [
@@ -196,7 +196,10 @@ export const createPgStateAdapter = <
         ],
       });
 
-      return mapDbJobToStateJob(job);
+      return {
+        job: mapDbJobToStateJob(result),
+        incompleteBlockerSequenceIds: result.incomplete_blocker_sequence_ids,
+      };
     },
     scheduleBlockedJobs: async ({ context, blockedBySequenceId }) => {
       const jobs = await executeTypedSql({

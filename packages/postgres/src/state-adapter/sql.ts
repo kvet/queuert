@@ -29,6 +29,10 @@ export type DbJob = {
   updated_at: string;
 };
 
+export type DbJobWithIncompleteBlockers = DbJob & {
+  incomplete_blocker_sequence_ids: string[];
+};
+
 export const migrateSql: TypedSql<[], void> = sql(
   /* sql */ `
 -- Types: job_status enum
@@ -194,7 +198,7 @@ LIMIT 1
 
 export const addJobBlockersSql: TypedSql<
   readonly [NamedParameter<"job_id", string[]>, NamedParameter<"blocked_by_sequence_id", string[]>],
-  [DbJob]
+  [DbJobWithIncompleteBlockers]
 > = sql(
   /* sql */ `
 WITH inserted_blockers AS (
@@ -216,6 +220,11 @@ blockers_status AS (
     ) AS blocker_status
   FROM inserted_blockers ib
 ),
+incomplete_blockers AS (
+  SELECT blocked_by_sequence_id
+  FROM blockers_status
+  WHERE blocker_status != 'completed'
+),
 has_incomplete_blockers AS (
   SELECT DISTINCT job_id
   FROM blockers_status
@@ -227,13 +236,18 @@ updated_job AS (
   WHERE j.id IN (SELECT job_id FROM has_incomplete_blockers)
     AND j.status = 'pending'
   RETURNING j.*
+),
+final_job AS (
+  SELECT * FROM updated_job
+  UNION ALL
+  SELECT j.* FROM {{schema}}.job j
+  WHERE j.id = (SELECT DISTINCT job_id FROM inserted_blockers LIMIT 1)
+    AND NOT EXISTS (SELECT 1 FROM updated_job)
+  LIMIT 1
 )
-SELECT * FROM updated_job
-UNION ALL
-SELECT j.* FROM {{schema}}.job j
-WHERE j.id = (SELECT DISTINCT job_id FROM inserted_blockers LIMIT 1)
-  AND NOT EXISTS (SELECT 1 FROM updated_job)
-LIMIT 1;
+SELECT fj.*,
+  COALESCE((SELECT array_agg(blocked_by_sequence_id) FROM incomplete_blockers), ARRAY[]::{{id_type}}[]) AS incomplete_blocker_sequence_ids
+FROM final_job fj;
 `,
   true,
 );

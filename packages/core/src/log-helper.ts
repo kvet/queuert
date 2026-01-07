@@ -41,7 +41,12 @@ const mapJobToJobBasicLogArgs = (job: Job<any, any, any, any>): JobBasicArgs => 
 });
 
 export type LogHelper = {
-  jobSequenceCreated: (job: StateJob, options: { input: unknown }) => void;
+  // worker
+  workerStarted: (options: { workerId: string; jobTypeNames: string[] }) => void;
+  workerError: (options: { workerId: string }, error: unknown) => void;
+  workerStopping: (options: { workerId: string }) => void;
+  workerStopped: (options: { workerId: string }) => void;
+  // job
   jobCreated: (
     job: StateJob,
     options: {
@@ -50,43 +55,74 @@ export type LogHelper = {
       schedule?: ScheduleOptions;
     },
   ) => void;
-  notifyContextAbsence: (job: StateJob) => void;
-  notifyAdapterError: (operation: string, error: unknown) => void;
-  stateAdapterError: (operation: string, error: unknown) => void;
-  jobCompleted: (
-    job: StateJob,
-    options: { output: unknown; continuedWith?: Job<any, any, any, any>; workerId: string | null },
-  ) => void;
-  jobSequenceCompleted: (jobSequenceStartJob: StateJob, options: { output: unknown }) => void;
-  jobSequenceUnblockedJobs: (
-    jobSequenceStartJob: StateJob,
-    options: { unblockedJobs: StateJob[] },
-  ) => void;
+  jobAttemptStarted: (job: StateJob, options: { workerId: string }) => void;
+  jobTakenByAnotherWorker: (job: StateJob, options: { workerId: string }) => void;
+  jobLeaseExpired: (job: StateJob, options: { workerId: string }) => void;
+  jobReaped: (job: StateJob, options: { workerId: string }) => void;
   jobAttemptFailed: (
     job: StateJob,
     options: { workerId: string; rescheduledSchedule: ScheduleOptions; error: unknown },
   ) => void;
-  jobTakenByAnotherWorker: (job: StateJob, options: { workerId: string }) => void;
-  jobLeaseExpired: (job: StateJob, options: { workerId: string }) => void;
-  jobAttemptStarted: (job: StateJob, options: { workerId: string }) => void;
-  jobReaped: (job: StateJob, options: { workerId: string }) => void;
+  jobCompleted: (
+    job: StateJob,
+    options: { output: unknown; continuedWith?: Job<any, any, any, any>; workerId: string | null },
+  ) => void;
+  // job sequence
+  jobSequenceCreated: (job: StateJob, options: { input: unknown }) => void;
+  jobSequenceCompleted: (jobSequenceStartJob: StateJob, options: { output: unknown }) => void;
   jobSequenceDeleted: (sequenceJob: StateJob, options: { deletedJobIds: string[] }) => void;
-  workerStarted: (options: { workerId: string; jobTypeNames: string[] }) => void;
-  workerError: (options: { workerId: string }, error: unknown) => void;
-  workerStopping: (options: { workerId: string }) => void;
-  workerStopped: (options: { workerId: string }) => void;
+  // blockers
+  jobBlocked: (
+    job: StateJob,
+    options: { blockedBySequences: JobSequence<any, any, any, any>[] },
+  ) => void;
+  jobUnblocked: (job: StateJob, options: { unblockedBySequence: StateJob }) => void;
+  // notify adapter
+  notifyContextAbsence: (job: StateJob) => void;
+  notifyAdapterError: (operation: string, error: unknown) => void;
+  // state adapter
+  stateAdapterError: (operation: string, error: unknown) => void;
 };
 
 export const createLogHelper = ({ log }: { log: Log }): LogHelper => ({
-  jobSequenceCreated(job, options) {
+  // worker
+  workerStarted(options) {
     log({
-      type: "job_sequence_created",
+      type: "worker_started",
       level: "info",
-      message: "Job sequence created",
-      args: [{ ...mapStateJobToJobSequenceLogArgs(job), input: options.input }],
+      message: "Started worker",
+      args: [options],
     });
   },
 
+  workerError(options, error) {
+    log({
+      type: "worker_error",
+      level: "error",
+      message: "Worker error",
+      args: [options, error],
+    });
+  },
+
+  workerStopping(options) {
+    log({
+      type: "worker_stopping",
+      level: "info",
+      message: "Stopping worker...",
+      args: [options],
+    });
+  },
+
+  workerStopped(options) {
+    log({
+      type: "worker_stopped",
+      level: "info",
+      message: "Worker has been stopped",
+      args: [options],
+    });
+  },
+
+  // job
   jobCreated(job, options) {
     log({
       type: "job_created",
@@ -104,91 +140,12 @@ export const createLogHelper = ({ log }: { log: Log }): LogHelper => ({
     });
   },
 
-  notifyContextAbsence(job) {
+  jobAttemptStarted(job, options) {
     log({
-      type: "notify_context_absence",
-      level: "warn",
-      message:
-        "Not withNotify context when creating job for queue. The job processing may be delayed.",
-      args: [mapStateJobToJobBasicLogArgs(job)],
-    });
-  },
-
-  notifyAdapterError(operation, error) {
-    log({
-      type: "notify_adapter_error",
-      level: "warn",
-      message: "Notify adapter error",
-      args: [{ operation }, error],
-    });
-  },
-
-  stateAdapterError(operation, error) {
-    log({
-      type: "state_adapter_error",
-      level: "warn",
-      message: "State adapter error",
-      args: [{ operation }, error],
-    });
-  },
-
-  jobCompleted(job, options) {
-    log({
-      type: "job_completed",
+      type: "job_attempt_started",
       level: "info",
-      message: "Job completed",
-      args: [
-        {
-          ...mapStateJobToJobProcessingLogArgs(job),
-          output: options.output,
-          continuedWith: options.continuedWith
-            ? mapJobToJobBasicLogArgs(options.continuedWith)
-            : undefined,
-          workerId: options.workerId,
-        },
-      ],
-    });
-  },
-
-  jobSequenceCompleted(jobSequenceStartJob, options) {
-    log({
-      type: "job_sequence_completed",
-      level: "info",
-      message: "Job sequence completed",
-      args: [{ ...mapStateJobToJobSequenceLogArgs(jobSequenceStartJob), output: options.output }],
-    });
-  },
-
-  jobSequenceUnblockedJobs(jobSequenceStartJob, options) {
-    log({
-      type: "job_sequence_unblocked_jobs",
-      level: "info",
-      message: "Job sequence completed and unblocked jobs",
-      args: [
-        {
-          ...mapStateJobToJobSequenceLogArgs(jobSequenceStartJob),
-          unblockedJobs: options.unblockedJobs.map(mapStateJobToJobBasicLogArgs),
-        },
-      ],
-    });
-  },
-
-  jobAttemptFailed(job, options) {
-    log({
-      type: "job_attempt_failed",
-      level: "error",
-      message: "Job attempt failed",
-      args: [
-        {
-          ...mapStateJobToJobProcessingLogArgs(job),
-          workerId: options.workerId,
-          ...(options.rescheduledSchedule.at && { rescheduledAt: options.rescheduledSchedule.at }),
-          ...(options.rescheduledSchedule.afterMs && {
-            rescheduledAfterMs: options.rescheduledSchedule.afterMs,
-          }),
-        },
-        options.error,
-      ],
+      message: "Job attempt started",
+      args: [{ ...mapStateJobToJobProcessingLogArgs(job), workerId: options.workerId }],
     });
   },
 
@@ -224,15 +181,6 @@ export const createLogHelper = ({ log }: { log: Log }): LogHelper => ({
     });
   },
 
-  jobAttemptStarted(job, options) {
-    log({
-      type: "job_attempt_started",
-      level: "info",
-      message: "Job attempt started",
-      args: [{ ...mapStateJobToJobProcessingLogArgs(job), workerId: options.workerId }],
-    });
-  },
-
   jobReaped(job, options) {
     log({
       type: "job_reaped",
@@ -246,6 +194,62 @@ export const createLogHelper = ({ log }: { log: Log }): LogHelper => ({
           workerId: options.workerId,
         },
       ],
+    });
+  },
+
+  jobAttemptFailed(job, options) {
+    log({
+      type: "job_attempt_failed",
+      level: "error",
+      message: "Job attempt failed",
+      args: [
+        {
+          ...mapStateJobToJobProcessingLogArgs(job),
+          workerId: options.workerId,
+          ...(options.rescheduledSchedule.at && { rescheduledAt: options.rescheduledSchedule.at }),
+          ...(options.rescheduledSchedule.afterMs && {
+            rescheduledAfterMs: options.rescheduledSchedule.afterMs,
+          }),
+        },
+        options.error,
+      ],
+    });
+  },
+
+  jobCompleted(job, options) {
+    log({
+      type: "job_completed",
+      level: "info",
+      message: "Job completed",
+      args: [
+        {
+          ...mapStateJobToJobProcessingLogArgs(job),
+          output: options.output,
+          continuedWith: options.continuedWith
+            ? mapJobToJobBasicLogArgs(options.continuedWith)
+            : undefined,
+          workerId: options.workerId,
+        },
+      ],
+    });
+  },
+
+  // job sequence
+  jobSequenceCreated(job, options) {
+    log({
+      type: "job_sequence_created",
+      level: "info",
+      message: "Job sequence created",
+      args: [{ ...mapStateJobToJobSequenceLogArgs(job), input: options.input }],
+    });
+  },
+
+  jobSequenceCompleted(jobSequenceStartJob, options) {
+    log({
+      type: "job_sequence_completed",
+      level: "info",
+      message: "Job sequence completed",
+      args: [{ ...mapStateJobToJobSequenceLogArgs(jobSequenceStartJob), output: options.output }],
     });
   },
 
@@ -263,39 +267,62 @@ export const createLogHelper = ({ log }: { log: Log }): LogHelper => ({
     });
   },
 
-  workerStarted(options) {
+  // blockers
+  jobBlocked(job, options) {
     log({
-      type: "worker_started",
+      type: "job_blocked",
       level: "info",
-      message: "Started worker",
-      args: [options],
+      message: "Job blocked by incomplete sequences",
+      args: [
+        {
+          ...mapStateJobToJobBasicLogArgs(job),
+          blockedBySequences: options.blockedBySequences.map(mapJobSequenceToLogArgs),
+        },
+      ],
     });
   },
 
-  workerError(options, error) {
+  jobUnblocked(job, options) {
     log({
-      type: "worker_error",
-      level: "error",
-      message: "Worker error",
-      args: [options, error],
+      type: "job_unblocked",
+      level: "info",
+      message: "Job unblocked",
+      args: [
+        {
+          ...mapStateJobToJobBasicLogArgs(job),
+          unblockedBySequence: mapStateJobToJobSequenceLogArgs(options.unblockedBySequence),
+        },
+      ],
     });
   },
 
-  workerStopping(options) {
+  // notify adapter
+  notifyContextAbsence(job) {
     log({
-      type: "worker_stopping",
-      level: "info",
-      message: "Stopping worker...",
-      args: [options],
+      type: "notify_context_absence",
+      level: "warn",
+      message:
+        "Not withNotify context when creating job for queue. The job processing may be delayed.",
+      args: [mapStateJobToJobBasicLogArgs(job)],
     });
   },
 
-  workerStopped(options) {
+  notifyAdapterError(operation, error) {
     log({
-      type: "worker_stopped",
-      level: "info",
-      message: "Worker has been stopped",
-      args: [options],
+      type: "notify_adapter_error",
+      level: "warn",
+      message: "Notify adapter error",
+      args: [{ operation }, error],
+    });
+  },
+
+  // state adapter
+  stateAdapterError(operation, error) {
+    log({
+      type: "state_adapter_error",
+      level: "warn",
+      message: "State adapter error",
+      args: [{ operation }, error],
     });
   },
 });

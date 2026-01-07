@@ -150,6 +150,23 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
           },
         ],
       },
+      // main job is blocked by the incomplete blocker sequence
+      {
+        type: "job_blocked",
+        args: [
+          {
+            typeName: "main",
+            blockedBySequences: [
+              {
+                sequenceId: dependencySequenceId!,
+                firstJobTypeName: "blocker",
+                originId: mainSequenceId!,
+                rootId: mainSequenceId!,
+              },
+            ],
+          },
+        ],
+      },
       // worker started
       { type: "worker_started" },
       // first blocker job processed
@@ -161,7 +178,20 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       { type: "job_completed", args: [{ typeName: "blocker" }] },
       { type: "job_sequence_completed", args: [{ firstJobTypeName: "blocker" }] },
       // main job unblocked and completed
-      { type: "job_sequence_unblocked_jobs", args: [{ firstJobTypeName: "blocker" }] },
+      {
+        type: "job_unblocked",
+        args: [
+          {
+            typeName: "main",
+            unblockedBySequence: {
+              sequenceId: dependencySequenceId!,
+              firstJobTypeName: "blocker",
+              originId: mainSequenceId!,
+              rootId: mainSequenceId!,
+            },
+          },
+        ],
+      },
       { type: "job_attempt_started", args: [{ typeName: "main" }] },
       { type: "job_completed", args: [{ typeName: "main" }] },
       { type: "job_sequence_completed", args: [{ firstJobTypeName: "main" }] },

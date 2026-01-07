@@ -124,11 +124,18 @@ type JobSequenceDeletedLogEntry = LogEntry<
   "Job sequence deleted",
   [{ deletedJobIds: string[] } & JobSequenceArgs]
 >;
-type JobSequenceUnblockedJobsLogEntry = LogEntry<
-  "job_sequence_unblocked_jobs",
+
+type JobBlockedLogEntry = LogEntry<
+  "job_blocked",
   "info",
-  "Job sequence completed and unblocked jobs",
-  [{ unblockedJobs: JobBasicArgs[] } & JobSequenceArgs]
+  "Job blocked by incomplete sequences",
+  [{ blockedBySequences: JobSequenceArgs[] } & JobBasicArgs]
+>;
+type JobUnblockedLogEntry = LogEntry<
+  "job_unblocked",
+  "info",
+  "Job unblocked",
+  [{ unblockedBySequence: JobSequenceArgs } & JobBasicArgs]
 >;
 
 type NotifyContextAbsenceLogEntry = LogEntry<
@@ -170,7 +177,8 @@ type TypedLogEntry =
   | JobSequenceCompletedLogEntry
   | JobSequenceDeletedLogEntry
   // blockers
-  | JobSequenceUnblockedJobsLogEntry
+  | JobBlockedLogEntry
+  | JobUnblockedLogEntry
   // notify adapter
   | NotifyContextAbsenceLogEntry
   | NotifyAdapterErrorLogEntry
