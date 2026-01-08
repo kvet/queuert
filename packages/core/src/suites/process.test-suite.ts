@@ -127,8 +127,16 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
         args: [{ ...jobArgs, status: "running", attempt: 1, ...workerArgs }],
       },
       {
+        type: "job_attempt_completed",
+        args: [
+          { ...jobArgs, status: "running", attempt: 1, output: { result: true }, ...workerArgs },
+        ],
+      },
+      {
         type: "job_completed",
-        args: [{ ...jobArgs, output: { result: true }, ...workerArgs }],
+        args: [
+          { ...jobArgs, status: "completed", attempt: 1, output: { result: true }, ...workerArgs },
+        ],
       },
       { type: "job_sequence_completed", args: [{ ...jobSequenceArgs, output: { result: true } }] },
       { type: "worker_stopping", args: [{ ...workerArgs }] },
@@ -684,6 +692,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       { type: "job_attempt_started" },
       { type: "job_attempt_failed", args: [{ rescheduledAfterMs: 40 }, expect.anything()] },
       { type: "job_attempt_started" },
+      { type: "job_attempt_completed" },
       { type: "job_completed" },
       { type: "job_sequence_completed" },
       { type: "worker_stopping" },

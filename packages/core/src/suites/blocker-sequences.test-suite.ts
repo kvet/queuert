@@ -172,9 +172,11 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       // first blocker job processed
       { type: "job_attempt_started", args: [{ typeName: "blocker" }] },
       { type: "job_created", args: [{ typeName: "blocker" }] },
+      { type: "job_attempt_completed", args: [{ typeName: "blocker" }] },
       { type: "job_completed", args: [{ typeName: "blocker" }] },
       // second blocker job processed, sequence completes
       { type: "job_attempt_started", args: [{ typeName: "blocker" }] },
+      { type: "job_attempt_completed", args: [{ typeName: "blocker" }] },
       { type: "job_completed", args: [{ typeName: "blocker" }] },
       { type: "job_sequence_completed", args: [{ typeName: "blocker" }] },
       // main job unblocked and completed
@@ -193,6 +195,7 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
         ],
       },
       { type: "job_attempt_started", args: [{ typeName: "main" }] },
+      { type: "job_attempt_completed", args: [{ typeName: "main" }] },
       { type: "job_completed", args: [{ typeName: "main" }] },
       { type: "job_sequence_completed", args: [{ typeName: "main" }] },
       // worker stopping

@@ -331,6 +331,12 @@ export const runJobProcess = async ({
           },
           ...context,
         });
+        helper.logJobAttemptCompleted({
+          job,
+          output: continuedJob ? null : output,
+          continuedWith: continuedJob ?? undefined,
+          workerId,
+        });
         const completedStateJob = await helper.finishJob(
           continuedJob
             ? { job, context, workerId, type: "continueWith", continuedJob }

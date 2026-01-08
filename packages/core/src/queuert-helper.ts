@@ -471,6 +471,19 @@ export const queuertHelper = ({
         | { type: "continueWith"; continuedJob: Job<any, any, any, any> }
       ),
     ) => Promise<StateJob>,
+    logJobAttemptCompleted: ({
+      job,
+      output,
+      continuedWith,
+      workerId,
+    }: {
+      job: StateJob;
+      output: unknown;
+      continuedWith?: Job<any, any, any, any>;
+      workerId: string;
+    }): void => {
+      logHelper.jobAttemptCompleted(job, { output, continuedWith, workerId });
+    },
     refetchJobForUpdate: async ({
       context,
       job,

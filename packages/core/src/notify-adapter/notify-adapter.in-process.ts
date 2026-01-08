@@ -23,7 +23,7 @@ export const createInProcessNotifyAdapter = (): NotifyAdapter => {
       const hintId = crypto.randomUUID();
       hintCounts.set(hintId, count);
 
-      setTimeout(() => hintCounts.delete(hintId), 60_000);
+      setTimeout(() => hintCounts.delete(hintId), 60_000).unref();
 
       for (const listener of jobScheduledListeners.slice()) {
         listener({ typeName, hintId });

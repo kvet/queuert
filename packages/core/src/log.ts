@@ -93,6 +93,12 @@ type JobAttemptFailedLogEntry = LogEntry<
     unknown,
   ]
 >;
+type JobAttemptCompletedLogEntry = LogEntry<
+  "job_attempt_completed",
+  "info",
+  "Job attempt completed",
+  [{ output?: unknown; continuedWith?: JobBasicArgs } & JobProcessingArgs & WorkerBasicArgs]
+>;
 type JobCompletedLogEntry = LogEntry<
   "job_completed",
   "info",
@@ -171,6 +177,7 @@ type TypedLogEntry =
   | JobLeaseExpiredLogEntry
   | JobReapedLogEntry
   | JobAttemptFailedLogEntry
+  | JobAttemptCompletedLogEntry
   | JobCompletedLogEntry
   // job sequence
   | JobSequenceCreatedLogEntry

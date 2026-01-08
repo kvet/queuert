@@ -160,6 +160,7 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
           },
         ],
       },
+      { type: "job_attempt_completed", args: [{ typeName: "linear" }] },
       { type: "job_completed", args: [{ typeName: "linear" }] },
       { type: "job_attempt_started", args: [{ typeName: "linear_next" }] },
       {
@@ -173,8 +174,10 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
           },
         ],
       },
+      { type: "job_attempt_completed", args: [{ typeName: "linear_next" }] },
       { type: "job_completed", args: [{ typeName: "linear_next" }] },
       { type: "job_attempt_started", args: [{ typeName: "linear_next_next" }] },
+      { type: "job_attempt_completed", args: [{ typeName: "linear_next_next" }] },
       { type: "job_completed", args: [{ typeName: "linear_next_next" }] },
       { type: "job_sequence_completed", args: [{ typeName: "linear" }] },
       { type: "worker_stopping" },

@@ -63,6 +63,10 @@ export type LogHelper = {
     job: StateJob,
     options: { workerId: string; rescheduledSchedule: ScheduleOptions; error: unknown },
   ) => void;
+  jobAttemptCompleted: (
+    job: StateJob,
+    options: { output: unknown; continuedWith?: Job<any, any, any, any>; workerId: string },
+  ) => void;
   jobCompleted: (
     job: StateJob,
     options: { output: unknown; continuedWith?: Job<any, any, any, any>; workerId: string | null },
@@ -212,6 +216,24 @@ export const createLogHelper = ({ log }: { log: Log }): LogHelper => ({
           }),
         },
         options.error,
+      ],
+    });
+  },
+
+  jobAttemptCompleted(job, options) {
+    log({
+      type: "job_attempt_completed",
+      level: "info",
+      message: "Job attempt completed",
+      args: [
+        {
+          ...mapStateJobToJobProcessingLogArgs(job),
+          output: options.output,
+          continuedWith: options.continuedWith
+            ? mapJobToJobBasicLogArgs(options.continuedWith)
+            : undefined,
+          workerId: options.workerId,
+        },
       ],
     });
   },
