@@ -1,17 +1,17 @@
 import {
-  BaseStateAdapterContext,
-  type RetryConfig,
-  type StateAdapter,
-  type StateJob,
-} from "queuert";
-import { withRetry } from "queuert/internal";
-import {
   createTemplateApplier,
   type NamedParameter,
   type TypedSql,
   type UnwrapNamedParameters,
 } from "@queuert/typed-sql";
 import { UUID } from "crypto";
+import {
+  BaseStateAdapterContext,
+  type RetryConfig,
+  type StateAdapter,
+  type StateJob,
+} from "queuert";
+import { withRetry } from "queuert/internal";
 import { SqliteStateProvider } from "../state-provider/state-provider.sqlite.js";
 import { isTransientSqliteError } from "./errors.js";
 import {
@@ -20,7 +20,7 @@ import {
   completeJobSql,
   type DbJob,
   type DbJobSequenceRow,
-  deleteJobsByRootIdsSql,
+  deleteJobsByRootSequenceIdsSql,
   findExistingJobSql,
   findReadyJobsSql,
   getCurrentJobForUpdateSql,
@@ -56,11 +56,12 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
   return {
     id: dbJob.id,
     typeName: dbJob.type_name,
+    sequenceId: dbJob.sequence_id,
+    sequenceTypeName: dbJob.sequence_type_name,
     input: parseJson(dbJob.input),
     output: parseJson(dbJob.output),
 
-    rootId: dbJob.root_id,
-    sequenceId: dbJob.sequence_id,
+    rootSequenceId: dbJob.root_sequence_id,
     originId: dbJob.origin_id,
 
     status: dbJob.status,
@@ -88,10 +89,11 @@ const parseDbJobSequenceRow = (
   const rootJob: DbJob = {
     id: row.id,
     type_name: row.type_name,
+    sequence_id: row.sequence_id,
+    sequence_type_name: row.sequence_type_name,
     input: row.input,
     output: row.output,
-    root_id: row.root_id,
-    sequence_id: row.sequence_id,
+    root_sequence_id: row.root_sequence_id,
     origin_id: row.origin_id,
     status: row.status,
     created_at: row.created_at,
@@ -111,10 +113,11 @@ const parseDbJobSequenceRow = (
     ? {
         id: row.lc_id,
         type_name: row.lc_type_name!,
+        sequence_id: row.lc_sequence_id!,
+        sequence_type_name: row.lc_sequence_type_name!,
         input: row.lc_input,
         output: row.lc_output,
-        root_id: row.lc_root_id!,
-        sequence_id: row.lc_sequence_id!,
+        root_sequence_id: row.lc_root_sequence_id!,
         origin_id: row.lc_origin_id,
         status: row.lc_status!,
         created_at: row.lc_created_at!,
@@ -238,8 +241,9 @@ export const createSqliteStateAdapter = <
     createJob: async ({
       context,
       typeName,
+      sequenceTypeName,
       input,
-      rootId,
+      rootSequenceId,
       sequenceId,
       originId,
       deduplication,
@@ -253,7 +257,7 @@ export const createSqliteStateAdapter = <
 
       const sequenceIdOrNull = sequenceId ?? null;
       const originIdOrNull = originId ?? null;
-      const rootIdOrNull = rootId ?? null;
+      const rootSequenceIdOrNull = rootSequenceId ?? null;
       const scheduledAtIso = schedule?.at?.toISOString().replace("T", " ").replace("Z", "") ?? null;
       const scheduleAfterMsOrNull = schedule?.afterMs ?? null;
 
@@ -285,10 +289,11 @@ export const createSqliteStateAdapter = <
         params: [
           newId,
           typeName,
-          inputJson,
-          rootIdOrNull,
-          newId,
           sequenceIdOrNull,
+          newId,
+          sequenceTypeName,
+          inputJson,
+          rootSequenceIdOrNull,
           newId,
           originIdOrNull,
           deduplicationKey,
@@ -435,23 +440,23 @@ export const createSqliteStateAdapter = <
       });
       return job ? mapDbJobToStateJob(job) : undefined;
     },
-    getExternalBlockers: async ({ context, rootIds }) => {
-      const rootIdsJson = JSON.stringify(rootIds);
+    getExternalBlockers: async ({ context, rootSequenceIds }) => {
+      const rootSequenceIdsJson = JSON.stringify(rootSequenceIds);
       const blockers = await executeTypedSql({
         context,
         sql: getExternalBlockersSql,
-        params: [rootIdsJson, rootIdsJson],
+        params: [rootSequenceIdsJson, rootSequenceIdsJson],
       });
       return blockers.map((b) => ({
         jobId: b.job_id as TIdType,
-        blockedRootId: b.blocked_root_id as TIdType,
+        blockedRootSequenceId: b.blocked_root_sequence_id as TIdType,
       }));
     },
-    deleteJobsByRootIds: async ({ context, rootIds }) => {
+    deleteJobsByRootSequenceIds: async ({ context, rootSequenceIds }) => {
       const jobs = await executeTypedSql({
         context,
-        sql: deleteJobsByRootIdsSql,
-        params: [JSON.stringify(rootIds)],
+        sql: deleteJobsByRootSequenceIdsSql,
+        params: [JSON.stringify(rootSequenceIds)],
       });
       return jobs.map(mapDbJobToStateJob);
     },

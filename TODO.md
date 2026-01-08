@@ -1,6 +1,7 @@
 # Medium term
 
-- Add firstJobTypeName to state - Simplifies job type discovery for UIs and monitoring tools
+- Add sequenceTypeName to Job type (Phase 2) - Type-safe generic TSequenceTypeName on Job entity
+- Add job_attempt_completed log event
 - Metrics collection & OTEL
 
 # Long term

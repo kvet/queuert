@@ -48,7 +48,7 @@ it("should infer types correctly with custom ID", async ({ postgresConnectionStr
     try {
       return await queuert.startJobSequence({
         poolClient,
-        firstJobTypeName: "test",
+        typeName: "test",
         input: { foo: "hello" },
       });
     } finally {

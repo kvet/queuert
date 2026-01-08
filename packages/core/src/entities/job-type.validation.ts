@@ -7,7 +7,7 @@ import {
   DefineContinuationInput,
   DefineContinuationOutput,
 } from "./job-type.js";
-import type { FirstJobTypeDefinitions } from "./job-type.navigation.js";
+import type { ExternalJobTypeDefinitions } from "./job-type.navigation.js";
 
 type NoVoidOrUndefined<T> = [T] extends [never]
   ? never
@@ -69,7 +69,7 @@ export type ValidatedJobTypeDefinitions<T extends BaseJobTypeDefinitions> = {
     output: ValidateOutput<T[K]["output"], keyof T & string>;
     blockers?: ValidateBlockers<
       T[K] extends { blockers: infer B } ? B : undefined,
-      keyof FirstJobTypeDefinitions<T> & string
+      keyof ExternalJobTypeDefinitions<T> & string
     >;
   };
 };

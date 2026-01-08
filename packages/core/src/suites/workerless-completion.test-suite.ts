@@ -37,7 +37,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "test",
+          typeName: "test",
           input: { value: 42 },
         }),
       ),
@@ -47,7 +47,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       runInTransaction(async (context) =>
         queuert.completeJobSequence({
           ...context,
-          firstJobTypeName: "test",
+          typeName: "test",
           id: jobSequence.id,
           complete: async ({ job, complete }) => {
             expect(job.typeName).toEqual("test");
@@ -98,7 +98,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "awaiting-approval",
+          typeName: "awaiting-approval",
           input: { requestId: "req-123" },
         }),
       ),
@@ -110,7 +110,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       runInTransaction(async (context) =>
         queuert.completeJobSequence({
           ...context,
-          firstJobTypeName: "awaiting-approval",
+          typeName: "awaiting-approval",
           id: jobSequence.id,
           complete: async ({ job, complete }) => {
             if (job.typeName === "awaiting-approval") {
@@ -160,7 +160,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "awaiting-approval",
+          typeName: "awaiting-approval",
           input: { requestId: "req-123" },
         }),
       ),
@@ -172,7 +172,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       runInTransaction(async (context) =>
         queuert.completeJobSequence({
           ...context,
-          firstJobTypeName: "awaiting-approval",
+          typeName: "awaiting-approval",
           id: jobSequence.id,
           complete: async ({ job, complete }) => {
             if (job.typeName === "awaiting-approval") {
@@ -231,7 +231,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "test",
+          typeName: "test",
           input: null,
         }),
       ),
@@ -241,7 +241,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       runInTransaction(async (context) =>
         queuert.completeJobSequence({
           ...context,
-          firstJobTypeName: "test",
+          typeName: "test",
           id: jobSequence.id,
           complete: async ({ job, complete }) => {
             return complete(job, () => ({ result: false }));
@@ -255,7 +255,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         runInTransaction(async (context) =>
           queuert.completeJobSequence({
             ...context,
-            firstJobTypeName: "test",
+            typeName: "test",
             id: jobSequence.id,
             complete: async ({ job, complete }) => {
               return complete(job, () => ({ result: false }));
@@ -289,7 +289,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "test",
+          typeName: "test",
           input: { value: 42 },
         }),
       ),
@@ -300,7 +300,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       runInTransaction(async (context) =>
         queuert.completeJobSequence({
           ...context,
-          firstJobTypeName: "test",
+          typeName: "test",
           id: jobSequence.id,
           complete: completeFn,
         }),
@@ -366,7 +366,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "test",
+          typeName: "test",
           input: null,
         }),
       ),
@@ -379,7 +379,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         runInTransaction(async (context) =>
           queuert.completeJobSequence({
             ...context,
-            firstJobTypeName: "test",
+            typeName: "test",
             id: jobSequence.id,
             complete: async ({ job, complete }) => {
               await complete(job, () => ({ result: "from-external" }));

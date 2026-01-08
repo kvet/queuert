@@ -93,16 +93,16 @@ defineUnionJobTypes<{
 // Usage - startBlockers callback creates blockers via startJobSequence
 await queuert.startJobSequence({
   client,
-  firstJobTypeName: 'main',
+  typeName: 'main',
   input: {...},
   startBlockers: async () => {
-    const blocker = await queuert.startJobSequence({ client, firstJobTypeName: 'blocker', input: {...} });
+    const blocker = await queuert.startJobSequence({ client, typeName: 'blocker', input: {...} });
     return [blocker];  // Can also return existing sequences
   },
 });
 ```
 
-Blockers created within `startBlockers` automatically inherit the main job's `rootId` and `originId` via context propagation. Existing sequences returned from the callback keep their own `rootId`. Same pattern applies to `continueWith`. A job with incomplete blockers starts as `blocked` and transitions to `pending` when all blockers complete.
+Blockers created within `startBlockers` automatically inherit the main job's `rootSequenceId` and `originId` via context propagation. Existing sequences returned from the callback keep their own `rootSequenceId`. Same pattern applies to `continueWith`. A job with incomplete blockers starts as `blocked` and transitions to `pending` when all blockers complete.
 
 ### Log
 
@@ -115,9 +115,9 @@ Abstracts database operations for job persistence. Allows different database imp
 The `StateAdapter` type accepts two generic parameters:
 
 - `TContext extends BaseStateAdapterContext`: The context type containing database client
-- `TJobId`: The job ID type used for input parameters (e.g., `jobId`, `rootIds`)
+- `TJobId`: The job ID type used for input parameters (e.g., `jobId`, `rootSequenceIds`)
 
-**Internal type design**: `StateJob` is a non-generic type with `string` for all ID fields (`id`, `rootId`, `sequenceId`, `originId`). The `StateAdapter` methods accept `TJobId` for input parameters but return plain `StateJob`. This simplifies internal code while allowing adapters to expose typed IDs to consumers via `GetStateAdapterJobId<TStateAdapter>`.
+**Internal type design**: `StateJob` is a non-generic type with `string` for all ID fields (`id`, `rootSequenceId`, `sequenceId`, `originId`) and includes `sequenceTypeName` for sequence type tracking. The `StateAdapter` methods accept `TJobId` for input parameters but return plain `StateJob`. This simplifies internal code while allowing adapters to expose typed IDs to consumers via `GetStateAdapterJobId<TStateAdapter>`.
 
 ### StateProvider
 
@@ -233,7 +233,7 @@ Two levels of deduplication prevent duplicate work:
 
 ```typescript
 await queuert.startJobSequence({
-  firstJobTypeName: "process",
+  typeName: "process",
   input: { userId: 123 },
   deduplication: { key: "user-123", strategy: "completed", windowMs: 60000 }
 });
@@ -295,7 +295,7 @@ Jobs can be completed without a worker using `completeJobSequence` (sets `worker
 ```typescript
 await queuert.completeJobSequence({
   client,
-  firstJobTypeName: "awaiting-approval",
+  typeName: "awaiting-approval",
   id: jobSequence.id,
   complete: async ({ job, complete }) => {
     // Inspect current job state
@@ -324,6 +324,24 @@ await queuert.completeJobSequence({
 
 ## Design Philosophy
 
+### First Job = Sequence (Unified Model)
+
+A JobSequence is not a separate entity - it's simply identified by its first job. The first job's ID becomes the sequence's ID (`sequenceId`). This unification provides:
+
+**Simplicity**: One table, one type, one set of operations. No separate `job_sequence` table to manage, no joins, no synchronization issues.
+
+**Flexibility**: The first job can be:
+
+- A lightweight "alias" that immediately continues to real work
+- A full job that does processing and completes the sequence in one step
+- Anything in between
+
+**Natural Promise semantics**: `continueWith` mirrors how promises chain. Each job is a `.then()` step.
+
+**Denormalization tradeoff**: `sequenceTypeName` is stored on every job for O(1) sequence-type filtering at scale. Without it, queries like `SELECT * FROM job WHERE status = 'running' AND sequence_id IN (SELECT id FROM job WHERE id = sequence_id AND type_name = 'batch-import')` become expensive with millions of records.
+
+**Junction table for blockers**: The `job_blocker` table is required for M:N blocker relationships (efficient bidirectional lookup). This is the only "extra" table beyond the unified job model.
+
 ### Consistent Terminology
 
 Parallel entities should use consistent lifecycle terminology to reduce cognitive load:
@@ -336,9 +354,10 @@ Avoid asymmetric naming (e.g., `started`/`finished` vs `created`/`completed`) ev
 ### Naming Conventions
 
 - `originId`: Tracks provenance (which job triggered this one), null for root jobs
-- `rootId`: Ultimate ancestor of a job tree, self-referential for root jobs (equals own ID, not null)
+- `rootSequenceId`: ID of the root sequence (ultimate ancestor of a job tree), self-referential for root sequences (equals own ID, not null)
 - `sequenceId`: The job sequence this job belongs to, self-referential for the first job (equals own ID)
-- `firstJobTypeName`: The job type name of the first job in a sequence (correlates with `sequenceId` - both reference the starting job)
+- `sequenceTypeName`: The job type name of the first job in a sequence (correlates with `sequenceId` - both reference the starting job)
+- `typeName`: On `JobSequence`, this is the sequence's entry type (cleaner public API, equivalent to `sequenceTypeName` on jobs)
 - `blockers`/`blocked`: Describes job dependencies (not `dependencies`/`dependents`)
 - `continueWith`: Continues to next job in complete callback
 - `process`: The job processing function provided to `implementJobType` (not `handler`). Receives `{ signal, job, prepare, complete }` and returns the completed job or continuation.
@@ -350,8 +369,8 @@ Avoid asymmetric naming (e.g., `started`/`finished` vs `created`/`completed`) ev
 - `DefineContinuationInput<T>`: Type wrapper marking job types as internal (only reachable via `continueWith`).
 - `DefineContinuationOutput<T>`: Type marker in output indicating continuation to another job type.
 - `DefineBlocker<T>`: Type marker for declaring blocker dependencies. Used in `blockers` field of job type definitions.
-- `startBlockers`: Callback parameter in `startJobSequence` and `continueWith` for providing blockers. Required when job type has blockers defined; must not be provided when job type has no blockers. Create new blocker sequences via `startJobSequence` within the callback - they automatically inherit rootId/originId from the main job via context propagation. Can also return existing sequences.
-- `deleteJobSequences`: Deletes entire job trees by `rootId`. Accepts array of sequence IDs. Must be called on root sequences. Throws error if external job sequences depend on sequences being deleted; include those dependents in the deletion set to proceed. Primarily intended for testing environments.
+- `startBlockers`: Callback parameter in `startJobSequence` and `continueWith` for providing blockers. Required when job type has blockers defined; must not be provided when job type has no blockers. Create new blocker sequences via `startJobSequence` within the callback - they automatically inherit rootSequenceId/originId from the main job via context propagation. Can also return existing sequences.
+- `deleteJobSequences`: Deletes entire job trees by `rootSequenceId`. Accepts array of sequence IDs. Must be called on root sequences. Throws error if external job sequences depend on sequences being deleted; include those dependents in the deletion set to proceed. Primarily intended for testing environments.
 - `completeJobSequence`: Completes jobs without a worker (`workerId: null`). Takes a `complete` callback that receives the current job and can complete it (with output or continuation). Supports partial completion and multi-step sequences.
 - `waitForJobSequenceCompletion`: Waits for a job sequence to complete. Uses a hybrid polling/notification approach with 100ms poll intervals for reliability. Throws `WaitForJobSequenceCompletionTimeoutError` on timeout. Throws immediately if sequence doesn't exist.
 - `withNotify`: Wraps a callback to collect and dispatch notifications after successful completion. Used to batch job scheduling and sequence completion notifications within a transaction.
@@ -373,9 +392,9 @@ Avoid asymmetric naming (e.g., `started`/`finished` vs `created`/`completed`) ev
 - `JobOf<TJobId, TJobTypeDefinitions, TJobTypeName>`: Resolves to `Job<TJobId, TJobTypeName, Input, BlockerSequences>` from job type definitions. Automatically unwraps `DefineContinuationInput` markers and includes typed blocker sequences.
 - `JobWithoutBlockers<TJob>`: Strips the `blockers` field from a `Job` type. Used in `startBlockers` callback where blockers haven't been created yet. Example: `JobWithoutBlockers<JobOf<string, Defs, "process">>`.
 - `PendingJob<TJob>`, `BlockedJob<TJob>`, `RunningJob<TJob>`, `CompletedJob<TJob>`, `CreatedJob<TJob>`: Job status types that take a `Job` type and narrow by status. Example: `PendingJob<JobOf<string, Defs, "process">>`.
-- `SequenceJobTypes<TJobTypeDefinitions, TFirstJobTypeName>`: Union of all job type names reachable in a sequence starting from `TFirstJobTypeName`.
+- `SequenceJobTypes<TJobTypeDefinitions, TSequenceTypeName>`: Union of all job type names reachable in a sequence starting from `TSequenceTypeName`.
 - `ContinuationJobTypes<TJobTypeDefinitions, TJobTypeName>`: Job type names that `TJobTypeName` can continue to.
-- `FirstJobTypeDefinitions<T>`: Filters job type definitions to only those that can start a sequence (excludes `DefineContinuationInput` types).
+- `ExternalJobTypeDefinitions<T>`: Filters job type definitions to only external job types that can be started via `startJobSequence` (excludes internal `DefineContinuationInput` types).
 - `HasBlockers<TJobTypeDefinitions, TJobTypeName>`: Returns `true` if the job type has blockers defined, `false` otherwise. Used internally to enforce `startBlockers` requirement.
 - `JobSequenceOf<TJobId, TJobTypeDefinitions, TJobTypeName>`: Resolves to `JobSequence<TJobId, TJobTypeName, Input, Output>` for all jobs reachable in the sequence.
 - `BlockerSequences<TJobId, TJobTypeDefinitions, TJobTypeName>`: Tuple of `JobSequence` types for all declared blockers of a job type.
@@ -383,7 +402,7 @@ Avoid asymmetric naming (e.g., `started`/`finished` vs `created`/`completed`) ev
 ### Type Organization
 
 - `job-type.ts`: Public marker types (`DefineContinuationInput`, `DefineContinuationOutput`, `DefineBlocker`) and their symbols. Re-exports navigation types.
-- `job-type.navigation.ts`: Type-level navigation logic (`JobOf`, `SequenceJobTypes`, `ContinuationJobTypes`, `FirstJobTypeDefinitions`, blocker resolution types).
+- `job-type.navigation.ts`: Type-level navigation logic (`JobOf`, `SequenceJobTypes`, `ContinuationJobTypes`, `ExternalJobTypeDefinitions`, blocker resolution types).
 - `job-sequence.types.ts`: Core entity types (`JobSequence`, `CompletedJobSequence`, `JobSequenceStatus`).
 - `job.types.ts`: Core job entity types (`Job`, `JobWithoutBlockers`) and status narrowing types (`PendingJob`, `RunningJob`, etc.).
 

@@ -44,7 +44,7 @@ export type JobBasicArgs = {
   typeName: string;
   originId: string | null;
   sequenceId: string;
-  rootId: string;
+  rootSequenceId: string;
 };
 export type JobProcessingArgs = JobBasicArgs & { status: StateJob["status"]; attempt: number };
 type JobCreatedLogEntry = LogEntry<
@@ -101,10 +101,10 @@ type JobCompletedLogEntry = LogEntry<
 >;
 
 export type JobSequenceArgs = {
-  sequenceId: string;
-  firstJobTypeName: string;
+  id: string;
+  typeName: string;
   originId: string | null;
-  rootId: string;
+  rootSequenceId: string;
 };
 type JobSequenceCreatedLogEntry = LogEntry<
   "job_sequence_created",

@@ -1,10 +1,10 @@
 export type JobSequenceStatus = "blocked" | "pending" | "running" | "completed";
 
-export type JobSequence<TJobId, TFirstJobTypeName, TInput, TOutput> = {
+export type JobSequence<TJobId, TSequenceTypeName, TInput, TOutput> = {
   id: TJobId;
+  typeName: TSequenceTypeName;
+  rootSequenceId: TJobId;
   originId: TJobId | null;
-  rootId: TJobId;
-  firstJobTypeName: TFirstJobTypeName;
   input: TInput;
   createdAt: Date;
 } & (

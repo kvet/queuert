@@ -76,7 +76,7 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
 
     for (const job of store.jobs.values()) {
       if (job.deduplicationKey !== deduplication.key) continue;
-      if (job.id !== job.sequenceId) continue; // Only root jobs
+      if (job.id !== job.sequenceId) continue; // Only first jobs in sequence
 
       if (strategy === "completed" && job.status === "completed") continue;
 
@@ -137,8 +137,9 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
 
     createJob: async ({
       typeName,
+      sequenceTypeName,
       input,
-      rootId,
+      rootSequenceId,
       sequenceId,
       originId,
       deduplication,
@@ -164,9 +165,10 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       const job: StateJob = {
         id,
         typeName,
+        sequenceTypeName,
         input,
         output: null,
-        rootId: rootId ?? id,
+        rootSequenceId: rootSequenceId ?? id,
         sequenceId: sequenceId ?? id,
         originId: originId ?? null,
         status: "pending",
@@ -404,13 +406,13 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       return updatedJob;
     },
 
-    getExternalBlockers: async ({ rootIds }) => {
-      const result: { jobId: string; blockedRootId: string }[] = [];
-      const rootIdSet = new Set(rootIds);
+    getExternalBlockers: async ({ rootSequenceIds }) => {
+      const result: { jobId: string; blockedRootSequenceId: string }[] = [];
+      const rootSequenceIdSet = new Set(rootSequenceIds);
 
       const sequenceIdsInRoots = new Set<string>();
       for (const job of store.jobs.values()) {
-        if (rootIdSet.has(job.rootId)) {
+        if (rootSequenceIdSet.has(job.rootSequenceId)) {
           sequenceIdsInRoots.add(job.sequenceId);
         }
       }
@@ -418,11 +420,11 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       for (const [jobId, blockerMap] of store.jobBlockers) {
         const job = store.jobs.get(jobId);
         if (!job) continue;
-        if (rootIdSet.has(job.rootId)) continue;
+        if (rootSequenceIdSet.has(job.rootSequenceId)) continue;
 
         for (const seqId of blockerMap.keys()) {
           if (sequenceIdsInRoots.has(seqId)) {
-            result.push({ jobId, blockedRootId: job.rootId });
+            result.push({ jobId, blockedRootSequenceId: job.rootSequenceId });
             break;
           }
         }
@@ -431,12 +433,12 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       return result;
     },
 
-    deleteJobsByRootIds: async ({ rootIds }) => {
+    deleteJobsByRootSequenceIds: async ({ rootSequenceIds }) => {
       const deletedJobs: StateJob[] = [];
-      const rootIdSet = new Set(rootIds);
+      const rootSequenceIdSet = new Set(rootSequenceIds);
 
       for (const [jobId, job] of store.jobs) {
-        if (rootIdSet.has(job.rootId)) {
+        if (rootSequenceIdSet.has(job.rootSequenceId)) {
           deletedJobs.push(job);
           store.jobs.delete(jobId);
           store.jobBlockers.delete(jobId);

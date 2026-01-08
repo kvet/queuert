@@ -53,7 +53,7 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
           expect(job.id).toEqual(jobSequence.id);
           expect(job.sequenceId).toEqual(jobSequence.id);
           expect(job.originId).toBeNull();
-          expect(job.rootId).toEqual(jobSequence.id);
+          expect(job.rootSequenceId).toEqual(jobSequence.id);
           originIds.push(job.id);
 
           return complete(async ({ continueWith }) => {
@@ -80,7 +80,7 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
           expect(job.id).not.toEqual(jobSequence.id);
           expect(job.sequenceId).toEqual(jobSequence.id);
           expect(job.originId).toEqual(originIds[0]);
-          expect(job.rootId).toEqual(jobSequence.id);
+          expect(job.rootSequenceId).toEqual(jobSequence.id);
           originIds.push(job.id);
 
           return complete(async ({ continueWith }) => {
@@ -104,7 +104,7 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
           expect(job.id).not.toEqual(jobSequence.id);
           expect(job.sequenceId).toEqual(jobSequence.id);
           expect(job.originId).toEqual(originIds[1]);
-          expect(job.rootId).toEqual(jobSequence.id);
+          expect(job.rootSequenceId).toEqual(jobSequence.id);
 
           const result = await complete(async () => ({
             result: job.input.valueNextNext,
@@ -119,7 +119,7 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
       runInTransaction(async (context) => {
         return queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "linear",
+          typeName: "linear",
           input: { value: 1 },
         });
       }),
@@ -128,10 +128,10 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
       result: number;
     }>();
     expectTypeOf<
-      Parameters<(typeof queuert)["startJobSequence"]>[0]["firstJobTypeName"]
+      Parameters<(typeof queuert)["startJobSequence"]>[0]["typeName"]
     >().toEqualTypeOf<"linear">();
     expectTypeOf<
-      Parameters<(typeof queuert)["getJobSequence"]>[0]["firstJobTypeName"]
+      Parameters<(typeof queuert)["getJobSequence"]>[0]["typeName"]
     >().toEqualTypeOf<"linear">();
 
     await withWorkers([await worker.start()], async () => {
@@ -145,7 +145,7 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
     });
 
     expectLogs([
-      { type: "job_sequence_created", args: [{ firstJobTypeName: "linear" }] },
+      { type: "job_sequence_created", args: [{ typeName: "linear" }] },
       { type: "job_created", args: [{ typeName: "linear" }] },
       { type: "worker_started" },
       { type: "job_attempt_started", args: [{ typeName: "linear" }] },
@@ -155,7 +155,7 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
           {
             typeName: "linear_next",
             sequenceId: jobSequence.id,
-            rootId: jobSequence.id,
+            rootSequenceId: jobSequence.id,
             originId: originIds[0],
           },
         ],
@@ -168,7 +168,7 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
           {
             typeName: "linear_next_next",
             sequenceId: jobSequence.id,
-            rootId: jobSequence.id,
+            rootSequenceId: jobSequence.id,
             originId: originIds[1],
           },
         ],
@@ -176,7 +176,7 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
       { type: "job_completed", args: [{ typeName: "linear_next" }] },
       { type: "job_attempt_started", args: [{ typeName: "linear_next_next" }] },
       { type: "job_completed", args: [{ typeName: "linear_next_next" }] },
-      { type: "job_sequence_completed", args: [{ firstJobTypeName: "linear" }] },
+      { type: "job_sequence_completed", args: [{ typeName: "linear" }] },
       { type: "worker_stopping" },
       { type: "worker_stopped" },
     ]);
@@ -251,7 +251,7 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "main",
+          typeName: "main",
           input: { value: 2 },
         }),
       ),
@@ -260,7 +260,7 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "main",
+          typeName: "main",
           input: { value: 3 },
         }),
       ),
@@ -336,7 +336,7 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "loop",
+          typeName: "loop",
           input: { counter: 0 },
         }),
       ),
@@ -417,7 +417,7 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "start",
+          typeName: "start",
           input: { value: 0 },
         }),
       ),

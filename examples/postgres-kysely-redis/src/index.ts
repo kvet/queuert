@@ -40,7 +40,7 @@ const jobSequence = await qrt.withNotify(async () =>
 
     return qrt.startJobSequence({
       db,
-      firstJobTypeName: "add_pet_to_user",
+      typeName: "add_pet_to_user",
       input: { userId: user.id, petName: "Fluffy" },
     });
   }),

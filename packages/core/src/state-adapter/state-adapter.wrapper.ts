@@ -41,7 +41,7 @@ export const wrapStateAdapter = <TContext extends BaseStateAdapterContext, TJobI
     completeJob: wrap("completeJob"),
     removeExpiredJobLease: wrap("removeExpiredJobLease"),
     getExternalBlockers: wrap("getExternalBlockers"),
-    deleteJobsByRootIds: wrap("deleteJobsByRootIds"),
+    deleteJobsByRootSequenceIds: wrap("deleteJobsByRootSequenceIds"),
     getJobForUpdate: wrap("getJobForUpdate"),
     getCurrentJobForUpdate: wrap("getCurrentJobForUpdate"),
   };

@@ -27,19 +27,19 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       runInTransaction(async (context) => [
         await queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "test",
+          typeName: "test",
           input: { value: 1 },
           deduplication: { key: "same-key" },
         }),
         await queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "test",
+          typeName: "test",
           input: { value: 2 },
           deduplication: { key: "same-key" },
         }),
         await queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "test",
+          typeName: "test",
           input: { value: 3 },
           deduplication: { key: "different-key" },
         }),
@@ -106,7 +106,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "test",
+          typeName: "test",
           input: { value: 1 },
           deduplication: { key: "all-key", strategy: "all" },
         }),
@@ -127,7 +127,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "test",
+          typeName: "test",
           input: { value: 2 },
           deduplication: { key: "all-key", strategy: "all" },
         }),
@@ -142,7 +142,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "test",
+          typeName: "test",
           input: { value: 3 },
           deduplication: { key: "completed-key", strategy: "completed" },
         }),
@@ -163,7 +163,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "test",
+          typeName: "test",
           input: { value: 4 },
           deduplication: { key: "completed-key", strategy: "completed" },
         }),
@@ -209,7 +209,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "test",
+          typeName: "test",
           input: { value: 1 },
           deduplication: { key: "all-key", strategy: "all", windowMs: 50 },
         }),
@@ -224,7 +224,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "test",
+          typeName: "test",
           input: { value: 2 },
           deduplication: { key: "all-key", strategy: "all", windowMs: 50 },
         }),
@@ -239,7 +239,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "test",
+          typeName: "test",
           input: { value: 3 },
           deduplication: { key: "completed-key", strategy: "completed", windowMs: 50 },
         }),
@@ -262,7 +262,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "test",
+          typeName: "test",
           input: { value: 4 },
           deduplication: { key: "completed-key", strategy: "completed", windowMs: 50 },
         }),

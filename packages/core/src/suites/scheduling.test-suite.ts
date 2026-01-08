@@ -39,7 +39,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "test",
+          typeName: "test",
           input: { value: 1 },
           schedule: { afterMs: 300 },
         }),
@@ -98,7 +98,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "test",
+          typeName: "test",
           input: { value: 1 },
           schedule: { at: new Date(Date.now() + 300) },
         }),
@@ -181,7 +181,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "first",
+          typeName: "first",
           input: { value: 1 },
         }),
       ),
@@ -265,7 +265,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "first",
+          typeName: "first",
           input: { value: 1 },
         }),
       ),
@@ -333,7 +333,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "test",
+          typeName: "test",
           input: { value: 1 },
         }),
       ),
@@ -403,7 +403,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "test",
+          typeName: "test",
           input: { value: 1 },
         }),
       ),

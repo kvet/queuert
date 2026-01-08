@@ -20,7 +20,7 @@ import {
   completeJobSql,
   createJobSql,
   type DbJob,
-  deleteJobsByRootIdsSql,
+  deleteJobsByRootSequenceIdsSql,
   getCurrentJobForUpdateSql,
   getExternalBlockersSql,
   getJobBlockersSql,
@@ -39,11 +39,12 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
   return {
     id: dbJob.id,
     typeName: dbJob.type_name,
+    sequenceId: dbJob.sequence_id,
+    sequenceTypeName: dbJob.sequence_type_name,
     input: dbJob.input,
     output: dbJob.output,
 
-    rootId: dbJob.root_id,
-    sequenceId: dbJob.sequence_id,
+    rootSequenceId: dbJob.root_sequence_id,
     originId: dbJob.origin_id,
 
     status: dbJob.status,
@@ -159,8 +160,9 @@ export const createPgStateAdapter = <
     createJob: async ({
       context,
       typeName,
+      sequenceTypeName,
       input,
-      rootId,
+      rootSequenceId,
       sequenceId,
       originId,
       deduplication,
@@ -171,9 +173,10 @@ export const createPgStateAdapter = <
         sql: createJobSql,
         params: [
           typeName,
-          input,
-          rootId,
           sequenceId,
+          sequenceTypeName,
+          input,
+          rootSequenceId,
           originId,
           deduplication?.key ?? null,
           deduplication ? (deduplication.strategy ?? "completed") : null,
@@ -270,22 +273,22 @@ export const createPgStateAdapter = <
       });
       return job ? mapDbJobToStateJob(job) : undefined;
     },
-    getExternalBlockers: async ({ context, rootIds }) => {
+    getExternalBlockers: async ({ context, rootSequenceIds }) => {
       const blockers = await executeTypedSql({
         context,
         sql: getExternalBlockersSql,
-        params: [rootIds],
+        params: [rootSequenceIds],
       });
       return blockers.map((b) => ({
         jobId: b.job_id as TIdType,
-        blockedRootId: b.blocked_root_id as TIdType,
+        blockedRootSequenceId: b.blocked_root_sequence_id as TIdType,
       }));
     },
-    deleteJobsByRootIds: async ({ context, rootIds }) => {
+    deleteJobsByRootSequenceIds: async ({ context, rootSequenceIds }) => {
       const jobs = await executeTypedSql({
         context,
-        sql: deleteJobsByRootIdsSql,
-        params: [rootIds],
+        sql: deleteJobsByRootSequenceIdsSql,
+        params: [rootSequenceIds],
       });
       return jobs.map(mapDbJobToStateJob);
     },

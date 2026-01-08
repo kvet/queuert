@@ -65,7 +65,7 @@ export const notifyResilienceTestSuite = ({
               Array.from({ length: 20 }, async (_, i) =>
                 queuert.startJobSequence({
                   ...context,
-                  firstJobTypeName: "test",
+                  typeName: "test",
                   input: { value: i, atomic: i % 2 === 0 },
                 }),
               ),

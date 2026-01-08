@@ -46,7 +46,7 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
     >().not.toBeUndefined();
 
     let mainSequenceId: string;
-    let dependencySequenceId: string;
+    let blockerSequenceId: string;
     let originId: string;
 
     const worker = queuert
@@ -54,8 +54,8 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       .implementJobType({
         name: "blocker",
         process: async ({ job, complete }) => {
-          expect(job.sequenceId).toEqual(dependencySequenceId);
-          expect(job.rootId).toEqual(mainSequenceId);
+          expect(job.sequenceId).toEqual(blockerSequenceId);
+          expect(job.rootSequenceId).toEqual(mainSequenceId);
           expect(job.originId).toEqual(originId);
           originId = job.id;
 
@@ -96,15 +96,15 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       runInTransaction(async (context) => {
         const jobSequence = await queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "main",
+          typeName: "main",
           input: { start: true },
           startBlockers: async () => {
             const dependencyJobSequence = await queuert.startJobSequence({
               ...context,
-              firstJobTypeName: "blocker",
+              typeName: "blocker",
               input: { value: 0 },
             });
-            dependencySequenceId = dependencyJobSequence.id;
+            blockerSequenceId = dependencyJobSequence.id;
             return [dependencyJobSequence];
           },
         });
@@ -129,11 +129,11 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       // blocker sequence created
       {
         type: "job_sequence_created",
-        args: [{ firstJobTypeName: "blocker", rootId: mainSequenceId!, originId: mainSequenceId! }],
+        args: [{ typeName: "blocker", rootSequenceId: mainSequenceId!, originId: mainSequenceId! }],
       },
       { type: "job_created", args: [{ typeName: "blocker" }] },
       // main sequence created
-      { type: "job_sequence_created", args: [{ firstJobTypeName: "main" }] },
+      { type: "job_sequence_created", args: [{ typeName: "main" }] },
       {
         type: "job_created",
         args: [
@@ -141,10 +141,10 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
             typeName: "main",
             blockers: [
               {
-                sequenceId: dependencySequenceId!,
-                firstJobTypeName: "blocker",
+                id: blockerSequenceId!,
+                typeName: "blocker",
                 originId: mainSequenceId!,
-                rootId: mainSequenceId!,
+                rootSequenceId: mainSequenceId!,
               },
             ],
           },
@@ -158,10 +158,10 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
             typeName: "main",
             blockedBySequences: [
               {
-                sequenceId: dependencySequenceId!,
-                firstJobTypeName: "blocker",
+                id: blockerSequenceId!,
+                typeName: "blocker",
                 originId: mainSequenceId!,
-                rootId: mainSequenceId!,
+                rootSequenceId: mainSequenceId!,
               },
             ],
           },
@@ -176,7 +176,7 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       // second blocker job processed, sequence completes
       { type: "job_attempt_started", args: [{ typeName: "blocker" }] },
       { type: "job_completed", args: [{ typeName: "blocker" }] },
-      { type: "job_sequence_completed", args: [{ firstJobTypeName: "blocker" }] },
+      { type: "job_sequence_completed", args: [{ typeName: "blocker" }] },
       // main job unblocked and completed
       {
         type: "job_unblocked",
@@ -184,17 +184,17 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
           {
             typeName: "main",
             unblockedBySequence: {
-              sequenceId: dependencySequenceId!,
-              firstJobTypeName: "blocker",
+              id: blockerSequenceId!,
+              typeName: "blocker",
               originId: mainSequenceId!,
-              rootId: mainSequenceId!,
+              rootSequenceId: mainSequenceId!,
             },
           },
         ],
       },
       { type: "job_attempt_started", args: [{ typeName: "main" }] },
       { type: "job_completed", args: [{ typeName: "main" }] },
-      { type: "job_sequence_completed", args: [{ firstJobTypeName: "main" }] },
+      { type: "job_sequence_completed", args: [{ typeName: "main" }] },
       // worker stopping
       { type: "worker_stopping" },
       { type: "worker_stopped" },
@@ -257,7 +257,7 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "blocker",
+          typeName: "blocker",
           input: { value: 1 },
         }),
       ),
@@ -276,7 +276,7 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "main",
+          typeName: "main",
           input: null,
           startBlockers: async () => [completedBlockerJobSequence],
         }),
@@ -344,7 +344,7 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
               await queuert.withNotify(async () =>
                 queuert.startJobSequence({
                   ...context,
-                  firstJobTypeName: "inner",
+                  typeName: "inner",
                   input: null,
                 }),
               ),
@@ -356,7 +356,7 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
               runInTransaction(async (context) =>
                 queuert.startJobSequence({
                   ...context,
-                  firstJobTypeName: "inner",
+                  typeName: "inner",
                   input: null,
                 }),
               ),
@@ -368,7 +368,7 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
               await queuert.withNotify(async () =>
                 queuert.startJobSequence({
                   ...context,
-                  firstJobTypeName: "inner",
+                  typeName: "inner",
                   input: null,
                 }),
               ),
@@ -383,7 +383,7 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "outer",
+          typeName: "outer",
           input: null,
         }),
       ),
@@ -459,7 +459,7 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "test",
+          typeName: "test",
           input: { value: 1 },
         }),
       ),
@@ -531,14 +531,14 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "main",
+          typeName: "main",
           input: null,
           startBlockers: async () =>
             Promise.all(
               Array.from({ length: 5 }, async (_, i) =>
                 queuert.startJobSequence({
                   ...context,
-                  firstJobTypeName: "blocker",
+                  typeName: "blocker",
                   input: { value: i + 1 },
                 }),
               ),
@@ -588,7 +588,7 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       }>(),
     });
 
-    let blockerRootId: string;
+    let blockerRootSequenceId: string;
     let blockerOriginId: string | null;
     let secondJobId: string;
 
@@ -597,7 +597,7 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       .implementJobType({
         name: "blocker",
         process: async ({ job, prepare, complete }) => {
-          blockerRootId = job.rootId;
+          blockerRootSequenceId = job.rootSequenceId;
           blockerOriginId = job.originId;
           await prepare({ mode: "atomic" });
           return complete(async () => ({ result: job.input.value * 10 }));
@@ -615,7 +615,7 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
               startBlockers: async () => [
                 await queuert.startJobSequence({
                   ...context,
-                  firstJobTypeName: "blocker",
+                  typeName: "blocker",
                   input: { value: 5 },
                 }),
               ],
@@ -643,7 +643,7 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "first",
+          typeName: "first",
           input: { id: "test-123" },
         }),
       ),
@@ -658,9 +658,9 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       expect(succeededJobSequence.output).toEqual({ finalResult: 50 });
 
       // Blocker should have the second job as originId (created in continueWith context)
-      // and the first job's rootId (since continueWith runs in first job's sequence)
+      // and the first job's rootSequenceId (since continueWith runs in first job's sequence)
       expect(blockerOriginId).toEqual(secondJobId);
-      expect(blockerRootId).toEqual(jobSequence.id);
+      expect(blockerRootSequenceId).toEqual(jobSequence.id);
     });
   });
 };

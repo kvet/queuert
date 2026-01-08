@@ -28,7 +28,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "test",
+          typeName: "test",
           input: { value: 1 },
         }),
       ),
@@ -45,7 +45,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       const fetchedJobSequence = await queuert.getJobSequence({
         ...context,
         id: jobSequence.id,
-        firstJobTypeName: "test",
+        typeName: "test",
       });
       expect(fetchedJobSequence).toBeNull();
     });
@@ -55,7 +55,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       { type: "job_created" },
       {
         type: "job_sequence_deleted",
-        args: [{ sequenceId: jobSequence.id, deletedJobIds: [jobSequence.id] }],
+        args: [{ id: jobSequence.id, deletedJobIds: [jobSequence.id] }],
       },
     ]);
   });
@@ -102,7 +102,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "test",
+          typeName: "test",
           input: null,
         }),
       ),
@@ -176,7 +176,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "blocker",
+          typeName: "blocker",
           input: { value: 1 },
         }),
       ),
@@ -186,7 +186,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "main",
+          typeName: "main",
           input: null,
           startBlockers: async () => [blockerSequence],
         }),
@@ -219,12 +219,12 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       const fetchedBlocker = await queuert.getJobSequence({
         ...context,
         id: blockerSequence.id,
-        firstJobTypeName: "blocker",
+        typeName: "blocker",
       });
       const fetchedMain = await queuert.getJobSequence({
         ...context,
         id: mainSequence.id,
-        firstJobTypeName: "main",
+        typeName: "main",
       });
 
       expect(fetchedBlocker).toBeNull();
@@ -261,12 +261,12 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "main",
+          typeName: "main",
           input: null,
           startBlockers: async () => {
             blockerSequence = await queuert.startJobSequence({
               ...context,
-              firstJobTypeName: "blocker",
+              typeName: "blocker",
               input: { value: 1 },
             });
             return [blockerSequence];
@@ -335,7 +335,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "test",
+          typeName: "test",
           input: null,
         }),
       ),

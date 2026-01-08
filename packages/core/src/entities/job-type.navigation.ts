@@ -7,7 +7,7 @@ import {
 } from "./job-type.js";
 import { CreatedJob, Job, JobWithoutBlockers } from "./job.js";
 
-export type FirstJobTypeDefinitions<T extends BaseJobTypeDefinitions> = {
+export type ExternalJobTypeDefinitions<T extends BaseJobTypeDefinitions> = {
   [K in keyof T as T[K]["input"] extends { [continuationInputSymbol]: true } ? never : K]: T[K];
 };
 
@@ -99,17 +99,17 @@ type BlockerSequenceOf<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TBlockerSpec,
 > = TBlockerSpec extends { [blockerSymbol]: infer TName }
-  ? TName extends keyof FirstJobTypeDefinitions<TJobTypeDefinitions> & string
+  ? TName extends keyof ExternalJobTypeDefinitions<TJobTypeDefinitions> & string
     ? JobSequenceOf<TJobId, TJobTypeDefinitions, TName>
     : never
   : TBlockerSpec extends object
     ? {
-        [K in keyof FirstJobTypeDefinitions<TJobTypeDefinitions>]: TJobTypeDefinitions[K]["input"] extends TBlockerSpec
+        [K in keyof ExternalJobTypeDefinitions<TJobTypeDefinitions>]: TJobTypeDefinitions[K]["input"] extends TBlockerSpec
           ? TBlockerSpec extends TJobTypeDefinitions[K]["input"]
             ? JobSequenceOf<TJobId, TJobTypeDefinitions, K>
             : never
           : never;
-      }[keyof FirstJobTypeDefinitions<TJobTypeDefinitions>]
+      }[keyof ExternalJobTypeDefinitions<TJobTypeDefinitions>]
     : never;
 
 type MapBlockerSequences<
@@ -156,8 +156,8 @@ export type CompletedBlockerSequences<
 export type SequenceJobs<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TFirstJobTypeName extends string,
+  TSequenceTypeName extends string,
 > = {
-  [K in SequenceJobTypes<TJobTypeDefinitions, TFirstJobTypeName> &
+  [K in SequenceJobTypes<TJobTypeDefinitions, TSequenceTypeName> &
     keyof TJobTypeDefinitions]: JobOf<TJobId, TJobTypeDefinitions, K>;
-}[SequenceJobTypes<TJobTypeDefinitions, TFirstJobTypeName> & keyof TJobTypeDefinitions];
+}[SequenceJobTypes<TJobTypeDefinitions, TSequenceTypeName> & keyof TJobTypeDefinitions];

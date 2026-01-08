@@ -39,7 +39,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "test",
+          typeName: "test",
           input: { test: true },
         }),
       ),
@@ -90,7 +90,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
           runInTransaction(async (context) =>
             queuert.startJobSequence({
               ...context,
-              firstJobTypeName: "test",
+              typeName: "test",
               input: { test: true },
             }),
           ),
@@ -144,7 +144,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
           runInTransaction(async (context) =>
             queuert.startJobSequence({
               ...context,
-              firstJobTypeName: "test",
+              typeName: "test",
               input: { jobNumber: i },
             }),
           ),
@@ -206,7 +206,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
           runInTransaction(async (context) =>
             queuert.startJobSequence({
               ...context,
-              firstJobTypeName: "test",
+              typeName: "test",
               input: { jobNumber: i },
             }),
           ),

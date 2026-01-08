@@ -35,7 +35,7 @@ it("should infer types correctly with custom ID", async ({ db }) => {
     try {
       return await queuert.startJobSequence({
         db,
-        firstJobTypeName: "test",
+        typeName: "test",
         input: { foo: "hello" },
       });
     } finally {

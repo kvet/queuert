@@ -10,7 +10,7 @@ export const mapStateJobToJob = (
     id: stateJob.id,
     sequenceId: stateJob.sequenceId,
     originId: stateJob.originId,
-    rootId: stateJob.rootId,
+    rootSequenceId: stateJob.rootSequenceId,
     typeName: stateJob.typeName,
     input: stateJob.input,
     createdAt: stateJob.createdAt,

@@ -4,7 +4,7 @@ export type Job<TJobId, TJobTypeName, TInput, TBlockerSequences extends any[]> =
   id: TJobId;
   sequenceId: TJobId;
   originId: TJobId | null;
-  rootId: TJobId;
+  rootSequenceId: TJobId;
   typeName: TJobTypeName;
   input: TInput;
   createdAt: Date;

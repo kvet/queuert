@@ -28,7 +28,7 @@ queuert.withNotify(async () => db.transaction(async (tx) => {
 
   await queuert.startJobSequence({
     tx,
-    firstJobTypeName: "process-image",
+    typeName: "process-image",
     input: { imageId: image.id },
   });
 }));
@@ -238,7 +238,7 @@ type Definitions = DefineJobTypeDefinitions<{
 
 // Start the sequence
 await queuert.startJobSequence({
-  firstJobTypeName: "step1",
+  typeName: "step1",
   input: { id: "123" },
 });
 
@@ -276,7 +276,7 @@ type Definitions = DefineJobTypeDefinitions<{
 
 // Start the sequence
 await queuert.startJobSequence({
-  firstJobTypeName: "main",
+  typeName: "main",
   input: { value: 42 },
 });
 
@@ -309,7 +309,7 @@ type Definitions = DefineJobTypeDefinitions<{
 
 // Start the sequence
 await queuert.startJobSequence({
-  firstJobTypeName: "loop",
+  typeName: "loop",
   input: { counter: 0 },
 });
 
@@ -342,7 +342,7 @@ type Definitions = DefineJobTypeDefinitions<{
 
 // Start the sequence
 await queuert.startJobSequence({
-  firstJobTypeName: "start",
+  typeName: "start",
   input: { value: 10 },
 });
 
@@ -387,11 +387,11 @@ type Definitions = DefineJobTypeDefinitions<{
 
 // Start with blockers
 await queuert.startJobSequence({
-  firstJobTypeName: 'process-all',
+  typeName: 'process-all',
   input: { ids: ['a', 'b', 'c'] },
   startBlockers: async () => Promise.all([
-    queuert.startJobSequence({ firstJobTypeName: 'fetch-data', input: { url: '/a' } }),
-    queuert.startJobSequence({ firstJobTypeName: 'fetch-data', input: { url: '/b' } }),
+    queuert.startJobSequence({ typeName: 'fetch-data', input: { url: '/a' } }),
+    queuert.startJobSequence({ typeName: 'fetch-data', input: { url: '/b' } }),
   ]),
 });
 
@@ -447,14 +447,14 @@ Jobs can be scheduled to start at a future time using the `schedule` option. The
 ```ts
 // Schedule a job to run in 5 minutes
 await queuert.startJobSequence({
-  firstJobTypeName: 'send-reminder',
+  typeName: 'send-reminder',
   input: { userId: '123' },
   schedule: { afterMs: 5 * 60 * 1000 }, // 5 minutes from now
 });
 
 // Or schedule at a specific time
 await queuert.startJobSequence({
-  firstJobTypeName: 'send-reminder',
+  typeName: 'send-reminder',
   input: { userId: '123' },
   schedule: { at: new Date('2025-01-15T09:00:00Z') },
 });
@@ -490,7 +490,7 @@ type Definitions = DefineJobTypeDefinitions<{
 
 // Start a job that auto-rejects in 2 hours if not handled
 const sequence = await queuert.startJobSequence({
-  firstJobTypeName: 'await-approval',
+  typeName: 'await-approval',
   input: { requestId: '123' },
   schedule: { afterMs: 2 * 60 * 60 * 1000 }, // 2 hours
 });
@@ -513,7 +513,7 @@ worker.implementJobType({
 // The job can be completed early without a worker (e.g., via API call)
 await queuert.completeJobSequence({
   id: sequence.id,
-  firstJobTypeName: 'await-approval',
+  typeName: 'await-approval',
   complete: async ({ job, complete }) => {
     if (job.typeName !== 'await-approval') {
       return; // Already past approval stage

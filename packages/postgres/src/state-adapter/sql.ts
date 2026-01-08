@@ -1,14 +1,16 @@
-import { type DeduplicationStrategy } from "queuert";
 import { type NamedParameter, sql, type TypedSql } from "@queuert/typed-sql";
+import { type DeduplicationStrategy } from "queuert";
 
 export type DbJob = {
   id: string;
   type_name: string;
+  sequence_id: string;
+  sequence_type_name: string;
+
   input: unknown;
   output: unknown;
 
-  root_id: string;
-  sequence_id: string;
+  root_sequence_id: string;
   origin_id: string | null;
 
   status: "blocked" | "pending" | "running" | "completed";
@@ -46,14 +48,15 @@ END$$;
 -- Tables: job table
 CREATE TABLE IF NOT EXISTS {{schema}}.job (
   id                            {{id_type}} PRIMARY KEY DEFAULT {{id_default}},
-  type_name                    text NOT NULL,
+  type_name                     text NOT NULL,
+  sequence_id                   {{id_type}} REFERENCES {{schema}}.job(id) ON DELETE CASCADE,
+  sequence_type_name            text NOT NULL,
 
   input                         jsonb,
   output                        jsonb,
 
   -- lineage / tracing
-  root_id                       {{id_type}} REFERENCES {{schema}}.job(id) ON DELETE CASCADE,
-  sequence_id                   {{id_type}} REFERENCES {{schema}}.job(id) ON DELETE CASCADE,
+  root_sequence_id              {{id_type}} REFERENCES {{schema}}.job(id) ON DELETE CASCADE,
   origin_id                     {{id_type}} REFERENCES {{schema}}.job(id) ON DELETE CASCADE,
 
   -- state
@@ -136,9 +139,10 @@ ON {{schema}}.job_blocker (blocked_by_sequence_id);
 export const createJobSql: TypedSql<
   readonly [
     NamedParameter<"type_name", string>,
-    NamedParameter<"input", unknown>,
-    NamedParameter<"root_id", string | undefined>,
     NamedParameter<"sequence_id", string | undefined>,
+    NamedParameter<"sequence_type_name", string>,
+    NamedParameter<"input", unknown>,
+    NamedParameter<"root_sequence_id", string | undefined>,
     NamedParameter<"origin_id", string | undefined>,
     NamedParameter<"deduplication_key", string | null | undefined>,
     NamedParameter<"deduplication_strategy", DeduplicationStrategy | null | undefined>,
@@ -152,35 +156,35 @@ export const createJobSql: TypedSql<
 WITH existing_continuation AS (
   SELECT *, TRUE AS deduplicated
   FROM {{schema}}.job
-  WHERE $4::{{id_type}} IS NOT NULL
-    AND $5::{{id_type}} IS NOT NULL
-    AND sequence_id = $4::{{id_type}}
-    AND origin_id = $5::{{id_type}}
+  WHERE $2::{{id_type}} IS NOT NULL
+    AND $6::{{id_type}} IS NOT NULL
+    AND sequence_id = $2::{{id_type}}
+    AND origin_id = $6::{{id_type}}
   LIMIT 1
 ),
 existing_deduplicated AS (
   SELECT j.*, TRUE AS deduplicated
   FROM {{schema}}.job j
-  WHERE $6::text IS NOT NULL
-    AND j.deduplication_key = $6
+  WHERE $7::text IS NOT NULL
+    AND j.deduplication_key = $7
     AND j.id = j.sequence_id
     AND (
-      $7::text IS NULL
-      OR ($7::text = 'completed' AND j.status != 'completed')
-      OR ($7::text = 'all')
+      $8::text IS NULL
+      OR ($8::text = 'completed' AND j.status != 'completed')
+      OR ($8::text = 'all')
     )
     AND (
-      $8::bigint IS NULL
-      OR j.created_at >= now() - ($8::bigint || ' milliseconds')::interval
+      $9::bigint IS NULL
+      OR j.created_at >= now() - ($9::bigint || ' milliseconds')::interval
     )
   ORDER BY j.created_at DESC
   LIMIT 1
 ),
 new_id AS (SELECT {{id_default}} AS id),
 inserted_job AS (
-  INSERT INTO {{schema}}.job (id, type_name, input, root_id, sequence_id, origin_id, deduplication_key, scheduled_at)
-  SELECT id, $1, $2, COALESCE($3, id), COALESCE($4, id), $5, $6,
-    COALESCE($9::timestamptz, now() + ($10::bigint || ' milliseconds')::interval, now())
+  INSERT INTO {{schema}}.job (id, type_name, sequence_id, sequence_type_name, input, root_sequence_id, origin_id, deduplication_key, scheduled_at)
+  SELECT id, $1, COALESCE($2, id), $3, $4, COALESCE($5, id), $6, $7,
+    COALESCE($10::timestamptz, now() + ($11::bigint || ' milliseconds')::interval, now())
   FROM new_id
   WHERE NOT EXISTS (SELECT 1 FROM existing_continuation)
     AND NOT EXISTS (SELECT 1 FROM existing_deduplicated)
@@ -479,28 +483,28 @@ RETURNING job.*
 );
 
 export const getExternalBlockersSql: TypedSql<
-  readonly [NamedParameter<"root_ids", string[]>],
-  { job_id: string; blocked_root_id: string }[]
+  readonly [NamedParameter<"root_sequence_ids", string[]>],
+  { job_id: string; blocked_root_sequence_id: string }[]
 > = sql(
   /* sql */ `
-SELECT DISTINCT jb.job_id, j.root_id AS blocked_root_id
+SELECT DISTINCT jb.job_id, j.root_sequence_id AS blocked_root_sequence_id
 FROM {{schema}}.job_blocker jb
 JOIN {{schema}}.job j ON j.id = jb.job_id
 WHERE jb.blocked_by_sequence_id IN (
-  SELECT id FROM {{schema}}.job WHERE root_id = ANY($1::{{id_type}}[])
+  SELECT id FROM {{schema}}.job WHERE root_sequence_id = ANY($1::{{id_type}}[])
 )
-AND j.root_id != ALL($1::{{id_type}}[])
+AND j.root_sequence_id != ALL($1::{{id_type}}[])
 `,
   true,
 );
 
-export const deleteJobsByRootIdsSql: TypedSql<
-  readonly [NamedParameter<"root_ids", string[]>],
+export const deleteJobsByRootSequenceIdsSql: TypedSql<
+  readonly [NamedParameter<"root_sequence_ids", string[]>],
   DbJob[]
 > = sql(
   /* sql */ `
 DELETE FROM {{schema}}.job
-WHERE root_id = ANY($1::{{id_type}}[])
+WHERE root_sequence_id = ANY($1::{{id_type}}[])
 RETURNING *
 `,
   true,

@@ -4,7 +4,7 @@ import {
   DefineContinuationInput,
   DefineContinuationOutput,
   DefineBlocker,
-  FirstJobTypeDefinitions,
+  ExternalJobTypeDefinitions,
   JobOf,
   ContinuationJobTypes,
   SequenceJobTypes,
@@ -217,7 +217,7 @@ describe("DefineContinuationInput", () => {
   });
 });
 
-describe("FirstJobTypeDefinitions", () => {
+describe("ExternalJobTypeDefinitions", () => {
   it("filters out continuation-only job types", () => {
     type Defs = {
       public: { input: { id: string }; output: DefineContinuationOutput<"internal"> };
@@ -225,9 +225,9 @@ describe("FirstJobTypeDefinitions", () => {
       alsoPublic: { input: null; output: { result: string } };
     };
 
-    type FirstDefs = FirstJobTypeDefinitions<Defs>;
+    type ExternalDefs = ExternalJobTypeDefinitions<Defs>;
 
-    expectTypeOf<keyof FirstDefs>().toEqualTypeOf<"public" | "alsoPublic">();
+    expectTypeOf<keyof ExternalDefs>().toEqualTypeOf<"public" | "alsoPublic">();
   });
 
   it("returns empty when all are continuation types", () => {
@@ -236,9 +236,9 @@ describe("FirstJobTypeDefinitions", () => {
       b: { input: DefineContinuationInput<{ x: number }>; output: { done: true } };
     };
 
-    type FirstDefs = FirstJobTypeDefinitions<Defs>;
+    type ExternalDefs = ExternalJobTypeDefinitions<Defs>;
 
-    expectTypeOf<keyof FirstDefs>().toEqualTypeOf<never>();
+    expectTypeOf<keyof ExternalDefs>().toEqualTypeOf<never>();
   });
 });
 
@@ -269,7 +269,7 @@ describe("JobOf", () => {
     expectTypeOf<TestJob["id"]>().toEqualTypeOf<string>();
     expectTypeOf<TestJob["sequenceId"]>().toEqualTypeOf<string>();
     expectTypeOf<TestJob["originId"]>().toEqualTypeOf<string | null>();
-    expectTypeOf<TestJob["rootId"]>().toEqualTypeOf<string>();
+    expectTypeOf<TestJob["rootSequenceId"]>().toEqualTypeOf<string>();
     expectTypeOf<TestJob["typeName"]>().toEqualTypeOf<"test">();
     expectTypeOf<TestJob["createdAt"]>().toEqualTypeOf<Date>();
     expectTypeOf<TestJob["attempt"]>().toEqualTypeOf<number>();

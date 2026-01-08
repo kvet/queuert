@@ -59,7 +59,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "test",
+          typeName: "test",
           input: null,
         }),
       ),
@@ -77,7 +77,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
           runInTransaction(async (context) =>
             queuert.startJobSequence({
               ...context,
-              firstJobTypeName: "test",
+              typeName: "test",
               input: null,
             }),
           ),
@@ -155,7 +155,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "test",
+          typeName: "test",
           input: null,
         }),
       ),
@@ -174,7 +174,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
           runInTransaction(async (context) =>
             queuert.startJobSequence({
               ...context,
-              firstJobTypeName: "test",
+              typeName: "test",
               input: null,
             }),
           ),

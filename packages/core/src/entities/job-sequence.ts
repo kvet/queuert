@@ -6,16 +6,16 @@ export * from "./job-sequence.types.js";
 export const mapStateJobPairToJobSequence = (
   stateJobPair: [StateJob, StateJob | undefined],
 ): JobSequence<any, any, any, any> => {
-  const [firstJob, currentJob] = stateJobPair;
-  const effectiveJob = currentJob ?? firstJob;
+  const [initialJob, currentJob] = stateJobPair;
+  const effectiveJob = currentJob ?? initialJob;
 
   const base = {
-    id: firstJob.id,
-    originId: firstJob.originId,
-    rootId: firstJob.rootId,
-    firstJobTypeName: firstJob.typeName,
-    input: firstJob.input,
-    createdAt: firstJob.createdAt,
+    id: initialJob.id,
+    originId: initialJob.originId,
+    rootSequenceId: initialJob.rootSequenceId,
+    typeName: initialJob.sequenceTypeName,
+    input: initialJob.input,
+    createdAt: initialJob.createdAt,
   };
 
   switch (effectiveJob.status) {

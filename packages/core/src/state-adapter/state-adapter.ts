@@ -6,11 +6,12 @@ export type { DeduplicationOptions, DeduplicationStrategy, ScheduleOptions };
 export type StateJob = {
   id: string;
   typeName: string;
+  sequenceId: string;
+  sequenceTypeName: string;
   input: unknown;
   output: unknown;
 
-  rootId: string;
-  sequenceId: string;
+  rootSequenceId: string;
   originId: string | null;
 
   status: "blocked" | "pending" | "running" | "completed";
@@ -47,9 +48,10 @@ export type StateAdapter<TContext extends BaseStateAdapterContext, TJobId> = {
   createJob: (params: {
     context: TContext;
     typeName: string;
-    input: unknown;
-    rootId: TJobId | undefined;
     sequenceId: TJobId | undefined;
+    sequenceTypeName: string;
+    input: unknown;
+    rootSequenceId: TJobId | undefined;
     originId: TJobId | undefined;
     deduplication?: DeduplicationOptions;
     schedule?: ScheduleOptions;
@@ -98,9 +100,12 @@ export type StateAdapter<TContext extends BaseStateAdapterContext, TJobId> = {
   }) => Promise<StateJob | undefined>;
   getExternalBlockers: (params: {
     context: TContext;
-    rootIds: TJobId[];
-  }) => Promise<{ jobId: TJobId; blockedRootId: TJobId }[]>;
-  deleteJobsByRootIds: (params: { context: TContext; rootIds: TJobId[] }) => Promise<StateJob[]>;
+    rootSequenceIds: TJobId[];
+  }) => Promise<{ jobId: TJobId; blockedRootSequenceId: TJobId }[]>;
+  deleteJobsByRootSequenceIds: (params: {
+    context: TContext;
+    rootSequenceIds: TJobId[];
+  }) => Promise<StateJob[]>;
   getJobForUpdate: (params: { context: TContext; jobId: TJobId }) => Promise<StateJob | undefined>;
   getCurrentJobForUpdate: (params: {
     context: TContext;

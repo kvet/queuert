@@ -1,13 +1,14 @@
-import { type DeduplicationStrategy } from "queuert";
 import { type NamedParameter, sql, type TypedSql } from "@queuert/typed-sql";
+import { type DeduplicationStrategy } from "queuert";
 
 export const jobColumns = [
   "id",
   "type_name",
+  "sequence_id",
+  "sequence_type_name",
   "input",
   "output",
-  "root_id",
-  "sequence_id",
+  "root_sequence_id",
   "origin_id",
   "status",
   "created_at",
@@ -32,11 +33,12 @@ export const jobColumnsPrefixedSelect = (alias: string, prefix: string): string 
 export type DbJob = {
   id: string;
   type_name: string;
+  sequence_id: string;
+  sequence_type_name: string;
   input: string | null;
   output: string | null;
 
-  root_id: string;
-  sequence_id: string;
+  root_sequence_id: string;
   origin_id: string | null;
 
   status: "blocked" | "pending" | "running" | "completed";
@@ -67,13 +69,14 @@ export const migrateSql: TypedSql<[], void> = sql(
 CREATE TABLE IF NOT EXISTS {{table_prefix}}job (
   id                            {{id_type}} PRIMARY KEY,
   type_name                     TEXT NOT NULL,
+  sequence_id                   {{id_type}} REFERENCES {{table_prefix}}job(id) ON DELETE CASCADE,
+  sequence_type_name            TEXT NOT NULL,
 
   input                         TEXT,
   output                        TEXT,
 
   -- lineage / tracing
-  root_id                       {{id_type}} REFERENCES {{table_prefix}}job(id) ON DELETE CASCADE,
-  sequence_id                   {{id_type}} REFERENCES {{table_prefix}}job(id) ON DELETE CASCADE,
+  root_sequence_id              {{id_type}} REFERENCES {{table_prefix}}job(id) ON DELETE CASCADE,
   origin_id                     {{id_type}} REFERENCES {{table_prefix}}job(id) ON DELETE CASCADE,
 
   -- state
@@ -193,11 +196,12 @@ export const insertJobSql: TypedSql<
   readonly [
     NamedParameter<"id", string>,
     NamedParameter<"type_name", string>,
-    NamedParameter<"input", string | null>,
-    NamedParameter<"root_id", string | null>,
-    NamedParameter<"id_for_root", string>,
     NamedParameter<"sequence_id", string | null>,
     NamedParameter<"id_for_sequence", string>,
+    NamedParameter<"sequence_type_name", string>,
+    NamedParameter<"input", string | null>,
+    NamedParameter<"root_sequence_id", string | null>,
+    NamedParameter<"id_for_root", string>,
     NamedParameter<"origin_id", string | null>,
     NamedParameter<"deduplication_key", string | null>,
     NamedParameter<"scheduled_at", string | null>,
@@ -207,8 +211,8 @@ export const insertJobSql: TypedSql<
   [DbJob & { deduplicated: number }]
 > = sql(
   /* sql */ `
-INSERT INTO {{table_prefix}}job (id, type_name, input, root_id, sequence_id, origin_id, deduplication_key, scheduled_at)
-VALUES (?, ?, ?, COALESCE(?, ?), COALESCE(?, ?), ?, ?,
+INSERT INTO {{table_prefix}}job (id, type_name, sequence_id, sequence_type_name, input, root_sequence_id, origin_id, deduplication_key, scheduled_at)
+VALUES (?, ?, COALESCE(?, ?), ?, ?, COALESCE(?, ?), ?, ?,
   COALESCE(?,
     CASE WHEN ? IS NOT NULL THEN datetime('now', 'subsec', '+' || (? / 1000.0) || ' seconds') ELSE NULL END,
     datetime('now', 'subsec')))
@@ -504,28 +508,31 @@ RETURNING *
 );
 
 export const getExternalBlockersSql: TypedSql<
-  readonly [NamedParameter<"root_ids_json_1", string>, NamedParameter<"root_ids_json_2", string>],
-  { job_id: string; blocked_root_id: string }[]
+  readonly [
+    NamedParameter<"root_sequence_ids_json_1", string>,
+    NamedParameter<"root_sequence_ids_json_2", string>,
+  ],
+  { job_id: string; blocked_root_sequence_id: string }[]
 > = sql(
   /* sql */ `
-SELECT DISTINCT jb.job_id, j.root_id AS blocked_root_id
+SELECT DISTINCT jb.job_id, j.root_sequence_id AS blocked_root_sequence_id
 FROM {{table_prefix}}job_blocker jb
 JOIN {{table_prefix}}job j ON j.id = jb.job_id
 WHERE jb.blocked_by_sequence_id IN (
-  SELECT id FROM {{table_prefix}}job WHERE root_id IN (SELECT value FROM json_each(?))
+  SELECT id FROM {{table_prefix}}job WHERE root_sequence_id IN (SELECT value FROM json_each(?))
 )
-AND j.root_id NOT IN (SELECT value FROM json_each(?))
+AND j.root_sequence_id NOT IN (SELECT value FROM json_each(?))
 `,
   true,
 );
 
-export const deleteJobsByRootIdsSql: TypedSql<
-  readonly [NamedParameter<"root_ids_json", string>],
+export const deleteJobsByRootSequenceIdsSql: TypedSql<
+  readonly [NamedParameter<"root_sequence_ids_json", string>],
   DbJob[]
 > = sql(
   /* sql */ `
 DELETE FROM {{table_prefix}}job
-WHERE root_id IN (SELECT value FROM json_each(?))
+WHERE root_sequence_id IN (SELECT value FROM json_each(?))
 RETURNING *
 `,
   true,

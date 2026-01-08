@@ -43,7 +43,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         runInTransaction(async (context) =>
           queuert.startJobSequence({
             ...context,
-            firstJobTypeName: "test",
+            typeName: "test",
             input: { value: 1 },
           }),
         ),
@@ -97,7 +97,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
               Array.from({ length: 5 }, async (_, i) =>
                 queuert.startJobSequence({
                   ...context,
-                  firstJobTypeName: "test",
+                  typeName: "test",
                   input: { value: i },
                 }),
               ),
@@ -167,12 +167,12 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         runInTransaction(async (context) =>
           queuert.startJobSequence({
             ...context,
-            firstJobTypeName: "main",
+            typeName: "main",
             input: null,
             startBlockers: async () => [
               await queuert.startJobSequence({
                 ...context,
-                firstJobTypeName: "blocker",
+                typeName: "blocker",
                 input: null,
               }),
             ],
@@ -243,7 +243,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         runInTransaction(async (context) =>
           queuert.startJobSequence({
             ...context,
-            firstJobTypeName: "step1",
+            typeName: "step1",
             input: null,
           }),
         ),
@@ -306,7 +306,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         runInTransaction(async (context) =>
           queuert.startJobSequence({
             ...context,
-            firstJobTypeName: "test",
+            typeName: "test",
             input: null,
           }),
         ),
@@ -318,7 +318,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         runInTransaction(async (context) =>
           queuert.completeJobSequence({
             ...context,
-            firstJobTypeName: "test",
+            typeName: "test",
             id: jobSequence.id,
             complete: async ({ job, complete }) => {
               return complete(job, () => ({ result: "from-external" }));
@@ -383,7 +383,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         runInTransaction(async (context) =>
           queuert.startJobSequence({
             ...context,
-            firstJobTypeName: "test",
+            typeName: "test",
             input: null,
           }),
         ),

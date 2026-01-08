@@ -31,7 +31,7 @@ export const waitSequenceCompletionTestSuite = ({
 
     const jobSequence = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({ ...context, firstJobTypeName: "test", input: null }),
+        queuert.startJobSequence({ ...context, typeName: "test", input: null }),
       ),
     );
 
@@ -77,7 +77,7 @@ export const waitSequenceCompletionTestSuite = ({
 
     const jobSequence = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({ ...context, firstJobTypeName: "test", input: null }),
+        queuert.startJobSequence({ ...context, typeName: "test", input: null }),
       ),
     );
 
@@ -112,7 +112,7 @@ export const waitSequenceCompletionTestSuite = ({
 
     const jobSequence = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({ ...context, firstJobTypeName: "test", input: null }),
+        queuert.startJobSequence({ ...context, typeName: "test", input: null }),
       ),
     );
 
@@ -142,7 +142,7 @@ export const waitSequenceCompletionTestSuite = ({
     const nonExistentId = crypto.randomUUID();
     await expect(
       queuert.waitForJobSequenceCompletion({
-        firstJobTypeName: "test",
+        typeName: "test",
         id: nonExistentId,
         timeoutMs: 5000,
       }),

@@ -42,7 +42,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
         expect(job.id).toBeDefined();
         expect(job.sequenceId).toEqual(job.id);
         expect(job.originId).toBeNull();
-        expect(job.rootId).toEqual(job.id);
+        expect(job.rootSequenceId).toEqual(job.id);
 
         const result = await prepare({ mode: "staged" }, (context) => {
           expectTypeOf(context).toEqualTypeOf<{ $test: true }>();
@@ -74,14 +74,14 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "test",
+          typeName: "test",
           input: { test: true },
         }),
       ),
     );
     // expectTypeOf<(typeof jobSequence)["status"]>().toEqualTypeOf<"pending" | "blocked">();
     expectTypeOf<(typeof jobSequence)["input"]>().toEqualTypeOf<{ test: boolean }>();
-    expectTypeOf<(typeof jobSequence)["firstJobTypeName"]>().toEqualTypeOf<"test">();
+    expectTypeOf<(typeof jobSequence)["typeName"]>().toEqualTypeOf<"test">();
     expect(jobSequence.input).toEqual({ test: true });
 
     await withWorkers([await worker.start({ workerId: "worker" })], async () => {
@@ -106,15 +106,15 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
 
     const workerArgs = { workerId: "worker" };
     const jobSequenceArgs = {
-      firstJobTypeName: "test",
-      sequenceId: jobSequence.id,
-      rootId: jobSequence.id,
+      typeName: "test",
+      id: jobSequence.id,
+      rootSequenceId: jobSequence.id,
       originId: null,
     };
     const jobArgs = {
       typeName: "test",
       id: jobSequence.id,
-      rootId: jobSequence.id,
+      rootSequenceId: jobSequence.id,
       originId: null,
       sequenceId: jobSequence.id,
     };
@@ -232,32 +232,32 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
         Promise.all([
           queuert.startJobSequence({
             ...context,
-            firstJobTypeName: "atomic-complete",
+            typeName: "atomic-complete",
             input: { value: 10 },
           }),
           queuert.startJobSequence({
             ...context,
-            firstJobTypeName: "staged-complete",
+            typeName: "staged-complete",
             input: { value: 10 },
           }),
           queuert.startJobSequence({
             ...context,
-            firstJobTypeName: "staged-with-callback",
+            typeName: "staged-with-callback",
             input: { value: 10 },
           }),
           queuert.startJobSequence({
             ...context,
-            firstJobTypeName: "staged-without-callback",
+            typeName: "staged-without-callback",
             input: { value: 10 },
           }),
           queuert.startJobSequence({
             ...context,
-            firstJobTypeName: "atomic-with-callback",
+            typeName: "atomic-with-callback",
             input: { value: 10 },
           }),
           queuert.startJobSequence({
             ...context,
-            firstJobTypeName: "atomic-without-callback",
+            typeName: "atomic-without-callback",
             input: { value: 10 },
           }),
         ]),
@@ -397,22 +397,22 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
         Promise.all([
           queuert.startJobSequence({
             ...context,
-            firstJobTypeName: "test-prepare-twice",
+            typeName: "test-prepare-twice",
             input: null,
           }),
           queuert.startJobSequence({
             ...context,
-            firstJobTypeName: "test-complete-twice",
+            typeName: "test-complete-twice",
             input: null,
           }),
           queuert.startJobSequence({
             ...context,
-            firstJobTypeName: "test-prepare-after-auto-setup",
+            typeName: "test-prepare-after-auto-setup",
             input: null,
           }),
           queuert.startJobSequence({
             ...context,
-            firstJobTypeName: "test-continueWith-twice",
+            typeName: "test-continueWith-twice",
             input: null,
           }),
         ]),
@@ -465,7 +465,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "test",
+          typeName: "test",
           input: null,
         }),
       ),
@@ -519,7 +519,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "test",
+          typeName: "test",
           input: { test: true },
         }),
       ),
@@ -586,7 +586,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "test",
+          typeName: "test",
           input: null,
         }),
       ),
@@ -651,7 +651,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "test",
+          typeName: "test",
           input: null,
         }),
       ),
@@ -754,7 +754,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
           (["prepare", "process", "complete"] as ErrorPhase[]).map(async (phase) =>
             queuert.startJobSequence({
               ...context,
-              firstJobTypeName: "test",
+              typeName: "test",
               input: { phase },
             }),
           ),
@@ -836,7 +836,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       runInTransaction(async (context) =>
         queuert.startJobSequence({
           ...context,
-          firstJobTypeName: "test",
+          typeName: "test",
           input: null,
         }),
       ),

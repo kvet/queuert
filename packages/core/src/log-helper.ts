@@ -9,7 +9,7 @@ const mapStateJobToJobBasicLogArgs = (job: StateJob): JobBasicArgs => ({
   typeName: job.typeName,
   originId: job.originId,
   sequenceId: job.sequenceId,
-  rootId: job.rootId,
+  rootSequenceId: job.rootSequenceId,
 });
 
 const mapStateJobToJobProcessingLogArgs = (job: StateJob): JobProcessingArgs => ({
@@ -19,17 +19,17 @@ const mapStateJobToJobProcessingLogArgs = (job: StateJob): JobProcessingArgs => 
 });
 
 const mapStateJobToJobSequenceLogArgs = (job: StateJob): JobSequenceArgs => ({
-  sequenceId: job.sequenceId,
-  firstJobTypeName: job.typeName,
+  id: job.sequenceId,
+  typeName: job.sequenceTypeName,
   originId: job.originId,
-  rootId: job.rootId,
+  rootSequenceId: job.rootSequenceId,
 });
 
 const mapJobSequenceToLogArgs = (seq: JobSequence<any, any, any, any>): JobSequenceArgs => ({
-  sequenceId: seq.id,
-  firstJobTypeName: seq.firstJobTypeName,
+  id: seq.id,
+  typeName: seq.typeName,
   originId: seq.originId,
-  rootId: seq.rootId,
+  rootSequenceId: seq.rootSequenceId,
 });
 
 const mapJobToJobBasicLogArgs = (job: Job<any, any, any, any>): JobBasicArgs => ({
@@ -37,7 +37,7 @@ const mapJobToJobBasicLogArgs = (job: Job<any, any, any, any>): JobBasicArgs => 
   typeName: job.typeName,
   originId: job.originId,
   sequenceId: job.sequenceId,
-  rootId: job.rootId,
+  rootSequenceId: job.rootSequenceId,
 });
 
 export type LogHelper = {

@@ -113,8 +113,9 @@ export const createExecutor = ({
 
             return helper.withJobContext(
               {
-                rootId: job.rootId,
                 sequenceId: job.sequenceId,
+                sequenceTypeName: job.sequenceTypeName,
+                rootSequenceId: job.rootSequenceId,
                 originId: job.id,
               },
               async () => [
