@@ -48,6 +48,37 @@ SQLite state adapter implementation using better-sqlite3.
 
 - `queuert` as peer dependency
 
+### `@queuert/mongodb`
+
+MongoDB state adapter implementation. Users provide their own MongoDB client.
+
+**Exports:**
+
+- `.` (main): `createMongoStateAdapter`, `MongoStateAdapter` type
+- `./testing`: Test helper for MongoDB tests (`extendWithStateMongodb`)
+
+**Dependencies:**
+
+- `queuert` as peer dependency
+- `mongodb` as peer dependency (requires 6.0+)
+
+**Adapter notes:**
+
+- Requires MongoDB 4.0+ for multi-document ACID transactions
+- Uses a single `jobs` collection with embedded blockers array (no separate blocker table)
+- Job IDs generated application-side using `crypto.randomUUID()` by default (configurable via `idGenerator`)
+- Uses atomic `findOneAndUpdate` for job acquisition (similar behavior to PostgreSQL's `FOR UPDATE SKIP LOCKED`)
+- Transactions use manual `startTransaction`/`commitTransaction`/`abortTransaction` for explicit error handling
+- Transient error detection includes MongoDB network errors, timeout errors, and common Node.js connection errors (ECONNRESET, ETIMEDOUT, etc.)
+
+**Configuration options:**
+
+- `stateProvider`: MongoDB state provider implementation
+- `collectionName`: Collection name for jobs (default: `"queuert_jobs"`)
+- `idGenerator`: Function returning job ID strings (default: `() => crypto.randomUUID()`)
+- `connectionRetryConfig`: Retry configuration for transient connection errors
+- `isTransientError`: Custom function to identify transient errors
+
 ### `@queuert/redis`
 
 Redis notify adapter implementation for distributed pub/sub notifications.

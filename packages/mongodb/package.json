@@ -1,0 +1,53 @@
+{
+  "name": "@queuert/mongodb",
+  "version": "0.1.2",
+  "description": "MongoDB adapter for Queuert job queue system",
+  "keywords": [
+    "background-jobs",
+    "job-queue",
+    "mongodb",
+    "queue",
+    "task-queue",
+    "typescript"
+  ],
+  "license": "MIT",
+  "author": "kvet",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kvet/queuert.git"
+  },
+  "type": "module",
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing.ts",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": "./dist/index.mjs",
+      "./testing": "./dist/testing.mjs",
+      "./package.json": "./package.json"
+    }
+  },
+  "scripts": {
+    "prepublishOnly": "pnpm build",
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@queuert/testcontainers": "workspace:*",
+    "@types/node": "^24.10.4",
+    "mongodb": "^6.12.0",
+    "queuert": "workspace:*",
+    "tsdown": "^0.18.3",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.16"
+  },
+  "peerDependencies": {
+    "mongodb": "^6.0.0",
+    "queuert": "workspace:*"
+  }
+}

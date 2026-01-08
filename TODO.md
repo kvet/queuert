@@ -1,3 +1,8 @@
+# Short term
+
+- CRITICAL: MongoDB `runInTransaction` silently bypasses when already in transaction - investigate why nested transaction calls occur and fix the root cause instead of silently ignoring
+- Refactor `withRetry` out of individual state adapter methods - currently inlined in every method making code messy; should be integrated at adapter wrapper level or via higher-order function pattern
+
 # Medium term
 
 - Investigate process not exiting cleanly after worker.stop() - Currently requires `process.exit(0)`; likely caused by `sleep()` timers or `AbortSignal.timeout()` keeping event loop alive
@@ -5,10 +10,10 @@
 - Metrics collection & OTEL
 - Refactor `jobTypeDefinitions` parameter - Currently required but only used for type inference; integrate with optional Zod schema to provide actual runtime value (input/output validation)
 - Restore generic return types on `StateProvider.provideContext` and `NotifyProvider.provideContext` - Currently uses `unknown`, should use `<T>` for type-safe return values without casting
+- MongoDB notify adapter - Use Change Streams for pub/sub; requires replica set; hint optimization via separate collection with findOneAndUpdate
 
 # Long term
 
-- MongoDB state adapter - Extends "use your existing database" promise; ACID transactions supported since MongoDB 4.0
 - Hard timeout (worker threads) - True isolation with `terminate()`; enables memory limits and untrusted code sandboxing
 
 # ???

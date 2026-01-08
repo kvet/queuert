@@ -1,0 +1,79 @@
+import { extendWithMongodb } from "@queuert/testcontainers";
+import {
+  blockerSequencesTestSuite,
+  extendWithCommon,
+  extendWithInProcessNotify,
+  notifyTestSuite,
+  processTestSuite,
+  reaperTestSuite,
+  schedulingTestSuite,
+  sequencesTestSuite,
+  stateResilienceTestSuite,
+  waitSequenceCompletionTestSuite,
+  workerlessCompletionTestSuite,
+  workerTestSuite,
+} from "queuert/testing";
+import { afterAll, beforeAll, describe, it as baseIt } from "vitest";
+import { extendWithStateMongodb } from "./state-adapter.mongodb.spec-helper.js";
+
+// Suppress unhandled rejections from flaky connection test cleanup
+// These occur when worker cleanup races with in-flight MongoDB operations
+// that are intentionally failing due to the flaky test setup
+const suppressedErrors: Error[] = [];
+const rejectionHandler = (error: Error) => {
+  if (error?.message === "connection reset") {
+    suppressedErrors.push(error);
+  }
+};
+
+beforeAll(() => {
+  process.on("unhandledRejection", rejectionHandler);
+});
+
+afterAll(() => {
+  process.off("unhandledRejection", rejectionHandler);
+});
+
+const mongodbInProcessIt = extendWithInProcessNotify(
+  extendWithCommon(extendWithStateMongodb(extendWithMongodb(baseIt, import.meta.url))),
+);
+
+describe("Process", () => {
+  processTestSuite({ it: mongodbInProcessIt });
+});
+
+describe("Worker", () => {
+  workerTestSuite({ it: mongodbInProcessIt });
+});
+
+describe("Reaper", () => {
+  reaperTestSuite({ it: mongodbInProcessIt });
+});
+
+describe("Sequences", () => {
+  sequencesTestSuite({ it: mongodbInProcessIt });
+});
+
+describe("Blocker Sequences", () => {
+  blockerSequencesTestSuite({ it: mongodbInProcessIt });
+});
+
+describe("Wait Sequence Completion", () => {
+  waitSequenceCompletionTestSuite({ it: mongodbInProcessIt });
+});
+
+describe("State Resilience", () => {
+  stateResilienceTestSuite({ it: mongodbInProcessIt });
+});
+
+describe("Workerless Completion", () => {
+  workerlessCompletionTestSuite({ it: mongodbInProcessIt });
+});
+
+describe("Scheduling", () => {
+  schedulingTestSuite({ it: mongodbInProcessIt });
+});
+
+describe("Notify", () => {
+  notifyTestSuite({ it: mongodbInProcessIt });
+});

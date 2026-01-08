@@ -100,6 +100,7 @@ npm install queuert
 # State adapters (pick one)
 npm install @queuert/postgres  # PostgreSQL (also includes notify adapter)
 npm install @queuert/sqlite    # SQLite
+npm install @queuert/mongodb   # MongoDB (requires 4.0+ for transactions)
 
 # Notify adapters (optional, for reduced latency)
 npm install @queuert/redis     # Redis pub/sub (recommended for production)
@@ -122,12 +123,13 @@ Defines a named job type with its input/output types and process function. Job t
 
 ### State Adapter
 
-Abstracts database operations for job persistence. Queuert provides adapters for PostgreSQL and SQLite. The adapter handles job creation, status transitions, leasing, and queries.
+Abstracts database operations for job persistence. Queuert provides adapters for PostgreSQL, SQLite, and MongoDB. The adapter handles job creation, status transitions, leasing, and queries.
 
 **Available adapters:**
 
 - `@queuert/postgres` - PostgreSQL state adapter
 - `@queuert/sqlite` - SQLite state adapter
+- `@queuert/mongodb` - MongoDB state adapter (requires MongoDB 4.0+ for multi-document transactions)
 - `createInProcessStateAdapter()` - In-memory adapter (for testing)
 
 ### State Provider
@@ -614,7 +616,7 @@ Test suites available in [`packages/core/src/suites/`](./packages/core/src/suite
 - [`reaper.test-suite.ts`](./packages/core/src/suites/reaper.test-suite.ts) — Expired lease reclamation
 - [`worker.test-suite.ts`](./packages/core/src/suites/worker.test-suite.ts) — Worker lifecycle and polling
 
-These suites run against all supported adapters (PostgreSQL, SQLite, in-memory) to ensure consistent behavior across databases.
+These suites run against all supported adapters (PostgreSQL, SQLite, MongoDB, in-memory) to ensure consistent behavior across databases.
 
 ## Full Example
 

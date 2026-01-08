@@ -3,7 +3,9 @@
   "changelog": "@changesets/cli/changelog",
   "commit": false,
   "fixed": [],
-  "linked": [["queuert", "@queuert/postgres", "@queuert/sqlite", "@queuert/redis"]],
+  "linked": [
+    ["queuert", "@queuert/postgres", "@queuert/sqlite", "@queuert/mongodb", "@queuert/redis"]
+  ],
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
