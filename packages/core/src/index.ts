@@ -38,7 +38,9 @@ export { type CompletedJob, type Job } from "./entities/job.js";
 export { type ScheduleOptions } from "./entities/schedule.js";
 export { type BackoffConfig } from "./helpers/backoff.js";
 export { type RetryConfig } from "./helpers/retry.js";
+export { type TypedAbortSignal } from "./helpers/abort.js";
 export { type Log } from "./log.js";
+export { createConsoleLog } from "./log.console.js";
 export { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 export {
   JobAlreadyCompletedError,
@@ -55,7 +57,12 @@ export {
   type StateAdapter,
   type StateJob,
 } from "./state-adapter/state-adapter.js";
-export { rescheduleJob, type LeaseConfig } from "./worker/job-process.js";
+export {
+  rescheduleJob,
+  RescheduleJobError,
+  type JobAbortReason,
+  type LeaseConfig,
+} from "./worker/job-process.js";
 
 // In-process adapters
 export { createInProcessNotifyAdapter } from "./notify-adapter/notify-adapter.in-process.js";
@@ -70,7 +77,7 @@ export type QueuertWorkerDefinition<
   TStateAdapter extends StateAdapter<any, any>,
 > = {
   implementJobType: <TJobTypeName extends keyof TJobTypeDefinitions & string>(options: {
-    name: TJobTypeName;
+    typeName: TJobTypeName;
     process: JobProcessFn<TStateAdapter, TJobTypeDefinitions, TJobTypeName>;
     retryConfig?: BackoffConfig;
     leaseConfig?: LeaseConfig;
@@ -120,7 +127,7 @@ export type Queuert<
   > | null>;
   deleteJobSequences: (
     options: {
-      sequenceIds: GetStateAdapterJobId<TStateAdapter>[];
+      rootSequenceIds: GetStateAdapterJobId<TStateAdapter>[];
     } & GetStateAdapterContext<TStateAdapter>,
   ) => Promise<void>;
   completeJobSequence: <
@@ -145,19 +152,20 @@ export type Queuert<
       TCompleteReturn
     >
   >;
-  withNotify: <T, TArgs extends any[]>(
-    cb: (...args: TArgs) => Promise<T>,
-    ...args: TArgs
-  ) => Promise<T>;
+  withNotify: <T>(cb: () => Promise<T>) => Promise<T>;
   waitForJobSequenceCompletion: <
     TSequenceTypeName extends keyof ExternalJobTypeDefinitions<TJobTypeDefinitions> & string,
-  >(options: {
-    typeName: TSequenceTypeName;
-    id: GetStateAdapterJobId<TStateAdapter>;
-    timeoutMs: number;
-    pollIntervalMs?: number;
-    signal?: AbortSignal;
-  }) => Promise<
+  >(
+    jobSequence: {
+      typeName: TSequenceTypeName;
+      id: GetStateAdapterJobId<TStateAdapter>;
+    },
+    options: {
+      timeoutMs: number;
+      pollIntervalMs?: number;
+      signal?: AbortSignal;
+    },
+  ) => Promise<
     CompletedJobSequence<
       JobSequenceOf<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TSequenceTypeName>
     >
@@ -189,9 +197,9 @@ export const createQueuert = async <
         registeredJobTypes: RegisteredJobTypes,
       ): QueuertWorkerDefinition<TJobTypeDefinitions, TStateAdapter> => {
         return {
-          implementJobType({ name: typeName, process, retryConfig, leaseConfig }) {
+          implementJobType({ typeName, process, retryConfig, leaseConfig }) {
             if (registeredJobTypes.has(typeName)) {
-              throw new Error(`JobType with name "${typeName}" is already registered`);
+              throw new Error(`JobType with typeName "${typeName}" is already registered`);
             }
             const newRegisteredJobTypes = new Map(registeredJobTypes);
             newRegisteredJobTypes.set(typeName, {
@@ -233,20 +241,20 @@ export const createQueuert = async <
       TJobTypeDefinitions,
       TStateAdapter
     >["getJobSequence"],
-    deleteJobSequences: async ({ sequenceIds, ...context }) =>
-      helper.deleteJobSequences({ sequenceIds, context }),
+    deleteJobSequences: async ({ rootSequenceIds, ...context }) =>
+      helper.deleteJobSequences({ rootSequenceIds, context }),
     completeJobSequence: (async ({ id, typeName, complete, ...context }) =>
       helper.completeJobSequence({ id, typeName, context, complete })) as Queuert<
       TJobTypeDefinitions,
       TStateAdapter
     >["completeJobSequence"],
-    waitForJobSequenceCompletion: (async ({ id, typeName, timeoutMs, pollIntervalMs, signal }) =>
+    waitForJobSequenceCompletion: (async (jobSequence, options) =>
       helper.waitForJobSequenceCompletion({
-        id,
-        typeName,
-        timeoutMs,
-        pollIntervalMs,
-        signal,
+        id: jobSequence.id,
+        typeName: jobSequence.typeName,
+        timeoutMs: options.timeoutMs,
+        pollIntervalMs: options.pollIntervalMs,
+        signal: options.signal,
       })) as Queuert<TJobTypeDefinitions, TStateAdapter>["waitForJobSequenceCompletion"],
     withNotify: async (cb, ...args) => helper.withNotifyContext(async () => cb(...args)),
   };

@@ -43,7 +43,7 @@ const createSharedListener = <TContext>(
           resolveReady();
           await closeSignal;
           await unsubscribe();
-        });
+        }) as Promise<void>;
 
         await readyPromise;
         state = {

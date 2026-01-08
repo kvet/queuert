@@ -47,7 +47,7 @@ const jobSequence = await qrt.withNotify(async () =>
 );
 
 // 6. Wait for the job sequence to complete
-await qrt.waitForJobSequenceCompletion({ ...jobSequence, timeoutMs: 1000 });
+await qrt.waitForJobSequenceCompletion(jobSequence, { timeoutMs: 1000 });
 
 // 7. Cleanup
 await stopQrtWorker();

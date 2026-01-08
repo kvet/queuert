@@ -35,6 +35,12 @@ import { createLeaseManager, type LeaseConfig } from "./lease.js";
 export type { BackoffConfig } from "../helpers/backoff.js";
 export type { LeaseConfig } from "./lease.js";
 
+export type JobAbortReason =
+  | "taken_by_another_worker"
+  | "error"
+  | "not_found"
+  | "already_completed";
+
 export class RescheduleJobError extends Error {
   public readonly schedule: ScheduleOptions;
   constructor(
@@ -134,7 +140,7 @@ export type JobProcessFn<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions & string,
 > = (processOptions: {
-  signal: TypedAbortSignal<"taken_by_another_worker" | "error" | "not_found" | "already_completed">;
+  signal: TypedAbortSignal<JobAbortReason>;
   job: RunningJob<JobOf<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TJobTypeName>>;
   prepare: PrepareFn<TStateAdapter>;
   complete: CompleteFn<TStateAdapter, TJobTypeDefinitions, TJobTypeName>;
@@ -165,9 +171,7 @@ export const runJobProcess = async ({
   const firstLeaseCommitted = createSignal();
   const claimTransactionClosed = createSignal();
 
-  const abortController = new AbortController() as TypedAbortController<
-    "taken_by_another_worker" | "error" | "not_found" | "already_completed"
-  >;
+  const abortController = new AbortController() as TypedAbortController<JobAbortReason>;
 
   const runInGuardedTransaction = async <T>(
     cb: (context: BaseStateAdapterContext) => Promise<T>,

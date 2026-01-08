@@ -36,7 +36,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const leaseConfig = { leaseMs: 10, renewIntervalMs: 100 } satisfies LeaseConfig;
 
     const worker = queuert.createWorker().implementJobType({
-      name: "test",
+      typeName: "test",
       process: async ({ signal, complete }) => {
         if (!failed) {
           failed = true;
@@ -84,14 +84,8 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         );
 
         await Promise.all([
-          queuert.waitForJobSequenceCompletion({
-            ...successJobSequence,
-            ...completionOptions,
-          }),
-          queuert.waitForJobSequenceCompletion({
-            ...failJobSequence,
-            ...completionOptions,
-          }),
+          queuert.waitForJobSequenceCompletion(successJobSequence, completionOptions),
+          queuert.waitForJobSequenceCompletion(failJobSequence, completionOptions),
         ]);
 
         await jobCompleted.promise;
@@ -131,7 +125,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const leaseConfig = { leaseMs: 1, renewIntervalMs: 100 } satisfies LeaseConfig;
 
     const worker = queuert.createWorker().implementJobType({
-      name: "test",
+      typeName: "test",
       process: async ({ prepare, complete }) => {
         await prepare({ mode: "staged" });
 
@@ -181,14 +175,8 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         );
 
         await Promise.all([
-          queuert.waitForJobSequenceCompletion({
-            ...successJobSequence,
-            ...completionOptions,
-          }),
-          queuert.waitForJobSequenceCompletion({
-            ...failJobSequence,
-            ...completionOptions,
-          }),
+          queuert.waitForJobSequenceCompletion(successJobSequence, completionOptions),
+          queuert.waitForJobSequenceCompletion(failJobSequence, completionOptions),
         ]);
 
         await jobCompleted.promise;

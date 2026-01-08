@@ -29,7 +29,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     const worker = queuert.createWorker().implementJobType({
-      name: "test",
+      typeName: "test",
       process: async ({ job, complete }) => {
         return complete(async () => ({ result: job.input.value * 2 }));
       },
@@ -50,15 +50,11 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       [await worker.start({ workerId: "worker", pollIntervalMs: 50 })],
       async () => {
         await expect(
-          queuert.waitForJobSequenceCompletion({
-            ...jobSequence,
-            timeoutMs: 200,
-          }),
+          queuert.waitForJobSequenceCompletion(jobSequence, { timeoutMs: 200 }),
         ).rejects.toThrow();
 
         await expect(
-          queuert.waitForJobSequenceCompletion({
-            ...jobSequence,
+          queuert.waitForJobSequenceCompletion(jobSequence, {
             pollIntervalMs: 100,
             timeoutMs: 400,
           }),
@@ -88,7 +84,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     const worker = queuert.createWorker().implementJobType({
-      name: "test",
+      typeName: "test",
       process: async ({ job, complete }) => {
         return complete(async () => ({ result: job.input.value * 2 }));
       },
@@ -109,15 +105,11 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       [await worker.start({ workerId: "worker", pollIntervalMs: 50 })],
       async () => {
         await expect(
-          queuert.waitForJobSequenceCompletion({
-            ...jobSequence,
-            timeoutMs: 200,
-          }),
+          queuert.waitForJobSequenceCompletion(jobSequence, { timeoutMs: 200 }),
         ).rejects.toThrow();
 
         await expect(
-          queuert.waitForJobSequenceCompletion({
-            ...jobSequence,
+          queuert.waitForJobSequenceCompletion(jobSequence, {
             pollIntervalMs: 100,
             timeoutMs: 400,
           }),
@@ -155,7 +147,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     const worker = queuert
       .createWorker()
       .implementJobType({
-        name: "first",
+        typeName: "first",
         process: async ({ complete }) => {
           try {
             return await complete(async ({ continueWith }) =>
@@ -171,7 +163,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         },
       })
       .implementJobType({
-        name: "second",
+        typeName: "second",
         process: async ({ complete }) => {
           return complete(async () => ({ result: "done" }));
         },
@@ -193,15 +185,11 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         await firstCompleted.promise;
 
         await expect(
-          queuert.waitForJobSequenceCompletion({
-            ...jobSequence,
-            timeoutMs: 200,
-          }),
+          queuert.waitForJobSequenceCompletion(jobSequence, { timeoutMs: 200 }),
         ).rejects.toThrow();
 
         await expect(
-          queuert.waitForJobSequenceCompletion({
-            ...jobSequence,
+          queuert.waitForJobSequenceCompletion(jobSequence, {
             pollIntervalMs: 100,
             timeoutMs: 400,
           }),
@@ -239,7 +227,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     const worker = queuert
       .createWorker()
       .implementJobType({
-        name: "first",
+        typeName: "first",
         process: async ({ complete }) => {
           try {
             return await complete(async ({ continueWith }) =>
@@ -255,7 +243,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         },
       })
       .implementJobType({
-        name: "second",
+        typeName: "second",
         process: async ({ complete }) => {
           return complete(async () => ({ result: "done" }));
         },
@@ -277,15 +265,11 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         await firstCompleted.promise;
 
         await expect(
-          queuert.waitForJobSequenceCompletion({
-            ...jobSequence,
-            timeoutMs: 200,
-          }),
+          queuert.waitForJobSequenceCompletion(jobSequence, { timeoutMs: 200 }),
         ).rejects.toThrow();
 
         await expect(
-          queuert.waitForJobSequenceCompletion({
-            ...jobSequence,
+          queuert.waitForJobSequenceCompletion(jobSequence, {
             pollIntervalMs: 100,
             timeoutMs: 400,
           }),
@@ -318,7 +302,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     const firstAttemptDone = Promise.withResolvers<void>();
 
     const worker = queuert.createWorker().implementJobType({
-      name: "test",
+      typeName: "test",
       process: async ({ job, complete }) => {
         attemptCount++;
         if (attemptCount === 1) {
@@ -345,15 +329,11 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         await firstAttemptDone.promise;
 
         await expect(
-          queuert.waitForJobSequenceCompletion({
-            ...jobSequence,
-            timeoutMs: 200,
-          }),
+          queuert.waitForJobSequenceCompletion(jobSequence, { timeoutMs: 200 }),
         ).rejects.toThrow();
 
         await expect(
-          queuert.waitForJobSequenceCompletion({
-            ...jobSequence,
+          queuert.waitForJobSequenceCompletion(jobSequence, {
             pollIntervalMs: 100,
             timeoutMs: 400,
           }),
@@ -388,7 +368,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     const firstAttemptDone = Promise.withResolvers<void>();
 
     const worker = queuert.createWorker().implementJobType({
-      name: "test",
+      typeName: "test",
       process: async ({ job, complete }) => {
         attemptCount++;
         if (attemptCount === 1) {
@@ -415,15 +395,11 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         await firstAttemptDone.promise;
 
         await expect(
-          queuert.waitForJobSequenceCompletion({
-            ...jobSequence,
-            timeoutMs: 200,
-          }),
+          queuert.waitForJobSequenceCompletion(jobSequence, { timeoutMs: 200 }),
         ).rejects.toThrow();
 
         await expect(
-          queuert.waitForJobSequenceCompletion({
-            ...jobSequence,
+          queuert.waitForJobSequenceCompletion(jobSequence, {
             pollIntervalMs: 100,
             timeoutMs: 400,
           }),

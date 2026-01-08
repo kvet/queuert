@@ -190,7 +190,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
 
     const worker = queuert.createWorker().implementJobType({
-      name: "process-approved",
+      typeName: "process-approved",
       process: async ({ prepare, complete }) => {
         await prepare({ mode: "atomic" });
         return complete(async () => ({ done: true }));
@@ -198,10 +198,10 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     });
 
     await withWorkers([await worker.start()], async () => {
-      const succeededSequence = await queuert.waitForJobSequenceCompletion({
-        ...partiallyCompletedSequence,
-        ...completionOptions,
-      });
+      const succeededSequence = await queuert.waitForJobSequenceCompletion(
+        partiallyCompletedSequence,
+        completionOptions,
+      );
 
       expectTypeOf<(typeof succeededSequence)["status"]>().toEqualTypeOf<"completed">();
       expect(succeededSequence.output).toEqual({ done: true });
@@ -343,7 +343,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     });
 
     const worker = queuert.createWorker().implementJobType({
-      name: "test",
+      typeName: "test",
       process: async ({ signal, complete }) => {
         jobStarted.resolve();
 

@@ -51,7 +51,7 @@ export const extendWithStatePostgres = <
         const stateProvider = createPgPoolProvider({
           pool: pool,
         });
-        const stateAdapter = createPgStateAdapter({
+        const stateAdapter = await createPgStateAdapter({
           stateProvider,
         });
 
@@ -124,14 +124,14 @@ export const extendWithStatePostgres = <
     ],
     stateAdapter: [
       async ({ stateProvider }, use) => {
-        return use(createPgStateAdapter({ stateProvider }));
+        return use(await createPgStateAdapter({ stateProvider }));
       },
       { scope: "test" },
     ],
     flakyStateAdapter: [
       async ({ flakyStateProvider }, use) => {
         return use(
-          createPgStateAdapter({
+          await createPgStateAdapter({
             stateProvider: flakyStateProvider,
             connectionRetryConfig: {
               maxAttempts: 3,

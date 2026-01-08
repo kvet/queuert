@@ -48,7 +48,7 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
     const worker = queuert
       .createWorker()
       .implementJobType({
-        name: "linear",
+        typeName: "linear",
         process: async ({ job, complete }) => {
           expect(job.id).toEqual(jobSequence.id);
           expect(job.sequenceId).toEqual(jobSequence.id);
@@ -75,7 +75,7 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
         },
       })
       .implementJobType({
-        name: "linear_next",
+        typeName: "linear_next",
         process: async ({ job, complete }) => {
           expect(job.id).not.toEqual(jobSequence.id);
           expect(job.sequenceId).toEqual(jobSequence.id);
@@ -99,7 +99,7 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
         },
       })
       .implementJobType({
-        name: "linear_next_next",
+        typeName: "linear_next_next",
         process: async ({ job, complete }) => {
           expect(job.id).not.toEqual(jobSequence.id);
           expect(job.sequenceId).toEqual(jobSequence.id);
@@ -135,10 +135,10 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
     >().toEqualTypeOf<"linear">();
 
     await withWorkers([await worker.start()], async () => {
-      const finishedJobSequence = await queuert.waitForJobSequenceCompletion({
-        ...jobSequence,
-        ...completionOptions,
-      });
+      const finishedJobSequence = await queuert.waitForJobSequenceCompletion(
+        jobSequence,
+        completionOptions,
+      );
 
       expectTypeOf(finishedJobSequence.output).toEqualTypeOf<{ result: number }>();
       expect(finishedJobSequence.output).toEqual({ result: 3 });
@@ -213,7 +213,7 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
     const worker = queuert
       .createWorker()
       .implementJobType({
-        name: "main",
+        typeName: "main",
         process: async ({ job, prepare, complete }) => {
           await prepare({ mode: "atomic" });
           return complete(async ({ continueWith }) => {
@@ -229,7 +229,7 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
         },
       })
       .implementJobType({
-        name: "branch1",
+        typeName: "branch1",
         process: async ({ job, prepare, complete }) => {
           await prepare({ mode: "atomic" });
           return complete(async () => ({
@@ -238,7 +238,7 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
         },
       })
       .implementJobType({
-        name: "branch2",
+        typeName: "branch2",
         process: async ({ job, prepare, complete }) => {
           await prepare({ mode: "atomic" });
           return complete(async () => ({
@@ -274,14 +274,8 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
 
     await withWorkers([await worker.start()], async () => {
       const [succeededJobEven, succeededJobOdd] = await Promise.all([
-        queuert.waitForJobSequenceCompletion({
-          ...evenJobSequence,
-          ...completionOptions,
-        }),
-        queuert.waitForJobSequenceCompletion({
-          ...oddJobSequence,
-          ...completionOptions,
-        }),
+        queuert.waitForJobSequenceCompletion(evenJobSequence, completionOptions),
+        queuert.waitForJobSequenceCompletion(oddJobSequence, completionOptions),
       ]);
 
       expectTypeOf(succeededJobEven.output).toEqualTypeOf<
@@ -316,7 +310,7 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
     });
 
     const worker = queuert.createWorker().implementJobType({
-      name: "loop",
+      typeName: "loop",
       process: async ({ job, prepare, complete }) => {
         await prepare({ mode: "atomic" });
         return complete(async ({ continueWith }) => {
@@ -346,10 +340,10 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
     }>();
 
     await withWorkers([await worker.start()], async () => {
-      const succeededJobSequence = await queuert.waitForJobSequenceCompletion({
-        ...jobSequence,
-        ...completionOptions,
-      });
+      const succeededJobSequence = await queuert.waitForJobSequenceCompletion(
+        jobSequence,
+        completionOptions,
+      );
       expect(succeededJobSequence.output).toEqual({ done: true });
     });
   });
@@ -381,7 +375,7 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
     const worker = queuert
       .createWorker()
       .implementJobType({
-        name: "start",
+        typeName: "start",
         process: async ({ job, prepare, complete }) => {
           await prepare({ mode: "atomic" });
           return complete(async ({ continueWith }) => {
@@ -395,7 +389,7 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
         },
       })
       .implementJobType({
-        name: "end",
+        typeName: "end",
         process: async ({ job, prepare, complete }) => {
           await prepare({ mode: "atomic" });
           return complete(async ({ continueWith }) => {
@@ -427,10 +421,10 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
     }>();
 
     await withWorkers([await worker.start()], async () => {
-      const succeededJobSequence = await queuert.waitForJobSequenceCompletion({
-        ...jobSequence,
-        ...completionOptions,
-      });
+      const succeededJobSequence = await queuert.waitForJobSequenceCompletion(
+        jobSequence,
+        completionOptions,
+      );
 
       expectTypeOf(succeededJobSequence.output).toEqualTypeOf<{ finalResult: number }>();
       expect(succeededJobSequence.output).toEqual({ finalResult: 3 });

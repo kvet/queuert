@@ -29,7 +29,7 @@ export const notifyResilienceTestSuite = ({
     });
 
     const worker = queuert.createWorker().implementJobType({
-      name: "test",
+      typeName: "test",
       process: async ({ job, prepare, complete }) => {
         await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
         return complete(async () => ({ result: job.input.value * 2 }));
@@ -76,7 +76,7 @@ export const notifyResilienceTestSuite = ({
         await Promise.all(
           jobSequences.map(async (seq) =>
             // we have to rely on polling here since notify adapter is flaky
-            queuert.waitForJobSequenceCompletion({ ...seq, pollIntervalMs: 1000, timeoutMs: 5000 }),
+            queuert.waitForJobSequenceCompletion(seq, { pollIntervalMs: 1000, timeoutMs: 5000 }),
           ),
         );
       },

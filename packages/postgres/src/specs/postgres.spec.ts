@@ -14,7 +14,7 @@ it("should infer types correctly with custom ID", async ({ postgresConnectionStr
   });
 
   const stateProvider = createPgPoolProvider({ pool });
-  const stateAdapter = createPgStateAdapter({
+  const stateAdapter = await createPgStateAdapter({
     stateProvider,
     schema: "myapp",
     idType: "TEXT",
@@ -59,7 +59,7 @@ it("should infer types correctly with custom ID", async ({ postgresConnectionStr
   expectTypeOf(jobSequence.id).toEqualTypeOf<`job.${UUID}`>();
 
   const worker = queuert.createWorker().implementJobType({
-    name: "test",
+    typeName: "test",
     process: async ({ job, complete }) => {
       expectTypeOf(job.id).toEqualTypeOf<`job.${UUID}`>();
 
@@ -69,7 +69,7 @@ it("should infer types correctly with custom ID", async ({ postgresConnectionStr
 
   const stopWorker = await worker.start();
 
-  await queuert.waitForJobSequenceCompletion({ ...jobSequence, timeoutMs: 1000 });
+  await queuert.waitForJobSequenceCompletion(jobSequence, { timeoutMs: 1000 });
 
   await stopWorker();
 

@@ -1,7 +1,7 @@
 // oxlint-disable no-empty-pattern
 import inspector from "node:inspector";
 import { MockedFunction, TestAPI, vi } from "vitest";
-import { Log, NotifyAdapter } from "../index.js";
+import { createConsoleLog, Log, NotifyAdapter } from "../index.js";
 import { createInProcessNotifyAdapter } from "../notify-adapter/notify-adapter.in-process.js";
 import { createNoopNotifyAdapter } from "../notify-adapter/notify-adapter.noop.js";
 import { StateAdapter } from "../state-adapter/state-adapter.js";
@@ -52,10 +52,11 @@ export const extendWithCommon = <
     ],
     log: [
       async ({}, use) => {
+        const log = createConsoleLog();
         await use(
-          vi.fn<Log>(({ level, message, args }) => {
+          vi.fn<Log>((...args) => {
             if (process.env.DEBUG || inspector.url()) {
-              console[level](`[${level}] ${message}`, ...args);
+              log(...args);
             }
           }),
         );

@@ -9,7 +9,7 @@ const it = extendWithStateSqlite(baseIt);
 
 it("should infer types correctly with custom ID", async ({ db }) => {
   const stateProvider = createBetterSqlite3Provider({ db });
-  const stateAdapter = createSqliteStateAdapter({
+  const stateAdapter = await createSqliteStateAdapter({
     stateProvider,
     tablePrefix: "myapp_",
     idType: "TEXT",
@@ -45,7 +45,7 @@ it("should infer types correctly with custom ID", async ({ db }) => {
   expectTypeOf(jobSequence.id).toEqualTypeOf<`job.${UUID}`>();
 
   const worker = queuert.createWorker().implementJobType({
-    name: "test",
+    typeName: "test",
     process: async ({ job, complete }) => {
       expectTypeOf(job.id).toEqualTypeOf<`job.${UUID}`>();
 
@@ -55,7 +55,7 @@ it("should infer types correctly with custom ID", async ({ db }) => {
 
   const stopWorker = await worker.start();
 
-  await queuert.waitForJobSequenceCompletion({ ...jobSequence, timeoutMs: 1000 });
+  await queuert.waitForJobSequenceCompletion(jobSequence, { timeoutMs: 1000 });
 
   await stopWorker();
 });

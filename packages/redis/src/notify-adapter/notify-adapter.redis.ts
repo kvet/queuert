@@ -33,7 +33,7 @@ const createSharedListener = <TContext>(
 
         state = { status: "starting", readyPromise };
 
-        const unsubscribe = await provider.provideContext("subscribe", async (ctx) => {
+        const unsubscribe = (await provider.provideContext("subscribe", async (ctx) => {
           const unsub = await provider.subscribe(ctx, channel, (payload) => {
             if (state.status === "running") {
               for (const cb of state.callbacks) {
@@ -43,7 +43,7 @@ const createSharedListener = <TContext>(
           });
           resolveReady();
           return unsub;
-        });
+        })) as () => Promise<void>;
 
         state = { status: "running", callbacks, unsubscribe };
         return callbacks;

@@ -1,17 +1,17 @@
 import {
-  type BaseStateAdapterContext,
-  type RetryConfig,
-  type StateAdapter,
-  type StateJob,
-} from "queuert";
-import { withRetry } from "queuert/internal";
-import {
   createTemplateApplier,
   type NamedParameter,
   type TypedSql,
   type UnwrapNamedParameters,
 } from "@queuert/typed-sql";
 import { UUID } from "crypto";
+import {
+  type BaseStateAdapterContext,
+  type RetryConfig,
+  type StateAdapter,
+  type StateJob,
+} from "queuert";
+import { withRetry } from "queuert/internal";
 import { PgStateProvider } from "../state-provider/state-provider.pg.js";
 import { isTransientPgError } from "./errors.js";
 import {
@@ -66,7 +66,7 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
   };
 };
 
-export const createPgStateAdapter = <
+export const createPgStateAdapter = async <
   TContext extends BaseStateAdapterContext,
   TIdType extends string = UUID,
 >({
@@ -88,11 +88,12 @@ export const createPgStateAdapter = <
   schema?: string;
   idType?: string;
   idDefault?: string;
-  /** @deprecated used for type inference only */
   $idType?: TIdType;
-}): StateAdapter<TContext, TIdType> & {
-  migrateToLatest: (context: TContext) => Promise<void>;
-} => {
+}): Promise<
+  StateAdapter<TContext, TIdType> & {
+    migrateToLatest: (context: TContext) => Promise<void>;
+  }
+> => {
   const applyTemplate = createTemplateApplier({ schema, id_type: idType, id_default: idDefault });
 
   const executeTypedSql = async <

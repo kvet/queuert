@@ -26,7 +26,7 @@ export const createQrt = async ({
       return result.rows;
     },
   };
-  const stateAdapter = createPgStateAdapter({
+  const stateAdapter = await createPgStateAdapter({
     stateProvider,
     schema: "public",
   });

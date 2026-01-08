@@ -14,7 +14,7 @@ Core abstractions, interfaces, and in-memory implementations for testing.
 
 **Exports:**
 
-- `.` (main): `createQueuert`, adapter interfaces (`StateAdapter`, `NotifyAdapter`), type definitions, error classes, in-process adapters (`createInProcessStateAdapter`, `createInProcessNotifyAdapter`, `createNoopNotifyAdapter`)
+- `.` (main): `createQueuert`, `createConsoleLog`, adapter interfaces (`StateAdapter`, `NotifyAdapter`), type definitions, error classes, in-process adapters (`createInProcessStateAdapter`, `createInProcessNotifyAdapter`)
 - `./testing`: Test suites and context helpers for adapter packages (`processTestSuite`, `sequencesTestSuite`, etc., `extendWithCommon`, `extendWithStateInProcess`)
 - `./internal`: Internal utilities for adapter packages only (`withRetry`)
 
@@ -106,7 +106,7 @@ Blockers created within `startBlockers` automatically inherit the main job's `ro
 
 ### Log
 
-A typed logging function for observability. All job lifecycle events are logged with structured data (job IDs, queue names, worker IDs, etc.). Consumers provide their own log implementation to integrate with their logging infrastructure.
+A typed logging function for observability. All job lifecycle events are logged with structured data (job IDs, queue names, worker IDs, etc.). Consumers provide their own log implementation to integrate with their logging infrastructure. A built-in `createConsoleLog()` factory provides a simple console-based logger for development and debugging.
 
 ### StateAdapter
 
@@ -351,6 +351,22 @@ Parallel entities should use consistent lifecycle terminology to reduce cognitiv
 
 Avoid asymmetric naming (e.g., `started`/`finished` vs `created`/`completed`) even if individual terms seem natural - consistency across the API produces fewer questions.
 
+### Async Factory Pattern
+
+Public-facing adapter factories that may perform I/O are async for consistency:
+
+- `createQueuert` → `Promise<Queuert>`
+- `createPgStateAdapter` → `Promise<StateAdapter>`
+- `createSqliteStateAdapter` → `Promise<StateAdapter>`
+- `createPgNotifyAdapter` → `Promise<NotifyAdapter>`
+- `createRedisNotifyAdapter` → `Promise<NotifyAdapter>`
+
+In-process and internal-only factories remain sync since they have no I/O:
+
+- `createInProcessStateAdapter` → `StateAdapter`
+- `createInProcessNotifyAdapter` → `NotifyAdapter`
+- `createNoopNotifyAdapter` → `NotifyAdapter`
+
 ### Naming Conventions
 
 - `originId`: Tracks provenance (which job triggered this one), null for root jobs
@@ -361,6 +377,8 @@ Avoid asymmetric naming (e.g., `started`/`finished` vs `created`/`completed`) ev
 - `blockers`/`blocked`: Describes job dependencies (not `dependencies`/`dependents`)
 - `continueWith`: Continues to next job in complete callback
 - `process`: The job processing function provided to `implementJobType` (not `handler`). Receives `{ signal, job, prepare, complete }` and returns the completed job or continuation.
+- `JobAbortReason`: Union type of abort reasons for job processing: `"taken_by_another_worker" | "error" | "not_found" | "already_completed"`. Used with `TypedAbortSignal` in process functions.
+- `TypedAbortSignal<T>`: Generic abort signal type with typed `reason` property. Process functions receive `TypedAbortSignal<JobAbortReason>` to enable type-safe abort reason checking.
 - `prepare`: Unified function for both atomic and staged modes via `mode` parameter (not separate `prepareAtomic`/`prepareStaged`)
 - `lease`/`leased`: Time-bounded exclusive claim on a job during processing (not `lock`/`locked`). Use `leasedBy`, `leasedUntil`, `leaseMs`, `leaseDurationMs`. DB columns use `leased_by`, `leased_until`.
 - `completedBy`: Records which worker completed the job (`workerId` string), or `null` for workerless completion. DB column uses `completed_by`. Available on completed jobs.
@@ -370,7 +388,7 @@ Avoid asymmetric naming (e.g., `started`/`finished` vs `created`/`completed`) ev
 - `DefineContinuationOutput<T>`: Type marker in output indicating continuation to another job type.
 - `DefineBlocker<T>`: Type marker for declaring blocker dependencies. Used in `blockers` field of job type definitions.
 - `startBlockers`: Callback parameter in `startJobSequence` and `continueWith` for providing blockers. Required when job type has blockers defined; must not be provided when job type has no blockers. Create new blocker sequences via `startJobSequence` within the callback - they automatically inherit rootSequenceId/originId from the main job via context propagation. Can also return existing sequences.
-- `deleteJobSequences`: Deletes entire job trees by `rootSequenceId`. Accepts array of sequence IDs. Must be called on root sequences. Throws error if external job sequences depend on sequences being deleted; include those dependents in the deletion set to proceed. Primarily intended for testing environments.
+- `deleteJobSequences`: Deletes entire job trees by `rootSequenceId`. Accepts `rootSequenceIds` array parameter. Must be called on root sequences. Throws error if external job sequences depend on sequences being deleted; include those dependents in the deletion set to proceed. Primarily intended for testing environments.
 - `completeJobSequence`: Completes jobs without a worker (`workerId: null`). Takes a `complete` callback that receives the current job and can complete it (with output or continuation). Supports partial completion and multi-step sequences.
 - `waitForJobSequenceCompletion`: Waits for a job sequence to complete. Uses a hybrid polling/notification approach with 100ms poll intervals for reliability. Throws `WaitForJobSequenceCompletionTimeoutError` on timeout. Throws immediately if sequence doesn't exist.
 - `withNotify`: Wraps a callback to collect and dispatch notifications after successful completion. Used to batch job scheduling and sequence completion notifications within a transaction.
@@ -459,4 +477,3 @@ describe("MyFeature", () => {
 - Update documentation in README.md if there were changes to public API
 - Update knowledge base in CLAUDE.md if there were architectural changes
 - Update todos in TODO.md if any were addressed
-- Use one-liner commit messages (no multi-line descriptions)

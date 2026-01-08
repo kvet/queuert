@@ -1,10 +1,10 @@
 export type RedisNotifyProviderContextType = "command" | "subscribe";
 
 export type RedisNotifyProvider<TContext> = {
-  provideContext: <T>(
+  provideContext: (
     type: RedisNotifyProviderContextType,
-    fn: (context: TContext) => Promise<T>,
-  ) => Promise<T>;
+    fn: (context: TContext) => Promise<unknown>,
+  ) => Promise<unknown>;
   publish: (context: TContext, channel: string, message: string) => Promise<void>;
   subscribe: (
     context: TContext,

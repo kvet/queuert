@@ -48,8 +48,7 @@ export const waitSequenceCompletionTestSuite = ({
     );
 
     const signal = AbortSignal.timeout(100);
-    const completedSequence = await queuert.waitForJobSequenceCompletion({
-      ...jobSequence,
+    const completedSequence = await queuert.waitForJobSequenceCompletion(jobSequence, {
       signal,
       timeoutMs: 5000,
     });
@@ -84,8 +83,7 @@ export const waitSequenceCompletionTestSuite = ({
     const fastSignal = AbortSignal.timeout(1);
     const slowSignal = AbortSignal.timeout(100);
     await expect(
-      queuert.waitForJobSequenceCompletion({
-        ...jobSequence,
+      queuert.waitForJobSequenceCompletion(jobSequence, {
         signal: fastSignal,
         timeoutMs: 5000,
       }),
@@ -117,8 +115,7 @@ export const waitSequenceCompletionTestSuite = ({
     );
 
     await expect(
-      queuert.waitForJobSequenceCompletion({
-        ...jobSequence,
+      queuert.waitForJobSequenceCompletion(jobSequence, {
         timeoutMs: 1,
       }),
     ).rejects.toThrow(WaitForJobSequenceCompletionTimeoutError);
@@ -141,11 +138,10 @@ export const waitSequenceCompletionTestSuite = ({
 
     const nonExistentId = crypto.randomUUID();
     await expect(
-      queuert.waitForJobSequenceCompletion({
-        typeName: "test",
-        id: nonExistentId,
-        timeoutMs: 5000,
-      }),
+      queuert.waitForJobSequenceCompletion(
+        { typeName: "test", id: nonExistentId },
+        { timeoutMs: 5000 },
+      ),
     ).rejects.toThrow(`Job sequence with id ${nonExistentId} not found`);
   });
 };

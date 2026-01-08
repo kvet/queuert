@@ -31,7 +31,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     const worker = queuert.createWorker().implementJobType({
-      name: "test",
+      typeName: "test",
       process: async ({ job, complete }) => {
         await sleep(50);
         return complete(async () => ({ result: job.input.value }));
@@ -50,10 +50,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       );
 
       const signal = AbortSignal.timeout(200);
-      await queuert.waitForJobSequenceCompletion({
-        ...jobSequence,
-        timeoutMs: 200,
-      });
+      await queuert.waitForJobSequenceCompletion(jobSequence, { timeoutMs: 200 });
       if (signal.aborted) {
         expect.fail("Timed out waiting for job sequence completion");
       }
@@ -81,7 +78,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     const worker = queuert.createWorker().implementJobType({
-      name: "test",
+      typeName: "test",
       process: async ({ job, complete }) => {
         await sleep(50);
         return complete(async () => ({ result: job.input.value }));
@@ -108,10 +105,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         const signal = AbortSignal.timeout(200);
         await Promise.all(
           jobSequences.map(async (sequence) =>
-            queuert.waitForJobSequenceCompletion({
-              ...sequence,
-              timeoutMs: 200,
-            }),
+            queuert.waitForJobSequenceCompletion(sequence, { timeoutMs: 200 }),
           ),
         );
         if (signal.aborted) {
@@ -147,7 +141,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     const worker1 = queuert.createWorker().implementJobType({
-      name: "blocker",
+      typeName: "blocker",
       process: async ({ complete }) => {
         await sleep(25);
         return complete(async () => ({ allowed: true }));
@@ -155,7 +149,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     const worker2 = queuert.createWorker().implementJobType({
-      name: "main",
+      typeName: "main",
       process: async ({ complete }) => {
         await sleep(25);
         return complete(async () => ({ done: true }));
@@ -181,8 +175,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       );
 
       const signal = AbortSignal.timeout(100);
-      await queuert.waitForJobSequenceCompletion({
-        ...jobSequence,
+      await queuert.waitForJobSequenceCompletion(jobSequence, {
         signal,
         timeoutMs: 200,
       });
@@ -218,7 +211,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     const worker1 = queuert.createWorker().implementJobType({
-      name: "step1",
+      typeName: "step1",
       process: async ({ complete }) => {
         await sleep(25);
         return complete(async ({ continueWith }) =>
@@ -231,7 +224,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     const worker2 = queuert.createWorker().implementJobType({
-      name: "step2",
+      typeName: "step2",
       process: async ({ complete }) => {
         await sleep(25);
         return complete(async () => ({ finished: true }));
@@ -250,10 +243,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       );
 
       const signal = AbortSignal.timeout(100);
-      await queuert.waitForJobSequenceCompletion({
-        ...jobSequence,
-        timeoutMs: 200,
-      });
+      await queuert.waitForJobSequenceCompletion(jobSequence, { timeoutMs: 200 });
       if (signal.aborted) {
         expect.fail("Timed out waiting for job sequence completion");
       }
@@ -287,7 +277,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const jobCompleted = Promise.withResolvers<void>();
 
     const worker = queuert.createWorker().implementJobType({
-      name: "test",
+      typeName: "test",
       process: async ({ signal, prepare }) => {
         await prepare({ mode: "staged" });
         jobStarted.resolve();
@@ -355,7 +345,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const jobCompleted = Promise.withResolvers<void>();
 
     const worker = queuert.createWorker().implementJobType({
-      name: "test",
+      typeName: "test",
       process: async ({ signal, job, prepare, complete }) => {
         await prepare({ mode: "staged" });
 
@@ -393,10 +383,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       await sleep(10);
 
       await withWorkers([await worker.start()], async () => {
-        await queuert.waitForJobSequenceCompletion({
-          ...jobSequence,
-          timeoutMs: 5000,
-        });
+        await queuert.waitForJobSequenceCompletion(jobSequence, { timeoutMs: 5000 });
       });
 
       await jobCompleted.promise;

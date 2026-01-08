@@ -37,7 +37,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     await runInTransaction(async (context) =>
       queuert.deleteJobSequences({
         ...context,
-        sequenceIds: [jobSequence.id],
+        rootSequenceIds: [jobSequence.id],
       }),
     );
 
@@ -84,7 +84,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     const jobDeleted = Promise.withResolvers<void>();
 
     const worker = queuert.createWorker().implementJobType({
-      name: "test",
+      typeName: "test",
       process: async ({ signal }) => {
         jobStarted.resolve();
 
@@ -114,7 +114,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       await runInTransaction(async (context) =>
         queuert.deleteJobSequences({
           ...context,
-          sequenceIds: [jobSequence.id],
+          rootSequenceIds: [jobSequence.id],
         }),
       );
 
@@ -152,14 +152,14 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     const worker = queuert
       .createWorker()
       .implementJobType({
-        name: "blocker",
+        typeName: "blocker",
         process: async ({ job, complete }) => {
           await blockerCanComplete.promise;
           return complete(async () => ({ result: job.input.value }));
         },
       })
       .implementJobType({
-        name: "main",
+        typeName: "main",
         process: async ({
           job: {
             blockers: [blocker],
@@ -200,7 +200,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
         runInTransaction(async (context) =>
           queuert.deleteJobSequences({
             ...context,
-            sequenceIds: [blockerSequence.id],
+            rootSequenceIds: [blockerSequence.id],
           }),
         ),
       ).rejects.toThrow("external job sequences depend on them");
@@ -208,7 +208,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       await runInTransaction(async (context) =>
         queuert.deleteJobSequences({
           ...context,
-          sequenceIds: [blockerSequence.id, mainSequence.id],
+          rootSequenceIds: [blockerSequence.id, mainSequence.id],
         }),
       );
 
@@ -279,7 +279,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       runInTransaction(async (context) =>
         queuert.deleteJobSequences({
           ...context,
-          sequenceIds: [blockerSequence.id],
+          rootSequenceIds: [blockerSequence.id],
         }),
       ),
     ).rejects.toThrow("must delete from the root sequence");
@@ -287,7 +287,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     await runInTransaction(async (context) =>
       queuert.deleteJobSequences({
         ...context,
-        sequenceIds: [mainSequence.id],
+        rootSequenceIds: [mainSequence.id],
       }),
     );
   });
@@ -316,7 +316,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     const processThrown = Promise.withResolvers<void>();
 
     const worker = queuert.createWorker().implementJobType({
-      name: "test",
+      typeName: "test",
       process: async ({ complete }) => {
         jobStarted.resolve();
         await sleep(200);
@@ -347,7 +347,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       await runInTransaction(async (context) =>
         queuert.deleteJobSequences({
           ...context,
-          sequenceIds: [jobSequence.id],
+          rootSequenceIds: [jobSequence.id],
         }),
       );
 

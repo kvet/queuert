@@ -213,12 +213,9 @@ export const queuertHelper = ({
     }
   };
 
-  const withNotifyContext = async <T, TArgs extends any[]>(
-    cb: (...args: TArgs) => Promise<T>,
-    ...args: TArgs
-  ): Promise<T> => {
+  const withNotifyContext = async <T>(cb: () => Promise<T>): Promise<T> => {
     if (notifyCompletionStorage.getStore()) {
-      return cb(...args);
+      return cb();
     }
 
     const store = {
@@ -228,7 +225,7 @@ export const queuertHelper = ({
       jobOwnershipLostIds: new Set<string>(),
     };
     return notifyCompletionStorage.run(store, async () => {
-      const result = await cb(...args);
+      const result = await cb();
 
       await Promise.all([
         ...Array.from(store.jobTypeCounts.entries()).map(async ([typeName, count]) => {
@@ -600,16 +597,16 @@ export const queuertHelper = ({
       }
     },
     deleteJobSequences: async ({
-      sequenceIds,
+      rootSequenceIds,
       context,
     }: {
-      sequenceIds: string[];
+      rootSequenceIds: string[];
       context: BaseStateAdapterContext;
     }): Promise<void> => {
       await assertInTransaction(context);
 
       const sequenceJobs = await Promise.all(
-        sequenceIds.map(async (sequenceId) =>
+        rootSequenceIds.map(async (sequenceId) =>
           stateAdapter.getJobById({
             context,
             jobId: sequenceId,
@@ -617,9 +614,9 @@ export const queuertHelper = ({
         ),
       );
 
-      for (let i = 0; i < sequenceIds.length; i++) {
+      for (let i = 0; i < rootSequenceIds.length; i++) {
         const sequenceJob = sequenceJobs[i];
-        const sequenceId = sequenceIds[i];
+        const sequenceId = rootSequenceIds[i];
 
         if (!sequenceJob) {
           throw new JobNotFoundError(`Job sequence with id ${sequenceId} not found`);
@@ -634,7 +631,7 @@ export const queuertHelper = ({
 
       const externalBlockers = await stateAdapter.getExternalBlockers({
         context,
-        rootSequenceIds: sequenceIds,
+        rootSequenceIds,
       });
 
       if (externalBlockers.length > 0) {
@@ -649,7 +646,7 @@ export const queuertHelper = ({
 
       const deletedJobs = await stateAdapter.deleteJobsByRootSequenceIds({
         context,
-        rootSequenceIds: sequenceIds,
+        rootSequenceIds,
       });
 
       for (const sequenceJob of sequenceJobs as StateJob[]) {

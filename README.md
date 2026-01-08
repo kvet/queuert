@@ -41,7 +41,7 @@ Later, a background worker picks up the job and processes it:
 ```ts
 queuert.createWorker()
   .implementJobType({
-    name: "process-image",
+    typeName: "process-image",
     process: async ({ job, prepare, complete }) => {
       const image = await prepare({ mode: "staged" }, async ({ tx }) => {
         return tx.images.getById(job.input.imageId);
@@ -61,7 +61,7 @@ queuert.createWorker()
     },
   })
   .implementJobType({
-    name: "distribute-image",
+    typeName: "distribute-image",
     process: async ({ job, prepare, complete }) => {
       const [image, minifiedImage] = await prepare({ mode: "staged" }, async ({ tx }) => {
         return Promise.all([
@@ -175,7 +175,7 @@ Everything runs in a single transaction. Use for quick operations.
 ```ts
 queuert.createWorker()
   .implementJobType({
-    name: "process-item",
+    typeName: "process-item",
     process: async ({ job, prepare, complete }) => {
       const data = await prepare({ mode: "atomic" }, async ({ db }) => {
         return db.query("SELECT * FROM items WHERE id = ?", [job.input.id]);
@@ -195,7 +195,7 @@ Prepare and complete run in separate transactions with a processing phase in bet
 ```ts
 queuert.createWorker()
   .implementJobType({
-    name: "process-item",
+    typeName: "process-item",
     process: async ({ job, prepare, complete }) => {
       // Phase 1: Prepare (transaction)
       const data = await prepare({ mode: "staged" }, async ({ db }) => {
@@ -245,7 +245,7 @@ await queuert.startJobSequence({
 // Process in worker
 queuert.createWorker()
   .implementJobType({
-    name: "step1",
+    typeName: "step1",
     process: async ({ job, complete }) => {
       return complete(async ({ continueWith }) => {
         return continueWith({ typeName: "step2", input: { id: job.input.id } });
@@ -253,7 +253,7 @@ queuert.createWorker()
     },
   })
   .implementJobType({
-    name: "step2",
+    typeName: "step2",
     process: async ({ job, complete }) => {
       return complete(() => ({ done: true }));
     },
@@ -283,7 +283,7 @@ await queuert.startJobSequence({
 // Process in worker
 queuert.createWorker()
   .implementJobType({
-    name: "main",
+    typeName: "main",
     process: async ({ job, complete }) => {
       return complete(async ({ continueWith }) => {
         return continueWith({
@@ -316,7 +316,7 @@ await queuert.startJobSequence({
 // Process in worker
 queuert.createWorker()
   .implementJobType({
-    name: "loop",
+    typeName: "loop",
     process: async ({ job, complete }) => {
       return complete(async ({ continueWith }) => {
         return job.input.counter < 3
@@ -349,7 +349,7 @@ await queuert.startJobSequence({
 // Process in worker
 queuert.createWorker()
   .implementJobType({
-    name: "start",
+    typeName: "start",
     process: async ({ job, complete }) => {
       return complete(async ({ continueWith }) => {
         return continueWith({ typeName: "end", input: { result: job.input.value * 2 } });
@@ -357,7 +357,7 @@ queuert.createWorker()
     },
   })
   .implementJobType({
-    name: "end",
+    typeName: "end",
     process: async ({ job, complete }) => {
       return complete(async ({ continueWith }) => {
         return job.input.result < 100
@@ -398,7 +398,7 @@ await queuert.startJobSequence({
 // Access completed blockers in worker
 queuert.createWorker()
   .implementJobType({
-    name: 'process-all',
+    typeName: 'process-all',
     process: async ({ job, complete }) => {
       const results = job.blockers.map(b => b.output.data);
       return complete(() => ({ results }));
@@ -497,13 +497,13 @@ const sequence = await queuert.startJobSequence({
 
 // The worker handles the timeout case (auto-reject, sequence ends)
 worker.implementJobType({
-  name: 'await-approval',
+  typeName: 'await-approval',
   process: async ({ complete }) => complete(() => ({ rejected: true })),
 });
 
 // The worker processes approved requests
 worker.implementJobType({
-  name: 'process-request',
+  typeName: 'process-request',
   process: async ({ job, complete }) => {
     await doSomethingWith(job.input.requestId);
     return complete(() => ({ processed: true }));
@@ -538,7 +538,7 @@ For cooperative timeouts, combine `AbortSignal.timeout()` with the provided `sig
 
 ```ts
 worker.implementJobType({
-  name: 'fetch-data',
+  typeName: 'fetch-data',
   process: async ({ signal, job, complete }) => {
     const timeout = AbortSignal.timeout(30_000); // 30 seconds
     const combined = AbortSignal.any([signal, timeout]);
@@ -556,7 +556,7 @@ For hard timeouts, configure `leaseMs` — if a job doesn't complete or renew it
 
 ```ts
 worker.implementJobType({
-  name: 'long-running-job',
+  typeName: 'long-running-job',
   leaseConfig: { leaseMs: 300_000, renewIntervalMs: 60_000 }, // 5 min lease
   process: async ({ job, complete }) => { ... },
 });
@@ -591,7 +591,7 @@ Per-job-type configuration can also be set via `implementJobType`:
 
 ```ts
 worker.implementJobType({
-  name: 'long-running-job',
+  typeName: 'long-running-job',
   retryConfig: { initialDelayMs: 30_000, multiplier: 2.0, maxDelayMs: 600_000 },
   leaseConfig: { leaseMs: 300_000, renewIntervalMs: 60_000 },
   process: async ({ job, complete }) => { ... },

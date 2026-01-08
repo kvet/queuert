@@ -36,7 +36,7 @@ export const stateResilienceTestSuite = ({
     });
 
     const flakyWorker = flakyQueuert.createWorker().implementJobType({
-      name: "test",
+      typeName: "test",
       process: async ({ job, prepare, complete }) => {
         await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
         return complete(async () => ({ result: job.input.value * 2 }));
@@ -81,7 +81,7 @@ export const stateResilienceTestSuite = ({
       async () => {
         await Promise.all(
           jobSequences.map(async (seq) =>
-            queuert.waitForJobSequenceCompletion({ ...seq, timeoutMs: 1000 }),
+            queuert.waitForJobSequenceCompletion(seq, { timeoutMs: 1000 }),
           ),
         );
       },

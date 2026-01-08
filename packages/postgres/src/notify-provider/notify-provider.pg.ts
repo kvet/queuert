@@ -1,10 +1,10 @@
 export type PgNotifyProviderContextType = "query" | "listen";
 
 export type PgNotifyProvider<TContext> = {
-  provideContext: <T>(
+  provideContext: (
     type: PgNotifyProviderContextType,
-    fn: (context: TContext) => Promise<T>,
-  ) => Promise<T>;
+    fn: (context: TContext) => Promise<unknown>,
+  ) => Promise<unknown>;
   publish: (context: TContext, channel: string, message: string) => Promise<void>;
   subscribe: (
     context: TContext,

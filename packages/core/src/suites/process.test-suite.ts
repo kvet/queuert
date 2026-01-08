@@ -31,7 +31,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     });
 
     const worker = queuert.createWorker().implementJobType({
-      name: "test",
+      typeName: "test",
       process: async ({ job, prepare, complete }) => {
         expectTypeOf(job.typeName).toEqualTypeOf<"test">();
         expectTypeOf(job.input).toEqualTypeOf<{ test: boolean }>();
@@ -85,10 +85,10 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     expect(jobSequence.input).toEqual({ test: true });
 
     await withWorkers([await worker.start({ workerId: "worker" })], async () => {
-      const completedJobSequence = await queuert.waitForJobSequenceCompletion({
-        ...jobSequence,
-        ...completionOptions,
-      });
+      const completedJobSequence = await queuert.waitForJobSequenceCompletion(
+        jobSequence,
+        completionOptions,
+      );
       expectTypeOf<(typeof completedJobSequence)["status"]>().toEqualTypeOf<"completed">();
       expectTypeOf<(typeof completedJobSequence)["output"]>().toEqualTypeOf<{
         result: boolean;
@@ -179,41 +179,41 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     const worker = queuert
       .createWorker()
       .implementJobType({
-        name: "atomic-complete",
+        typeName: "atomic-complete",
         process: async ({ job, complete }) => {
           return complete(async () => ({ result: job.input.value * 2 }));
         },
       })
       .implementJobType({
-        name: "staged-complete",
+        typeName: "staged-complete",
         process: async ({ job, complete }) => {
           await sleep(1);
           return complete(async () => ({ result: job.input.value * 3 }));
         },
       })
       .implementJobType({
-        name: "staged-with-callback",
+        typeName: "staged-with-callback",
         process: async ({ job, prepare, complete }) => {
           const multiplier = await prepare({ mode: "staged" }, () => 4);
           return complete(async () => ({ result: job.input.value * multiplier }));
         },
       })
       .implementJobType({
-        name: "staged-without-callback",
+        typeName: "staged-without-callback",
         process: async ({ job, prepare, complete }) => {
           await prepare({ mode: "staged" });
           return complete(async () => ({ result: job.input.value * 5 }));
         },
       })
       .implementJobType({
-        name: "atomic-with-callback",
+        typeName: "atomic-with-callback",
         process: async ({ job, prepare, complete }) => {
           const multiplier = await prepare({ mode: "atomic" }, () => 6);
           return complete(async () => ({ result: job.input.value * multiplier }));
         },
       })
       .implementJobType({
-        name: "atomic-without-callback",
+        typeName: "atomic-without-callback",
         process: async ({ job, prepare, complete }) => {
           await prepare({ mode: "atomic" });
           return complete(async () => ({ result: job.input.value * 7 }));
@@ -273,12 +273,12 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
         completedAtomicCallback,
         completedAtomicNoCallback,
       ] = await Promise.all([
-        queuert.waitForJobSequenceCompletion({ ...atomicCompleteJob, ...completionOptions }),
-        queuert.waitForJobSequenceCompletion({ ...stagedCompleteJob, ...completionOptions }),
-        queuert.waitForJobSequenceCompletion({ ...stagedCallbackJob, ...completionOptions }),
-        queuert.waitForJobSequenceCompletion({ ...stagedNoCallbackJob, ...completionOptions }),
-        queuert.waitForJobSequenceCompletion({ ...atomicCallbackJob, ...completionOptions }),
-        queuert.waitForJobSequenceCompletion({ ...atomicNoCallbackJob, ...completionOptions }),
+        queuert.waitForJobSequenceCompletion(atomicCompleteJob, completionOptions),
+        queuert.waitForJobSequenceCompletion(stagedCompleteJob, completionOptions),
+        queuert.waitForJobSequenceCompletion(stagedCallbackJob, completionOptions),
+        queuert.waitForJobSequenceCompletion(stagedNoCallbackJob, completionOptions),
+        queuert.waitForJobSequenceCompletion(atomicCallbackJob, completionOptions),
+        queuert.waitForJobSequenceCompletion(atomicNoCallbackJob, completionOptions),
       ]);
 
       expect(completedAtomicComplete.output).toEqual({ result: 20 });
@@ -329,7 +329,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     const worker = queuert
       .createWorker()
       .implementJobType({
-        name: "test-prepare-twice",
+        typeName: "test-prepare-twice",
         process: async ({ prepare, complete }) => {
           await prepare({ mode: "atomic" });
           await expect(prepare({ mode: "atomic" })).rejects.toThrow(
@@ -339,7 +339,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
         },
       })
       .implementJobType({
-        name: "test-complete-twice",
+        typeName: "test-complete-twice",
         process: async ({ prepare, complete }) => {
           await prepare({ mode: "atomic" });
           const result = complete(async () => null);
@@ -350,7 +350,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
         },
       })
       .implementJobType({
-        name: "test-prepare-after-auto-setup",
+        typeName: "test-prepare-after-auto-setup",
         process: async (options) => {
           // Don't access prepare synchronously - auto-setup will run
           // Use 50ms to ensure auto-setup completes before we continue
@@ -361,7 +361,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
         },
       })
       .implementJobType({
-        name: "test-continueWith-twice",
+        typeName: "test-continueWith-twice",
         process: async ({ prepare, complete }) => {
           await prepare({ mode: "atomic" });
           return complete(async ({ continueWith }) => {
@@ -380,7 +380,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
         },
       })
       .implementJobType({
-        name: "test-next",
+        typeName: "test-next",
         process: async ({ job, prepare, complete }) => {
           await prepare({ mode: "atomic" });
           return complete(async () => ({ result: job.input.value }));
@@ -421,13 +421,10 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
 
     await withWorkers([await worker.start()], async () => {
       await Promise.all([
-        queuert.waitForJobSequenceCompletion({ ...prepareJobSequence, ...completionOptions }),
-        queuert.waitForJobSequenceCompletion({ ...completeJobSequence, ...completionOptions }),
-        queuert.waitForJobSequenceCompletion({
-          ...prepareAfterAutoSetupJobSequence,
-          ...completionOptions,
-        }),
-        queuert.waitForJobSequenceCompletion({ ...continueWithJobSequence, ...completionOptions }),
+        queuert.waitForJobSequenceCompletion(prepareJobSequence, completionOptions),
+        queuert.waitForJobSequenceCompletion(completeJobSequence, completionOptions),
+        queuert.waitForJobSequenceCompletion(prepareAfterAutoSetupJobSequence, completionOptions),
+        queuert.waitForJobSequenceCompletion(continueWithJobSequence, completionOptions),
       ]);
     });
   });
@@ -453,7 +450,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     });
 
     const worker = queuert.createWorker().implementJobType({
-      name: "test",
+      typeName: "test",
       process: async ({ complete }) => {
         await sleep(100);
 
@@ -474,7 +471,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     await withWorkers(
       [await worker.start({ defaultLeaseConfig: { leaseMs: 1, renewIntervalMs: 100 } })],
       async () => {
-        await queuert.waitForJobSequenceCompletion({ ...jobSequence, ...completionOptions });
+        await queuert.waitForJobSequenceCompletion(jobSequence, completionOptions);
       },
     );
 
@@ -511,7 +508,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     });
 
     const worker = queuert.createWorker().implementJobType({
-      name: "test",
+      typeName: "test",
       process: processFn,
     });
 
@@ -526,7 +523,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     );
 
     await withWorkers(await Promise.all([worker.start(), worker.start()]), async () => {
-      await queuert.waitForJobSequenceCompletion({ ...job, ...completionOptions });
+      await queuert.waitForJobSequenceCompletion(job, completionOptions);
     });
 
     expect(processFn).toHaveBeenCalledTimes(1);
@@ -555,7 +552,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     const attempts: number[] = [];
 
     const worker = queuert.createWorker().implementJobType({
-      name: "test",
+      typeName: "test",
       process: async ({ job, prepare, complete }) => {
         attempts.push(job.attempt);
 
@@ -602,7 +599,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
         }),
       ],
       async () => {
-        await queuert.waitForJobSequenceCompletion({ ...jobSequence, ...completionOptions });
+        await queuert.waitForJobSequenceCompletion(jobSequence, completionOptions);
       },
     );
 
@@ -633,7 +630,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     const errors: string[] = [];
 
     const worker = queuert.createWorker().implementJobType({
-      name: "test",
+      typeName: "test",
       process: async ({ job, complete }) => {
         if (job.lastAttemptError) {
           errors.push(job.lastAttemptError);
@@ -668,7 +665,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
         }),
       ],
       async () => {
-        await queuert.waitForJobSequenceCompletion({ ...job, ...completionOptions });
+        await queuert.waitForJobSequenceCompletion(job, completionOptions);
       },
     );
 
@@ -719,7 +716,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     const errors: { phase: ErrorPhase; error: string }[] = [];
 
     const worker = queuert.createWorker().implementJobType({
-      name: "test",
+      typeName: "test",
       process: async ({ job, prepare, complete }) => {
         if (job.lastAttemptError) {
           errors.push({
@@ -775,7 +772,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       async () => {
         await Promise.all(
           jobSequences.map(async (job) =>
-            queuert.waitForJobSequenceCompletion({ ...job, ...completionOptions }),
+            queuert.waitForJobSequenceCompletion(job, completionOptions),
           ),
         );
       },
@@ -816,7 +813,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     let attempts = 0;
 
     const worker = queuert.createWorker().implementJobType({
-      name: "test",
+      typeName: "test",
       retryConfig: {
         initialDelayMs: 1,
         multiplier: 1,
@@ -843,7 +840,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     );
 
     await withWorkers([await worker.start()], async () => {
-      await queuert.waitForJobSequenceCompletion({ ...jobSequence, ...completionOptions });
+      await queuert.waitForJobSequenceCompletion(jobSequence, completionOptions);
     });
 
     expect(attempts).toBe(2);

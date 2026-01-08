@@ -137,7 +137,7 @@ const parseDbJobSequenceRow = (
   return { rootJob, lastSequenceJob };
 };
 
-export const createSqliteStateAdapter = <
+export const createSqliteStateAdapter = async <
   TContext extends BaseStateAdapterContext,
   TIdType extends string = UUID,
 >({
@@ -159,9 +159,11 @@ export const createSqliteStateAdapter = <
   tablePrefix?: string;
   idType?: string;
   idGenerator?: () => TIdType;
-}): StateAdapter<TContext, TIdType> & {
-  migrateToLatest: (context: TContext) => Promise<void>;
-} => {
+}): Promise<
+  StateAdapter<TContext, TIdType> & {
+    migrateToLatest: (context: TContext) => Promise<void>;
+  }
+> => {
   const applyTemplate = createTemplateApplier(
     { table_prefix: tablePrefix, id_type: idType },
     {
