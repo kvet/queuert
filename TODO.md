@@ -9,7 +9,6 @@
 - Metrics collection & OTEL
 - Refactor `jobTypeDefinitions` parameter - Currently required but only used for type inference; integrate with optional Zod schema to provide actual runtime value (input/output validation)
 - Restore generic return types on `StateProvider.provideContext` and `NotifyProvider.provideContext` - Currently uses `unknown`, should use `<T>` for type-safe return values without casting
-- MongoDB notify adapter - Use Change Streams for pub/sub; requires replica set; hint optimization via separate collection with findOneAndUpdate
 
 # Long term
 

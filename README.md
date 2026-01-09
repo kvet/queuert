@@ -104,6 +104,7 @@ npm install @queuert/mongodb   # MongoDB (requires 4.0+ for transactions)
 
 # Notify adapters (optional, for reduced latency)
 npm install @queuert/redis     # Redis pub/sub (recommended for production)
+npm install @queuert/nats      # NATS pub/sub (with optional JetStream KV for hints)
 # Or use PostgreSQL LISTEN/NOTIFY via @queuert/postgres (no extra infra)
 ```
 
@@ -143,6 +144,7 @@ Handles pub/sub notifications for efficient job scheduling. When a job is create
 **Available adapters:**
 
 - `@queuert/redis` - Redis notify adapter (recommended for production, includes hint-based optimization)
+- `@queuert/nats` - NATS notify adapter (with optional JetStream KV for hint-based optimization)
 - `@queuert/postgres` - PostgreSQL notify adapter (uses LISTEN/NOTIFY, no additional infrastructure)
 - `createInProcessNotifyAdapter()` - In-memory adapter (for single-process apps)
 - None (default) - polling only, no real-time notifications

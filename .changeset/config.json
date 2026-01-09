@@ -4,7 +4,14 @@
   "commit": false,
   "fixed": [],
   "linked": [
-    ["queuert", "@queuert/postgres", "@queuert/sqlite", "@queuert/mongodb", "@queuert/redis"]
+    [
+      "queuert",
+      "@queuert/postgres",
+      "@queuert/sqlite",
+      "@queuert/mongodb",
+      "@queuert/redis",
+      "@queuert/nats"
+    ]
   ],
   "access": "public",
   "baseBranch": "main",

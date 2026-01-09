@@ -1,4 +1,5 @@
 export { extendWithMongodb } from "./mongodb.js";
+export { extendWithNats, type NatsConnectionOptions } from "./nats.js";
 export { extendWithPostgres } from "./postgres.js";
 export { extendWithRedis } from "./redis.js";
 

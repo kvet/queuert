@@ -182,6 +182,30 @@ importers:
         specifier: ^4.0.16
         version: 4.0.16(@types/node@24.10.4)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
 
+  packages/nats:
+    devDependencies:
+      '@queuert/testcontainers':
+        specifier: workspace:*
+        version: file:packages/testcontainers(@types/node@24.10.4)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
+      '@types/node':
+        specifier: ^24.10.4
+        version: 24.10.4
+      nats:
+        specifier: ^2.28.0
+        version: 2.29.3
+      queuert:
+        specifier: workspace:*
+        version: link:../core
+      tsdown:
+        specifier: ^0.18.3
+        version: 0.18.3(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.16
+        version: 4.0.16(@types/node@24.10.4)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
+
   packages/postgres:
     devDependencies:
       '@queuert/testcontainers':
@@ -267,6 +291,9 @@ importers:
     dependencies:
       '@testcontainers/mongodb':
         specifier: ^11.10.0
+        version: 11.11.0
+      '@testcontainers/nats':
+        specifier: ^11.11.0
         version: 11.11.0
       '@testcontainers/postgresql':
         specifier: ^11.10.0
@@ -1018,6 +1045,9 @@ packages:
 
   '@testcontainers/mongodb@11.11.0':
     resolution: {integrity: sha512-iVXjMhR0O4UzQPkg+zlFSOV+c1/fcugNzalTQqSLDCp9KYpOpXPOkokgtN4LZ+eWUQ6+I/XmbwLHPQ5pD5FFuA==}
+
+  '@testcontainers/nats@11.11.0':
+    resolution: {integrity: sha512-mjFq44jazk1DYTvKPrPNZbqRl6hgucquAOoz2zfg7T4ypVkLNG8cVvd7cZNl7L6JfWeiAJD5Ns/83+2Z3xCjOg==}
 
   '@testcontainers/postgresql@11.10.0':
     resolution: {integrity: sha512-d6QeN3KkXLJBdt0T6X3KKtdkHbaZdzCRPo133FSG8yOoGofQAYghtau39iUdeF9GAN8UTWZAxio40uYKBSV7xw==}
@@ -1790,6 +1820,14 @@ packages:
   napi-build-utils@2.0.0:
     resolution: {integrity: sha512-GEbrYkbfF7MoNaoh2iGG84Mnf/WZfB0GdGEsM8wz7Expx/LlWf5U8t9nvJKXSp3qr5IsEbK04cBGhol/KwOsWA==}
 
+  nats@2.29.3:
+    resolution: {integrity: sha512-tOQCRCwC74DgBTk4pWZ9V45sk4d7peoE2njVprMRCBXrhJ5q5cYM7i6W+Uvw2qUrcfOSnuisrX7bEx3b3Wx4QA==}
+    engines: {node: '>= 14.0.0'}
+
+  nkeys.js@1.1.0:
+    resolution: {integrity: sha512-tB/a0shZL5UZWSwsoeyqfTszONTt4k2YS0tuQioMOD180+MbombYVgzDUYHlx+gejYK6rgf08n/2Df99WY0Sxg==}
+    engines: {node: '>=10.0.0'}
+
   node-abi@3.85.0:
     resolution: {integrity: sha512-zsFhmbkAzwhTft6nd3VxcG0cvJsT70rL+BIGHWVq5fi6MwGrHwzqKaxXE+Hl2GmnGItnDKPPkO5/LQqjVkIdFg==}
     engines: {node: '>=10'}
@@ -2329,6 +2367,9 @@ packages:
 
   tweetnacl@0.14.5:
     resolution: {integrity: sha512-KXXFFdAbFXY4geFIwoyNK+f5Z1b7swfXABfL7HXCmoIWMKU3dmS26672A4EeQtDzLKy7SXmfBu51JolvEKwtGA==}
+
+  tweetnacl@1.0.3:
+    resolution: {integrity: sha512-6rt+RN7aOi1nGMyC4Xa5DdYiukl2UWCbcJft7YhxReBGQD7OAM8Pbxw6YMo4r2diNEA8FEmu32YOn9rhaiE5yw==}
 
   typescript@5.9.3:
     resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
@@ -3117,6 +3158,15 @@ snapshots:
       - react-native-b4a
       - supports-color
 
+  '@testcontainers/nats@11.11.0':
+    dependencies:
+      testcontainers: 11.11.0
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - react-native-b4a
+      - supports-color
+
   '@testcontainers/postgresql@11.10.0':
     dependencies:
       testcontainers: 11.11.0
@@ -3864,6 +3914,14 @@ snapshots:
 
   napi-build-utils@2.0.0: {}
 
+  nats@2.29.3:
+    dependencies:
+      nkeys.js: 1.1.0
+
+  nkeys.js@1.1.0:
+    dependencies:
+      tweetnacl: 1.0.3
+
   node-abi@3.85.0:
     dependencies:
       semver: 7.7.3
@@ -4526,6 +4584,8 @@ snapshots:
       safe-buffer: 5.2.1
 
   tweetnacl@0.14.5: {}
+
+  tweetnacl@1.0.3: {}
 
   typescript@5.9.3: {}
 

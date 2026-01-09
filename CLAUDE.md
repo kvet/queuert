@@ -95,6 +95,30 @@ Redis notify adapter implementation for distributed pub/sub notifications.
 
 Uses 3 fixed channels with payload-based filtering (same pattern as PostgreSQL). Implements hint-based thundering herd optimization using Lua scripts for atomic decrement operations. Requires two Redis connections: one for commands (PUBLISH, EVAL) and one for subscriptions (SUBSCRIBE).
 
+### `@queuert/nats`
+
+NATS notify adapter implementation for distributed pub/sub notifications with optional JetStream KV support.
+
+**Exports:**
+
+- `.` (main): `createNatsNotifyAdapter`
+- `./testing`: Test helper for NATS tests (`extendWithNatsNotify`)
+
+**Dependencies:**
+
+- `queuert` as peer dependency
+- `nats` as peer dependency (requires ^2.28.0)
+
+**Notify adapter notes:**
+
+Uses 3 NATS subjects with payload-based filtering (`{prefix}.sched`, `{prefix}.seqc`, `{prefix}.owls`). Supports optional JetStream KV for hint-based thundering herd optimization using revision-based CAS operations. Without JetStream KV, behaves like PostgreSQL (all listeners query database). Unlike Redis, NATS is fully multiplexed and a single connection handles both publishing and subscriptions.
+
+**Configuration options:**
+
+- `nc`: NATS connection
+- `kv`: Optional JetStream KV bucket for hint optimization
+- `subjectPrefix`: Subject prefix (default: `"queuert"`)
+
 ## Core Concepts
 
 ### Job
@@ -390,6 +414,7 @@ Public-facing adapter factories that may perform I/O are async for consistency:
 - `createSqliteStateAdapter` → `Promise<StateAdapter>`
 - `createPgNotifyAdapter` → `Promise<NotifyAdapter>`
 - `createRedisNotifyAdapter` → `Promise<NotifyAdapter>`
+- `createNatsNotifyAdapter` → `Promise<NotifyAdapter>`
 
 In-process and internal-only factories remain sync since they have no I/O:
 
@@ -491,8 +516,9 @@ describe("MyFeature", () => {
 - `packages/postgres/src/specs/` - Spec files that run the same test suites with PostgreSQL adapter
 - `packages/sqlite/src/specs/` - Spec files that run the same test suites with SQLite adapter
 - `packages/redis/src/specs/` - Spec files that run the same test suites with Redis notify adapter
+- `packages/nats/src/specs/` - Spec files that run the same test suites with NATS notify adapter
 - State adapter test helpers (`extendWithStateInProcess`, `extendWithStatePostgres`, `extendWithStateSqlite`) configure the test context with the appropriate state adapter
-- Notify adapter test helpers (`extendWithNotifyInProcess`, `extendWithNotifyNoop`, `extendWithNotifyRedis`) configure the test context with the appropriate notify adapter
+- Notify adapter test helpers (`extendWithNotifyInProcess`, `extendWithNotifyNoop`, `extendWithNotifyRedis`, `extendWithNatsNotify`) configure the test context with the appropriate notify adapter
 
 ## Code Style
 
