@@ -1,0 +1,31 @@
+{
+  "name": "@queuert/postgres-raw-redis",
+  "version": "0.0.1",
+  "private": true,
+  "description": "An example Queuert adapter using raw Postgres (pg) for job storage and Redis for pub/sub.",
+  "license": "MIT",
+  "author": "kvet",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kvet/queuert.git"
+  },
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@queuert/postgres": "workspace:*",
+    "@queuert/redis": "workspace:*",
+    "@testcontainers/postgresql": "^11.10.0",
+    "@testcontainers/redis": "^11.10.0",
+    "@types/node": "^24.10.4",
+    "@types/pg": "^8.16.0",
+    "pg": "^8.16.3",
+    "queuert": "workspace:*",
+    "redis": "^5.0.0",
+    "testcontainers": "^11.10.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

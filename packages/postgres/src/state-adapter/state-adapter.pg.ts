@@ -82,7 +82,7 @@ export const createPgStateAdapter = async <
   idType = "uuid",
   idDefault = "gen_random_uuid()",
 }: {
-  stateProvider: PgStateProvider<TContext>;
+  stateProvider: PgStateProvider<TContext, any>;
   connectionRetryConfig?: RetryConfig;
   isTransientError?: (error: unknown) => boolean;
   schema?: string;
