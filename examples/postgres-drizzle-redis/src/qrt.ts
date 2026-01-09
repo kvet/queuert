@@ -16,12 +16,14 @@ export const createQrt = async ({
 }) => {
   const stateProvider: PgStateProvider<{ tx: DbTransaction }, { db: Db }> = {
     provideContext: async (cb) => cb({ db }),
-    isInTransaction: async () => true,
+    isInTransaction: async (ctx) => "tx" in ctx,
     runInTransaction: async (ctx, cb) => {
       return ctx.db.transaction(async (tx) => cb({ tx }));
     },
     executeSql: async (ctx, query, params) => {
-      const client = (ctx.tx as any)?._session?.client;
+      // Inside transaction: access Drizzle's internal pg client
+      // Outside transaction (migrations): use db.$client (the pool)
+      const client = "tx" in ctx ? (ctx.tx as any).session.client : (db as any).$client;
       const result = await client.query(query, params);
       return result.rows;
     },
