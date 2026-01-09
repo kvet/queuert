@@ -8,8 +8,9 @@ import type { Log } from "queuert";
  * for proper stack trace formatting and serialization.
  */
 export const createPinoLog = (logger: Logger): Log => {
-  return ({ type, level, message, args }) => {
-    const [data, error] = args;
+  return (entry) => {
+    const { type, level, message, data } = entry;
+    const error = "error" in entry ? entry.error : undefined;
 
     // Pino uses 'err' property for proper error serialization
     if (error !== undefined) {

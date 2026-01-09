@@ -145,41 +145,37 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
     });
 
     expectLogs([
-      { type: "job_sequence_created", args: [{ typeName: "linear" }] },
-      { type: "job_created", args: [{ typeName: "linear" }] },
+      { type: "job_sequence_created", data: { typeName: "linear" } },
+      { type: "job_created", data: { typeName: "linear" } },
       { type: "worker_started" },
-      { type: "job_attempt_started", args: [{ typeName: "linear" }] },
+      { type: "job_attempt_started", data: { typeName: "linear" } },
       {
         type: "job_created",
-        args: [
-          {
-            typeName: "linear_next",
-            sequenceId: jobSequence.id,
-            rootSequenceId: jobSequence.id,
-            originId: originIds[0],
-          },
-        ],
+        data: {
+          typeName: "linear_next",
+          sequenceId: jobSequence.id,
+          rootSequenceId: jobSequence.id,
+          originId: originIds[0],
+        },
       },
-      { type: "job_attempt_completed", args: [{ typeName: "linear" }] },
-      { type: "job_completed", args: [{ typeName: "linear" }] },
-      { type: "job_attempt_started", args: [{ typeName: "linear_next" }] },
+      { type: "job_attempt_completed", data: { typeName: "linear" } },
+      { type: "job_completed", data: { typeName: "linear" } },
+      { type: "job_attempt_started", data: { typeName: "linear_next" } },
       {
         type: "job_created",
-        args: [
-          {
-            typeName: "linear_next_next",
-            sequenceId: jobSequence.id,
-            rootSequenceId: jobSequence.id,
-            originId: originIds[1],
-          },
-        ],
+        data: {
+          typeName: "linear_next_next",
+          sequenceId: jobSequence.id,
+          rootSequenceId: jobSequence.id,
+          originId: originIds[1],
+        },
       },
-      { type: "job_attempt_completed", args: [{ typeName: "linear_next" }] },
-      { type: "job_completed", args: [{ typeName: "linear_next" }] },
-      { type: "job_attempt_started", args: [{ typeName: "linear_next_next" }] },
-      { type: "job_attempt_completed", args: [{ typeName: "linear_next_next" }] },
-      { type: "job_completed", args: [{ typeName: "linear_next_next" }] },
-      { type: "job_sequence_completed", args: [{ typeName: "linear" }] },
+      { type: "job_attempt_completed", data: { typeName: "linear_next" } },
+      { type: "job_completed", data: { typeName: "linear_next" } },
+      { type: "job_attempt_started", data: { typeName: "linear_next_next" } },
+      { type: "job_attempt_completed", data: { typeName: "linear_next_next" } },
+      { type: "job_completed", data: { typeName: "linear_next_next" } },
+      { type: "job_sequence_completed", data: { typeName: "linear" } },
       { type: "worker_stopping" },
       { type: "worker_stopped" },
     ]);

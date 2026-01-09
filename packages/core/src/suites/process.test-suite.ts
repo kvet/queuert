@@ -119,28 +119,39 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       sequenceId: jobSequence.id,
     };
     expectLogs([
-      { type: "job_sequence_created", args: [{ ...jobSequenceArgs, input: { test: true } }] },
-      { type: "job_created", args: [{ ...jobArgs, input: { test: true } }] },
-      { type: "worker_started", args: [{ ...workerArgs, jobTypeNames: ["test"] }] },
+      { type: "job_sequence_created", data: { ...jobSequenceArgs, input: { test: true } } },
+      { type: "job_created", data: { ...jobArgs, input: { test: true } } },
+      { type: "worker_started", data: { ...workerArgs, jobTypeNames: ["test"] } },
       {
         type: "job_attempt_started",
-        args: [{ ...jobArgs, status: "running", attempt: 1, ...workerArgs }],
+        data: { ...jobArgs, status: "running", attempt: 1, ...workerArgs },
       },
       {
         type: "job_attempt_completed",
-        args: [
-          { ...jobArgs, status: "running", attempt: 1, output: { result: true }, ...workerArgs },
-        ],
+        data: {
+          ...jobArgs,
+          status: "running",
+          attempt: 1,
+          output: { result: true },
+          ...workerArgs,
+        },
       },
       {
         type: "job_completed",
-        args: [
-          { ...jobArgs, status: "completed", attempt: 1, output: { result: true }, ...workerArgs },
-        ],
+        data: {
+          ...jobArgs,
+          status: "completed",
+          attempt: 1,
+          output: { result: true },
+          ...workerArgs,
+        },
       },
-      { type: "job_sequence_completed", args: [{ ...jobSequenceArgs, output: { result: true } }] },
-      { type: "worker_stopping", args: [{ ...workerArgs }] },
-      { type: "worker_stopped", args: [{ ...workerArgs }] },
+      {
+        type: "job_sequence_completed",
+        data: { ...jobSequenceArgs, output: { result: true } },
+      },
+      { type: "worker_stopping", data: { ...workerArgs } },
+      { type: "worker_stopped", data: { ...workerArgs } },
     ]);
   });
 
@@ -686,11 +697,23 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       { type: "job_created" },
       { type: "worker_started" },
       { type: "job_attempt_started" },
-      { type: "job_attempt_failed", args: [{ rescheduledAfterMs: 10 }, expect.anything()] },
+      {
+        type: "job_attempt_failed",
+        data: { rescheduledAfterMs: 10 },
+        error: expect.anything(),
+      },
       { type: "job_attempt_started" },
-      { type: "job_attempt_failed", args: [{ rescheduledAfterMs: 20 }, expect.anything()] },
+      {
+        type: "job_attempt_failed",
+        data: { rescheduledAfterMs: 20 },
+        error: expect.anything(),
+      },
       { type: "job_attempt_started" },
-      { type: "job_attempt_failed", args: [{ rescheduledAfterMs: 40 }, expect.anything()] },
+      {
+        type: "job_attempt_failed",
+        data: { rescheduledAfterMs: 40 },
+        error: expect.anything(),
+      },
       { type: "job_attempt_started" },
       { type: "job_attempt_completed" },
       { type: "job_completed" },

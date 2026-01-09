@@ -1,7 +1,7 @@
-import { createQueuert } from "queuert";
 import { createPgStateAdapter, PgStateProvider } from "@queuert/postgres";
 import { createRedisNotifyAdapter, RedisNotifyProvider } from "@queuert/redis";
 import { CompiledQuery } from "kysely";
+import { createConsoleLog, createQueuert } from "queuert";
 import { Db } from "./db.js";
 import { qrtJobDefinitions } from "./qrt-schema.js";
 import { Redis } from "./redis.js";
@@ -62,9 +62,7 @@ export const createQrt = async ({
   return createQueuert({
     stateAdapter,
     notifyAdapter,
-    log: ({ level, message, args }) => {
-      console[level](`[${level}] ${message}`, ...args);
-    },
+    log: createConsoleLog(),
     jobTypeDefinitions: qrtJobDefinitions,
   });
 };

@@ -55,7 +55,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       { type: "job_created" },
       {
         type: "job_sequence_deleted",
-        args: [{ id: jobSequence.id, deletedJobIds: [jobSequence.id] }],
+        data: { id: jobSequence.id, deletedJobIds: [jobSequence.id] },
       },
     ]);
   });

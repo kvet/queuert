@@ -1,10 +1,10 @@
 import { JobSequence } from "./entities/job-sequence.js";
 import { Job } from "./entities/job.js";
 import { ScheduleOptions } from "./entities/schedule.js";
-import { JobBasicArgs, JobProcessingArgs, JobSequenceArgs, Log } from "./log.js";
+import { JobBasicData, JobProcessingData, JobSequenceData, Log } from "./log.js";
 import { StateJob } from "./state-adapter/state-adapter.js";
 
-const mapStateJobToJobBasicLogArgs = (job: StateJob): JobBasicArgs => ({
+const mapStateJobToJobBasicLogData = (job: StateJob): JobBasicData => ({
   id: job.id,
   typeName: job.typeName,
   originId: job.originId,
@@ -12,27 +12,27 @@ const mapStateJobToJobBasicLogArgs = (job: StateJob): JobBasicArgs => ({
   rootSequenceId: job.rootSequenceId,
 });
 
-const mapStateJobToJobProcessingLogArgs = (job: StateJob): JobProcessingArgs => ({
-  ...mapStateJobToJobBasicLogArgs(job),
+const mapStateJobToJobProcessingLogData = (job: StateJob): JobProcessingData => ({
+  ...mapStateJobToJobBasicLogData(job),
   status: job.status,
   attempt: job.attempt,
 });
 
-const mapStateJobToJobSequenceLogArgs = (job: StateJob): JobSequenceArgs => ({
+const mapStateJobToJobSequenceLogData = (job: StateJob): JobSequenceData => ({
   id: job.sequenceId,
   typeName: job.sequenceTypeName,
   originId: job.originId,
   rootSequenceId: job.rootSequenceId,
 });
 
-const mapJobSequenceToLogArgs = (seq: JobSequence<any, any, any, any>): JobSequenceArgs => ({
+const mapJobSequenceToLogData = (seq: JobSequence<any, any, any, any>): JobSequenceData => ({
   id: seq.id,
   typeName: seq.typeName,
   originId: seq.originId,
   rootSequenceId: seq.rootSequenceId,
 });
 
-const mapJobToJobBasicLogArgs = (job: Job<any, any, any, any>): JobBasicArgs => ({
+const mapJobToJobBasicLogData = (job: Job<any, any, any, any>): JobBasicData => ({
   id: job.id,
   typeName: job.typeName,
   originId: job.originId,
@@ -95,7 +95,7 @@ export const createLogHelper = ({ log }: { log: Log }): LogHelper => ({
       type: "worker_started",
       level: "info",
       message: "Started worker",
-      args: [options],
+      data: options,
     });
   },
 
@@ -104,7 +104,8 @@ export const createLogHelper = ({ log }: { log: Log }): LogHelper => ({
       type: "worker_error",
       level: "error",
       message: "Worker error",
-      args: [options, error],
+      data: options,
+      error,
     });
   },
 
@@ -113,7 +114,7 @@ export const createLogHelper = ({ log }: { log: Log }): LogHelper => ({
       type: "worker_stopping",
       level: "info",
       message: "Stopping worker...",
-      args: [options],
+      data: options,
     });
   },
 
@@ -122,7 +123,7 @@ export const createLogHelper = ({ log }: { log: Log }): LogHelper => ({
       type: "worker_stopped",
       level: "info",
       message: "Worker has been stopped",
-      args: [options],
+      data: options,
     });
   },
 
@@ -132,15 +133,13 @@ export const createLogHelper = ({ log }: { log: Log }): LogHelper => ({
       type: "job_created",
       level: "info",
       message: "Job created",
-      args: [
-        {
-          ...mapStateJobToJobBasicLogArgs(job),
-          input: options.input,
-          blockers: options.blockers.map(mapJobSequenceToLogArgs),
-          ...(options.schedule?.at && { scheduledAt: options.schedule.at }),
-          ...(options.schedule?.afterMs && { scheduleAfterMs: options.schedule.afterMs }),
-        },
-      ],
+      data: {
+        ...mapStateJobToJobBasicLogData(job),
+        input: options.input,
+        blockers: options.blockers.map(mapJobSequenceToLogData),
+        ...(options.schedule?.at && { scheduledAt: options.schedule.at }),
+        ...(options.schedule?.afterMs && { scheduleAfterMs: options.schedule.afterMs }),
+      },
     });
   },
 
@@ -149,7 +148,7 @@ export const createLogHelper = ({ log }: { log: Log }): LogHelper => ({
       type: "job_attempt_started",
       level: "info",
       message: "Job attempt started",
-      args: [{ ...mapStateJobToJobProcessingLogArgs(job), workerId: options.workerId }],
+      data: { ...mapStateJobToJobProcessingLogData(job), workerId: options.workerId },
     });
   },
 
@@ -158,14 +157,12 @@ export const createLogHelper = ({ log }: { log: Log }): LogHelper => ({
       type: "job_taken_by_another_worker",
       level: "warn",
       message: "Job taken by another worker",
-      args: [
-        {
-          ...mapStateJobToJobProcessingLogArgs(job),
-          workerId: options.workerId,
-          leasedBy: job.leasedBy!,
-          leasedUntil: job.leasedUntil!,
-        },
-      ],
+      data: {
+        ...mapStateJobToJobProcessingLogData(job),
+        workerId: options.workerId,
+        leasedBy: job.leasedBy!,
+        leasedUntil: job.leasedUntil!,
+      },
     });
   },
 
@@ -174,14 +171,12 @@ export const createLogHelper = ({ log }: { log: Log }): LogHelper => ({
       type: "job_lease_expired",
       level: "warn",
       message: "Job lease expired",
-      args: [
-        {
-          ...mapStateJobToJobProcessingLogArgs(job),
-          workerId: options.workerId,
-          leasedBy: job.leasedBy!,
-          leasedUntil: job.leasedUntil!,
-        },
-      ],
+      data: {
+        ...mapStateJobToJobProcessingLogData(job),
+        workerId: options.workerId,
+        leasedBy: job.leasedBy!,
+        leasedUntil: job.leasedUntil!,
+      },
     });
   },
 
@@ -190,14 +185,12 @@ export const createLogHelper = ({ log }: { log: Log }): LogHelper => ({
       type: "job_reaped",
       level: "info",
       message: "Reaped expired job lease",
-      args: [
-        {
-          ...mapStateJobToJobBasicLogArgs(job),
-          leasedBy: job.leasedBy!,
-          leasedUntil: job.leasedUntil!,
-          workerId: options.workerId,
-        },
-      ],
+      data: {
+        ...mapStateJobToJobBasicLogData(job),
+        leasedBy: job.leasedBy!,
+        leasedUntil: job.leasedUntil!,
+        workerId: options.workerId,
+      },
     });
   },
 
@@ -206,17 +199,15 @@ export const createLogHelper = ({ log }: { log: Log }): LogHelper => ({
       type: "job_attempt_failed",
       level: "error",
       message: "Job attempt failed",
-      args: [
-        {
-          ...mapStateJobToJobProcessingLogArgs(job),
-          workerId: options.workerId,
-          ...(options.rescheduledSchedule.at && { rescheduledAt: options.rescheduledSchedule.at }),
-          ...(options.rescheduledSchedule.afterMs && {
-            rescheduledAfterMs: options.rescheduledSchedule.afterMs,
-          }),
-        },
-        options.error,
-      ],
+      data: {
+        ...mapStateJobToJobProcessingLogData(job),
+        workerId: options.workerId,
+        ...(options.rescheduledSchedule.at && { rescheduledAt: options.rescheduledSchedule.at }),
+        ...(options.rescheduledSchedule.afterMs && {
+          rescheduledAfterMs: options.rescheduledSchedule.afterMs,
+        }),
+      },
+      error: options.error,
     });
   },
 
@@ -225,16 +216,14 @@ export const createLogHelper = ({ log }: { log: Log }): LogHelper => ({
       type: "job_attempt_completed",
       level: "info",
       message: "Job attempt completed",
-      args: [
-        {
-          ...mapStateJobToJobProcessingLogArgs(job),
-          output: options.output,
-          continuedWith: options.continuedWith
-            ? mapJobToJobBasicLogArgs(options.continuedWith)
-            : undefined,
-          workerId: options.workerId,
-        },
-      ],
+      data: {
+        ...mapStateJobToJobProcessingLogData(job),
+        output: options.output,
+        continuedWith: options.continuedWith
+          ? mapJobToJobBasicLogData(options.continuedWith)
+          : undefined,
+        workerId: options.workerId,
+      },
     });
   },
 
@@ -243,16 +232,14 @@ export const createLogHelper = ({ log }: { log: Log }): LogHelper => ({
       type: "job_completed",
       level: "info",
       message: "Job completed",
-      args: [
-        {
-          ...mapStateJobToJobProcessingLogArgs(job),
-          output: options.output,
-          continuedWith: options.continuedWith
-            ? mapJobToJobBasicLogArgs(options.continuedWith)
-            : undefined,
-          workerId: options.workerId,
-        },
-      ],
+      data: {
+        ...mapStateJobToJobProcessingLogData(job),
+        output: options.output,
+        continuedWith: options.continuedWith
+          ? mapJobToJobBasicLogData(options.continuedWith)
+          : undefined,
+        workerId: options.workerId,
+      },
     });
   },
 
@@ -262,7 +249,7 @@ export const createLogHelper = ({ log }: { log: Log }): LogHelper => ({
       type: "job_sequence_created",
       level: "info",
       message: "Job sequence created",
-      args: [{ ...mapStateJobToJobSequenceLogArgs(job), input: options.input }],
+      data: { ...mapStateJobToJobSequenceLogData(job), input: options.input },
     });
   },
 
@@ -271,7 +258,7 @@ export const createLogHelper = ({ log }: { log: Log }): LogHelper => ({
       type: "job_sequence_completed",
       level: "info",
       message: "Job sequence completed",
-      args: [{ ...mapStateJobToJobSequenceLogArgs(jobSequenceStartJob), output: options.output }],
+      data: { ...mapStateJobToJobSequenceLogData(jobSequenceStartJob), output: options.output },
     });
   },
 
@@ -280,12 +267,10 @@ export const createLogHelper = ({ log }: { log: Log }): LogHelper => ({
       type: "job_sequence_deleted",
       level: "info",
       message: "Job sequence deleted",
-      args: [
-        {
-          ...mapStateJobToJobSequenceLogArgs(sequenceJob),
-          deletedJobIds: options.deletedJobIds,
-        },
-      ],
+      data: {
+        ...mapStateJobToJobSequenceLogData(sequenceJob),
+        deletedJobIds: options.deletedJobIds,
+      },
     });
   },
 
@@ -295,12 +280,10 @@ export const createLogHelper = ({ log }: { log: Log }): LogHelper => ({
       type: "job_blocked",
       level: "info",
       message: "Job blocked by incomplete sequences",
-      args: [
-        {
-          ...mapStateJobToJobBasicLogArgs(job),
-          blockedBySequences: options.blockedBySequences.map(mapJobSequenceToLogArgs),
-        },
-      ],
+      data: {
+        ...mapStateJobToJobBasicLogData(job),
+        blockedBySequences: options.blockedBySequences.map(mapJobSequenceToLogData),
+      },
     });
   },
 
@@ -309,12 +292,10 @@ export const createLogHelper = ({ log }: { log: Log }): LogHelper => ({
       type: "job_unblocked",
       level: "info",
       message: "Job unblocked",
-      args: [
-        {
-          ...mapStateJobToJobBasicLogArgs(job),
-          unblockedBySequence: mapStateJobToJobSequenceLogArgs(options.unblockedBySequence),
-        },
-      ],
+      data: {
+        ...mapStateJobToJobBasicLogData(job),
+        unblockedBySequence: mapStateJobToJobSequenceLogData(options.unblockedBySequence),
+      },
     });
   },
 
@@ -325,7 +306,7 @@ export const createLogHelper = ({ log }: { log: Log }): LogHelper => ({
       level: "warn",
       message:
         "Not withNotify context when creating job for queue. The job processing may be delayed.",
-      args: [mapStateJobToJobBasicLogArgs(job)],
+      data: mapStateJobToJobBasicLogData(job),
     });
   },
 
@@ -334,7 +315,8 @@ export const createLogHelper = ({ log }: { log: Log }): LogHelper => ({
       type: "notify_adapter_error",
       level: "warn",
       message: "Notify adapter error",
-      args: [{ operation }, error],
+      data: { operation },
+      error,
     });
   },
 
@@ -344,7 +326,8 @@ export const createLogHelper = ({ log }: { log: Log }): LogHelper => ({
       type: "state_adapter_error",
       level: "warn",
       message: "State adapter error",
-      args: [{ operation }, error],
+      data: { operation },
+      error,
     });
   },
 });

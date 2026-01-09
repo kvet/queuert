@@ -129,75 +129,73 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       // blocker sequence created
       {
         type: "job_sequence_created",
-        args: [{ typeName: "blocker", rootSequenceId: mainSequenceId!, originId: mainSequenceId! }],
+        data: {
+          typeName: "blocker",
+          rootSequenceId: mainSequenceId!,
+          originId: mainSequenceId!,
+        },
       },
-      { type: "job_created", args: [{ typeName: "blocker" }] },
+      { type: "job_created", data: { typeName: "blocker" } },
       // main sequence created
-      { type: "job_sequence_created", args: [{ typeName: "main" }] },
+      { type: "job_sequence_created", data: { typeName: "main" } },
       {
         type: "job_created",
-        args: [
-          {
-            typeName: "main",
-            blockers: [
-              {
-                id: blockerSequenceId!,
-                typeName: "blocker",
-                originId: mainSequenceId!,
-                rootSequenceId: mainSequenceId!,
-              },
-            ],
-          },
-        ],
-      },
-      // main job is blocked by the incomplete blocker sequence
-      {
-        type: "job_blocked",
-        args: [
-          {
-            typeName: "main",
-            blockedBySequences: [
-              {
-                id: blockerSequenceId!,
-                typeName: "blocker",
-                originId: mainSequenceId!,
-                rootSequenceId: mainSequenceId!,
-              },
-            ],
-          },
-        ],
-      },
-      // worker started
-      { type: "worker_started" },
-      // first blocker job processed
-      { type: "job_attempt_started", args: [{ typeName: "blocker" }] },
-      { type: "job_created", args: [{ typeName: "blocker" }] },
-      { type: "job_attempt_completed", args: [{ typeName: "blocker" }] },
-      { type: "job_completed", args: [{ typeName: "blocker" }] },
-      // second blocker job processed, sequence completes
-      { type: "job_attempt_started", args: [{ typeName: "blocker" }] },
-      { type: "job_attempt_completed", args: [{ typeName: "blocker" }] },
-      { type: "job_completed", args: [{ typeName: "blocker" }] },
-      { type: "job_sequence_completed", args: [{ typeName: "blocker" }] },
-      // main job unblocked and completed
-      {
-        type: "job_unblocked",
-        args: [
-          {
-            typeName: "main",
-            unblockedBySequence: {
+        data: {
+          typeName: "main",
+          blockers: [
+            {
               id: blockerSequenceId!,
               typeName: "blocker",
               originId: mainSequenceId!,
               rootSequenceId: mainSequenceId!,
             },
-          },
-        ],
+          ],
+        },
       },
-      { type: "job_attempt_started", args: [{ typeName: "main" }] },
-      { type: "job_attempt_completed", args: [{ typeName: "main" }] },
-      { type: "job_completed", args: [{ typeName: "main" }] },
-      { type: "job_sequence_completed", args: [{ typeName: "main" }] },
+      // main job is blocked by the incomplete blocker sequence
+      {
+        type: "job_blocked",
+        data: {
+          typeName: "main",
+          blockedBySequences: [
+            {
+              id: blockerSequenceId!,
+              typeName: "blocker",
+              originId: mainSequenceId!,
+              rootSequenceId: mainSequenceId!,
+            },
+          ],
+        },
+      },
+      // worker started
+      { type: "worker_started" },
+      // first blocker job processed
+      { type: "job_attempt_started", data: { typeName: "blocker" } },
+      { type: "job_created", data: { typeName: "blocker" } },
+      { type: "job_attempt_completed", data: { typeName: "blocker" } },
+      { type: "job_completed", data: { typeName: "blocker" } },
+      // second blocker job processed, sequence completes
+      { type: "job_attempt_started", data: { typeName: "blocker" } },
+      { type: "job_attempt_completed", data: { typeName: "blocker" } },
+      { type: "job_completed", data: { typeName: "blocker" } },
+      { type: "job_sequence_completed", data: { typeName: "blocker" } },
+      // main job unblocked and completed
+      {
+        type: "job_unblocked",
+        data: {
+          typeName: "main",
+          unblockedBySequence: {
+            id: blockerSequenceId!,
+            typeName: "blocker",
+            originId: mainSequenceId!,
+            rootSequenceId: mainSequenceId!,
+          },
+        },
+      },
+      { type: "job_attempt_started", data: { typeName: "main" } },
+      { type: "job_attempt_completed", data: { typeName: "main" } },
+      { type: "job_completed", data: { typeName: "main" } },
+      { type: "job_sequence_completed", data: { typeName: "main" } },
       // worker stopping
       { type: "worker_stopping" },
       { type: "worker_stopped" },

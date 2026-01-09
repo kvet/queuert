@@ -64,10 +64,10 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     expect(completedSequence.output).toEqual({ result: 84 });
 
     expectLogs([
-      { type: "job_sequence_created", args: [{ input: { value: 42 } }] },
-      { type: "job_created", args: [{ input: { value: 42 } }] },
-      { type: "job_completed", args: [{ output: { result: 84 }, workerId: null }] },
-      { type: "job_sequence_completed", args: [{ output: { result: 84 } }] },
+      { type: "job_sequence_created", data: { input: { value: 42 } } },
+      { type: "job_created", data: { input: { value: 42 } } },
+      { type: "job_completed", data: { output: { result: 84 }, workerId: null } },
+      { type: "job_sequence_completed", data: { output: { result: 84 } } },
     ]);
   });
 

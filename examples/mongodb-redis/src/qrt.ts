@@ -1,7 +1,7 @@
-import { ClientSession } from "mongodb";
-import { createQueuert } from "queuert";
 import { createMongoStateAdapter, MongoStateProvider } from "@queuert/mongodb";
 import { createRedisNotifyAdapter, RedisNotifyProvider } from "@queuert/redis";
+import { ClientSession } from "mongodb";
+import { createConsoleLog, createQueuert } from "queuert";
 import { DbConnection } from "./db.js";
 import { qrtJobDefinitions } from "./qrt-schema.js";
 import { Redis } from "./redis.js";
@@ -77,9 +77,7 @@ export const createQrt = async ({
   return createQueuert({
     stateAdapter,
     notifyAdapter,
-    log: ({ level, message, args }) => {
-      console[level](`[${level}] ${message}`, ...args);
-    },
+    log: createConsoleLog(),
     jobTypeDefinitions: qrtJobDefinitions,
   });
 };

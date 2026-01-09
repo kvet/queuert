@@ -15,7 +15,8 @@ export type TestSuiteContext = {
   expectLogs: (
     expected: {
       type: string;
-      args?: [Record<string, unknown>] | [Record<string, unknown>, unknown];
+      data?: Record<string, unknown>;
+      error?: unknown;
     }[],
   ) => void;
 };
@@ -67,17 +68,16 @@ export const extendWithCommon = <
       async ({ log, expect }, use) => {
         await use((expected) => {
           expect(log.mock.calls.map((call) => call[0])).toEqual(
-            expected.map((entry) =>
-              entry.args
-                ? expect.objectContaining({
-                    type: entry.type,
-                    args: [
-                      expect.objectContaining(entry.args[0]),
-                      ...(entry.args[1] ? [entry.args[1]] : []),
-                    ],
-                  })
-                : expect.objectContaining({ type: entry.type }),
-            ),
+            expected.map((entry) => {
+              const matcher: Record<string, unknown> = { type: entry.type };
+              if (entry.data) {
+                matcher.data = expect.objectContaining(entry.data);
+              }
+              if (entry.error !== undefined) {
+                matcher.error = entry.error;
+              }
+              return expect.objectContaining(matcher);
+            }),
           );
         });
       },

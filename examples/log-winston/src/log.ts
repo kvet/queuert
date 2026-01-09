@@ -8,10 +8,11 @@ import type { Log } from "queuert";
  * and formats them based on configured transports and formats.
  */
 export const createWinstonLog = (logger: Logger): Log => {
-  return ({ type, level, message, args }) => {
-    const [data, error] = args;
+  return (entry) => {
+    const { type, level, message, data } = entry;
+    const error = "error" in entry ? entry.error : undefined;
 
-    // Winston accepts error in metadata object
+    // Winston accepts error in data object
     if (error !== undefined) {
       logger.log(level, message, { type, ...data, error });
     } else {
