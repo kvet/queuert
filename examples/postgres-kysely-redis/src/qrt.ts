@@ -31,7 +31,7 @@ export const createQrt = async ({
     schema: "public",
   });
 
-  await stateAdapter.migrateToLatest({ db });
+  await stateAdapter.migrateToLatest();
 
   const notifyProvider: RedisNotifyProvider<{ redis: Redis }> = {
     provideContext: async (type, cb) => {

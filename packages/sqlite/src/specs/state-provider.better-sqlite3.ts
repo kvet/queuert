@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3";
+import { createAsyncLock } from "queuert/internal";
 import { SqliteStateProvider } from "../state-provider/state-provider.sqlite.js";
 
 export type SqliteContext = { db: Database.Database };
@@ -8,6 +9,8 @@ export const createBetterSqlite3Provider = ({
 }: {
   db: Database.Database;
 }): SqliteStateProvider<SqliteContext> => {
+  const lock = createAsyncLock();
+
   return {
     provideContext: async (fn) => {
       return fn({ db });
@@ -25,24 +28,25 @@ export const createBetterSqlite3Provider = ({
       return db.inTransaction;
     },
     runInTransaction: async ({ db }, fn) => {
-      if (db.inTransaction) {
-        return fn({ db });
-      }
-
-      db.exec("BEGIN IMMEDIATE");
+      await lock.acquire();
       try {
-        const result = await fn({ db });
-        db.exec("COMMIT");
-        return result;
-      } catch (error) {
-        if (db.inTransaction) {
-          try {
-            db.exec("ROLLBACK");
-          } catch {
-            // ignore rollback errors
+        db.exec("BEGIN IMMEDIATE");
+        try {
+          const result = await fn({ db });
+          db.exec("COMMIT");
+          return result;
+        } catch (error) {
+          if (db.inTransaction) {
+            try {
+              db.exec("ROLLBACK");
+            } catch {
+              // ignore rollback errors
+            }
           }
+          throw error;
         }
-        throw error;
+      } finally {
+        lock.release();
       }
     },
   };

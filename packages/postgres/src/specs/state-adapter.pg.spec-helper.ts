@@ -47,6 +47,7 @@ export const extendWithStatePostgres = <
         await client.query(`DROP SCHEMA IF EXISTS queuert CASCADE;`).catch(() => {
           // ignore
         });
+        client.release();
 
         const stateProvider = createPgPoolProvider({
           pool: pool,
@@ -61,9 +62,7 @@ export const extendWithStatePostgres = <
             GRANT USAGE ON SCHEMA queuert TO test;
           `),
         );
-        await stateAdapter.migrateToLatest({ poolClient: client });
-
-        client.release();
+        await stateAdapter.migrateToLatest();
 
         await use();
       },

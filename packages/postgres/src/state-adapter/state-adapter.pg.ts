@@ -91,7 +91,7 @@ export const createPgStateAdapter = async <
   $idType?: TIdType;
 }): Promise<
   StateAdapter<TContext, TIdType> & {
-    migrateToLatest: (context: TContext) => Promise<void>;
+    migrateToLatest: () => Promise<void>;
   }
 > => {
   const applyTemplate = createTemplateApplier({ schema, id_type: idType, id_default: idDefault });
@@ -125,10 +125,12 @@ export const createPgStateAdapter = async <
       stateProvider.runInTransaction(context, fn) as ReturnType<typeof fn>,
     isInTransaction: async (context) => stateProvider.isInTransaction(context),
 
-    migrateToLatest: async (context) => {
-      await executeTypedSql({
-        context,
-        sql: migrateSql,
+    migrateToLatest: async () => {
+      await stateProvider.provideContext(async (context) => {
+        await executeTypedSql({
+          context,
+          sql: migrateSql,
+        });
       });
     },
 

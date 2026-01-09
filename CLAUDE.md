@@ -16,7 +16,7 @@ Core abstractions, interfaces, and in-memory implementations for testing.
 
 - `.` (main): `createQueuert`, `createConsoleLog`, adapter interfaces (`StateAdapter`, `NotifyAdapter`), type definitions, error classes, in-process adapters (`createInProcessStateAdapter`, `createInProcessNotifyAdapter`)
 - `./testing`: Test suites and context helpers for adapter packages (`processTestSuite`, `sequencesTestSuite`, etc., `extendWithCommon`, `extendWithStateInProcess`)
-- `./internal`: Internal utilities for adapter packages only (`withRetry`)
+- `./internal`: Internal utilities for adapter packages only (`withRetry`, `createAsyncLock`)
 
 ### `@queuert/postgres`
 
@@ -41,7 +41,7 @@ SQLite state adapter implementation using better-sqlite3.
 
 **Exports:**
 
-- `.` (main): `createSqliteStateAdapter`, `SqliteStateAdapter` type
+- `.` (main): `createSqliteStateAdapter`, `SqliteStateAdapter` type, `createAsyncLock` (re-exported from `queuert/internal`)
 - `./testing`: Test helper for SQLite tests (`extendWithStateSqlite`)
 
 **Dependencies:**

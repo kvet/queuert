@@ -16,7 +16,7 @@ it("should infer types correctly with custom ID", async ({ db }) => {
     idGenerator: () => `job.${crypto.randomUUID()}`,
   });
 
-  await stateAdapter.migrateToLatest({ db });
+  await stateAdapter.migrateToLatest();
 
   const queuert = await createQueuert({
     stateAdapter,

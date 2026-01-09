@@ -127,7 +127,7 @@ export const extendWithStateMongodb = <
         });
         const stateAdapter = await createMongoStateAdapter({ stateProvider, collectionName });
 
-        await stateAdapter.migrateToLatest({});
+        await stateAdapter.migrateToLatest();
 
         await use();
       },

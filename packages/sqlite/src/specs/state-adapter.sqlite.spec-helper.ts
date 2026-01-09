@@ -48,7 +48,7 @@ export const extendWithStateSqlite = <T>(
         const stateProvider = createBetterSqlite3Provider({ db: db });
         const stateAdapter = await createSqliteStateAdapter({ stateProvider });
 
-        await stateAdapter.migrateToLatest({ db: db });
+        await stateAdapter.migrateToLatest();
 
         await use();
       },

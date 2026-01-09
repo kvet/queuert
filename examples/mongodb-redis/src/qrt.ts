@@ -7,7 +7,7 @@ import { qrtJobDefinitions } from "./qrt-schema.js";
 import { Redis } from "./redis.js";
 
 type MongoContext = {
-  session?: ClientSession;
+  session: ClientSession;
 };
 
 export const createQrt = async ({
@@ -24,20 +24,18 @@ export const createQrt = async ({
   const collection = db.collection(collectionName);
 
   const stateProvider: MongoStateProvider<MongoContext> = {
-    provideContext: async (cb) => cb({}),
-    getCollection: () => collection,
-    isInTransaction: async (context) => context.session?.inTransaction() === true,
-    runInTransaction: async (context, cb) => {
-      if (context.session?.inTransaction()) {
-        return cb(context);
-      }
-
+    provideContext: async (cb) => {
       const session = client.startSession();
       try {
-        return await session.withTransaction(async () => cb({ session }));
+        return await cb({ session });
       } finally {
         await session.endSession();
       }
+    },
+    getCollection: () => collection,
+    isInTransaction: async (context) => context.session.inTransaction(),
+    runInTransaction: async (context, cb) => {
+      return context.session.withTransaction(async (session) => cb({ session }));
     },
   };
 
@@ -46,7 +44,7 @@ export const createQrt = async ({
     collectionName,
   });
 
-  await stateAdapter.migrateToLatest({});
+  await stateAdapter.migrateToLatest();
 
   const notifyProvider: RedisNotifyProvider<{ redis: Redis }> = {
     provideContext: async (type, cb) => {

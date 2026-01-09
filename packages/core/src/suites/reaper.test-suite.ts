@@ -72,6 +72,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       ]),
       async () => {
         await jobStarted.promise;
+        await sleep(10);
 
         const successJobSequence = await queuert.withNotify(async () =>
           runInTransaction(async (context) =>

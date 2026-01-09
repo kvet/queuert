@@ -1,3 +1,4 @@
+import { createAsyncLock } from "../helpers/async-lock.js";
 import { DeduplicationOptions, StateAdapter, StateJob } from "./state-adapter.js";
 
 export type InProcessContext = { inTransaction?: boolean };
@@ -20,27 +21,7 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
     jobBlockers: new Map(),
   };
 
-  const lockQueue: (() => void)[] = [];
-  let isLocked = false;
-
-  const acquireLock = async (): Promise<void> => {
-    if (!isLocked) {
-      isLocked = true;
-      return;
-    }
-    await new Promise<void>((resolve) => {
-      lockQueue.push(resolve);
-    });
-  };
-
-  const releaseLock = (): void => {
-    const next = lockQueue.shift();
-    if (next) {
-      next();
-    } else {
-      isLocked = false;
-    }
-  };
+  const lock = createAsyncLock();
 
   const getLastJobInSequence = (sequenceId: string): StateJob | undefined => {
     let lastJob: StateJob | undefined;
@@ -99,11 +80,7 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
     },
 
     runInTransaction: async (context, fn) => {
-      if (context.inTransaction) {
-        return fn(context);
-      }
-
-      await acquireLock();
+      await lock.acquire();
 
       const snapshot = deepCloneStore(store);
       const txContext: InProcessContext = { inTransaction: true };
@@ -115,7 +92,7 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
         store.jobBlockers = snapshot.jobBlockers;
         throw error;
       } finally {
-        releaseLock();
+        lock.release();
       }
     },
 

@@ -27,7 +27,7 @@ it("should infer types correctly with custom ID", async ({ mongoConnectionString
     idGenerator: () => `job.${crypto.randomUUID()}` as `job.${string}`,
   });
 
-  await stateAdapter.migrateToLatest({});
+  await stateAdapter.migrateToLatest();
 
   const queuert = await createQueuert({
     stateAdapter,

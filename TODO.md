@@ -1,6 +1,5 @@
 # Short term
 
-- CRITICAL: MongoDB `runInTransaction` silently bypasses when already in transaction - investigate why nested transaction calls occur and fix the root cause instead of silently ignoring
 - Refactor `withRetry` out of individual state adapter methods - currently inlined in every method making code messy; should be integrated at adapter wrapper level or via higher-order function pattern
 
 # Medium term

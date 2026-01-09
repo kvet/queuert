@@ -27,8 +27,8 @@ it("should infer types correctly with custom ID", async ({ postgresConnectionStr
     CREATE SCHEMA IF NOT EXISTS myapp;
     GRANT USAGE ON SCHEMA myapp TO test;
   `);
-  await stateAdapter.migrateToLatest({ poolClient });
   poolClient.release();
+  await stateAdapter.migrateToLatest();
 
   const queuert = await createQueuert({
     stateAdapter,

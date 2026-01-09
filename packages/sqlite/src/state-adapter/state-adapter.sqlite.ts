@@ -161,7 +161,7 @@ export const createSqliteStateAdapter = async <
   idGenerator?: () => TIdType;
 }): Promise<
   StateAdapter<TContext, TIdType> & {
-    migrateToLatest: (context: TContext) => Promise<void>;
+    migrateToLatest: () => Promise<void>;
   }
 > => {
   const applyTemplate = createTemplateApplier(
@@ -207,9 +207,11 @@ export const createSqliteStateAdapter = async <
       stateProvider.runInTransaction(context, fn) as ReturnType<typeof fn>,
     isInTransaction: async (context) => stateProvider.isInTransaction(context),
 
-    migrateToLatest: async (context) => {
-      const db = (context as unknown as { db: { exec: (sqlStr: string) => void } }).db;
-      db.exec(applyTemplate(migrateSql).sql);
+    migrateToLatest: async () => {
+      await stateProvider.provideContext(async (context) => {
+        const db = (context as unknown as { db: { exec: (sqlStr: string) => void } }).db;
+        db.exec(applyTemplate(migrateSql).sql);
+      });
     },
 
     getJobSequenceById: async ({ context, jobId }) => {

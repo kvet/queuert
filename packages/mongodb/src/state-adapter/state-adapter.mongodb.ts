@@ -97,7 +97,7 @@ export const createMongoStateAdapter = async <
   idGenerator?: () => TIdType;
 }): Promise<
   StateAdapter<TContext, TIdType> & {
-    migrateToLatest: (context: TContext) => Promise<void>;
+    migrateToLatest: () => Promise<void>;
     collectionName: string;
   }
 > => {
@@ -117,43 +117,45 @@ export const createMongoStateAdapter = async <
       stateProvider.runInTransaction(context, fn) as ReturnType<typeof fn>,
     isInTransaction: async (context) => stateProvider.isInTransaction(context),
 
-    migrateToLatest: async (context) => {
-      const collection = getCollection(context);
+    migrateToLatest: async () => {
+      await stateProvider.provideContext(async (context) => {
+        const collection = getCollection(context);
 
-      // Create indexes
-      await withRetryWrapper(async () => {
-        // Job acquisition index
-        await collection.createIndex(
-          { typeName: 1, scheduledAt: 1 },
-          { partialFilterExpression: { status: "pending" } },
-        );
+        // Create indexes
+        await withRetryWrapper(async () => {
+          // Job acquisition index
+          await collection.createIndex(
+            { typeName: 1, scheduledAt: 1 },
+            { partialFilterExpression: { status: "pending" } },
+          );
 
-        // Sequence lookup index
-        await collection.createIndex({ sequenceId: 1, createdAt: -1 });
+          // Sequence lookup index
+          await collection.createIndex({ sequenceId: 1, createdAt: -1 });
 
-        // Root lookup for cascading deletes
-        await collection.createIndex({ rootSequenceId: 1 });
+          // Root lookup for cascading deletes
+          await collection.createIndex({ rootSequenceId: 1 });
 
-        // Deduplication lookup (use $type to filter non-null strings since $ne is not supported in partial indexes)
-        await collection.createIndex(
-          { deduplicationKey: 1, createdAt: -1 },
-          { partialFilterExpression: { deduplicationKey: { $type: "string" } } },
-        );
+          // Deduplication lookup (use $type to filter non-null strings since $ne is not supported in partial indexes)
+          await collection.createIndex(
+            { deduplicationKey: 1, createdAt: -1 },
+            { partialFilterExpression: { deduplicationKey: { $type: "string" } } },
+          );
 
-        // Expired lease detection
-        await collection.createIndex(
-          { typeName: 1, leasedUntil: 1 },
-          { partialFilterExpression: { status: "running", leasedUntil: { $type: "date" } } },
-        );
+          // Expired lease detection
+          await collection.createIndex(
+            { typeName: 1, leasedUntil: 1 },
+            { partialFilterExpression: { status: "running", leasedUntil: { $type: "date" } } },
+          );
 
-        // Blocker lookup
-        await collection.createIndex({ "blockers.blockedBySequenceId": 1 });
+          // Blocker lookup
+          await collection.createIndex({ "blockers.blockedBySequenceId": 1 });
 
-        // Continuation uniqueness
-        await collection.createIndex(
-          { sequenceId: 1, originId: 1 },
-          { unique: true, partialFilterExpression: { originId: { $type: "string" } } },
-        );
+          // Continuation uniqueness
+          await collection.createIndex(
+            { sequenceId: 1, originId: 1 },
+            { unique: true, partialFilterExpression: { originId: { $type: "string" } } },
+          );
+        });
       });
     },
 

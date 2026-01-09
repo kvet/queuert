@@ -2,7 +2,7 @@ import { type ClientSession, type Db, MongoClient } from "mongodb";
 import { MongoStateProvider } from "../state-provider/state-provider.mongodb.js";
 
 export type MongoContext = {
-  session?: ClientSession;
+  session: ClientSession;
 };
 
 export const createMongoProvider = ({
@@ -18,26 +18,21 @@ export const createMongoProvider = ({
 
   return {
     provideContext: async (fn) => {
-      return fn({});
+      const session = client.startSession();
+      try {
+        return await fn({ session });
+      } finally {
+        await session.endSession();
+      }
     },
     getCollection: () => {
       return collection;
     },
     isInTransaction: async (context) => {
-      return context.session?.inTransaction() === true;
+      return context.session.inTransaction();
     },
     runInTransaction: async (context, fn) => {
-      // If already in a transaction, just run the function
-      if (context.session?.inTransaction()) {
-        return fn(context);
-      }
-
-      const session = client.startSession();
-      try {
-        return await session.withTransaction(async () => fn({ session }));
-      } finally {
-        await session.endSession();
-      }
+      return context.session.withTransaction(async (session) => fn({ session }));
     },
   };
 };

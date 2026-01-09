@@ -1,4 +1,5 @@
 import { expectTypeOf, TestAPI, vi } from "vitest";
+import { sleep } from "../helpers/sleep.js";
 import {
   createQueuert,
   DefineContinuationInput,
@@ -374,6 +375,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     await withWorkers([await worker.start({ workerId: "worker" })], async () => {
       await jobStarted.promise;
+      await sleep(10);
 
       await queuert.withNotify(async () =>
         runInTransaction(async (context) =>
