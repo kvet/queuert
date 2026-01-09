@@ -342,7 +342,7 @@ importers:
     devDependencies:
       '@queuert/testcontainers':
         specifier: workspace:*
-        version: file:packages/testcontainers(@types/node@24.10.4)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: link:../testcontainers
       '@types/node':
         specifier: ^24.10.4
         version: 24.10.4
