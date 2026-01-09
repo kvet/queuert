@@ -22,7 +22,7 @@ import { createLogHelper, LogHelper } from "./log-helper.js";
 import { Log } from "./log.js";
 import { NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 import { createNoopNotifyAdapter } from "./notify-adapter/notify-adapter.noop.js";
-import { wrapNotifyAdapter } from "./notify-adapter/notify-adapter.wrapper.js";
+import { wrapNotifyAdapterWithLogging } from "./notify-adapter/notify-adapter.wrapper.logging.js";
 import {
   BaseStateAdapterContext,
   DeduplicationOptions,
@@ -30,7 +30,7 @@ import {
   StateAdapter,
   StateJob,
 } from "./state-adapter/state-adapter.js";
-import { wrapStateAdapter } from "./state-adapter/state-adapter.wrapper.js";
+import { wrapStateAdapterWithLogging } from "./state-adapter/state-adapter.wrapper.logging.js";
 import { CompleteCallbackOptions, RescheduleJobError } from "./worker/job-process.js";
 
 export type StartBlockersFn<
@@ -95,14 +95,16 @@ export const queuertHelper = ({
   log: Log;
 }) => {
   const logHelper = createLogHelper({ log });
-  const stateAdapter = wrapStateAdapter({
+  const stateAdapter = wrapStateAdapterWithLogging({
     stateAdapter: stateAdapterOption,
     logHelper,
   });
-  const notifyAdapter = wrapNotifyAdapter({
-    notifyAdapter: notifyAdapterOption ?? createNoopNotifyAdapter(),
-    logHelper,
-  });
+  const notifyAdapter = notifyAdapterOption
+    ? wrapNotifyAdapterWithLogging({
+        notifyAdapter: notifyAdapterOption,
+        logHelper,
+      })
+    : createNoopNotifyAdapter();
 
   const assertInTransaction = async (context: BaseStateAdapterContext): Promise<void> => {
     if (!(await stateAdapter.isInTransaction(context))) {

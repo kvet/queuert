@@ -6,7 +6,7 @@ import {
   type StateAdapter,
   type StateJob,
 } from "queuert";
-import { withRetry } from "queuert/internal";
+import { wrapStateAdapterWithRetry } from "queuert/internal";
 import { MongoStateProvider } from "../state-provider/state-provider.mongodb.js";
 import { isTransientMongoError } from "./errors.js";
 
@@ -87,104 +87,46 @@ export const createMongoStateAdapter = async <
     maxDelayMs: 10 * 1000,
   },
   isTransientError = isTransientMongoError,
-  collectionName = "queuert_jobs",
   idGenerator = () => crypto.randomUUID() as TIdType,
 }: {
   stateProvider: MongoStateProvider<TContext>;
   connectionRetryConfig?: RetryConfig;
   isTransientError?: (error: unknown) => boolean;
-  collectionName?: string;
   idGenerator?: () => TIdType;
 }): Promise<
   StateAdapter<TContext, TIdType> & {
     migrateToLatest: () => Promise<void>;
-    collectionName: string;
   }
 > => {
-  const withRetryWrapper = async <T>(fn: () => Promise<T>): Promise<T> => {
-    return withRetry(fn, connectionRetryConfig, { isRetryableError: isTransientError });
-  };
-
   const getCollection = (context: TContext): Collection<DbJob> => {
     return stateProvider.getCollection(context) as unknown as Collection<DbJob>;
   };
 
-  return {
-    collectionName,
-
+  const rawAdapter: StateAdapter<TContext, TIdType> = {
     provideContext: async (fn) => stateProvider.provideContext(fn) as ReturnType<typeof fn>,
     runInTransaction: async (context, fn) =>
       stateProvider.runInTransaction(context, fn) as ReturnType<typeof fn>,
     isInTransaction: async (context) => stateProvider.isInTransaction(context),
 
-    migrateToLatest: async () => {
-      await stateProvider.provideContext(async (context) => {
-        const collection = getCollection(context);
-
-        // Create indexes
-        await withRetryWrapper(async () => {
-          // Job acquisition index
-          await collection.createIndex(
-            { typeName: 1, scheduledAt: 1 },
-            { partialFilterExpression: { status: "pending" } },
-          );
-
-          // Sequence lookup index
-          await collection.createIndex({ sequenceId: 1, createdAt: -1 });
-
-          // Root lookup for cascading deletes
-          await collection.createIndex({ rootSequenceId: 1 });
-
-          // Deduplication lookup (use $type to filter non-null strings since $ne is not supported in partial indexes)
-          await collection.createIndex(
-            { deduplicationKey: 1, createdAt: -1 },
-            { partialFilterExpression: { deduplicationKey: { $type: "string" } } },
-          );
-
-          // Expired lease detection
-          await collection.createIndex(
-            { typeName: 1, leasedUntil: 1 },
-            { partialFilterExpression: { status: "running", leasedUntil: { $type: "date" } } },
-          );
-
-          // Blocker lookup
-          await collection.createIndex({ "blockers.blockedBySequenceId": 1 });
-
-          // Continuation uniqueness
-          await collection.createIndex(
-            { sequenceId: 1, originId: 1 },
-            { unique: true, partialFilterExpression: { originId: { $type: "string" } } },
-          );
-        });
-      });
-    },
-
     getJobSequenceById: async ({ context, jobId }) => {
-      return withRetryWrapper(async () => {
-        const collection = getCollection(context);
-        // Get root job
-        const rootJob = await collection.findOne({ _id: jobId });
-        if (!rootJob) return undefined;
+      const collection = getCollection(context);
+      // Get root job
+      const rootJob = await collection.findOne({ _id: jobId });
+      if (!rootJob) return undefined;
 
-        // Get last job in sequence
-        const lastJob = await collection.findOne(
-          { sequenceId: jobId },
-          { sort: { createdAt: -1 } },
-        );
+      // Get last job in sequence
+      const lastJob = await collection.findOne({ sequenceId: jobId }, { sort: { createdAt: -1 } });
 
-        return [
-          mapDbJobToStateJob(rootJob),
-          lastJob && lastJob._id !== rootJob._id ? mapDbJobToStateJob(lastJob) : undefined,
-        ];
-      });
+      return [
+        mapDbJobToStateJob(rootJob),
+        lastJob && lastJob._id !== rootJob._id ? mapDbJobToStateJob(lastJob) : undefined,
+      ];
     },
 
     getJobById: async ({ context, jobId }) => {
-      return withRetryWrapper(async () => {
-        const collection = getCollection(context);
-        const job = await collection.findOne({ _id: jobId });
-        return job ? mapDbJobToStateJob(job) : undefined;
-      });
+      const collection = getCollection(context);
+      const job = await collection.findOne({ _id: jobId });
+      return job ? mapDbJobToStateJob(job) : undefined;
     },
 
     createJob: async ({
@@ -198,428 +140,444 @@ export const createMongoStateAdapter = async <
       deduplication,
       schedule,
     }) => {
-      return withRetryWrapper(async () => {
-        const collection = getCollection(context);
-        const newId = idGenerator();
+      const collection = getCollection(context);
+      const newId = idGenerator();
 
-        // Check for existing continuation or deduplicated job
-        if ((sequenceId && originId) || deduplication) {
-          const existingQuery = buildDeduplicationQuery(
-            sequenceId as string | undefined,
-            originId as string | undefined,
-            deduplication,
-          );
-
-          if (existingQuery) {
-            const existing = await collection.findOne(existingQuery, { sort: { createdAt: -1 } });
-            if (existing) {
-              return { job: mapDbJobToStateJob(existing), deduplicated: true };
-            }
-          }
-        }
-
-        // Use findOneAndUpdate with upsert to get server-side timestamps via $$NOW
-        const scheduledAtExpr = schedule?.at
-          ? { $literal: schedule.at }
-          : { $add: ["$$NOW", schedule?.afterMs ?? 0] };
-
-        const job = await collection.findOneAndUpdate(
-          { _id: newId },
-          [
-            {
-              $set: {
-                _id: { $literal: newId },
-                typeName: { $literal: typeName },
-                sequenceId: { $literal: (sequenceId as string) ?? newId },
-                sequenceTypeName: { $literal: sequenceTypeName },
-                input: { $literal: input ?? null },
-                output: null,
-
-                rootSequenceId: { $literal: (rootSequenceId as string) ?? newId },
-                originId: { $literal: (originId as string) ?? null },
-
-                status: "pending",
-                createdAt: "$$NOW",
-                scheduledAt: scheduledAtExpr,
-                completedAt: null,
-                completedBy: null,
-
-                attempt: 0,
-                lastAttemptError: null,
-                lastAttemptAt: null,
-
-                leasedBy: null,
-                leasedUntil: null,
-
-                deduplicationKey: { $literal: deduplication?.key ?? null },
-
-                updatedAt: "$$NOW",
-
-                blockers: [],
-              },
-            },
-          ],
-          { upsert: true, returnDocument: "after" },
+      // Check for existing continuation or deduplicated job
+      if ((sequenceId && originId) || deduplication) {
+        const existingQuery = buildDeduplicationQuery(
+          sequenceId as string | undefined,
+          originId as string | undefined,
+          deduplication,
         );
 
-        return { job: mapDbJobToStateJob(job!), deduplicated: false };
-      });
+        if (existingQuery) {
+          const existing = await collection.findOne(existingQuery, { sort: { createdAt: -1 } });
+          if (existing) {
+            return { job: mapDbJobToStateJob(existing), deduplicated: true };
+          }
+        }
+      }
+
+      // Use findOneAndUpdate with upsert to get server-side timestamps via $$NOW
+      const scheduledAtExpr = schedule?.at
+        ? { $literal: schedule.at }
+        : { $add: ["$$NOW", schedule?.afterMs ?? 0] };
+
+      const job = await collection.findOneAndUpdate(
+        { _id: newId },
+        [
+          {
+            $set: {
+              _id: { $literal: newId },
+              typeName: { $literal: typeName },
+              sequenceId: { $literal: (sequenceId as string) ?? newId },
+              sequenceTypeName: { $literal: sequenceTypeName },
+              input: { $literal: input ?? null },
+              output: null,
+
+              rootSequenceId: { $literal: (rootSequenceId as string) ?? newId },
+              originId: { $literal: (originId as string) ?? null },
+
+              status: "pending",
+              createdAt: "$$NOW",
+              scheduledAt: scheduledAtExpr,
+              completedAt: null,
+              completedBy: null,
+
+              attempt: 0,
+              lastAttemptError: null,
+              lastAttemptAt: null,
+
+              leasedBy: null,
+              leasedUntil: null,
+
+              deduplicationKey: { $literal: deduplication?.key ?? null },
+
+              updatedAt: "$$NOW",
+
+              blockers: [],
+            },
+          },
+        ],
+        { upsert: true, returnDocument: "after" },
+      );
+
+      return { job: mapDbJobToStateJob(job!), deduplicated: false };
     },
 
     addJobBlockers: async ({ context, jobId, blockedBySequenceIds }) => {
-      return withRetryWrapper(async () => {
-        const collection = getCollection(context);
-        // Add blockers to the job
-        const blockers = blockedBySequenceIds.map((id, index) => ({
-          blockedBySequenceId: id as string,
-          index,
-        }));
+      const collection = getCollection(context);
+      // Add blockers to the job
+      const blockers = blockedBySequenceIds.map((id, index) => ({
+        blockedBySequenceId: id as string,
+        index,
+      }));
 
-        await collection.updateOne({ _id: jobId }, { $push: { blockers: { $each: blockers } } });
+      await collection.updateOne({ _id: jobId }, { $push: { blockers: { $each: blockers } } });
 
-        // Check status of each blocker
-        const incompleteBlockerSequenceIds: string[] = [];
+      // Check status of each blocker
+      const incompleteBlockerSequenceIds: string[] = [];
 
-        for (const blocker of blockers) {
-          // Get the last job in the blocker sequence
+      for (const blocker of blockers) {
+        // Get the last job in the blocker sequence
+        const lastBlockerJob = await collection.findOne(
+          { sequenceId: blocker.blockedBySequenceId },
+          { sort: { createdAt: -1 } },
+        );
+
+        if (!lastBlockerJob || lastBlockerJob.status !== "completed") {
+          incompleteBlockerSequenceIds.push(blocker.blockedBySequenceId);
+        }
+      }
+
+      // If there are incomplete blockers, update status to blocked
+      if (incompleteBlockerSequenceIds.length > 0) {
+        const updatedJob = await collection.findOneAndUpdate(
+          { _id: jobId, status: "pending" },
+          { $set: { status: "blocked", updatedAt: new Date() } },
+          { returnDocument: "after" },
+        );
+
+        if (updatedJob) {
+          return { job: mapDbJobToStateJob(updatedJob), incompleteBlockerSequenceIds };
+        }
+      }
+
+      const job = await collection.findOne({ _id: jobId });
+      return { job: mapDbJobToStateJob(job!), incompleteBlockerSequenceIds: [] };
+    },
+
+    scheduleBlockedJobs: async ({ context, blockedBySequenceId }) => {
+      const collection = getCollection(context);
+      // Find all jobs that have this sequence as a blocker
+      const blockedJobs = await collection
+        .find({
+          "blockers.blockedBySequenceId": blockedBySequenceId,
+          status: "blocked",
+        })
+        .toArray();
+
+      const scheduledJobs: StateJob[] = [];
+
+      for (const blockedJob of blockedJobs) {
+        const dbJob = blockedJob as unknown as DbJob;
+        // Check if all blockers are completed
+        let allBlockersCompleted = true;
+
+        for (const blocker of dbJob.blockers) {
           const lastBlockerJob = await collection.findOne(
             { sequenceId: blocker.blockedBySequenceId },
             { sort: { createdAt: -1 } },
           );
 
           if (!lastBlockerJob || lastBlockerJob.status !== "completed") {
-            incompleteBlockerSequenceIds.push(blocker.blockedBySequenceId);
+            allBlockersCompleted = false;
+            break;
           }
         }
 
-        // If there are incomplete blockers, update status to blocked
-        if (incompleteBlockerSequenceIds.length > 0) {
+        if (allBlockersCompleted) {
+          // Use aggregation pipeline for server-side date computation with $$NOW
           const updatedJob = await collection.findOneAndUpdate(
-            { _id: jobId, status: "pending" },
-            { $set: { status: "blocked", updatedAt: new Date() } },
+            { _id: dbJob._id, status: "blocked" },
+            [{ $set: { status: "pending", scheduledAt: "$$NOW", updatedAt: "$$NOW" } }],
             { returnDocument: "after" },
           );
 
           if (updatedJob) {
-            return { job: mapDbJobToStateJob(updatedJob), incompleteBlockerSequenceIds };
+            scheduledJobs.push(mapDbJobToStateJob(updatedJob));
           }
         }
+      }
 
-        const job = await collection.findOne({ _id: jobId });
-        return { job: mapDbJobToStateJob(job!), incompleteBlockerSequenceIds: [] };
-      });
-    },
-
-    scheduleBlockedJobs: async ({ context, blockedBySequenceId }) => {
-      return withRetryWrapper(async () => {
-        const collection = getCollection(context);
-        // Find all jobs that have this sequence as a blocker
-        const blockedJobs = await collection
-          .find({
-            "blockers.blockedBySequenceId": blockedBySequenceId,
-            status: "blocked",
-          })
-          .toArray();
-
-        const scheduledJobs: StateJob[] = [];
-
-        for (const blockedJob of blockedJobs) {
-          const dbJob = blockedJob as unknown as DbJob;
-          // Check if all blockers are completed
-          let allBlockersCompleted = true;
-
-          for (const blocker of dbJob.blockers) {
-            const lastBlockerJob = await collection.findOne(
-              { sequenceId: blocker.blockedBySequenceId },
-              { sort: { createdAt: -1 } },
-            );
-
-            if (!lastBlockerJob || lastBlockerJob.status !== "completed") {
-              allBlockersCompleted = false;
-              break;
-            }
-          }
-
-          if (allBlockersCompleted) {
-            // Use aggregation pipeline for server-side date computation with $$NOW
-            const updatedJob = await collection.findOneAndUpdate(
-              { _id: dbJob._id, status: "blocked" },
-              [{ $set: { status: "pending", scheduledAt: "$$NOW", updatedAt: "$$NOW" } }],
-              { returnDocument: "after" },
-            );
-
-            if (updatedJob) {
-              scheduledJobs.push(mapDbJobToStateJob(updatedJob));
-            }
-          }
-        }
-
-        return scheduledJobs;
-      });
+      return scheduledJobs;
     },
 
     getJobBlockers: async ({ context, jobId }) => {
-      return withRetryWrapper(async () => {
-        const collection = getCollection(context);
-        const job = await collection.findOne({ _id: jobId });
-        if (!job) return [];
+      const collection = getCollection(context);
+      const job = await collection.findOne({ _id: jobId });
+      if (!job) return [];
 
-        const dbJob = job as unknown as DbJob;
-        const result: [StateJob, StateJob | undefined][] = [];
+      const dbJob = job as unknown as DbJob;
+      const result: [StateJob, StateJob | undefined][] = [];
 
-        // Sort blockers by index
-        const sortedBlockers = [...dbJob.blockers].sort((a, b) => a.index - b.index);
+      // Sort blockers by index
+      const sortedBlockers = [...dbJob.blockers].sort((a, b) => a.index - b.index);
 
-        for (const blocker of sortedBlockers) {
-          // Get root job of blocker sequence
-          const rootJob = await collection.findOne({ _id: blocker.blockedBySequenceId });
-          if (!rootJob) continue;
+      for (const blocker of sortedBlockers) {
+        // Get root job of blocker sequence
+        const rootJob = await collection.findOne({ _id: blocker.blockedBySequenceId });
+        if (!rootJob) continue;
 
-          // Get last job in sequence
-          const lastJob = await collection.findOne(
-            { sequenceId: blocker.blockedBySequenceId },
-            { sort: { createdAt: -1 } },
-          );
+        // Get last job in sequence
+        const lastJob = await collection.findOne(
+          { sequenceId: blocker.blockedBySequenceId },
+          { sort: { createdAt: -1 } },
+        );
 
-          result.push([
-            mapDbJobToStateJob(rootJob),
-            lastJob && lastJob._id !== rootJob._id ? mapDbJobToStateJob(lastJob) : undefined,
-          ]);
-        }
+        result.push([
+          mapDbJobToStateJob(rootJob),
+          lastJob && lastJob._id !== rootJob._id ? mapDbJobToStateJob(lastJob) : undefined,
+        ]);
+      }
 
-        return result;
-      });
+      return result;
     },
 
     getNextJobAvailableInMs: async ({ context, typeNames }) => {
-      return withRetryWrapper(async () => {
-        const collection = getCollection(context);
-        const job = await collection.findOne(
-          {
-            typeName: { $in: typeNames },
-            status: "pending",
-          },
-          { sort: { scheduledAt: 1 }, projection: { scheduledAt: 1 } },
-        );
+      const collection = getCollection(context);
+      const job = await collection.findOne(
+        {
+          typeName: { $in: typeNames },
+          status: "pending",
+        },
+        { sort: { scheduledAt: 1 }, projection: { scheduledAt: 1 } },
+      );
 
-        if (!job) return null;
+      if (!job) return null;
 
-        const scheduledAt = (job as unknown as DbJob).scheduledAt;
-        const now = new Date();
-        const diff = scheduledAt.getTime() - now.getTime();
+      const scheduledAt = (job as unknown as DbJob).scheduledAt;
+      const now = new Date();
+      const diff = scheduledAt.getTime() - now.getTime();
 
-        return Math.max(0, diff);
-      });
+      return Math.max(0, diff);
     },
 
     acquireJob: async ({ context, typeNames }) => {
-      return withRetryWrapper(async () => {
-        const collection = getCollection(context);
+      const collection = getCollection(context);
 
-        // Use aggregation pipeline for server-side date computation with $$NOW
-        const job = await collection.findOneAndUpdate(
+      // Use aggregation pipeline for server-side date computation with $$NOW
+      const job = await collection.findOneAndUpdate(
+        {
+          typeName: { $in: typeNames },
+          status: "pending",
+          scheduledAt: { $lte: new Date() },
+        },
+        [
           {
-            typeName: { $in: typeNames },
-            status: "pending",
-            scheduledAt: { $lte: new Date() },
-          },
-          [
-            {
-              $set: {
-                status: "running",
-                updatedAt: "$$NOW",
-                attempt: { $add: ["$attempt", 1] },
-              },
+            $set: {
+              status: "running",
+              updatedAt: "$$NOW",
+              attempt: { $add: ["$attempt", 1] },
             },
-          ],
-          { sort: { scheduledAt: 1 }, returnDocument: "after" },
-        );
+          },
+        ],
+        { sort: { scheduledAt: 1 }, returnDocument: "after" },
+      );
 
-        return job ? mapDbJobToStateJob(job) : undefined;
-      });
+      return job ? mapDbJobToStateJob(job) : undefined;
     },
 
     renewJobLease: async ({ context, jobId, workerId, leaseDurationMs }) => {
-      return withRetryWrapper(async () => {
-        const collection = getCollection(context);
+      const collection = getCollection(context);
 
-        // Use aggregation pipeline for server-side date computation with $$NOW
-        const job = await collection.findOneAndUpdate(
-          { _id: jobId },
-          [
-            {
-              $set: {
-                leasedBy: { $literal: workerId },
-                leasedUntil: { $add: ["$$NOW", leaseDurationMs] },
-                status: "running",
-                updatedAt: "$$NOW",
-              },
+      // Use aggregation pipeline for server-side date computation with $$NOW
+      const job = await collection.findOneAndUpdate(
+        { _id: jobId },
+        [
+          {
+            $set: {
+              leasedBy: { $literal: workerId },
+              leasedUntil: { $add: ["$$NOW", leaseDurationMs] },
+              status: "running",
+              updatedAt: "$$NOW",
             },
-          ],
-          { returnDocument: "after" },
-        );
+          },
+        ],
+        { returnDocument: "after" },
+      );
 
-        return mapDbJobToStateJob(job!);
-      });
+      return mapDbJobToStateJob(job!);
     },
 
     rescheduleJob: async ({ context, jobId, schedule, error }) => {
-      return withRetryWrapper(async () => {
-        const collection = getCollection(context);
+      const collection = getCollection(context);
 
-        // Use aggregation pipeline for server-side date computation with $$NOW
-        const job = await collection.findOneAndUpdate(
-          { _id: jobId },
-          [
-            {
-              $set: {
-                scheduledAt: schedule.at
-                  ? { $literal: schedule.at }
-                  : { $add: ["$$NOW", schedule.afterMs] },
-                lastAttemptAt: "$$NOW",
-                lastAttemptError: { $literal: error },
-                leasedBy: null,
-                leasedUntil: null,
-                status: "pending",
-                updatedAt: "$$NOW",
-              },
+      // Use aggregation pipeline for server-side date computation with $$NOW
+      const job = await collection.findOneAndUpdate(
+        { _id: jobId },
+        [
+          {
+            $set: {
+              scheduledAt: schedule.at
+                ? { $literal: schedule.at }
+                : { $add: ["$$NOW", schedule.afterMs] },
+              lastAttemptAt: "$$NOW",
+              lastAttemptError: { $literal: error },
+              leasedBy: null,
+              leasedUntil: null,
+              status: "pending",
+              updatedAt: "$$NOW",
             },
-          ],
-          { returnDocument: "after" },
-        );
+          },
+        ],
+        { returnDocument: "after" },
+      );
 
-        return mapDbJobToStateJob(job!);
-      });
+      return mapDbJobToStateJob(job!);
     },
 
     completeJob: async ({ context, jobId, output, workerId }) => {
-      return withRetryWrapper(async () => {
-        const collection = getCollection(context);
+      const collection = getCollection(context);
 
-        // Use aggregation pipeline for server-side date computation with $$NOW
-        const job = await collection.findOneAndUpdate(
-          { _id: jobId },
-          [
-            {
-              $set: {
-                status: "completed",
-                completedAt: "$$NOW",
-                completedBy: { $literal: workerId },
-                output: { $literal: output ?? null },
-                leasedBy: null,
-                leasedUntil: null,
-                updatedAt: "$$NOW",
-              },
+      // Use aggregation pipeline for server-side date computation with $$NOW
+      const job = await collection.findOneAndUpdate(
+        { _id: jobId },
+        [
+          {
+            $set: {
+              status: "completed",
+              completedAt: "$$NOW",
+              completedBy: { $literal: workerId },
+              output: { $literal: output ?? null },
+              leasedBy: null,
+              leasedUntil: null,
+              updatedAt: "$$NOW",
             },
-          ],
-          { returnDocument: "after" },
-        );
+          },
+        ],
+        { returnDocument: "after" },
+      );
 
-        return mapDbJobToStateJob(job!);
-      });
+      return mapDbJobToStateJob(job!);
     },
 
     removeExpiredJobLease: async ({ context, typeNames }) => {
-      return withRetryWrapper(async () => {
-        const collection = getCollection(context);
+      const collection = getCollection(context);
 
-        // Use aggregation pipeline for server-side date computation with $$NOW
-        const job = await collection.findOneAndUpdate(
+      // Use aggregation pipeline for server-side date computation with $$NOW
+      const job = await collection.findOneAndUpdate(
+        {
+          typeName: { $in: typeNames },
+          status: "running",
+          leasedUntil: { $lt: new Date(), $ne: null },
+        },
+        [
           {
-            typeName: { $in: typeNames },
-            status: "running",
-            leasedUntil: { $lt: new Date(), $ne: null },
-          },
-          [
-            {
-              $set: {
-                leasedBy: null,
-                leasedUntil: null,
-                status: "pending",
-                updatedAt: "$$NOW",
-              },
+            $set: {
+              leasedBy: null,
+              leasedUntil: null,
+              status: "pending",
+              updatedAt: "$$NOW",
             },
-          ],
-          { sort: { leasedUntil: 1 }, returnDocument: "after" },
-        );
+          },
+        ],
+        { sort: { leasedUntil: 1 }, returnDocument: "after" },
+      );
 
-        return job ? mapDbJobToStateJob(job) : undefined;
-      });
+      return job ? mapDbJobToStateJob(job) : undefined;
     },
 
     getExternalBlockers: async ({ context, rootSequenceIds }) => {
-      return withRetryWrapper(async () => {
-        const collection = getCollection(context);
-        const rootSequenceIdSet = new Set(rootSequenceIds as string[]);
+      const collection = getCollection(context);
+      const rootSequenceIdSet = new Set(rootSequenceIds as string[]);
 
-        // Find all jobs in the given roots
-        const jobsInRoots = await collection
-          .find(
-            { rootSequenceId: { $in: rootSequenceIds as string[] } },
-            { projection: { _id: 1 } },
-          )
-          .toArray();
-        const jobIdsInRoots = new Set(jobsInRoots.map((j) => j._id));
+      // Find all jobs in the given roots
+      const jobsInRoots = await collection
+        .find({ rootSequenceId: { $in: rootSequenceIds as string[] } }, { projection: { _id: 1 } })
+        .toArray();
+      const jobIdsInRoots = new Set(jobsInRoots.map((j) => j._id));
 
-        // Find jobs outside these roots that have blockers pointing to jobs in these roots
-        const externalJobs = await collection
-          .find({
-            rootSequenceId: { $nin: rootSequenceIds as string[] },
-            "blockers.blockedBySequenceId": { $in: Array.from(jobIdsInRoots) },
-          })
-          .toArray();
+      // Find jobs outside these roots that have blockers pointing to jobs in these roots
+      const externalJobs = await collection
+        .find({
+          rootSequenceId: { $nin: rootSequenceIds as string[] },
+          "blockers.blockedBySequenceId": { $in: Array.from(jobIdsInRoots) },
+        })
+        .toArray();
 
-        const result: { jobId: TIdType; blockedRootSequenceId: TIdType }[] = [];
+      const result: { jobId: TIdType; blockedRootSequenceId: TIdType }[] = [];
 
-        for (const externalJob of externalJobs) {
-          for (const blocker of externalJob.blockers) {
-            if (jobIdsInRoots.has(blocker.blockedBySequenceId)) {
-              // Find the root of this blocker
-              const blockerJob = await collection.findOne({ _id: blocker.blockedBySequenceId });
-              if (blockerJob && rootSequenceIdSet.has(blockerJob.rootSequenceId)) {
-                result.push({
-                  jobId: externalJob._id as TIdType,
-                  blockedRootSequenceId: blockerJob.rootSequenceId as TIdType,
-                });
-              }
+      for (const externalJob of externalJobs) {
+        for (const blocker of externalJob.blockers) {
+          if (jobIdsInRoots.has(blocker.blockedBySequenceId)) {
+            // Find the root of this blocker
+            const blockerJob = await collection.findOne({ _id: blocker.blockedBySequenceId });
+            if (blockerJob && rootSequenceIdSet.has(blockerJob.rootSequenceId)) {
+              result.push({
+                jobId: externalJob._id as TIdType,
+                blockedRootSequenceId: blockerJob.rootSequenceId as TIdType,
+              });
             }
           }
         }
+      }
 
-        return result;
-      });
+      return result;
     },
 
     deleteJobsByRootSequenceIds: async ({ context, rootSequenceIds }) => {
-      return withRetryWrapper(async () => {
-        const collection = getCollection(context);
-        // First get all jobs that will be deleted
-        const jobs = await collection
-          .find({ rootSequenceId: { $in: rootSequenceIds as string[] } })
-          .toArray();
+      const collection = getCollection(context);
+      // First get all jobs that will be deleted
+      const jobs = await collection
+        .find({ rootSequenceId: { $in: rootSequenceIds as string[] } })
+        .toArray();
 
-        // Delete them
-        await collection.deleteMany({ rootSequenceId: { $in: rootSequenceIds as string[] } });
+      // Delete them
+      await collection.deleteMany({ rootSequenceId: { $in: rootSequenceIds as string[] } });
 
-        return jobs.map(mapDbJobToStateJob);
-      });
+      return jobs.map(mapDbJobToStateJob);
     },
 
     getJobForUpdate: async ({ context, jobId }) => {
-      return withRetryWrapper(async () => {
-        const collection = getCollection(context);
-        // In MongoDB, within a transaction, reads are consistent
-        // There's no explicit FOR UPDATE, but the transaction provides isolation
-        const job = await collection.findOne({ _id: jobId });
-        return job ? mapDbJobToStateJob(job) : undefined;
-      });
+      const collection = getCollection(context);
+      // In MongoDB, within a transaction, reads are consistent
+      // There's no explicit FOR UPDATE, but the transaction provides isolation
+      const job = await collection.findOne({ _id: jobId });
+      return job ? mapDbJobToStateJob(job) : undefined;
     },
 
     getCurrentJobForUpdate: async ({ context, sequenceId }) => {
-      return withRetryWrapper(async () => {
+      const collection = getCollection(context);
+      const job = await collection.findOne({ sequenceId }, { sort: { createdAt: -1 } });
+      return job ? mapDbJobToStateJob(job) : undefined;
+    },
+  };
+
+  return {
+    ...wrapStateAdapterWithRetry({
+      stateAdapter: rawAdapter,
+      retryConfig: connectionRetryConfig,
+      isRetryableError: isTransientError,
+    }),
+    migrateToLatest: async () => {
+      await stateProvider.provideContext(async (context) => {
         const collection = getCollection(context);
-        const job = await collection.findOne({ sequenceId }, { sort: { createdAt: -1 } });
-        return job ? mapDbJobToStateJob(job) : undefined;
+
+        // Create indexes
+        // Job acquisition index
+        await collection.createIndex(
+          { typeName: 1, scheduledAt: 1 },
+          { partialFilterExpression: { status: "pending" } },
+        );
+
+        // Sequence lookup index
+        await collection.createIndex({ sequenceId: 1, createdAt: -1 });
+
+        // Root lookup for cascading deletes
+        await collection.createIndex({ rootSequenceId: 1 });
+
+        // Deduplication lookup (use $type to filter non-null strings since $ne is not supported in partial indexes)
+        await collection.createIndex(
+          { deduplicationKey: 1, createdAt: -1 },
+          { partialFilterExpression: { deduplicationKey: { $type: "string" } } },
+        );
+
+        // Expired lease detection
+        await collection.createIndex(
+          { typeName: 1, leasedUntil: 1 },
+          { partialFilterExpression: { status: "running", leasedUntil: { $type: "date" } } },
+        );
+
+        // Blocker lookup
+        await collection.createIndex({ "blockers.blockedBySequenceId": 1 });
+
+        // Continuation uniqueness
+        await collection.createIndex(
+          { sequenceId: 1, originId: 1 },
+          { unique: true, partialFilterExpression: { originId: { $type: "string" } } },
+        );
       });
     },
   };

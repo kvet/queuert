@@ -23,7 +23,6 @@ it("should infer types correctly with custom ID", async ({ mongoConnectionString
 
   const stateAdapter = await createMongoStateAdapter({
     stateProvider,
-    collectionName,
     idGenerator: () => `job.${crypto.randomUUID()}` as `job.${string}`,
   });
 

@@ -11,7 +11,7 @@ import {
   type StateAdapter,
   type StateJob,
 } from "queuert";
-import { withRetry } from "queuert/internal";
+import { wrapStateAdapterWithRetry } from "queuert/internal";
 import { PgStateProvider } from "../state-provider/state-provider.pg.js";
 import { isTransientPgError } from "./errors.js";
 import {
@@ -112,27 +112,14 @@ export const createPgStateAdapter = async <
     ? { params?: undefined }
     : { params: UnwrapNamedParameters<TParams> })): Promise<TResult> => {
     const resolvedSql = applyTemplate(sql);
-    return withRetry(
-      async () => stateProvider.executeSql(context, resolvedSql.sql, params) as Promise<TResult>,
-      connectionRetryConfig,
-      { isRetryableError: isTransientError },
-    );
+    return stateProvider.executeSql(context, resolvedSql.sql, params) as Promise<TResult>;
   };
 
-  return {
+  const rawAdapter: StateAdapter<TContext, TIdType> = {
     provideContext: async (fn) => stateProvider.provideContext(fn) as ReturnType<typeof fn>,
     runInTransaction: async (context, fn) =>
       stateProvider.runInTransaction(context, fn) as ReturnType<typeof fn>,
     isInTransaction: async (context) => stateProvider.isInTransaction(context),
-
-    migrateToLatest: async () => {
-      await stateProvider.provideContext(async (context) => {
-        await executeTypedSql({
-          context,
-          sql: migrateSql,
-        });
-      });
-    },
 
     getJobSequenceById: async ({ context, jobId }) => {
       const [jobSequence] = await executeTypedSql({
@@ -310,6 +297,22 @@ export const createPgStateAdapter = async <
         params: [sequenceId],
       });
       return job ? mapDbJobToStateJob(job) : undefined;
+    },
+  };
+
+  return {
+    ...wrapStateAdapterWithRetry({
+      stateAdapter: rawAdapter,
+      retryConfig: connectionRetryConfig,
+      isRetryableError: isTransientError,
+    }),
+    migrateToLatest: async () => {
+      await stateProvider.provideContext(async (context) => {
+        await executeTypedSql({
+          context,
+          sql: migrateSql,
+        });
+      });
     },
   };
 };

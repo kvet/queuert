@@ -11,7 +11,7 @@ import {
   type StateAdapter,
   type StateJob,
 } from "queuert";
-import { withRetry } from "queuert/internal";
+import { wrapStateAdapterWithRetry } from "queuert/internal";
 import { SqliteStateProvider } from "../state-provider/state-provider.sqlite.js";
 import { isTransientSqliteError } from "./errors.js";
 import {
@@ -188,31 +188,19 @@ export const createSqliteStateAdapter = async <
     ? { params?: undefined }
     : { params: UnwrapNamedParameters<TParams> })): Promise<TResult> => {
     const resolvedSql = applyTemplate(sql);
-    return withRetry(
-      async () =>
-        stateProvider.executeSql(
-          context,
-          resolvedSql.sql,
-          params,
-          resolvedSql.returns,
-        ) as Promise<TResult>,
-      connectionRetryConfig,
-      { isRetryableError: isTransientError },
-    );
+    return stateProvider.executeSql(
+      context,
+      resolvedSql.sql,
+      params,
+      resolvedSql.returns,
+    ) as Promise<TResult>;
   };
 
-  return {
+  const rawAdapter: StateAdapter<TContext, TIdType> = {
     provideContext: async (fn) => stateProvider.provideContext(fn) as ReturnType<typeof fn>,
     runInTransaction: async (context, fn) =>
       stateProvider.runInTransaction(context, fn) as ReturnType<typeof fn>,
     isInTransaction: async (context) => stateProvider.isInTransaction(context),
-
-    migrateToLatest: async () => {
-      await stateProvider.provideContext(async (context) => {
-        const db = (context as unknown as { db: { exec: (sqlStr: string) => void } }).db;
-        db.exec(applyTemplate(migrateSql).sql);
-      });
-    },
 
     getJobSequenceById: async ({ context, jobId }) => {
       const [row] = await executeTypedSql({
@@ -479,6 +467,20 @@ export const createSqliteStateAdapter = async <
         params: [sequenceId],
       });
       return job ? mapDbJobToStateJob(job) : undefined;
+    },
+  };
+
+  return {
+    ...wrapStateAdapterWithRetry({
+      stateAdapter: rawAdapter,
+      retryConfig: connectionRetryConfig,
+      isRetryableError: isTransientError,
+    }),
+    migrateToLatest: async () => {
+      await stateProvider.provideContext(async (context) => {
+        const db = (context as unknown as { db: { exec: (sqlStr: string) => void } }).db;
+        db.exec(applyTemplate(migrateSql).sql);
+      });
     },
   };
 };

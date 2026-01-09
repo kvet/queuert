@@ -16,7 +16,7 @@ Core abstractions, interfaces, and in-memory implementations for testing.
 
 - `.` (main): `createQueuert`, `createConsoleLog`, adapter interfaces (`StateAdapter`, `NotifyAdapter`), type definitions, error classes, in-process adapters (`createInProcessStateAdapter`, `createInProcessNotifyAdapter`)
 - `./testing`: Test suites and context helpers for adapter packages (`processTestSuite`, `sequencesTestSuite`, etc., `extendWithCommon`, `extendWithStateInProcess`)
-- `./internal`: Internal utilities for adapter packages only (`withRetry`, `createAsyncLock`)
+- `./internal`: Internal utilities for adapter packages only (`withRetry`, `createAsyncLock`, `wrapStateAdapterWithRetry`)
 
 ### `@queuert/postgres`
 
@@ -74,7 +74,6 @@ MongoDB state adapter implementation. Users provide their own MongoDB client.
 **Configuration options:**
 
 - `stateProvider`: MongoDB state provider implementation
-- `collectionName`: Collection name for jobs (default: `"queuert_jobs"`)
 - `idGenerator`: Function returning job ID strings (default: `() => crypto.randomUUID()`)
 - `connectionRetryConfig`: Retry configuration for transient connection errors
 - `isTransientError`: Custom function to identify transient errors
@@ -429,8 +428,9 @@ In-process and internal-only factories remain sync since they have no I/O:
 - `JobAlreadyCompletedError`: Error thrown when attempting to complete a job that was already completed (by another worker or workerless completion).
 - `WaitForJobSequenceCompletionTimeoutError`: Error thrown when `waitForJobSequenceCompletion` times out before the sequence completes.
 - `StateNotInTransactionError`: Error thrown when operations requiring a transaction (e.g., `startJobSequence`, `deleteJobSequences`, `completeJobSequence`) are called outside a transaction context.
-- `wrapStateAdapter`: Helper function that wraps a `StateAdapter` to log errors via `LogHelper.stateAdapterError` before re-throwing. Infrastructure methods (`provideContext`, `runInTransaction`, `isInTransaction`) are passed through without wrapping.
-- `wrapNotifyAdapter`: Helper function that wraps a `NotifyAdapter` to log errors via `LogHelper.notifyAdapterError` before re-throwing.
+- `wrapStateAdapterWithLogging`: Helper function that wraps a `StateAdapter` to log errors via `LogHelper.stateAdapterError` before re-throwing. Infrastructure methods (`provideContext`, `runInTransaction`, `isInTransaction`) are passed through without wrapping.
+- `wrapNotifyAdapterWithLogging`: Helper function that wraps a `NotifyAdapter` to log errors via `LogHelper.notifyAdapterError` before re-throwing.
+- `wrapStateAdapterWithRetry`: Helper function that wraps a `StateAdapter` with retry logic for transient errors. Infrastructure methods are passed through without wrapping.
 - `ScheduleOptions`: Discriminated union type for deferred scheduling: `{ at: Date; afterMs?: never }` or `{ at?: never; afterMs: number }`. Used with `schedule` parameter in `startJobSequence` and `continueWith`.
 - `schedule`: Optional parameter in `startJobSequence` and `continueWith` for deferred job execution. Accepts `ScheduleOptions`. Jobs are created transactionally but not processable until the specified time. `afterMs` is computed at the database level using `now() + interval` to avoid clock skew.
 - `rescheduleJob`: Helper function to reschedule a job from within a process function. Takes `ScheduleOptions` and optional cause. Throws `RescheduleJobError`.

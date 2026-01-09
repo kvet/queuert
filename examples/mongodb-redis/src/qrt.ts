@@ -41,7 +41,6 @@ export const createQrt = async ({
 
   const stateAdapter = await createMongoStateAdapter({
     stateProvider,
-    collectionName,
   });
 
   await stateAdapter.migrateToLatest();

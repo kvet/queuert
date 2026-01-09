@@ -125,7 +125,7 @@ export const extendWithStateMongodb = <
           db,
           collectionName,
         });
-        const stateAdapter = await createMongoStateAdapter({ stateProvider, collectionName });
+        const stateAdapter = await createMongoStateAdapter({ stateProvider });
 
         await stateAdapter.migrateToLatest();
 
@@ -197,7 +197,7 @@ export const extendWithStateMongodb = <
     ],
     stateAdapter: [
       async ({ stateProvider }, use) => {
-        return use(await createMongoStateAdapter({ stateProvider, collectionName }));
+        return use(await createMongoStateAdapter({ stateProvider }));
       },
       { scope: "test" },
     ],
@@ -206,7 +206,6 @@ export const extendWithStateMongodb = <
         return use(
           await createMongoStateAdapter({
             stateProvider: flakyStateProvider,
-            collectionName,
             connectionRetryConfig: {
               maxAttempts: 3,
               initialDelayMs: 1,
