@@ -1,10 +1,10 @@
-import winston from "winston";
 import {
-  createQueuert,
-  createInProcessStateAdapter,
   createInProcessNotifyAdapter,
+  createInProcessStateAdapter,
+  createQueuert,
   defineUnionJobTypes,
 } from "queuert";
+import winston from "winston";
 import { createWinstonLog } from "./log.js";
 
 // 1. Create Winston logger with console transport
@@ -102,5 +102,3 @@ logger.info("Retry job completed after failure", { output: retryCompleted.output
 
 // 7. Cleanup
 await stopWorker();
-
-process.exit(0);

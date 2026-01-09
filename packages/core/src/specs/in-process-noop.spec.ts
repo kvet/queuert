@@ -7,12 +7,18 @@ import { processTestSuite } from "../suites/process.test-suite.js";
 import { reaperTestSuite } from "../suites/reaper.test-suite.js";
 import { schedulingTestSuite } from "../suites/scheduling.test-suite.js";
 import { sequencesTestSuite } from "../suites/sequences.test-suite.js";
-import { extendWithCommon, extendWithNoopNotify } from "../suites/spec-context.spec-helper.js";
+import {
+  extendWithCommon,
+  extendWithNoopNotify,
+  extendWithResourceLeakDetection,
+} from "../suites/spec-context.spec-helper.js";
 import { waitSequenceCompletionTestSuite } from "../suites/wait-sequence-completion.test-suite.js";
 import { workerTestSuite } from "../suites/worker.test-suite.js";
 import { workerlessCompletionTestSuite } from "../suites/workerless-completion.test-suite.js";
 
-const inProcessNoopIt = extendWithNoopNotify(extendWithCommon(extendWithStateInProcess(it)));
+const inProcessNoopIt = extendWithResourceLeakDetection(
+  extendWithNoopNotify(extendWithCommon(extendWithStateInProcess(it))),
+);
 
 describe("Process", () => {
   processTestSuite({ it: inProcessNoopIt });

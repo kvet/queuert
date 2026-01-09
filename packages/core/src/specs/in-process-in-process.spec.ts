@@ -6,13 +6,17 @@ import { processTestSuite } from "../suites/process.test-suite.js";
 import { reaperTestSuite } from "../suites/reaper.test-suite.js";
 import { schedulingTestSuite } from "../suites/scheduling.test-suite.js";
 import { sequencesTestSuite } from "../suites/sequences.test-suite.js";
-import { extendWithCommon, extendWithInProcessNotify } from "../suites/spec-context.spec-helper.js";
+import {
+  extendWithCommon,
+  extendWithInProcessNotify,
+  extendWithResourceLeakDetection,
+} from "../suites/spec-context.spec-helper.js";
 import { waitSequenceCompletionTestSuite } from "../suites/wait-sequence-completion.test-suite.js";
 import { workerTestSuite } from "../suites/worker.test-suite.js";
 import { workerlessCompletionTestSuite } from "../suites/workerless-completion.test-suite.js";
 
-const inProcessInProcessIt = extendWithInProcessNotify(
-  extendWithCommon(extendWithStateInProcess(it)),
+const inProcessInProcessIt = extendWithResourceLeakDetection(
+  extendWithInProcessNotify(extendWithCommon(extendWithStateInProcess(it))),
 );
 
 describe("Process", () => {

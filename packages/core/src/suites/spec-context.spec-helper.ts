@@ -108,3 +108,56 @@ export const extendWithNoopNotify = <T extends {}>(
       { scope: "test" },
     ],
   }) as any;
+
+const ALLOWED_RESOURCE_TYPES = new Set([
+  "TTYWrap", // stdin/stdout/stderr - always present
+  "FSReqCallback", // File system callbacks - transient during test execution
+  "GetAddrInfoReqWrap", // DNS lookups - transient
+]);
+
+export const extendWithResourceLeakDetection = <T extends {}>(
+  it: TestAPI<T>,
+  options?: { additionalAllowedTypes?: string[] },
+): TestAPI<T> => {
+  const allowedTypes = options?.additionalAllowedTypes
+    ? new Set([...ALLOWED_RESOURCE_TYPES, ...options.additionalAllowedTypes])
+    : ALLOWED_RESOURCE_TYPES;
+
+  return it.extend({
+    _resourceLeakCheck: [
+      async ({}, use) => {
+        const baselineCounts = new Map<string, number>();
+        for (const resource of process.getActiveResourcesInfo()) {
+          baselineCounts.set(resource, (baselineCounts.get(resource) ?? 0) + 1);
+        }
+
+        await use(undefined);
+
+        // Small delay to let any cleanup handlers run
+        await new Promise((resolve) => setImmediate(resolve));
+
+        const afterCounts = new Map<string, number>();
+        for (const resource of process.getActiveResourcesInfo()) {
+          afterCounts.set(resource, (afterCounts.get(resource) ?? 0) + 1);
+        }
+
+        const leaked: string[] = [];
+        for (const [resource, count] of afterCounts) {
+          const baselineCount = baselineCounts.get(resource) ?? 0;
+          const leakedCount = count - baselineCount;
+          if (leakedCount > 0 && !allowedTypes.has(resource)) {
+            leaked.push(`${resource} x${leakedCount}`);
+          }
+        }
+
+        if (leaked.length > 0) {
+          throw new Error(
+            `Test leaked resources: ${leaked.join(", ")}\n` +
+              `Full active resources: ${process.getActiveResourcesInfo().join(", ")}`,
+          );
+        }
+      },
+      { auto: true, scope: "test" },
+    ],
+  }) as any;
+};

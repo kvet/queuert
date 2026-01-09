@@ -1,8 +1,9 @@
-import { extendWithMongodb } from "@queuert/testcontainers";
+import { extendWithMongodb, TESTCONTAINER_RESOURCE_TYPES } from "@queuert/testcontainers";
 import {
   blockerSequencesTestSuite,
   extendWithCommon,
   extendWithInProcessNotify,
+  extendWithResourceLeakDetection,
   notifyTestSuite,
   processTestSuite,
   reaperTestSuite,
@@ -34,8 +35,11 @@ afterAll(() => {
   process.off("unhandledRejection", rejectionHandler);
 });
 
-const mongodbInProcessIt = extendWithInProcessNotify(
-  extendWithCommon(extendWithStateMongodb(extendWithMongodb(baseIt, import.meta.url))),
+const mongodbInProcessIt = extendWithResourceLeakDetection(
+  extendWithInProcessNotify(
+    extendWithCommon(extendWithStateMongodb(extendWithMongodb(baseIt, import.meta.url))),
+  ),
+  { additionalAllowedTypes: TESTCONTAINER_RESOURCE_TYPES },
 );
 
 describe("Process", () => {

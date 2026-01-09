@@ -5,7 +5,6 @@
 
 # Medium term
 
-- Investigate process not exiting cleanly after worker.stop() - Currently requires `process.exit(0)`; likely caused by `sleep()` timers or `AbortSignal.timeout()` keeping event loop alive
 - Add sequenceTypeName to Job type (Phase 2) - Type-safe generic TSequenceTypeName on Job entity
 - Metrics collection & OTEL
 - Refactor `jobTypeDefinitions` parameter - Currently required but only used for type inference; integrate with optional Zod schema to provide actual runtime value (input/output validation)

@@ -18,6 +18,7 @@ export {
   extendWithCommon,
   extendWithInProcessNotify,
   extendWithNoopNotify,
+  extendWithResourceLeakDetection,
   type TestSuiteContext,
 } from "./suites/spec-context.spec-helper.js";
 

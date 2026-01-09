@@ -1,10 +1,11 @@
-import { extendWithPostgres } from "@queuert/testcontainers";
+import { extendWithPostgres, TESTCONTAINER_RESOURCE_TYPES } from "@queuert/testcontainers";
 import {
   blockerSequencesTestSuite,
   deduplicationTestSuite,
   deletionTestSuite,
   extendWithCommon,
   extendWithNoopNotify,
+  extendWithResourceLeakDetection,
   processTestSuite,
   reaperTestSuite,
   schedulingTestSuite,
@@ -17,8 +18,11 @@ import {
 import { describe, it } from "vitest";
 import { extendWithStatePostgres } from "./state-adapter.pg.spec-helper.js";
 
-const postgresNoopIt = extendWithNoopNotify(
-  extendWithCommon(extendWithStatePostgres(extendWithPostgres(it, import.meta.url))),
+const postgresNoopIt = extendWithResourceLeakDetection(
+  extendWithNoopNotify(
+    extendWithCommon(extendWithStatePostgres(extendWithPostgres(it, import.meta.url))),
+  ),
+  { additionalAllowedTypes: TESTCONTAINER_RESOURCE_TYPES },
 );
 
 describe("Process", () => {

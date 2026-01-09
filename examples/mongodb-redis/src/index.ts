@@ -57,5 +57,3 @@ await redisSubscription.close();
 await dbConnection.client.close();
 await redisContainer.stop();
 await mongoContainer.stop();
-
-process.exit(0);

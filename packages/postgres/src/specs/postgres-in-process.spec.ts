@@ -1,8 +1,9 @@
-import { extendWithPostgres } from "@queuert/testcontainers";
+import { extendWithPostgres, TESTCONTAINER_RESOURCE_TYPES } from "@queuert/testcontainers";
 import {
   blockerSequencesTestSuite,
   extendWithCommon,
   extendWithInProcessNotify,
+  extendWithResourceLeakDetection,
   notifyTestSuite,
   processTestSuite,
   reaperTestSuite,
@@ -16,8 +17,11 @@ import {
 import { describe, it } from "vitest";
 import { extendWithStatePostgres } from "./state-adapter.pg.spec-helper.js";
 
-const postgresInProcessIt = extendWithInProcessNotify(
-  extendWithCommon(extendWithStatePostgres(extendWithPostgres(it, import.meta.url))),
+const postgresInProcessIt = extendWithResourceLeakDetection(
+  extendWithInProcessNotify(
+    extendWithCommon(extendWithStatePostgres(extendWithPostgres(it, import.meta.url))),
+  ),
+  { additionalAllowedTypes: TESTCONTAINER_RESOURCE_TYPES },
 );
 
 describe("Process", () => {

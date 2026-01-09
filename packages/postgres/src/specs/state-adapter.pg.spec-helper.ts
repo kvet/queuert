@@ -33,6 +33,7 @@ export const extendWithStatePostgres = <
       async ({ postgresConnectionString }, use) => {
         const pool = new Pool({
           connectionString: postgresConnectionString,
+          allowExitOnIdle: true, // Unref idle timeout timers to prevent resource leak detection
         });
 
         await use(pool);

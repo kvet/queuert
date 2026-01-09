@@ -56,5 +56,3 @@ await redisSubscription.close();
 await db.destroy();
 await redisContainer.stop();
 await pgContainer.stop();
-
-process.exit(0);

@@ -17,7 +17,7 @@ import {
 import { Job, JobWithoutBlockers, mapStateJobToJob, PendingJob } from "./entities/job.js";
 import { ScheduleOptions } from "./entities/schedule.js";
 import { BackoffConfig, calculateBackoffMs } from "./helpers/backoff.js";
-import { sleep } from "./helpers/sleep.js";
+import { raceWithSleep } from "./helpers/sleep.js";
 import { createLogHelper, LogHelper } from "./log-helper.js";
 import { Log } from "./log.js";
 import { NotifyAdapter } from "./notify-adapter/notify-adapter.js";
@@ -845,10 +845,7 @@ export const queuertHelper = ({
       } catch {}
       try {
         while (!combinedSignal.aborted) {
-          await Promise.race([
-            notificationPromise,
-            sleep(pollIntervalMs, { signal: combinedSignal }),
-          ]);
+          await raceWithSleep(notificationPromise, pollIntervalMs, { signal: combinedSignal });
           resetNotificationPromise();
 
           const sequence = await checkSequence();

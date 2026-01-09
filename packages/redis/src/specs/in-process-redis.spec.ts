@@ -1,6 +1,7 @@
-import { extendWithRedis } from "@queuert/testcontainers";
+import { extendWithRedis, TESTCONTAINER_RESOURCE_TYPES } from "@queuert/testcontainers";
 import {
   extendWithCommon,
+  extendWithResourceLeakDetection,
   extendWithStateInProcess,
   notifyResilienceTestSuite,
   notifyTestSuite,
@@ -8,8 +9,11 @@ import {
 import { describe, it } from "vitest";
 import { extendWithRedisNotify } from "./notify-adapter.redis.spec-helper.js";
 
-const inProcessInProcessIt = extendWithRedisNotify(
-  extendWithRedis(extendWithCommon(extendWithStateInProcess(it)), import.meta.url),
+const inProcessInProcessIt = extendWithResourceLeakDetection(
+  extendWithRedisNotify(
+    extendWithRedis(extendWithCommon(extendWithStateInProcess(it)), import.meta.url),
+  ),
+  { additionalAllowedTypes: TESTCONTAINER_RESOURCE_TYPES },
 );
 
 describe("Notify", () => {

@@ -1,8 +1,8 @@
 import pino from "pino";
 import {
-  createQueuert,
-  createInProcessStateAdapter,
   createInProcessNotifyAdapter,
+  createInProcessStateAdapter,
+  createQueuert,
   defineUnionJobTypes,
 } from "queuert";
 import { createPinoLog } from "./log.js";
@@ -95,5 +95,3 @@ logger.info({ output: retryCompleted.output }, "Retry job completed after failur
 
 // 7. Cleanup
 await stopWorker();
-
-process.exit(0);

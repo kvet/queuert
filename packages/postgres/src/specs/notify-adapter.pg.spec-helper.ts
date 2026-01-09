@@ -18,7 +18,10 @@ export const extendWithPostgresNotify = <
   }>({
     notifyAdapter: [
       async ({ postgresConnectionString }, use) => {
-        const pool = new Pool({ connectionString: postgresConnectionString });
+        const pool = new Pool({
+          connectionString: postgresConnectionString,
+          allowExitOnIdle: true, // Unref idle timeout timers to prevent resource leak detection
+        });
 
         const provider = createPgPoolNotifyProvider({ pool });
         const notifyAdapter = await createPgNotifyAdapter({

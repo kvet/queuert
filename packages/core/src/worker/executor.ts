@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { BaseJobTypeDefinitions } from "../entities/job-type.js";
 import { BackoffConfig } from "../helpers/backoff.js";
 import { withRetry } from "../helpers/retry.js";
-import { sleep } from "../helpers/sleep.js";
+import { raceWithSleep, sleep } from "../helpers/sleep.js";
 import {
   JobAlreadyCompletedError,
   JobTakenByAnotherWorkerError,
@@ -81,13 +81,10 @@ export const createExecutor = ({
         if (stopController.signal.aborted) {
           return;
         }
-        await Promise.any([
-          notified,
-          sleep(pullDelayMs, {
-            jitterMs: pullDelayMs / 10,
-            signal: stopController.signal,
-          }),
-        ]);
+        await raceWithSleep(notified, pullDelayMs, {
+          jitterMs: pullDelayMs / 10,
+          signal: stopController.signal,
+        });
       } finally {
         await dispose();
       }
