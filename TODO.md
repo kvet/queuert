@@ -1,6 +1,5 @@
 # Short term
 
-- CRITICAL: MongoDB `runInTransaction` silently bypasses when already in transaction - investigate why nested transaction calls occur and fix the root cause instead of silently ignoring
 - MongoDB: Use native ObjectId instead of app-side UUID generation
 - MongoDB: Move collection configuration from provider to adapter - Provider should only handle context/transactions, collection name is an adapter concern (like schema/tablePrefix in PostgreSQL/SQLite)
 
