@@ -5,3 +5,4 @@ export {
   type PgNotifyProvider,
   type PgNotifyProviderContextType,
 } from "./notify-provider/notify-provider.pg.js";
+export { pgLiteral } from "./sql-literal/sql-literal.pg.js";

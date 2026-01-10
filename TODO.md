@@ -1,7 +1,6 @@
 # Short term
 
 - Get rid of provide functions in adapters - Adapters should only provide transaction context
-- Think of embedding sql params into queueries for broader compatibility - e.g. `$1`, `?`, `:param`
 - executeSql can run outside transaction - for migrations; need to access the underlying client/pool
 - MongoDB: Use native ObjectId instead of app-side UUID generation
 - MongoDB: Move collection configuration from provider to adapter - Provider should only handle context/transactions, collection name is an adapter concern (like schema/tablePrefix in PostgreSQL/SQLite)
