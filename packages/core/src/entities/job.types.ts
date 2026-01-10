@@ -3,9 +3,9 @@ export type JobStatus = "blocked" | "pending" | "running" | "completed";
 export type Job<TJobId, TJobTypeName, TInput, TBlockerSequences extends any[]> = {
   id: TJobId;
   sequenceId: TJobId;
-  originId: TJobId | null;
-  rootSequenceId: TJobId;
   typeName: TJobTypeName;
+  rootSequenceId: TJobId;
+  originId: TJobId | null;
   input: TInput;
   createdAt: Date;
   scheduledAt: Date;

@@ -175,6 +175,7 @@ The `StateAdapter` type accepts three generic parameters:
 This dual-context design enables operations like migrations to run outside transactions (e.g., PostgreSQL's `CREATE INDEX CONCURRENTLY`). When transaction and general contexts are the same, use identical types for both (e.g., SQLite adapter uses `StateAdapter<TContext, TContext, TJobId>`).
 
 **Type helpers**:
+
 - `GetStateAdapterTxContext<TStateAdapter>`: Extracts the transaction context type
 - `GetStateAdapterContext<TStateAdapter>`: Extracts the general context type
 - `GetStateAdapterJobId<TStateAdapter>`: Extracts the job ID type
@@ -186,6 +187,7 @@ This dual-context design enables operations like migrations to run outside trans
 Abstracts ORM/database client operations, providing context management, transaction handling, and SQL execution. Users create their own `StateProvider` implementation to integrate with their preferred client (raw `pg`, Drizzle, Prisma, better-sqlite3, etc.) and pass it to the state adapter factory (`createPgStateAdapter` or `createSqliteStateAdapter`).
 
 State providers use dual-context generics matching `StateAdapter`:
+
 - `PgStateProvider<TTxContext, TContext>` - PostgreSQL provider
 - `SqliteStateProvider<TTxContext, TContext>` - SQLite provider
 - `MongoStateProvider<TTxContext, TContext>` - MongoDB provider
@@ -395,7 +397,23 @@ await queuert.completeJobSequence({
 
 ### First Job = Sequence (Unified Model)
 
-A JobSequence is not a separate entity - it's simply identified by its first job. The first job's ID becomes the sequence's ID (`sequenceId`). This unification provides:
+A JobSequence is not a separate entity - it's simply identified by its first job. The first job's ID becomes the sequence's ID (`sequenceId`). This mirrors how JavaScript Promises work:
+
+```javascript
+// In JavaScript, a Promise chain IS the first promise:
+const chain = fetch(url)        // chain === this promise
+  .then(processResponse)        // continuation
+  .then(formatResult);          // continuation
+
+// In Queuert, a sequence IS its first job:
+const sequence = startJobSequence(...)  // sequence.id === firstJob.id
+  .continueWith(processStep)            // continuation
+  .continueWith(formatStep);            // continuation
+```
+
+A Promise chain doesn't have a separate "chain ID" - the original promise IS the chain's identity. Similarly, in Queuert: **the first job IS the sequence**.
+
+This unification provides:
 
 **Simplicity**: One table, one type, one set of operations. No separate `job_sequence` table to manage, no joins, no synchronization issues.
 
@@ -405,7 +423,7 @@ A JobSequence is not a separate entity - it's simply identified by its first job
 - A full job that does processing and completes the sequence in one step
 - Anything in between
 
-**Natural Promise semantics**: `continueWith` mirrors how promises chain. Each job is a `.then()` step.
+**Self-referential identity**: For the first job in a sequence, `job.id === job.sequenceId`. This isn't redundant - it's a meaningful signal that identifies the sequence starter. Continuation jobs have `job.id !== job.sequenceId` but share the same `sequenceId` as all other jobs in the sequence.
 
 **Denormalization tradeoff**: `sequenceTypeName` is stored on every job for O(1) sequence-type filtering at scale. Without it, queries like `SELECT * FROM job WHERE status = 'running' AND sequence_id IN (SELECT id FROM job WHERE id = sequence_id AND type_name = 'batch-import')` become expensive with millions of records.
 

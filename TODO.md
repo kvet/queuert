@@ -1,6 +1,5 @@
 # Short term
 
-
 # Medium term
 
 - Add sequenceTypeName to Job type (Phase 2) - Type-safe generic TSequenceTypeName on Job entity

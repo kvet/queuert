@@ -116,7 +116,7 @@ An individual unit of work. Jobs have a lifecycle: `pending` → `running` → `
 
 ### Job Sequence
 
-A chain of linked jobs where each job can `continueWith` to the next. Think of it like a Promise chain - the sequence completes when its final job completes. Sequences enable multi-step workflows where each step is durably persisted.
+A chain of linked jobs where each job can `continueWith` to the next - just like a Promise chain. In fact, a sequence IS its first job, the same way a Promise chain IS the first promise. When you call `startJobSequence`, the returned `sequence.id` is the first job's ID. Continuation jobs share this `sequenceId` but have their own unique `id`. The sequence completes when its final job completes without continuing.
 
 ### Job Type
 
