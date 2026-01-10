@@ -1,14 +1,19 @@
 # Short term
 
-- MongoDB: Use native ObjectId instead of app-side UUID generation
-- MongoDB: Move collection configuration from provider to adapter - Provider should only handle context/transactions, collection name is an adapter concern (like schema/tablePrefix in PostgreSQL/SQLite)
 
 # Medium term
 
 - Add sequenceTypeName to Job type (Phase 2) - Type-safe generic TSequenceTypeName on Job entity
 - Metrics collection & OTEL
 - Refactor `jobTypeDefinitions` parameter - Currently required but only used for type inference; integrate with optional Zod schema to provide actual runtime value (input/output validation)
-- Restore generic return types on `StateProvider.provideContext` and `NotifyProvider.provideContext` - Currently uses `unknown`, should use `<T>` for type-safe return values without casting
+- Polish providers:
+  - Prepare more examples like SQLite with kysely, drizzle, prisma; redis with ioredis, node-redis
+  - Restore generic return types on `StateProvider.provideContext` and `NotifyProvider.provideContext` - Currently uses `unknown`, should use `<T>` for type-safe return values without casting
+- MonogoDB ready:
+  - MongoDB: Use native ObjectId instead of app-side UUID generation
+  - MongoDB: Move collection configuration from provider to adapter - Provider should only handle context/transactions, collection name is an adapter concern (like schema/tablePrefix in PostgreSQL/SQLite)
+  - Different mongo client libraries - e.g. Mongoose
+  - Prisma MongoDB support - via generic StateProvider interface
 
 # Long term
 
