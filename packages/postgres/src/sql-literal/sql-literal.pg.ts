@@ -104,9 +104,7 @@ export function pgLiteral(value: unknown): string {
     return escapeString(value.toString());
   }
 
-  // Exhaustive check - should never reach here
-  const _exhaustive: never = value;
-  return escapeString(String(_exhaustive));
+  throw new Error("Unable to convert value to PostgreSQL literal");
 }
 
 /**

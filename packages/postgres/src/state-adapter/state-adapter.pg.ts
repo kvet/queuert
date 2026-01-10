@@ -67,7 +67,8 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
 };
 
 export const createPgStateAdapter = async <
-  TContext extends BaseStateAdapterContext,
+  TTxContext extends BaseStateAdapterContext,
+  TContext extends BaseStateAdapterContext = TTxContext,
   TIdType extends string = UUID,
 >({
   stateProvider,
@@ -82,7 +83,7 @@ export const createPgStateAdapter = async <
   idType = "uuid",
   idDefault = "gen_random_uuid()",
 }: {
-  stateProvider: PgStateProvider<TContext, any>;
+  stateProvider: PgStateProvider<TTxContext, TContext>;
   connectionRetryConfig?: RetryConfig;
   isTransientError?: (error: unknown) => boolean;
   schema?: string;
@@ -90,7 +91,7 @@ export const createPgStateAdapter = async <
   idDefault?: string;
   $idType?: TIdType;
 }): Promise<
-  StateAdapter<TContext, TIdType> & {
+  StateAdapter<TTxContext, TContext, TIdType> & {
     migrateToLatest: () => Promise<void>;
   }
 > => {
@@ -106,20 +107,18 @@ export const createPgStateAdapter = async <
     sql,
     params,
   }: {
-    context: TContext;
+    context: TTxContext | TContext;
     sql: TypedSql<TParams, TResult>;
   } & (TParams extends readonly []
     ? { params?: undefined }
     : { params: UnwrapNamedParameters<TParams> })): Promise<TResult> => {
-    const resolvedSql = applyTemplate(sql);
-    return stateProvider.executeSql(context, resolvedSql.sql, params) as Promise<TResult>;
+    return stateProvider.executeSql(context, applyTemplate(sql).sql, params) as Promise<TResult>;
   };
 
-  const rawAdapter: StateAdapter<TContext, TIdType> = {
-    provideContext: async (fn) => stateProvider.provideContext(fn) as ReturnType<typeof fn>,
-    runInTransaction: async (context, fn) =>
-      stateProvider.runInTransaction(context, fn) as ReturnType<typeof fn>,
-    isInTransaction: async (context) => stateProvider.isInTransaction(context),
+  const rawAdapter: StateAdapter<TTxContext, TContext, TIdType> = {
+    provideContext: stateProvider.provideContext,
+    runInTransaction: stateProvider.runInTransaction,
+    isInTransaction: stateProvider.isInTransaction,
 
     getJobSequenceById: async ({ context, jobId }) => {
       const [jobSequence] = await executeTypedSql({
@@ -317,7 +316,8 @@ export const createPgStateAdapter = async <
   };
 };
 
-export type PgStateAdapter<TContext extends BaseStateAdapterContext, TJobId> = StateAdapter<
-  TContext,
-  TJobId
->;
+export type PgStateAdapter<
+  TTxContext extends BaseStateAdapterContext,
+  TContext extends BaseStateAdapterContext,
+  TJobId extends string,
+> = StateAdapter<TTxContext, TContext, TJobId>;

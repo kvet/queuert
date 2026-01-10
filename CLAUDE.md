@@ -164,18 +164,33 @@ A typed logging function for observability. All job lifecycle events are logged 
 
 ### StateAdapter
 
-Abstracts database operations for job persistence. Allows different database implementations (PostgreSQL and SQLite). Handles job creation, status transitions, leasing, and queries.
+Abstracts database operations for job persistence. Allows different database implementations (PostgreSQL, SQLite, MongoDB). Handles job creation, status transitions, leasing, and queries.
 
-The `StateAdapter` type accepts two generic parameters:
+The `StateAdapter` type accepts three generic parameters:
 
-- `TContext extends BaseStateAdapterContext`: The context type containing database client
-- `TJobId`: The job ID type used for input parameters (e.g., `jobId`, `rootSequenceIds`)
+- `TTxContext extends BaseStateAdapterContext`: Transaction context type, used within `runInTransaction` callbacks
+- `TContext extends BaseStateAdapterContext`: General context type, provided by `provideContext`
+- `TJobId extends string`: The job ID type used for input parameters (e.g., `jobId`, `rootSequenceIds`)
+
+This dual-context design enables operations like migrations to run outside transactions (e.g., PostgreSQL's `CREATE INDEX CONCURRENTLY`). When transaction and general contexts are the same, use identical types for both (e.g., SQLite adapter uses `StateAdapter<TContext, TContext, TJobId>`).
+
+**Type helpers**:
+- `GetStateAdapterTxContext<TStateAdapter>`: Extracts the transaction context type
+- `GetStateAdapterContext<TStateAdapter>`: Extracts the general context type
+- `GetStateAdapterJobId<TStateAdapter>`: Extracts the job ID type
 
 **Internal type design**: `StateJob` is a non-generic type with `string` for all ID fields (`id`, `rootSequenceId`, `sequenceId`, `originId`) and includes `sequenceTypeName` for sequence type tracking. The `StateAdapter` methods accept `TJobId` for input parameters but return plain `StateJob`. This simplifies internal code while allowing adapters to expose typed IDs to consumers via `GetStateAdapterJobId<TStateAdapter>`.
 
 ### StateProvider
 
 Abstracts ORM/database client operations, providing context management, transaction handling, and SQL execution. Users create their own `StateProvider` implementation to integrate with their preferred client (raw `pg`, Drizzle, Prisma, better-sqlite3, etc.) and pass it to the state adapter factory (`createPgStateAdapter` or `createSqliteStateAdapter`).
+
+State providers use dual-context generics matching `StateAdapter`:
+- `PgStateProvider<TTxContext, TContext>` - PostgreSQL provider
+- `SqliteStateProvider<TTxContext, TContext>` - SQLite provider
+- `MongoStateProvider<TTxContext, TContext>` - MongoDB provider
+
+When `TTxContext` differs from `TContext`, the provider can execute non-transactional operations via `provideContext` while ensuring transactional operations use `runInTransaction`.
 
 **PostgreSQL adapter configuration** (`createPgStateAdapter` options):
 

@@ -5,7 +5,7 @@ import { type TestAPI } from "vitest";
 import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.js";
 import { createPgPoolProvider, PgPoolContext, PgPoolProvider } from "./state-provider.pg-pool.js";
 
-export type PgStateAdapter = StateAdapter<PgPoolContext, string>;
+export type PgStateAdapter = StateAdapter<PgPoolContext, PgPoolContext, string>;
 
 export const extendWithStatePostgres = <
   T extends {
@@ -16,8 +16,8 @@ export const extendWithStatePostgres = <
 ): TestAPI<
   T & {
     pool: Pool;
-    stateAdapter: StateAdapter<{ $test: true }, string>;
-    flakyStateAdapter: StateAdapter<{ $test: true }, string>;
+    stateAdapter: StateAdapter<{ $test: true }, { $test: true }, string>;
+    flakyStateAdapter: StateAdapter<{ $test: true }, { $test: true }, string>;
   }
 > => {
   return api.extend<{

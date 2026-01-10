@@ -160,7 +160,7 @@ export const createSqliteStateAdapter = async <
   idType?: string;
   idGenerator?: () => TIdType;
 }): Promise<
-  StateAdapter<TContext, TIdType> & {
+  StateAdapter<TContext, TContext, TIdType> & {
     migrateToLatest: () => Promise<void>;
   }
 > => {
@@ -196,11 +196,10 @@ export const createSqliteStateAdapter = async <
     ) as Promise<TResult>;
   };
 
-  const rawAdapter: StateAdapter<TContext, TIdType> = {
-    provideContext: async (fn) => stateProvider.provideContext(fn) as ReturnType<typeof fn>,
-    runInTransaction: async (context, fn) =>
-      stateProvider.runInTransaction(context, fn) as ReturnType<typeof fn>,
-    isInTransaction: async (context) => stateProvider.isInTransaction(context),
+  const rawAdapter: StateAdapter<TContext, TContext, TIdType> = {
+    provideContext: stateProvider.provideContext,
+    runInTransaction: stateProvider.runInTransaction,
+    isInTransaction: stateProvider.isInTransaction,
 
     getJobSequenceById: async ({ context, jobId }) => {
       const [row] = await executeTypedSql({
@@ -485,7 +484,7 @@ export const createSqliteStateAdapter = async <
   };
 };
 
-export type SqliteStateAdapter<TContext extends BaseStateAdapterContext, TJobId> = StateAdapter<
-  TContext,
-  TJobId
->;
+export type SqliteStateAdapter<
+  TContext extends BaseStateAdapterContext,
+  TJobId extends string,
+> = StateAdapter<TContext, TContext, TJobId>;

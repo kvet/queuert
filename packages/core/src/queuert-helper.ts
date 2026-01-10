@@ -90,7 +90,7 @@ export const queuertHelper = ({
   notifyAdapter: notifyAdapterOption,
   log,
 }: {
-  stateAdapter: StateAdapter<BaseStateAdapterContext, any>;
+  stateAdapter: StateAdapter<BaseStateAdapterContext, BaseStateAdapterContext, any>;
   notifyAdapter?: NotifyAdapter;
   log: Log;
 }) => {
@@ -869,7 +869,7 @@ export const queuertHelper = ({
 export type ProcessHelper = ReturnType<typeof queuertHelper>;
 
 export type JobSequenceCompleteOptions<
-  TStateAdapter extends StateAdapter<any, any>,
+  TStateAdapter extends StateAdapter<any, any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TSequenceTypeName extends string,
   TCompleteReturn,
@@ -893,7 +893,7 @@ export type JobSequenceCompleteOptions<
 }) => Promise<TCompleteReturn>;
 
 export type CompleteJobSequenceResult<
-  TStateAdapter extends StateAdapter<any, any>,
+  TStateAdapter extends StateAdapter<any, any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TSequenceTypeName extends keyof TJobTypeDefinitions & string,
   TCompleteReturn,

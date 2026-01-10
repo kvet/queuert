@@ -15,7 +15,7 @@ export type RegisteredJobTypes = Map<
   string,
   {
     process: JobProcessFn<
-      StateAdapter<BaseStateAdapterContext, any>,
+      StateAdapter<BaseStateAdapterContext, BaseStateAdapterContext, any>,
       BaseJobTypeDefinitions,
       string
     >;

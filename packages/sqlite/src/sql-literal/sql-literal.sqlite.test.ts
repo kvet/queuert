@@ -50,12 +50,8 @@ describe("sqliteLiteral", () => {
 
   describe("bigint", () => {
     test("returns unquoted bigint", () => {
-      expect(sqliteLiteral(BigInt("9223372036854775807"))).toBe(
-        "9223372036854775807",
-      );
-      expect(sqliteLiteral(BigInt("-9223372036854775808"))).toBe(
-        "-9223372036854775808",
-      );
+      expect(sqliteLiteral(BigInt("9223372036854775807"))).toBe("9223372036854775807");
+      expect(sqliteLiteral(BigInt("-9223372036854775808"))).toBe("-9223372036854775808");
     });
   });
 
@@ -95,9 +91,7 @@ describe("sqliteLiteral", () => {
     });
 
     test("throws on null bytes", () => {
-      expect(() => sqliteLiteral("hello\0world")).toThrow(
-        "undefined behavior with null bytes",
-      );
+      expect(() => sqliteLiteral("hello\0world")).toThrow("undefined behavior with null bytes");
     });
   });
 
@@ -140,24 +134,27 @@ describe("sqliteLiteral", () => {
     });
 
     test("handles string arrays with escaping", () => {
-      expect(sqliteLiteral(["hello", "O'Reilly"])).toBe(
-        "'[\"hello\",\"O''Reilly\"]'",
-      );
+      expect(sqliteLiteral(["hello", "O'Reilly"])).toBe("'[\"hello\",\"O''Reilly\"]'");
     });
 
     test("handles nested arrays", () => {
-      expect(sqliteLiteral([[1, 2], [3, 4]])).toBe("'[[1,2],[3,4]]'");
+      expect(
+        sqliteLiteral([
+          [1, 2],
+          [3, 4],
+        ]),
+      ).toBe("'[[1,2],[3,4]]'");
     });
   });
 
   describe("objects (JSON)", () => {
     test("serializes as JSON string (no cast)", () => {
-      expect(sqliteLiteral({ key: "value" })).toBe("'{\"key\":\"value\"}'");
+      expect(sqliteLiteral({ key: "value" })).toBe('\'{"key":"value"}\'');
     });
 
     test("handles nested objects", () => {
       const obj = { nested: { deep: true } };
-      expect(sqliteLiteral(obj)).toBe("'{\"nested\":{\"deep\":true}}'");
+      expect(sqliteLiteral(obj)).toBe('\'{"nested":{"deep":true}}\'');
     });
 
     test("escapes quotes in JSON string", () => {
@@ -225,7 +222,7 @@ describe("sqliteLiteral", () => {
     test("object handling differs", () => {
       // PostgreSQL: '{"key":"value"}'::jsonb
       // SQLite: '{"key":"value"}' (no cast)
-      expect(sqliteLiteral({ key: "value" })).toBe("'{\"key\":\"value\"}'");
+      expect(sqliteLiteral({ key: "value" })).toBe('\'{"key":"value"}\'');
     });
   });
 });

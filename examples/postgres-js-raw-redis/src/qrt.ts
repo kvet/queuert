@@ -17,8 +17,13 @@ export const createQrt = async ({
   const stateProvider: PgStateProvider<{ sql: TransactionSql }, { sql: Sql }> = {
     provideContext: async (cb) => cb({ sql }),
     isInTransaction: async () => true,
-    runInTransaction: async ({ sql }, cb) =>
-      sql.begin(async (sql) => cb({ sql: sql as TransactionSql })),
+    runInTransaction: async ({ sql }, cb) => {
+      let result: any;
+      await sql.begin(async (sql) => {
+        result = await cb({ sql: sql as TransactionSql });
+      });
+      return result;
+    },
     executeSql: async ({ sql }, query, params) => {
       const normalizedParams = params
         ? (params as any[]).map((p) => (p === undefined ? null : p))

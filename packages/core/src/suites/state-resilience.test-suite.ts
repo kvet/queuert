@@ -5,7 +5,9 @@ import { TestSuiteContext } from "./spec-context.spec-helper.js";
 export const stateResilienceTestSuite = ({
   it,
 }: {
-  it: TestAPI<TestSuiteContext & { flakyStateAdapter: StateAdapter<{ $test: true }, string> }>;
+  it: TestAPI<
+    TestSuiteContext & { flakyStateAdapter: StateAdapter<{ $test: true }, { $test: true }, string> }
+  >;
 }): void => {
   it("handles transient database errors gracefully", async ({
     flakyStateAdapter,

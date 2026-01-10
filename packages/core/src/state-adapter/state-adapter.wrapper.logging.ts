@@ -1,13 +1,17 @@
 import { LogHelper } from "../log-helper.js";
 import { BaseStateAdapterContext, StateAdapter } from "./state-adapter.js";
 
-export const wrapStateAdapterWithLogging = <TContext extends BaseStateAdapterContext, TJobId>({
+export const wrapStateAdapterWithLogging = <
+  TTxContext extends BaseStateAdapterContext,
+  TContext extends BaseStateAdapterContext,
+  TJobId extends string,
+>({
   stateAdapter,
   logHelper,
 }: {
-  stateAdapter: StateAdapter<TContext, TJobId>;
+  stateAdapter: StateAdapter<TTxContext, TContext, TJobId>;
   logHelper: LogHelper;
-}): StateAdapter<TContext, TJobId> => {
+}): StateAdapter<TTxContext, TContext, TJobId> => {
   const wrap = <T extends (...args: never[]) => Promise<unknown>>(
     operationName: string,
     fn: T,

@@ -16,7 +16,7 @@ export const createQrt = async ({
 }) => {
   const stateProvider: PgStateProvider<{ tx: DbTransaction }, { db: Db }> = {
     provideContext: async (cb) => cb({ db }),
-    isInTransaction: async (ctx) => "tx" in ctx,
+    isInTransaction: async () => true,
     runInTransaction: async (ctx, cb) => {
       return ctx.db.transaction(async (tx) => cb({ tx }));
     },

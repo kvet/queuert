@@ -1,15 +1,19 @@
 import { RetryConfig, withRetry } from "../helpers/retry.js";
 import { BaseStateAdapterContext, StateAdapter } from "./state-adapter.js";
 
-export const wrapStateAdapterWithRetry = <TContext extends BaseStateAdapterContext, TJobId>({
+export const wrapStateAdapterWithRetry = <
+  TTxContext extends BaseStateAdapterContext,
+  TContext extends BaseStateAdapterContext,
+  TJobId extends string,
+>({
   stateAdapter,
   retryConfig,
   isRetryableError,
 }: {
-  stateAdapter: StateAdapter<TContext, TJobId>;
+  stateAdapter: StateAdapter<TTxContext, TContext, TJobId>;
   retryConfig: RetryConfig;
   isRetryableError: (error: unknown) => boolean;
-}): StateAdapter<TContext, TJobId> => {
+}): StateAdapter<TTxContext, TContext, TJobId> => {
   const wrap = <T extends (...args: never[]) => Promise<unknown>>(fn: T): T =>
     (async (...args) => withRetry(async () => fn(...args), retryConfig, { isRetryableError })) as T;
 

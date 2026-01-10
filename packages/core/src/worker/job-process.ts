@@ -25,8 +25,8 @@ import {
 } from "../queuert-helper.js";
 import {
   BaseStateAdapterContext,
-  GetStateAdapterContext,
   GetStateAdapterJobId,
+  GetStateAdapterTxContext,
   StateAdapter,
   StateJob,
 } from "../state-adapter/state-adapter.js";
@@ -63,7 +63,7 @@ export const rescheduleJob = (schedule: ScheduleOptions, cause?: unknown): never
 };
 
 export type CompleteCallbackOptions<
-  TStateAdapter extends StateAdapter<BaseStateAdapterContext, any>,
+  TStateAdapter extends StateAdapter<BaseStateAdapterContext, BaseStateAdapterContext, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions & string,
 > = {
@@ -92,10 +92,10 @@ export type CompleteCallbackOptions<
       JobOf<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TContinueJobTypeName>
     >
   >;
-} & GetStateAdapterContext<TStateAdapter>;
+} & GetStateAdapterTxContext<TStateAdapter>;
 
 export type CompleteCallback<
-  TStateAdapter extends StateAdapter<BaseStateAdapterContext, any>,
+  TStateAdapter extends StateAdapter<BaseStateAdapterContext, BaseStateAdapterContext, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions & string,
   TResult,
@@ -104,7 +104,7 @@ export type CompleteCallback<
 ) => Promise<TResult>;
 
 export type CompleteFn<
-  TStateAdapter extends StateAdapter<BaseStateAdapterContext, any>,
+  TStateAdapter extends StateAdapter<BaseStateAdapterContext, BaseStateAdapterContext, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions & string,
 > = <
@@ -123,11 +123,14 @@ export type CompleteFn<
 
 export type PrepareConfig = { mode: "atomic" | "staged" };
 
-export type PrepareCallback<TStateAdapter extends StateAdapter<BaseStateAdapterContext, any>, T> = (
-  prepareCallbackOptions: GetStateAdapterContext<TStateAdapter>,
-) => T | Promise<T>;
+export type PrepareCallback<
+  TStateAdapter extends StateAdapter<BaseStateAdapterContext, BaseStateAdapterContext, any>,
+  T,
+> = (prepareCallbackOptions: GetStateAdapterTxContext<TStateAdapter>) => T | Promise<T>;
 
-export type PrepareFn<TStateAdapter extends StateAdapter<BaseStateAdapterContext, any>> = {
+export type PrepareFn<
+  TStateAdapter extends StateAdapter<BaseStateAdapterContext, BaseStateAdapterContext, any>,
+> = {
   (config: PrepareConfig): Promise<void>;
   <T>(
     config: PrepareConfig,
@@ -136,7 +139,7 @@ export type PrepareFn<TStateAdapter extends StateAdapter<BaseStateAdapterContext
 };
 
 export type JobProcessFn<
-  TStateAdapter extends StateAdapter<BaseStateAdapterContext, any>,
+  TStateAdapter extends StateAdapter<BaseStateAdapterContext, BaseStateAdapterContext, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions & string,
 > = (processOptions: {
@@ -160,7 +163,11 @@ export const runJobProcess = async ({
   notifyAdapter,
 }: {
   helper: ProcessHelper;
-  process: JobProcessFn<StateAdapter<BaseStateAdapterContext, any>, BaseJobTypeDefinitions, string>;
+  process: JobProcessFn<
+    StateAdapter<BaseStateAdapterContext, BaseStateAdapterContext, any>,
+    BaseJobTypeDefinitions,
+    string
+  >;
   context: BaseStateAdapterContext;
   job: StateJob;
   retryConfig: BackoffConfig;
@@ -284,7 +291,7 @@ export const runJobProcess = async ({
       }
 
       return callbackOutput;
-    }) as PrepareFn<StateAdapter<BaseStateAdapterContext, any>>;
+    }) as PrepareFn<StateAdapter<BaseStateAdapterContext, BaseStateAdapterContext, any>>;
 
     let completeCalled = false;
     let completeSucceeded = false;
@@ -351,7 +358,11 @@ export const runJobProcess = async ({
       });
       completeSucceeded = true;
       return result;
-    }) as CompleteFn<StateAdapter<BaseStateAdapterContext, any>, BaseJobTypeDefinitions, string>;
+    }) as CompleteFn<
+      StateAdapter<BaseStateAdapterContext, BaseStateAdapterContext, any>,
+      BaseJobTypeDefinitions,
+      string
+    >;
 
     let autoSetupDone = false;
     try {

@@ -13,7 +13,7 @@ const deepCloneStore = (store: InProcessStore): InProcessStore => ({
   jobBlockers: new Map(Array.from(store.jobBlockers).map(([k, v]) => [k, new Map(v)])),
 });
 
-export type InProcessStateAdapter = StateAdapter<InProcessContext, string>;
+export type InProcessStateAdapter = StateAdapter<InProcessContext, InProcessContext, string>;
 
 export const createInProcessStateAdapter = (): InProcessStateAdapter => {
   const store: InProcessStore = {

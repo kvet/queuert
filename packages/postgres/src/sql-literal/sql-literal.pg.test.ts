@@ -50,12 +50,8 @@ describe("pgLiteral", () => {
 
   describe("bigint", () => {
     test("returns unquoted bigint", () => {
-      expect(pgLiteral(BigInt("9223372036854775807"))).toBe(
-        "9223372036854775807",
-      );
-      expect(pgLiteral(BigInt("-9223372036854775808"))).toBe(
-        "-9223372036854775808",
-      );
+      expect(pgLiteral(BigInt("9223372036854775807"))).toBe("9223372036854775807");
+      expect(pgLiteral(BigInt("-9223372036854775808"))).toBe("-9223372036854775808");
     });
   });
 
@@ -94,9 +90,7 @@ describe("pgLiteral", () => {
     });
 
     test("throws on null bytes", () => {
-      expect(() => pgLiteral("hello\0world")).toThrow(
-        "PostgreSQL cannot store null bytes",
-      );
+      expect(() => pgLiteral("hello\0world")).toThrow("PostgreSQL cannot store null bytes");
     });
   });
 
@@ -139,32 +133,31 @@ describe("pgLiteral", () => {
     });
 
     test("handles string arrays with escaping", () => {
-      expect(pgLiteral(["hello", "O'Reilly"])).toBe(
-        "ARRAY['hello', 'O''Reilly']",
-      );
+      expect(pgLiteral(["hello", "O'Reilly"])).toBe("ARRAY['hello', 'O''Reilly']");
     });
 
     test("handles mixed type arrays", () => {
-      expect(pgLiteral([1, "two", true, null])).toBe(
-        "ARRAY[1, 'two', 't', NULL]",
-      );
+      expect(pgLiteral([1, "two", true, null])).toBe("ARRAY[1, 'two', 't', NULL]");
     });
 
     test("handles nested arrays", () => {
-      expect(pgLiteral([[1, 2], [3, 4]])).toBe(
-        "ARRAY[ARRAY[1, 2], ARRAY[3, 4]]",
-      );
+      expect(
+        pgLiteral([
+          [1, 2],
+          [3, 4],
+        ]),
+      ).toBe("ARRAY[ARRAY[1, 2], ARRAY[3, 4]]");
     });
   });
 
   describe("objects (JSON)", () => {
     test("serializes and casts to jsonb", () => {
-      expect(pgLiteral({ key: "value" })).toBe("'{\"key\":\"value\"}'::jsonb");
+      expect(pgLiteral({ key: "value" })).toBe('\'{"key":"value"}\'::jsonb');
     });
 
     test("handles nested objects", () => {
       const obj = { nested: { deep: true } };
-      expect(pgLiteral(obj)).toBe("'{\"nested\":{\"deep\":true}}'::jsonb");
+      expect(pgLiteral(obj)).toBe('\'{"nested":{"deep":true}}\'::jsonb');
     });
 
     test("escapes quotes in JSON string", () => {

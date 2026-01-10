@@ -16,8 +16,8 @@ import {
 } from "./queuert-helper.js";
 import {
   DeduplicationOptions,
-  GetStateAdapterContext,
   GetStateAdapterJobId,
+  GetStateAdapterTxContext,
   StateAdapter,
 } from "./state-adapter/state-adapter.js";
 import { createExecutor, Executor, RegisteredJobTypes } from "./worker/executor.js";
@@ -36,11 +36,11 @@ export {
 export { type ValidatedJobTypeDefinitions } from "./entities/job-type.validation.js";
 export { type CompletedJob, type Job } from "./entities/job.js";
 export { type ScheduleOptions } from "./entities/schedule.js";
+export { type TypedAbortSignal } from "./helpers/abort.js";
 export { type BackoffConfig } from "./helpers/backoff.js";
 export { type RetryConfig } from "./helpers/retry.js";
-export { type TypedAbortSignal } from "./helpers/abort.js";
-export { type Log } from "./log.js";
 export { createConsoleLog } from "./log.console.js";
+export { type Log } from "./log.js";
 export { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 export {
   JobAlreadyCompletedError,
@@ -74,7 +74,7 @@ export {
 
 export type QueuertWorkerDefinition<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TStateAdapter extends StateAdapter<any, any>,
+  TStateAdapter extends StateAdapter<any, any, any>,
 > = {
   implementJobType: <TJobTypeName extends keyof TJobTypeDefinitions & string>(options: {
     typeName: TJobTypeName;
@@ -87,7 +87,7 @@ export type QueuertWorkerDefinition<
 
 export type Queuert<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TStateAdapter extends StateAdapter<any, any>,
+  TStateAdapter extends StateAdapter<any, any, any>,
 > = {
   createWorker: () => QueuertWorkerDefinition<TJobTypeDefinitions, TStateAdapter>;
   startJobSequence: <
@@ -107,7 +107,7 @@ export type Queuert<
           >;
         }
       : { startBlockers?: never }) &
-      GetStateAdapterContext<TStateAdapter>,
+      GetStateAdapterTxContext<TStateAdapter>,
   ) => Promise<
     JobSequenceOf<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TSequenceTypeName> & {
       deduplicated: boolean;
@@ -119,7 +119,7 @@ export type Queuert<
     options: {
       typeName: TSequenceTypeName;
       id: GetStateAdapterJobId<TStateAdapter>;
-    } & GetStateAdapterContext<TStateAdapter>,
+    } & GetStateAdapterTxContext<TStateAdapter>,
   ) => Promise<JobSequenceOf<
     GetStateAdapterJobId<TStateAdapter>,
     TJobTypeDefinitions,
@@ -128,7 +128,7 @@ export type Queuert<
   deleteJobSequences: (
     options: {
       rootSequenceIds: GetStateAdapterJobId<TStateAdapter>[];
-    } & GetStateAdapterContext<TStateAdapter>,
+    } & GetStateAdapterTxContext<TStateAdapter>,
   ) => Promise<void>;
   completeJobSequence: <
     TSequenceTypeName extends keyof ExternalJobTypeDefinitions<TJobTypeDefinitions> & string,
@@ -143,7 +143,7 @@ export type Queuert<
         TSequenceTypeName,
         TCompleteReturn
       >;
-    } & GetStateAdapterContext<TStateAdapter>,
+    } & GetStateAdapterTxContext<TStateAdapter>,
   ) => Promise<
     CompleteJobSequenceResult<
       TStateAdapter,
@@ -174,7 +174,7 @@ export type Queuert<
 
 export const createQueuert = async <
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TStateAdapter extends StateAdapter<any, any>,
+  TStateAdapter extends StateAdapter<any, any, any>,
 >({
   stateAdapter,
   notifyAdapter,

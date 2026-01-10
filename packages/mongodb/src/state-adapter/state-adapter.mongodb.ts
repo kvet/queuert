@@ -1,4 +1,4 @@
-import { type Collection, type Document, type WithId } from "mongodb";
+import { Collection, type Document, type WithId } from "mongodb";
 import {
   BaseStateAdapterContext,
   type DeduplicationOptions,
@@ -76,6 +76,7 @@ const mapDbJobToStateJob = (dbJob: WithId<Document> | DbJob): StateJob => {
 };
 
 export const createMongoStateAdapter = async <
+  TTxContext extends BaseStateAdapterContext,
   TContext extends BaseStateAdapterContext,
   TIdType extends string = string,
 >({
@@ -89,24 +90,23 @@ export const createMongoStateAdapter = async <
   isTransientError = isTransientMongoError,
   idGenerator = () => crypto.randomUUID() as TIdType,
 }: {
-  stateProvider: MongoStateProvider<TContext>;
+  stateProvider: MongoStateProvider<TTxContext, TContext>;
   connectionRetryConfig?: RetryConfig;
   isTransientError?: (error: unknown) => boolean;
   idGenerator?: () => TIdType;
 }): Promise<
-  StateAdapter<TContext, TIdType> & {
+  StateAdapter<TTxContext, TContext, TIdType> & {
     migrateToLatest: () => Promise<void>;
   }
 > => {
-  const getCollection = (context: TContext): Collection<DbJob> => {
+  const getCollection = (context: TTxContext | TContext): Collection<DbJob> => {
     return stateProvider.getCollection(context) as unknown as Collection<DbJob>;
   };
 
-  const rawAdapter: StateAdapter<TContext, TIdType> = {
-    provideContext: async (fn) => stateProvider.provideContext(fn) as ReturnType<typeof fn>,
-    runInTransaction: async (context, fn) =>
-      stateProvider.runInTransaction(context, fn) as ReturnType<typeof fn>,
-    isInTransaction: async (context) => stateProvider.isInTransaction(context),
+  const rawAdapter: StateAdapter<TTxContext, TContext, TIdType> = {
+    provideContext: stateProvider.provideContext,
+    runInTransaction: stateProvider.runInTransaction,
+    isInTransaction: stateProvider.isInTransaction,
 
     getJobSequenceById: async ({ context, jobId }) => {
       const collection = getCollection(context);
@@ -622,7 +622,8 @@ function buildDeduplicationQuery(
   return { $or: conditions };
 }
 
-export type MongoStateAdapter<TContext extends BaseStateAdapterContext, TJobId> = StateAdapter<
-  TContext,
-  TJobId
->;
+export type MongoStateAdapter<
+  TTxContext extends BaseStateAdapterContext,
+  TContext extends BaseStateAdapterContext,
+  TJobId extends string,
+> = StateAdapter<TTxContext, TContext, TJobId>;

@@ -6,7 +6,7 @@ export const extendWithStateInProcess = <T>(
   api: TestAPI<T>,
 ): TestAPI<
   T & {
-    stateAdapter: StateAdapter<{ $test: true }, string>;
+    stateAdapter: StateAdapter<{ $test: true }, { $test: true }, string>;
   }
 > => {
   return api.extend<{
