@@ -68,20 +68,26 @@ type JobAttemptStartedLogEntry = LogEntry<
   "Job attempt started",
   JobProcessingData & WorkerBasicData
 >;
-type JobTakenByAnotherWorkerLogEntry = LogEntry<
-  "job_taken_by_another_worker",
+type JobAttemptTakenByAnotherWorkerLogEntry = LogEntry<
+  "job_attempt_taken_by_another_worker",
   "warn",
   "Job taken by another worker",
   { leasedBy: string; leasedUntil: Date } & JobProcessingData & WorkerBasicData
 >;
-type JobLeaseExpiredLogEntry = LogEntry<
-  "job_lease_expired",
+type JobAttemptAlreadyCompletedLogEntry = LogEntry<
+  "job_attempt_already_completed",
+  "warn",
+  "Job already completed by another worker",
+  { completedBy: string | null } & JobProcessingData & WorkerBasicData
+>;
+type JobAttemptLeaseExpiredLogEntry = LogEntry<
+  "job_attempt_lease_expired",
   "warn",
   "Job lease expired",
   { leasedBy: string; leasedUntil: Date } & JobProcessingData & WorkerBasicData
 >;
-type JobLeaseRenewedLogEntry = LogEntry<
-  "job_lease_renewed",
+type JobAttemptLeaseRenewedLogEntry = LogEntry<
+  "job_attempt_lease_renewed",
   "info",
   "Job lease renewed",
   { leasedBy: string; leasedUntil: Date } & JobProcessingData & WorkerBasicData
@@ -130,12 +136,6 @@ type JobSequenceCompletedLogEntry = LogEntry<
   "Job sequence completed",
   { output: unknown } & JobSequenceData
 >;
-type JobSequenceDeletedLogEntry = LogEntry<
-  "job_sequence_deleted",
-  "info",
-  "Job sequence deleted",
-  { deletedJobIds: string[] } & JobSequenceData
->;
 
 type JobBlockedLogEntry = LogEntry<
   "job_blocked",
@@ -181,9 +181,10 @@ type TypedLogEntry =
   // job
   | JobCreatedLogEntry
   | JobAttemptStartedLogEntry
-  | JobTakenByAnotherWorkerLogEntry
-  | JobLeaseExpiredLogEntry
-  | JobLeaseRenewedLogEntry
+  | JobAttemptTakenByAnotherWorkerLogEntry
+  | JobAttemptAlreadyCompletedLogEntry
+  | JobAttemptLeaseExpiredLogEntry
+  | JobAttemptLeaseRenewedLogEntry
   | JobReapedLogEntry
   | JobAttemptFailedLogEntry
   | JobAttemptCompletedLogEntry
@@ -191,7 +192,6 @@ type TypedLogEntry =
   // job sequence
   | JobSequenceCreatedLogEntry
   | JobSequenceCompletedLogEntry
-  | JobSequenceDeletedLogEntry
   // blockers
   | JobBlockedLogEntry
   | JobUnblockedLogEntry

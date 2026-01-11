@@ -139,7 +139,7 @@ Users configure their OTEL SDK with desired exporters (Prometheus, OTLP, Jaeger,
 **Counters emitted:**
 
 - Worker: `{prefix}.worker.started`, `{prefix}.worker.error`, `{prefix}.worker.stopped`
-- Job: `{prefix}.job.created`, `{prefix}.job.attempt_started`, `{prefix}.job.taken_by_another_worker`, `{prefix}.job.lease_expired`, `{prefix}.job.lease_renewed`, `{prefix}.job.attempt_failed`, `{prefix}.job.attempt_completed`, `{prefix}.job.completed`, `{prefix}.job.reaped`, `{prefix}.job.blocked`, `{prefix}.job.unblocked`
+- Job: `{prefix}.job.created`, `{prefix}.job.attempt.started`, `{prefix}.job.attempt.taken_by_another_worker`, `{prefix}.job.attempt.already_completed`, `{prefix}.job.attempt.lease_expired`, `{prefix}.job.attempt.lease_renewed`, `{prefix}.job.attempt.failed`, `{prefix}.job.attempt.completed`, `{prefix}.job.completed`, `{prefix}.job.reaped`, `{prefix}.job.blocked`, `{prefix}.job.unblocked`
 - Job Sequence: `{prefix}.job_sequence.created`, `{prefix}.job_sequence.completed`
 - Notify Adapter: `{prefix}.notify_adapter.context_absence`, `{prefix}.notify_adapter.error`
 - State Adapter: `{prefix}.state_adapter.error`
@@ -284,7 +284,7 @@ Low-level adapter interface for observability metrics. Accepts primitive data ty
 **Counters (current implementation):**
 
 - Worker: `workerStarted`, `workerError`, `workerStopped`
-- Job: `jobCreated`, `jobAttemptStarted`, `jobTakenByAnotherWorker`, `jobLeaseExpired`, `jobLeaseRenewed`, `jobAttemptFailed`, `jobAttemptCompleted`, `jobCompleted`, `jobReaped`
+- Job: `jobCreated`, `jobAttemptStarted`, `jobAttemptTakenByAnotherWorker`, `jobAttemptAlreadyCompleted`, `jobAttemptLeaseExpired`, `jobAttemptLeaseRenewed`, `jobAttemptFailed`, `jobAttemptCompleted`, `jobCompleted`, `jobReaped`
 - Job Sequence: `jobSequenceCreated`, `jobSequenceCompleted`
 - Blockers: `jobBlocked`, `jobUnblocked`
 - Notify Adapter: `notifyContextAbsence`, `notifyAdapterError`

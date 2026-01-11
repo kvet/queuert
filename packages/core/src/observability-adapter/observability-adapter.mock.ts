@@ -29,9 +29,10 @@ export const createMockObservabilityAdapter = (): MockObservabilityAdapter => {
     // job
     jobCreated: mock("jobCreated"),
     jobAttemptStarted: mock("jobAttemptStarted"),
-    jobTakenByAnotherWorker: mock("jobTakenByAnotherWorker"),
-    jobLeaseExpired: mock("jobLeaseExpired"),
-    jobLeaseRenewed: mock("jobLeaseRenewed"),
+    jobAttemptTakenByAnotherWorker: mock("jobAttemptTakenByAnotherWorker"),
+    jobAttemptAlreadyCompleted: mock("jobAttemptAlreadyCompleted"),
+    jobAttemptLeaseExpired: mock("jobAttemptLeaseExpired"),
+    jobAttemptLeaseRenewed: mock("jobAttemptLeaseRenewed"),
     jobAttemptFailed: mock("jobAttemptFailed"),
     jobAttemptCompleted: mock("jobAttemptCompleted"),
     jobCompleted: mock("jobCompleted"),
@@ -40,7 +41,6 @@ export const createMockObservabilityAdapter = (): MockObservabilityAdapter => {
     // job sequence
     jobSequenceCreated: mock("jobSequenceCreated"),
     jobSequenceCompleted: mock("jobSequenceCompleted"),
-    jobSequenceDeleted: mock("jobSequenceDeleted"),
 
     // blockers
     jobBlocked: mock("jobBlocked"),

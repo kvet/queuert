@@ -526,6 +526,7 @@ export const queuertHelper = ({
       }
 
       if (fetchedJob.status === "completed") {
+        observabilityHelper.jobAttemptAlreadyCompleted(fetchedJob, { workerId });
         throw new JobAlreadyCompletedError("Job is already completed");
       }
 
@@ -533,7 +534,7 @@ export const queuertHelper = ({
         fetchedJob.leasedBy !== workerId &&
         !(allowEmptyWorker ? fetchedJob.leasedBy === null : false)
       ) {
-        observabilityHelper.jobTakenByAnotherWorker(fetchedJob, { workerId });
+        observabilityHelper.jobAttemptTakenByAnotherWorker(fetchedJob, { workerId });
         throw new JobTakenByAnotherWorkerError(`Job taken by another worker`, {
           cause: {
             jobId: fetchedJob.id,
@@ -544,7 +545,7 @@ export const queuertHelper = ({
       }
 
       if (fetchedJob.leasedUntil && fetchedJob.leasedUntil.getTime() < Date.now()) {
-        observabilityHelper.jobLeaseExpired(fetchedJob, { workerId });
+        observabilityHelper.jobAttemptLeaseExpired(fetchedJob, { workerId });
       }
 
       return fetchedJob;
@@ -674,21 +675,10 @@ export const queuertHelper = ({
         );
       }
 
-      const deletedJobs = await stateAdapter.deleteJobsByRootSequenceIds({
+      await stateAdapter.deleteJobsByRootSequenceIds({
         context,
         rootSequenceIds,
       });
-
-      for (const sequenceJob of sequenceJobs as StateJob[]) {
-        const deletedJobsForSequence = deletedJobs.filter(
-          (j) => j.rootSequenceId === sequenceJob.id,
-        );
-        if (deletedJobsForSequence.length > 0) {
-          observabilityHelper.jobSequenceDeleted(sequenceJob, {
-            deletedJobIds: deletedJobsForSequence.map((j) => j.id),
-          });
-        }
-      }
     },
     completeJobSequence: async <TSequenceTypeName extends string, TInput, TOutput>({
       id,

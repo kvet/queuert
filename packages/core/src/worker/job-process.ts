@@ -285,7 +285,7 @@ export const runJobProcess = async ({
             workerId,
           });
         });
-        helper.observabilityHelper.jobLeaseRenewed(job, { workerId });
+        helper.observabilityHelper.jobAttemptLeaseRenewed(job, { workerId });
       } catch (error) {
         if (
           error instanceof JobTakenByAnotherWorkerError ||

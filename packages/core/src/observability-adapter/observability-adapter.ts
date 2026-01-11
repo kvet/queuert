@@ -27,13 +27,16 @@ export type ObservabilityAdapter = {
     },
   ) => void;
   jobAttemptStarted: (data: JobProcessingData & { workerId: string }) => void;
-  jobTakenByAnotherWorker: (
+  jobAttemptTakenByAnotherWorker: (
     data: JobProcessingData & { workerId: string; leasedBy: string; leasedUntil: Date },
   ) => void;
-  jobLeaseExpired: (
+  jobAttemptAlreadyCompleted: (
+    data: JobProcessingData & { workerId: string; completedBy: string | null },
+  ) => void;
+  jobAttemptLeaseExpired: (
     data: JobProcessingData & { workerId: string; leasedBy: string; leasedUntil: Date },
   ) => void;
-  jobLeaseRenewed: (
+  jobAttemptLeaseRenewed: (
     data: JobProcessingData & { workerId: string; leasedBy: string; leasedUntil: Date },
   ) => void;
   jobAttemptFailed: (
@@ -65,7 +68,6 @@ export type ObservabilityAdapter = {
   // job sequence
   jobSequenceCreated: (data: JobSequenceData & { input: unknown }) => void;
   jobSequenceCompleted: (data: JobSequenceData & { output: unknown }) => void;
-  jobSequenceDeleted: (data: JobSequenceData & { deletedJobIds: string[] }) => void;
 
   // blockers
   jobBlocked: (data: JobBasicData & { blockedBySequences: JobSequenceData[] }) => void;

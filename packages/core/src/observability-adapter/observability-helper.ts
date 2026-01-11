@@ -1,9 +1,9 @@
 import { JobSequence } from "../entities/job-sequence.js";
 import { Job } from "../entities/job.js";
 import { ScheduleOptions } from "../entities/schedule.js";
-import { JobBasicData, JobProcessingData, JobSequenceData, Log } from "./log.js";
 import { NotifyAdapter } from "../notify-adapter/notify-adapter.js";
 import { StateAdapter, StateJob } from "../state-adapter/state-adapter.js";
+import { JobBasicData, JobProcessingData, JobSequenceData, Log } from "./log.js";
 import { ObservabilityAdapter } from "./observability-adapter.js";
 
 // Mapper functions
@@ -69,9 +69,10 @@ export type ObservabilityHelper = {
     },
   ) => void;
   jobAttemptStarted: (job: StateJob, options: { workerId: string }) => void;
-  jobTakenByAnotherWorker: (job: StateJob, options: { workerId: string }) => void;
-  jobLeaseExpired: (job: StateJob, options: { workerId: string }) => void;
-  jobLeaseRenewed: (job: StateJob, options: { workerId: string }) => void;
+  jobAttemptTakenByAnotherWorker: (job: StateJob, options: { workerId: string }) => void;
+  jobAttemptAlreadyCompleted: (job: StateJob, options: { workerId: string }) => void;
+  jobAttemptLeaseExpired: (job: StateJob, options: { workerId: string }) => void;
+  jobAttemptLeaseRenewed: (job: StateJob, options: { workerId: string }) => void;
   jobAttemptFailed: (
     job: StateJob,
     options: { workerId: string; rescheduledSchedule: ScheduleOptions; error: unknown },
@@ -92,7 +93,6 @@ export type ObservabilityHelper = {
   // job sequence
   jobSequenceCreated: (job: StateJob, options: { input: unknown }) => void;
   jobSequenceCompleted: (jobSequenceStartJob: StateJob, options: { output: unknown }) => void;
-  jobSequenceDeleted: (sequenceJob: StateJob, options: { deletedJobIds: string[] }) => void;
   // blockers
   jobBlocked: (
     job: StateJob,
@@ -194,7 +194,7 @@ export const createObservabilityHelper = ({
     adapter.jobAttemptStarted(data);
   },
 
-  jobTakenByAnotherWorker(job, options) {
+  jobAttemptTakenByAnotherWorker(job, options) {
     const data = {
       ...mapStateJobToJobProcessingData(job),
       workerId: options.workerId,
@@ -202,15 +202,30 @@ export const createObservabilityHelper = ({
       leasedUntil: job.leasedUntil!,
     };
     log({
-      type: "job_taken_by_another_worker",
+      type: "job_attempt_taken_by_another_worker",
       level: "warn",
       message: "Job taken by another worker",
       data,
     });
-    adapter.jobTakenByAnotherWorker(data);
+    adapter.jobAttemptTakenByAnotherWorker(data);
   },
 
-  jobLeaseExpired(job, options) {
+  jobAttemptAlreadyCompleted(job, options) {
+    const data = {
+      ...mapStateJobToJobProcessingData(job),
+      workerId: options.workerId,
+      completedBy: job.completedBy,
+    };
+    log({
+      type: "job_attempt_already_completed",
+      level: "warn",
+      message: "Job already completed by another worker",
+      data,
+    });
+    adapter.jobAttemptAlreadyCompleted(data);
+  },
+
+  jobAttemptLeaseExpired(job, options) {
     const data = {
       ...mapStateJobToJobProcessingData(job),
       workerId: options.workerId,
@@ -218,15 +233,15 @@ export const createObservabilityHelper = ({
       leasedUntil: job.leasedUntil!,
     };
     log({
-      type: "job_lease_expired",
+      type: "job_attempt_lease_expired",
       level: "warn",
       message: "Job lease expired",
       data,
     });
-    adapter.jobLeaseExpired(data);
+    adapter.jobAttemptLeaseExpired(data);
   },
 
-  jobLeaseRenewed(job, options) {
+  jobAttemptLeaseRenewed(job, options) {
     const data = {
       ...mapStateJobToJobProcessingData(job),
       workerId: options.workerId,
@@ -234,12 +249,12 @@ export const createObservabilityHelper = ({
       leasedUntil: job.leasedUntil!,
     };
     log({
-      type: "job_lease_renewed",
+      type: "job_attempt_lease_renewed",
       level: "info",
       message: "Job lease renewed",
       data,
     });
-    adapter.jobLeaseRenewed(data);
+    adapter.jobAttemptLeaseRenewed(data);
   },
 
   jobReaped(job, options) {
@@ -336,20 +351,6 @@ export const createObservabilityHelper = ({
       data,
     });
     adapter.jobSequenceCompleted(data);
-  },
-
-  jobSequenceDeleted(sequenceJob, options) {
-    const data = {
-      ...mapStateJobToJobSequenceData(sequenceJob),
-      deletedJobIds: options.deletedJobIds,
-    };
-    log({
-      type: "job_sequence_deleted",
-      level: "info",
-      message: "Job sequence deleted",
-      data,
-    });
-    adapter.jobSequenceDeleted(data);
   },
 
   // blockers

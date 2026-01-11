@@ -10,8 +10,6 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     runInTransaction,
     observabilityAdapter,
     log,
-    expectLogs,
-    expectMetrics,
     expect,
   }) => {
     const queuert = await createQueuert({
@@ -52,21 +50,6 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       });
       expect(fetchedJobSequence).toBeNull();
     });
-
-    expectLogs([
-      { type: "job_sequence_created" },
-      { type: "job_created" },
-      {
-        type: "job_sequence_deleted",
-        data: { id: jobSequence.id, deletedJobIds: [jobSequence.id] },
-      },
-    ]);
-
-    await expectMetrics([
-      { method: "jobSequenceCreated", args: { typeName: "test" } },
-      { method: "jobCreated", args: { typeName: "test" } },
-      { method: "jobSequenceDeleted", args: { typeName: "test", deletedJobIds: [jobSequence.id] } },
-    ]);
   });
 
   it("running job receives deletion signal", async ({
@@ -370,12 +353,6 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
 
       await processThrown.promise;
     });
-
-    expect(log).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "job_sequence_deleted",
-      }),
-    );
 
     expect(log).not.toHaveBeenCalledWith(
       expect.objectContaining({

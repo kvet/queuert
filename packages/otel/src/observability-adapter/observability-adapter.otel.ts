@@ -22,21 +22,27 @@ export const createOtelObservabilityAdapter = ({
 
   // job
   const jobCreatedCounter = meter.createCounter(`${metricPrefix}.job.created`);
-  const jobAttemptStartedCounter = meter.createCounter(`${metricPrefix}.job.attempt_started`);
-  const jobTakenByAnotherWorkerCounter = meter.createCounter(
-    `${metricPrefix}.job.taken_by_another_worker`,
+  const jobAttemptStartedCounter = meter.createCounter(`${metricPrefix}.job.attempt.started`);
+  const jobAttemptTakenByAnotherWorkerCounter = meter.createCounter(
+    `${metricPrefix}.job.attempt.taken_by_another_worker`,
   );
-  const jobLeaseExpiredCounter = meter.createCounter(`${metricPrefix}.job.lease_expired`);
-  const jobLeaseRenewedCounter = meter.createCounter(`${metricPrefix}.job.lease_renewed`);
-  const jobAttemptFailedCounter = meter.createCounter(`${metricPrefix}.job.attempt_failed`);
-  const jobAttemptCompletedCounter = meter.createCounter(`${metricPrefix}.job.attempt_completed`);
+  const jobAttemptLeaseExpiredCounter = meter.createCounter(
+    `${metricPrefix}.job.attempt.lease_expired`,
+  );
+  const jobAttemptLeaseRenewedCounter = meter.createCounter(
+    `${metricPrefix}.job.attempt.lease_renewed`,
+  );
+  const jobAttemptFailedCounter = meter.createCounter(`${metricPrefix}.job.attempt.failed`);
+  const jobAttemptCompletedCounter = meter.createCounter(`${metricPrefix}.job.attempt.completed`);
+  const jobAttemptAlreadyCompletedCounter = meter.createCounter(
+    `${metricPrefix}.job.attempt.already_completed`,
+  );
   const jobCompletedCounter = meter.createCounter(`${metricPrefix}.job.completed`);
   const jobReapedCounter = meter.createCounter(`${metricPrefix}.job.reaped`);
 
   // job sequence
   const jobSequenceCreatedCounter = meter.createCounter(`${metricPrefix}.job_sequence.created`);
   const jobSequenceCompletedCounter = meter.createCounter(`${metricPrefix}.job_sequence.completed`);
-  const jobSequenceDeletedCounter = meter.createCounter(`${metricPrefix}.job_sequence.deleted`);
 
   // blockers
   const jobBlockedCounter = meter.createCounter(`${metricPrefix}.job.blocked`);
@@ -56,15 +62,12 @@ export const createOtelObservabilityAdapter = ({
     workerStarted: ({ workerId }) => {
       workerStartedCounter.add(1, { workerId });
     },
-
     workerError: ({ workerId }) => {
       workerErrorCounter.add(1, { workerId });
     },
-
     workerStopping: ({ workerId }) => {
       workerStoppingCounter.add(1, { workerId });
     },
-
     workerStopped: ({ workerId }) => {
       workerStoppedCounter.add(1, { workerId });
     },
@@ -73,35 +76,30 @@ export const createOtelObservabilityAdapter = ({
     jobCreated: ({ typeName, sequenceTypeName }) => {
       jobCreatedCounter.add(1, { typeName, sequenceTypeName });
     },
-
     jobAttemptStarted: ({ typeName, sequenceTypeName, workerId }) => {
       jobAttemptStartedCounter.add(1, { typeName, sequenceTypeName, workerId });
     },
-
-    jobTakenByAnotherWorker: ({ typeName, sequenceTypeName, workerId }) => {
-      jobTakenByAnotherWorkerCounter.add(1, { typeName, sequenceTypeName, workerId });
+    jobAttemptTakenByAnotherWorker: ({ typeName, sequenceTypeName, workerId }) => {
+      jobAttemptTakenByAnotherWorkerCounter.add(1, { typeName, sequenceTypeName, workerId });
     },
-
-    jobLeaseExpired: ({ typeName, sequenceTypeName, workerId }) => {
-      jobLeaseExpiredCounter.add(1, { typeName, sequenceTypeName, workerId });
+    jobAttemptAlreadyCompleted: ({ typeName, sequenceTypeName, workerId }) => {
+      jobAttemptAlreadyCompletedCounter.add(1, { typeName, sequenceTypeName, workerId });
     },
-
-    jobLeaseRenewed: ({ typeName, sequenceTypeName, workerId }) => {
-      jobLeaseRenewedCounter.add(1, { typeName, sequenceTypeName, workerId });
+    jobAttemptLeaseExpired: ({ typeName, sequenceTypeName, workerId }) => {
+      jobAttemptLeaseExpiredCounter.add(1, { typeName, sequenceTypeName, workerId });
     },
-
+    jobAttemptLeaseRenewed: ({ typeName, sequenceTypeName, workerId }) => {
+      jobAttemptLeaseRenewedCounter.add(1, { typeName, sequenceTypeName, workerId });
+    },
     jobReaped: ({ typeName, sequenceTypeName, workerId }) => {
       jobReapedCounter.add(1, { typeName, sequenceTypeName, workerId });
     },
-
     jobAttemptFailed: ({ typeName, sequenceTypeName, workerId }) => {
       jobAttemptFailedCounter.add(1, { typeName, sequenceTypeName, workerId });
     },
-
     jobAttemptCompleted: ({ typeName, sequenceTypeName, workerId }) => {
       jobAttemptCompletedCounter.add(1, { typeName, sequenceTypeName, workerId });
     },
-
     jobCompleted: ({ typeName, sequenceTypeName, workerId, continuedWith }) => {
       jobCompletedCounter.add(1, {
         typeName,
@@ -115,20 +113,14 @@ export const createOtelObservabilityAdapter = ({
     jobSequenceCreated: ({ typeName }) => {
       jobSequenceCreatedCounter.add(1, { sequenceTypeName: typeName });
     },
-
     jobSequenceCompleted: ({ typeName }) => {
       jobSequenceCompletedCounter.add(1, { sequenceTypeName: typeName });
-    },
-
-    jobSequenceDeleted: ({ typeName }) => {
-      jobSequenceDeletedCounter.add(1, { sequenceTypeName: typeName });
     },
 
     // blockers
     jobBlocked: ({ typeName, sequenceTypeName }) => {
       jobBlockedCounter.add(1, { typeName, sequenceTypeName });
     },
-
     jobUnblocked: ({ typeName, sequenceTypeName }) => {
       jobUnblockedCounter.add(1, { typeName, sequenceTypeName });
     },
@@ -137,7 +129,6 @@ export const createOtelObservabilityAdapter = ({
     notifyContextAbsence: ({ typeName, sequenceTypeName }) => {
       notifyContextAbsenceCounter.add(1, { typeName, sequenceTypeName });
     },
-
     notifyAdapterError: ({ operation }) => {
       notifyAdapterErrorCounter.add(1, { operation });
     },

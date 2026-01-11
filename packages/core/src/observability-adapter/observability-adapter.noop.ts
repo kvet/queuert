@@ -10,9 +10,10 @@ export const createNoopObservabilityAdapter = (): ObservabilityAdapter => ({
   // job
   jobCreated: () => {},
   jobAttemptStarted: () => {},
-  jobTakenByAnotherWorker: () => {},
-  jobLeaseExpired: () => {},
-  jobLeaseRenewed: () => {},
+  jobAttemptTakenByAnotherWorker: () => {},
+  jobAttemptAlreadyCompleted: () => {},
+  jobAttemptLeaseExpired: () => {},
+  jobAttemptLeaseRenewed: () => {},
   jobAttemptFailed: () => {},
   jobAttemptCompleted: () => {},
   jobCompleted: () => {},
@@ -21,7 +22,6 @@ export const createNoopObservabilityAdapter = (): ObservabilityAdapter => ({
   // job sequence
   jobSequenceCreated: () => {},
   jobSequenceCompleted: () => {},
-  jobSequenceDeleted: () => {},
 
   // blockers
   jobBlocked: () => {},

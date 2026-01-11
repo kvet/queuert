@@ -1,13 +1,13 @@
 // oxlint-disable no-empty-pattern
+import {
+  AggregationTemporality,
+  DataPointType,
+  InMemoryMetricExporter,
+  MeterProvider,
+  PeriodicExportingMetricReader,
+} from "@opentelemetry/sdk-metrics";
 import { type ObservabilityAdapter } from "queuert";
 import { type TestAPI } from "vitest";
-import {
-  MeterProvider,
-  InMemoryMetricExporter,
-  PeriodicExportingMetricReader,
-  DataPointType,
-  AggregationTemporality,
-} from "@opentelemetry/sdk-metrics";
 import { createOtelObservabilityAdapter } from "../observability-adapter/observability-adapter.otel.js";
 
 // Map method names to OTEL metric names
@@ -17,17 +17,17 @@ const methodToMetricName: Record<string, string> = {
   workerStopping: "queuert.worker.stopping",
   workerStopped: "queuert.worker.stopped",
   jobCreated: "queuert.job.created",
-  jobAttemptStarted: "queuert.job.attempt_started",
-  jobTakenByAnotherWorker: "queuert.job.taken_by_another_worker",
-  jobLeaseExpired: "queuert.job.lease_expired",
-  jobLeaseRenewed: "queuert.job.lease_renewed",
-  jobAttemptFailed: "queuert.job.attempt_failed",
-  jobAttemptCompleted: "queuert.job.attempt_completed",
+  jobAttemptStarted: "queuert.job.attempt.started",
+  jobAttemptTakenByAnotherWorker: "queuert.job.attempt.taken_by_another_worker",
+  jobAttemptAlreadyCompleted: "queuert.job.attempt.already_completed",
+  jobAttemptLeaseExpired: "queuert.job.attempt.lease_expired",
+  jobAttemptLeaseRenewed: "queuert.job.attempt.lease_renewed",
+  jobAttemptFailed: "queuert.job.attempt.failed",
+  jobAttemptCompleted: "queuert.job.attempt.completed",
   jobCompleted: "queuert.job.completed",
   jobReaped: "queuert.job.reaped",
   jobSequenceCreated: "queuert.job_sequence.created",
   jobSequenceCompleted: "queuert.job_sequence.completed",
-  jobSequenceDeleted: "queuert.job_sequence.deleted",
   jobBlocked: "queuert.job.blocked",
   jobUnblocked: "queuert.job.unblocked",
   notifyContextAbsence: "queuert.notify_adapter.context_absence",
