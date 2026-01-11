@@ -25,6 +25,9 @@ export type TestSuiteContext = {
   ) => void;
   observabilityAdapter: MockObservabilityAdapter;
   expectMetrics: (expected: { method: string; args?: Record<string, unknown> }[]) => Promise<void>;
+  expectHistograms: (
+    expected: { method: string; args?: Record<string, unknown> }[],
+  ) => Promise<void>;
 };
 
 export const extendWithCommon = <
@@ -43,6 +46,7 @@ export const extendWithCommon = <
       | "expectLogs"
       | "observabilityAdapter"
       | "expectMetrics"
+      | "expectHistograms"
     >
 > =>
   it.extend<
@@ -54,6 +58,7 @@ export const extendWithCommon = <
       | "expectLogs"
       | "observabilityAdapter"
       | "expectMetrics"
+      | "expectHistograms"
     >
   >({
     runInTransaction: [
@@ -118,11 +123,48 @@ export const extendWithCommon = <
     ],
     expectMetrics: [
       async ({ observabilityAdapter, expect }, use) => {
+        const histogramMethods = new Set([
+          "jobSequenceDuration",
+          "jobDuration",
+          "jobAttemptDuration",
+        ]);
+
         await use(async (expected: { method: string; args?: Record<string, unknown> }[]) => {
-          const actual = observabilityAdapter._calls.map((call) => ({
-            method: call.method,
-            data: call.args[0],
-          }));
+          const actual = observabilityAdapter._calls
+            .filter((call) => !histogramMethods.has(call.method))
+            .map((call) => ({
+              method: call.method,
+              data: call.args[0],
+            }));
+
+          expect(actual).toEqual(
+            expected.map((entry) => {
+              const matcher: Record<string, unknown> = { method: entry.method };
+              if (entry.args) {
+                matcher.data = expect.objectContaining(entry.args);
+              }
+              return expect.objectContaining(matcher);
+            }),
+          );
+        });
+      },
+      { scope: "test" },
+    ],
+    expectHistograms: [
+      async ({ observabilityAdapter, expect }, use) => {
+        const histogramMethods = new Set([
+          "jobSequenceDuration",
+          "jobDuration",
+          "jobAttemptDuration",
+        ]);
+
+        await use(async (expected: { method: string; args?: Record<string, unknown> }[]) => {
+          const actual = observabilityAdapter._calls
+            .filter((call) => histogramMethods.has(call.method))
+            .map((call) => ({
+              method: call.method,
+              data: call.args[0],
+            }));
 
           expect(actual).toEqual(
             expected.map((entry) => {

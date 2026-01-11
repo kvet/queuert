@@ -52,5 +52,10 @@ export const createMockObservabilityAdapter = (): MockObservabilityAdapter => {
 
     // state adapter
     stateAdapterError: mock("stateAdapterError"),
+
+    // histograms
+    jobSequenceDuration: mock("jobSequenceDuration"),
+    jobDuration: mock("jobDuration"),
+    jobAttemptDuration: mock("jobAttemptDuration"),
   };
 };

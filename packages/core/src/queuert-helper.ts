@@ -310,6 +310,7 @@ export const queuertHelper = ({
       continuedWith: hasContinuedJob ? rest.continuedJob : undefined,
       workerId,
     });
+    observabilityHelper.jobDuration(job);
 
     if (!hasContinuedJob) {
       const jobSequenceStartJob = await stateAdapter.getJobById({
@@ -322,6 +323,7 @@ export const queuertHelper = ({
       }
 
       observabilityHelper.jobSequenceCompleted(jobSequenceStartJob, { output });
+      observabilityHelper.jobSequenceDuration(jobSequenceStartJob, job);
       notifySequenceCompletion(job);
 
       const unblockedJobs = await stateAdapter.scheduleBlockedJobs({

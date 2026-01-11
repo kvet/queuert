@@ -33,6 +33,10 @@ const methodToMetricName: Record<string, string> = {
   notifyContextAbsence: "queuert.notify_adapter.context_absence",
   notifyAdapterError: "queuert.notify_adapter.error",
   stateAdapterError: "queuert.state_adapter.error",
+  // histograms
+  jobSequenceDuration: "queuert.job_sequence.duration",
+  jobDuration: "queuert.job.duration",
+  jobAttemptDuration: "queuert.job.attempt.duration",
 };
 
 export const extendWithOtelObservability = <T extends {}>(
@@ -43,11 +47,17 @@ export const extendWithOtelObservability = <T extends {}>(
     expectMetrics: (
       expected: { method: string; args?: Record<string, unknown> }[],
     ) => Promise<void>;
+    expectHistograms: (
+      expected: { method: string; args?: Record<string, unknown> }[],
+    ) => Promise<void>;
   }
 > => {
   return api.extend<{
     observabilityAdapter: ObservabilityAdapter;
     expectMetrics: (
+      expected: { method: string; args?: Record<string, unknown> }[],
+    ) => Promise<void>;
+    expectHistograms: (
       expected: { method: string; args?: Record<string, unknown> }[],
     ) => Promise<void>;
     _otelExporter: InMemoryMetricExporter;
@@ -113,6 +123,37 @@ export const extendWithOtelObservability = <T extends {}>(
           // The test expectations use ObservabilityAdapter method args which don't map 1:1
           // to OTEL attributes (e.g., typeName -> sequenceTypeName, rescheduledAfterMs not stored).
           // Attribute verification should be done via unit tests on the adapter itself.
+        });
+      },
+      { scope: "test" },
+    ],
+    expectHistograms: [
+      async ({ _otelReader, _otelExporter, expect }, use) => {
+        await use(async (expected) => {
+          await _otelReader.forceFlush();
+          const lastExport = _otelExporter.getMetrics().at(-1);
+
+          // Collect actual histogram counts
+          const actualCounts = new Map<string, number>();
+          for (const scope of lastExport?.scopeMetrics ?? []) {
+            for (const m of scope.metrics) {
+              if (m.dataPointType === DataPointType.HISTOGRAM) {
+                let count = 0;
+                for (const p of m.dataPoints) count += p.value.count;
+                actualCounts.set(m.descriptor.name, count);
+              }
+            }
+          }
+
+          // Count expected histograms
+          const expectedCounts = new Map<string, number>();
+          for (const { method } of expected) {
+            const name = methodToMetricName[method] ?? method;
+            expectedCounts.set(name, (expectedCounts.get(name) ?? 0) + 1);
+          }
+
+          // Verify counts match
+          expect(Object.fromEntries(actualCounts)).toEqual(Object.fromEntries(expectedCounts));
         });
       },
       { scope: "test" },

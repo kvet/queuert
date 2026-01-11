@@ -23,6 +23,7 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
     log,
     expectLogs,
     expectMetrics,
+    expectHistograms,
     expect,
   }) => {
     const queuert = await createQueuert({
@@ -203,6 +204,16 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
       { method: "jobSequenceCompleted", args: { typeName: "linear" } },
       { method: "workerStopping" },
       { method: "workerStopped" },
+    ]);
+
+    await expectHistograms([
+      { method: "jobDuration", args: { typeName: "linear" } },
+      { method: "jobAttemptDuration", args: { typeName: "linear" } },
+      { method: "jobDuration", args: { typeName: "linear_next" } },
+      { method: "jobAttemptDuration", args: { typeName: "linear_next" } },
+      { method: "jobDuration", args: { typeName: "linear_next_next" } },
+      { method: "jobSequenceDuration", args: { typeName: "linear" } },
+      { method: "jobAttemptDuration", args: { typeName: "linear_next_next" } },
     ]);
   });
 

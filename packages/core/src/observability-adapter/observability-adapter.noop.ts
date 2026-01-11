@@ -33,4 +33,9 @@ export const createNoopObservabilityAdapter = (): ObservabilityAdapter => ({
 
   // state adapter
   stateAdapterError: () => {},
+
+  // histograms
+  jobSequenceDuration: () => {},
+  jobDuration: () => {},
+  jobAttemptDuration: () => {},
 });

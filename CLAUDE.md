@@ -134,15 +134,21 @@ OpenTelemetry observability adapter for metrics and tracing.
 
 **Adapter notes:**
 
-Users configure their OTEL SDK with desired exporters (Prometheus, OTLP, Jaeger, etc.) before using this adapter. Currently implements counters only; histograms, gauges, and tracing spans will be added later.
+Users configure their OTEL SDK with desired exporters (Prometheus, OTLP, Jaeger, etc.) before using this adapter. Implements counters and histograms; gauges and tracing spans will be added later.
 
 **Counters emitted:**
 
-- Worker: `{prefix}.worker.started`, `{prefix}.worker.error`, `{prefix}.worker.stopped`
+- Worker: `{prefix}.worker.started`, `{prefix}.worker.error`, `{prefix}.worker.stopping`, `{prefix}.worker.stopped`
 - Job: `{prefix}.job.created`, `{prefix}.job.attempt.started`, `{prefix}.job.attempt.taken_by_another_worker`, `{prefix}.job.attempt.already_completed`, `{prefix}.job.attempt.lease_expired`, `{prefix}.job.attempt.lease_renewed`, `{prefix}.job.attempt.failed`, `{prefix}.job.attempt.completed`, `{prefix}.job.completed`, `{prefix}.job.reaped`, `{prefix}.job.blocked`, `{prefix}.job.unblocked`
 - Job Sequence: `{prefix}.job_sequence.created`, `{prefix}.job_sequence.completed`
 - Notify Adapter: `{prefix}.notify_adapter.context_absence`, `{prefix}.notify_adapter.error`
 - State Adapter: `{prefix}.state_adapter.error`
+
+**Histograms emitted:**
+
+- Job Sequence: `{prefix}.job_sequence.duration` - Duration from sequence creation to completion (ms)
+- Job: `{prefix}.job.duration` - Duration from job creation to completion (ms)
+- Job Attempt: `{prefix}.job.attempt.duration` - Duration of attempt processing (ms)
 
 **Configuration options:**
 

@@ -18,6 +18,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     log,
     expectLogs,
     expectMetrics,
+    expectHistograms,
     expect,
   }) => {
     const queuert = await createQueuert({
@@ -168,6 +169,12 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       { method: "jobSequenceCompleted", args: { typeName: "test", output: { result: true } } },
       { method: "workerStopping", args: { workerId: "worker" } },
       { method: "workerStopped", args: { workerId: "worker" } },
+    ]);
+
+    await expectHistograms([
+      { method: "jobDuration", args: { typeName: "test" } },
+      { method: "jobSequenceDuration", args: { typeName: "test" } },
+      { method: "jobAttemptDuration", args: { typeName: "test", workerId: "worker" } },
     ]);
   });
 

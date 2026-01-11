@@ -57,6 +57,20 @@ export const createOtelObservabilityAdapter = ({
   // state adapter
   const stateAdapterErrorCounter = meter.createCounter(`${metricPrefix}.state_adapter.error`);
 
+  // histograms
+  const jobSequenceDurationHistogram = meter.createHistogram(
+    `${metricPrefix}.job_sequence.duration`,
+    { unit: "ms", description: "Duration of job sequence from creation to completion" },
+  );
+  const jobDurationHistogram = meter.createHistogram(`${metricPrefix}.job.duration`, {
+    unit: "ms",
+    description: "Duration of job from creation to completion",
+  });
+  const jobAttemptDurationHistogram = meter.createHistogram(
+    `${metricPrefix}.job.attempt.duration`,
+    { unit: "ms", description: "Duration of job attempt processing" },
+  );
+
   return {
     // worker
     workerStarted: ({ workerId }) => {
@@ -136,6 +150,17 @@ export const createOtelObservabilityAdapter = ({
     // state adapter
     stateAdapterError: ({ operation }) => {
       stateAdapterErrorCounter.add(1, { operation });
+    },
+
+    // histograms
+    jobSequenceDuration: ({ typeName, durationMs }) => {
+      jobSequenceDurationHistogram.record(durationMs, { sequenceTypeName: typeName });
+    },
+    jobDuration: ({ typeName, sequenceTypeName, durationMs }) => {
+      jobDurationHistogram.record(durationMs, { typeName, sequenceTypeName });
+    },
+    jobAttemptDuration: ({ typeName, sequenceTypeName, workerId, durationMs }) => {
+      jobAttemptDurationHistogram.record(durationMs, { typeName, sequenceTypeName, workerId });
     },
   };
 };

@@ -104,6 +104,10 @@ export type ObservabilityHelper = {
   notifyAdapterError: (operation: keyof NotifyAdapter, error: unknown) => void;
   // state adapter
   stateAdapterError: (operation: keyof StateAdapter<any, any, any>, error: unknown) => void;
+  // histograms
+  jobSequenceDuration: (firstJob: StateJob, lastJob: StateJob) => void;
+  jobDuration: (job: StateJob) => void;
+  jobAttemptDuration: (job: StateJob, options: { durationMs: number; workerId: string }) => void;
 };
 
 export const createObservabilityHelper = ({
@@ -411,5 +415,28 @@ export const createObservabilityHelper = ({
       error,
     });
     adapter.stateAdapterError({ operation, error });
+  },
+
+  // histograms (no logging, metrics only)
+  jobSequenceDuration(firstJob, lastJob) {
+    if (lastJob.completedAt && firstJob.createdAt) {
+      const durationMs = lastJob.completedAt.getTime() - firstJob.createdAt.getTime();
+      adapter.jobSequenceDuration({ ...mapStateJobToJobSequenceData(firstJob), durationMs });
+    }
+  },
+
+  jobDuration(job) {
+    if (job.completedAt && job.createdAt) {
+      const durationMs = job.completedAt.getTime() - job.createdAt.getTime();
+      adapter.jobDuration({ ...mapStateJobToJobProcessingData(job), durationMs });
+    }
+  },
+
+  jobAttemptDuration(job, options) {
+    adapter.jobAttemptDuration({
+      ...mapStateJobToJobProcessingData(job),
+      durationMs: options.durationMs,
+      workerId: options.workerId,
+    });
   },
 });

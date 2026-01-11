@@ -7,8 +7,6 @@ import { StateAdapter } from "../state-adapter/state-adapter.js";
  *
  * Accepts primitive data types (not domain objects).
  * Use with ObservabilityHelper for domain-object-friendly interface.
- *
- * Counters only for now - histograms, gauges, and tracing will be added later.
  */
 export type ObservabilityAdapter = {
   // worker
@@ -82,4 +80,9 @@ export type ObservabilityAdapter = {
     operation: keyof StateAdapter<any, any, any>;
     error: unknown;
   }) => void;
+
+  // histograms
+  jobSequenceDuration: (data: JobSequenceData & { durationMs: number }) => void;
+  jobDuration: (data: JobProcessingData & { durationMs: number }) => void;
+  jobAttemptDuration: (data: JobProcessingData & { durationMs: number; workerId: string }) => void;
 };

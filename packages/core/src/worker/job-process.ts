@@ -305,6 +305,7 @@ export const runJobProcess = async ({
   let disposeOwnershipListener: (() => Promise<void>) | null = null;
 
   const startProcessing = async (job: StateJob) => {
+    const attemptStartTime = Date.now();
     const blockerPairs = await helper.getJobBlockers({ jobId: job.id, context });
     const runningJob = {
       ...mapStateJobToJob(job),
@@ -413,6 +414,10 @@ export const runJobProcess = async ({
         );
       });
       completeSucceeded = true;
+      helper.observabilityHelper.jobAttemptDuration(job, {
+        durationMs: Date.now() - attemptStartTime,
+        workerId,
+      });
       return result;
     }) as CompleteFn<
       StateAdapter<BaseStateAdapterContext, BaseStateAdapterContext, any>,
