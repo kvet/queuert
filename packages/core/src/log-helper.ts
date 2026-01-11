@@ -32,7 +32,7 @@ const mapJobSequenceToLogData = (seq: JobSequence<any, any, any, any>): JobSeque
   rootSequenceId: seq.rootSequenceId,
 });
 
-const mapJobToJobBasicLogData = (job: Job<any, any, any, any>): JobBasicData => ({
+const mapJobToJobBasicLogData = (job: Job<any, any, any, any, any[]>): JobBasicData => ({
   id: job.id,
   typeName: job.typeName,
   originId: job.originId,
@@ -65,11 +65,15 @@ export type LogHelper = {
   ) => void;
   jobAttemptCompleted: (
     job: StateJob,
-    options: { output: unknown; continuedWith?: Job<any, any, any, any>; workerId: string },
+    options: { output: unknown; continuedWith?: Job<any, any, any, any, any[]>; workerId: string },
   ) => void;
   jobCompleted: (
     job: StateJob,
-    options: { output: unknown; continuedWith?: Job<any, any, any, any>; workerId: string | null },
+    options: {
+      output: unknown;
+      continuedWith?: Job<any, any, any, any, any[]>;
+      workerId: string | null;
+    },
   ) => void;
   // job sequence
   jobSequenceCreated: (job: StateJob, options: { input: unknown }) => void;

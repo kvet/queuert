@@ -9,6 +9,7 @@ import {
   BaseJobTypeDefinitions,
   BlockerSequences,
   ContinuationJobs,
+  ExternalJobTypeDefinitions,
   JobOf,
   JobSequenceOf,
   SequenceJobs,
@@ -37,8 +38,12 @@ export type StartBlockersFn<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions & string,
+  TSequenceTypeName extends keyof ExternalJobTypeDefinitions<TJobTypeDefinitions> & string =
+    keyof ExternalJobTypeDefinitions<TJobTypeDefinitions> & string,
 > = (options: {
-  job: PendingJob<JobWithoutBlockers<JobOf<TJobId, TJobTypeDefinitions, TJobTypeName>>>;
+  job: PendingJob<
+    JobWithoutBlockers<JobOf<TJobId, TJobTypeDefinitions, TJobTypeName, TSequenceTypeName>>
+  >;
 }) => Promise<BlockerSequences<TJobId, TJobTypeDefinitions, TJobTypeName>>;
 
 const notifyCompletionStorage = new AsyncLocalStorage<{
@@ -280,7 +285,7 @@ export const queuertHelper = ({
     workerId: string | null;
   } & (
     | { type: "completeSequence"; output: unknown }
-    | { type: "continueWith"; continuedJob: Job<any, any, any, any> }
+    | { type: "continueWith"; continuedJob: Job<any, any, any, any, any[]> }
   )): Promise<StateJob> => {
     const hasContinuedJob = rest.type === "continueWith";
     const output = hasContinuedJob ? null : rest.output;
@@ -415,7 +420,7 @@ export const queuertHelper = ({
       context: any;
       schedule?: ScheduleOptions;
       startBlockers?: StartBlockersFn<string, BaseJobTypeDefinitions, string>;
-    }): Promise<JobOf<string, BaseJobTypeDefinitions, TJobTypeName>> => {
+    }): Promise<JobOf<string, BaseJobTypeDefinitions, TJobTypeName, string>> => {
       const { job } = await createStateJob({
         typeName,
         input,
@@ -425,7 +430,7 @@ export const queuertHelper = ({
         schedule,
       });
 
-      return mapStateJobToJob(job) as JobOf<string, BaseJobTypeDefinitions, TJobTypeName>;
+      return mapStateJobToJob(job) as JobOf<string, BaseJobTypeDefinitions, TJobTypeName, string>;
     },
     handleJobHandlerError: async ({
       job,
@@ -470,7 +475,7 @@ export const queuertHelper = ({
         workerId: string | null;
       } & (
         | { type: "completeSequence"; output: unknown }
-        | { type: "continueWith"; continuedJob: Job<any, any, any, any> }
+        | { type: "continueWith"; continuedJob: Job<any, any, any, any, any[]> }
       ),
     ) => Promise<StateJob>,
     logJobAttemptCompleted: ({
@@ -481,7 +486,7 @@ export const queuertHelper = ({
     }: {
       job: StateJob;
       output: unknown;
-      continuedWith?: Job<any, any, any, any>;
+      continuedWith?: Job<any, any, any, any, any[]>;
       workerId: string;
     }): void => {
       logHelper.jobAttemptCompleted(job, { output, continuedWith, workerId });
@@ -729,7 +734,7 @@ export const queuertHelper = ({
           );
         }
 
-        let continuedJob: Job<any, any, any, any> | null = null;
+        let continuedJob: Job<any, any, any, any, any[]> | null = null;
 
         const output = await jobCompleteCallback({
           continueWith: async ({ typeName, input, schedule, startBlockers }) => {
@@ -754,7 +759,7 @@ export const queuertHelper = ({
                   schedule,
                 });
 
-                return mapStateJobToJob(newJob) as Job<any, any, any, any>;
+                return mapStateJobToJob(newJob) as Job<any, any, any, any, any[]>;
               },
             );
 
@@ -871,7 +876,7 @@ export type ProcessHelper = ReturnType<typeof queuertHelper>;
 export type JobSequenceCompleteOptions<
   TStateAdapter extends StateAdapter<any, any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TSequenceTypeName extends string,
+  TSequenceTypeName extends keyof ExternalJobTypeDefinitions<TJobTypeDefinitions> & string,
   TCompleteReturn,
 > = (options: {
   job: SequenceJobs<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TSequenceTypeName>;
@@ -879,15 +884,35 @@ export type JobSequenceCompleteOptions<
     TJobTypeName extends SequenceJobTypes<TJobTypeDefinitions, TSequenceTypeName> & string,
     TReturn extends
       | TJobTypeDefinitions[TJobTypeName]["output"]
-      | ContinuationJobs<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TJobTypeName>
+      | ContinuationJobs<
+          GetStateAdapterJobId<TStateAdapter>,
+          TJobTypeDefinitions,
+          TJobTypeName,
+          TSequenceTypeName
+        >
       | Promise<TJobTypeDefinitions[TJobTypeName]["output"]>
       | Promise<
-          ContinuationJobs<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TJobTypeName>
+          ContinuationJobs<
+            GetStateAdapterJobId<TStateAdapter>,
+            TJobTypeDefinitions,
+            TJobTypeName,
+            TSequenceTypeName
+          >
         >,
   >(
-    job: JobOf<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TJobTypeName>,
+    job: JobOf<
+      GetStateAdapterJobId<TStateAdapter>,
+      TJobTypeDefinitions,
+      TJobTypeName,
+      TSequenceTypeName
+    >,
     completeCallback: (
-      completeOptions: CompleteCallbackOptions<TStateAdapter, TJobTypeDefinitions, TJobTypeName>,
+      completeOptions: CompleteCallbackOptions<
+        TStateAdapter,
+        TJobTypeDefinitions,
+        TJobTypeName,
+        TSequenceTypeName
+      >,
     ) => TReturn,
   ) => Promise<Awaited<TReturn>>;
 }) => Promise<TCompleteReturn>;
@@ -899,7 +924,7 @@ export type CompleteJobSequenceResult<
   TCompleteReturn,
 > = [TCompleteReturn] extends [void]
   ? JobSequenceOf<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TSequenceTypeName>
-  : TCompleteReturn extends Job<any, any, any, any>
+  : TCompleteReturn extends Job<any, any, any, any, any[]>
     ? JobSequenceOf<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TSequenceTypeName>
     : CompletedJobSequence<
         JobSequence<

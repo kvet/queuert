@@ -5,10 +5,11 @@ export * from "./job.types.js";
 
 export const mapStateJobToJob = (
   stateJob: StateJob,
-): JobWithoutBlockers<Job<any, any, any, any>> => {
+): JobWithoutBlockers<Job<any, any, any, any, any[]>> => {
   const base = {
     id: stateJob.id,
     sequenceId: stateJob.sequenceId,
+    sequenceTypeName: stateJob.sequenceTypeName,
     originId: stateJob.originId,
     rootSequenceId: stateJob.rootSequenceId,
     typeName: stateJob.typeName,

@@ -394,4 +394,56 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       await processCompleted.promise;
     });
   });
+
+  it("correctly narrows sequenceTypeName in completeJobSequence", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    log,
+    expect,
+  }) => {
+    const queuert = await createQueuert({
+      stateAdapter,
+      notifyAdapter,
+      log,
+      jobTypeDefinitions: defineUnionJobTypes<{
+        entryA: { input: null; output: DefineContinuationOutput<"shared"> };
+        entryB: { input: null; output: DefineContinuationOutput<"shared"> };
+        shared: { input: DefineContinuationInput<null>; output: { done: true } };
+      }>(),
+    });
+
+    const jobSequence = await queuert.withNotify(async () =>
+      runInTransaction(async (context) =>
+        queuert.startJobSequence({ ...context, typeName: "entryA", input: null }),
+      ),
+    );
+
+    await queuert.withNotify(async () =>
+      runInTransaction(async (context) =>
+        queuert.completeJobSequence({
+          ...context,
+          typeName: "entryA",
+          id: jobSequence.id,
+          complete: async ({ job, complete }) => {
+            // In completeJobSequence with typeName: "entryA", sequenceTypeName should be narrowed
+            expectTypeOf(job.sequenceTypeName).toEqualTypeOf<"entryA">();
+            expect(job.sequenceTypeName).toBe("entryA");
+
+            if (job.typeName === "entryA") {
+              job = await complete(job, async ({ continueWith }) =>
+                continueWith({ typeName: "shared", input: null }),
+              );
+            }
+
+            // After continuing, job is now "shared" but sequenceTypeName is still "entryA"
+            expectTypeOf(job.sequenceTypeName).toEqualTypeOf<"entryA">();
+            expect(job.sequenceTypeName).toBe("entryA");
+
+            return complete(job, async () => ({ done: true }));
+          },
+        }),
+      ),
+    );
+  });
 };

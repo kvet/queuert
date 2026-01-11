@@ -22,9 +22,12 @@ export type JobOf<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions,
+  TSequenceTypeName extends keyof ExternalJobTypeDefinitions<TJobTypeDefinitions> & string =
+    SequenceTypesReaching<TJobTypeDefinitions, TJobTypeName>,
 > = Job<
   TJobId,
   TJobTypeName,
+  TSequenceTypeName,
   UnwrapContinuationInput<TJobTypeDefinitions[TJobTypeName]["input"]>,
   CompletedBlockerSequences<TJobId, TJobTypeDefinitions, TJobTypeName & string>
 >;
@@ -68,13 +71,27 @@ export type SequenceJobTypes<
           >;
         }[ContinuationJobTypes<TJobTypeDefinitions, TJobTypeName>];
 
+export type SequenceTypesReaching<
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TJobTypeName extends keyof TJobTypeDefinitions,
+> = {
+  [K in keyof ExternalJobTypeDefinitions<TJobTypeDefinitions>]: TJobTypeName extends SequenceJobTypes<
+    TJobTypeDefinitions,
+    K
+  >
+    ? K
+    : never;
+}[keyof ExternalJobTypeDefinitions<TJobTypeDefinitions>];
+
 export type ContinuationJobs<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions & string,
+  TSequenceTypeName extends keyof ExternalJobTypeDefinitions<TJobTypeDefinitions> & string =
+    SequenceTypesReaching<TJobTypeDefinitions, TJobTypeName>,
 > = {
   [K in ContinuationJobTypes<TJobTypeDefinitions, TJobTypeName>]: CreatedJob<
-    JobWithoutBlockers<JobOf<TJobId, TJobTypeDefinitions, K>>
+    JobWithoutBlockers<JobOf<TJobId, TJobTypeDefinitions, K, TSequenceTypeName>>
   >;
 }[ContinuationJobTypes<TJobTypeDefinitions, TJobTypeName>];
 
@@ -156,8 +173,8 @@ export type CompletedBlockerSequences<
 export type SequenceJobs<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TSequenceTypeName extends string,
+  TSequenceTypeName extends keyof ExternalJobTypeDefinitions<TJobTypeDefinitions> & string,
 > = {
   [K in SequenceJobTypes<TJobTypeDefinitions, TSequenceTypeName> &
-    keyof TJobTypeDefinitions]: JobOf<TJobId, TJobTypeDefinitions, K>;
+    keyof TJobTypeDefinitions]: JobOf<TJobId, TJobTypeDefinitions, K, TSequenceTypeName>;
 }[SequenceJobTypes<TJobTypeDefinitions, TSequenceTypeName> & keyof TJobTypeDefinitions];

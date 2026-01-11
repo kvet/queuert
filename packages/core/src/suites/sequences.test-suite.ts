@@ -430,5 +430,79 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
     });
   });
 
+  it("correctly types sequenceTypeName for jobs reachable from multiple sequences", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    withWorkers,
+    log,
+    expect,
+  }) => {
+    const queuert = await createQueuert({
+      stateAdapter,
+      notifyAdapter,
+      log,
+      jobTypeDefinitions: defineUnionJobTypes<{
+        entryA: { input: { fromA: true }; output: DefineContinuationOutput<"shared"> };
+        entryB: { input: { fromB: true }; output: DefineContinuationOutput<"shared"> };
+        shared: { input: DefineContinuationInput<{ data: number }>; output: { done: true } };
+      }>(),
+    });
+
+    const worker = queuert
+      .createWorker()
+      .implementJobType({
+        typeName: "entryA",
+        process: async ({ job, complete }) => {
+          // Entry job's sequenceTypeName should match its own typeName
+          expectTypeOf(job.sequenceTypeName).toEqualTypeOf<"entryA">();
+          expect(job.sequenceTypeName).toBe("entryA");
+          return complete(async ({ continueWith }) =>
+            continueWith({ typeName: "shared", input: { data: 1 } }),
+          );
+        },
+      })
+      .implementJobType({
+        typeName: "entryB",
+        process: async ({ job, complete }) => {
+          // Entry job's sequenceTypeName should match its own typeName
+          expectTypeOf(job.sequenceTypeName).toEqualTypeOf<"entryB">();
+          expect(job.sequenceTypeName).toBe("entryB");
+          return complete(async ({ continueWith }) =>
+            continueWith({ typeName: "shared", input: { data: 2 } }),
+          );
+        },
+      })
+      .implementJobType({
+        typeName: "shared",
+        process: async ({ job, complete }) => {
+          // Shared job's sequenceTypeName should be union of both entry types
+          expectTypeOf(job.sequenceTypeName).toEqualTypeOf<"entryA" | "entryB">();
+          expect(["entryA", "entryB"]).toContain(job.sequenceTypeName);
+          return complete(async () => ({ done: true }));
+        },
+      });
+
+    const sequenceA = await queuert.withNotify(async () =>
+      runInTransaction(async (context) =>
+        queuert.startJobSequence({ ...context, typeName: "entryA", input: { fromA: true } }),
+      ),
+    );
+    const sequenceB = await queuert.withNotify(async () =>
+      runInTransaction(async (context) =>
+        queuert.startJobSequence({ ...context, typeName: "entryB", input: { fromB: true } }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      const [resultA, resultB] = await Promise.all([
+        queuert.waitForJobSequenceCompletion(sequenceA, { pollIntervalMs: 100, timeoutMs: 5000 }),
+        queuert.waitForJobSequenceCompletion(sequenceB, { pollIntervalMs: 100, timeoutMs: 5000 }),
+      ]);
+      expect(resultA.output).toEqual({ done: true });
+      expect(resultB.output).toEqual({ done: true });
+    });
+  });
+
   // TODO: add a test where a sequence is distributed across multiple workers
 };

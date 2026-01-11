@@ -1,9 +1,16 @@
 export type JobStatus = "blocked" | "pending" | "running" | "completed";
 
-export type Job<TJobId, TJobTypeName, TInput, TBlockerSequences extends any[]> = {
+export type Job<
+  TJobId,
+  TJobTypeName,
+  TSequenceTypeName,
+  TInput,
+  TBlockerSequences extends any[],
+> = {
   id: TJobId;
   sequenceId: TJobId;
   typeName: TJobTypeName;
+  sequenceTypeName: TSequenceTypeName;
   rootSequenceId: TJobId;
   originId: TJobId | null;
   input: TInput;
@@ -21,11 +28,11 @@ export type Job<TJobId, TJobTypeName, TInput, TBlockerSequences extends any[]> =
   | { status: "completed"; completedAt: Date; completedBy: string | null }
 );
 
-export type JobWithoutBlockers<TJob extends Job<any, any, any, any>> = TJob extends any
+export type JobWithoutBlockers<TJob extends Job<any, any, any, any, any[]>> = TJob extends any
   ? Omit<TJob, "blockers">
   : never;
 
-type AnyJob = Job<any, any, any, any> | Omit<Job<any, any, any, any>, "blockers">;
+type AnyJob = Job<any, any, any, any, any[]> | Omit<Job<any, any, any, any, any[]>, "blockers">;
 
 export type PendingJob<TJob extends AnyJob> = TJob & { status: "pending" };
 export type BlockedJob<TJob extends AnyJob> = TJob & { status: "blocked" };

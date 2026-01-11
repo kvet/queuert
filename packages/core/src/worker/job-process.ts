@@ -7,8 +7,10 @@ import {
   BaseJobTypeDefinitions,
   ContinuationJobs,
   ContinuationJobTypes,
+  ExternalJobTypeDefinitions,
   HasBlockers,
   JobOf,
+  SequenceTypesReaching,
 } from "../entities/job-type.js";
 import { CompletedJob, CreatedJob, Job, mapStateJobToJob, RunningJob } from "../entities/job.js";
 import { ScheduleOptions } from "../entities/schedule.js";
@@ -66,6 +68,7 @@ export type CompleteCallbackOptions<
   TStateAdapter extends StateAdapter<BaseStateAdapterContext, BaseStateAdapterContext, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions & string,
+  TSequenceTypeName extends keyof ExternalJobTypeDefinitions<TJobTypeDefinitions> & string,
 > = {
   continueWith: <
     TContinueJobTypeName extends ContinuationJobTypes<TJobTypeDefinitions, TJobTypeName> & string,
@@ -75,7 +78,8 @@ export type CompleteCallbackOptions<
       input: JobOf<
         GetStateAdapterJobId<TStateAdapter>,
         TJobTypeDefinitions,
-        TContinueJobTypeName
+        TContinueJobTypeName,
+        TSequenceTypeName
       >["input"];
       schedule?: ScheduleOptions;
     } & (HasBlockers<TJobTypeDefinitions, TContinueJobTypeName> extends true
@@ -89,7 +93,12 @@ export type CompleteCallbackOptions<
       : { startBlockers?: never }),
   ) => Promise<
     CreatedJob<
-      JobOf<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TContinueJobTypeName>
+      JobOf<
+        GetStateAdapterJobId<TStateAdapter>,
+        TJobTypeDefinitions,
+        TContinueJobTypeName,
+        TSequenceTypeName
+      >
     >
   >;
 } & GetStateAdapterTxContext<TStateAdapter>;
@@ -100,7 +109,12 @@ export type CompleteCallback<
   TJobTypeName extends keyof TJobTypeDefinitions & string,
   TResult,
 > = (
-  completeOptions: CompleteCallbackOptions<TStateAdapter, TJobTypeDefinitions, TJobTypeName>,
+  completeOptions: CompleteCallbackOptions<
+    TStateAdapter,
+    TJobTypeDefinitions,
+    TJobTypeName,
+    SequenceTypesReaching<TJobTypeDefinitions, TJobTypeName>
+  >,
 ) => Promise<TResult>;
 
 export type CompleteFn<
@@ -110,15 +124,37 @@ export type CompleteFn<
 > = <
   TReturn extends
     | TJobTypeDefinitions[TJobTypeName]["output"]
-    | ContinuationJobs<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TJobTypeName>,
+    | ContinuationJobs<
+        GetStateAdapterJobId<TStateAdapter>,
+        TJobTypeDefinitions,
+        TJobTypeName,
+        SequenceTypesReaching<TJobTypeDefinitions, TJobTypeName>
+      >,
 >(
   completeCallback: (
-    completeOptions: CompleteCallbackOptions<TStateAdapter, TJobTypeDefinitions, TJobTypeName>,
+    completeOptions: CompleteCallbackOptions<
+      TStateAdapter,
+      TJobTypeDefinitions,
+      TJobTypeName,
+      SequenceTypesReaching<TJobTypeDefinitions, TJobTypeName>
+    >,
   ) => Promise<TReturn>,
 ) => Promise<
   TReturn extends TJobTypeDefinitions[TJobTypeName]["output"]
-    ? CompletedJob<JobOf<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TJobTypeName>>
-    : ContinuationJobs<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TJobTypeName>
+    ? CompletedJob<
+        JobOf<
+          GetStateAdapterJobId<TStateAdapter>,
+          TJobTypeDefinitions,
+          TJobTypeName,
+          SequenceTypesReaching<TJobTypeDefinitions, TJobTypeName>
+        >
+      >
+    : ContinuationJobs<
+        GetStateAdapterJobId<TStateAdapter>,
+        TJobTypeDefinitions,
+        TJobTypeName,
+        SequenceTypesReaching<TJobTypeDefinitions, TJobTypeName>
+      >
 >;
 
 export type PrepareConfig = { mode: "atomic" | "staged" };
@@ -144,12 +180,31 @@ export type JobProcessFn<
   TJobTypeName extends keyof TJobTypeDefinitions & string,
 > = (processOptions: {
   signal: TypedAbortSignal<JobAbortReason>;
-  job: RunningJob<JobOf<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TJobTypeName>>;
+  job: RunningJob<
+    JobOf<
+      GetStateAdapterJobId<TStateAdapter>,
+      TJobTypeDefinitions,
+      TJobTypeName,
+      SequenceTypesReaching<TJobTypeDefinitions, TJobTypeName>
+    >
+  >;
   prepare: PrepareFn<TStateAdapter>;
   complete: CompleteFn<TStateAdapter, TJobTypeDefinitions, TJobTypeName>;
 }) => Promise<
-  | CompletedJob<JobOf<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TJobTypeName>>
-  | ContinuationJobs<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TJobTypeName>
+  | CompletedJob<
+      JobOf<
+        GetStateAdapterJobId<TStateAdapter>,
+        TJobTypeDefinitions,
+        TJobTypeName,
+        SequenceTypesReaching<TJobTypeDefinitions, TJobTypeName>
+      >
+    >
+  | ContinuationJobs<
+      GetStateAdapterJobId<TStateAdapter>,
+      TJobTypeDefinitions,
+      TJobTypeName,
+      SequenceTypesReaching<TJobTypeDefinitions, TJobTypeName>
+    >
 >;
 
 export const runJobProcess = async ({
@@ -255,7 +310,7 @@ export const runJobProcess = async ({
       blockers: blockerPairs.map(mapStateJobPairToJobSequence) as CompletedJobSequence<
         JobSequence<any, any, any, any>
       >[],
-    } as RunningJob<Job<any, any, any, any>>;
+    } as RunningJob<JobOf<any, any, any, any>>;
 
     let prepareAccessed = false;
     let prepareCalled = false;
@@ -321,7 +376,7 @@ export const runJobProcess = async ({
       await disposeOwnershipListener?.();
       await leaseManager.stop();
       const result = await runInGuardedTransaction(async (context) => {
-        let continuedJob: Job<any, any, any, any> | null = null;
+        let continuedJob: Job<any, any, any, any, any[]> | null = null;
         const output = await completeCallback({
           continueWith: async ({ typeName, input, schedule, startBlockers }) => {
             if (continuedJob) {

@@ -496,10 +496,11 @@ In-process and internal-only factories remain sync since they have no I/O:
 
 ### Type Helpers
 
-- `JobOf<TJobId, TJobTypeDefinitions, TJobTypeName>`: Resolves to `Job<TJobId, TJobTypeName, Input, BlockerSequences>` from job type definitions. Automatically unwraps `DefineContinuationInput` markers and includes typed blocker sequences.
+- `JobOf<TJobId, TJobTypeDefinitions, TJobTypeName, TSequenceTypeName?>`: Resolves to `Job<TJobId, TJobTypeName, Input, BlockerSequences, SequenceTypeName>` from job type definitions. Automatically unwraps `DefineContinuationInput` markers and includes typed blocker sequences. The optional 4th parameter `TSequenceTypeName` defaults to `SequenceTypesReaching<TJobTypeDefinitions, TJobTypeName>` (union of all sequence types that can reach this job type).
 - `JobWithoutBlockers<TJob>`: Strips the `blockers` field from a `Job` type. Used in `startBlockers` callback where blockers haven't been created yet. Example: `JobWithoutBlockers<JobOf<string, Defs, "process">>`.
 - `PendingJob<TJob>`, `BlockedJob<TJob>`, `RunningJob<TJob>`, `CompletedJob<TJob>`, `CreatedJob<TJob>`: Job status types that take a `Job` type and narrow by status. Example: `PendingJob<JobOf<string, Defs, "process">>`.
 - `SequenceJobTypes<TJobTypeDefinitions, TSequenceTypeName>`: Union of all job type names reachable in a sequence starting from `TSequenceTypeName`.
+- `SequenceTypesReaching<TJobTypeDefinitions, TJobTypeName>`: Inverse of `SequenceJobTypes`. Given a job type, computes the union of all sequence types (external job types) that can reach it. For entry jobs, this is their own type; for continuation-only jobs, this is the union of all entry types that eventually continue to them.
 - `ContinuationJobTypes<TJobTypeDefinitions, TJobTypeName>`: Job type names that `TJobTypeName` can continue to.
 - `ExternalJobTypeDefinitions<T>`: Filters job type definitions to only external job types that can be started via `startJobSequence` (excludes internal `DefineContinuationInput` types).
 - `HasBlockers<TJobTypeDefinitions, TJobTypeName>`: Returns `true` if the job type has blockers defined, `false` otherwise. Used internally to enforce `startBlockers` requirement.

@@ -1,15 +1,16 @@
-import { describe, it, expectTypeOf } from "vitest";
+import { describe, expectTypeOf, it } from "vitest";
 import {
-  defineUnionJobTypes,
+  BlockerSequences,
+  ContinuationJobTypes,
+  DefineBlocker,
   DefineContinuationInput,
   DefineContinuationOutput,
-  DefineBlocker,
+  defineUnionJobTypes,
   ExternalJobTypeDefinitions,
   JobOf,
-  ContinuationJobTypes,
-  SequenceJobTypes,
-  BlockerSequences,
   JobSequenceOf,
+  SequenceJobTypes,
+  SequenceTypesReaching,
 } from "./job-type.js";
 
 describe("defineUnionJobTypes", () => {
@@ -387,5 +388,137 @@ describe("JobSequenceOf", () => {
 
     // Input can be either first job's input or second job's unwrapped input
     expectTypeOf<SeqInput>().toEqualTypeOf<{ start: number } | { continued: string }>();
+  });
+});
+
+describe("SequenceTypesReaching", () => {
+  it("computes reaching sequence types for complex job graphs", () => {
+    // Complex graph with:
+    // - 5 entry points (external job types)
+    // - Multiple shared internal jobs reachable from different sequences
+    // - Branching paths
+    // - Deep chains (up to 6 levels)
+    // - Diamond patterns (multiple paths converging)
+    const defs = defineUnionJobTypes<{
+      // Entry points
+      entryA: { input: { a: true }; output: DefineContinuationOutput<"sharedStep1"> };
+      entryB: { input: { b: true }; output: DefineContinuationOutput<"sharedStep1"> };
+      entryC: { input: { c: true }; output: DefineContinuationOutput<"branchC1"> };
+      entryD: { input: { d: true }; output: DefineContinuationOutput<"deepChain1"> };
+      entryE: {
+        input: { e: true };
+        output: DefineContinuationOutput<"branchE1"> | DefineContinuationOutput<"branchE2">;
+      };
+
+      // Shared step reachable from A and B
+      sharedStep1: {
+        input: DefineContinuationInput<{ step: 1 }>;
+        output: DefineContinuationOutput<"sharedStep2">;
+      };
+      sharedStep2: {
+        input: DefineContinuationInput<{ step: 2 }>;
+        output: DefineContinuationOutput<"finalShared">;
+      };
+      finalShared: {
+        input: DefineContinuationInput<{ final: true }>;
+        output: { done: "shared" };
+      };
+
+      // Branch from C
+      branchC1: {
+        input: DefineContinuationInput<{ c1: true }>;
+        output: DefineContinuationOutput<"branchC2">;
+      };
+      branchC2: {
+        input: DefineContinuationInput<{ c2: true }>;
+        output: DefineContinuationOutput<"finalShared">; // Converges to shared final
+      };
+
+      // Deep chain from D (6 levels)
+      deepChain1: {
+        input: DefineContinuationInput<{ depth: 1 }>;
+        output: DefineContinuationOutput<"deepChain2">;
+      };
+      deepChain2: {
+        input: DefineContinuationInput<{ depth: 2 }>;
+        output: DefineContinuationOutput<"deepChain3">;
+      };
+      deepChain3: {
+        input: DefineContinuationInput<{ depth: 3 }>;
+        output: DefineContinuationOutput<"deepChain4">;
+      };
+      deepChain4: {
+        input: DefineContinuationInput<{ depth: 4 }>;
+        output: DefineContinuationOutput<"deepChain5">;
+      };
+      deepChain5: {
+        input: DefineContinuationInput<{ depth: 5 }>;
+        output: DefineContinuationOutput<"deepChain6">;
+      };
+      deepChain6: {
+        input: DefineContinuationInput<{ depth: 6 }>;
+        output: { done: "deep" };
+      };
+
+      // Branches from E (both converge to same final)
+      branchE1: {
+        input: DefineContinuationInput<{ e1: true }>;
+        output: DefineContinuationOutput<"convergencePoint">;
+      };
+      branchE2: {
+        input: DefineContinuationInput<{ e2: true }>;
+        output: DefineContinuationOutput<"convergencePoint">;
+      };
+      convergencePoint: {
+        input: DefineContinuationInput<{ converged: true }>;
+        output: { done: "converged" };
+      };
+    }>();
+
+    // Entry points reach only themselves
+    expectTypeOf<SequenceTypesReaching<typeof defs, "entryA">>().toEqualTypeOf<"entryA">();
+    expectTypeOf<SequenceTypesReaching<typeof defs, "entryB">>().toEqualTypeOf<"entryB">();
+    expectTypeOf<SequenceTypesReaching<typeof defs, "entryC">>().toEqualTypeOf<"entryC">();
+    expectTypeOf<SequenceTypesReaching<typeof defs, "entryD">>().toEqualTypeOf<"entryD">();
+    expectTypeOf<SequenceTypesReaching<typeof defs, "entryE">>().toEqualTypeOf<"entryE">();
+
+    // Shared steps reachable from A and B
+    expectTypeOf<SequenceTypesReaching<typeof defs, "sharedStep1">>().toEqualTypeOf<
+      "entryA" | "entryB"
+    >();
+    expectTypeOf<SequenceTypesReaching<typeof defs, "sharedStep2">>().toEqualTypeOf<
+      "entryA" | "entryB"
+    >();
+
+    // Final shared is reachable from A, B, and C (via diamond pattern)
+    expectTypeOf<SequenceTypesReaching<typeof defs, "finalShared">>().toEqualTypeOf<
+      "entryA" | "entryB" | "entryC"
+    >();
+
+    // C-only branches
+    expectTypeOf<SequenceTypesReaching<typeof defs, "branchC1">>().toEqualTypeOf<"entryC">();
+    expectTypeOf<SequenceTypesReaching<typeof defs, "branchC2">>().toEqualTypeOf<"entryC">();
+
+    // Deep chain only from D
+    expectTypeOf<SequenceTypesReaching<typeof defs, "deepChain1">>().toEqualTypeOf<"entryD">();
+    expectTypeOf<SequenceTypesReaching<typeof defs, "deepChain6">>().toEqualTypeOf<"entryD">();
+
+    // E branches and convergence point
+    expectTypeOf<SequenceTypesReaching<typeof defs, "branchE1">>().toEqualTypeOf<"entryE">();
+    expectTypeOf<SequenceTypesReaching<typeof defs, "branchE2">>().toEqualTypeOf<"entryE">();
+    expectTypeOf<SequenceTypesReaching<typeof defs, "convergencePoint">>().toEqualTypeOf<"entryE">();
+
+    // JobOf uses the computed sequence type by default
+    type SharedStep1Job = JobOf<string, typeof defs, "sharedStep1">;
+    expectTypeOf<SharedStep1Job["sequenceTypeName"]>().toEqualTypeOf<"entryA" | "entryB">();
+
+    type FinalSharedJob = JobOf<string, typeof defs, "finalShared">;
+    expectTypeOf<FinalSharedJob["sequenceTypeName"]>().toEqualTypeOf<
+      "entryA" | "entryB" | "entryC"
+    >();
+
+    // Can narrow with explicit 4th param
+    type FinalSharedFromA = JobOf<string, typeof defs, "finalShared", "entryA">;
+    expectTypeOf<FinalSharedFromA["sequenceTypeName"]>().toEqualTypeOf<"entryA">();
   });
 });
