@@ -177,6 +177,6 @@ export type GetStateAdapterContext<TStateAdapter> =
     : never;
 
 export type GetStateAdapterJobId<TStateAdapter> =
-  TStateAdapter extends StateAdapter<infer _TContext, infer _TContext, infer TJobId>
+  TStateAdapter extends StateAdapter<infer _TTxContext, infer _TContext, infer TJobId>
     ? TJobId
     : never;
