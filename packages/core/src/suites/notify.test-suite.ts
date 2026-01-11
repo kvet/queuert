@@ -13,6 +13,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
   it("schedules processing immediately", async ({
     stateAdapter,
     notifyAdapter,
+    observabilityAdapter,
     log,
     withWorkers,
     runInTransaction,
@@ -21,6 +22,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         test: {
@@ -60,6 +62,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
   it("distributes processing to multiple workers", async ({
     stateAdapter,
     notifyAdapter,
+    observabilityAdapter,
     log,
     withWorkers,
     runInTransaction,
@@ -68,6 +71,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         test: {
@@ -118,6 +122,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
   it("handles distributed blocker jobs", async ({
     stateAdapter,
     notifyAdapter,
+    observabilityAdapter,
     log,
     withWorkers,
     runInTransaction,
@@ -126,6 +131,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         blocker: {
@@ -188,6 +194,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
   it("handles distributed sequence jobs", async ({
     stateAdapter,
     notifyAdapter,
+    observabilityAdapter,
     log,
     withWorkers,
     runInTransaction,
@@ -196,6 +203,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         step1: {
@@ -256,6 +264,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
   it("notifies workers about workerless completed jobs", async ({
     stateAdapter,
     notifyAdapter,
+    observabilityAdapter,
     log,
     withWorkers,
     runInTransaction,
@@ -264,6 +273,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         test: {
@@ -324,6 +334,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
   it('notifies workers when reaper deletes "zombie" jobs', async ({
     stateAdapter,
     notifyAdapter,
+    observabilityAdapter,
     log,
     withWorkers,
     runInTransaction,
@@ -332,6 +343,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         test: {

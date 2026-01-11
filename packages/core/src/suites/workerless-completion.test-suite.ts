@@ -18,13 +18,16 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     stateAdapter,
     notifyAdapter,
     runInTransaction,
+    observabilityAdapter,
     log,
     expect,
     expectLogs,
+    expectMetrics,
   }) => {
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         test: {
@@ -70,18 +73,27 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       { type: "job_completed", data: { output: { result: 84 }, workerId: null } },
       { type: "job_sequence_completed", data: { output: { result: 84 } } },
     ]);
+
+    await expectMetrics([
+      { method: "jobSequenceCreated", args: { input: { value: 42 } } },
+      { method: "jobCreated", args: { input: { value: 42 } } },
+      { method: "jobCompleted", args: { output: { result: 84 }, workerId: null } },
+      { method: "jobSequenceCompleted", args: { output: { result: 84 } } },
+    ]);
   });
 
   it("completes a complex job sequence without worker", async ({
     stateAdapter,
     notifyAdapter,
     runInTransaction,
+    observabilityAdapter,
     log,
     expect,
   }) => {
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         "awaiting-approval": {
@@ -138,12 +150,14 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     notifyAdapter,
     runInTransaction,
     withWorkers,
+    observabilityAdapter,
     log,
     expect,
   }) => {
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         "awaiting-approval": {
@@ -213,12 +227,14 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     stateAdapter,
     notifyAdapter,
     runInTransaction,
+    observabilityAdapter,
     log,
     expect,
   }) => {
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         test: {
@@ -271,12 +287,14 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     stateAdapter,
     notifyAdapter,
     runInTransaction,
+    observabilityAdapter,
     log,
     expect,
   }) => {
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         test: {
@@ -324,6 +342,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     notifyAdapter,
     runInTransaction,
     withWorkers,
+    observabilityAdapter,
     log,
     expect,
   }) => {
@@ -334,6 +353,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         test: {
@@ -399,12 +419,14 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     stateAdapter,
     notifyAdapter,
     runInTransaction,
+    observabilityAdapter,
     log,
     expect,
   }) => {
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         entryA: { input: null; output: DefineContinuationOutput<"shared"> };

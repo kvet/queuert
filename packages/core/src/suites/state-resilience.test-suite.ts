@@ -15,6 +15,7 @@ export const stateResilienceTestSuite = ({
     notifyAdapter,
     withWorkers,
     runInTransaction,
+    observabilityAdapter,
     log,
   }) => {
     const jobTypeDefinitions = defineUnionJobTypes<{
@@ -27,12 +28,14 @@ export const stateResilienceTestSuite = ({
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions,
     });
     const flakyQueuert = await createQueuert({
       stateAdapter: flakyStateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions,
     });

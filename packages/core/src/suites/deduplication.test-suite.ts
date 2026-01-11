@@ -8,12 +8,14 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     stateAdapter,
     notifyAdapter,
     runInTransaction,
+    observabilityAdapter,
     log,
     expect,
   }) => {
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         test: {
@@ -87,11 +89,13 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     notifyAdapter,
     runInTransaction,
     log,
+    observabilityAdapter,
     expect,
   }) => {
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         test: {
@@ -189,12 +193,14 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     stateAdapter,
     notifyAdapter,
     runInTransaction,
+    observabilityAdapter,
     log,
     expect,
   }) => {
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         test: {

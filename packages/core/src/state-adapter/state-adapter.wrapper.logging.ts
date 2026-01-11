@@ -1,4 +1,4 @@
-import { LogHelper } from "../log-helper.js";
+import { ObservabilityHelper } from "../observability-adapter/observability-helper.js";
 import { BaseStateAdapterContext, StateAdapter } from "./state-adapter.js";
 
 export const wrapStateAdapterWithLogging = <
@@ -7,20 +7,20 @@ export const wrapStateAdapterWithLogging = <
   TJobId extends string,
 >({
   stateAdapter,
-  logHelper,
+  observabilityHelper,
 }: {
   stateAdapter: StateAdapter<TTxContext, TContext, TJobId>;
-  logHelper: LogHelper;
+  observabilityHelper: ObservabilityHelper;
 }): StateAdapter<TTxContext, TContext, TJobId> => {
   const wrap = <T extends (...args: never[]) => Promise<unknown>>(
-    operationName: string,
+    operationName: keyof StateAdapter<any, any, any>,
     fn: T,
   ): T =>
     (async (...args) => {
       try {
         return await fn(...args);
       } catch (error) {
-        logHelper.stateAdapterError(operationName, error);
+        observabilityHelper.stateAdapterError(operationName, error);
         throw error;
       }
     }) as T;

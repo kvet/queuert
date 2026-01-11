@@ -15,12 +15,14 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     notifyAdapter,
     runInTransaction,
     withWorkers,
+    observabilityAdapter,
     log,
     expect,
   }) => {
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         test: {
@@ -105,12 +107,14 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     notifyAdapter,
     runInTransaction,
     withWorkers,
+    observabilityAdapter,
     log,
     expect,
   }) => {
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         test: {

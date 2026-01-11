@@ -506,7 +506,9 @@ describe("SequenceTypesReaching", () => {
     // E branches and convergence point
     expectTypeOf<SequenceTypesReaching<typeof defs, "branchE1">>().toEqualTypeOf<"entryE">();
     expectTypeOf<SequenceTypesReaching<typeof defs, "branchE2">>().toEqualTypeOf<"entryE">();
-    expectTypeOf<SequenceTypesReaching<typeof defs, "convergencePoint">>().toEqualTypeOf<"entryE">();
+    expectTypeOf<
+      SequenceTypesReaching<typeof defs, "convergencePoint">
+    >().toEqualTypeOf<"entryE">();
 
     // JobOf uses the computed sequence type by default
     type SharedStep1Job = JobOf<string, typeof defs, "sharedStep1">;

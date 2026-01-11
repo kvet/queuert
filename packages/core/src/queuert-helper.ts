@@ -19,11 +19,16 @@ import { Job, JobWithoutBlockers, mapStateJobToJob, PendingJob } from "./entitie
 import { ScheduleOptions } from "./entities/schedule.js";
 import { BackoffConfig, calculateBackoffMs } from "./helpers/backoff.js";
 import { raceWithSleep } from "./helpers/sleep.js";
-import { createLogHelper, LogHelper } from "./log-helper.js";
-import { Log } from "./log.js";
+import { Log } from "./observability-adapter/log.js";
 import { NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 import { createNoopNotifyAdapter } from "./notify-adapter/notify-adapter.noop.js";
 import { wrapNotifyAdapterWithLogging } from "./notify-adapter/notify-adapter.wrapper.logging.js";
+import { ObservabilityAdapter } from "./observability-adapter/observability-adapter.js";
+import { createNoopObservabilityAdapter } from "./observability-adapter/observability-adapter.noop.js";
+import {
+  createObservabilityHelper,
+  ObservabilityHelper,
+} from "./observability-adapter/observability-helper.js";
 import {
   BaseStateAdapterContext,
   DeduplicationOptions,
@@ -93,21 +98,24 @@ export class StateNotInTransactionError extends Error {
 export const queuertHelper = ({
   stateAdapter: stateAdapterOption,
   notifyAdapter: notifyAdapterOption,
+  observabilityAdapter: observabilityAdapterOption,
   log,
 }: {
   stateAdapter: StateAdapter<BaseStateAdapterContext, BaseStateAdapterContext, any>;
   notifyAdapter?: NotifyAdapter;
+  observabilityAdapter?: ObservabilityAdapter;
   log: Log;
 }) => {
-  const logHelper = createLogHelper({ log });
+  const observabilityAdapter = observabilityAdapterOption ?? createNoopObservabilityAdapter();
+  const observabilityHelper = createObservabilityHelper({ log, adapter: observabilityAdapter });
   const stateAdapter = wrapStateAdapterWithLogging({
     stateAdapter: stateAdapterOption,
-    logHelper,
+    observabilityHelper,
   });
   const notifyAdapter = notifyAdapterOption
     ? wrapNotifyAdapterWithLogging({
         notifyAdapter: notifyAdapterOption,
-        logHelper,
+        observabilityHelper,
       })
     : createNoopNotifyAdapter();
 
@@ -179,17 +187,17 @@ export const queuertHelper = ({
     }
 
     if (isSequence) {
-      logHelper.jobSequenceCreated(job, { input });
+      observabilityHelper.jobSequenceCreated(job, { input });
     }
 
-    logHelper.jobCreated(job, { input, blockers: blockerSequences, schedule });
+    observabilityHelper.jobCreated(job, { input, blockers: blockerSequences, schedule });
 
     if (incompleteBlockerSequenceIds.length > 0) {
       const incompleteBlockerSet = new Set(incompleteBlockerSequenceIds);
       const incompleteBlockerSequences = blockerSequences.filter((b) =>
         incompleteBlockerSet.has(b.id),
       );
-      logHelper.jobBlocked(job, { blockedBySequences: incompleteBlockerSequences });
+      observabilityHelper.jobBlocked(job, { blockedBySequences: incompleteBlockerSequences });
     }
 
     notifyJobScheduled(job);
@@ -202,7 +210,7 @@ export const queuertHelper = ({
     if (store) {
       store.jobTypeCounts.set(job.typeName, (store.jobTypeCounts.get(job.typeName) ?? 0) + 1);
     } else if (notifyAdapterOption) {
-      logHelper.notifyContextAbsence(job);
+      observabilityHelper.notifyContextAbsence(job);
     }
   };
 
@@ -297,7 +305,7 @@ export const queuertHelper = ({
       workerId,
     });
 
-    logHelper.jobCompleted(job, {
+    observabilityHelper.jobCompleted(job, {
       output,
       continuedWith: hasContinuedJob ? rest.continuedJob : undefined,
       workerId,
@@ -313,7 +321,7 @@ export const queuertHelper = ({
         throw new JobNotFoundError(`Job sequence with id ${job.sequenceId} not found`);
       }
 
-      logHelper.jobSequenceCompleted(jobSequenceStartJob, { output });
+      observabilityHelper.jobSequenceCompleted(jobSequenceStartJob, { output });
       notifySequenceCompletion(job);
 
       const unblockedJobs = await stateAdapter.scheduleBlockedJobs({
@@ -324,7 +332,9 @@ export const queuertHelper = ({
       if (unblockedJobs.length > 0) {
         unblockedJobs.forEach((unblockedJob) => {
           notifyJobScheduled(unblockedJob);
-          logHelper.jobUnblocked(unblockedJob, { unblockedBySequence: jobSequenceStartJob });
+          observabilityHelper.jobUnblocked(unblockedJob, {
+            unblockedBySequence: jobSequenceStartJob,
+          });
         });
       }
     }
@@ -336,7 +346,7 @@ export const queuertHelper = ({
     // oxlint-disable-next-line no-unnecessary-type-assertion -- needed for --isolatedDeclarations
     notifyAdapter: notifyAdapter as NotifyAdapter,
     // oxlint-disable-next-line no-unnecessary-type-assertion -- needed for --isolatedDeclarations
-    logHelper: logHelper as LogHelper,
+    observabilityHelper: observabilityHelper as ObservabilityHelper,
     withNotifyContext: withNotifyContext as <T>(cb: () => Promise<T>) => Promise<T>,
     withJobContext: withJobContext as <T>(
       context: {
@@ -459,7 +469,7 @@ export const queuertHelper = ({
         : { afterMs: calculateBackoffMs(job.attempt, retryConfig) };
       const errorString = isRescheduled ? String(error.cause) : String(error);
 
-      logHelper.jobAttemptFailed(job, { workerId, rescheduledSchedule: schedule, error });
+      observabilityHelper.jobAttemptFailed(job, { workerId, rescheduledSchedule: schedule, error });
 
       await stateAdapter.rescheduleJob({
         context,
@@ -489,7 +499,7 @@ export const queuertHelper = ({
       continuedWith?: Job<any, any, any, any, any[]>;
       workerId: string;
     }): void => {
-      logHelper.jobAttemptCompleted(job, { output, continuedWith, workerId });
+      observabilityHelper.jobAttemptCompleted(job, { output, continuedWith, workerId });
     },
     refetchJobForUpdate: async ({
       context,
@@ -523,7 +533,7 @@ export const queuertHelper = ({
         fetchedJob.leasedBy !== workerId &&
         !(allowEmptyWorker ? fetchedJob.leasedBy === null : false)
       ) {
-        logHelper.jobTakenByAnotherWorker(fetchedJob, { workerId });
+        observabilityHelper.jobTakenByAnotherWorker(fetchedJob, { workerId });
         throw new JobTakenByAnotherWorkerError(`Job taken by another worker`, {
           cause: {
             jobId: fetchedJob.id,
@@ -534,7 +544,7 @@ export const queuertHelper = ({
       }
 
       if (fetchedJob.leasedUntil && fetchedJob.leasedUntil.getTime() < Date.now()) {
-        logHelper.jobLeaseExpired(fetchedJob, { workerId });
+        observabilityHelper.jobLeaseExpired(fetchedJob, { workerId });
       }
 
       return fetchedJob;
@@ -590,7 +600,7 @@ export const queuertHelper = ({
       });
 
       if (job) {
-        logHelper.jobAttemptStarted(job, { workerId });
+        observabilityHelper.jobAttemptStarted(job, { workerId });
       }
 
       return job;
@@ -606,7 +616,7 @@ export const queuertHelper = ({
         stateAdapter.removeExpiredJobLease({ context, typeNames }),
       );
       if (job) {
-        logHelper.jobReaped(job, { workerId });
+        observabilityHelper.jobReaped(job, { workerId });
 
         try {
           await notifyAdapter.notifyJobScheduled(job.typeName, 1);
@@ -674,7 +684,7 @@ export const queuertHelper = ({
           (j) => j.rootSequenceId === sequenceJob.id,
         );
         if (deletedJobsForSequence.length > 0) {
-          logHelper.jobSequenceDeleted(sequenceJob, {
+          observabilityHelper.jobSequenceDeleted(sequenceJob, {
             deletedJobIds: deletedJobsForSequence.map((j) => j.id),
           });
         }

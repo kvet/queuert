@@ -19,13 +19,16 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
     notifyAdapter,
     runInTransaction,
     withWorkers,
+    observabilityAdapter,
     log,
     expectLogs,
+    expectMetrics,
     expect,
   }) => {
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         linear: {
@@ -154,6 +157,7 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
         data: {
           typeName: "linear_next",
           sequenceId: jobSequence.id,
+          sequenceTypeName: "linear",
           rootSequenceId: jobSequence.id,
           originId: originIds[0],
         },
@@ -166,6 +170,7 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
         data: {
           typeName: "linear_next_next",
           sequenceId: jobSequence.id,
+          sequenceTypeName: "linear",
           rootSequenceId: jobSequence.id,
           originId: originIds[1],
         },
@@ -179,6 +184,26 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
       { type: "worker_stopping" },
       { type: "worker_stopped" },
     ]);
+
+    await expectMetrics([
+      { method: "jobSequenceCreated", args: { typeName: "linear" } },
+      { method: "jobCreated", args: { typeName: "linear" } },
+      { method: "workerStarted" },
+      { method: "jobAttemptStarted", args: { typeName: "linear" } },
+      { method: "jobCreated", args: { typeName: "linear_next", sequenceTypeName: "linear" } },
+      { method: "jobAttemptCompleted", args: { typeName: "linear" } },
+      { method: "jobCompleted", args: { typeName: "linear" } },
+      { method: "jobAttemptStarted", args: { typeName: "linear_next" } },
+      { method: "jobCreated", args: { typeName: "linear_next_next", sequenceTypeName: "linear" } },
+      { method: "jobAttemptCompleted", args: { typeName: "linear_next" } },
+      { method: "jobCompleted", args: { typeName: "linear_next" } },
+      { method: "jobAttemptStarted", args: { typeName: "linear_next_next" } },
+      { method: "jobAttemptCompleted", args: { typeName: "linear_next_next" } },
+      { method: "jobCompleted", args: { typeName: "linear_next_next" } },
+      { method: "jobSequenceCompleted", args: { typeName: "linear" } },
+      { method: "workerStopping" },
+      { method: "workerStopped" },
+    ]);
   });
 
   it("handles branched sequences", async ({
@@ -186,12 +211,14 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
     notifyAdapter,
     runInTransaction,
     withWorkers,
+    observabilityAdapter,
     log,
     expect,
   }) => {
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         main: {
@@ -293,12 +320,14 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
     notifyAdapter,
     runInTransaction,
     withWorkers,
+    observabilityAdapter,
     log,
     expect,
   }) => {
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         loop: {
@@ -352,12 +381,14 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
     notifyAdapter,
     runInTransaction,
     withWorkers,
+    observabilityAdapter,
     log,
     expect,
   }) => {
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         start: {
@@ -435,12 +466,14 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
     notifyAdapter,
     runInTransaction,
     withWorkers,
+    observabilityAdapter,
     log,
     expect,
   }) => {
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         entryA: { input: { fromA: true }; output: DefineContinuationOutput<"shared"> };

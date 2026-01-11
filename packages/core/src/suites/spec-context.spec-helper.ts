@@ -4,6 +4,10 @@ import { MockedFunction, TestAPI, vi } from "vitest";
 import { createConsoleLog, Log, NotifyAdapter } from "../index.js";
 import { createInProcessNotifyAdapter } from "../notify-adapter/notify-adapter.in-process.js";
 import { createNoopNotifyAdapter } from "../notify-adapter/notify-adapter.noop.js";
+import {
+  createMockObservabilityAdapter,
+  MockObservabilityAdapter,
+} from "../observability-adapter/observability-adapter.mock.js";
 import { StateAdapter } from "../state-adapter/state-adapter.js";
 
 export type TestSuiteContext = {
@@ -19,6 +23,8 @@ export type TestSuiteContext = {
       error?: unknown;
     }[],
   ) => void;
+  observabilityAdapter: MockObservabilityAdapter;
+  expectMetrics: (expected: { method: string; args?: Record<string, unknown> }[]) => Promise<void>;
 };
 
 export const extendWithCommon = <
@@ -27,8 +33,29 @@ export const extendWithCommon = <
   },
 >(
   it: TestAPI<T>,
-): TestAPI<T & Pick<TestSuiteContext, "runInTransaction" | "withWorkers" | "log" | "expectLogs">> =>
-  it.extend<Pick<TestSuiteContext, "runInTransaction" | "withWorkers" | "log" | "expectLogs">>({
+): TestAPI<
+  T &
+    Pick<
+      TestSuiteContext,
+      | "runInTransaction"
+      | "withWorkers"
+      | "log"
+      | "expectLogs"
+      | "observabilityAdapter"
+      | "expectMetrics"
+    >
+> =>
+  it.extend<
+    Pick<
+      TestSuiteContext,
+      | "runInTransaction"
+      | "withWorkers"
+      | "log"
+      | "expectLogs"
+      | "observabilityAdapter"
+      | "expectMetrics"
+    >
+  >({
     runInTransaction: [
       async ({ stateAdapter }, use) => {
         await use(async (cb) => {
@@ -75,6 +102,33 @@ export const extendWithCommon = <
               }
               if (entry.error !== undefined) {
                 matcher.error = entry.error;
+              }
+              return expect.objectContaining(matcher);
+            }),
+          );
+        });
+      },
+      { scope: "test" },
+    ],
+    observabilityAdapter: [
+      async ({}, use) => {
+        await use(createMockObservabilityAdapter());
+      },
+      { scope: "test" },
+    ],
+    expectMetrics: [
+      async ({ observabilityAdapter, expect }, use) => {
+        await use(async (expected: { method: string; args?: Record<string, unknown> }[]) => {
+          const actual = observabilityAdapter._calls.map((call) => ({
+            method: call.method,
+            data: call.args[0],
+          }));
+
+          expect(actual).toEqual(
+            expected.map((entry) => {
+              const matcher: Record<string, unknown> = { method: entry.method };
+              if (entry.args) {
+                matcher.data = expect.objectContaining(entry.args);
               }
               return expect.objectContaining(matcher);
             }),

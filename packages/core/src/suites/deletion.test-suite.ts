@@ -8,13 +8,16 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     stateAdapter,
     notifyAdapter,
     runInTransaction,
+    observabilityAdapter,
     log,
     expectLogs,
+    expectMetrics,
     expect,
   }) => {
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         test: {
@@ -58,6 +61,12 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
         data: { id: jobSequence.id, deletedJobIds: [jobSequence.id] },
       },
     ]);
+
+    await expectMetrics([
+      { method: "jobSequenceCreated", args: { typeName: "test" } },
+      { method: "jobCreated", args: { typeName: "test" } },
+      { method: "jobSequenceDeleted", args: { typeName: "test", deletedJobIds: [jobSequence.id] } },
+    ]);
   });
 
   it("running job receives deletion signal", async ({
@@ -65,12 +74,14 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     notifyAdapter,
     runInTransaction,
     withWorkers,
+    observabilityAdapter,
     log,
     expect,
   }) => {
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         test: {
@@ -127,12 +138,14 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     notifyAdapter,
     runInTransaction,
     withWorkers,
+    observabilityAdapter,
     log,
     expect,
   }) => {
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         blocker: {
@@ -236,12 +249,14 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     stateAdapter,
     notifyAdapter,
     runInTransaction,
+    observabilityAdapter,
     log,
     expect,
   }) => {
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         blocker: {
@@ -297,12 +312,14 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     notifyAdapter,
     runInTransaction,
     withWorkers,
+    observabilityAdapter,
     log,
     expect,
   }) => {
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         test: {

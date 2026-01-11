@@ -1,4 +1,5 @@
-import { StateJob } from "./state-adapter/state-adapter.js";
+import { NotifyAdapter } from "../notify-adapter/notify-adapter.js";
+import { StateAdapter, StateJob } from "../state-adapter/state-adapter.js";
 
 type LogLevel = "info" | "warn" | "error";
 type LogEntry<
@@ -44,9 +45,10 @@ type WorkerStoppedLogEntry = LogEntry<
 export type JobBasicData = {
   id: string;
   typeName: string;
-  originId: string | null;
   sequenceId: string;
+  sequenceTypeName: string;
   rootSequenceId: string;
+  originId: string | null;
 };
 export type JobProcessingData = JobBasicData & { status: StateJob["status"]; attempt: number };
 type JobCreatedLogEntry = LogEntry<
@@ -76,6 +78,12 @@ type JobLeaseExpiredLogEntry = LogEntry<
   "job_lease_expired",
   "warn",
   "Job lease expired",
+  { leasedBy: string; leasedUntil: Date } & JobProcessingData & WorkerBasicData
+>;
+type JobLeaseRenewedLogEntry = LogEntry<
+  "job_lease_renewed",
+  "info",
+  "Job lease renewed",
   { leasedBy: string; leasedUntil: Date } & JobProcessingData & WorkerBasicData
 >;
 type JobReapedLogEntry = LogEntry<
@@ -152,7 +160,7 @@ type NotifyAdapterErrorLogEntry = LogEntry<
   "notify_adapter_error",
   "warn",
   "Notify adapter error",
-  { operation: string },
+  { operation: keyof NotifyAdapter },
   unknown
 >;
 
@@ -160,7 +168,7 @@ type StateAdapterErrorLogEntry = LogEntry<
   "state_adapter_error",
   "warn",
   "State adapter error",
-  { operation: string },
+  { operation: keyof StateAdapter<any, any, any> },
   unknown
 >;
 
@@ -175,6 +183,7 @@ type TypedLogEntry =
   | JobAttemptStartedLogEntry
   | JobTakenByAnotherWorkerLogEntry
   | JobLeaseExpiredLogEntry
+  | JobLeaseRenewedLogEntry
   | JobReapedLogEntry
   | JobAttemptFailedLogEntry
   | JobAttemptCompletedLogEntry

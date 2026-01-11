@@ -20,13 +20,16 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
     notifyAdapter,
     runInTransaction,
     withWorkers,
+    observabilityAdapter,
     log,
     expect,
     expectLogs,
+    expectMetrics,
   }) => {
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         blocker: {
@@ -200,6 +203,37 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       { type: "worker_stopping" },
       { type: "worker_stopped" },
     ]);
+
+    await expectMetrics([
+      // blocker sequence created
+      { method: "jobSequenceCreated", args: { typeName: "blocker" } },
+      { method: "jobCreated", args: { typeName: "blocker" } },
+      // main sequence created
+      { method: "jobSequenceCreated", args: { typeName: "main" } },
+      { method: "jobCreated", args: { typeName: "main" } },
+      // main job is blocked
+      { method: "jobBlocked", args: { typeName: "main" } },
+      // worker started
+      { method: "workerStarted" },
+      // first blocker job processed
+      { method: "jobAttemptStarted", args: { typeName: "blocker" } },
+      { method: "jobCreated", args: { typeName: "blocker" } },
+      { method: "jobAttemptCompleted", args: { typeName: "blocker" } },
+      { method: "jobCompleted", args: { typeName: "blocker" } },
+      // second blocker job processed, sequence completes
+      { method: "jobAttemptStarted", args: { typeName: "blocker" } },
+      { method: "jobAttemptCompleted", args: { typeName: "blocker" } },
+      { method: "jobCompleted", args: { typeName: "blocker" } },
+      { method: "jobSequenceCompleted", args: { typeName: "blocker" } },
+      // main job unblocked and completed
+      { method: "jobUnblocked", args: { typeName: "main" } },
+      { method: "jobAttemptStarted", args: { typeName: "main" } },
+      { method: "jobAttemptCompleted", args: { typeName: "main" } },
+      { method: "jobCompleted", args: { typeName: "main" } },
+      { method: "jobSequenceCompleted", args: { typeName: "main" } },
+      { method: "workerStopping" },
+      { method: "workerStopped" },
+    ]);
   });
 
   it("handles completed blocker sequences", async ({
@@ -207,12 +241,14 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
     notifyAdapter,
     runInTransaction,
     withWorkers,
+    observabilityAdapter,
     log,
     expect,
   }) => {
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         blocker: {
@@ -301,12 +337,14 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
     notifyAdapter,
     runInTransaction,
     withWorkers,
+    observabilityAdapter,
     log,
     expect,
   }) => {
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         inner: {
@@ -408,12 +446,14 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
     notifyAdapter,
     runInTransaction,
     withWorkers,
+    observabilityAdapter,
     log,
     expect,
   }) => {
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         test: {
@@ -485,12 +525,14 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
     notifyAdapter,
     runInTransaction,
     withWorkers,
+    observabilityAdapter,
     log,
     expect,
   }) => {
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         blocker: {
@@ -559,12 +601,14 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
     notifyAdapter,
     runInTransaction,
     withWorkers,
+    observabilityAdapter,
     log,
     expect,
   }) => {
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         blocker: {

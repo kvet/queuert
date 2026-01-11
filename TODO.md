@@ -1,8 +1,9 @@
 # Short term
 
+- ObservabilityAdapter: Add histograms (job duration, wait time, total time, attempts, poll duration), gauges (active workers, processing jobs), and tracing spans
+
 # Medium term
 
-- Metrics collection & OTEL
 - Refactor `jobTypeDefinitions` parameter - Currently required but only used for type inference; integrate with optional Zod schema to provide actual runtime value (input/output validation)
 - Polish providers:
   - Prepare more examples like SQLite with kysely, drizzle, prisma; redis with ioredis, node-redis

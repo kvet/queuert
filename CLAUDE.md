@@ -14,7 +14,7 @@ Core abstractions, interfaces, and in-memory implementations for testing.
 
 **Exports:**
 
-- `.` (main): `createQueuert`, `createConsoleLog`, adapter interfaces (`StateAdapter`, `NotifyAdapter`), type definitions, error classes, in-process adapters (`createInProcessStateAdapter`, `createInProcessNotifyAdapter`)
+- `.` (main): `createQueuert`, `createConsoleLog`, adapter interfaces (`StateAdapter`, `NotifyAdapter`, `ObservabilityAdapter`), type definitions, error classes, in-process adapters (`createInProcessStateAdapter`, `createInProcessNotifyAdapter`)
 - `./testing`: Test suites and context helpers for adapter packages (`processTestSuite`, `sequencesTestSuite`, etc., `extendWithCommon`, `extendWithStateInProcess`)
 - `./internal`: Internal utilities for adapter packages only (`withRetry`, `createAsyncLock`, `wrapStateAdapterWithRetry`)
 
@@ -118,6 +118,36 @@ Uses 3 NATS subjects with payload-based filtering (`{prefix}.sched`, `{prefix}.s
 - `nc`: NATS connection
 - `kv`: Optional JetStream KV bucket for hint optimization
 - `subjectPrefix`: Subject prefix (default: `"queuert"`)
+
+### `@queuert/otel`
+
+OpenTelemetry observability adapter for metrics and tracing.
+
+**Exports:**
+
+- `.` (main): `createOtelObservabilityAdapter`
+
+**Dependencies:**
+
+- `queuert` as peer dependency
+- `@opentelemetry/api` as peer dependency (requires ^1.9.0)
+
+**Adapter notes:**
+
+Users configure their OTEL SDK with desired exporters (Prometheus, OTLP, Jaeger, etc.) before using this adapter. Currently implements counters only; histograms, gauges, and tracing spans will be added later.
+
+**Counters emitted:**
+
+- Worker: `{prefix}.worker.started`, `{prefix}.worker.error`, `{prefix}.worker.stopped`
+- Job: `{prefix}.job.created`, `{prefix}.job.attempt_started`, `{prefix}.job.taken_by_another_worker`, `{prefix}.job.lease_expired`, `{prefix}.job.lease_renewed`, `{prefix}.job.attempt_failed`, `{prefix}.job.attempt_completed`, `{prefix}.job.completed`, `{prefix}.job.reaped`, `{prefix}.job.blocked`, `{prefix}.job.unblocked`
+- Job Sequence: `{prefix}.job_sequence.created`, `{prefix}.job_sequence.completed`
+- Notify Adapter: `{prefix}.notify_adapter.context_absence`, `{prefix}.notify_adapter.error`
+- State Adapter: `{prefix}.state_adapter.error`
+
+**Configuration options:**
+
+- `meter`: OTEL Meter instance (default: `metrics.getMeter("queuert")`)
+- `metricPrefix`: Prefix for all metric names (default: `"queuert"`)
 
 ## Core Concepts
 
@@ -241,6 +271,24 @@ try {
   await dispose();
 }
 ```
+
+### ObservabilityAdapter
+
+Low-level adapter interface for observability metrics. Accepts primitive data types (not domain objects). When not provided, a noop implementation is used automatically. Use with `ObservabilityHelper` for domain-object-friendly interface.
+
+**Architecture:**
+
+- `ObservabilityAdapter`: Low-level interface accepting primitive data (`JobBasicData`, `JobProcessingData`, `JobSequenceData` from `log.ts`)
+- `ObservabilityHelper`: High-level helper that wraps both `Log` and `ObservabilityAdapter`, accepts domain objects (`StateJob`, `Job`, `JobSequence`), emits to both logging and metrics
+
+**Counters (current implementation):**
+
+- Worker: `workerStarted`, `workerError`, `workerStopped`
+- Job: `jobCreated`, `jobAttemptStarted`, `jobTakenByAnotherWorker`, `jobLeaseExpired`, `jobLeaseRenewed`, `jobAttemptFailed`, `jobAttemptCompleted`, `jobCompleted`, `jobReaped`
+- Job Sequence: `jobSequenceCreated`, `jobSequenceCompleted`
+- Blockers: `jobBlocked`, `jobUnblocked`
+- Notify Adapter: `notifyContextAbsence`, `notifyAdapterError`
+- State Adapter: `stateAdapterError`
 
 ### Worker
 

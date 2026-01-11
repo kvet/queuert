@@ -17,12 +17,14 @@ export const waitSequenceCompletionTestSuite = ({
     stateAdapter,
     notifyAdapter,
     runInTransaction,
+    observabilityAdapter,
     log,
     expect,
   }) => {
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         test: { input: null; output: { result: string } };
@@ -62,12 +64,14 @@ export const waitSequenceCompletionTestSuite = ({
     stateAdapter,
     notifyAdapter,
     runInTransaction,
+    observabilityAdapter,
     log,
     expect,
   }) => {
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         test: { input: null; output: { result: string } };
@@ -96,12 +100,14 @@ export const waitSequenceCompletionTestSuite = ({
     stateAdapter,
     notifyAdapter,
     runInTransaction,
+    observabilityAdapter,
     log,
     expect,
   }) => {
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         test: { input: null; output: { result: string } };
@@ -124,12 +130,14 @@ export const waitSequenceCompletionTestSuite = ({
   it("throws error when sequence does not exist", async ({
     stateAdapter,
     notifyAdapter,
+    observabilityAdapter,
     log,
     expect,
   }) => {
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         test: { input: null; output: { result: string } };

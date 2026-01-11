@@ -6,8 +6,9 @@ import {
 } from "./entities/job-type.js";
 import { ScheduleOptions } from "./entities/schedule.js";
 import { BackoffConfig } from "./helpers/backoff.js";
-import { Log } from "./log.js";
+import { Log } from "./observability-adapter/log.js";
 import { NotifyAdapter } from "./notify-adapter/notify-adapter.js";
+import { ObservabilityAdapter } from "./observability-adapter/observability-adapter.js";
 import {
   CompleteJobSequenceResult,
   JobSequenceCompleteOptions,
@@ -39,9 +40,10 @@ export { type ScheduleOptions } from "./entities/schedule.js";
 export { type TypedAbortSignal } from "./helpers/abort.js";
 export { type BackoffConfig } from "./helpers/backoff.js";
 export { type RetryConfig } from "./helpers/retry.js";
-export { createConsoleLog } from "./log.console.js";
-export { type Log } from "./log.js";
+export { createConsoleLog } from "./observability-adapter/log.console.js";
+export { type Log } from "./observability-adapter/log.js";
 export { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
+export { type ObservabilityAdapter } from "./observability-adapter/observability-adapter.js";
 export {
   JobAlreadyCompletedError,
   JobNotFoundError,
@@ -178,16 +180,19 @@ export const createQueuert = async <
 >({
   stateAdapter,
   notifyAdapter,
+  observabilityAdapter,
   log,
 }: {
   stateAdapter: TStateAdapter;
   notifyAdapter?: NotifyAdapter;
-  jobTypeDefinitions: TJobTypeDefinitions;
+  observabilityAdapter?: ObservabilityAdapter;
   log: Log;
+  jobTypeDefinitions: TJobTypeDefinitions;
 }): Promise<Queuert<TJobTypeDefinitions, TStateAdapter>> => {
   const helper = queuertHelper({
     stateAdapter,
     notifyAdapter,
+    observabilityAdapter,
     log,
   });
 

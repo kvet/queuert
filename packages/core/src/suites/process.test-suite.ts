@@ -14,13 +14,16 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     notifyAdapter,
     runInTransaction,
     withWorkers,
+    observabilityAdapter,
     log,
     expectLogs,
+    expectMetrics,
     expect,
   }) => {
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         test: {
@@ -117,6 +120,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       rootSequenceId: jobSequence.id,
       originId: null,
       sequenceId: jobSequence.id,
+      sequenceTypeName: "test",
     };
     expectLogs([
       { type: "job_sequence_created", data: { ...jobSequenceArgs, input: { test: true } } },
@@ -153,6 +157,18 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       { type: "worker_stopping", data: { ...workerArgs } },
       { type: "worker_stopped", data: { ...workerArgs } },
     ]);
+
+    await expectMetrics([
+      { method: "jobSequenceCreated", args: { typeName: "test" } },
+      { method: "jobCreated", args: { typeName: "test" } },
+      { method: "workerStarted", args: { workerId: "worker" } },
+      { method: "jobAttemptStarted", args: { typeName: "test", status: "running" } },
+      { method: "jobAttemptCompleted", args: { typeName: "test", output: { result: true } } },
+      { method: "jobCompleted", args: { typeName: "test", output: { result: true } } },
+      { method: "jobSequenceCompleted", args: { typeName: "test", output: { result: true } } },
+      { method: "workerStopping", args: { workerId: "worker" } },
+      { method: "workerStopped", args: { workerId: "worker" } },
+    ]);
   });
 
   it("supports all job execution modes", async ({
@@ -160,12 +176,14 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     notifyAdapter,
     runInTransaction,
     withWorkers,
+    observabilityAdapter,
     log,
     expect,
   }) => {
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         "atomic-complete": {
@@ -314,12 +332,14 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     notifyAdapter,
     runInTransaction,
     withWorkers,
+    observabilityAdapter,
     log,
     expect,
   }) => {
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         "test-prepare-twice": {
@@ -453,12 +473,14 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     notifyAdapter,
     runInTransaction,
     withWorkers,
+    observabilityAdapter,
     log,
     expect,
   }) => {
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         test: {
@@ -507,6 +529,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     notifyAdapter,
     runInTransaction,
     withWorkers,
+    observabilityAdapter,
     log,
     expect,
   }) => {
@@ -517,6 +540,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         test: {
@@ -553,12 +577,14 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     notifyAdapter,
     runInTransaction,
     withWorkers,
+    observabilityAdapter,
     log,
     expect,
   }) => {
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         test: {
@@ -630,13 +656,16 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     notifyAdapter,
     runInTransaction,
     withWorkers,
+    observabilityAdapter,
     log,
     expectLogs,
+    expectMetrics,
     expect,
   }) => {
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         test: {
@@ -721,6 +750,24 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       { type: "worker_stopping" },
       { type: "worker_stopped" },
     ]);
+
+    await expectMetrics([
+      { method: "jobSequenceCreated" },
+      { method: "jobCreated" },
+      { method: "workerStarted" },
+      { method: "jobAttemptStarted" },
+      { method: "jobAttemptFailed", args: { rescheduledAfterMs: 10 } },
+      { method: "jobAttemptStarted" },
+      { method: "jobAttemptFailed", args: { rescheduledAfterMs: 20 } },
+      { method: "jobAttemptStarted" },
+      { method: "jobAttemptFailed", args: { rescheduledAfterMs: 40 } },
+      { method: "jobAttemptStarted" },
+      { method: "jobAttemptCompleted" },
+      { method: "jobCompleted" },
+      { method: "jobSequenceCompleted" },
+      { method: "workerStopping" },
+      { method: "workerStopped" },
+    ]);
   });
 
   it("handles errors in all phases", async ({
@@ -728,6 +775,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     notifyAdapter,
     runInTransaction,
     withWorkers,
+    observabilityAdapter,
     log,
     expect,
   }) => {
@@ -736,6 +784,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         test: {
@@ -827,12 +876,14 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     notifyAdapter,
     runInTransaction,
     withWorkers,
+    observabilityAdapter,
     log,
     expect,
   }) => {
     const queuert = await createQueuert({
       stateAdapter,
       notifyAdapter,
+      observabilityAdapter,
       log,
       jobTypeDefinitions: defineUnionJobTypes<{
         test: {

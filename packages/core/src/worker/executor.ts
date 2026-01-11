@@ -39,7 +39,7 @@ export const createExecutor = ({
   workerLoopRetryConfig?: BackoffConfig;
 }) => Promise<() => Promise<void>>) => {
   const typeNames = Array.from(registeredJobTypes.keys());
-  const { notifyAdapter, logHelper } = helper;
+  const { notifyAdapter, observabilityHelper } = helper;
 
   return async ({
     workerId = randomUUID(),
@@ -60,8 +60,7 @@ export const createExecutor = ({
       maxDelayMs: 300_000,
     },
   } = {}) => {
-    logHelper.workerStarted({ workerId, jobTypeNames: typeNames });
-
+    observabilityHelper.workerStarted({ workerId, jobTypeNames: typeNames });
     const stopController = new AbortController();
 
     const waitForNextJob = async () => {
@@ -142,7 +141,7 @@ export const createExecutor = ({
         ) {
           return true;
         } else {
-          logHelper.workerError({ workerId }, error);
+          observabilityHelper.workerError({ workerId }, error);
           throw error;
         }
       }
@@ -176,7 +175,7 @@ export const createExecutor = ({
             }
           }
         } catch (error) {
-          logHelper.workerError({ workerId }, error);
+          observabilityHelper.workerError({ workerId }, error);
           throw error;
         }
       }
@@ -187,10 +186,10 @@ export const createExecutor = ({
     }).catch(() => {});
 
     return async () => {
-      logHelper.workerStopping({ workerId });
+      observabilityHelper.workerStopping({ workerId });
       stopController.abort();
       await runWorkerLoopPromise;
-      logHelper.workerStopped({ workerId });
+      observabilityHelper.workerStopped({ workerId });
     };
   };
 };

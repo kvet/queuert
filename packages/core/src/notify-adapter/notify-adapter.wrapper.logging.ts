@@ -1,22 +1,22 @@
-import { LogHelper } from "../log-helper.js";
+import { ObservabilityHelper } from "../observability-adapter/observability-helper.js";
 import { NotifyAdapter } from "./notify-adapter.js";
 
 export const wrapNotifyAdapterWithLogging = ({
   notifyAdapter,
-  logHelper,
+  observabilityHelper,
 }: {
   notifyAdapter: NotifyAdapter;
-  logHelper: LogHelper;
+  observabilityHelper: ObservabilityHelper;
 }): NotifyAdapter => {
   const wrap = <T extends (...args: never[]) => Promise<unknown>>(
-    operationName: string,
+    operationName: keyof NotifyAdapter,
     fn: T,
   ): T =>
     (async (...args) => {
       try {
         return await fn(...args);
       } catch (error) {
-        logHelper.notifyAdapterError(operationName, error);
+        observabilityHelper.notifyAdapterError(operationName, error);
         throw error;
       }
     }) as T;
