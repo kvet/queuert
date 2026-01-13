@@ -785,6 +785,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     observabilityAdapter,
     log,
     expect,
+    expectGauges,
   }) => {
     type ErrorPhase = "prepare" | "process" | "complete";
 
@@ -876,6 +877,48 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     expect(errors.find((e) => e.phase === "complete")?.error).toBe(
       "Error: Simulated failure in complete",
     );
+
+    // Verify gauges balance even with errors:
+    // 3 jobs × 2 attempts each = 6 processing cycles
+    // Each cycle: -1 idle (start), +1 idle (end), +1 processing (start), -1 processing (end)
+    // Plus: +1 idle (worker start), -1 idle (worker stop)
+    // Net idle: +1 - 6 + 6 - 1 = 0, Net processing: +6 - 6 = 0
+    await expectGauges({
+      jobTypeIdleChange: [
+        // worker start
+        { delta: 1, typeName: "test" },
+        // 6 processing cycles (3 jobs × 2 attempts each)
+        { delta: -1, typeName: "test" },
+        { delta: 1, typeName: "test" },
+        { delta: -1, typeName: "test" },
+        { delta: 1, typeName: "test" },
+        { delta: -1, typeName: "test" },
+        { delta: 1, typeName: "test" },
+        { delta: -1, typeName: "test" },
+        { delta: 1, typeName: "test" },
+        { delta: -1, typeName: "test" },
+        { delta: 1, typeName: "test" },
+        { delta: -1, typeName: "test" },
+        { delta: 1, typeName: "test" },
+        // worker stop
+        { delta: -1, typeName: "test" },
+      ],
+      jobTypeProcessingChange: [
+        // 6 processing cycles
+        { delta: 1, typeName: "test" },
+        { delta: -1, typeName: "test" },
+        { delta: 1, typeName: "test" },
+        { delta: -1, typeName: "test" },
+        { delta: 1, typeName: "test" },
+        { delta: -1, typeName: "test" },
+        { delta: 1, typeName: "test" },
+        { delta: -1, typeName: "test" },
+        { delta: 1, typeName: "test" },
+        { delta: -1, typeName: "test" },
+        { delta: 1, typeName: "test" },
+        { delta: -1, typeName: "test" },
+      ],
+    });
   });
 
   it("reschedules job when error thrown after complete callback finishes", async ({

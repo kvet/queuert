@@ -28,6 +28,10 @@ export type TestSuiteContext = {
   expectHistograms: (
     expected: { method: string; args?: Record<string, unknown> }[],
   ) => Promise<void>;
+  expectGauges: (expected: {
+    jobTypeIdleChange?: Array<{ delta: number; typeName?: string; workerId?: string }>;
+    jobTypeProcessingChange?: Array<{ delta: number; typeName?: string; workerId?: string }>;
+  }) => Promise<void>;
 };
 
 export const extendWithCommon = <
@@ -47,6 +51,7 @@ export const extendWithCommon = <
       | "observabilityAdapter"
       | "expectMetrics"
       | "expectHistograms"
+      | "expectGauges"
     >
 > =>
   it.extend<
@@ -59,6 +64,7 @@ export const extendWithCommon = <
       | "observabilityAdapter"
       | "expectMetrics"
       | "expectHistograms"
+      | "expectGauges"
     >
   >({
     runInTransaction: [
@@ -123,15 +129,19 @@ export const extendWithCommon = <
     ],
     expectMetrics: [
       async ({ observabilityAdapter, expect }, use) => {
-        const histogramMethods = new Set([
+        const excludedMethods = new Set([
+          // histograms
           "jobSequenceDuration",
           "jobDuration",
           "jobAttemptDuration",
+          // gauges
+          "jobTypeIdleChange",
+          "jobTypeProcessingChange",
         ]);
 
         await use(async (expected: { method: string; args?: Record<string, unknown> }[]) => {
           const actual = observabilityAdapter._calls
-            .filter((call) => !histogramMethods.has(call.method))
+            .filter((call) => !excludedMethods.has(call.method))
             .map((call) => ({
               method: call.method,
               data: call.args[0],
@@ -176,6 +186,93 @@ export const extendWithCommon = <
             }),
           );
         });
+      },
+      { scope: "test" },
+    ],
+    expectGauges: [
+      async ({ observabilityAdapter, expect }, use) => {
+        await use(
+          async (expected: {
+            jobTypeIdleChange?: Array<{
+              delta: number;
+              typeName?: string;
+              workerId?: string;
+            }>;
+            jobTypeProcessingChange?: Array<{
+              delta: number;
+              typeName?: string;
+              workerId?: string;
+            }>;
+          }) => {
+            // Collect actual gauge calls and remove them from the calls array
+            const actualCalls: Record<
+              string,
+              Array<{ delta: number; typeName: string; workerId: string }>
+            > = {
+              jobTypeIdleChange: [],
+              jobTypeProcessingChange: [],
+            };
+
+            // Extract gauge calls and remove them from the adapter
+            const remainingCalls: typeof observabilityAdapter._calls = [];
+            for (const call of observabilityAdapter._calls) {
+              if (
+                call.method === "jobTypeIdleChange" ||
+                call.method === "jobTypeProcessingChange"
+              ) {
+                const data = call.args[0] as {
+                  delta: number;
+                  typeName: string;
+                  workerId: string;
+                };
+
+                // Verify required attributes are present
+                expect(data).toEqual(
+                  expect.objectContaining({
+                    delta: expect.any(Number),
+                    typeName: expect.any(String),
+                    workerId: expect.any(String),
+                  }),
+                );
+
+                actualCalls[call.method].push({
+                  delta: data.delta,
+                  typeName: data.typeName,
+                  workerId: data.workerId,
+                });
+              } else {
+                // Keep non-gauge calls
+                remainingCalls.push(call);
+              }
+            }
+
+            // Clear gauge calls from the adapter for the next check
+            observabilityAdapter._calls.length = 0;
+            observabilityAdapter._calls.push(...remainingCalls);
+
+            // Verify each gauge type with explicit attribute checking
+            for (const [method, expectedCalls] of Object.entries(expected) as Array<
+              [
+                "jobTypeIdleChange" | "jobTypeProcessingChange",
+                Array<{ delta: number; typeName?: string; workerId?: string }>,
+              ]
+            >) {
+              if (expectedCalls === undefined) continue;
+
+              const actualCallsForMethod = actualCalls[method];
+
+              expect(actualCallsForMethod).toEqual(
+                expectedCalls.map((exp) =>
+                  expect.objectContaining({
+                    delta: exp.delta,
+                    ...(exp.typeName !== undefined && { typeName: exp.typeName }),
+                    ...(exp.workerId !== undefined && { workerId: exp.workerId }),
+                  }),
+                ),
+              );
+            }
+          },
+        );
       },
       { scope: "test" },
     ],

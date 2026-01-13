@@ -37,6 +37,9 @@ const methodToMetricName: Record<string, string> = {
   jobSequenceDuration: "queuert.job_sequence.duration",
   jobDuration: "queuert.job.duration",
   jobAttemptDuration: "queuert.job.attempt.duration",
+  // gauges
+  jobTypeIdleChange: "queuert.job_type.idle",
+  jobTypeProcessingChange: "queuert.job_type.processing",
 };
 
 export const extendWithOtelObservability = <T extends {}>(
@@ -50,6 +53,10 @@ export const extendWithOtelObservability = <T extends {}>(
     expectHistograms: (
       expected: { method: string; args?: Record<string, unknown> }[],
     ) => Promise<void>;
+    expectGauges: (expected: {
+      jobTypeIdleChange?: Array<{ delta: number; typeName?: string; workerId?: string }>;
+      jobTypeProcessingChange?: Array<{ delta: number; typeName?: string; workerId?: string }>;
+    }) => Promise<void>;
   }
 > => {
   return api.extend<{
@@ -60,6 +67,10 @@ export const extendWithOtelObservability = <T extends {}>(
     expectHistograms: (
       expected: { method: string; args?: Record<string, unknown> }[],
     ) => Promise<void>;
+    expectGauges: (expected: {
+      jobTypeIdleChange?: Array<{ delta: number; typeName?: string; workerId?: string }>;
+      jobTypeProcessingChange?: Array<{ delta: number; typeName?: string; workerId?: string }>;
+    }) => Promise<void>;
     _otelExporter: InMemoryMetricExporter;
     _otelReader: PeriodicExportingMetricReader;
     _otelProvider: MeterProvider;
@@ -97,11 +108,15 @@ export const extendWithOtelObservability = <T extends {}>(
           await _otelReader.forceFlush();
           const lastExport = _otelExporter.getMetrics().at(-1);
 
-          // Collect actual metric counts
+          // Collect actual metric counts (excluding gauges)
+          const gaugeNames = new Set([
+            methodToMetricName.jobTypeIdleChange,
+            methodToMetricName.jobTypeProcessingChange,
+          ]);
           const actualCounts = new Map<string, number>();
           for (const scope of lastExport?.scopeMetrics ?? []) {
             for (const m of scope.metrics) {
-              if (m.dataPointType === DataPointType.SUM) {
+              if (m.dataPointType === DataPointType.SUM && !gaugeNames.has(m.descriptor.name)) {
                 let count = 0;
                 for (const p of m.dataPoints) count += p.value;
                 actualCounts.set(m.descriptor.name, count);
@@ -154,6 +169,57 @@ export const extendWithOtelObservability = <T extends {}>(
 
           // Verify counts match
           expect(Object.fromEntries(actualCounts)).toEqual(Object.fromEntries(expectedCounts));
+        });
+      },
+      { scope: "test" },
+    ],
+    expectGauges: [
+      async ({ _otelReader, _otelExporter, expect }, use) => {
+        // Track cumulative expected values per metric (keyed by "metricName:typeName")
+        const cumulativeExpected = new Map<string, number>();
+
+        await use(async (expected) => {
+          await _otelReader.forceFlush();
+
+          // Sum expected deltas into cumulative values (grouped by typeName)
+          for (const [method, calls] of Object.entries(expected) as Array<
+            [
+              "jobTypeIdleChange" | "jobTypeProcessingChange",
+              Array<{ delta: number; typeName?: string; workerId?: string }> | undefined,
+            ]
+          >) {
+            if (!calls) continue;
+            const metricName = methodToMetricName[method];
+            for (const { delta, typeName } of calls) {
+              const key = `${metricName}:${typeName ?? ""}`;
+              cumulativeExpected.set(key, (cumulativeExpected.get(key) ?? 0) + delta);
+            }
+          }
+
+          // Collect actual cumulative values from OTEL
+          const lastExport = _otelExporter.getMetrics().at(-1);
+          const actualCumulative = new Map<string, number>();
+          const gaugeNames = new Set([
+            methodToMetricName.jobTypeIdleChange,
+            methodToMetricName.jobTypeProcessingChange,
+          ]);
+
+          for (const scope of lastExport?.scopeMetrics ?? []) {
+            for (const m of scope.metrics) {
+              if (m.dataPointType === DataPointType.SUM && gaugeNames.has(m.descriptor.name)) {
+                for (const p of m.dataPoints) {
+                  const attrs = p.attributes as Record<string, string>;
+                  const key = `${m.descriptor.name}:${attrs.typeName ?? ""}`;
+                  actualCumulative.set(key, (actualCumulative.get(key) ?? 0) + p.value);
+                }
+              }
+            }
+          }
+
+          // Verify cumulative values match
+          expect(Object.fromEntries(actualCumulative)).toEqual(
+            Object.fromEntries(cumulativeExpected),
+          );
         });
       },
       { scope: "test" },

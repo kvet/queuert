@@ -108,6 +108,9 @@ export type ObservabilityHelper = {
   jobSequenceDuration: (firstJob: StateJob, lastJob: StateJob) => void;
   jobDuration: (job: StateJob) => void;
   jobAttemptDuration: (job: StateJob, options: { durationMs: number; workerId: string }) => void;
+  // gauges
+  jobTypeIdleChange: (delta: number, workerId: string, typeNames: readonly string[]) => void;
+  jobTypeProcessingChange: (delta: number, job: StateJob, workerId: string) => void;
 };
 
 export const createObservabilityHelper = ({
@@ -437,6 +440,21 @@ export const createObservabilityHelper = ({
       ...mapStateJobToJobProcessingData(job),
       durationMs: options.durationMs,
       workerId: options.workerId,
+    });
+  },
+
+  // gauges (no logging, metrics only)
+  jobTypeIdleChange(delta, workerId, typeNames) {
+    for (const typeName of typeNames) {
+      adapter.jobTypeIdleChange({ delta, typeName, workerId });
+    }
+  },
+
+  jobTypeProcessingChange(delta, job, workerId) {
+    adapter.jobTypeProcessingChange({
+      delta,
+      typeName: job.typeName,
+      workerId,
     });
   },
 });

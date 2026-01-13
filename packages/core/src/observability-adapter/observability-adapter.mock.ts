@@ -57,5 +57,9 @@ export const createMockObservabilityAdapter = (): MockObservabilityAdapter => {
     jobSequenceDuration: mock("jobSequenceDuration"),
     jobDuration: mock("jobDuration"),
     jobAttemptDuration: mock("jobAttemptDuration"),
+
+    // gauges
+    jobTypeIdleChange: mock("jobTypeIdleChange"),
+    jobTypeProcessingChange: mock("jobTypeProcessingChange"),
   };
 };

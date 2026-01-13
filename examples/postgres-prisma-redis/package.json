@@ -13,7 +13,7 @@
   "scripts": {
     "prestart": "prisma generate",
     "start": "tsx src/index.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "prisma generate && tsc --noEmit"
   },
   "devDependencies": {
     "@prisma/client": "^6.10.1",

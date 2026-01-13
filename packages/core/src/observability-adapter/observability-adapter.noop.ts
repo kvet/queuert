@@ -38,4 +38,8 @@ export const createNoopObservabilityAdapter = (): ObservabilityAdapter => ({
   jobSequenceDuration: () => {},
   jobDuration: () => {},
   jobAttemptDuration: () => {},
+
+  // gauges
+  jobTypeIdleChange: () => {},
+  jobTypeProcessingChange: () => {},
 });

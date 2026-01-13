@@ -1,6 +1,6 @@
-import { JobBasicData, JobProcessingData, JobSequenceData } from "./log.js";
 import { NotifyAdapter } from "../notify-adapter/notify-adapter.js";
 import { StateAdapter } from "../state-adapter/state-adapter.js";
+import { JobBasicData, JobProcessingData, JobSequenceData } from "./log.js";
 
 /**
  * Low-level adapter interface for observability metrics.
@@ -85,4 +85,8 @@ export type ObservabilityAdapter = {
   jobSequenceDuration: (data: JobSequenceData & { durationMs: number }) => void;
   jobDuration: (data: JobProcessingData & { durationMs: number }) => void;
   jobAttemptDuration: (data: JobProcessingData & { durationMs: number; workerId: string }) => void;
+
+  // gauges (UpDownCounters)
+  jobTypeIdleChange: (data: { delta: number; typeName: string; workerId: string }) => void;
+  jobTypeProcessingChange: (data: { delta: number; typeName: string; workerId: string }) => void;
 };

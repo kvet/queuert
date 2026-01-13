@@ -216,6 +216,7 @@ export const runJobProcess = async ({
   leaseConfig,
   workerId,
   notifyAdapter,
+  typeNames,
 }: {
   helper: ProcessHelper;
   process: JobProcessFn<
@@ -229,6 +230,7 @@ export const runJobProcess = async ({
   leaseConfig: LeaseConfig;
   workerId: string;
   notifyAdapter: NotifyAdapter;
+  typeNames: readonly string[];
 }): Promise<() => Promise<void>> => {
   const firstLeaseCommitted = createSignal();
   const claimTransactionClosed = createSignal();
@@ -305,166 +307,173 @@ export const runJobProcess = async ({
   let disposeOwnershipListener: (() => Promise<void>) | null = null;
 
   const startProcessing = async (job: StateJob) => {
-    const attemptStartTime = Date.now();
-    const blockerPairs = await helper.getJobBlockers({ jobId: job.id, context });
-    const runningJob = {
-      ...mapStateJobToJob(job),
-      blockers: blockerPairs.map(mapStateJobPairToJobSequence) as CompletedJobSequence<
-        JobSequence<any, any, any, any>
-      >[],
-    } as RunningJob<JobOf<any, any, any, any>>;
-
-    let prepareAccessed = false;
-    let prepareCalled = false;
-    const prepare = (async <T>(
-      config: { mode: "atomic" | "staged" },
-      prepareCallback?: (options: BaseStateAdapterContext) => T | Promise<T>,
-    ) => {
-      if (prepareCalled) {
-        throw new Error("Prepare can only be called once");
-      }
-      prepareCalled = true;
-
-      const callbackOutput = await prepareCallback?.({ ...context });
-
-      await helper.renewJobLease({
-        context,
-        job,
-        leaseMs: leaseConfig.leaseMs,
-        workerId,
-      });
-      firstLeaseCommitted.signalOnce();
-      await claimTransactionClosed.onSignal;
-
-      if (config.mode === "staged") {
-        await leaseManager.start();
-        try {
-          disposeOwnershipListener = await notifyAdapter.listenJobOwnershipLost(job.id, () => {
-            if (!abortController.signal.aborted) {
-              void runInGuardedTransaction(async () => Promise.resolve()).catch(() => {});
-            }
-          });
-        } catch {}
-      }
-
-      return callbackOutput;
-    }) as PrepareFn<StateAdapter<BaseStateAdapterContext, BaseStateAdapterContext, any>>;
-
-    let completeCalled = false;
-    let completeSucceeded = false;
-    // oxlint-disable-next-line no-unsafe-type-assertion
-    const complete = (async (
-      completeCallback: (
-        options: {
-          continueWith: (
-            options: {
-              typeName: string;
-              input: unknown;
-              schedule?: ScheduleOptions;
-              startBlockers?: StartBlockersFn<any, BaseJobTypeDefinitions, string>;
-            } & BaseStateAdapterContext,
-          ) => Promise<unknown>;
-        } & BaseStateAdapterContext,
-      ) => unknown,
-    ) => {
-      if (!prepareCalled) {
-        // Auto-setup in atomic mode if complete is called before prepare
-        await prepare({ mode: "atomic" });
-      }
-      if (completeCalled) {
-        throw new Error("Complete can only be called once");
-      }
-      completeCalled = true;
-      await disposeOwnershipListener?.();
-      await leaseManager.stop();
-      const result = await runInGuardedTransaction(async (context) => {
-        let continuedJob: Job<any, any, any, any, any[]> | null = null;
-        const output = await completeCallback({
-          continueWith: async ({ typeName, input, schedule, startBlockers }) => {
-            if (continuedJob) {
-              throw new Error("continueWith can only be called once");
-            }
-            continuedJob = await helper.continueWith({
-              typeName,
-              input,
-              context,
-              schedule,
-              startBlockers: startBlockers as any,
-            });
-            return continuedJob;
-          },
-          ...context,
-        });
-        helper.logJobAttemptCompleted({
-          job,
-          output: continuedJob ? null : output,
-          continuedWith: continuedJob ?? undefined,
-          workerId,
-        });
-        const completedStateJob = await helper.finishJob(
-          continuedJob
-            ? { job, context, workerId, type: "continueWith", continuedJob }
-            : { job, context, workerId, type: "completeSequence", output },
-        );
-        return (
-          continuedJob ?? {
-            ...mapStateJobToJob(completedStateJob),
-            blockers: runningJob.blockers,
-          }
-        );
-      });
-      completeSucceeded = true;
-      helper.observabilityHelper.jobAttemptDuration(job, {
-        durationMs: Date.now() - attemptStartTime,
-        workerId,
-      });
-      return result;
-    }) as CompleteFn<
-      StateAdapter<BaseStateAdapterContext, BaseStateAdapterContext, any>,
-      BaseJobTypeDefinitions,
-      string
-    >;
-
-    let autoSetupDone = false;
+    helper.observabilityHelper.jobTypeProcessingChange(1, job, workerId);
+    helper.observabilityHelper.jobTypeIdleChange(-1, workerId, typeNames);
     try {
-      const processPromise = process({
-        signal: abortController.signal,
-        job: runningJob,
-        get prepare() {
-          if (autoSetupDone) {
-            throw new Error("Prepare cannot be accessed after auto-setup");
-          }
-          if (!prepareAccessed) {
-            prepareAccessed = true;
-          }
-          return prepare;
-        },
-        complete,
-      });
-      processPromise.catch(() => {});
+      const attemptStartTime = Date.now();
+      const blockerPairs = await helper.getJobBlockers({ jobId: job.id, context });
+      const runningJob = {
+        ...mapStateJobToJob(job),
+        blockers: blockerPairs.map(mapStateJobPairToJobSequence) as CompletedJobSequence<
+          JobSequence<any, any, any, any>
+        >[],
+      } as RunningJob<JobOf<any, any, any, any>>;
 
-      if (!prepareAccessed && !prepareCalled) {
-        await prepare({ mode: "staged" });
-        autoSetupDone = true;
-      }
+      let prepareAccessed = false;
+      let prepareCalled = false;
+      const prepare = (async <T>(
+        config: { mode: "atomic" | "staged" },
+        prepareCallback?: (options: BaseStateAdapterContext) => T | Promise<T>,
+      ) => {
+        if (prepareCalled) {
+          throw new Error("Prepare can only be called once");
+        }
+        prepareCalled = true;
 
-      await processPromise;
-    } catch (error) {
-      const runInTx = completeSucceeded
-        ? helper.runInTransaction.bind(helper)
-        : runInGuardedTransaction;
-      await runInTx(async (context) =>
-        helper.handleJobHandlerError({
-          job,
-          error,
+        const callbackOutput = await prepareCallback?.({ ...context });
+
+        await helper.renewJobLease({
           context,
-          retryConfig,
+          job,
+          leaseMs: leaseConfig.leaseMs,
           workerId,
-        }),
-      );
+        });
+        firstLeaseCommitted.signalOnce();
+        await claimTransactionClosed.onSignal;
+
+        if (config.mode === "staged") {
+          await leaseManager.start();
+          try {
+            disposeOwnershipListener = await notifyAdapter.listenJobOwnershipLost(job.id, () => {
+              if (!abortController.signal.aborted) {
+                void runInGuardedTransaction(async () => Promise.resolve()).catch(() => {});
+              }
+            });
+          } catch {}
+        }
+
+        return callbackOutput;
+      }) as PrepareFn<StateAdapter<BaseStateAdapterContext, BaseStateAdapterContext, any>>;
+
+      let completeCalled = false;
+      let completeSucceeded = false;
+      // oxlint-disable-next-line no-unsafe-type-assertion
+      const complete = (async (
+        completeCallback: (
+          options: {
+            continueWith: (
+              options: {
+                typeName: string;
+                input: unknown;
+                schedule?: ScheduleOptions;
+                startBlockers?: StartBlockersFn<any, BaseJobTypeDefinitions, string>;
+              } & BaseStateAdapterContext,
+            ) => Promise<unknown>;
+          } & BaseStateAdapterContext,
+        ) => unknown,
+      ) => {
+        if (!prepareCalled) {
+          // Auto-setup in atomic mode if complete is called before prepare
+          await prepare({ mode: "atomic" });
+        }
+        if (completeCalled) {
+          throw new Error("Complete can only be called once");
+        }
+        completeCalled = true;
+        await disposeOwnershipListener?.();
+        await leaseManager.stop();
+        const result = await runInGuardedTransaction(async (context) => {
+          let continuedJob: Job<any, any, any, any, any[]> | null = null;
+          const output = await completeCallback({
+            continueWith: async ({ typeName, input, schedule, startBlockers }) => {
+              if (continuedJob) {
+                throw new Error("continueWith can only be called once");
+              }
+              continuedJob = await helper.continueWith({
+                typeName,
+                input,
+                context,
+                schedule,
+                startBlockers: startBlockers as any,
+              });
+              return continuedJob;
+            },
+            ...context,
+          });
+          helper.logJobAttemptCompleted({
+            job,
+            output: continuedJob ? null : output,
+            continuedWith: continuedJob ?? undefined,
+            workerId,
+          });
+          const completedStateJob = await helper.finishJob(
+            continuedJob
+              ? { job, context, workerId, type: "continueWith", continuedJob }
+              : { job, context, workerId, type: "completeSequence", output },
+          );
+          return (
+            continuedJob ?? {
+              ...mapStateJobToJob(completedStateJob),
+              blockers: runningJob.blockers,
+            }
+          );
+        });
+        completeSucceeded = true;
+        helper.observabilityHelper.jobAttemptDuration(job, {
+          durationMs: Date.now() - attemptStartTime,
+          workerId,
+        });
+        return result;
+      }) as CompleteFn<
+        StateAdapter<BaseStateAdapterContext, BaseStateAdapterContext, any>,
+        BaseJobTypeDefinitions,
+        string
+      >;
+
+      let autoSetupDone = false;
+      try {
+        const processPromise = process({
+          signal: abortController.signal,
+          job: runningJob,
+          get prepare() {
+            if (autoSetupDone) {
+              throw new Error("Prepare cannot be accessed after auto-setup");
+            }
+            if (!prepareAccessed) {
+              prepareAccessed = true;
+            }
+            return prepare;
+          },
+          complete,
+        });
+        processPromise.catch(() => {});
+
+        if (!prepareAccessed && !prepareCalled) {
+          await prepare({ mode: "staged" });
+          autoSetupDone = true;
+        }
+
+        await processPromise;
+      } catch (error) {
+        const runInTx = completeSucceeded
+          ? helper.runInTransaction.bind(helper)
+          : runInGuardedTransaction;
+        await runInTx(async (context) =>
+          helper.handleJobHandlerError({
+            job,
+            error,
+            context,
+            retryConfig,
+            workerId,
+          }),
+        );
+      } finally {
+        await disposeOwnershipListener?.();
+        await leaseManager.stop();
+      }
     } finally {
-      await disposeOwnershipListener?.();
-      await leaseManager.stop();
+      helper.observabilityHelper.jobTypeIdleChange(1, workerId, typeNames);
+      helper.observabilityHelper.jobTypeProcessingChange(-1, job, workerId);
     }
   };
 

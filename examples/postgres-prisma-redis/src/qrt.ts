@@ -24,7 +24,7 @@ export const createQrt = async ({
       return !("$transaction" in prisma);
     },
     runInTransaction: async ({ prisma }, cb) => {
-      return prisma.$transaction(async (tx) => cb({ prisma: tx }));
+      return prisma.$transaction(async (prisma) => cb({ prisma }));
     },
     executeSql: async ({ prisma }, query, params) => {
       // Prisma's $queryRawUnsafe only supports single statements (uses prepared statements)

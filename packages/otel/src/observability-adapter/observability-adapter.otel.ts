@@ -71,6 +71,14 @@ export const createOtelObservabilityAdapter = ({
     { unit: "ms", description: "Duration of job attempt processing" },
   );
 
+  // gauges (UpDownCounters)
+  const jobTypeIdleGauge = meter.createUpDownCounter(`${metricPrefix}.job_type.idle`, {
+    description: "Workers idle for this job type",
+  });
+  const jobTypeProcessingGauge = meter.createUpDownCounter(`${metricPrefix}.job_type.processing`, {
+    description: "Jobs of this type currently being processed",
+  });
+
   return {
     // worker
     workerStarted: ({ workerId }) => {
@@ -161,6 +169,14 @@ export const createOtelObservabilityAdapter = ({
     },
     jobAttemptDuration: ({ typeName, sequenceTypeName, workerId, durationMs }) => {
       jobAttemptDurationHistogram.record(durationMs, { typeName, sequenceTypeName, workerId });
+    },
+
+    // gauges
+    jobTypeIdleChange: ({ delta, typeName, workerId }) => {
+      jobTypeIdleGauge.add(delta, { typeName, workerId });
+    },
+    jobTypeProcessingChange: ({ delta, typeName, workerId }) => {
+      jobTypeProcessingGauge.add(delta, { typeName, workerId });
     },
   };
 };

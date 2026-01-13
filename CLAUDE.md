@@ -134,7 +134,7 @@ OpenTelemetry observability adapter for metrics and tracing.
 
 **Adapter notes:**
 
-Users configure their OTEL SDK with desired exporters (Prometheus, OTLP, Jaeger, etc.) before using this adapter. Implements counters and histograms; gauges and tracing spans will be added later.
+Users configure their OTEL SDK with desired exporters (Prometheus, OTLP, Jaeger, etc.) before using this adapter. Implements counters, histograms, and gauges; tracing spans will be added later.
 
 **Counters emitted:**
 
@@ -149,6 +149,15 @@ Users configure their OTEL SDK with desired exporters (Prometheus, OTLP, Jaeger,
 - Job Sequence: `{prefix}.job_sequence.duration` - Duration from sequence creation to completion (ms)
 - Job: `{prefix}.job.duration` - Duration from job creation to completion (ms)
 - Job Attempt: `{prefix}.job.attempt.duration` - Duration of attempt processing (ms)
+
+**Gauges emitted (UpDownCounters):**
+
+- `{prefix}.job_type.idle` - Workers idle for this job type (can accept jobs)
+  - Attributes: `typeName`, `workerId`
+  - Semantics: +1 on worker start, -1 when job processing starts, +1 when job processing ends, -1 on worker stop
+- `{prefix}.job_type.processing` - Jobs of this type currently being processed
+  - Attributes: `typeName`, `workerId`
+  - Semantics: +1 when job processing starts, -1 when job processing ends
 
 **Configuration options:**
 

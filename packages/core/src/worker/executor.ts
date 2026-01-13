@@ -61,6 +61,7 @@ export const createExecutor = ({
     },
   } = {}) => {
     observabilityHelper.workerStarted({ workerId, jobTypeNames: typeNames });
+    observabilityHelper.jobTypeIdleChange(1, workerId, typeNames);
     const stopController = new AbortController();
 
     const waitForNextJob = async () => {
@@ -125,6 +126,7 @@ export const createExecutor = ({
                   leaseConfig: jobType.leaseConfig ?? defaultLeaseConfig,
                   workerId,
                   notifyAdapter,
+                  typeNames,
                 }),
               ],
             );
@@ -189,6 +191,7 @@ export const createExecutor = ({
       observabilityHelper.workerStopping({ workerId });
       stopController.abort();
       await runWorkerLoopPromise;
+      observabilityHelper.jobTypeIdleChange(-1, workerId, typeNames);
       observabilityHelper.workerStopped({ workerId });
     };
   };
