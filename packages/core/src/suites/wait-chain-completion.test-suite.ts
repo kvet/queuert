@@ -1,16 +1,8 @@
 import { TestAPI } from "vitest";
-import {
-  createQueuert,
-  defineJobTypes,
-  WaitForJobChainCompletionTimeoutError,
-} from "../index.js";
+import { createQueuert, defineJobTypes, WaitForJobChainCompletionTimeoutError } from "../index.js";
 import { TestSuiteContext } from "./spec-context.spec-helper.js";
 
-export const waitChainCompletionTestSuite = ({
-  it,
-}: {
-  it: TestAPI<TestSuiteContext>;
-}): void => {
+export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
   // check completion scenario with workers completing jobs
 
   it("handles already completed chains", async ({

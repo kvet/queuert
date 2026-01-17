@@ -24,14 +24,8 @@ export const wrapNotifyAdapterWithLogging = ({
   return {
     notifyJobScheduled: wrap("notifyJobScheduled", notifyAdapter.notifyJobScheduled),
     listenJobScheduled: wrap("listenJobScheduled", notifyAdapter.listenJobScheduled),
-    notifyJobChainCompleted: wrap(
-      "notifyJobChainCompleted",
-      notifyAdapter.notifyJobChainCompleted,
-    ),
-    listenJobChainCompleted: wrap(
-      "listenJobChainCompleted",
-      notifyAdapter.listenJobChainCompleted,
-    ),
+    notifyJobChainCompleted: wrap("notifyJobChainCompleted", notifyAdapter.notifyJobChainCompleted),
+    listenJobChainCompleted: wrap("listenJobChainCompleted", notifyAdapter.listenJobChainCompleted),
     notifyJobOwnershipLost: wrap("notifyJobOwnershipLost", notifyAdapter.notifyJobOwnershipLost),
     listenJobOwnershipLost: wrap("listenJobOwnershipLost", notifyAdapter.listenJobOwnershipLost),
   };

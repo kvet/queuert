@@ -58,10 +58,10 @@ export const createOtelObservabilityAdapter = ({
   const stateAdapterErrorCounter = meter.createCounter(`${metricPrefix}.state_adapter.error`);
 
   // histograms
-  const jobChainDurationHistogram = meter.createHistogram(
-    `${metricPrefix}.job_chain.duration`,
-    { unit: "ms", description: "Duration of job chain from creation to completion" },
-  );
+  const jobChainDurationHistogram = meter.createHistogram(`${metricPrefix}.job_chain.duration`, {
+    unit: "ms",
+    description: "Duration of job chain from creation to completion",
+  });
   const jobDurationHistogram = meter.createHistogram(`${metricPrefix}.job.duration`, {
     unit: "ms",
     description: "Duration of job from creation to completion",

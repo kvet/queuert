@@ -15,6 +15,7 @@ blocked/pending → running → completed
 ```
 
 Each job:
+
 - Belongs to a **Job Type** that defines its input/output schema
 - Contains typed input data and (when completed) output data
 - Can `continueWith` to create a linked follow-up job
@@ -47,6 +48,7 @@ const chain = startJobChain(...)   // chain.id === firstJob.id
 ```
 
 Key parallel:
+
 - A Promise chain doesn't have a separate "chain ID"—the original promise IS the chain's identity
 - A Job Chain doesn't have a separate entity—the first job IS the chain's identity
 
@@ -64,6 +66,7 @@ fetchUser(id)
 ```
 
 The chain:
+
 - Has identity (the first promise)
 - Has continuations (`.then()` callbacks)
 - Completes when the last `.then()` resolves
@@ -94,17 +97,21 @@ This isn't redundant—it's a meaningful signal that identifies the chain starte
 Having the first job BE the chain (rather than a separate entity) provides:
 
 ### Simplicity
+
 - One table, one type, one set of operations
 - No separate `job_chain` table to manage
 - No joins, no synchronization issues
 
 ### Flexibility
+
 The first job can be:
+
 - A lightweight "alias" that immediately continues to real work
 - A full job that processes and completes the chain in one step
 - Anything in between
 
 ### Performance
+
 - `chainTypeName` denormalized on every job for O(1) filtering
 - No subqueries needed to find chains by type
 - Efficient at scale (millions of jobs)
@@ -114,22 +121,26 @@ The first job can be:
 Chains support various patterns via `continueWith`:
 
 ### Linear
+
 ```
 A → B → C → done
 ```
 
 ### Branched
+
 ```
 A → B1 (if condition)
   → B2 (else)
 ```
 
 ### Loop
+
 ```
 A → A → A → done
 ```
 
 ### Go-to (jump back)
+
 ```
 A → B → A → B → done
 ```

@@ -83,9 +83,7 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
   };
 };
 
-const parseDbJobChainRow = (
-  row: DbJobChainRow,
-): { rootJob: DbJob; lastChainJob: DbJob | null } => {
+const parseDbJobChainRow = (row: DbJobChainRow): { rootJob: DbJob; lastChainJob: DbJob | null } => {
   const rootJob: DbJob = {
     id: row.id,
     type_name: row.type_name,

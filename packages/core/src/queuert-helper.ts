@@ -1,19 +1,15 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { UUID } from "node:crypto";
-import {
-  CompletedJobChain,
-  JobChain,
-  mapStateJobPairToJobChain,
-} from "./entities/job-chain.js";
+import { CompletedJobChain, JobChain, mapStateJobPairToJobChain } from "./entities/job-chain.js";
 import {
   BaseJobTypeDefinitions,
   BlockerChains,
-  ContinuationJobs,
-  EntryJobTypeDefinitions,
-  JobOf,
-  JobChainOf,
   ChainJobs,
   ChainJobTypes,
+  ContinuationJobs,
+  EntryJobTypeDefinitions,
+  JobChainOf,
+  JobOf,
 } from "./entities/job-type.js";
 import { Job, JobWithoutBlockers, mapStateJobToJob, PendingJob } from "./entities/job.js";
 import { ScheduleOptions } from "./entities/schedule.js";
@@ -237,9 +233,7 @@ export const queuertHelper = ({
 
     if (incompleteBlockerChainIds.length > 0) {
       const incompleteBlockerSet = new Set(incompleteBlockerChainIds);
-      const incompleteBlockerChains = blockerChains.filter((b) =>
-        incompleteBlockerSet.has(b.id),
-      );
+      const incompleteBlockerChains = blockerChains.filter((b) => incompleteBlockerSet.has(b.id));
       observabilityHelper.jobBlocked(job, { blockedByChains: incompleteBlockerChains });
     }
 
@@ -323,6 +317,35 @@ export const queuertHelper = ({
       },
       cb,
     );
+  };
+
+  const continueWith = async <TJobTypeName extends string, TInput>({
+    typeName,
+    input,
+    context,
+    schedule,
+    startBlockers,
+    fromTypeName,
+  }: {
+    typeName: TJobTypeName;
+    input: TInput;
+    context: any;
+    schedule?: ScheduleOptions;
+    startBlockers?: StartBlockersFn<string, BaseJobTypeDefinitions, string>;
+    fromTypeName: string;
+  }): Promise<JobOf<string, BaseJobTypeDefinitions, TJobTypeName, string>> => {
+    registry.validateContinueWith(fromTypeName, { typeName, input });
+
+    const { job } = await createStateJob({
+      typeName,
+      input,
+      context,
+      startBlockers,
+      isChain: false,
+      schedule,
+    });
+
+    return mapStateJobToJob(job) as JobOf<string, BaseJobTypeDefinitions, TJobTypeName, string>;
   };
 
   const finishJob = async ({
@@ -435,9 +458,7 @@ export const queuertHelper = ({
       deduplication?: DeduplicationOptions;
       schedule?: ScheduleOptions;
       startBlockers?: StartBlockersFn<string, BaseJobTypeDefinitions, string>;
-    }): Promise<
-      JobChain<string, TChainTypeName, TInput, TOutput> & { deduplicated: boolean }
-    > => {
+    }): Promise<JobChain<string, TChainTypeName, TInput, TOutput> & { deduplicated: boolean }> => {
       await assertInTransaction(context);
 
       const { job, deduplicated } = await createStateJob({
@@ -467,7 +488,7 @@ export const queuertHelper = ({
 
       return jobChain ? mapStateJobPairToJobChain(jobChain) : null;
     },
-    continueWith: async <TJobTypeName extends string, TInput>({
+    continueWith: continueWith as <TJobTypeName extends string, TInput>({
       typeName,
       input,
       context,
@@ -481,20 +502,7 @@ export const queuertHelper = ({
       schedule?: ScheduleOptions;
       startBlockers?: StartBlockersFn<string, BaseJobTypeDefinitions, string>;
       fromTypeName: string;
-    }): Promise<JobOf<string, BaseJobTypeDefinitions, TJobTypeName, string>> => {
-      registry.validateContinueWith(fromTypeName, { typeName, input });
-
-      const { job } = await createStateJob({
-        typeName,
-        input,
-        context,
-        startBlockers,
-        isChain: false,
-        schedule,
-      });
-
-      return mapStateJobToJob(job) as JobOf<string, BaseJobTypeDefinitions, TJobTypeName, string>;
-    },
+    }) => Promise<JobOf<string, BaseJobTypeDefinitions, TJobTypeName, string>>,
     handleJobHandlerError: async ({
       job,
       error,
@@ -795,30 +803,23 @@ export const queuertHelper = ({
               throw new Error("continueWith can only be called once");
             }
 
-            registry.validateContinueWith(job.typeName, { typeName, input });
-
-            continuedJob = await withJobContext(
+            return withJobContext(
               {
-                originId: job.originId ?? job.id,
+                originId: job.id,
                 chainId: job.chainId,
                 rootChainId: job.rootChainId,
                 chainTypeName: job.chainTypeName,
               },
-              async () => {
-                const { job: newJob } = await createStateJob({
+              async () =>
+                continueWith({
                   typeName,
                   input,
                   context,
-                  startBlockers: startBlockers as any,
-                  isChain: false,
                   schedule,
-                });
-
-                return mapStateJobToJob(newJob) as Job<any, any, any, any, any[]>;
-              },
+                  startBlockers: startBlockers as any,
+                  fromTypeName: job.typeName,
+                }),
             );
-
-            return continuedJob;
           },
           ...context,
         });
@@ -874,9 +875,7 @@ export const queuertHelper = ({
         }
         const jobChain = mapStateJobPairToJobChain(chain);
         return jobChain.status === "completed"
-          ? (jobChain as CompletedJobChain<
-              JobChain<string, TChainTypeName, TInput, TOutput>
-            >)
+          ? (jobChain as CompletedJobChain<JobChain<string, TChainTypeName, TInput, TOutput>>)
           : null;
       };
 

@@ -1,8 +1,4 @@
-import {
-  CompletedJobChain,
-  JobChain,
-  mapStateJobPairToJobChain,
-} from "../entities/job-chain.js";
+import { CompletedJobChain, JobChain, mapStateJobPairToJobChain } from "../entities/job-chain.js";
 import {
   BaseJobTypeDefinitions,
   ContinuationJobs,
@@ -389,14 +385,23 @@ export const runJobProcess = async ({
               if (continuedJob) {
                 throw new Error("continueWith can only be called once");
               }
-              continuedJob = await helper.continueWith({
-                typeName,
-                input,
-                context,
-                schedule,
-                startBlockers: startBlockers as any,
-                fromTypeName: job.typeName,
-              });
+              continuedJob = await helper.withJobContext(
+                {
+                  chainId: job.chainId,
+                  chainTypeName: job.chainTypeName,
+                  rootChainId: job.rootChainId,
+                  originId: job.id,
+                },
+                async () =>
+                  helper.continueWith({
+                    typeName,
+                    input,
+                    context,
+                    schedule,
+                    startBlockers: startBlockers as any,
+                    fromTypeName: job.typeName,
+                  }),
+              );
               return continuedJob;
             },
             ...context,

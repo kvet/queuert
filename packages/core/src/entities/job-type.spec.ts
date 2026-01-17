@@ -501,17 +501,17 @@ describe("ChainTypesReaching", () => {
     >().toEqualTypeOf<"entryE">();
 
     // Shared steps reachable from A and B
-    expectTypeOf<
-      ChainTypesReaching<(typeof defs)["$definitions"], "sharedStep1">
-    >().toEqualTypeOf<"entryA" | "entryB">();
-    expectTypeOf<
-      ChainTypesReaching<(typeof defs)["$definitions"], "sharedStep2">
-    >().toEqualTypeOf<"entryA" | "entryB">();
+    expectTypeOf<ChainTypesReaching<(typeof defs)["$definitions"], "sharedStep1">>().toEqualTypeOf<
+      "entryA" | "entryB"
+    >();
+    expectTypeOf<ChainTypesReaching<(typeof defs)["$definitions"], "sharedStep2">>().toEqualTypeOf<
+      "entryA" | "entryB"
+    >();
 
     // Final shared is reachable from A, B, and C (via diamond pattern)
-    expectTypeOf<
-      ChainTypesReaching<(typeof defs)["$definitions"], "finalShared">
-    >().toEqualTypeOf<"entryA" | "entryB" | "entryC">();
+    expectTypeOf<ChainTypesReaching<(typeof defs)["$definitions"], "finalShared">>().toEqualTypeOf<
+      "entryA" | "entryB" | "entryC"
+    >();
 
     // C-only branches
     expectTypeOf<
@@ -545,9 +545,7 @@ describe("ChainTypesReaching", () => {
     expectTypeOf<SharedStep1Job["chainTypeName"]>().toEqualTypeOf<"entryA" | "entryB">();
 
     type FinalSharedJob = JobOf<string, (typeof defs)["$definitions"], "finalShared">;
-    expectTypeOf<FinalSharedJob["chainTypeName"]>().toEqualTypeOf<
-      "entryA" | "entryB" | "entryC"
-    >();
+    expectTypeOf<FinalSharedJob["chainTypeName"]>().toEqualTypeOf<"entryA" | "entryB" | "entryC">();
 
     // Can narrow with explicit 4th param
     type FinalSharedFromA = JobOf<string, (typeof defs)["$definitions"], "finalShared", "entryA">;

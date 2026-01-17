@@ -263,8 +263,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       },
     });
 
-    const jobChains: JobChain<string, "test", { jobNumber: number }, { success: boolean }>[] =
-      [];
+    const jobChains: JobChain<string, "test", { jobNumber: number }, { success: boolean }>[] = [];
     for (let i = 0; i < 5; i++) {
       jobChains.push(
         await queuert.withNotify(async () =>
@@ -325,8 +324,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       },
     });
 
-    const jobChains: JobChain<string, "test", { jobNumber: number }, { success: boolean }>[] =
-      [];
+    const jobChains: JobChain<string, "test", { jobNumber: number }, { success: boolean }>[] = [];
     for (let i = 0; i < 5; i++) {
       jobChains.push(
         await queuert.withNotify(async () =>

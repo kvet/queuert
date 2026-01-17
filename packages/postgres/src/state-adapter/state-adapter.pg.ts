@@ -130,9 +130,7 @@ export const createPgStateAdapter = async <
       return jobChain
         ? [
             mapDbJobToStateJob(jobChain.root_job),
-            jobChain.last_chain_job
-              ? mapDbJobToStateJob(jobChain.last_chain_job)
-              : undefined,
+            jobChain.last_chain_job ? mapDbJobToStateJob(jobChain.last_chain_job) : undefined,
           ]
         : undefined;
     },
@@ -182,10 +180,7 @@ export const createPgStateAdapter = async <
       const [result] = await executeTypedSql({
         context,
         sql: addJobBlockersSql,
-        params: [
-          Array.from({ length: blockedByChainIds.length }, () => jobId),
-          blockedByChainIds,
-        ],
+        params: [Array.from({ length: blockedByChainIds.length }, () => jobId), blockedByChainIds],
       });
 
       return {

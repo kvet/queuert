@@ -16,6 +16,11 @@
     "type": "git",
     "url": "git+https://github.com/kvet/queuert.git"
   },
+  "files": [
+    "dist",
+    "package.json",
+    "README.md"
+  ],
   "type": "module",
   "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",

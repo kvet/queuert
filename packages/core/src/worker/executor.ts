@@ -108,28 +108,20 @@ export const createExecutor = ({
               throw new Error(`No process function registered for job type "${job.typeName}"`);
             }
 
-            return helper.withJobContext(
-              {
-                chainId: job.chainId,
-                chainTypeName: job.chainTypeName,
-                rootChainId: job.rootChainId,
-                originId: job.id,
-              },
-              async () => [
-                true,
-                await runJobProcess({
-                  helper,
-                  process: jobType.process,
-                  context,
-                  job,
-                  retryConfig: jobType.retryConfig ?? defaultRetryConfig,
-                  leaseConfig: jobType.leaseConfig ?? defaultLeaseConfig,
-                  workerId,
-                  notifyAdapter,
-                  typeNames,
-                }),
-              ],
-            );
+            return [
+              true,
+              await runJobProcess({
+                helper,
+                process: jobType.process,
+                context,
+                job,
+                retryConfig: jobType.retryConfig ?? defaultRetryConfig,
+                leaseConfig: jobType.leaseConfig ?? defaultLeaseConfig,
+                workerId,
+                notifyAdapter,
+                typeNames,
+              }),
+            ];
           },
         );
 

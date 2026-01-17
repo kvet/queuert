@@ -121,8 +121,7 @@ export type JobChainOf<
   TJobTypeName,
 > = TJobTypeName extends keyof TJobTypeDefinitions
   ? {
-      [K in ChainJobTypes<TJobTypeDefinitions, TJobTypeName> &
-        keyof TJobTypeDefinitions]: JobChain<
+      [K in ChainJobTypes<TJobTypeDefinitions, TJobTypeName> & keyof TJobTypeDefinitions]: JobChain<
         TJobId,
         TJobTypeName & string,
         ExtractInputType<TJobTypeDefinitions[K]>,
@@ -192,6 +191,10 @@ export type ChainJobs<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
 > = {
-  [K in ChainJobTypes<TJobTypeDefinitions, TChainTypeName> &
-    keyof TJobTypeDefinitions]: JobOf<TJobId, TJobTypeDefinitions, K, TChainTypeName>;
+  [K in ChainJobTypes<TJobTypeDefinitions, TChainTypeName> & keyof TJobTypeDefinitions]: JobOf<
+    TJobId,
+    TJobTypeDefinitions,
+    K,
+    TChainTypeName
+  >;
 }[ChainJobTypes<TJobTypeDefinitions, TChainTypeName> & keyof TJobTypeDefinitions];

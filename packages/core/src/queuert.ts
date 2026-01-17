@@ -68,9 +68,7 @@ export type Queuert<
       deduplicated: boolean;
     }
   >;
-  getJobChain: <
-    TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
-  >(
+  getJobChain: <TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string>(
     options: {
       typeName: TChainTypeName;
       id: GetStateAdapterJobId<TStateAdapter>;
@@ -100,12 +98,7 @@ export type Queuert<
       >;
     } & GetStateAdapterTxContext<TStateAdapter>,
   ) => Promise<
-    CompleteJobChainResult<
-      TStateAdapter,
-      TJobTypeDefinitions,
-      TChainTypeName,
-      TCompleteReturn
-    >
+    CompleteJobChainResult<TStateAdapter, TJobTypeDefinitions, TChainTypeName, TCompleteReturn>
   >;
   withNotify: <T>(cb: () => Promise<T>) => Promise<T>;
   waitForJobChainCompletion: <
@@ -215,10 +208,7 @@ export const createQueuert = async <
         timeoutMs: options.timeoutMs,
         pollIntervalMs: options.pollIntervalMs,
         signal: options.signal,
-      })) as Queuert<
-      TJobTypeRegistry["$definitions"],
-      TStateAdapter
-    >["waitForJobChainCompletion"],
+      })) as Queuert<TJobTypeRegistry["$definitions"], TStateAdapter>["waitForJobChainCompletion"],
     withNotify: async (cb, ...args) => helper.withNotifyContext(async () => cb(...args)),
   };
 };

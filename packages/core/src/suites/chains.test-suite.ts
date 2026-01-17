@@ -134,10 +134,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     >().toEqualTypeOf<"linear">();
 
     await withWorkers([await worker.start()], async () => {
-      const finishedJobChain = await queuert.waitForJobChainCompletion(
-        jobChain,
-        completionOptions,
-      );
+      const finishedJobChain = await queuert.waitForJobChainCompletion(jobChain, completionOptions);
 
       expectTypeOf(finishedJobChain.output).toEqualTypeOf<{ result: number }>();
       expect(finishedJobChain.output).toEqual({ result: 3 });
@@ -545,6 +542,113 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       ]);
       expect(resultA.output).toEqual({ done: true });
       expect(resultB.output).toEqual({ done: true });
+    });
+  });
+
+  it("independent chains created during job processing do not inherit context", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const queuert = await createQueuert({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry: defineJobTypes<{
+        parent: {
+          entry: true;
+          input: { value: number };
+          output: { childChainId: string };
+        };
+        independent: {
+          entry: true;
+          input: { fromParent: number };
+          output: { result: number };
+        };
+      }>(),
+    });
+
+    let independentChainId: string | null = null;
+    let independentChainRootChainId: string | null = null;
+    let independentChainOriginId: string | null = null;
+
+    const worker = queuert
+      .createWorker()
+      .implementJobType({
+        typeName: "parent",
+        process: async ({ job, complete }) => {
+          // Create an independent chain during job processing
+          const independentChain = await queuert.withNotify(async () =>
+            runInTransaction(async (context) =>
+              queuert.startJobChain({
+                ...context,
+                typeName: "independent",
+                input: { fromParent: job.input.value },
+              }),
+            ),
+          );
+
+          independentChainId = independentChain.id;
+
+          return complete(async () => ({
+            childChainId: independentChain.id,
+          }));
+        },
+      })
+      .implementJobType({
+        typeName: "independent",
+        process: async ({ job, complete }) => {
+          // Capture the chain context for verification
+          independentChainRootChainId = job.rootChainId;
+          independentChainOriginId = job.originId;
+
+          return complete(async () => ({
+            result: job.input.fromParent * 2,
+          }));
+        },
+      });
+
+    const parentChain = await queuert.withNotify(async () =>
+      runInTransaction(async (context) =>
+        queuert.startJobChain({
+          ...context,
+          typeName: "parent",
+          input: { value: 42 },
+        }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      // Wait for both chains to complete
+      const [completedParent] = await Promise.all([
+        queuert.waitForJobChainCompletion(parentChain, completionOptions),
+        // Wait for independent chain using a polling approach since we don't have its reference yet
+        (async () => {
+          while (!independentChainId) {
+            await new Promise((resolve) => setTimeout(resolve, 50));
+          }
+          return queuert.waitForJobChainCompletion(
+            { id: independentChainId, typeName: "independent" } as any,
+            completionOptions,
+          );
+        })(),
+      ]);
+
+      expect(completedParent.output.childChainId).toBe(independentChainId);
+
+      // The independent chain should NOT have inherited context from parent
+      // rootChainId should be self-referential (its own id)
+      expect(independentChainRootChainId).toBe(independentChainId);
+      // originId should be null (not linked to parent job)
+      expect(independentChainOriginId).toBeNull();
+
+      // Verify they are truly independent - parent's rootChainId is different
+      expect(independentChainRootChainId).not.toBe(parentChain.id);
     });
   });
 

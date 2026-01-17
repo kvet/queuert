@@ -19,13 +19,13 @@ interface JobTypeRegistry<TJobTypeDefinitions = unknown> {
 
 ### Method Mapping
 
-| BaseJobTypeDefinition             | Registry Method                        | Purpose                                 |
-| --------------------------------- | -------------------------------------- | --------------------------------------- |
-| `entry?: boolean`                 | `validateEntry(typeName)`              | Validates job type can start a chain    |
-| `input: unknown`                  | `parseInput(typeName, input)`          | Parses and validates job input          |
-| `output?: unknown`                | `parseOutput(typeName, output)`        | Parses and validates job output         |
-| `continueWith?: JobTypeReference` | `validateContinueWith(typeName, to)`   | Validates continuation target           |
-| `blockers?: JobTypeReference[]`   | `validateBlockers(typeName, blockers)` | Validates blocker references            |
+| BaseJobTypeDefinition             | Registry Method                        | Purpose                              |
+| --------------------------------- | -------------------------------------- | ------------------------------------ |
+| `entry?: boolean`                 | `validateEntry(typeName)`              | Validates job type can start a chain |
+| `input: unknown`                  | `parseInput(typeName, input)`          | Parses and validates job input       |
+| `output?: unknown`                | `parseOutput(typeName, output)`        | Parses and validates job output      |
+| `continueWith?: JobTypeReference` | `validateContinueWith(typeName, to)`   | Validates continuation target        |
+| `blockers?: JobTypeReference[]`   | `validateBlockers(typeName, blockers)` | Validates blocker references         |
 
 ## Creating a Registry
 

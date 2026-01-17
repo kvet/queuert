@@ -162,11 +162,7 @@ export const extendWithCommon = <
     ],
     expectHistograms: [
       async ({ observabilityAdapter, expect }, use) => {
-        const histogramMethods = new Set([
-          "jobChainDuration",
-          "jobDuration",
-          "jobAttemptDuration",
-        ]);
+        const histogramMethods = new Set(["jobChainDuration", "jobDuration", "jobAttemptDuration"]);
 
         await use(async (expected: { method: string; args?: Record<string, unknown> }[]) => {
           const actual = observabilityAdapter._calls

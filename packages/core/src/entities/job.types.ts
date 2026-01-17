@@ -1,12 +1,6 @@
 export type JobStatus = "blocked" | "pending" | "running" | "completed";
 
-export type Job<
-  TJobId,
-  TJobTypeName,
-  TChainTypeName,
-  TInput,
-  TBlockerChains extends any[],
-> = {
+export type Job<TJobId, TJobTypeName, TChainTypeName, TInput, TBlockerChains extends any[]> = {
   id: TJobId;
   chainId: TJobId;
   typeName: TJobTypeName;

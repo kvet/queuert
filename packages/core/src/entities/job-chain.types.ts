@@ -14,7 +14,6 @@ export type JobChain<TJobId, TChainTypeName, TInput, TOutput> = {
   | { status: "completed"; output: TOutput; completedAt: Date }
 );
 
-export type CompletedJobChain<TJobChain extends JobChain<any, any, any, any>> =
-  TJobChain & {
-    status: "completed";
-  };
+export type CompletedJobChain<TJobChain extends JobChain<any, any, any, any>> = TJobChain & {
+  status: "completed";
+};

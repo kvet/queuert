@@ -330,7 +330,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     });
   });
 
-  it("handles blocker chains spawned during processing", async ({
+  it("independent chains spawned during processing do not inherit context", async ({
     stateAdapter,
     notifyAdapter,
     runInTransaction,
@@ -359,7 +359,6 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     });
 
     const childJobChains: JobChain<string, "inner", null, null>[] = [];
-    let originId: string;
 
     const worker = queuert
       .createWorker()
@@ -367,7 +366,10 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         typeName: "inner",
         process: async ({ job, complete }) => {
           return complete(async () => {
-            expect(job.originId).toEqual(originId);
+            // Independent chains should NOT inherit originId from parent
+            expect(job.originId).toBeNull();
+            // Independent chains should have self-referential rootChainId
+            expect(job.rootChainId).toEqual(job.id);
             return null;
           });
         },
@@ -376,7 +378,6 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         typeName: "outer",
         process: async ({ job, prepare, complete }) => {
           expect(job.originId).toBeNull();
-          originId = job.id;
 
           await prepare({ mode: "staged" }, async (context) => {
             childJobChains.push(

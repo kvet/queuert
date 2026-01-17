@@ -444,37 +444,33 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
         },
       });
 
-    const [
-      prepareJobChain,
-      completeJobChain,
-      prepareAfterAutoSetupJobChain,
-      continueWithJobChain,
-    ] = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
-        Promise.all([
-          queuert.startJobChain({
-            ...context,
-            typeName: "test-prepare-twice",
-            input: null,
-          }),
-          queuert.startJobChain({
-            ...context,
-            typeName: "test-complete-twice",
-            input: null,
-          }),
-          queuert.startJobChain({
-            ...context,
-            typeName: "test-prepare-after-auto-setup",
-            input: null,
-          }),
-          queuert.startJobChain({
-            ...context,
-            typeName: "test-continueWith-twice",
-            input: null,
-          }),
-        ]),
-      ),
-    );
+    const [prepareJobChain, completeJobChain, prepareAfterAutoSetupJobChain, continueWithJobChain] =
+      await queuert.withNotify(async () =>
+        runInTransaction(async (context) =>
+          Promise.all([
+            queuert.startJobChain({
+              ...context,
+              typeName: "test-prepare-twice",
+              input: null,
+            }),
+            queuert.startJobChain({
+              ...context,
+              typeName: "test-complete-twice",
+              input: null,
+            }),
+            queuert.startJobChain({
+              ...context,
+              typeName: "test-prepare-after-auto-setup",
+              input: null,
+            }),
+            queuert.startJobChain({
+              ...context,
+              typeName: "test-continueWith-twice",
+              input: null,
+            }),
+          ]),
+        ),
+      );
 
     await withWorkers([await worker.start()], async () => {
       await Promise.all([
@@ -876,9 +872,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       ],
       async () => {
         await Promise.all(
-          jobChains.map(async (job) =>
-            queuert.waitForJobChainCompletion(job, completionOptions),
-          ),
+          jobChains.map(async (job) => queuert.waitForJobChainCompletion(job, completionOptions)),
         );
       },
     );

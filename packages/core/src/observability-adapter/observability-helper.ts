@@ -95,10 +95,7 @@ export type ObservabilityHelper = {
   jobChainCreated: (job: StateJob, options: { input: unknown }) => void;
   jobChainCompleted: (jobChainStartJob: StateJob, options: { output: unknown }) => void;
   // blockers
-  jobBlocked: (
-    job: StateJob,
-    options: { blockedByChains: JobChain<any, any, any, any>[] },
-  ) => void;
+  jobBlocked: (job: StateJob, options: { blockedByChains: JobChain<any, any, any, any>[] }) => void;
   jobUnblocked: (job: StateJob, options: { unblockedByChain: StateJob }) => void;
   // notify adapter
   notifyContextAbsence: (job: StateJob) => void;
