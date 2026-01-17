@@ -1,10 +1,6 @@
 import pino from "pino";
-import {
-  createInProcessNotifyAdapter,
-  createInProcessStateAdapter,
-  createQueuert,
-  defineJobTypes,
-} from "queuert";
+import { createQueuert, defineJobTypes } from "queuert";
+import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
 import { createPinoLog } from "./log.js";
 
 // 1. Create Pino logger with pretty printing for demo

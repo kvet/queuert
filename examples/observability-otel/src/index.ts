@@ -1,10 +1,5 @@
-import {
-  createInProcessNotifyAdapter,
-  createInProcessStateAdapter,
-  createQueuert,
-  createConsoleLog,
-  defineJobTypes,
-} from "queuert";
+import { createQueuert, createConsoleLog, defineJobTypes } from "queuert";
+import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
 import { observabilityAdapter, flushMetrics, shutdownMetrics } from "./observability.js";
 
 // 1. Define job types

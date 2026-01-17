@@ -14,9 +14,9 @@ Core abstractions, interfaces, and in-memory implementations for testing.
 
 **Exports:**
 
-- `.` (main): `createQueuert`, `createConsoleLog`, adapter interfaces (`StateAdapter`, `NotifyAdapter`, `ObservabilityAdapter`), type definitions (`defineJobTypes`, `createJobTypeRegistry`), error classes, in-process adapters (`createInProcessStateAdapter`, `createInProcessNotifyAdapter`)
+- `.` (main): `createQueuert`, `createConsoleLog`, adapter interfaces (`StateAdapter`, `NotifyAdapter`, `ObservabilityAdapter`), type definitions (`defineJobTypes`, `createJobTypeRegistry`), error classes
 - `./testing`: Test suites and context helpers for adapter packages (`processTestSuite`, `sequencesTestSuite`, etc., `extendWithCommon`, `extendWithStateInProcess`)
-- `./internal`: Internal utilities for adapter packages only (`withRetry`, `createAsyncLock`, `wrapStateAdapterWithRetry`)
+- `./internal`: Internal utilities for adapter packages only (`withRetry`, `createAsyncLock`, `wrapStateAdapterWithRetry`), in-process adapters (`createInProcessStateAdapter`, `createInProcessNotifyAdapter`)
 
 ### `@queuert/postgres`
 

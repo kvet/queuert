@@ -1,6 +1,7 @@
 import { extendWithMongodb } from "@queuert/testcontainers";
 import { MongoClient } from "mongodb";
-import { createInProcessNotifyAdapter, createQueuert, defineJobTypes } from "queuert";
+import { createQueuert, defineJobTypes } from "queuert";
+import { createInProcessNotifyAdapter } from "queuert/internal";
 import { it as baseIt, expectTypeOf, vi } from "vitest";
 import { createMongoStateAdapter } from "../state-adapter/state-adapter.mongodb.js";
 import { createMongoProvider } from "./state-provider.mongodb.js";

@@ -1,5 +1,6 @@
 import { UUID } from "crypto";
-import { createInProcessNotifyAdapter, createQueuert, defineJobTypes } from "queuert";
+import { createQueuert, defineJobTypes } from "queuert";
+import { createInProcessNotifyAdapter } from "queuert/internal";
 import { it as baseIt, expectTypeOf, vi } from "vitest";
 import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
 import { extendWithStateSqlite } from "../testing.js";

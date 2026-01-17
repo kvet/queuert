@@ -1,9 +1,5 @@
-import {
-  createInProcessNotifyAdapter,
-  createInProcessStateAdapter,
-  createQueuert,
-  JobTypeValidationError,
-} from "queuert";
+import { createQueuert, JobTypeValidationError } from "queuert";
+import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
 import { describe, expect, it } from "vitest";
 import { Type } from "@sinclair/typebox";
 import { createTypeBoxJobTypeRegistry } from "./typebox-adapter.js";

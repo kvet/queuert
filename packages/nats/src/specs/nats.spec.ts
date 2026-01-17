@@ -1,6 +1,7 @@
 import { extendWithNats } from "@queuert/testcontainers";
 import { connect } from "nats";
-import { createInProcessStateAdapter, createQueuert, defineJobTypes } from "queuert";
+import { createQueuert, defineJobTypes } from "queuert";
+import { createInProcessStateAdapter } from "queuert/internal";
 import { it as baseIt, vi } from "vitest";
 import { createNatsNotifyAdapter } from "../notify-adapter/notify-adapter.nats.js";
 
