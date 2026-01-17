@@ -67,7 +67,7 @@ describe("defineJobTypes", () => {
     it("allows pure continuation outputs", () => {
       // Pure continuation output should be valid
       const defs = defineJobTypes<{
-        first: { entry: true; input: null; continuesTo: { typeName: "second" } };
+        first: { entry: true; input: null; continueWith: { typeName: "second" } };
         second: { input: null; output: { done: true } };
       }>();
 
@@ -76,22 +76,22 @@ describe("defineJobTypes", () => {
     });
 
     it("allows mixed continuation and terminal outputs", () => {
-      // Can continue or complete (continuesTo with non-null output)
+      // Can continue or complete (continueWith with non-null output)
       const defs = defineJobTypes<{
         loop: {
           input: { counter: number };
           output: { done: true };
-          continuesTo: { typeName: "loop" };
+          continueWith: { typeName: "loop" };
         };
       }>();
 
       expectTypeOf<(typeof defs)["$definitions"]>().toHaveProperty("loop");
     });
 
-    it("rejects continuesTo referencing undefined job type", () => {
+    it("rejects continueWith referencing undefined job type", () => {
       // @ts-expect-error "nonexistent" is not a defined job type
       defineJobTypes<{
-        start: { input: null; continuesTo: { typeName: "nonexistent" } };
+        start: { input: null; continueWith: { typeName: "nonexistent" } };
       }>();
     });
 
@@ -109,7 +109,7 @@ describe("defineJobTypes", () => {
     it("rejects blockers referencing continuation-only job type", () => {
       // @ts-expect-error "internal" is a continuation-only type, cannot be a blocker
       defineJobTypes<{
-        start: { entry: true; input: null; continuesTo: { typeName: "internal" } };
+        start: { entry: true; input: null; continueWith: { typeName: "internal" } };
         internal: { input: null; output: { done: true } };
         main: {
           entry: true;
@@ -120,9 +120,9 @@ describe("defineJobTypes", () => {
       }>();
     });
 
-    it("allows valid continuesTo references", () => {
+    it("allows valid continueWith references", () => {
       const defs = defineJobTypes<{
-        first: { entry: true; input: null; continuesTo: { typeName: "second" } };
+        first: { entry: true; input: null; continueWith: { typeName: "second" } };
         second: { input: null; output: { done: true } };
       }>();
 
@@ -150,7 +150,7 @@ describe("defineJobTypes", () => {
 describe("continuation-only jobs (default behavior)", () => {
   it("supports null as input type", () => {
     const defs = defineJobTypes<{
-      first: { entry: true; input: { start: true }; continuesTo: { typeName: "second" } };
+      first: { entry: true; input: { start: true }; continueWith: { typeName: "second" } };
       second: { input: null; output: { done: true } };
     }>();
 
@@ -160,7 +160,7 @@ describe("continuation-only jobs (default behavior)", () => {
 
   it("supports object types", () => {
     const defs = defineJobTypes<{
-      first: { entry: true; input: null; continuesTo: { typeName: "second" } };
+      first: { entry: true; input: null; continueWith: { typeName: "second" } };
       second: {
         input: { value: number; name: string };
         output: { done: true };
@@ -173,7 +173,7 @@ describe("continuation-only jobs (default behavior)", () => {
 
   it("supports primitive types", () => {
     const defs = defineJobTypes<{
-      first: { entry: true; input: null; continuesTo: { typeName: "second" } };
+      first: { entry: true; input: null; continueWith: { typeName: "second" } };
       second: { input: number; output: { done: true } };
     }>();
 
@@ -183,7 +183,7 @@ describe("continuation-only jobs (default behavior)", () => {
 
   it("supports array types", () => {
     const defs = defineJobTypes<{
-      first: { entry: true; input: null; continuesTo: { typeName: "second" } };
+      first: { entry: true; input: null; continueWith: { typeName: "second" } };
       second: { input: string[]; output: { done: true } };
     }>();
 
@@ -194,7 +194,7 @@ describe("continuation-only jobs (default behavior)", () => {
   it("rejects void as continuation input", () => {
     // @ts-expect-error void is not allowed as input
     defineJobTypes<{
-      first: { entry: true; input: null; continuesTo: { typeName: "second" } };
+      first: { entry: true; input: null; continueWith: { typeName: "second" } };
       second: { input: void; output: { done: true } };
     }>();
   });
@@ -202,7 +202,7 @@ describe("continuation-only jobs (default behavior)", () => {
   it("rejects undefined as continuation input", () => {
     // @ts-expect-error undefined is not allowed as input
     defineJobTypes<{
-      first: { entry: true; input: null; continuesTo: { typeName: "second" } };
+      first: { entry: true; input: null; continueWith: { typeName: "second" } };
       second: { input: undefined; output: { done: true } };
     }>();
   });
@@ -211,7 +211,7 @@ describe("continuation-only jobs (default behavior)", () => {
 describe("EntryJobTypeDefinitions", () => {
   it("includes only job types with entry: true", () => {
     type Defs = {
-      public: { entry: true; input: { id: string }; continuesTo: { typeName: "internal" } };
+      public: { entry: true; input: { id: string }; continueWith: { typeName: "internal" } };
       internal: { input: { data: number }; output: { done: true } };
       alsoPublic: { entry: true; input: null; output: { result: string } };
     };
@@ -236,7 +236,7 @@ describe("EntryJobTypeDefinitions", () => {
 describe("JobOf", () => {
   it("extracts input type correctly for continuation jobs", () => {
     const defs = defineJobTypes<{
-      first: { entry: true; input: { value: number }; continuesTo: { typeName: "second" } };
+      first: { entry: true; input: { value: number }; continueWith: { typeName: "second" } };
       second: {
         input: { continued: boolean };
         output: { done: true };
@@ -268,9 +268,9 @@ describe("JobOf", () => {
 });
 
 describe("ContinuationJobTypes", () => {
-  it("resolves continuation types from continuesTo", () => {
+  it("resolves continuation types from continueWith", () => {
     const defs = defineJobTypes<{
-      first: { entry: true; input: null; continuesTo: { typeName: "second" } };
+      first: { entry: true; input: null; continueWith: { typeName: "second" } };
       second: { input: null; output: { done: true } };
     }>();
 
@@ -285,7 +285,7 @@ describe("ContinuationJobTypes", () => {
         entry: true;
         input: null;
 
-        continuesTo: { typeName: "branchA" | "branchB" };
+        continueWith: { typeName: "branchA" | "branchB" };
       };
       branchA: { input: null; output: { a: true } };
       branchB: { input: null; output: { b: true } };
@@ -310,8 +310,8 @@ describe("ContinuationJobTypes", () => {
 describe("SequenceJobTypes", () => {
   it("collects all job types in a sequence", () => {
     const defs = defineJobTypes<{
-      first: { entry: true; input: null; continuesTo: { typeName: "second" } };
-      second: { input: null; continuesTo: { typeName: "third" } };
+      first: { entry: true; input: null; continueWith: { typeName: "second" } };
+      second: { input: null; continueWith: { typeName: "third" } };
       third: { input: null; output: { done: true } };
       unrelated: { entry: true; input: { other: true }; output: { other: true } };
     }>();
@@ -327,7 +327,7 @@ describe("SequenceJobTypes", () => {
         entry: true;
         input: { counter: number };
         output: { done: true };
-        continuesTo: { typeName: "loop" };
+        continueWith: { typeName: "loop" };
       };
     }>();
 
@@ -369,7 +369,7 @@ describe("BlockerSequences", () => {
 describe("JobSequenceOf", () => {
   it("extracts input types correctly for sequences", () => {
     const defs = defineJobTypes<{
-      first: { entry: true; input: { start: number }; continuesTo: { typeName: "second" } };
+      first: { entry: true; input: { start: number }; continueWith: { typeName: "second" } };
       second: {
         input: { continued: string };
         output: { done: true };
@@ -396,27 +396,27 @@ describe("SequenceTypesReaching", () => {
     // - Diamond patterns (multiple paths converging)
     const defs = defineJobTypes<{
       // Entry points
-      entryA: { entry: true; input: { a: true }; continuesTo: { typeName: "sharedStep1" } };
-      entryB: { entry: true; input: { b: true }; continuesTo: { typeName: "sharedStep1" } };
-      entryC: { entry: true; input: { c: true }; continuesTo: { typeName: "branchC1" } };
-      entryD: { entry: true; input: { d: true }; continuesTo: { typeName: "deepChain1" } };
+      entryA: { entry: true; input: { a: true }; continueWith: { typeName: "sharedStep1" } };
+      entryB: { entry: true; input: { b: true }; continueWith: { typeName: "sharedStep1" } };
+      entryC: { entry: true; input: { c: true }; continueWith: { typeName: "branchC1" } };
+      entryD: { entry: true; input: { d: true }; continueWith: { typeName: "deepChain1" } };
       entryE: {
         entry: true;
         input: { e: true };
 
-        continuesTo: { typeName: "branchE1" | "branchE2" };
+        continueWith: { typeName: "branchE1" | "branchE2" };
       };
 
       // Shared step reachable from A and B
       sharedStep1: {
         input: { step: 1 };
 
-        continuesTo: { typeName: "sharedStep2" };
+        continueWith: { typeName: "sharedStep2" };
       };
       sharedStep2: {
         input: { step: 2 };
 
-        continuesTo: { typeName: "finalShared" };
+        continueWith: { typeName: "finalShared" };
       };
       finalShared: {
         input: { final: true };
@@ -427,39 +427,39 @@ describe("SequenceTypesReaching", () => {
       branchC1: {
         input: { c1: true };
 
-        continuesTo: { typeName: "branchC2" };
+        continueWith: { typeName: "branchC2" };
       };
       branchC2: {
         input: { c2: true };
 
-        continuesTo: { typeName: "finalShared" }; // Converges to shared final
+        continueWith: { typeName: "finalShared" }; // Converges to shared final
       };
 
       // Deep chain from D (6 levels)
       deepChain1: {
         input: { depth: 1 };
 
-        continuesTo: { typeName: "deepChain2" };
+        continueWith: { typeName: "deepChain2" };
       };
       deepChain2: {
         input: { depth: 2 };
 
-        continuesTo: { typeName: "deepChain3" };
+        continueWith: { typeName: "deepChain3" };
       };
       deepChain3: {
         input: { depth: 3 };
 
-        continuesTo: { typeName: "deepChain4" };
+        continueWith: { typeName: "deepChain4" };
       };
       deepChain4: {
         input: { depth: 4 };
 
-        continuesTo: { typeName: "deepChain5" };
+        continueWith: { typeName: "deepChain5" };
       };
       deepChain5: {
         input: { depth: 5 };
 
-        continuesTo: { typeName: "deepChain6" };
+        continueWith: { typeName: "deepChain6" };
       };
       deepChain6: {
         input: { depth: 6 };
@@ -470,12 +470,12 @@ describe("SequenceTypesReaching", () => {
       branchE1: {
         input: { e1: true };
 
-        continuesTo: { typeName: "convergencePoint" };
+        continueWith: { typeName: "convergencePoint" };
       };
       branchE2: {
         input: { e2: true };
 
-        continuesTo: { typeName: "convergencePoint" };
+        continueWith: { typeName: "convergencePoint" };
       };
       convergencePoint: {
         input: { converged: true };
@@ -561,7 +561,7 @@ describe("structural references", () => {
       router: {
         entry: true;
         input: { path: string };
-        continuesTo: { input: { payload: unknown } };
+        continueWith: { input: { payload: unknown } };
       };
       handler: {
         input: { payload: unknown };
@@ -579,7 +579,7 @@ describe("structural references", () => {
       router: {
         entry: true;
         input: { path: string };
-        continuesTo: { input: { payload: unknown } };
+        continueWith: { input: { payload: unknown } };
       };
       handlerA: {
         input: { payload: unknown };
@@ -602,7 +602,7 @@ describe("structural references", () => {
       router: {
         entry: true;
         input: { path: string };
-        continuesTo: { input: { nonexistent: boolean } };
+        continueWith: { input: { nonexistent: boolean } };
       };
       handler: {
         input: { payload: unknown };
@@ -611,12 +611,12 @@ describe("structural references", () => {
     }>();
   });
 
-  it("allows combined nominal and structural references in continuesTo", () => {
+  it("allows combined nominal and structural references in continueWith", () => {
     const defs = defineJobTypes<{
       router: {
         entry: true;
         input: { path: string };
-        continuesTo: { typeName: "handlerA" } | { input: { payload: unknown } };
+        continueWith: { typeName: "handlerA" } | { input: { payload: unknown } };
       };
       handlerA: {
         input: { id: string };

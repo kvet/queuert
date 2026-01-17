@@ -17,10 +17,10 @@ type MatchingJobTypesByInput<TDefs extends BaseJobTypeDefinitions, TInput> = {
 }[keyof TDefs] &
   string;
 
-type HasContinuesTo<TJobType> = TJobType extends { continuesTo: JobTypeReference } ? true : false;
+type HasContinueWith<TJobType> = TJobType extends { continueWith: JobTypeReference } ? true : false;
 
 type ValidateOutput<TJobType> =
-  HasContinuesTo<TJobType> extends true
+  HasContinueWith<TJobType> extends true
     ? TJobType extends { output: infer O }
       ? O extends undefined
         ? undefined
@@ -41,7 +41,7 @@ type ValidateReference<TRef, TDefs extends BaseJobTypeDefinitions, TValidKeys ex
         : TRef
       : never;
 
-type ValidateContinuesTo<
+type ValidateContinueWith<
   T,
   TDefs extends BaseJobTypeDefinitions,
   TValidKeys extends string,
@@ -70,7 +70,7 @@ type ExtractOutput<T> = T extends { output: infer O } ? O : undefined;
 type ExtractBlockers<T> = T extends { blockers: infer B } ? B : undefined;
 
 type OutputProperty<TJobType> =
-  HasContinuesTo<TJobType> extends true
+  HasContinueWith<TJobType> extends true
     ? [ExtractOutput<TJobType>] extends [undefined]
       ? { output?: ValidateOutput<TJobType> }
       : { output: ValidateOutput<TJobType> }
@@ -85,8 +85,8 @@ type BlockersProperty<TJobType, T extends BaseJobTypeDefinitions> = [
 type ValidateJobType<TJobType, TValidKeys extends string, T extends BaseJobTypeDefinitions> = {
   entry?: TJobType extends { entry: infer E extends boolean } ? E : never;
   input: NoVoidOrUndefined<TJobType extends { input: infer I } ? I : never>;
-  continuesTo?: ValidateContinuesTo<
-    TJobType extends { continuesTo: infer CT } ? CT : undefined,
+  continueWith?: ValidateContinueWith<
+    TJobType extends { continueWith: infer CT } ? CT : undefined,
     T,
     TValidKeys
   >;

@@ -19,10 +19,10 @@ import { Job, JobWithoutBlockers, mapStateJobToJob, PendingJob } from "./entitie
 import { ScheduleOptions } from "./entities/schedule.js";
 import { BackoffConfig, calculateBackoffMs } from "./helpers/backoff.js";
 import { raceWithSleep } from "./helpers/sleep.js";
-import { Log } from "./observability-adapter/log.js";
 import { NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 import { createNoopNotifyAdapter } from "./notify-adapter/notify-adapter.noop.js";
 import { wrapNotifyAdapterWithLogging } from "./notify-adapter/notify-adapter.wrapper.logging.js";
+import { Log } from "./observability-adapter/log.js";
 import { ObservabilityAdapter } from "./observability-adapter/observability-adapter.js";
 import { createNoopObservabilityAdapter } from "./observability-adapter/observability-adapter.noop.js";
 import {
@@ -121,6 +121,7 @@ export class JobTypeValidationError extends Error {
 }
 
 import { JobTypeRegistry } from "./entities/job-type-registry.js";
+import { wrapJobTypeRegistryWithLogging } from "./entities/job-type-registry.wrapper.logging.js";
 
 export const queuertHelper = ({
   stateAdapter: stateAdapterOption,
@@ -147,7 +148,10 @@ export const queuertHelper = ({
         observabilityHelper,
       })
     : createNoopNotifyAdapter();
-  const registry = jobTypeRegistry;
+  const registry = wrapJobTypeRegistryWithLogging({
+    registry: jobTypeRegistry,
+    observabilityHelper,
+  });
 
   const assertInTransaction = async (context: BaseStateAdapterContext): Promise<void> => {
     if (!(await stateAdapter.isInTransaction(context))) {
@@ -163,7 +167,6 @@ export const queuertHelper = ({
     isSequence,
     deduplication,
     schedule,
-    fromTypeName,
   }: {
     typeName: string;
     input: unknown;
@@ -172,26 +175,12 @@ export const queuertHelper = ({
     isSequence: boolean;
     deduplication?: DeduplicationOptions;
     schedule?: ScheduleOptions;
-    fromTypeName?: string;
   }): Promise<{ job: StateJob; deduplicated: boolean }> => {
-    try {
-      registry.validate(typeName, fromTypeName);
-    } catch (error) {
-      if (error instanceof JobTypeValidationError) {
-        observabilityHelper.jobTypeValidationError(error);
-      }
-      throw error;
+    if (isSequence) {
+      registry.validateEntry(typeName);
     }
 
-    let parsedInput: unknown;
-    try {
-      parsedInput = registry.parseInput(typeName, input);
-    } catch (error) {
-      if (error instanceof JobTypeValidationError) {
-        observabilityHelper.jobTypeValidationError(error);
-      }
-      throw error;
-    }
+    const parsedInput = registry.parseInput(typeName, input);
 
     const jobContext = jobContextStorage.getStore();
     const createJobResult = await stateAdapter.createJob({
@@ -228,17 +217,6 @@ export const queuertHelper = ({
       blockerSequences = [...blockers] as JobSequence<any, any, any, any>[];
       const blockerSequenceIds = blockerSequences.map((b) => b.id);
 
-      // TODO: Validate blockers outside of if statement to report all validation errors
-      const blockerTypeNames = blockerSequences.map((b) => b.typeName);
-      try {
-        registry.validateBlockers(typeName, blockerTypeNames);
-      } catch (error) {
-        if (error instanceof JobTypeValidationError) {
-          observabilityHelper.jobTypeValidationError(error);
-        }
-        throw error;
-      }
-
       const addBlockersResult = await stateAdapter.addJobBlockers({
         context,
         jobId: job.id,
@@ -247,6 +225,9 @@ export const queuertHelper = ({
       job = addBlockersResult.job;
       incompleteBlockerSequenceIds = addBlockersResult.incompleteBlockerSequenceIds;
     }
+
+    const blockerRefs = blockerSequences.map((b) => ({ typeName: b.typeName, input: b.input }));
+    registry.validateBlockers(typeName, blockerRefs);
 
     if (isSequence) {
       observabilityHelper.jobSequenceCreated(job, { input });
@@ -361,14 +342,7 @@ export const queuertHelper = ({
     let output = hasContinuedJob ? null : rest.output;
 
     if (!hasContinuedJob) {
-      try {
-        output = registry.parseOutput(job.typeName, output);
-      } catch (error) {
-        if (error instanceof JobTypeValidationError) {
-          observabilityHelper.jobTypeValidationError(error);
-        }
-        throw error;
-      }
+      output = registry.parseOutput(job.typeName, output);
     }
 
     job = await stateAdapter.completeJob({
@@ -508,6 +482,8 @@ export const queuertHelper = ({
       startBlockers?: StartBlockersFn<string, BaseJobTypeDefinitions, string>;
       fromTypeName: string;
     }): Promise<JobOf<string, BaseJobTypeDefinitions, TJobTypeName, string>> => {
+      registry.validateContinueWith(fromTypeName, { typeName, input });
+
       const { job } = await createStateJob({
         typeName,
         input,
@@ -515,7 +491,6 @@ export const queuertHelper = ({
         startBlockers,
         isSequence: false,
         schedule,
-        fromTypeName,
       });
 
       return mapStateJobToJob(job) as JobOf<string, BaseJobTypeDefinitions, TJobTypeName, string>;
@@ -820,6 +795,8 @@ export const queuertHelper = ({
               throw new Error("continueWith can only be called once");
             }
 
+            registry.validateContinueWith(job.typeName, { typeName, input });
+
             continuedJob = await withJobContext(
               {
                 originId: job.originId ?? job.id,
@@ -835,7 +812,6 @@ export const queuertHelper = ({
                   startBlockers: startBlockers as any,
                   isSequence: false,
                   schedule,
-                  fromTypeName: job.typeName,
                 });
 
                 return mapStateJobToJob(newJob) as Job<any, any, any, any, any[]>;

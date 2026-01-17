@@ -7,7 +7,7 @@ export type BaseJobTypeDefinition = {
   entry?: boolean;
   input: unknown;
   output?: unknown;
-  continuesTo?: JobTypeReference;
+  continueWith?: JobTypeReference;
   blockers?: readonly JobTypeReference[];
 };
 
@@ -33,7 +33,7 @@ import { ValidatedJobTypeDefinitions } from "./job-type.validation.js";
  *   'process': {
  *     entry: true;
  *     input: { id: string };
- *     continuesTo: { typeName: 'finalize' };
+ *     continueWith: { typeName: 'finalize' };
  *     blockers: [{ typeName: 'fetch' }];
  *   };
  *   'finalize': {

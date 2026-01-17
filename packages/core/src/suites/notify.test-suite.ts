@@ -207,7 +207,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         step1: {
           entry: true;
           input: null;
-          continuesTo: { typeName: "step2" };
+          continueWith: { typeName: "step2" };
         };
         step2: {
           input: null;

@@ -193,31 +193,32 @@ const jobTypes = defineJobTypes<{
 }>();
 ```
 
-**Runtime validation** (production APIs, external input): Use `createJobTypeRegistry` with parser functions from validation libraries (Zod, Valibot, ArkType, etc.). Validates input/output at runtime and throws `JobTypeValidationError` on invalid data.
+**Runtime validation** (production APIs, external input): Use `createJobTypeRegistry` with validation functions. The core is minimal - schema-specific adapters (Zod, Valibot, ArkType) are implemented in user-land.
 
 ```typescript
-import { z } from 'zod';
-
-const jobTypes = createJobTypeRegistry({
-  'process': {
-    input: z.object({ id: z.string() }).parse,
-    output: z.object({ result: z.number() }).parse,
-  },
+// Core accepts validation functions directly
+const registry = createJobTypeRegistry<TJobTypeDefinitions>({
+  validateEntry: (typeName) => { /* throw if not entry point */ },
+  parseInput: (typeName, input) => { /* validate and return input */ },
+  parseOutput: (typeName, output) => { /* validate and return output */ },
+  validateContinueWith: (typeName, target) => { /* validate { typeName, input } */ },
+  validateBlockers: (typeName, blockers) => { /* validate [{ typeName, input }] */ },
 });
 ```
 
+See `examples/runtime-validation-zod` for a complete Zod adapter implementation that demonstrates both nominal (by type name) and structural (by input shape) reference validation.
+
 The `JobTypeRegistry` is passed to `createQueuert` via the `jobTypeRegistry` parameter. Both approaches provide the same compile-time type safety; runtime validation adds safety for external input.
 
-**Parser interface**: A `Parser<T>` is any function `(input: unknown) => T` that validates and returns typed output. Compatible with all major validation libraries.
+**Registry methods**:
 
-**Validation points**:
+- `validateEntry(typeName)`: Validates job type can start a sequence (is an entry point)
+- `parseInput(typeName, input)`: Validates and returns job input
+- `parseOutput(typeName, output)`: Validates and returns job output
+- `validateContinueWith(typeName, target)`: Validates continuation target with nominal (typeName) or structural (input shape) validation
+- `validateBlockers(typeName, [{ typeName, input }])`: Validates blocker references with nominal or structural validation
 
-- `parseInput`: Validates job input when starting sequences or continuing
-- `parseOutput`: Validates job output when completing
-- `validate`: Validates job type access (entry points) and continuation targets (via `continuesTo` parser)
-- `validateBlockers`: Validates blocker types match declarations (via `blockers` parser)
-
-**Error handling**: All validation errors are thrown as `JobTypeValidationError` with error codes (`invalid_input`, `invalid_output`, `not_entry_point`, `invalid_continuation`, `invalid_blockers`) and detailed context.
+**Error handling**: Adapter functions throw their native errors (e.g., ZodError). Core wraps all errors in `JobTypeValidationError` with codes (`invalid_input`, `invalid_output`, `not_entry_point`, `invalid_continuation`, `invalid_blockers`) and detailed context including the original error.
 
 ### Blockers
 
@@ -426,7 +427,7 @@ defineJobTypes<{
     entry: true;  // Can be started via startJobSequence
     input: { imageId: string };
     // output field omitted - must continue (cannot complete with output)
-    continuesTo: { typeName: 'distribute-image' };  // Allowed continuation target
+    continueWith: { typeName: 'distribute-image' };  // Allowed continuation target
   };
   'distribute-image': {
     // No entry field - defaults to false (continuation-only)
@@ -575,11 +576,11 @@ In-process and internal-only factories remain sync since they have no I/O:
 - `deduplicationKey`: Explicit key for sequence-level deduplication. DB column uses `deduplication_key`.
 - `deduplicated`: Boolean flag returned when a job/sequence was deduplicated instead of created.
 - `entry`: Boolean field in job type definition. `true` marks job types as entry points (can be started via `startJobSequence`). Defaults to `false` (continuation-only, reachable only via `continueWith`).
-- `continuesTo`: Reference field in job type definition specifying allowed continuation targets. Supports nominal references (`{ typeName: 'step2' }`), structural references (`{ input: { data: string } }`), or unions of both. Example: `continuesTo: { typeName: 'step2' | 'step3' }`.
+- `continueWith`: Reference field in job type definition specifying allowed continuation targets. Supports nominal references (`{ typeName: 'step2' }`), structural references (`{ input: { data: string } }`), or unions of both. Example: `continueWith: { typeName: 'step2' | 'step3' }`.
 - `blockers`: Tuple/array field in job type definition specifying blocker dependencies using references. Supports fixed slots, rest/variadic slots with spread syntax, or combinations. Example: `blockers: [{ typeName: 'auth' }, ...{ typeName: 'validator' }[]]`.
-- `NominalReference`: Reference type `{ typeName: T }` for referencing job types by name. Used in `continuesTo` and `blockers`.
-- `StructuralReference`: Reference type `{ input: T }` for referencing job types by input signature. Matches all job types with compatible input type.
-- `JobTypeReference`: Union type `NominalReference | StructuralReference` representing any job type reference.
+- `NominalReference`: Compile-time reference type `{ typeName: T }` for referencing job types by name. Used in type definitions for `continueWith` and `blockers`.
+- `StructuralReference`: Compile-time reference type `{ input: T }` for referencing job types by input signature. Matches all job types with compatible input type.
+- `JobTypeReference` (runtime): Object type `{ typeName: string; input: unknown }` passed to `validateContinueWith` and `validateBlockers` at runtime. Contains both fields; adapters can validate either typeName (nominal), input (structural), or both.
 - `startBlockers`: Callback parameter in `startJobSequence` and `continueWith` for providing blockers. Required when job type has blockers defined; must not be provided when job type has no blockers. Create new blocker sequences via `startJobSequence` within the callback - they automatically inherit rootSequenceId/originId from the main job via context propagation. Can also return existing sequences.
 - `deleteJobSequences`: Deletes entire job trees by `rootSequenceId`. Accepts `rootSequenceIds` array parameter. Must be called on root sequences. Throws error if external job sequences depend on sequences being deleted; include those dependents in the deletion set to proceed. Primarily intended for testing environments.
 - `completeJobSequence`: Completes jobs without a worker (`workerId: null`). Takes a `complete` callback that receives the current job and can complete it (with output or continuation). Supports partial completion and multi-step sequences.
@@ -620,7 +621,7 @@ In-process and internal-only factories remain sync since they have no I/O:
 ### Type Organization
 
 - `job-type.ts`: Base type definitions (`BaseJobTypeDefinition`) and `defineJobTypes` factory (uses `createNoopJobTypeRegistry` internally). Re-exports navigation types.
-- `job-type-registry.ts`: Runtime validation types (`JobTypeRegistry`, `Parser`, `JobTypeSchemaDefinition`) and factories (`createJobTypeRegistry` for runtime validation, `createNoopJobTypeRegistry` for internal use, `InferJobTypeDefinitions` type helper).
+- `job-type-registry.ts`: Runtime validation types (`JobTypeRegistry`, `JobTypeRegistryConfig`, `JobTypeReference`) and factories (`createJobTypeRegistry` for runtime validation, `createNoopJobTypeRegistry` for internal use).
 - `job-type.navigation.ts`: Type-level navigation logic (`JobOf`, `SequenceJobTypes`, `ContinuationJobTypes`, `EntryJobTypeDefinitions`, blocker resolution types).
 - `job-type.validation.ts`: Compile-time validation types (`ValidatedJobTypeDefinitions`).
 - `job-sequence.types.ts`: Core entity types (`JobSequence`, `CompletedJobSequence`, `JobSequenceStatus`).

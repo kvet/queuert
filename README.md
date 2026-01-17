@@ -13,7 +13,7 @@ const jobTypes = defineJobTypes<{
   'process-image': {
     entry: true;  // Can be started via startJobSequence
     input: { imageId: string };
-    continuesTo: { typeName: 'distribute-image' };
+    continueWith: { typeName: 'distribute-image' };
   };
   'distribute-image': {
     // No entry field - continuation-only (default)
@@ -172,6 +172,32 @@ Queuert provides end-to-end type safety with full type inference. Define your jo
 
 No runtime type errors. No mismatched job names. Your workflow logic is verified before your code ever runs.
 
+## Runtime Validation
+
+For production APIs accepting external input, you can add runtime validation using any schema library (Zod, Valibot, ArkType, etc.). The core is minimal — schema-specific adapters are implemented in user-land.
+
+```ts
+import { z } from 'zod';
+import { createJobTypeRegistry } from 'queuert';
+
+// Create a Zod-based registry (see examples/runtime-validation-zod for full implementation)
+const jobTypes = createJobTypeRegistry<{
+  'process-data': { entry: true; input: { url: string }; output: { data: unknown } };
+}>({
+  validateEntry: (typeName) => {
+    if (!schemas[typeName]?.entry) throw new Error('Not an entry point');
+  },
+  parseInput: (typeName, input) => schemas[typeName].input.parse(input),
+  parseOutput: (typeName, output) => schemas[typeName].output.parse(output),
+  validateContinueWith: (typeName, continuation) => schemas[typeName].continueWith?.parse(continuation),
+  validateBlockers: (typeName, blockers) => schemas[typeName].blockers?.parse(blockers),
+});
+```
+
+Both `defineJobTypes` (compile-time only) and `createJobTypeRegistry` (runtime validation) provide the same compile-time type safety. Runtime validation adds protection against invalid external data.
+
+See complete adapter examples: [Zod](./examples/runtime-validation-zod), [Valibot](./examples/runtime-validation-valibot), [TypeBox](./examples/runtime-validation-typebox).
+
 ## Job Processing Modes
 
 Jobs support two processing modes via the `prepare` function:
@@ -240,7 +266,7 @@ Jobs execute one after another: `A → B`
 
 ```ts
 type Definitions = {
-  step1: { entry: true; input: { id: string }; continuesTo: { typeName: 'step2' } };
+  step1: { entry: true; input: { id: string }; continueWith: { typeName: 'step2' } };
   step2: { input: { id: string }; output: { done: true } };
 };
 
@@ -277,7 +303,7 @@ type Definitions = {
   main: {
     entry: true;
     input: { value: number };
-    continuesTo: { typeName: 'branch1' | 'branch2' };  // Union of allowed targets
+    continueWith: { typeName: 'branch1' | 'branch2' };  // Union of allowed targets
   };
   branch1: { input: { value: number }; output: { result1: number } };
   branch2: { input: { value: number }; output: { result2: number } };
@@ -314,7 +340,7 @@ type Definitions = {
     entry: true;
     input: { counter: number };
     output: { done: true };  // Terminal output when done
-    continuesTo: { typeName: 'loop' };     // Can continue to self
+    continueWith: { typeName: 'loop' };     // Can continue to self
   };
 };
 
@@ -344,11 +370,11 @@ Jobs can jump back to earlier types: `A → B → A → B → done`
 
 ```ts
 type Definitions = {
-  start: { entry: true; input: { value: number }; continuesTo: { typeName: 'end' } };
+  start: { entry: true; input: { value: number }; continueWith: { typeName: 'end' } };
   end: {
     input: { result: number };
     output: { finalResult: number };  // Terminal output when done
-    continuesTo: { typeName: 'start' };             // Can jump back to start
+    continueWith: { typeName: 'start' };             // Can jump back to start
   };
 };
 
@@ -443,12 +469,12 @@ type Definitions = {
   'charge-card': {
     entry: true;
     input: { orderId: string };
-    continuesTo: { typeName: 'ship-order' | 'refund-charge' };
+    continueWith: { typeName: 'ship-order' | 'refund-charge' };
   };
   'ship-order': {
     input: { orderId: string; chargeId: string };
     output: { shipped: true };
-    continuesTo: { typeName: 'refund-charge' };  // Can continue to refund on failure
+    continueWith: { typeName: 'refund-charge' };  // Can continue to refund on failure
   };
   'refund-charge': {
     input: { chargeId: string };
@@ -499,7 +525,7 @@ type Definitions = {
     entry: true;
     input: { requestId: string };
     output: { rejected: true };
-    continuesTo: { typeName: 'process-request' };
+    continueWith: { typeName: 'process-request' };
   };
   'process-request': {
     input: { requestId: string };

@@ -137,7 +137,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         first: {
           entry: true;
           input: { value: number };
-          continuesTo: { typeName: "second" };
+          continueWith: { typeName: "second" };
         };
         second: {
           input: { continued: boolean };
@@ -220,7 +220,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         first: {
           entry: true;
           input: { value: number };
-          continuesTo: { typeName: "second" };
+          continueWith: { typeName: "second" };
         };
         second: {
           input: { continued: boolean };

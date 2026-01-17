@@ -95,7 +95,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         "awaiting-approval": {
           entry: true;
           input: { requestId: string };
-          continuesTo: { typeName: "process-approved" };
+          continueWith: { typeName: "process-approved" };
         };
         "process-approved": {
           input: { approved: boolean };
@@ -160,7 +160,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         "awaiting-approval": {
           entry: true;
           input: { requestId: string };
-          continuesTo: { typeName: "process-approved" };
+          continueWith: { typeName: "process-approved" };
         };
         "process-approved": {
           input: { approved: boolean };
@@ -430,8 +430,8 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       observabilityAdapter,
       log,
       jobTypeRegistry: defineJobTypes<{
-        entryA: { entry: true; input: null; continuesTo: { typeName: "shared" } };
-        entryB: { entry: true; input: null; continuesTo: { typeName: "shared" } };
+        entryA: { entry: true; input: null; continueWith: { typeName: "shared" } };
+        entryB: { entry: true; input: null; continueWith: { typeName: "shared" } };
         shared: { input: null; output: { done: boolean } };
       }>(),
     });

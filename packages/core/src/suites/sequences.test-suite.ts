@@ -29,11 +29,11 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
         linear: {
           entry: true;
           input: { value: number };
-          continuesTo: { typeName: "linear_next" };
+          continueWith: { typeName: "linear_next" };
         };
         linear_next: {
           input: { valueNext: number };
-          continuesTo: { typeName: "linear_next_next" };
+          continueWith: { typeName: "linear_next_next" };
         };
         linear_next_next: {
           input: { valueNextNext: number };
@@ -230,7 +230,7 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
         main: {
           entry: true;
           input: { value: number };
-          continuesTo: { typeName: "branch1" | "branch2" };
+          continueWith: { typeName: "branch1" | "branch2" };
         };
         branch1: {
           input: { valueBranched: number };
@@ -341,7 +341,7 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
           entry: true;
           input: { counter: number };
           output: { done: true };
-          continuesTo: { typeName: "loop" };
+          continueWith: { typeName: "loop" };
         };
       }>(),
     });
@@ -403,12 +403,12 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
         start: {
           entry: true;
           input: { value: number };
-          continuesTo: { typeName: "end" };
+          continueWith: { typeName: "end" };
         };
         end: {
           input: { result: number };
           output: { finalResult: number };
-          continuesTo: { typeName: "start" };
+          continueWith: { typeName: "start" };
         };
       }>(),
     });
@@ -487,8 +487,8 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
       observabilityAdapter,
       log,
       jobTypeRegistry: defineJobTypes<{
-        entryA: { entry: true; input: { fromA: true }; continuesTo: { typeName: "shared" } };
-        entryB: { entry: true; input: { fromB: true }; continuesTo: { typeName: "shared" } };
+        entryA: { entry: true; input: { fromA: true }; continueWith: { typeName: "shared" } };
+        entryB: { entry: true; input: { fromB: true }; continueWith: { typeName: "shared" } };
         shared: { input: { data: number }; output: { done: true } };
       }>(),
     });

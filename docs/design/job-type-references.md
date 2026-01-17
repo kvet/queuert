@@ -38,7 +38,7 @@ This matches **all** job types whose input type matches the given structure (or 
 
 ## Application
 
-### Continuation (`continuesTo`)
+### Continuation (`continueWith`)
 
 Defines what job types a job can continue to:
 
@@ -47,7 +47,7 @@ Defines what job types a job can continue to:
   step1: {
     entry: true,
     input: { a: boolean },
-    continuesTo: { typeName: 'step2' }
+    continueWith: { typeName: 'step2' }
   },
   step2: {
     input: { b: boolean },
@@ -63,7 +63,7 @@ Or by structural matching:
   step1: {
     entry: true,
     input: { a: boolean },
-    continuesTo: { input: { b: boolean } }
+    continueWith: { input: { b: boolean } }
   },
   step2: {
     input: { b: boolean },
@@ -75,7 +75,7 @@ Or by structural matching:
 References can be combined with unions:
 
 ```typescript
-continuesTo: { typeName: 'step2' | 'step2_alt' } | { input: { c: boolean } }
+continueWith: { typeName: 'step2' | 'step2_alt' } | { input: { c: boolean } }
 ```
 
 ### Blockers
@@ -176,16 +176,16 @@ A job with only `output` terminates the sequence:
 }
 ```
 
-### ContinuesTo Only (Must Continue)
+### ContinueWith Only (Must Continue)
 
-A job with only `continuesTo` must continue to another job:
+A job with only `continueWith` must continue to another job:
 
 ```typescript
 {
   step1: {
     entry: true,
     input: { a: boolean },
-    continuesTo: { typeName: 'step2' }
+    continueWith: { typeName: 'step2' }
   },
   step2: {
     input: { b: boolean },
@@ -194,7 +194,7 @@ A job with only `continuesTo` must continue to another job:
 }
 ```
 
-### Both Output and ContinuesTo (Optional Continuation)
+### Both Output and ContinueWith (Optional Continuation)
 
 A job with both can either terminate or continue:
 
@@ -204,7 +204,7 @@ A job with both can either terminate or continue:
     entry: true,
     input: { a: boolean },
     output: { done: true },
-    continuesTo: { input: { b: boolean } }
+    continueWith: { input: { b: boolean } }
   },
   step2: {
     input: { b: boolean },
@@ -228,7 +228,7 @@ Multiple implementations can share an input contract:
   step1: {
     entry: true,
     input: { a: boolean },
-    continuesTo: { input: { b: boolean } }  // matches step2 OR step2_alt
+    continueWith: { input: { b: boolean } }  // matches step2 OR step2_alt
   },
   step2: {
     input: { b: boolean },
@@ -259,15 +259,15 @@ A simplified shorthand syntax could be added later for common cases:
 
 ```typescript
 // Shorthand (future)
-continuesTo: 'step2' | 'step3'
+continueWith: 'step2' | 'step3'
 blockers: ['auth', ...'processor'[]]
 
 // Expands to full syntax
-continuesTo: { typeName: 'step2' | 'step3' }
+continueWith: { typeName: 'step2' | 'step3' }
 blockers: [{ typeName: 'auth' }, ...{ typeName: 'processor' }[]]
 
 // Mixed shorthand and structural
-continuesTo: 'step2' | { input: { b: boolean } }
+continueWith: 'step2' | { input: { b: boolean } }
 ```
 
 This would reduce verbosity for nominal-only references while keeping the full syntax available for structural matching.
@@ -303,7 +303,7 @@ defineJobTypes<{
   step1: {
     entry: true;
     input: { a: boolean };
-    continuesTo: { typeName: 'step2' };
+    continueWith: { typeName: 'step2' };
   };
   step2: {
     input: { b: boolean };
@@ -319,7 +319,7 @@ defineJobTypes<{
   router: {
     entry: true;
     input: { path: string };
-    continuesTo: { typeName: 'handlerA' | 'handlerB' };
+    continueWith: { typeName: 'handlerA' | 'handlerB' };
   };
   handlerA: {
     input: { dataA: string };
@@ -339,7 +339,7 @@ defineJobTypes<{
   router: {
     entry: true;
     input: { path: string };
-    continuesTo: { input: { payload: unknown } };
+    continueWith: { input: { payload: unknown } };
   };
   handlerA: {
     input: { payload: unknown };
@@ -386,7 +386,7 @@ defineJobTypes<{
     entry: true;
     input: { data: string };
     output: { done: true };  // can terminate here
-    continuesTo: { typeName: 'postProcess' };  // or continue
+    continueWith: { typeName: 'postProcess' };  // or continue
   };
   postProcess: {
     input: { processed: string };

@@ -29,7 +29,7 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
           entry: true;
           input: { value: number };
           output: { done: true };
-          continuesTo: { typeName: "blocker" };
+          continueWith: { typeName: "blocker" };
         };
         main: {
           entry: true;
@@ -459,7 +459,7 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
         test: {
           entry: true;
           input: { value: number };
-          continuesTo: { typeName: "finish" };
+          continueWith: { typeName: "finish" };
         };
         finish: {
           input: { valueNext: number };
@@ -625,7 +625,7 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
         first: {
           entry: true;
           input: { id: string };
-          continuesTo: { typeName: "second" };
+          continueWith: { typeName: "second" };
         };
         second: {
           input: { fromFirst: string };

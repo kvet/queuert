@@ -374,7 +374,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
         "test-continueWith-twice": {
           entry: true;
           input: null;
-          continuesTo: { typeName: "test-next" };
+          continueWith: { typeName: "test-next" };
         };
         "test-next": {
           input: { value: number };

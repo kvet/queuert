@@ -35,7 +35,8 @@
   "scripts": {
     "prepublishOnly": "pnpm build",
     "build": "tsdown",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest --run"
   },
   "devDependencies": {
     "@queuert/testcontainers": "workspace:*",

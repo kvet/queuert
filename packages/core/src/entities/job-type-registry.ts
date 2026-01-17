@@ -1,54 +1,55 @@
 import { JobTypeValidationError } from "../queuert-helper.js";
-import type { BaseJobTypeDefinitions, NominalReference } from "./job-type.js";
+import type { BaseJobTypeDefinitions } from "./job-type.js";
 
 /**
- * Parser function type - takes unknown input and returns typed output.
- * Compatible with validation libraries like Zod, Valibot, ArkType, etc.
- *
- * @example
- * // With Zod
- * const parser: Parser<{ name: string }> = z.object({ name: z.string() }).parse;
- *
- * // With Valibot
- * const parser: Parser<{ name: string }> = (input) => v.parse(v.object({ name: v.string() }), input);
+ * Reference object for continuation and blocker validation.
+ * Contains both typeName (for nominal validation) and input (for structural validation).
  */
-export type Parser<T = unknown> = (input: unknown) => T;
+export type JobTypeReference = {
+  readonly typeName: string;
+  readonly input: unknown;
+};
 
 /**
- * Schema definition for a single job type with runtime validation.
- * Use with createJobTypeRegistry for runtime validation.
+ * Configuration for createJobTypeRegistry.
+ * Adapters implement these functions to provide validation logic.
+ * Functions should throw on validation failure (any error type).
  */
-export type JobTypeSchemaDefinition = {
-  entry?: boolean; // true = entry point (default: false)
-  input: Parser; // Validates input data
-  output?: Parser; // Validates output data, undefined = must continue
-  continuesTo?: Parser<string>; // Validates continuation target (union): z.literal('a').or(z.literal('b'))
-  blockers?: Parser<readonly string[]>; // Validates blocker types (tuple/array): z.tuple([...]) or z.array(...)
+export type JobTypeRegistryConfig = {
+  /** Validate that a job type can start a sequence. Throw on failure. */
+  validateEntry: (typeName: string) => void;
+  /** Parse and validate input. Return transformed value or throw on failure. */
+  parseInput: (typeName: string, input: unknown) => unknown;
+  /** Parse and validate output. Return transformed value or throw on failure. */
+  parseOutput: (typeName: string, output: unknown) => unknown;
+  /** Validate continuation target. Receives { typeName, input } for nominal/structural validation. Throw on failure. */
+  validateContinueWith: (typeName: string, target: JobTypeReference) => void;
+  /** Validate blocker references. Receives array of { typeName, input } objects. Throw on failure. */
+  validateBlockers: (typeName: string, blockers: readonly JobTypeReference[]) => void;
 };
 
 /**
  * Runtime registry for job type validation.
  *
  * Methods are split by return type:
- * - validate* → throws or returns void (pure validation)
- * - parse* → throws or returns transformed value (validation + transformation)
+ * - validate* → throws JobTypeValidationError or returns void (pure validation)
+ * - parse* → throws JobTypeValidationError or returns transformed value (validation + transformation)
  */
 export interface JobTypeRegistry<TJobTypeDefinitions = unknown> {
-  /**
-   * Validate job type access.
-   * - validate(typeName) → can this type start a sequence?
-   * - validate(typeName, fromTypeName) → can fromTypeName continue to typeName?
-   */
-  validate(typeName: string, fromTypeName?: string): void;
+  /** Validate that a job type can start a sequence (is an entry point). Throws JobTypeValidationError on failure. */
+  validateEntry: (typeName: string) => void;
 
-  /** Validate blocker types match declarations. */
-  validateBlockers(typeName: string, blockerTypeNames: readonly string[]): void;
+  /** Parse and validate input. Returns transformed value. Throws JobTypeValidationError on failure. */
+  parseInput: (typeName: string, input: unknown) => unknown;
 
-  /** Parse and validate input. Returns transformed value. */
-  parseInput(typeName: string, input: unknown): unknown;
+  /** Parse and validate output. Returns transformed value. Throws JobTypeValidationError on failure. */
+  parseOutput: (typeName: string, output: unknown) => unknown;
 
-  /** Parse and validate output. Returns transformed value. */
-  parseOutput(typeName: string, output: unknown): unknown;
+  /** Validate continuation target. Throws JobTypeValidationError on failure. */
+  validateContinueWith: (typeName: string, target: JobTypeReference) => void;
+
+  /** Validate blocker references. Throws JobTypeValidationError on failure. */
+  validateBlockers: (typeName: string, blockers: readonly JobTypeReference[]) => void;
 
   /** Phantom property for TypeScript type inference. */
   readonly $definitions: TJobTypeDefinitions;
@@ -61,92 +62,48 @@ export interface JobTypeRegistry<TJobTypeDefinitions = unknown> {
 export const createNoopJobTypeRegistry = <
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
 >(): JobTypeRegistry<TJobTypeDefinitions> => ({
-  validate: () => {},
-  validateBlockers: () => {},
+  validateEntry: () => {},
   parseInput: (_, input) => input,
   parseOutput: (_, output) => output,
+  validateContinueWith: () => {},
+  validateBlockers: () => {},
   $definitions: undefined as unknown as TJobTypeDefinitions,
 });
 
-// Helper to map string tuple/array to NominalReference tuple/array
-type MapToNominalReferences<T extends readonly string[]> = T extends readonly [
-  infer First extends string,
-  ...infer Rest extends string[],
-]
-  ? readonly [NominalReference<First>, ...MapToNominalReferences<Rest>]
-  : T extends readonly (infer U extends string)[]
-    ? readonly NominalReference<U>[]
-    : readonly NominalReference[];
-
 /**
- * Infer BaseJobTypeDefinitions from schema definitions.
- * Maps Parser return types to the corresponding type definition fields.
- * Wraps continuesTo and blockers in NominalReference to match BaseJobTypeDefinition.
+ * Create a job type registry with runtime validation.
+ * Wraps adapter errors in JobTypeValidationError.
+ *
+ * @example
+ * // Adapters throw their native errors (e.g., ZodError)
+ * const registry = createJobTypeRegistry<MyJobTypes>({
+ *   validateEntry: (typeName) => {
+ *     if (!entryTypes.has(typeName)) throw new Error('Not an entry point');
+ *   },
+ *   parseInput: (typeName, input) => schemas[typeName].input.parse(input),
+ *   parseOutput: (typeName, output) => schemas[typeName].output.parse(output),
+ *   validateContinueWith: (typeName, target) => schemas[typeName].continueWith.parse(target),
+ *   validateBlockers: (typeName, blockers) => schemas[typeName].blockers.parse(blockers),
+ * });
  */
-export type InferJobTypeDefinitions<T extends Record<string, JobTypeSchemaDefinition>> = {
-  [K in keyof T & string]: {
-    entry: T[K]["entry"] extends true ? true : false;
-    input: ReturnType<T[K]["input"]>;
-    output: T[K]["output"] extends Parser ? ReturnType<T[K]["output"]> : undefined;
-    continuesTo: T[K]["continuesTo"] extends Parser<infer U extends string>
-      ? NominalReference<U>
-      : undefined;
-    blockers: T[K]["blockers"] extends Parser<infer U extends readonly string[]>
-      ? MapToNominalReferences<U>
-      : undefined;
-  };
-};
-
-export const createJobTypeRegistry = <T extends Record<string, JobTypeSchemaDefinition>>(
-  definitions: T,
-): JobTypeRegistry<InferJobTypeDefinitions<T>> => ({
-  validate: (typeName, fromTypeName) => {
-    if (fromTypeName === undefined) {
-      // Validating sequence start
-      if (definitions[typeName]?.entry !== true) {
-        throw new JobTypeValidationError({
-          code: "not_entry_point",
-          message: `Job type "${typeName}" is not an entry point and cannot start a sequence`,
-          typeName,
-        });
-      }
-    } else {
-      // Validating continuation - use parser to validate target
-      const continuesTo = definitions[fromTypeName]?.continuesTo;
-      if (continuesTo) {
-        try {
-          continuesTo(typeName);
-        } catch (cause) {
-          throw new JobTypeValidationError({
-            code: "invalid_continuation",
-            message: `Job type "${fromTypeName}" cannot continue to "${typeName}"`,
-            typeName: fromTypeName,
-            details: { fromTypeName, toTypeName: typeName, cause },
-          });
-        }
-      }
-    }
-  },
-  validateBlockers: (typeName, blockerTypeNames) => {
-    const blockers = definitions[typeName]?.blockers;
-    if (blockers) {
-      try {
-        blockers(blockerTypeNames);
-      } catch (cause) {
-        throw new JobTypeValidationError({
-          code: "invalid_blockers",
-          message: `Invalid blockers for job type "${typeName}"`,
-          typeName,
-          details: { blockerTypeNames, cause },
-        });
-      }
+export const createJobTypeRegistry = <TJobTypeDefinitions>(
+  config: JobTypeRegistryConfig,
+): JobTypeRegistry<TJobTypeDefinitions> => ({
+  validateEntry: (typeName) => {
+    try {
+      config.validateEntry(typeName);
+    } catch (cause) {
+      throw new JobTypeValidationError({
+        code: "not_entry_point",
+        message: `Job type "${typeName}" is not an entry point`,
+        typeName,
+        details: { cause },
+      });
     }
   },
   parseInput: (typeName, input) => {
-    const parser = definitions[typeName]?.input;
-    if (!parser) return input;
     try {
-      return parser(input);
+      return config.parseInput(typeName, input);
     } catch (cause) {
       throw new JobTypeValidationError({
         code: "invalid_input",
@@ -157,10 +114,8 @@ export const createJobTypeRegistry = <T extends Record<string, JobTypeSchemaDefi
     }
   },
   parseOutput: (typeName, output) => {
-    const parser = definitions[typeName]?.output;
-    if (!parser) return output;
     try {
-      return parser(output);
+      return config.parseOutput(typeName, output);
     } catch (cause) {
       throw new JobTypeValidationError({
         code: "invalid_output",
@@ -170,5 +125,29 @@ export const createJobTypeRegistry = <T extends Record<string, JobTypeSchemaDefi
       });
     }
   },
-  $definitions: undefined as unknown as InferJobTypeDefinitions<T>,
+  validateContinueWith: (typeName, target) => {
+    try {
+      config.validateContinueWith(typeName, target);
+    } catch (cause) {
+      throw new JobTypeValidationError({
+        code: "invalid_continuation",
+        message: `Job type "${typeName}" cannot continue to "${target.typeName}"`,
+        typeName,
+        details: { target, cause },
+      });
+    }
+  },
+  validateBlockers: (typeName, blockers) => {
+    try {
+      config.validateBlockers(typeName, blockers);
+    } catch (cause) {
+      throw new JobTypeValidationError({
+        code: "invalid_blockers",
+        message: `Invalid blockers for job type "${typeName}"`,
+        typeName,
+        details: { blockers, cause },
+      });
+    }
+  },
+  $definitions: undefined as unknown as TJobTypeDefinitions,
 });

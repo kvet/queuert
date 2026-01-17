@@ -7,8 +7,8 @@ import {
 } from "./entities/job-type.js";
 import { ScheduleOptions } from "./entities/schedule.js";
 import { BackoffConfig } from "./helpers/backoff.js";
-import { Log } from "./observability-adapter/log.js";
 import { NotifyAdapter } from "./notify-adapter/notify-adapter.js";
+import { Log } from "./observability-adapter/log.js";
 import { ObservabilityAdapter } from "./observability-adapter/observability-adapter.js";
 import {
   CompleteJobSequenceResult,
@@ -27,7 +27,12 @@ import { JobProcessFn, LeaseConfig } from "./worker/job-process.js";
 
 import { CompletedJobSequence } from "./entities/job-sequence.js";
 export { type CompletedJobSequence, type JobSequence } from "./entities/job-sequence.js";
-export { createJobTypeRegistry, type JobTypeRegistry } from "./entities/job-type-registry.js";
+export {
+  createJobTypeRegistry,
+  type JobTypeReference,
+  type JobTypeRegistry,
+  type JobTypeRegistryConfig,
+} from "./entities/job-type-registry.js";
 export {
   defineJobTypes,
   type BaseJobTypeDefinition,
@@ -40,9 +45,9 @@ export { type ScheduleOptions } from "./entities/schedule.js";
 export { type TypedAbortSignal } from "./helpers/abort.js";
 export { type BackoffConfig } from "./helpers/backoff.js";
 export { type RetryConfig } from "./helpers/retry.js";
+export { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 export { createConsoleLog } from "./observability-adapter/log.console.js";
 export { type Log } from "./observability-adapter/log.js";
-export { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 export { type ObservabilityAdapter } from "./observability-adapter/observability-adapter.js";
 export {
   JobAlreadyCompletedError,

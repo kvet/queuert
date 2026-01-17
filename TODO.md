@@ -3,12 +3,8 @@
 - Logs: add metrics for logs (like common attributes inside spans, e.g. winston.log can show context attributes)
 - ObservabilityAdapter: Add histograms (job duration, wait time, total time, attempts, poll duration), gauges (active workers, processing jobs), and tracing spans
 - Setup `files` field in package.json for public packages to exclude unnecessary files (\*.tsbuildinfo, tests, etc.) from npm packages
-- Runtime validation:
-  - Remove fromTypeName from createStateJob
-  - Rework errors
-  - Tests
-  - Zod, Valibot, Ark examples
 - review transitive dep versions for public packages (e.g. pg)
+- ensure tests use isolated typescript isolated modules and declarations
 
 # Medium term
 
@@ -29,7 +25,6 @@
 
 - Separate queuert client and worker. The worker should accept a queuert client instance to allow job definition reuse. The change is pure cosmetic but would clarify the separation of concerns.
 - Support more job id types (integers)
-- Zod job type definitions - TypeScript types already strong at compile-time; runtime validation is user's concern at system boundaries
 - Singletons/concurrency limit - Achievable in userland via blocker-based semaphore pattern; document the pattern instead
 - Partitioning - Scaling concern; defer until users hit limits
 - Add donations link - Premature until adoption; revisit later

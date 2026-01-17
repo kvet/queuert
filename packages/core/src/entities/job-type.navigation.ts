@@ -57,7 +57,7 @@ type ResolveReference<TDefs extends BaseJobTypeDefinitions, TRef> =
 export type ContinuationJobTypes<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions,
-> = TJobTypeDefinitions[TJobTypeName] extends { continuesTo: infer CT }
+> = TJobTypeDefinitions[TJobTypeName] extends { continueWith: infer CT }
   ? ResolveReference<TJobTypeDefinitions, CT>
   : never;
 
