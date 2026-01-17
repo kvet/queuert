@@ -4,7 +4,7 @@
 - ObservabilityAdapter: Add histograms (job duration, wait time, total time, attempts, poll duration), gauges (active workers, processing jobs), and tracing spans
 - Setup `files` field in package.json for public packages to exclude unnecessary files (\*.tsbuildinfo, tests, etc.) from npm packages
 - review transitive dep versions for public packages (e.g. pg)
-- ensure tests use isolated typescript isolated modules and declarations
+- simplify index.ts files to only export public API, move internal exports to other files
 
 # Medium term
 

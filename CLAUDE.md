@@ -677,7 +677,7 @@ describe("MyFeature", () => {
 
 ## Session Requirements
 
-- End each agentic session only when all checks pass: `pnpm check` (runs lint, fmt:check, typecheck, test); run `pnpm fmt` before running checks to fix formatting issues. There are separate commands like `pnpm lint`, `pnpm typecheck` and `pnpm test`.
+- Tun `pnpm fmt` before running checks to fix formatting issues. There are separate commands like `pnpm lint`, `pnpm typecheck` and `pnpm test`. Run `pnpm check` to run all checks only once you are sure it makes sense to run everything.
 - Update documentation in README.md if there were changes to public API
 - Update knowledge base in CLAUDE.md if there were architectural changes
 - Update todos in TODO.md if any were addressed

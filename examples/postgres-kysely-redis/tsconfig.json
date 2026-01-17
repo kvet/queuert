@@ -6,10 +6,9 @@
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "noEmit": true,
-    // TODO: enable back
-    // "isolatedModules": true,
     "composite": true,
     "strict": true,
+    "isolatedModules": true,
     "skipLibCheck": true,
     "skipDefaultLibCheck": true
   }
