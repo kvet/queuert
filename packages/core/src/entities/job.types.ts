@@ -3,15 +3,15 @@ export type JobStatus = "blocked" | "pending" | "running" | "completed";
 export type Job<
   TJobId,
   TJobTypeName,
-  TSequenceTypeName,
+  TChainTypeName,
   TInput,
-  TBlockerSequences extends any[],
+  TBlockerChains extends any[],
 > = {
   id: TJobId;
-  sequenceId: TJobId;
+  chainId: TJobId;
   typeName: TJobTypeName;
-  sequenceTypeName: TSequenceTypeName;
-  rootSequenceId: TJobId;
+  chainTypeName: TChainTypeName;
+  rootChainId: TJobId;
   originId: TJobId | null;
   input: TInput;
   createdAt: Date;
@@ -20,7 +20,7 @@ export type Job<
   attempt: number;
   lastAttemptAt: Date | null;
   lastAttemptError: string | null;
-  blockers: TBlockerSequences;
+  blockers: TBlockerChains;
 } & (
   | { status: "blocked" }
   | { status: "pending" }

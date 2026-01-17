@@ -42,11 +42,11 @@ it("should infer types correctly with custom ID", async ({ mongoConnectionString
     }>(),
   });
 
-  const jobSequence = await queuert.withNotify(async () => {
+  const jobChain = await queuert.withNotify(async () => {
     const session = client.startSession();
     try {
       return await session.withTransaction(async () => {
-        return queuert.startJobSequence({
+        return queuert.startJobChain({
           session,
           typeName: "test",
           input: { foo: "hello" },
@@ -56,7 +56,7 @@ it("should infer types correctly with custom ID", async ({ mongoConnectionString
       await session.endSession();
     }
   });
-  expectTypeOf(jobSequence.id).toEqualTypeOf<`job.${string}`>();
+  expectTypeOf(jobChain.id).toEqualTypeOf<`job.${string}`>();
 
   const worker = queuert.createWorker().implementJobType({
     typeName: "test",
@@ -69,7 +69,7 @@ it("should infer types correctly with custom ID", async ({ mongoConnectionString
 
   const stopWorker = await worker.start();
 
-  await queuert.waitForJobSequenceCompletion(jobSequence, { timeoutMs: 1000 });
+  await queuert.waitForJobChainCompletion(jobChain, { timeoutMs: 1000 });
 
   await stopWorker();
 

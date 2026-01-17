@@ -4,13 +4,13 @@ import { type DeduplicationStrategy } from "queuert";
 export type DbJob = {
   id: string;
   type_name: string;
-  sequence_id: string;
-  sequence_type_name: string;
+  chain_id: string;
+  chain_type_name: string;
 
   input: unknown;
   output: unknown;
 
-  root_sequence_id: string;
+  root_chain_id: string;
   origin_id: string | null;
 
   status: "blocked" | "pending" | "running" | "completed";
@@ -32,7 +32,7 @@ export type DbJob = {
 };
 
 export type DbJobWithIncompleteBlockers = DbJob & {
-  incomplete_blocker_sequence_ids: string[];
+  incomplete_blocker_chain_ids: string[];
 };
 
 export const migrateSql: TypedSql<[], void> = sql(
@@ -49,14 +49,14 @@ END$$;
 CREATE TABLE IF NOT EXISTS {{schema}}.job (
   id                            {{id_type}} PRIMARY KEY DEFAULT {{id_default}},
   type_name                     text NOT NULL,
-  sequence_id                   {{id_type}} REFERENCES {{schema}}.job(id) ON DELETE CASCADE,
-  sequence_type_name            text NOT NULL,
+  chain_id                      {{id_type}} REFERENCES {{schema}}.job(id) ON DELETE CASCADE,
+  chain_type_name               text NOT NULL,
 
   input                         jsonb,
   output                        jsonb,
 
   -- lineage / tracing
-  root_sequence_id              {{id_type}} REFERENCES {{schema}}.job(id) ON DELETE CASCADE,
+  root_chain_id                 {{id_type}} REFERENCES {{schema}}.job(id) ON DELETE CASCADE,
   origin_id                     {{id_type}} REFERENCES {{schema}}.job(id) ON DELETE CASCADE,
 
   -- state
@@ -85,9 +85,9 @@ CREATE TABLE IF NOT EXISTS {{schema}}.job (
 -- Tables: job_blocker table
 CREATE TABLE IF NOT EXISTS {{schema}}.job_blocker (
   job_id                        {{id_type}} NOT NULL REFERENCES {{schema}}.job(id) ON DELETE CASCADE,
-  blocked_by_sequence_id        {{id_type}} NOT NULL REFERENCES {{schema}}.job(id) ON DELETE CASCADE,
+  blocked_by_chain_id           {{id_type}} NOT NULL REFERENCES {{schema}}.job(id) ON DELETE CASCADE,
   index                         integer NOT NULL,
-  PRIMARY KEY (job_id, blocked_by_sequence_id)
+  PRIMARY KEY (job_id, blocked_by_chain_id)
 );
 
 -- Triggers: updated_at triggers
@@ -106,8 +106,8 @@ FOR EACH ROW
 EXECUTE PROCEDURE {{schema}}.update_updated_at_column();
 
 -- Constraints: continuation deduplication
-CREATE UNIQUE INDEX IF NOT EXISTS job_sequence_origin_unique_idx
-ON {{schema}}.job (sequence_id, origin_id)
+CREATE UNIQUE INDEX IF NOT EXISTS job_chain_origin_unique_idx
+ON {{schema}}.job (chain_id, origin_id)
 WHERE origin_id IS NOT NULL;
 
 -- Indexes: job acquisition
@@ -115,9 +115,9 @@ CREATE INDEX IF NOT EXISTS job_acquisition_idx
 ON {{schema}}.job (type_name, scheduled_at)
 WHERE status = 'pending';
 
--- Indexes: last sequence job lookup
-CREATE INDEX IF NOT EXISTS job_sequence_created_at_idx
-ON {{schema}}.job (sequence_id, created_at DESC);
+-- Indexes: last chain job lookup
+CREATE INDEX IF NOT EXISTS job_chain_created_at_idx
+ON {{schema}}.job (chain_id, created_at DESC);
 
 -- Indexes: deduplication lookup
 CREATE INDEX IF NOT EXISTS job_deduplication_idx
@@ -130,8 +130,8 @@ ON {{schema}}.job (type_name, leased_until)
 WHERE status = 'running' AND leased_until IS NOT NULL;
 
 -- Indexes: blocker lookup
-CREATE INDEX IF NOT EXISTS job_blocker_sequence_idx
-ON {{schema}}.job_blocker (blocked_by_sequence_id);
+CREATE INDEX IF NOT EXISTS job_blocker_chain_idx
+ON {{schema}}.job_blocker (blocked_by_chain_id);
 `,
   false,
 );
@@ -139,10 +139,10 @@ ON {{schema}}.job_blocker (blocked_by_sequence_id);
 export const createJobSql: TypedSql<
   readonly [
     NamedParameter<"type_name", string>,
-    NamedParameter<"sequence_id", string | undefined>,
-    NamedParameter<"sequence_type_name", string>,
+    NamedParameter<"chain_id", string | undefined>,
+    NamedParameter<"chain_type_name", string>,
     NamedParameter<"input", unknown>,
-    NamedParameter<"root_sequence_id", string | undefined>,
+    NamedParameter<"root_chain_id", string | undefined>,
     NamedParameter<"origin_id", string | undefined>,
     NamedParameter<"deduplication_key", string | null | undefined>,
     NamedParameter<"deduplication_strategy", DeduplicationStrategy | null | undefined>,
@@ -158,7 +158,7 @@ WITH existing_continuation AS (
   FROM {{schema}}.job
   WHERE $2::{{id_type}} IS NOT NULL
     AND $6::{{id_type}} IS NOT NULL
-    AND sequence_id = $2::{{id_type}}
+    AND chain_id = $2::{{id_type}}
     AND origin_id = $6::{{id_type}}
   LIMIT 1
 ),
@@ -167,7 +167,7 @@ existing_deduplicated AS (
   FROM {{schema}}.job j
   WHERE $7::text IS NOT NULL
     AND j.deduplication_key = $7
-    AND j.id = j.sequence_id
+    AND j.id = j.chain_id
     AND (
       $8::text IS NULL
       OR ($8::text = 'completed' AND j.status != 'completed')
@@ -182,7 +182,7 @@ existing_deduplicated AS (
 ),
 new_id AS (SELECT {{id_default}} AS id),
 inserted_job AS (
-  INSERT INTO {{schema}}.job (id, type_name, sequence_id, sequence_type_name, input, root_sequence_id, origin_id, deduplication_key, scheduled_at)
+  INSERT INTO {{schema}}.job (id, type_name, chain_id, chain_type_name, input, root_chain_id, origin_id, deduplication_key, scheduled_at)
   SELECT id, $1, COALESCE($2, id), $3, $4, COALESCE($5, id), $6, $7,
     COALESCE($10::timestamptz, now() + ($11::bigint || ' milliseconds')::interval, now())
   FROM new_id
@@ -201,31 +201,31 @@ LIMIT 1
 );
 
 export const addJobBlockersSql: TypedSql<
-  readonly [NamedParameter<"job_id", string[]>, NamedParameter<"blocked_by_sequence_id", string[]>],
+  readonly [NamedParameter<"job_id", string[]>, NamedParameter<"blocked_by_chain_id", string[]>],
   [DbJobWithIncompleteBlockers]
 > = sql(
   /* sql */ `
 WITH inserted_blockers AS (
-  INSERT INTO {{schema}}.job_blocker (job_id, blocked_by_sequence_id, "index")
-  SELECT job_id, blocked_by_sequence_id, ord - 1 AS "index"
-  FROM unnest($1::{{id_type}}[], $2::{{id_type}}[]) WITH ORDINALITY AS t(job_id, blocked_by_sequence_id, ord)
-  RETURNING job_id, blocked_by_sequence_id
+  INSERT INTO {{schema}}.job_blocker (job_id, blocked_by_chain_id, "index")
+  SELECT job_id, blocked_by_chain_id, ord - 1 AS "index"
+  FROM unnest($1::{{id_type}}[], $2::{{id_type}}[]) WITH ORDINALITY AS t(job_id, blocked_by_chain_id, ord)
+  RETURNING job_id, blocked_by_chain_id
 ),
 blockers_status AS (
   SELECT
     ib.job_id,
-    ib.blocked_by_sequence_id,
+    ib.blocked_by_chain_id,
     (
       SELECT j2.status
       FROM {{schema}}.job j2
-      WHERE j2.sequence_id = ib.blocked_by_sequence_id
+      WHERE j2.chain_id = ib.blocked_by_chain_id
       ORDER BY j2.created_at DESC
       LIMIT 1
     ) AS blocker_status
   FROM inserted_blockers ib
 ),
 incomplete_blockers AS (
-  SELECT blocked_by_sequence_id
+  SELECT blocked_by_chain_id
   FROM blockers_status
   WHERE blocker_status != 'completed'
 ),
@@ -250,7 +250,7 @@ final_job AS (
   LIMIT 1
 )
 SELECT fj.*,
-  COALESCE((SELECT array_agg(blocked_by_sequence_id) FROM incomplete_blockers), ARRAY[]::{{id_type}}[]) AS incomplete_blocker_sequence_ids
+  COALESCE((SELECT array_agg(blocked_by_chain_id) FROM incomplete_blockers), ARRAY[]::{{id_type}}[]) AS incomplete_blocker_chain_ids
 FROM final_job fj;
 `,
   true,
@@ -279,23 +279,23 @@ RETURNING *
 );
 
 export const scheduleBlockedJobsSql: TypedSql<
-  readonly [NamedParameter<"blocked_by_sequence_id", string>],
+  readonly [NamedParameter<"blocked_by_chain_id", string>],
   DbJob[]
 > = sql(
   /* sql */ `
 WITH direct_blocked AS (
   SELECT DISTINCT jb.job_id
   FROM {{schema}}.job_blocker jb
-  WHERE jb.blocked_by_sequence_id = $1
+  WHERE jb.blocked_by_chain_id = $1
 ),
 blockers_status AS (
   SELECT
     jb.job_id,
-    jb.blocked_by_sequence_id,
+    jb.blocked_by_chain_id,
     (
       SELECT j2.status
       FROM {{schema}}.job j2
-      WHERE j2.sequence_id = jb.blocked_by_sequence_id
+      WHERE j2.chain_id = jb.blocked_by_chain_id
       ORDER BY j2.created_at DESC
       LIMIT 1
     ) AS blocker_status
@@ -318,19 +318,19 @@ RETURNING j.*;
   true,
 );
 
-export const getJobSequenceByIdSql: TypedSql<
+export const getJobChainByIdSql: TypedSql<
   readonly [NamedParameter<"id", string>],
-  [{ root_job: DbJob; last_sequence_job: DbJob | null } | undefined]
+  [{ root_job: DbJob; last_chain_job: DbJob | null } | undefined]
 > = sql(
   /* sql */ `
 SELECT
   row_to_json(j)  AS root_job,
-  row_to_json(lc) AS last_sequence_job
+  row_to_json(lc) AS last_chain_job
 FROM {{schema}}.job AS j
 LEFT JOIN LATERAL (
   SELECT *
   FROM {{schema}}.job
-  WHERE sequence_id = j.id
+  WHERE chain_id = j.id
   ORDER BY created_at DESC
   LIMIT 1
 ) AS lc ON TRUE
@@ -341,19 +341,19 @@ WHERE j.id = $1
 
 export const getJobBlockersSql: TypedSql<
   readonly [NamedParameter<"id", string>],
-  { root_job: DbJob; last_sequence_job: DbJob | null }[]
+  { root_job: DbJob; last_chain_job: DbJob | null }[]
 > = sql(
   /* sql */ `
 SELECT
   row_to_json(j)   AS root_job,
-  row_to_json(lc)  AS last_sequence_job
+  row_to_json(lc)  AS last_chain_job
 FROM {{schema}}.job_blocker AS b
 JOIN {{schema}}.job AS j
-  ON j.id = b.blocked_by_sequence_id
+  ON j.id = b.blocked_by_chain_id
 LEFT JOIN LATERAL (
   SELECT *
   FROM {{schema}}.job
-  WHERE sequence_id = j.id
+  WHERE chain_id = j.id
   ORDER BY created_at DESC
   LIMIT 1
 ) AS lc ON TRUE
@@ -483,28 +483,28 @@ RETURNING job.*
 );
 
 export const getExternalBlockersSql: TypedSql<
-  readonly [NamedParameter<"root_sequence_ids", string[]>],
-  { job_id: string; blocked_root_sequence_id: string }[]
+  readonly [NamedParameter<"root_chain_ids", string[]>],
+  { job_id: string; blocked_root_chain_id: string }[]
 > = sql(
   /* sql */ `
-SELECT DISTINCT jb.job_id, j.root_sequence_id AS blocked_root_sequence_id
+SELECT DISTINCT jb.job_id, j.root_chain_id AS blocked_root_chain_id
 FROM {{schema}}.job_blocker jb
 JOIN {{schema}}.job j ON j.id = jb.job_id
-WHERE jb.blocked_by_sequence_id IN (
-  SELECT id FROM {{schema}}.job WHERE root_sequence_id = ANY($1::{{id_type}}[])
+WHERE jb.blocked_by_chain_id IN (
+  SELECT id FROM {{schema}}.job WHERE root_chain_id = ANY($1::{{id_type}}[])
 )
-AND j.root_sequence_id != ALL($1::{{id_type}}[])
+AND j.root_chain_id != ALL($1::{{id_type}}[])
 `,
   true,
 );
 
-export const deleteJobsByRootSequenceIdsSql: TypedSql<
-  readonly [NamedParameter<"root_sequence_ids", string[]>],
+export const deleteJobsByRootChainIdsSql: TypedSql<
+  readonly [NamedParameter<"root_chain_ids", string[]>],
   DbJob[]
 > = sql(
   /* sql */ `
 DELETE FROM {{schema}}.job
-WHERE root_sequence_id = ANY($1::{{id_type}}[])
+WHERE root_chain_id = ANY($1::{{id_type}}[])
 RETURNING *
 `,
   true,
@@ -524,13 +524,13 @@ FOR UPDATE
 );
 
 export const getCurrentJobForUpdateSql: TypedSql<
-  readonly [NamedParameter<"sequence_id", string>],
+  readonly [NamedParameter<"chain_id", string>],
   [DbJob | undefined]
 > = sql(
   /* sql */ `
 SELECT *
 FROM {{schema}}.job
-WHERE sequence_id = $1
+WHERE chain_id = $1
 ORDER BY created_at DESC
 LIMIT 1
 FOR UPDATE

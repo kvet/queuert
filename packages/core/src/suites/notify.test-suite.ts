@@ -36,9 +36,9 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     await withWorkers([await worker.start()], async () => {
-      const jobSequence = await queuert.withNotify(async () =>
+      const jobChain = await queuert.withNotify(async () =>
         runInTransaction(async (context) =>
-          queuert.startJobSequence({
+          queuert.startJobChain({
             ...context,
             typeName: "test",
             input: { value: 1 },
@@ -47,9 +47,9 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       );
 
       const signal = AbortSignal.timeout(200);
-      await queuert.waitForJobSequenceCompletion(jobSequence, { timeoutMs: 200 });
+      await queuert.waitForJobChainCompletion(jobChain, { timeoutMs: 200 });
       if (signal.aborted) {
-        expect.fail("Timed out waiting for job sequence completion");
+        expect.fail("Timed out waiting for job chain completion");
       }
     });
   });
@@ -88,11 +88,11 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     await withWorkers(
       await Promise.all(Array.from({ length: 5 }, async () => worker.start())),
       async () => {
-        const jobSequences = await queuert.withNotify(async () =>
+        const jobChains = await queuert.withNotify(async () =>
           runInTransaction(async (context) =>
             Promise.all(
               Array.from({ length: 5 }, async (_, i) =>
-                queuert.startJobSequence({
+                queuert.startJobChain({
                   ...context,
                   typeName: "test",
                   input: { value: i },
@@ -104,12 +104,12 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
         const signal = AbortSignal.timeout(200);
         await Promise.all(
-          jobSequences.map(async (sequence) =>
-            queuert.waitForJobSequenceCompletion(sequence, { timeoutMs: 200 }),
+          jobChains.map(async (chain) =>
+            queuert.waitForJobChainCompletion(chain, { timeoutMs: 200 }),
           ),
         );
         if (signal.aborted) {
-          expect.fail("Timed out waiting for job sequence completions");
+          expect.fail("Timed out waiting for job chain completions");
         }
       },
     );
@@ -161,14 +161,14 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     await withWorkers([await worker1.start(), await worker2.start()], async () => {
-      const jobSequence = await queuert.withNotify(async () =>
+      const jobChain = await queuert.withNotify(async () =>
         runInTransaction(async (context) =>
-          queuert.startJobSequence({
+          queuert.startJobChain({
             ...context,
             typeName: "main",
             input: null,
             startBlockers: async () => [
-              await queuert.startJobSequence({
+              await queuert.startJobChain({
                 ...context,
                 typeName: "blocker",
                 input: null,
@@ -179,17 +179,17 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       );
 
       const signal = AbortSignal.timeout(100);
-      await queuert.waitForJobSequenceCompletion(jobSequence, {
+      await queuert.waitForJobChainCompletion(jobChain, {
         signal,
         timeoutMs: 200,
       });
       if (signal.aborted) {
-        expect.fail("Timed out waiting for job sequence completion");
+        expect.fail("Timed out waiting for job chain completion");
       }
     });
   });
 
-  it("handles distributed sequence jobs", async ({
+  it("handles distributed chain jobs", async ({
     stateAdapter,
     notifyAdapter,
     observabilityAdapter,
@@ -238,9 +238,9 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     await withWorkers([await worker1.start(), await worker2.start()], async () => {
-      const jobSequence = await queuert.withNotify(async () =>
+      const jobChain = await queuert.withNotify(async () =>
         runInTransaction(async (context) =>
-          queuert.startJobSequence({
+          queuert.startJobChain({
             ...context,
             typeName: "step1",
             input: null,
@@ -249,9 +249,9 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       );
 
       const signal = AbortSignal.timeout(100);
-      await queuert.waitForJobSequenceCompletion(jobSequence, { timeoutMs: 200 });
+      await queuert.waitForJobChainCompletion(jobChain, { timeoutMs: 200 });
       if (signal.aborted) {
-        expect.fail("Timed out waiting for job sequence completion");
+        expect.fail("Timed out waiting for job chain completion");
       }
     });
   });
@@ -301,9 +301,9 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     await withWorkers([await worker.start({ workerId: "worker" })], async () => {
-      const jobSequence = await queuert.withNotify(async () =>
+      const jobChain = await queuert.withNotify(async () =>
         runInTransaction(async (context) =>
-          queuert.startJobSequence({
+          queuert.startJobChain({
             ...context,
             typeName: "test",
             input: null,
@@ -315,10 +315,10 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
       await queuert.withNotify(async () =>
         runInTransaction(async (context) =>
-          queuert.completeJobSequence({
+          queuert.completeJobChain({
             ...context,
             typeName: "test",
-            id: jobSequence.id,
+            id: jobChain.id,
             complete: async ({ job, complete }) => {
               return complete(job, async () => ({ result: "from-external" }));
             },
@@ -381,9 +381,9 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     await withWorkers([await worker.start()], async () => {
-      const jobSequence = await queuert.withNotify(async () =>
+      const jobChain = await queuert.withNotify(async () =>
         runInTransaction(async (context) =>
-          queuert.startJobSequence({
+          queuert.startJobChain({
             ...context,
             typeName: "test",
             input: null,
@@ -395,7 +395,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       await sleep(10);
 
       await withWorkers([await worker.start()], async () => {
-        await queuert.waitForJobSequenceCompletion(jobSequence, { timeoutMs: 5000 });
+        await queuert.waitForJobChainCompletion(jobChain, { timeoutMs: 5000 });
       });
 
       await jobCompleted.promise;

@@ -56,8 +56,8 @@ Each documented feature should have corresponding tests.
 
 **Check test suites exist for:**
 
-- Job sequences and continuations (`sequences.test-suite.ts`)
-- Blockers (`blocker-sequences.test-suite.ts`)
+- Job chains and continuations (`chains.test-suite.ts`)
+- Blockers (`blocker-chains.test-suite.ts`)
 - Prepare/complete pattern (`process.test-suite.ts`)
 - Scheduling (`scheduling.test-suite.ts`)
 - Deduplication (`deduplication.test-suite.ts`)
@@ -111,7 +111,7 @@ All documented exports should be actually exported.
 - `defineJobTypes`
 - `createJobTypeRegistry`
 - All error classes (`JobNotFoundError`, `JobTakenByAnotherWorkerError`, etc.)
-- All type helpers (`JobOf`, `JobSequenceOf`, etc.)
+- All type helpers (`JobOf`, `JobChainOf`, etc.)
 
 **Check for undocumented exports:**
 
@@ -143,7 +143,7 @@ Provide your findings in this format:
 ### Test Coverage
 | Feature | Documented | Test Suite | Coverage |
 |---------|------------|------------|----------|
-| Sequences | Yes | sequences.test-suite.ts | Good |
+| Chains | Yes | chains.test-suite.ts | Good |
 | ... | ... | ... | ... |
 
 ### Example Status

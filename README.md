@@ -11,7 +11,7 @@ Imagine you have some long-running process. For example, performing image proces
 ```ts
 const jobTypes = defineJobTypes<{
   'process-image': {
-    entry: true;  // Can be started via startJobSequence
+    entry: true;  // Can be started via startJobChain
     input: { imageId: string };
     continueWith: { typeName: 'distribute-image' };
   };
@@ -30,7 +30,7 @@ const queuert = createQueuert({
 queuert.withNotify(async () => db.transaction(async (tx) => {
   const image = await tx.images.create({ ... });
 
-  await queuert.startJobSequence({
+  await queuert.startJobChain({
     tx,
     typeName: "process-image",
     input: { imageId: image.id },
@@ -118,13 +118,13 @@ npm install @queuert/nats      # NATS pub/sub (with optional JetStream KV for hi
 
 An individual unit of work. Jobs have a lifecycle: `pending` → `running` → `completed`. Each job belongs to a Job Type and contains typed input/output. Jobs can also be `blocked` if they depend on other jobs to complete first.
 
-### Job Sequence
+### Job Chain
 
-A chain of linked jobs where each job can `continueWith` to the next - just like a Promise chain. In fact, a sequence IS its first job, the same way a Promise chain IS the first promise. When you call `startJobSequence`, the returned `sequence.id` is the first job's ID. Continuation jobs share this `sequenceId` but have their own unique `id`. The sequence completes when its final job completes without continuing.
+A chain of linked jobs where each job can `continueWith` to the next - just like a Promise chain. In fact, a chain IS its first job, the same way a Promise chain IS the first promise. When you call `startJobChain`, the returned `chain.id` is the first job's ID. Continuation jobs share this `chainId` but have their own unique `id`. The chain completes when its final job completes without continuing.
 
 ### Job Type
 
-Defines a named job type with its input/output types and process function. Job types are registered with workers via `implementJobType`. The process function receives the job and context for completing or continuing the sequence.
+Defines a named job type with its input/output types and process function. Job types are registered with workers via `implementJobType`. The process function receives the job and context for completing or continuing the chain.
 
 ### State Adapter
 
@@ -168,7 +168,7 @@ Queuert provides end-to-end type safety with full type inference. Define your jo
 - **Job inputs and outputs** are inferred and validated at compile time
 - **Continuations** are type-checked — `continueWith` only accepts valid target job types with matching inputs
 - **Blockers** are fully typed — access `job.blockers` with correct output types for each blocker
-- **Internal job types** without `entry: true` cannot be started directly via `startJobSequence`
+- **Internal job types** without `entry: true` cannot be started directly via `startJobChain`
 
 No runtime type errors. No mismatched job names. Your workflow logic is verified before your code ever runs.
 
@@ -256,9 +256,9 @@ If you don't call `prepare`, auto-setup runs based on when you call `complete`:
 - Call `complete` synchronously → atomic mode
 - Call `complete` after async work → staged mode (lease renewal active)
 
-## Job Sequence Patterns
+## Job Chain Patterns
 
-Sequences support various execution patterns via `continueWith`:
+Chains support various execution patterns via `continueWith`:
 
 ### Linear
 
@@ -270,8 +270,8 @@ type Definitions = {
   step2: { input: { id: string }; output: { done: true } };
 };
 
-// Start the sequence
-await queuert.startJobSequence({
+// Start the chain
+await queuert.startJobChain({
   typeName: "step1",
   input: { id: "123" },
 });
@@ -309,8 +309,8 @@ type Definitions = {
   branch2: { input: { value: number }; output: { result2: number } };
 };
 
-// Start the sequence
-await queuert.startJobSequence({
+// Start the chain
+await queuert.startJobChain({
   typeName: "main",
   input: { value: 42 },
 });
@@ -344,8 +344,8 @@ type Definitions = {
   };
 };
 
-// Start the sequence
-await queuert.startJobSequence({
+// Start the chain
+await queuert.startJobChain({
   typeName: "loop",
   input: { counter: 0 },
 });
@@ -378,8 +378,8 @@ type Definitions = {
   };
 };
 
-// Start the sequence
-await queuert.startJobSequence({
+// Start the chain
+await queuert.startJobChain({
   typeName: "start",
   input: { value: 10 },
 });
@@ -408,7 +408,7 @@ queuert.createWorker()
 
 ## Job Blockers
 
-Jobs can depend on other job sequences to complete before they start. A job with incomplete blockers starts as `blocked` and transitions to `pending` when all blockers complete.
+Jobs can depend on other job chains to complete before they start. A job with incomplete blockers starts as `blocked` and transitions to `pending` when all blockers complete.
 
 ```ts
 type Definitions = {
@@ -426,12 +426,12 @@ type Definitions = {
 };
 
 // Start with blockers
-await queuert.startJobSequence({
+await queuert.startJobChain({
   typeName: 'process-all',
   input: { ids: ['a', 'b', 'c'] },
   startBlockers: async () => Promise.all([
-    queuert.startJobSequence({ typeName: 'fetch-data', input: { url: '/a' } }),
-    queuert.startJobSequence({ typeName: 'fetch-data', input: { url: '/b' } }),
+    queuert.startJobChain({ typeName: 'fetch-data', input: { url: '/a' } }),
+    queuert.startJobChain({ typeName: 'fetch-data', input: { url: '/b' } }),
   ]),
 });
 
@@ -489,14 +489,14 @@ Jobs can be scheduled to start at a future time using the `schedule` option. The
 
 ```ts
 // Schedule a job to run in 5 minutes
-await queuert.startJobSequence({
+await queuert.startJobChain({
   typeName: 'send-reminder',
   input: { userId: '123' },
   schedule: { afterMs: 5 * 60 * 1000 }, // 5 minutes from now
 });
 
 // Or schedule at a specific time
-await queuert.startJobSequence({
+await queuert.startJobChain({
   typeName: 'send-reminder',
   input: { userId: '123' },
   schedule: { at: new Date('2025-01-15T09:00:00Z') },
@@ -517,7 +517,7 @@ await complete(job, async ({ continueWith }) =>
 
 ## Workerless Completion
 
-Jobs can be completed without a worker using `completeJobSequence`. This enables approval workflows, webhook-triggered completions, and patterns where jobs wait for external events. Deferred start pairs well with this — schedule a job to auto-reject after a timeout, but allow early completion based on user action.
+Jobs can be completed without a worker using `completeJobChain`. This enables approval workflows, webhook-triggered completions, and patterns where jobs wait for external events. Deferred start pairs well with this — schedule a job to auto-reject after a timeout, but allow early completion based on user action.
 
 ```ts
 type Definitions = {
@@ -534,13 +534,13 @@ type Definitions = {
 };
 
 // Start a job that auto-rejects in 2 hours if not handled
-const sequence = await queuert.startJobSequence({
+const chain = await queuert.startJobChain({
   typeName: 'await-approval',
   input: { requestId: '123' },
   schedule: { afterMs: 2 * 60 * 60 * 1000 }, // 2 hours
 });
 
-// The worker handles the timeout case (auto-reject, sequence ends)
+// The worker handles the timeout case (auto-reject, chain ends)
 worker.implementJobType({
   typeName: 'await-approval',
   process: async ({ complete }) => complete(() => ({ rejected: true })),
@@ -556,8 +556,8 @@ worker.implementJobType({
 });
 
 // The job can be completed early without a worker (e.g., via API call)
-await queuert.completeJobSequence({
-  id: sequence.id,
+await queuert.completeJobChain({
+  id: chain.id,
   typeName: 'await-approval',
   complete: async ({ job, complete }) => {
     if (job.typeName !== 'await-approval') {
@@ -575,7 +575,7 @@ await queuert.completeJobSequence({
 });
 ```
 
-This pattern lets you interweave external actions with your job sequences — waiting for user input, third-party callbacks, or manual approval steps.
+This pattern lets you interweave external actions with your job chains — waiting for user input, third-party callbacks, or manual approval steps.
 
 ## Timeouts
 
@@ -650,8 +650,8 @@ Queuert includes comprehensive test suites that verify job execution guarantees 
 Test suites available in [`packages/core/src/suites/`](./packages/core/src/suites/):
 
 - [`process.test-suite.ts`](./packages/core/src/suites/process.test-suite.ts) — Atomic/staged modes, prepare/complete patterns
-- [`sequences.test-suite.ts`](./packages/core/src/suites/sequences.test-suite.ts) — Linear, branched, loop, go-to patterns
-- [`blocker-sequences.test-suite.ts`](./packages/core/src/suites/blocker-sequences.test-suite.ts) — Job dependencies and blocking
+- [`chains.test-suite.ts`](./packages/core/src/suites/chains.test-suite.ts) — Linear, branched, loop, go-to patterns
+- [`blocker-chains.test-suite.ts`](./packages/core/src/suites/blocker-chains.test-suite.ts) — Job dependencies and blocking
 - [`workerless-completion.test-suite.ts`](./packages/core/src/suites/workerless-completion.test-suite.ts) — External job completion
 - [`scheduling.test-suite.ts`](./packages/core/src/suites/scheduling.test-suite.ts) — Scheduled job execution and rescheduling
 - [`deduplication.test-suite.ts`](./packages/core/src/suites/deduplication.test-suite.ts) — Duplicate job prevention

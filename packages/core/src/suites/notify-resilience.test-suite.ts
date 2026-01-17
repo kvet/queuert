@@ -62,11 +62,11 @@ export const notifyResilienceTestSuite = ({
       ],
       async () => {
         // at least one notify pushes worker to process jobs
-        const jobSequences = await queuert.withNotify(async () =>
+        const jobChains = await queuert.withNotify(async () =>
           runInTransaction(async (context) =>
             Promise.all(
               Array.from({ length: 20 }, async (_, i) =>
-                queuert.startJobSequence({
+                queuert.startJobChain({
                   ...context,
                   typeName: "test",
                   input: { value: i, atomic: i % 2 === 0 },
@@ -77,9 +77,9 @@ export const notifyResilienceTestSuite = ({
         );
 
         await Promise.all(
-          jobSequences.map(async (seq) =>
+          jobChains.map(async (chain) =>
             // we have to rely on polling here since notify adapter is flaky
-            queuert.waitForJobSequenceCompletion(seq, { pollIntervalMs: 1000, timeoutMs: 5000 }),
+            queuert.waitForJobChainCompletion(chain, { pollIntervalMs: 1000, timeoutMs: 5000 }),
           ),
         );
       },

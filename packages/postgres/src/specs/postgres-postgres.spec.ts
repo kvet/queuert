@@ -1,6 +1,6 @@
 import { extendWithPostgres, TESTCONTAINER_RESOURCE_TYPES } from "@queuert/testcontainers";
 import {
-  blockerSequencesTestSuite,
+  blockerChainsTestSuite,
   extendWithCommon,
   extendWithResourceLeakDetection,
   notifyResilienceTestSuite,
@@ -8,9 +8,9 @@ import {
   processTestSuite,
   reaperTestSuite,
   schedulingTestSuite,
-  sequencesTestSuite,
+  chainsTestSuite,
   stateResilienceTestSuite,
-  waitSequenceCompletionTestSuite,
+  waitChainCompletionTestSuite,
   workerlessCompletionTestSuite,
   workerTestSuite,
 } from "queuert/testing";
@@ -37,16 +37,16 @@ describe("Reaper", () => {
   reaperTestSuite({ it: postgresPostgresIt });
 });
 
-describe("Sequences", () => {
-  sequencesTestSuite({ it: postgresPostgresIt });
+describe("Chains", () => {
+  chainsTestSuite({ it: postgresPostgresIt });
 });
 
-describe("Blocker Sequences", () => {
-  blockerSequencesTestSuite({ it: postgresPostgresIt });
+describe("Blocker Chains", () => {
+  blockerChainsTestSuite({ it: postgresPostgresIt });
 });
 
-describe("Wait Sequence Completion", () => {
-  waitSequenceCompletionTestSuite({ it: postgresPostgresIt });
+describe("Wait Chain Completion", () => {
+  waitChainCompletionTestSuite({ it: postgresPostgresIt });
 });
 
 describe("State Resilience", () => {

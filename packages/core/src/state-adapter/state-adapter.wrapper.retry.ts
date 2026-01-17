@@ -24,7 +24,7 @@ export const wrapStateAdapterWithRetry = <
     isInTransaction: stateAdapter.isInTransaction,
 
     // Operation methods - wrap with retry
-    getJobSequenceById: wrap(stateAdapter.getJobSequenceById),
+    getJobChainById: wrap(stateAdapter.getJobChainById),
     getJobById: wrap(stateAdapter.getJobById),
     createJob: wrap(stateAdapter.createJob),
     addJobBlockers: wrap(stateAdapter.addJobBlockers),
@@ -37,7 +37,7 @@ export const wrapStateAdapterWithRetry = <
     completeJob: wrap(stateAdapter.completeJob),
     removeExpiredJobLease: wrap(stateAdapter.removeExpiredJobLease),
     getExternalBlockers: wrap(stateAdapter.getExternalBlockers),
-    deleteJobsByRootSequenceIds: wrap(stateAdapter.deleteJobsByRootSequenceIds),
+    deleteJobsByRootChainIds: wrap(stateAdapter.deleteJobsByRootChainIds),
     getJobForUpdate: wrap(stateAdapter.getJobForUpdate),
     getCurrentJobForUpdate: wrap(stateAdapter.getCurrentJobForUpdate),
   };

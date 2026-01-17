@@ -6,7 +6,7 @@ export const createInProcessNotifyAdapter = (): NotifyAdapter => {
   const hintCounts = new Map<string, number>();
 
   const jobScheduledListeners: Array<(notification: JobScheduledNotification) => void> = [];
-  const sequenceCompletedListeners: Array<(sequenceId: string) => void> = [];
+  const chainCompletedListeners: Array<(chainId: string) => void> = [];
   const jobOwnershipLostListeners: Array<(jobId: string) => void> = [];
 
   const tryConsumeHint = (hintId: string): boolean => {
@@ -47,25 +47,25 @@ export const createInProcessNotifyAdapter = (): NotifyAdapter => {
       };
     },
 
-    notifyJobSequenceCompleted: async (sequenceId: string) => {
-      for (const listener of sequenceCompletedListeners.slice()) {
-        listener(sequenceId);
+    notifyJobChainCompleted: async (chainId: string) => {
+      for (const listener of chainCompletedListeners.slice()) {
+        listener(chainId);
       }
     },
 
-    listenJobSequenceCompleted: async (targetSequenceId, onNotification) => {
-      const listener = (sequenceId: string): void => {
-        if (sequenceId === targetSequenceId) {
+    listenJobChainCompleted: async (targetChainId, onNotification) => {
+      const listener = (chainId: string): void => {
+        if (chainId === targetChainId) {
           onNotification();
         }
       };
 
-      sequenceCompletedListeners.push(listener);
+      chainCompletedListeners.push(listener);
 
       return async () => {
-        const index = sequenceCompletedListeners.indexOf(listener);
+        const index = chainCompletedListeners.indexOf(listener);
         if (index !== -1) {
-          sequenceCompletedListeners.splice(index, 1);
+          chainCompletedListeners.splice(index, 1);
         }
       };
     },

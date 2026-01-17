@@ -40,9 +40,9 @@ export const createOtelObservabilityAdapter = ({
   const jobCompletedCounter = meter.createCounter(`${metricPrefix}.job.completed`);
   const jobReapedCounter = meter.createCounter(`${metricPrefix}.job.reaped`);
 
-  // job sequence
-  const jobSequenceCreatedCounter = meter.createCounter(`${metricPrefix}.job_sequence.created`);
-  const jobSequenceCompletedCounter = meter.createCounter(`${metricPrefix}.job_sequence.completed`);
+  // job chain
+  const jobChainCreatedCounter = meter.createCounter(`${metricPrefix}.job_chain.created`);
+  const jobChainCompletedCounter = meter.createCounter(`${metricPrefix}.job_chain.completed`);
 
   // blockers
   const jobBlockedCounter = meter.createCounter(`${metricPrefix}.job.blocked`);
@@ -58,9 +58,9 @@ export const createOtelObservabilityAdapter = ({
   const stateAdapterErrorCounter = meter.createCounter(`${metricPrefix}.state_adapter.error`);
 
   // histograms
-  const jobSequenceDurationHistogram = meter.createHistogram(
-    `${metricPrefix}.job_sequence.duration`,
-    { unit: "ms", description: "Duration of job sequence from creation to completion" },
+  const jobChainDurationHistogram = meter.createHistogram(
+    `${metricPrefix}.job_chain.duration`,
+    { unit: "ms", description: "Duration of job chain from creation to completion" },
   );
   const jobDurationHistogram = meter.createHistogram(`${metricPrefix}.job.duration`, {
     unit: "ms",
@@ -95,61 +95,61 @@ export const createOtelObservabilityAdapter = ({
     },
 
     // job
-    jobCreated: ({ typeName, sequenceTypeName }) => {
-      jobCreatedCounter.add(1, { typeName, sequenceTypeName });
+    jobCreated: ({ typeName, chainTypeName }) => {
+      jobCreatedCounter.add(1, { typeName, chainTypeName });
     },
-    jobAttemptStarted: ({ typeName, sequenceTypeName, workerId }) => {
-      jobAttemptStartedCounter.add(1, { typeName, sequenceTypeName, workerId });
+    jobAttemptStarted: ({ typeName, chainTypeName, workerId }) => {
+      jobAttemptStartedCounter.add(1, { typeName, chainTypeName, workerId });
     },
-    jobAttemptTakenByAnotherWorker: ({ typeName, sequenceTypeName, workerId }) => {
-      jobAttemptTakenByAnotherWorkerCounter.add(1, { typeName, sequenceTypeName, workerId });
+    jobAttemptTakenByAnotherWorker: ({ typeName, chainTypeName, workerId }) => {
+      jobAttemptTakenByAnotherWorkerCounter.add(1, { typeName, chainTypeName, workerId });
     },
-    jobAttemptAlreadyCompleted: ({ typeName, sequenceTypeName, workerId }) => {
-      jobAttemptAlreadyCompletedCounter.add(1, { typeName, sequenceTypeName, workerId });
+    jobAttemptAlreadyCompleted: ({ typeName, chainTypeName, workerId }) => {
+      jobAttemptAlreadyCompletedCounter.add(1, { typeName, chainTypeName, workerId });
     },
-    jobAttemptLeaseExpired: ({ typeName, sequenceTypeName, workerId }) => {
-      jobAttemptLeaseExpiredCounter.add(1, { typeName, sequenceTypeName, workerId });
+    jobAttemptLeaseExpired: ({ typeName, chainTypeName, workerId }) => {
+      jobAttemptLeaseExpiredCounter.add(1, { typeName, chainTypeName, workerId });
     },
-    jobAttemptLeaseRenewed: ({ typeName, sequenceTypeName, workerId }) => {
-      jobAttemptLeaseRenewedCounter.add(1, { typeName, sequenceTypeName, workerId });
+    jobAttemptLeaseRenewed: ({ typeName, chainTypeName, workerId }) => {
+      jobAttemptLeaseRenewedCounter.add(1, { typeName, chainTypeName, workerId });
     },
-    jobReaped: ({ typeName, sequenceTypeName, workerId }) => {
-      jobReapedCounter.add(1, { typeName, sequenceTypeName, workerId });
+    jobReaped: ({ typeName, chainTypeName, workerId }) => {
+      jobReapedCounter.add(1, { typeName, chainTypeName, workerId });
     },
-    jobAttemptFailed: ({ typeName, sequenceTypeName, workerId }) => {
-      jobAttemptFailedCounter.add(1, { typeName, sequenceTypeName, workerId });
+    jobAttemptFailed: ({ typeName, chainTypeName, workerId }) => {
+      jobAttemptFailedCounter.add(1, { typeName, chainTypeName, workerId });
     },
-    jobAttemptCompleted: ({ typeName, sequenceTypeName, workerId }) => {
-      jobAttemptCompletedCounter.add(1, { typeName, sequenceTypeName, workerId });
+    jobAttemptCompleted: ({ typeName, chainTypeName, workerId }) => {
+      jobAttemptCompletedCounter.add(1, { typeName, chainTypeName, workerId });
     },
-    jobCompleted: ({ typeName, sequenceTypeName, workerId, continuedWith }) => {
+    jobCompleted: ({ typeName, chainTypeName, workerId, continuedWith }) => {
       jobCompletedCounter.add(1, {
         typeName,
-        sequenceTypeName,
+        chainTypeName,
         workerId: workerId ?? "null",
         continued: continuedWith ? "true" : "false",
       });
     },
 
-    // job sequence
-    jobSequenceCreated: ({ typeName }) => {
-      jobSequenceCreatedCounter.add(1, { sequenceTypeName: typeName });
+    // job chain
+    jobChainCreated: ({ typeName }) => {
+      jobChainCreatedCounter.add(1, { chainTypeName: typeName });
     },
-    jobSequenceCompleted: ({ typeName }) => {
-      jobSequenceCompletedCounter.add(1, { sequenceTypeName: typeName });
+    jobChainCompleted: ({ typeName }) => {
+      jobChainCompletedCounter.add(1, { chainTypeName: typeName });
     },
 
     // blockers
-    jobBlocked: ({ typeName, sequenceTypeName }) => {
-      jobBlockedCounter.add(1, { typeName, sequenceTypeName });
+    jobBlocked: ({ typeName, chainTypeName }) => {
+      jobBlockedCounter.add(1, { typeName, chainTypeName });
     },
-    jobUnblocked: ({ typeName, sequenceTypeName }) => {
-      jobUnblockedCounter.add(1, { typeName, sequenceTypeName });
+    jobUnblocked: ({ typeName, chainTypeName }) => {
+      jobUnblockedCounter.add(1, { typeName, chainTypeName });
     },
 
     // notify adapter
-    notifyContextAbsence: ({ typeName, sequenceTypeName }) => {
-      notifyContextAbsenceCounter.add(1, { typeName, sequenceTypeName });
+    notifyContextAbsence: ({ typeName, chainTypeName }) => {
+      notifyContextAbsenceCounter.add(1, { typeName, chainTypeName });
     },
     notifyAdapterError: ({ operation }) => {
       notifyAdapterErrorCounter.add(1, { operation });
@@ -161,14 +161,14 @@ export const createOtelObservabilityAdapter = ({
     },
 
     // histograms
-    jobSequenceDuration: ({ typeName, durationMs }) => {
-      jobSequenceDurationHistogram.record(durationMs, { sequenceTypeName: typeName });
+    jobChainDuration: ({ typeName, durationMs }) => {
+      jobChainDurationHistogram.record(durationMs, { chainTypeName: typeName });
     },
-    jobDuration: ({ typeName, sequenceTypeName, durationMs }) => {
-      jobDurationHistogram.record(durationMs, { typeName, sequenceTypeName });
+    jobDuration: ({ typeName, chainTypeName, durationMs }) => {
+      jobDurationHistogram.record(durationMs, { typeName, chainTypeName });
     },
-    jobAttemptDuration: ({ typeName, sequenceTypeName, workerId, durationMs }) => {
-      jobAttemptDurationHistogram.record(durationMs, { typeName, sequenceTypeName, workerId });
+    jobAttemptDuration: ({ typeName, chainTypeName, workerId, durationMs }) => {
+      jobAttemptDurationHistogram.record(durationMs, { typeName, chainTypeName, workerId });
     },
 
     // gauges

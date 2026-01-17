@@ -97,12 +97,12 @@ export const createRedisNotifyAdapter = async <TContext>({
   channelPrefix = "queuert",
 }: CreateRedisNotifyAdapterOptions<TContext>): Promise<NotifyAdapter> => {
   const jobScheduledChannel = `${channelPrefix}:sched`;
-  const sequenceCompletedChannel = `${channelPrefix}:seqc`;
+  const chainCompletedChannel = `${channelPrefix}:chainc`;
   const ownershipLostChannel = `${channelPrefix}:owls`;
   const hintKeyPrefix = `${channelPrefix}:hint:`;
 
   const jobScheduledListener = createSharedListener(provider, jobScheduledChannel);
-  const sequenceCompletedListener = createSharedListener(provider, sequenceCompletedChannel);
+  const chainCompletedListener = createSharedListener(provider, chainCompletedChannel);
   const ownershipLostListener = createSharedListener(provider, ownershipLostChannel);
 
   return {
@@ -142,15 +142,15 @@ export const createRedisNotifyAdapter = async <TContext>({
       });
     },
 
-    notifyJobSequenceCompleted: async (sequenceId) => {
+    notifyJobChainCompleted: async (chainId) => {
       await provider.provideContext("command", async (ctx) => {
-        await provider.publish(ctx, sequenceCompletedChannel, sequenceId);
+        await provider.publish(ctx, chainCompletedChannel, chainId);
       });
     },
 
-    listenJobSequenceCompleted: async (sequenceId, onNotification) => {
-      return sequenceCompletedListener.subscribe((payload) => {
-        if (payload === sequenceId) {
+    listenJobChainCompleted: async (chainId, onNotification) => {
+      return chainCompletedListener.subscribe((payload) => {
+        if (payload === chainId) {
           onNotification();
         }
       });

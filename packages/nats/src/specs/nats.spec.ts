@@ -34,10 +34,10 @@ it("should work end-to-end with NATS notify adapter", async ({ natsConnectionOpt
     }>(),
   });
 
-  const jobSequence = await queuert.withNotify(async () =>
+  const jobChain = await queuert.withNotify(async () =>
     stateAdapter.provideContext(async (ctx) =>
       stateAdapter.runInTransaction(ctx, async (txCtx) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...txCtx,
           typeName: "test",
           input: { message: "hello from nats" },
@@ -55,7 +55,7 @@ it("should work end-to-end with NATS notify adapter", async ({ natsConnectionOpt
 
   const stopWorker = await worker.start();
 
-  await queuert.waitForJobSequenceCompletion(jobSequence, { timeoutMs: 5000 });
+  await queuert.waitForJobChainCompletion(jobChain, { timeoutMs: 5000 });
 
   await stopWorker();
 
@@ -85,10 +85,10 @@ it("should work end-to-end without JetStream KV", async ({ natsConnectionOptions
     }>(),
   });
 
-  const jobSequence = await queuert.withNotify(async () =>
+  const jobChain = await queuert.withNotify(async () =>
     stateAdapter.provideContext(async (ctx) =>
       stateAdapter.runInTransaction(ctx, async (txCtx) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...txCtx,
           typeName: "test",
           input: { value: 21 },
@@ -106,7 +106,7 @@ it("should work end-to-end without JetStream KV", async ({ natsConnectionOptions
 
   const stopWorker = await worker.start();
 
-  await queuert.waitForJobSequenceCompletion(jobSequence, { timeoutMs: 5000 });
+  await queuert.waitForJobChainCompletion(jobChain, { timeoutMs: 5000 });
 
   await stopWorker();
 

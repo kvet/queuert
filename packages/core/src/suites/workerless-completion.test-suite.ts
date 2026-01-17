@@ -9,7 +9,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     timeoutMs: 5000,
   };
 
-  it("completes a simple job sequence without worker", async ({
+  it("completes a simple job chain without worker", async ({
     stateAdapter,
     notifyAdapter,
     runInTransaction,
@@ -33,9 +33,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }>(),
     });
 
-    const jobSequence = await queuert.withNotify(async () =>
+    const jobChain = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...context,
           typeName: "test",
           input: { value: 42 },
@@ -43,12 +43,12 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       ),
     );
 
-    const completedSequence = await queuert.withNotify(async () =>
+    const completedChain = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.completeJobSequence({
+        queuert.completeJobChain({
           ...context,
           typeName: "test",
-          id: jobSequence.id,
+          id: jobChain.id,
           complete: async ({ job, complete }) => {
             expect(job.typeName).toEqual("test");
             expect(job.status).toEqual("pending");
@@ -60,25 +60,25 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       ),
     );
 
-    expectTypeOf<(typeof completedSequence)["status"]>().toEqualTypeOf<"completed">();
-    expect(completedSequence.output).toEqual({ result: 84 });
+    expectTypeOf<(typeof completedChain)["status"]>().toEqualTypeOf<"completed">();
+    expect(completedChain.output).toEqual({ result: 84 });
 
     expectLogs([
-      { type: "job_sequence_created", data: { input: { value: 42 } } },
+      { type: "job_chain_created", data: { input: { value: 42 } } },
       { type: "job_created", data: { input: { value: 42 } } },
       { type: "job_completed", data: { output: { result: 84 }, workerId: null } },
-      { type: "job_sequence_completed", data: { output: { result: 84 } } },
+      { type: "job_chain_completed", data: { output: { result: 84 } } },
     ]);
 
     await expectMetrics([
-      { method: "jobSequenceCreated", args: { input: { value: 42 } } },
+      { method: "jobChainCreated", args: { input: { value: 42 } } },
       { method: "jobCreated", args: { input: { value: 42 } } },
       { method: "jobCompleted", args: { output: { result: 84 }, workerId: null } },
-      { method: "jobSequenceCompleted", args: { output: { result: 84 } } },
+      { method: "jobChainCompleted", args: { output: { result: 84 } } },
     ]);
   });
 
-  it("completes a complex job sequence without worker", async ({
+  it("completes a complex job chain without worker", async ({
     stateAdapter,
     notifyAdapter,
     runInTransaction,
@@ -104,9 +104,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }>(),
     });
 
-    const jobSequence = await queuert.withNotify(async () =>
+    const jobChain = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...context,
           typeName: "awaiting-approval",
           input: { requestId: "req-123" },
@@ -114,14 +114,14 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       ),
     );
 
-    expect(jobSequence.status).toEqual("pending");
+    expect(jobChain.status).toEqual("pending");
 
-    const completedSequence = await queuert.withNotify(async () =>
+    const completedChain = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.completeJobSequence({
+        queuert.completeJobChain({
           ...context,
           typeName: "awaiting-approval",
-          id: jobSequence.id,
+          id: jobChain.id,
           complete: async ({ job, complete }) => {
             if (job.typeName === "awaiting-approval") {
               job = await complete(job, async ({ continueWith }) => {
@@ -138,11 +138,11 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       ),
     );
 
-    expectTypeOf<(typeof completedSequence)["status"]>().toEqualTypeOf<"completed">();
-    expect(completedSequence.output).toEqual({ done: true });
+    expectTypeOf<(typeof completedChain)["status"]>().toEqualTypeOf<"completed">();
+    expect(completedChain.output).toEqual({ done: true });
   });
 
-  it("partially completes a complex job sequence without worker", async ({
+  it("partially completes a complex job chain without worker", async ({
     stateAdapter,
     notifyAdapter,
     runInTransaction,
@@ -169,9 +169,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }>(),
     });
 
-    const jobSequence = await queuert.withNotify(async () =>
+    const jobChain = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...context,
           typeName: "awaiting-approval",
           input: { requestId: "req-123" },
@@ -179,14 +179,14 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       ),
     );
 
-    expect(jobSequence.status).toEqual("pending");
+    expect(jobChain.status).toEqual("pending");
 
-    const partiallyCompletedSequence = await queuert.withNotify(async () =>
+    const partiallyCompletedChain = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.completeJobSequence({
+        queuert.completeJobChain({
           ...context,
           typeName: "awaiting-approval",
-          id: jobSequence.id,
+          id: jobChain.id,
           complete: async ({ job, complete }) => {
             if (job.typeName === "awaiting-approval") {
               job = await complete(job, async ({ continueWith }) => {
@@ -211,13 +211,13 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     });
 
     await withWorkers([await worker.start()], async () => {
-      const succeededSequence = await queuert.waitForJobSequenceCompletion(
-        partiallyCompletedSequence,
+      const succeededChain = await queuert.waitForJobChainCompletion(
+        partiallyCompletedChain,
         completionOptions,
       );
 
-      expectTypeOf<(typeof succeededSequence)["status"]>().toEqualTypeOf<"completed">();
-      expect(succeededSequence.output).toEqual({ done: true });
+      expectTypeOf<(typeof succeededChain)["status"]>().toEqualTypeOf<"completed">();
+      expect(succeededChain.output).toEqual({ done: true });
     });
   });
 
@@ -243,9 +243,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }>(),
     });
 
-    const jobSequence = await queuert.withNotify(async () =>
+    const jobChain = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...context,
           typeName: "test",
           input: null,
@@ -255,10 +255,10 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.completeJobSequence({
+        queuert.completeJobChain({
           ...context,
           typeName: "test",
-          id: jobSequence.id,
+          id: jobChain.id,
           complete: async ({ job, complete }) => {
             return complete(job, async () => ({ result: false }));
           },
@@ -269,10 +269,10 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     await expect(
       queuert.withNotify(async () =>
         runInTransaction(async (context) =>
-          queuert.completeJobSequence({
+          queuert.completeJobChain({
             ...context,
             typeName: "test",
-            id: jobSequence.id,
+            id: jobChain.id,
             complete: async ({ job, complete }) => {
               return complete(job, async () => ({ result: false }));
             },
@@ -304,9 +304,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }>(),
     });
 
-    const jobSequence = await queuert.withNotify(async () =>
+    const jobChain = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...context,
           typeName: "test",
           input: { value: 42 },
@@ -315,12 +315,12 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
 
     const completeFn = vi.fn();
-    const updatedSequence = await queuert.withNotify(async () =>
+    const updatedChain = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.completeJobSequence({
+        queuert.completeJobChain({
           ...context,
           typeName: "test",
-          id: jobSequence.id,
+          id: jobChain.id,
           complete: completeFn,
         }),
       ),
@@ -331,8 +331,8 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         job: expect.objectContaining({ typeName: "test", status: "pending" }),
       }),
     );
-    expect(updatedSequence).toMatchObject({
-      id: jobSequence.id,
+    expect(updatedChain).toMatchObject({
+      id: jobChain.id,
       status: "pending",
     });
   });
@@ -384,9 +384,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       },
     });
 
-    const jobSequence = await queuert.withNotify(async () =>
+    const jobChain = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...context,
           typeName: "test",
           input: null,
@@ -400,10 +400,10 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
       await queuert.withNotify(async () =>
         runInTransaction(async (context) =>
-          queuert.completeJobSequence({
+          queuert.completeJobChain({
             ...context,
             typeName: "test",
-            id: jobSequence.id,
+            id: jobChain.id,
             complete: async ({ job, complete }) => {
               await complete(job, async () => ({ result: "from-external" }));
             },
@@ -416,7 +416,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     });
   });
 
-  it("correctly narrows sequenceTypeName in completeJobSequence", async ({
+  it("correctly narrows chainTypeName in completeJobChain", async ({
     stateAdapter,
     notifyAdapter,
     runInTransaction,
@@ -436,22 +436,22 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }>(),
     });
 
-    const jobSequence = await queuert.withNotify(async () =>
+    const jobChain = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({ ...context, typeName: "entryA", input: null }),
+        queuert.startJobChain({ ...context, typeName: "entryA", input: null }),
       ),
     );
 
     await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.completeJobSequence({
+        queuert.completeJobChain({
           ...context,
           typeName: "entryA",
-          id: jobSequence.id,
+          id: jobChain.id,
           complete: async ({ job, complete }) => {
-            // In completeJobSequence with typeName: "entryA", sequenceTypeName should be narrowed
-            expectTypeOf(job.sequenceTypeName).toEqualTypeOf<"entryA">();
-            expect(job.sequenceTypeName).toBe("entryA");
+            // In completeJobChain with typeName: "entryA", chainTypeName should be narrowed
+            expectTypeOf(job.chainTypeName).toEqualTypeOf<"entryA">();
+            expect(job.chainTypeName).toBe("entryA");
 
             if (job.typeName === "entryA") {
               job = await complete(job, async ({ continueWith }) =>
@@ -459,9 +459,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
               );
             }
 
-            // After continuing, job is now "shared" but sequenceTypeName is still "entryA"
-            expectTypeOf(job.sequenceTypeName).toEqualTypeOf<"entryA">();
-            expect(job.sequenceTypeName).toBe("entryA");
+            // After continuing, job is now "shared" but chainTypeName is still "entryA"
+            expectTypeOf(job.chainTypeName).toEqualTypeOf<"entryA">();
+            expect(job.chainTypeName).toBe("entryA");
 
             return complete(job, async () => ({ done: true }));
           },

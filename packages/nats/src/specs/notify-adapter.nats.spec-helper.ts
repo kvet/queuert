@@ -64,13 +64,13 @@ export const extendWithNatsNotify = <
             maybeThrow();
             return notifyAdapter.listenJobScheduled(typeNames, onNotification);
           },
-          notifyJobSequenceCompleted: async (sequenceId) => {
+          notifyJobChainCompleted: async (chainId) => {
             maybeThrow();
-            return notifyAdapter.notifyJobSequenceCompleted(sequenceId);
+            return notifyAdapter.notifyJobChainCompleted(chainId);
           },
-          listenJobSequenceCompleted: async (sequenceId, onNotification) => {
+          listenJobChainCompleted: async (chainId, onNotification) => {
             maybeThrow();
-            return notifyAdapter.listenJobSequenceCompleted(sequenceId, onNotification);
+            return notifyAdapter.listenJobChainCompleted(chainId, onNotification);
           },
           notifyJobOwnershipLost: async (jobId) => {
             maybeThrow();

@@ -23,10 +23,10 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
 
   const lock = createAsyncLock();
 
-  const getLastJobInSequence = (sequenceId: string): StateJob | undefined => {
+  const getLastJobInChain = (chainId: string): StateJob | undefined => {
     let lastJob: StateJob | undefined;
     for (const job of store.jobs.values()) {
-      if (job.sequenceId === sequenceId) {
+      if (job.chainId === chainId) {
         if (!lastJob || job.createdAt >= lastJob.createdAt) {
           lastJob = job;
         }
@@ -36,12 +36,12 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
   };
 
   const findExistingContinuation = (
-    sequenceId: string | undefined,
+    chainId: string | undefined,
     originId: string | undefined,
   ): StateJob | undefined => {
-    if (!sequenceId || !originId) return undefined;
+    if (!chainId || !originId) return undefined;
     for (const job of store.jobs.values()) {
-      if (job.sequenceId === sequenceId && job.originId === originId) {
+      if (job.chainId === chainId && job.originId === originId) {
         return job;
       }
     }
@@ -57,7 +57,7 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
 
     for (const job of store.jobs.values()) {
       if (job.deduplicationKey !== deduplication.key) continue;
-      if (job.id !== job.sequenceId) continue; // Only first jobs in sequence
+      if (job.id !== job.chainId) continue; // Only first jobs in chain
 
       if (strategy === "completed" && job.status === "completed") continue;
 
@@ -100,11 +100,11 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       return context.inTransaction === true;
     },
 
-    getJobSequenceById: async ({ jobId }) => {
+    getJobChainById: async ({ jobId }) => {
       const rootJob = store.jobs.get(jobId);
       if (!rootJob) return undefined;
 
-      const lastJob = getLastJobInSequence(jobId);
+      const lastJob = getLastJobInChain(jobId);
       return [rootJob, lastJob?.id !== rootJob.id ? lastJob : undefined];
     },
 
@@ -114,15 +114,15 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
 
     createJob: async ({
       typeName,
-      sequenceTypeName,
+      chainTypeName,
       input,
-      rootSequenceId,
-      sequenceId,
+      rootChainId,
+      chainId,
       originId,
       deduplication,
       schedule,
     }) => {
-      const existingContinuation = findExistingContinuation(sequenceId, originId);
+      const existingContinuation = findExistingContinuation(chainId, originId);
       if (existingContinuation) {
         return { job: existingContinuation, deduplicated: true };
       }
@@ -142,11 +142,11 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       const job: StateJob = {
         id,
         typeName,
-        sequenceTypeName,
+        chainTypeName,
         input,
         output: null,
-        rootSequenceId: rootSequenceId ?? id,
-        sequenceId: sequenceId ?? id,
+        rootChainId: rootChainId ?? id,
+        chainId: chainId ?? id,
         originId: originId ?? null,
         status: "pending",
         createdAt: now,
@@ -166,46 +166,46 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       return { job, deduplicated: false };
     },
 
-    addJobBlockers: async ({ jobId, blockedBySequenceIds }) => {
+    addJobBlockers: async ({ jobId, blockedByChainIds }) => {
       const job = store.jobs.get(jobId);
       if (!job) throw new Error("Job not found");
 
       const blockerMap = store.jobBlockers.get(jobId) ?? new Map<string, number>();
-      blockedBySequenceIds.forEach((seqId, index) => {
-        blockerMap.set(seqId, index);
+      blockedByChainIds.forEach((blockerChainId, index) => {
+        blockerMap.set(blockerChainId, index);
       });
       store.jobBlockers.set(jobId, blockerMap);
 
-      const incompleteBlockerSequenceIds: string[] = [];
-      for (const seqId of blockedBySequenceIds) {
-        const lastJob = getLastJobInSequence(seqId);
+      const incompleteBlockerChainIds: string[] = [];
+      for (const blockerChainId of blockedByChainIds) {
+        const lastJob = getLastJobInChain(blockerChainId);
         if (!lastJob || lastJob.status !== "completed") {
-          incompleteBlockerSequenceIds.push(seqId);
+          incompleteBlockerChainIds.push(blockerChainId);
         }
       }
 
-      if (incompleteBlockerSequenceIds.length > 0 && job.status === "pending") {
+      if (incompleteBlockerChainIds.length > 0 && job.status === "pending") {
         const updatedJob: StateJob = { ...job, status: "blocked", updatedAt: new Date() };
         store.jobs.set(jobId, updatedJob);
-        return { job: updatedJob, incompleteBlockerSequenceIds };
+        return { job: updatedJob, incompleteBlockerChainIds };
       }
 
-      return { job, incompleteBlockerSequenceIds: [] };
+      return { job, incompleteBlockerChainIds: [] };
     },
 
-    scheduleBlockedJobs: async ({ blockedBySequenceId }) => {
+    scheduleBlockedJobs: async ({ blockedByChainId }) => {
       const scheduledJobs: StateJob[] = [];
       const now = new Date();
 
       for (const [jobId, blockerMap] of store.jobBlockers) {
-        if (!blockerMap.has(blockedBySequenceId)) continue;
+        if (!blockerMap.has(blockedByChainId)) continue;
 
         const job = store.jobs.get(jobId);
         if (!job || job.status !== "blocked") continue;
 
         let allComplete = true;
-        for (const seqId of blockerMap.keys()) {
-          const lastJob = getLastJobInSequence(seqId);
+        for (const blockerChainId of blockerMap.keys()) {
+          const lastJob = getLastJobInChain(blockerChainId);
           if (!lastJob || lastJob.status !== "completed") {
             allComplete = false;
             break;
@@ -234,11 +234,11 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       const entries = Array.from(blockerMap.entries()).sort((a, b) => a[1] - b[1]);
 
       const result: [StateJob, StateJob | undefined][] = [];
-      for (const [seqId] of entries) {
-        const rootJob = store.jobs.get(seqId);
+      for (const [blockerChainId] of entries) {
+        const rootJob = store.jobs.get(blockerChainId);
         if (!rootJob) continue;
 
-        const lastJob = getLastJobInSequence(seqId);
+        const lastJob = getLastJobInChain(blockerChainId);
         result.push([rootJob, lastJob?.id !== rootJob.id ? lastJob : undefined]);
       }
 
@@ -383,25 +383,25 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       return updatedJob;
     },
 
-    getExternalBlockers: async ({ rootSequenceIds }) => {
-      const result: { jobId: string; blockedRootSequenceId: string }[] = [];
-      const rootSequenceIdSet = new Set(rootSequenceIds);
+    getExternalBlockers: async ({ rootChainIds }) => {
+      const result: { jobId: string; blockedRootChainId: string }[] = [];
+      const rootChainIdSet = new Set(rootChainIds);
 
-      const sequenceIdsInRoots = new Set<string>();
+      const chainIdsInRoots = new Set<string>();
       for (const job of store.jobs.values()) {
-        if (rootSequenceIdSet.has(job.rootSequenceId)) {
-          sequenceIdsInRoots.add(job.sequenceId);
+        if (rootChainIdSet.has(job.rootChainId)) {
+          chainIdsInRoots.add(job.chainId);
         }
       }
 
       for (const [jobId, blockerMap] of store.jobBlockers) {
         const job = store.jobs.get(jobId);
         if (!job) continue;
-        if (rootSequenceIdSet.has(job.rootSequenceId)) continue;
+        if (rootChainIdSet.has(job.rootChainId)) continue;
 
-        for (const seqId of blockerMap.keys()) {
-          if (sequenceIdsInRoots.has(seqId)) {
-            result.push({ jobId, blockedRootSequenceId: job.rootSequenceId });
+        for (const blockerChainId of blockerMap.keys()) {
+          if (chainIdsInRoots.has(blockerChainId)) {
+            result.push({ jobId, blockedRootChainId: job.rootChainId });
             break;
           }
         }
@@ -410,12 +410,12 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       return result;
     },
 
-    deleteJobsByRootSequenceIds: async ({ rootSequenceIds }) => {
+    deleteJobsByRootChainIds: async ({ rootChainIds }) => {
       const deletedJobs: StateJob[] = [];
-      const rootSequenceIdSet = new Set(rootSequenceIds);
+      const rootChainIdSet = new Set(rootChainIds);
 
       for (const [jobId, job] of store.jobs) {
-        if (rootSequenceIdSet.has(job.rootSequenceId)) {
+        if (rootChainIdSet.has(job.rootChainId)) {
           deletedJobs.push(job);
           store.jobs.delete(jobId);
           store.jobBlockers.delete(jobId);
@@ -423,9 +423,9 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       }
 
       for (const blockerMap of store.jobBlockers.values()) {
-        for (const seqId of blockerMap.keys()) {
-          if (!store.jobs.has(seqId)) {
-            blockerMap.delete(seqId);
+        for (const blockerChainId of blockerMap.keys()) {
+          if (!store.jobs.has(blockerChainId)) {
+            blockerMap.delete(blockerChainId);
           }
         }
       }
@@ -437,8 +437,8 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       return store.jobs.get(jobId);
     },
 
-    getCurrentJobForUpdate: async ({ sequenceId }) => {
-      return getLastJobInSequence(sequenceId);
+    getCurrentJobForUpdate: async ({ chainId }) => {
+      return getLastJobInChain(chainId);
     },
   };
 };

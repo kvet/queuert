@@ -1,8 +1,8 @@
 import {
-  CompletedJobSequence,
-  JobSequence,
-  mapStateJobPairToJobSequence,
-} from "../entities/job-sequence.js";
+  CompletedJobChain,
+  JobChain,
+  mapStateJobPairToJobChain,
+} from "../entities/job-chain.js";
 import {
   BaseJobTypeDefinitions,
   ContinuationJobs,
@@ -10,7 +10,7 @@ import {
   EntryJobTypeDefinitions,
   HasBlockers,
   JobOf,
-  SequenceTypesReaching,
+  ChainTypesReaching,
 } from "../entities/job-type.js";
 import { CompletedJob, CreatedJob, Job, mapStateJobToJob, RunningJob } from "../entities/job.js";
 import { ScheduleOptions } from "../entities/schedule.js";
@@ -68,7 +68,7 @@ export type CompleteCallbackOptions<
   TStateAdapter extends StateAdapter<BaseStateAdapterContext, BaseStateAdapterContext, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions & string,
-  TSequenceTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
+  TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
 > = {
   continueWith: <
     TContinueJobTypeName extends ContinuationJobTypes<TJobTypeDefinitions, TJobTypeName> & string,
@@ -79,7 +79,7 @@ export type CompleteCallbackOptions<
         GetStateAdapterJobId<TStateAdapter>,
         TJobTypeDefinitions,
         TContinueJobTypeName,
-        TSequenceTypeName
+        TChainTypeName
       >["input"];
       schedule?: ScheduleOptions;
     } & (HasBlockers<TJobTypeDefinitions, TContinueJobTypeName> extends true
@@ -97,7 +97,7 @@ export type CompleteCallbackOptions<
         GetStateAdapterJobId<TStateAdapter>,
         TJobTypeDefinitions,
         TContinueJobTypeName,
-        TSequenceTypeName
+        TChainTypeName
       >
     >
   >;
@@ -113,7 +113,7 @@ export type CompleteCallback<
     TStateAdapter,
     TJobTypeDefinitions,
     TJobTypeName,
-    SequenceTypesReaching<TJobTypeDefinitions, TJobTypeName>
+    ChainTypesReaching<TJobTypeDefinitions, TJobTypeName>
   >,
 ) => Promise<TResult>;
 
@@ -128,7 +128,7 @@ export type CompleteFn<
         GetStateAdapterJobId<TStateAdapter>,
         TJobTypeDefinitions,
         TJobTypeName,
-        SequenceTypesReaching<TJobTypeDefinitions, TJobTypeName>
+        ChainTypesReaching<TJobTypeDefinitions, TJobTypeName>
       >,
 >(
   completeCallback: (
@@ -136,7 +136,7 @@ export type CompleteFn<
       TStateAdapter,
       TJobTypeDefinitions,
       TJobTypeName,
-      SequenceTypesReaching<TJobTypeDefinitions, TJobTypeName>
+      ChainTypesReaching<TJobTypeDefinitions, TJobTypeName>
     >,
   ) => Promise<TReturn>,
 ) => Promise<
@@ -146,14 +146,14 @@ export type CompleteFn<
           GetStateAdapterJobId<TStateAdapter>,
           TJobTypeDefinitions,
           TJobTypeName,
-          SequenceTypesReaching<TJobTypeDefinitions, TJobTypeName>
+          ChainTypesReaching<TJobTypeDefinitions, TJobTypeName>
         >
       >
     : ContinuationJobs<
         GetStateAdapterJobId<TStateAdapter>,
         TJobTypeDefinitions,
         TJobTypeName,
-        SequenceTypesReaching<TJobTypeDefinitions, TJobTypeName>
+        ChainTypesReaching<TJobTypeDefinitions, TJobTypeName>
       >
 >;
 
@@ -185,7 +185,7 @@ export type JobProcessFn<
       GetStateAdapterJobId<TStateAdapter>,
       TJobTypeDefinitions,
       TJobTypeName,
-      SequenceTypesReaching<TJobTypeDefinitions, TJobTypeName>
+      ChainTypesReaching<TJobTypeDefinitions, TJobTypeName>
     >
   >;
   prepare: PrepareFn<TStateAdapter>;
@@ -196,14 +196,14 @@ export type JobProcessFn<
         GetStateAdapterJobId<TStateAdapter>,
         TJobTypeDefinitions,
         TJobTypeName,
-        SequenceTypesReaching<TJobTypeDefinitions, TJobTypeName>
+        ChainTypesReaching<TJobTypeDefinitions, TJobTypeName>
       >
     >
   | ContinuationJobs<
       GetStateAdapterJobId<TStateAdapter>,
       TJobTypeDefinitions,
       TJobTypeName,
-      SequenceTypesReaching<TJobTypeDefinitions, TJobTypeName>
+      ChainTypesReaching<TJobTypeDefinitions, TJobTypeName>
     >
 >;
 
@@ -314,8 +314,8 @@ export const runJobProcess = async ({
       const blockerPairs = await helper.getJobBlockers({ jobId: job.id, context });
       const runningJob = {
         ...mapStateJobToJob(job),
-        blockers: blockerPairs.map(mapStateJobPairToJobSequence) as CompletedJobSequence<
-          JobSequence<any, any, any, any>
+        blockers: blockerPairs.map(mapStateJobPairToJobChain) as CompletedJobChain<
+          JobChain<any, any, any, any>
         >[],
       } as RunningJob<JobOf<any, any, any, any>>;
 
@@ -410,7 +410,7 @@ export const runJobProcess = async ({
           const completedStateJob = await helper.finishJob(
             continuedJob
               ? { job, context, workerId, type: "continueWith", continuedJob }
-              : { job, context, workerId, type: "completeSequence", output },
+              : { job, context, workerId, type: "completeChain", output },
           );
           return (
             continuedJob ?? {

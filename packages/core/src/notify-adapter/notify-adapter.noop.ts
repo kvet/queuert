@@ -6,8 +6,8 @@ export const createNoopNotifyAdapter = (): NotifyAdapter => {
   return {
     notifyJobScheduled: async () => {},
     listenJobScheduled: async () => noop,
-    notifyJobSequenceCompleted: async () => {},
-    listenJobSequenceCompleted: async () => noop,
+    notifyJobChainCompleted: async () => {},
+    listenJobChainCompleted: async () => noop,
     notifyJobOwnershipLost: async () => {},
     listenJobOwnershipLost: async () => noop,
   };

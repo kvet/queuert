@@ -1,10 +1,10 @@
 import { TestAPI } from "vitest";
 import { sleep } from "../helpers/sleep.js";
-import { createQueuert, defineJobTypes, JobSequence } from "../index.js";
+import { createQueuert, defineJobTypes, JobChain } from "../index.js";
 import { TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
-  it("deletes job sequence and all jobs in the tree", async ({
+  it("deletes job chain and all jobs in the tree", async ({
     stateAdapter,
     notifyAdapter,
     runInTransaction,
@@ -26,9 +26,9 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       }>(),
     });
 
-    const jobSequence = await queuert.withNotify(async () =>
+    const jobChain = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...context,
           typeName: "test",
           input: { value: 1 },
@@ -37,19 +37,19 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     );
 
     await runInTransaction(async (context) =>
-      queuert.deleteJobSequences({
+      queuert.deleteJobChains({
         ...context,
-        rootSequenceIds: [jobSequence.id],
+        rootChainIds: [jobChain.id],
       }),
     );
 
     await runInTransaction(async (context) => {
-      const fetchedJobSequence = await queuert.getJobSequence({
+      const fetchedJobChain = await queuert.getJobChain({
         ...context,
-        id: jobSequence.id,
+        id: jobChain.id,
         typeName: "test",
       });
-      expect(fetchedJobSequence).toBeNull();
+      expect(fetchedJobChain).toBeNull();
     });
   });
 
@@ -94,9 +94,9 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       leaseConfig: { leaseMs: 1000, renewIntervalMs: 100 },
     });
 
-    const jobSequence = await queuert.withNotify(async () =>
+    const jobChain = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...context,
           typeName: "test",
           input: null,
@@ -108,9 +108,9 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       await jobStarted.promise;
 
       await runInTransaction(async (context) =>
-        queuert.deleteJobSequences({
+        queuert.deleteJobChains({
           ...context,
-          rootSequenceIds: [jobSequence.id],
+          rootChainIds: [jobChain.id],
         }),
       );
 
@@ -118,7 +118,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     });
   });
 
-  it("throws error when deleting sequence with external blockers", async ({
+  it("throws error when deleting chain with external blockers", async ({
     stateAdapter,
     notifyAdapter,
     runInTransaction,
@@ -172,9 +172,9 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
         },
       });
 
-    const blockerSequence = await queuert.withNotify(async () =>
+    const blockerChain = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...context,
           typeName: "blocker",
           input: { value: 1 },
@@ -182,33 +182,33 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       ),
     );
 
-    const mainSequence = await queuert.withNotify(async () =>
+    const mainChain = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...context,
           typeName: "main",
           input: null,
-          startBlockers: async () => [blockerSequence],
+          startBlockers: async () => [blockerChain],
         }),
       ),
     );
 
-    expect(mainSequence.status).toBe("blocked");
+    expect(mainChain.status).toBe("blocked");
 
     await withWorkers(await Promise.all([worker.start(), worker.start()]), async () => {
       await expect(
         runInTransaction(async (context) =>
-          queuert.deleteJobSequences({
+          queuert.deleteJobChains({
             ...context,
-            rootSequenceIds: [blockerSequence.id],
+            rootChainIds: [blockerChain.id],
           }),
         ),
-      ).rejects.toThrow("external job sequences depend on them");
+      ).rejects.toThrow("external job chains depend on them");
 
       await runInTransaction(async (context) =>
-        queuert.deleteJobSequences({
+        queuert.deleteJobChains({
           ...context,
-          rootSequenceIds: [blockerSequence.id, mainSequence.id],
+          rootChainIds: [blockerChain.id, mainChain.id],
         }),
       );
 
@@ -216,14 +216,14 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     });
 
     await runInTransaction(async (context) => {
-      const fetchedBlocker = await queuert.getJobSequence({
+      const fetchedBlocker = await queuert.getJobChain({
         ...context,
-        id: blockerSequence.id,
+        id: blockerChain.id,
         typeName: "blocker",
       });
-      const fetchedMain = await queuert.getJobSequence({
+      const fetchedMain = await queuert.getJobChain({
         ...context,
-        id: mainSequence.id,
+        id: mainChain.id,
         typeName: "main",
       });
 
@@ -232,7 +232,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     });
   });
 
-  it("throws error when trying to delete non-root sequence", async ({
+  it("throws error when trying to delete non-root chain", async ({
     stateAdapter,
     notifyAdapter,
     runInTransaction,
@@ -260,20 +260,20 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       }>(),
     });
 
-    let blockerSequence: JobSequence<string, "blocker", { value: number }, { result: number }>;
-    const mainSequence = await queuert.withNotify(async () =>
+    let blockerChain: JobChain<string, "blocker", { value: number }, { result: number }>;
+    const mainChain = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...context,
           typeName: "main",
           input: null,
           startBlockers: async () => {
-            blockerSequence = await queuert.startJobSequence({
+            blockerChain = await queuert.startJobChain({
               ...context,
               typeName: "blocker",
               input: { value: 1 },
             });
-            return [blockerSequence];
+            return [blockerChain];
           },
         }),
       ),
@@ -281,17 +281,17 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
 
     await expect(
       runInTransaction(async (context) =>
-        queuert.deleteJobSequences({
+        queuert.deleteJobChains({
           ...context,
-          rootSequenceIds: [blockerSequence.id],
+          rootChainIds: [blockerChain.id],
         }),
       ),
-    ).rejects.toThrow("must delete from the root sequence");
+    ).rejects.toThrow("must delete from the root chain");
 
     await runInTransaction(async (context) =>
-      queuert.deleteJobSequences({
+      queuert.deleteJobChains({
         ...context,
-        rootSequenceIds: [mainSequence.id],
+        rootChainIds: [mainChain.id],
       }),
     );
   });
@@ -338,9 +338,9 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       leaseConfig: { leaseMs: 100, renewIntervalMs: 10 },
     });
 
-    const jobSequence = await queuert.withNotify(async () =>
+    const jobChain = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...context,
           typeName: "test",
           input: null,
@@ -352,9 +352,9 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       await jobStarted.promise;
 
       await runInTransaction(async (context) =>
-        queuert.deleteJobSequences({
+        queuert.deleteJobChains({
           ...context,
-          rootSequenceIds: [jobSequence.id],
+          rootChainIds: [jobChain.id],
         }),
       );
 

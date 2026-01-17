@@ -31,7 +31,7 @@ const stopQrtWorker = await qrtWorker.start();
 
 // 5. Create a user and queue a job atomically in the same transaction
 //    withNotify() batches notifications and dispatches them after the transaction commits
-const jobSequence = await qrt.withNotify(async () => {
+const jobChain = await qrt.withNotify(async () => {
   const poolClient = await db.connect();
   try {
     await poolClient.query("BEGIN");
@@ -42,7 +42,7 @@ const jobSequence = await qrt.withNotify(async () => {
     );
     const user = userResult.rows[0];
 
-    const result = await qrt.startJobSequence({
+    const result = await qrt.startJobChain({
       poolClient,
       typeName: "add_pet_to_user",
       input: { userId: user.id, petName: "Fluffy" },
@@ -58,8 +58,8 @@ const jobSequence = await qrt.withNotify(async () => {
   }
 });
 
-// 6. Wait for the job sequence to complete
-await qrt.waitForJobSequenceCompletion(jobSequence, { timeoutMs: 1000 });
+// 6. Wait for the job chain to complete
+await qrt.waitForJobChainCompletion(jobChain, { timeoutMs: 1000 });
 
 // 7. Cleanup
 await stopQrtWorker();

@@ -1,4 +1,4 @@
-export { type CompletedJobSequence, type JobSequence } from "./entities/job-sequence.js";
+export { type CompletedJobChain, type JobChain } from "./entities/job-chain.js";
 export {
   createJobTypeRegistry,
   type JobTypeReference,
@@ -27,7 +27,7 @@ export {
   JobTakenByAnotherWorkerError,
   JobTypeValidationError,
   StateNotInTransactionError,
-  WaitForJobSequenceCompletionTimeoutError,
+  WaitForJobChainCompletionTimeoutError,
   type JobTypeValidationErrorCode,
 } from "./queuert-helper.js";
 export { createQueuert, type Queuert, type QueuertWorkerDefinition } from "./queuert.js";

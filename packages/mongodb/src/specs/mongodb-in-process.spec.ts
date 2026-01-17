@@ -1,6 +1,6 @@
 import { extendWithMongodb, TESTCONTAINER_RESOURCE_TYPES } from "@queuert/testcontainers";
 import {
-  blockerSequencesTestSuite,
+  blockerChainsTestSuite,
   extendWithCommon,
   extendWithInProcessNotify,
   extendWithResourceLeakDetection,
@@ -8,9 +8,9 @@ import {
   processTestSuite,
   reaperTestSuite,
   schedulingTestSuite,
-  sequencesTestSuite,
+  chainsTestSuite,
   stateResilienceTestSuite,
-  waitSequenceCompletionTestSuite,
+  waitChainCompletionTestSuite,
   workerlessCompletionTestSuite,
   workerTestSuite,
 } from "queuert/testing";
@@ -54,16 +54,16 @@ describe("Reaper", () => {
   reaperTestSuite({ it: mongodbInProcessIt });
 });
 
-describe("Sequences", () => {
-  sequencesTestSuite({ it: mongodbInProcessIt });
+describe("Chains", () => {
+  chainsTestSuite({ it: mongodbInProcessIt });
 });
 
-describe("Blocker Sequences", () => {
-  blockerSequencesTestSuite({ it: mongodbInProcessIt });
+describe("Blocker Chains", () => {
+  blockerChainsTestSuite({ it: mongodbInProcessIt });
 });
 
-describe("Wait Sequence Completion", () => {
-  waitSequenceCompletionTestSuite({ it: mongodbInProcessIt });
+describe("Wait Chain Completion", () => {
+  waitChainCompletionTestSuite({ it: mongodbInProcessIt });
 });
 
 describe("State Resilience", () => {

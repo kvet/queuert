@@ -21,7 +21,7 @@ interface JobTypeRegistry<TJobTypeDefinitions = unknown> {
 
 | BaseJobTypeDefinition             | Registry Method                        | Purpose                                 |
 | --------------------------------- | -------------------------------------- | --------------------------------------- |
-| `entry?: boolean`                 | `validateEntry(typeName)`              | Validates job type can start a sequence |
+| `entry?: boolean`                 | `validateEntry(typeName)`              | Validates job type can start a chain    |
 | `input: unknown`                  | `parseInput(typeName, input)`          | Parses and validates job input          |
 | `output?: unknown`                | `parseOutput(typeName, output)`        | Parses and validates job output         |
 | `continueWith?: JobTypeReference` | `validateContinueWith(typeName, to)`   | Validates continuation target           |

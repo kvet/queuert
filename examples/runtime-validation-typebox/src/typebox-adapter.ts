@@ -20,7 +20,7 @@ type PartialJobTypeReference = { typeName?: string; input?: unknown };
  * Schema definition for a single job type using TypeBox.
  */
 export type TypeBoxJobTypeSchema = {
-  /** Whether this job type can start a sequence (entry point). Default: false */
+  /** Whether this job type can start a chain (entry point). Default: false */
   entry?: boolean;
   /** TypeBox schema for validating job input */
   input: TSchema;

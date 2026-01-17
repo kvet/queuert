@@ -131,7 +131,7 @@ export const extendWithCommon = <
       async ({ observabilityAdapter, expect }, use) => {
         const excludedMethods = new Set([
           // histograms
-          "jobSequenceDuration",
+          "jobChainDuration",
           "jobDuration",
           "jobAttemptDuration",
           // gauges
@@ -163,7 +163,7 @@ export const extendWithCommon = <
     expectHistograms: [
       async ({ observabilityAdapter, expect }, use) => {
         const histogramMethods = new Set([
-          "jobSequenceDuration",
+          "jobChainDuration",
           "jobDuration",
           "jobAttemptDuration",
         ]);

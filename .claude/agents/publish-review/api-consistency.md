@@ -110,7 +110,7 @@ Type exports should follow consistent conventions.
 
 - `StateAdapter`, `NotifyAdapter`, `ObservabilityAdapter`
 - Provider types for each adapter
-- Job types, sequence types
+- Job types, chain types
 
 ### 5. Testing Export Patterns
 

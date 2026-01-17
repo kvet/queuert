@@ -1,4 +1,4 @@
-import { CompletedJobSequence, JobSequence } from "./job-sequence.types.js";
+import { CompletedJobChain, JobChain } from "./job-chain.types.js";
 import {
   BaseJobTypeDefinitions,
   JobTypeReference,
@@ -61,7 +61,7 @@ export type ContinuationJobTypes<
   ? ResolveReference<TJobTypeDefinitions, CT>
   : never;
 
-export type SequenceJobTypes<
+export type ChainJobTypes<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions,
   Visited extends keyof TJobTypeDefinitions = never,
@@ -70,18 +70,18 @@ export type SequenceJobTypes<
   :
       | TJobTypeName
       | {
-          [K in ContinuationJobTypes<TJobTypeDefinitions, TJobTypeName>]: SequenceJobTypes<
+          [K in ContinuationJobTypes<TJobTypeDefinitions, TJobTypeName>]: ChainJobTypes<
             TJobTypeDefinitions,
             K,
             Visited | TJobTypeName
           >;
         }[ContinuationJobTypes<TJobTypeDefinitions, TJobTypeName>];
 
-export type SequenceTypesReaching<
+export type ChainTypesReaching<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions,
 > = {
-  [K in keyof EntryJobTypeDefinitions<TJobTypeDefinitions>]: TJobTypeName extends SequenceJobTypes<
+  [K in keyof EntryJobTypeDefinitions<TJobTypeDefinitions>]: TJobTypeName extends ChainJobTypes<
     TJobTypeDefinitions,
     K
   >
@@ -93,68 +93,68 @@ export type JobOf<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions,
-  TSequenceTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string =
-    SequenceTypesReaching<TJobTypeDefinitions, TJobTypeName>,
+  TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string =
+    ChainTypesReaching<TJobTypeDefinitions, TJobTypeName>,
 > = Job<
   TJobId,
   TJobTypeName,
-  TSequenceTypeName,
+  TChainTypeName,
   ExtractInputType<TJobTypeDefinitions[TJobTypeName]>,
-  CompletedBlockerSequences<TJobId, TJobTypeDefinitions, TJobTypeName & string>
+  CompletedBlockerChains<TJobId, TJobTypeDefinitions, TJobTypeName & string>
 >;
 
 export type ContinuationJobs<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions & string,
-  TSequenceTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string =
-    SequenceTypesReaching<TJobTypeDefinitions, TJobTypeName>,
+  TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string =
+    ChainTypesReaching<TJobTypeDefinitions, TJobTypeName>,
 > = {
   [K in ContinuationJobTypes<TJobTypeDefinitions, TJobTypeName>]: CreatedJob<
-    JobWithoutBlockers<JobOf<TJobId, TJobTypeDefinitions, K, TSequenceTypeName>>
+    JobWithoutBlockers<JobOf<TJobId, TJobTypeDefinitions, K, TChainTypeName>>
   >;
 }[ContinuationJobTypes<TJobTypeDefinitions, TJobTypeName>];
 
-export type JobSequenceOf<
+export type JobChainOf<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName,
 > = TJobTypeName extends keyof TJobTypeDefinitions
   ? {
-      [K in SequenceJobTypes<TJobTypeDefinitions, TJobTypeName> &
-        keyof TJobTypeDefinitions]: JobSequence<
+      [K in ChainJobTypes<TJobTypeDefinitions, TJobTypeName> &
+        keyof TJobTypeDefinitions]: JobChain<
         TJobId,
         TJobTypeName & string,
         ExtractInputType<TJobTypeDefinitions[K]>,
         ExtractOutputType<TJobTypeDefinitions[K]>
       >;
-    }[SequenceJobTypes<TJobTypeDefinitions, TJobTypeName> & keyof TJobTypeDefinitions]
+    }[ChainJobTypes<TJobTypeDefinitions, TJobTypeName> & keyof TJobTypeDefinitions]
   : never;
 
 type GetBlockersProperty<T> = T extends { blockers: infer B } ? B : never;
 
-// Map reference to sequence type
-type ReferenceToSequence<
+// Map reference to chain type
+type ReferenceToChain<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TRef,
-> = JobSequenceOf<TJobId, TJobTypeDefinitions, ResolveReference<TJobTypeDefinitions, TRef>>;
+> = JobChainOf<TJobId, TJobTypeDefinitions, ResolveReference<TJobTypeDefinitions, TRef>>;
 
-// Updated to handle references (replaces MapStringBlockersToSequences)
-type MapBlockersToSequences<
+// Updated to handle references (replaces MapStringBlockersToChains)
+type MapBlockersToChains<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TBlockers,
 > = TBlockers extends readonly [infer First extends JobTypeReference, ...infer Rest]
   ? [
-      ReferenceToSequence<TJobId, TJobTypeDefinitions, First>,
-      ...MapBlockersToSequences<TJobId, TJobTypeDefinitions, Rest>,
+      ReferenceToChain<TJobId, TJobTypeDefinitions, First>,
+      ...MapBlockersToChains<TJobId, TJobTypeDefinitions, Rest>,
     ]
   : TBlockers extends readonly (infer TElement extends JobTypeReference)[]
-    ? ReferenceToSequence<TJobId, TJobTypeDefinitions, TElement>[]
+    ? ReferenceToChain<TJobId, TJobTypeDefinitions, TElement>[]
     : [];
 
-export type BlockerSequences<
+export type BlockerChains<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions,
@@ -163,35 +163,35 @@ export type BlockerSequences<
     ? [TBlockers] extends [never]
       ? []
       : TBlockers extends readonly unknown[]
-        ? MapBlockersToSequences<TJobId, TJobTypeDefinitions, TBlockers>
+        ? MapBlockersToChains<TJobId, TJobTypeDefinitions, TBlockers>
         : []
     : [];
 
 export type HasBlockers<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions,
-> = BlockerSequences<string, TJobTypeDefinitions, TJobTypeName> extends [] ? false : true;
+> = BlockerChains<string, TJobTypeDefinitions, TJobTypeName> extends [] ? false : true;
 
-type MapToCompletedSequences<TBlockers> = TBlockers extends [
-  infer First extends JobSequence<string, string, unknown, unknown>,
+type MapToCompletedChains<TBlockers> = TBlockers extends [
+  infer First extends JobChain<string, string, unknown, unknown>,
   ...infer Rest,
 ]
-  ? [CompletedJobSequence<First>, ...MapToCompletedSequences<Rest>]
-  : TBlockers extends (infer TElement extends JobSequence<string, string, unknown, unknown>)[]
-    ? CompletedJobSequence<TElement>[]
+  ? [CompletedJobChain<First>, ...MapToCompletedChains<Rest>]
+  : TBlockers extends (infer TElement extends JobChain<string, string, unknown, unknown>)[]
+    ? CompletedJobChain<TElement>[]
     : [];
 
-export type CompletedBlockerSequences<
+export type CompletedBlockerChains<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions,
-> = MapToCompletedSequences<BlockerSequences<TJobId, TJobTypeDefinitions, TJobTypeName>>;
+> = MapToCompletedChains<BlockerChains<TJobId, TJobTypeDefinitions, TJobTypeName>>;
 
-export type SequenceJobs<
+export type ChainJobs<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TSequenceTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
+  TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
 > = {
-  [K in SequenceJobTypes<TJobTypeDefinitions, TSequenceTypeName> &
-    keyof TJobTypeDefinitions]: JobOf<TJobId, TJobTypeDefinitions, K, TSequenceTypeName>;
-}[SequenceJobTypes<TJobTypeDefinitions, TSequenceTypeName> & keyof TJobTypeDefinitions];
+  [K in ChainJobTypes<TJobTypeDefinitions, TChainTypeName> &
+    keyof TJobTypeDefinitions]: JobOf<TJobId, TJobTypeDefinitions, K, TChainTypeName>;
+}[ChainJobTypes<TJobTypeDefinitions, TChainTypeName> & keyof TJobTypeDefinitions];

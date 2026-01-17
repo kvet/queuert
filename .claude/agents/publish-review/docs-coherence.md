@@ -23,7 +23,7 @@ Read and analyze these files:
 
 **Example issues to find:**
 
-- README says "job chain" but CLAUDE.md says "job sequence"
+- README says "job chain" but CLAUDE.md says "job chain"
 - Different descriptions of what `originId` means
 - Inconsistent use of "blocker" vs "dependency"
 

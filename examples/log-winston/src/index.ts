@@ -71,7 +71,7 @@ logger.info("--- Running successful job ---");
 const successJob = await qrt.withNotify(async () =>
   stateAdapter.provideContext(async (ctx) =>
     stateAdapter.runInTransaction(ctx, async (ctx) =>
-      qrt.startJobSequence({
+      qrt.startJobChain({
         ...ctx,
         typeName: "greet",
         input: { name: "World" },
@@ -80,7 +80,7 @@ const successJob = await qrt.withNotify(async () =>
   ),
 );
 
-const successCompleted = await qrt.waitForJobSequenceCompletion(successJob, {
+const successCompleted = await qrt.waitForJobChainCompletion(successJob, {
   timeoutMs: 5000,
 });
 logger.info("Successful job completed", { output: successCompleted.output });
@@ -90,7 +90,7 @@ logger.info("--- Running job that fails first attempt ---");
 const failThenSucceedJob = await qrt.withNotify(async () =>
   stateAdapter.provideContext(async (ctx) =>
     stateAdapter.runInTransaction(ctx, async (ctx) =>
-      qrt.startJobSequence({
+      qrt.startJobChain({
         ...ctx,
         typeName: "might-fail",
         input: { shouldFail: true },
@@ -99,7 +99,7 @@ const failThenSucceedJob = await qrt.withNotify(async () =>
   ),
 );
 
-const retryCompleted = await qrt.waitForJobSequenceCompletion(failThenSucceedJob, {
+const retryCompleted = await qrt.waitForJobChainCompletion(failThenSucceedJob, {
   timeoutMs: 5000,
 });
 logger.info("Retry job completed after failure", { output: retryCompleted.output });

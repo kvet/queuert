@@ -32,7 +32,7 @@ export const wrapStateAdapterWithLogging = <
     isInTransaction: stateAdapter.isInTransaction,
 
     // Operation methods - wrap with error logging
-    getJobSequenceById: wrap("getJobSequenceById", stateAdapter.getJobSequenceById),
+    getJobChainById: wrap("getJobChainById", stateAdapter.getJobChainById),
     getJobById: wrap("getJobById", stateAdapter.getJobById),
     createJob: wrap("createJob", stateAdapter.createJob),
     addJobBlockers: wrap("addJobBlockers", stateAdapter.addJobBlockers),
@@ -45,9 +45,9 @@ export const wrapStateAdapterWithLogging = <
     completeJob: wrap("completeJob", stateAdapter.completeJob),
     removeExpiredJobLease: wrap("removeExpiredJobLease", stateAdapter.removeExpiredJobLease),
     getExternalBlockers: wrap("getExternalBlockers", stateAdapter.getExternalBlockers),
-    deleteJobsByRootSequenceIds: wrap(
-      "deleteJobsByRootSequenceIds",
-      stateAdapter.deleteJobsByRootSequenceIds,
+    deleteJobsByRootChainIds: wrap(
+      "deleteJobsByRootChainIds",
+      stateAdapter.deleteJobsByRootChainIds,
     ),
     getJobForUpdate: wrap("getJobForUpdate", stateAdapter.getJobForUpdate),
     getCurrentJobForUpdate: wrap("getCurrentJobForUpdate", stateAdapter.getCurrentJobForUpdate),

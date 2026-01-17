@@ -3,7 +3,7 @@ import { createQueuert, defineJobTypes, rescheduleJob } from "../index.js";
 import { TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
-  it("startJobSequence with schedule.afterMs defers job processing", async ({
+  it("startJobChain with schedule.afterMs defers job processing", async ({
     stateAdapter,
     notifyAdapter,
     runInTransaction,
@@ -33,9 +33,9 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       },
     });
 
-    const jobSequence = await queuert.withNotify(async () =>
+    const jobChain = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...context,
           typeName: "test",
           input: { value: 1 },
@@ -48,11 +48,11 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       [await worker.start({ workerId: "worker", pollIntervalMs: 50 })],
       async () => {
         await expect(
-          queuert.waitForJobSequenceCompletion(jobSequence, { timeoutMs: 200 }),
+          queuert.waitForJobChainCompletion(jobChain, { timeoutMs: 200 }),
         ).rejects.toThrow();
 
         await expect(
-          queuert.waitForJobSequenceCompletion(jobSequence, {
+          queuert.waitForJobChainCompletion(jobChain, {
             pollIntervalMs: 100,
             timeoutMs: 400,
           }),
@@ -61,7 +61,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     );
   });
 
-  it("startJobSequence with schedule.at defers job processing", async ({
+  it("startJobChain with schedule.at defers job processing", async ({
     stateAdapter,
     notifyAdapter,
     runInTransaction,
@@ -91,9 +91,9 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       },
     });
 
-    const jobSequence = await queuert.withNotify(async () =>
+    const jobChain = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...context,
           typeName: "test",
           input: { value: 1 },
@@ -106,11 +106,11 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       [await worker.start({ workerId: "worker", pollIntervalMs: 50 })],
       async () => {
         await expect(
-          queuert.waitForJobSequenceCompletion(jobSequence, { timeoutMs: 200 }),
+          queuert.waitForJobChainCompletion(jobChain, { timeoutMs: 200 }),
         ).rejects.toThrow();
 
         await expect(
-          queuert.waitForJobSequenceCompletion(jobSequence, {
+          queuert.waitForJobChainCompletion(jobChain, {
             pollIntervalMs: 100,
             timeoutMs: 400,
           }),
@@ -173,9 +173,9 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         },
       });
 
-    const jobSequence = await queuert.withNotify(async () =>
+    const jobChain = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...context,
           typeName: "first",
           input: { value: 1 },
@@ -189,11 +189,11 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         await firstCompleted.promise;
 
         await expect(
-          queuert.waitForJobSequenceCompletion(jobSequence, { timeoutMs: 200 }),
+          queuert.waitForJobChainCompletion(jobChain, { timeoutMs: 200 }),
         ).rejects.toThrow();
 
         await expect(
-          queuert.waitForJobSequenceCompletion(jobSequence, {
+          queuert.waitForJobChainCompletion(jobChain, {
             pollIntervalMs: 100,
             timeoutMs: 400,
           }),
@@ -256,9 +256,9 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         },
       });
 
-    const jobSequence = await queuert.withNotify(async () =>
+    const jobChain = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...context,
           typeName: "first",
           input: { value: 1 },
@@ -272,11 +272,11 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         await firstCompleted.promise;
 
         await expect(
-          queuert.waitForJobSequenceCompletion(jobSequence, { timeoutMs: 200 }),
+          queuert.waitForJobChainCompletion(jobChain, { timeoutMs: 200 }),
         ).rejects.toThrow();
 
         await expect(
-          queuert.waitForJobSequenceCompletion(jobSequence, {
+          queuert.waitForJobChainCompletion(jobChain, {
             pollIntervalMs: 100,
             timeoutMs: 400,
           }),
@@ -323,9 +323,9 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       },
     });
 
-    const jobSequence = await queuert.withNotify(async () =>
+    const jobChain = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...context,
           typeName: "test",
           input: { value: 1 },
@@ -339,11 +339,11 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         await firstAttemptDone.promise;
 
         await expect(
-          queuert.waitForJobSequenceCompletion(jobSequence, { timeoutMs: 200 }),
+          queuert.waitForJobChainCompletion(jobChain, { timeoutMs: 200 }),
         ).rejects.toThrow();
 
         await expect(
-          queuert.waitForJobSequenceCompletion(jobSequence, {
+          queuert.waitForJobChainCompletion(jobChain, {
             pollIntervalMs: 100,
             timeoutMs: 400,
           }),
@@ -392,9 +392,9 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       },
     });
 
-    const jobSequence = await queuert.withNotify(async () =>
+    const jobChain = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...context,
           typeName: "test",
           input: { value: 1 },
@@ -408,11 +408,11 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         await firstAttemptDone.promise;
 
         await expect(
-          queuert.waitForJobSequenceCompletion(jobSequence, { timeoutMs: 200 }),
+          queuert.waitForJobChainCompletion(jobChain, { timeoutMs: 200 }),
         ).rejects.toThrow();
 
         await expect(
-          queuert.waitForJobSequenceCompletion(jobSequence, {
+          queuert.waitForJobChainCompletion(jobChain, {
             pollIntervalMs: 100,
             timeoutMs: 400,
           }),

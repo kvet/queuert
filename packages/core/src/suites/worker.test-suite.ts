@@ -1,6 +1,6 @@
 import { TestAPI } from "vitest";
 import { sleep } from "../helpers/sleep.js";
-import { createQueuert, defineJobTypes, JobSequence } from "../index.js";
+import { createQueuert, defineJobTypes, JobChain } from "../index.js";
 import { TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -39,9 +39,9 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       },
     });
 
-    const jobSequence = await queuert.withNotify(async () =>
+    const jobChain = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...context,
           typeName: "test",
           input: { test: true },
@@ -54,7 +54,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       jobTypeProcessingChange: [],
     });
     await withWorkers([await worker.start()], async () => {
-      await queuert.waitForJobSequenceCompletion(jobSequence, completionOptions);
+      await queuert.waitForJobChainCompletion(jobChain, completionOptions);
 
       await expectGauges({
         jobTypeIdleChange: [
@@ -117,7 +117,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
     const emailJob = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...context,
           typeName: "email",
           input: { to: "test@example.com" },
@@ -126,14 +126,14 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     );
     const smsJob = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({ ...context, typeName: "sms", input: { phone: "+1234567890" } }),
+        queuert.startJobChain({ ...context, typeName: "sms", input: { phone: "+1234567890" } }),
       ),
     );
 
     await withWorkers([await worker.start()], async () => {
       await Promise.all([
-        queuert.waitForJobSequenceCompletion(emailJob, completionOptions),
-        queuert.waitForJobSequenceCompletion(smsJob, completionOptions),
+        queuert.waitForJobChainCompletion(emailJob, completionOptions),
+        queuert.waitForJobChainCompletion(smsJob, completionOptions),
       ]);
 
       expect(processedTypes).toContain("email");
@@ -213,9 +213,9 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         }),
       ],
       async () => {
-        const jobSequence = await queuert.withNotify(async () =>
+        const jobChain = await queuert.withNotify(async () =>
           runInTransaction(async (context) =>
-            queuert.startJobSequence({
+            queuert.startJobChain({
               ...context,
               typeName: "test",
               input: { test: true },
@@ -223,7 +223,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
           ),
         );
 
-        await queuert.waitForJobSequenceCompletion(jobSequence, completionOptions);
+        await queuert.waitForJobChainCompletion(jobChain, completionOptions);
       },
     );
   });
@@ -263,13 +263,13 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       },
     });
 
-    const jobSequences: JobSequence<string, "test", { jobNumber: number }, { success: boolean }>[] =
+    const jobChains: JobChain<string, "test", { jobNumber: number }, { success: boolean }>[] =
       [];
     for (let i = 0; i < 5; i++) {
-      jobSequences.push(
+      jobChains.push(
         await queuert.withNotify(async () =>
           runInTransaction(async (context) =>
-            queuert.startJobSequence({
+            queuert.startJobChain({
               ...context,
               typeName: "test",
               input: { jobNumber: i },
@@ -281,8 +281,8 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
     await withWorkers([await worker.start()], async () => {
       await Promise.all(
-        jobSequences.map(async (jobSequence) =>
-          queuert.waitForJobSequenceCompletion(jobSequence, completionOptions),
+        jobChains.map(async (jobChain) =>
+          queuert.waitForJobChainCompletion(jobChain, completionOptions),
         ),
       );
     });
@@ -325,13 +325,13 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       },
     });
 
-    const jobSequences: JobSequence<string, "test", { jobNumber: number }, { success: boolean }>[] =
+    const jobChains: JobChain<string, "test", { jobNumber: number }, { success: boolean }>[] =
       [];
     for (let i = 0; i < 5; i++) {
-      jobSequences.push(
+      jobChains.push(
         await queuert.withNotify(async () =>
           runInTransaction(async (context) =>
-            queuert.startJobSequence({
+            queuert.startJobChain({
               ...context,
               typeName: "test",
               input: { jobNumber: i },
@@ -343,8 +343,8 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
     await withWorkers(await Promise.all([worker.start(), worker.start()]), async () => {
       await Promise.all(
-        jobSequences.map(async (jobSequence) =>
-          queuert.waitForJobSequenceCompletion(jobSequence, completionOptions),
+        jobChains.map(async (jobChain) =>
+          queuert.waitForJobChainCompletion(jobChain, completionOptions),
         ),
       );
     });

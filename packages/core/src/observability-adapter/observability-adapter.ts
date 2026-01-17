@@ -1,6 +1,6 @@
 import { NotifyAdapter } from "../notify-adapter/notify-adapter.js";
 import { StateAdapter } from "../state-adapter/state-adapter.js";
-import { JobBasicData, JobProcessingData, JobSequenceData } from "./log.js";
+import { JobBasicData, JobProcessingData, JobChainData } from "./log.js";
 
 /**
  * Low-level adapter interface for observability metrics.
@@ -19,7 +19,7 @@ export type ObservabilityAdapter = {
   jobCreated: (
     data: JobBasicData & {
       input: unknown;
-      blockers: JobSequenceData[];
+      blockers: JobChainData[];
       scheduledAt?: Date;
       scheduleAfterMs?: number;
     },
@@ -63,13 +63,13 @@ export type ObservabilityAdapter = {
     data: JobBasicData & { leasedBy: string; leasedUntil: Date; workerId: string },
   ) => void;
 
-  // job sequence
-  jobSequenceCreated: (data: JobSequenceData & { input: unknown }) => void;
-  jobSequenceCompleted: (data: JobSequenceData & { output: unknown }) => void;
+  // job chain
+  jobChainCreated: (data: JobChainData & { input: unknown }) => void;
+  jobChainCompleted: (data: JobChainData & { output: unknown }) => void;
 
   // blockers
-  jobBlocked: (data: JobBasicData & { blockedBySequences: JobSequenceData[] }) => void;
-  jobUnblocked: (data: JobBasicData & { unblockedBySequence: JobSequenceData }) => void;
+  jobBlocked: (data: JobBasicData & { blockedByChains: JobChainData[] }) => void;
+  jobUnblocked: (data: JobBasicData & { unblockedByChain: JobChainData }) => void;
 
   // notify adapter
   notifyContextAbsence: (data: JobBasicData) => void;
@@ -82,7 +82,7 @@ export type ObservabilityAdapter = {
   }) => void;
 
   // histograms
-  jobSequenceDuration: (data: JobSequenceData & { durationMs: number }) => void;
+  jobChainDuration: (data: JobChainData & { durationMs: number }) => void;
   jobDuration: (data: JobProcessingData & { durationMs: number }) => void;
   jobAttemptDuration: (data: JobProcessingData & { durationMs: number; workerId: string }) => void;
 

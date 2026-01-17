@@ -1,19 +1,19 @@
 import { StateJob } from "../state-adapter/state-adapter.js";
-import { JobSequence } from "./job-sequence.types.js";
+import { JobChain } from "./job-chain.types.js";
 
-export * from "./job-sequence.types.js";
+export * from "./job-chain.types.js";
 
-export const mapStateJobPairToJobSequence = (
+export const mapStateJobPairToJobChain = (
   stateJobPair: [StateJob, StateJob | undefined],
-): JobSequence<any, any, any, any> => {
+): JobChain<any, any, any, any> => {
   const [initialJob, currentJob] = stateJobPair;
   const effectiveJob = currentJob ?? initialJob;
 
   const base = {
     id: initialJob.id,
     originId: initialJob.originId,
-    rootSequenceId: initialJob.rootSequenceId,
-    typeName: initialJob.sequenceTypeName,
+    rootChainId: initialJob.rootChainId,
+    typeName: initialJob.chainTypeName,
     input: initialJob.input,
     createdAt: initialJob.createdAt,
   };

@@ -19,9 +19,9 @@ export const createNoopObservabilityAdapter = (): ObservabilityAdapter => ({
   jobCompleted: () => {},
   jobReaped: () => {},
 
-  // job sequence
-  jobSequenceCreated: () => {},
-  jobSequenceCompleted: () => {},
+  // job chain
+  jobChainCreated: () => {},
+  jobChainCompleted: () => {},
 
   // blockers
   jobBlocked: () => {},
@@ -35,7 +35,7 @@ export const createNoopObservabilityAdapter = (): ObservabilityAdapter => ({
   stateAdapterError: () => {},
 
   // histograms
-  jobSequenceDuration: () => {},
+  jobChainDuration: () => {},
   jobDuration: () => {},
   jobAttemptDuration: () => {},
 

@@ -15,7 +15,7 @@ Core abstractions, interfaces, and in-memory implementations for testing.
 **Exports:**
 
 - `.` (main): `createQueuert`, `createConsoleLog`, adapter interfaces (`StateAdapter`, `NotifyAdapter`, `ObservabilityAdapter`), type definitions (`defineJobTypes`, `createJobTypeRegistry`), error classes
-- `./testing`: Test suites and context helpers for adapter packages (`processTestSuite`, `sequencesTestSuite`, etc., `extendWithCommon`, `extendWithStateInProcess`)
+- `./testing`: Test suites and context helpers for adapter packages (`processTestSuite`, `chainsTestSuite`, etc., `extendWithCommon`, `extendWithStateInProcess`)
 - `./internal`: Internal utilities for adapter packages only (`withRetry`, `createAsyncLock`, `wrapStateAdapterWithRetry`), in-process adapters (`createInProcessStateAdapter`, `createInProcessNotifyAdapter`)
 
 ### `@queuert/postgres`
@@ -111,7 +111,7 @@ NATS notify adapter implementation for distributed pub/sub notifications with op
 
 **Notify adapter notes:**
 
-Uses 3 NATS subjects with payload-based filtering (`{prefix}.sched`, `{prefix}.seqc`, `{prefix}.owls`). Supports optional JetStream KV for hint-based thundering herd optimization using revision-based CAS operations. Without JetStream KV, behaves like PostgreSQL (all listeners query database). Unlike Redis, NATS is fully multiplexed and a single connection handles both publishing and subscriptions.
+Uses 3 NATS subjects with payload-based filtering (`{prefix}.sched`, `{prefix}.chainc`, `{prefix}.owls`). Supports optional JetStream KV for hint-based thundering herd optimization using revision-based CAS operations. Without JetStream KV, behaves like PostgreSQL (all listeners query database). Unlike Redis, NATS is fully multiplexed and a single connection handles both publishing and subscriptions.
 
 **Configuration options:**
 
@@ -140,13 +140,13 @@ Users configure their OTEL SDK with desired exporters (Prometheus, OTLP, Jaeger,
 
 - Worker: `{prefix}.worker.started`, `{prefix}.worker.error`, `{prefix}.worker.stopping`, `{prefix}.worker.stopped`
 - Job: `{prefix}.job.created`, `{prefix}.job.attempt.started`, `{prefix}.job.attempt.taken_by_another_worker`, `{prefix}.job.attempt.already_completed`, `{prefix}.job.attempt.lease_expired`, `{prefix}.job.attempt.lease_renewed`, `{prefix}.job.attempt.failed`, `{prefix}.job.attempt.completed`, `{prefix}.job.completed`, `{prefix}.job.reaped`, `{prefix}.job.blocked`, `{prefix}.job.unblocked`
-- Job Sequence: `{prefix}.job_sequence.created`, `{prefix}.job_sequence.completed`
+- Job Chain: `{prefix}.job_chain.created`, `{prefix}.job_chain.completed`
 - Notify Adapter: `{prefix}.notify_adapter.context_absence`, `{prefix}.notify_adapter.error`
 - State Adapter: `{prefix}.state_adapter.error`
 
 **Histograms emitted:**
 
-- Job Sequence: `{prefix}.job_sequence.duration` - Duration from sequence creation to completion (ms)
+- Job Chain: `{prefix}.job_chain.duration` - Duration from chain creation to completion (ms)
 - Job: `{prefix}.job.duration` - Duration from job creation to completion (ms)
 - Job Attempt: `{prefix}.job.attempt.duration` - Duration of attempt processing (ms)
 
@@ -170,13 +170,13 @@ Users configure their OTEL SDK with desired exporters (Prometheus, OTLP, Jaeger,
 
 An individual unit of work. Jobs have a lifecycle: `blocked`/`pending` → `running` → `completed`. Jobs start as `blocked` if they have incomplete blockers, otherwise `pending`. Jobs can be deleted (hard-deleted from the database). Each job belongs to a JobType and contains typed input/output. Jobs track their execution attempts, scheduling, and provenance via `originId`.
 
-### JobSequence
+### JobChain
 
-Like a Promise chain, a sequence of linked jobs where each job can `continueWith` to the next. The sequence completes when its final job completes without continuing. Sequence status reflects the current job in the sequence: `blocked`/`pending` → `running` → `completed`.
+Like a Promise chain, a chain of linked jobs where each job can `continueWith` to the next. The chain completes when its final job completes without continuing. Chain status reflects the current job in the chain: `blocked`/`pending` → `running` → `completed`.
 
 ### JobType
 
-Defines a named job type with its input/output types and process function. JobTypes are registered with workers via `implementJobType`. The process function receives the job (with resolved blockers accessible via `job.blockers`) and a context for continuing the sequence.
+Defines a named job type with its input/output types and process function. JobTypes are registered with workers via `implementJobType`. The process function receives the job (with resolved blockers accessible via `job.blockers`) and a context for continuing the chain.
 
 ### JobTypeRegistry
 
@@ -212,7 +212,7 @@ The `JobTypeRegistry` is passed to `createQueuert` via the `jobTypeRegistry` par
 
 **Registry methods**:
 
-- `validateEntry(typeName)`: Validates job type can start a sequence (is an entry point)
+- `validateEntry(typeName)`: Validates job type can start a chain (is an entry point)
 - `parseInput(typeName, input)`: Validates and returns job input
 - `parseOutput(typeName, output)`: Validates and returns job output
 - `validateContinueWith(typeName, target)`: Validates continuation target with nominal (typeName) or structural (input shape) validation
@@ -222,7 +222,7 @@ The `JobTypeRegistry` is passed to `createQueuert` via the `jobTypeRegistry` par
 
 ### Blockers
 
-Jobs can depend on other job sequences. Blockers are declared at the type level with the `blockers` field and provided via `startBlockers` callback:
+Jobs can depend on other job chains. Blockers are declared at the type level with the `blockers` field and provided via `startBlockers` callback:
 
 ```typescript
 // Type declaration
@@ -231,19 +231,19 @@ defineJobTypes<{
   main: { entry: true; input: {...}; output: {...}; blockers: [{ typeName: 'blocker' }] };
 }>()
 
-// Usage - startBlockers callback creates blockers via startJobSequence
-await queuert.startJobSequence({
+// Usage - startBlockers callback creates blockers via startJobChain
+await queuert.startJobChain({
   client,
   typeName: 'main',
   input: {...},
   startBlockers: async () => {
-    const blocker = await queuert.startJobSequence({ client, typeName: 'blocker', input: {...} });
-    return [blocker];  // Can also return existing sequences
+    const blocker = await queuert.startJobChain({ client, typeName: 'blocker', input: {...} });
+    return [blocker];  // Can also return existing chains
   },
 });
 ```
 
-Blockers created within `startBlockers` automatically inherit the main job's `rootSequenceId` and `originId` via context propagation. Existing sequences returned from the callback keep their own `rootSequenceId`. Same pattern applies to `continueWith`. A job with incomplete blockers starts as `blocked` and transitions to `pending` when all blockers complete.
+Blockers created within `startBlockers` automatically inherit the main job's `rootChainId` and `originId` via context propagation. Existing chains returned from the callback keep their own `rootChainId`. Same pattern applies to `continueWith`. A job with incomplete blockers starts as `blocked` and transitions to `pending` when all blockers complete.
 
 ### Log
 
@@ -257,7 +257,7 @@ The `StateAdapter` type accepts three generic parameters:
 
 - `TTxContext extends BaseStateAdapterContext`: Transaction context type, used within `runInTransaction` callbacks
 - `TContext extends BaseStateAdapterContext`: General context type, provided by `provideContext`
-- `TJobId extends string`: The job ID type used for input parameters (e.g., `jobId`, `rootSequenceIds`)
+- `TJobId extends string`: The job ID type used for input parameters (e.g., `jobId`, `rootChainIds`)
 
 This dual-context design enables operations like migrations to run outside transactions (e.g., PostgreSQL's `CREATE INDEX CONCURRENTLY`). When transaction and general contexts are the same, use identical types for both (e.g., SQLite adapter uses `StateAdapter<TContext, TContext, TJobId>`).
 
@@ -267,7 +267,7 @@ This dual-context design enables operations like migrations to run outside trans
 - `GetStateAdapterContext<TStateAdapter>`: Extracts the general context type
 - `GetStateAdapterJobId<TStateAdapter>`: Extracts the job ID type
 
-**Internal type design**: `StateJob` is a non-generic type with `string` for all ID fields (`id`, `rootSequenceId`, `sequenceId`, `originId`) and includes `sequenceTypeName` for sequence type tracking. The `StateAdapter` methods accept `TJobId` for input parameters but return plain `StateJob`. This simplifies internal code while allowing adapters to expose typed IDs to consumers via `GetStateAdapterJobId<TStateAdapter>`.
+**Internal type design**: `StateJob` is a non-generic type with `string` for all ID fields (`id`, `rootChainId`, `chainId`, `originId`) and includes `chainTypeName` for chain type tracking. The `StateAdapter` methods accept `TJobId` for input parameters but return plain `StateJob`. This simplifies internal code while allowing adapters to expose typed IDs to consumers via `GetStateAdapterJobId<TStateAdapter>`.
 
 ### StateProvider
 
@@ -301,13 +301,13 @@ When `TTxContext` differs from `TContext`, the provider can execute non-transact
 
 ### NotifyAdapter
 
-Handles pub/sub notifications for job scheduling and sequence completion. Workers listen for job scheduling notifications to wake up and process jobs immediately rather than polling. Sequence completion notifications enable `waitForJobSequenceCompletion` to respond promptly when sequences complete. Enables efficient job processing with minimal latency.
+Handles pub/sub notifications for job scheduling and chain completion. Workers listen for job scheduling notifications to wake up and process jobs immediately rather than polling. Chain completion notifications enable `waitForJobChainCompletion` to respond promptly when chains complete. Enables efficient job processing with minimal latency.
 
 **All notifications use broadcast (pub/sub) semantics with hint-based optimization:**
 
 - `notifyJobScheduled(typeName, count)`: Broadcasts notification with a hint count. Creates a hint key with the count and publishes the message with a unique hintId.
 - `listenJobScheduled`: Workers receive the notification and atomically decrement the hint count. Only workers that successfully decrement (hint > 0) proceed to query the database. This prevents thundering herd when many workers are idle.
-- `listenJobSequenceCompleted`: All listeners for the matching sequence ID receive the notification
+- `listenJobChainCompleted`: All listeners for the matching chain ID receive the notification
 - `listenJobOwnershipLost`: All listeners for the matching job ID receive the notification
 
 **Hint-based optimization**: When N jobs are scheduled, the hint count is set to N. When workers receive the notification, they atomically check-and-decrement the hint using Lua scripts (Redis) or synchronous operations (in-process). Only N workers will proceed to query the database; others skip and wait for the next notification. This reduces database contention while maintaining low latency.
@@ -335,14 +335,14 @@ Low-level adapter interface for observability metrics. Accepts primitive data ty
 
 **Architecture:**
 
-- `ObservabilityAdapter`: Low-level interface accepting primitive data (`JobBasicData`, `JobProcessingData`, `JobSequenceData` from `log.ts`)
-- `ObservabilityHelper`: High-level helper that wraps both `Log` and `ObservabilityAdapter`, accepts domain objects (`StateJob`, `Job`, `JobSequence`), emits to both logging and metrics
+- `ObservabilityAdapter`: Low-level interface accepting primitive data (`JobBasicData`, `JobProcessingData`, `JobChainData` from `log.ts`)
+- `ObservabilityHelper`: High-level helper that wraps both `Log` and `ObservabilityAdapter`, accepts domain objects (`StateJob`, `Job`, `JobChain`), emits to both logging and metrics
 
 **Counters (current implementation):**
 
 - Worker: `workerStarted`, `workerError`, `workerStopped`
 - Job: `jobCreated`, `jobAttemptStarted`, `jobAttemptTakenByAnotherWorker`, `jobAttemptAlreadyCompleted`, `jobAttemptLeaseExpired`, `jobAttemptLeaseRenewed`, `jobAttemptFailed`, `jobAttemptCompleted`, `jobCompleted`, `jobReaped`
-- Job Sequence: `jobSequenceCreated`, `jobSequenceCompleted`
+- Job Chain: `jobChainCreated`, `jobChainCompleted`
 - Blockers: `jobBlocked`, `jobUnblocked`
 - Notify Adapter: `notifyContextAbsence`, `notifyAdapterError`
 - State Adapter: `stateAdapterError`
@@ -394,28 +394,28 @@ If `prepare` is not accessed, auto-setup runs in staged mode. If `complete` is c
 **Complete phase**: `return complete(({ client, continueWith }) => { ... })`
 
 - Commits state changes in a transaction
-- `continueWith` continues to the next job in the sequence
+- `continueWith` continues to the next job in the chain
 - Return value becomes the job output
 
 ### Deduplication
 
 Two levels of deduplication prevent duplicate work:
 
-**Sequence-level deduplication** (explicit): When starting a job sequence, provide `deduplication` options:
+**Chain-level deduplication** (explicit): When starting a job chain, provide `deduplication` options:
 
 - `key`: Unique identifier for deduplication matching
 - `strategy`: `'completed'` (default) deduplicates against non-completed jobs; `'all'` includes completed jobs
 - `windowMs`: Optional time window; `undefined` means no time limit
 
 ```typescript
-await queuert.startJobSequence({
+await queuert.startJobChain({
   typeName: "process",
   input: { userId: 123 },
   deduplication: { key: "user-123", strategy: "completed", windowMs: 60000 }
 });
 ```
 
-**Continuation restriction**: `continueWith` can only be called once per complete callback. Calling it multiple times throws an error: "continueWith can only be called once". This ensures each job has a clear single continuation in the sequence.
+**Continuation restriction**: `continueWith` can only be called once per complete callback. Calling it multiple times throws an error: "continueWith can only be called once". This ensures each job has a clear single continuation in the chain.
 
 ### Continuation Types
 
@@ -424,7 +424,7 @@ Job types use explicit fields to define their relationships:
 ```typescript
 defineJobTypes<{
   'process-image': {
-    entry: true;  // Can be started via startJobSequence
+    entry: true;  // Can be started via startJobChain
     input: { imageId: string };
     // output field omitted - must continue (cannot complete with output)
     continueWith: { typeName: 'distribute-image' };  // Allowed continuation target
@@ -437,7 +437,7 @@ defineJobTypes<{
 }>()
 ```
 
-TypeScript prevents calling `startJobSequence` with internal job types (those without `entry: true`) at compile-time.
+TypeScript prevents calling `startJobChain` with internal job types (those without `entry: true`) at compile-time.
 
 ### Timeouts
 
@@ -464,13 +464,13 @@ For hard timeouts (forceful termination), the lease mechanism already handles th
 
 ### Workerless Completion
 
-Jobs can be completed without a worker using `completeJobSequence` (sets `workerId: null`). This enables approval workflows, webhook-triggered completions, and other patterns where jobs wait for events outside worker processing.
+Jobs can be completed without a worker using `completeJobChain` (sets `workerId: null`). This enables approval workflows, webhook-triggered completions, and other patterns where jobs wait for events outside worker processing.
 
 ```typescript
-await queuert.completeJobSequence({
+await queuert.completeJobChain({
   client,
   typeName: "awaiting-approval",
-  id: jobSequence.id,
+  id: jobChain.id,
   complete: async ({ job, complete }) => {
     // Inspect current job state
     if (job.status === "blocked") {
@@ -480,7 +480,7 @@ await queuert.completeJobSequence({
     // Complete with output (completes the job)
     await complete(job, async () => ({ approved: true }));
 
-    // Or continue to next job in sequence
+    // Or continue to next job in chain
     await complete(job, async ({ continueWith }) =>
       continueWith({ typeName: "process-approved", input: { ... } })
     );
@@ -491,16 +491,16 @@ await queuert.completeJobSequence({
 **Key behaviors**:
 
 - Must be called within a transaction (uses `FOR UPDATE` lock on current job)
-- `complete` callback receives current job, can call inner `complete` multiple times for multi-step sequences
+- `complete` callback receives current job, can call inner `complete` multiple times for multi-step chains
 - Partial completion supported: complete one job and leave the next pending
 - Can complete blocked jobs (user's responsibility to handle/compensate blockers)
 - Running workers detect completion by others via `JobAlreadyCompletedError` and abort signal with reason `"already_completed"`
 
 ## Design Philosophy
 
-### First Job = Sequence (Unified Model)
+### First Job = Chain (Unified Model)
 
-A JobSequence is not a separate entity - it's simply identified by its first job. The first job's ID becomes the sequence's ID (`sequenceId`). This mirrors how JavaScript Promises work:
+A JobChain is not a separate entity - it's simply identified by its first job. The first job's ID becomes the chain's ID (`chainId`). This mirrors how JavaScript Promises work:
 
 ```javascript
 // In JavaScript, a Promise chain IS the first promise:
@@ -508,27 +508,27 @@ const chain = fetch(url)        // chain === this promise
   .then(processResponse)        // continuation
   .then(formatResult);          // continuation
 
-// In Queuert, a sequence IS its first job:
-const sequence = startJobSequence(...)  // sequence.id === firstJob.id
+// In Queuert, a chain IS its first job:
+const chain = startJobChain(...)  // chain.id === firstJob.id
   .continueWith(processStep)            // continuation
   .continueWith(formatStep);            // continuation
 ```
 
-A Promise chain doesn't have a separate "chain ID" - the original promise IS the chain's identity. Similarly, in Queuert: **the first job IS the sequence**.
+A Promise chain doesn't have a separate "chain ID" - the original promise IS the chain's identity. Similarly, in Queuert: **the first job IS the chain**.
 
 This unification provides:
 
-**Simplicity**: One table, one type, one set of operations. No separate `job_sequence` table to manage, no joins, no synchronization issues.
+**Simplicity**: One table, one type, one set of operations. No separate `job_chain` table to manage, no joins, no synchronization issues.
 
 **Flexibility**: The first job can be:
 
 - A lightweight "alias" that immediately continues to real work
-- A full job that does processing and completes the sequence in one step
+- A full job that does processing and completes the chain in one step
 - Anything in between
 
-**Self-referential identity**: For the first job in a sequence, `job.id === job.sequenceId`. This isn't redundant - it's a meaningful signal that identifies the sequence starter. Continuation jobs have `job.id !== job.sequenceId` but share the same `sequenceId` as all other jobs in the sequence.
+**Self-referential identity**: For the first job in a chain, `job.id === job.chainId`. This isn't redundant - it's a meaningful signal that identifies the chain starter. Continuation jobs have `job.id !== job.chainId` but share the same `chainId` as all other jobs in the chain.
 
-**Denormalization tradeoff**: `sequenceTypeName` is stored on every job for O(1) sequence-type filtering at scale. Without it, queries like `SELECT * FROM job WHERE status = 'running' AND sequence_id IN (SELECT id FROM job WHERE id = sequence_id AND type_name = 'batch-import')` become expensive with millions of records.
+**Denormalization tradeoff**: `chainTypeName` is stored on every job for O(1) chain-type filtering at scale. Without it, queries like `SELECT * FROM job WHERE status = 'running' AND chain_id IN (SELECT id FROM job WHERE id = chain_id AND type_name = 'batch-import')` become expensive with millions of records.
 
 **Junction table for blockers**: The `job_blocker` table is required for M:N blocker relationships (efficient bidirectional lookup). This is the only "extra" table beyond the unified job model.
 
@@ -537,7 +537,7 @@ This unification provides:
 Parallel entities should use consistent lifecycle terminology to reduce cognitive load:
 
 - Job: `blocked`/`pending` → `running` → `completed`
-- JobSequence: `blocked`/`pending` → `running` → `completed` (reflects status of current job in sequence)
+- JobChain: `blocked`/`pending` → `running` → `completed` (reflects status of current job in chain)
 
 Avoid asymmetric naming (e.g., `started`/`finished` vs `created`/`completed`) even if individual terms seem natural - consistency across the API produces fewer questions.
 
@@ -561,10 +561,10 @@ In-process and internal-only factories remain sync since they have no I/O:
 ### Naming Conventions
 
 - `originId`: Tracks provenance (which job triggered this one), null for root jobs
-- `rootSequenceId`: ID of the root sequence (ultimate ancestor of a job tree), self-referential for root sequences (equals own ID, not null)
-- `sequenceId`: The job sequence this job belongs to, self-referential for the first job (equals own ID)
-- `sequenceTypeName`: The job type name of the first job in a sequence (correlates with `sequenceId` - both reference the starting job)
-- `typeName`: On `JobSequence`, this is the sequence's entry type (cleaner public API, equivalent to `sequenceTypeName` on jobs)
+- `rootChainId`: ID of the root chain (ultimate ancestor of a job tree), self-referential for root chains (equals own ID, not null)
+- `chainId`: The job chain this job belongs to, self-referential for the first job (equals own ID)
+- `chainTypeName`: The job type name of the first job in a chain (correlates with `chainId` - both reference the starting job)
+- `typeName`: On `JobChain`, this is the chain's entry type (cleaner public API, equivalent to `chainTypeName` on jobs)
 - `blockers`/`blocked`: Describes job dependencies (not `dependencies`/`dependents`)
 - `continueWith`: Continues to next job in complete callback
 - `process`: The job processing function provided to `implementJobType` (not `handler`). Receives `{ signal, job, prepare, complete }` and returns the completed job or continuation.
@@ -573,30 +573,30 @@ In-process and internal-only factories remain sync since they have no I/O:
 - `prepare`: Unified function for both atomic and staged modes via `mode` parameter (not separate `prepareAtomic`/`prepareStaged`)
 - `lease`/`leased`: Time-bounded exclusive claim on a job during processing (not `lock`/`locked`). Use `leasedBy`, `leasedUntil`, `leaseMs`, `leaseDurationMs`. DB columns use `leased_by`, `leased_until`.
 - `completedBy`: Records which worker completed the job (`workerId` string), or `null` for workerless completion. DB column uses `completed_by`. Available on completed jobs.
-- `deduplicationKey`: Explicit key for sequence-level deduplication. DB column uses `deduplication_key`.
-- `deduplicated`: Boolean flag returned when a job/sequence was deduplicated instead of created.
-- `entry`: Boolean field in job type definition. `true` marks job types as entry points (can be started via `startJobSequence`). Defaults to `false` (continuation-only, reachable only via `continueWith`).
+- `deduplicationKey`: Explicit key for chain-level deduplication. DB column uses `deduplication_key`.
+- `deduplicated`: Boolean flag returned when a job/chain was deduplicated instead of created.
+- `entry`: Boolean field in job type definition. `true` marks job types as entry points (can be started via `startJobChain`). Defaults to `false` (continuation-only, reachable only via `continueWith`).
 - `continueWith`: Reference field in job type definition specifying allowed continuation targets. Supports nominal references (`{ typeName: 'step2' }`), structural references (`{ input: { data: string } }`), or unions of both. Example: `continueWith: { typeName: 'step2' | 'step3' }`.
 - `blockers`: Tuple/array field in job type definition specifying blocker dependencies using references. Supports fixed slots, rest/variadic slots with spread syntax, or combinations. Example: `blockers: [{ typeName: 'auth' }, ...{ typeName: 'validator' }[]]`.
 - `NominalReference`: Compile-time reference type `{ typeName: T }` for referencing job types by name. Used in type definitions for `continueWith` and `blockers`.
 - `StructuralReference`: Compile-time reference type `{ input: T }` for referencing job types by input signature. Matches all job types with compatible input type.
 - `JobTypeReference` (runtime): Object type `{ typeName: string; input: unknown }` passed to `validateContinueWith` and `validateBlockers` at runtime. Contains both fields; adapters can validate either typeName (nominal), input (structural), or both.
-- `startBlockers`: Callback parameter in `startJobSequence` and `continueWith` for providing blockers. Required when job type has blockers defined; must not be provided when job type has no blockers. Create new blocker sequences via `startJobSequence` within the callback - they automatically inherit rootSequenceId/originId from the main job via context propagation. Can also return existing sequences.
-- `deleteJobSequences`: Deletes entire job trees by `rootSequenceId`. Accepts `rootSequenceIds` array parameter. Must be called on root sequences. Throws error if external job sequences depend on sequences being deleted; include those dependents in the deletion set to proceed. Primarily intended for testing environments.
-- `completeJobSequence`: Completes jobs without a worker (`workerId: null`). Takes a `complete` callback that receives the current job and can complete it (with output or continuation). Supports partial completion and multi-step sequences.
-- `waitForJobSequenceCompletion`: Waits for a job sequence to complete. Uses a hybrid polling/notification approach with 100ms poll intervals for reliability. Throws `WaitForJobSequenceCompletionTimeoutError` on timeout. Throws immediately if sequence doesn't exist.
-- `withNotify`: Wraps a callback to collect and dispatch notifications after successful completion. Used to batch job scheduling and sequence completion notifications within a transaction.
+- `startBlockers`: Callback parameter in `startJobChain` and `continueWith` for providing blockers. Required when job type has blockers defined; must not be provided when job type has no blockers. Create new blocker chains via `startJobChain` within the callback - they automatically inherit rootChainId/originId from the main job via context propagation. Can also return existing chains.
+- `deleteJobChains`: Deletes entire job trees by `rootChainId`. Accepts `rootChainIds` array parameter. Must be called on root chains. Throws error if external job chains depend on chains being deleted; include those dependents in the deletion set to proceed. Primarily intended for testing environments.
+- `completeJobChain`: Completes jobs without a worker (`workerId: null`). Takes a `complete` callback that receives the current job and can complete it (with output or continuation). Supports partial completion and multi-step chains.
+- `waitForJobChainCompletion`: Waits for a job chain to complete. Uses a hybrid polling/notification approach with 100ms poll intervals for reliability. Throws `WaitForJobChainCompletionTimeoutError` on timeout. Throws immediately if chain doesn't exist.
+- `withNotify`: Wraps a callback to collect and dispatch notifications after successful completion. Used to batch job scheduling and chain completion notifications within a transaction.
 - `notifyJobOwnershipLost` / `listenJobOwnershipLost`: Notification channel for job ownership loss. When a job's ownership is lost outside its process function (reaper reaps it, workerless completion), the process function is notified immediately via this channel. Workers in staged mode listen for these notifications and abort their signal with the appropriate reason (`"taken_by_another_worker"` or `"already_completed"`).
-- `JobNotFoundError`: Error thrown when a job or job sequence is not found (e.g., deleted during processing, or waiting for non-existent sequence).
+- `JobNotFoundError`: Error thrown when a job or job chain is not found (e.g., deleted during processing, or waiting for non-existent chain).
 - `JobTakenByAnotherWorkerError`: Error thrown when a worker detects another worker has taken over the job (lease was acquired by someone else).
 - `JobAlreadyCompletedError`: Error thrown when attempting to complete a job that was already completed (by another worker or workerless completion).
-- `WaitForJobSequenceCompletionTimeoutError`: Error thrown when `waitForJobSequenceCompletion` times out before the sequence completes.
-- `StateNotInTransactionError`: Error thrown when operations requiring a transaction (e.g., `startJobSequence`, `deleteJobSequences`, `completeJobSequence`) are called outside a transaction context.
+- `WaitForJobChainCompletionTimeoutError`: Error thrown when `waitForJobChainCompletion` times out before the chain completes.
+- `StateNotInTransactionError`: Error thrown when operations requiring a transaction (e.g., `startJobChain`, `deleteJobChains`, `completeJobChain`) are called outside a transaction context.
 - `wrapStateAdapterWithLogging`: Helper function that wraps a `StateAdapter` to log errors via `LogHelper.stateAdapterError` before re-throwing. Infrastructure methods (`provideContext`, `runInTransaction`, `isInTransaction`) are passed through without wrapping.
 - `wrapNotifyAdapterWithLogging`: Helper function that wraps a `NotifyAdapter` to log errors via `LogHelper.notifyAdapterError` before re-throwing.
 - `wrapStateAdapterWithRetry`: Helper function that wraps a `StateAdapter` with retry logic for transient errors. Infrastructure methods are passed through without wrapping.
-- `ScheduleOptions`: Discriminated union type for deferred scheduling: `{ at: Date; afterMs?: never }` or `{ at?: never; afterMs: number }`. Used with `schedule` parameter in `startJobSequence` and `continueWith`.
-- `schedule`: Optional parameter in `startJobSequence` and `continueWith` for deferred job execution. Accepts `ScheduleOptions`. Jobs are created transactionally but not processable until the specified time. `afterMs` is computed at the database level using `now() + interval` to avoid clock skew.
+- `ScheduleOptions`: Discriminated union type for deferred scheduling: `{ at: Date; afterMs?: never }` or `{ at?: never; afterMs: number }`. Used with `schedule` parameter in `startJobChain` and `continueWith`.
+- `schedule`: Optional parameter in `startJobChain` and `continueWith` for deferred job execution. Accepts `ScheduleOptions`. Jobs are created transactionally but not processable until the specified time. `afterMs` is computed at the database level using `now() + interval` to avoid clock skew.
 - `rescheduleJob`: Helper function to reschedule a job from within a process function. Takes `ScheduleOptions` and optional cause. Throws `RescheduleJobError`.
 - `RescheduleJobError`: Error class with `schedule: ScheduleOptions` property. Used by `rescheduleJob` helper.
 - `defineJobTypes`: Factory function for compile-time-only job type definitions. Returns a `JobTypeRegistry` that passes all values through without runtime validation.
@@ -607,24 +607,24 @@ In-process and internal-only factories remain sync since they have no I/O:
 
 ### Type Helpers
 
-- `JobOf<TJobId, TJobTypeDefinitions, TJobTypeName, TSequenceTypeName?>`: Resolves to `Job<TJobId, TJobTypeName, Input, BlockerSequences, SequenceTypeName>` from job type definitions. Includes typed blocker sequences. The optional 4th parameter `TSequenceTypeName` defaults to `SequenceTypesReaching<TJobTypeDefinitions, TJobTypeName>` (union of all sequence types that can reach this job type).
+- `JobOf<TJobId, TJobTypeDefinitions, TJobTypeName, TChainTypeName?>`: Resolves to `Job<TJobId, TJobTypeName, Input, BlockerChains, ChainTypeName>` from job type definitions. Includes typed blocker chains. The optional 4th parameter `TChainTypeName` defaults to `ChainTypesReaching<TJobTypeDefinitions, TJobTypeName>` (union of all chain types that can reach this job type).
 - `JobWithoutBlockers<TJob>`: Strips the `blockers` field from a `Job` type. Used in `startBlockers` callback where blockers haven't been created yet. Example: `JobWithoutBlockers<JobOf<string, Defs, "process">>`.
 - `PendingJob<TJob>`, `BlockedJob<TJob>`, `RunningJob<TJob>`, `CompletedJob<TJob>`, `CreatedJob<TJob>`: Job status types that take a `Job` type and narrow by status. Example: `PendingJob<JobOf<string, Defs, "process">>`.
-- `SequenceJobTypes<TJobTypeDefinitions, TSequenceTypeName>`: Union of all job type names reachable in a sequence starting from `TSequenceTypeName`.
-- `SequenceTypesReaching<TJobTypeDefinitions, TJobTypeName>`: Inverse of `SequenceJobTypes`. Given a job type, computes the union of all sequence types (external job types) that can reach it. For entry jobs, this is their own type; for continuation-only jobs, this is the union of all entry types that eventually continue to them.
+- `ChainJobTypes<TJobTypeDefinitions, TChainTypeName>`: Union of all job type names reachable in a chain starting from `TChainTypeName`.
+- `ChainTypesReaching<TJobTypeDefinitions, TJobTypeName>`: Inverse of `ChainJobTypes`. Given a job type, computes the union of all chain types (external job types) that can reach it. For entry jobs, this is their own type; for continuation-only jobs, this is the union of all entry types that eventually continue to them.
 - `ContinuationJobTypes<TJobTypeDefinitions, TJobTypeName>`: Job type names that `TJobTypeName` can continue to.
-- `EntryJobTypeDefinitions<T>`: Filters job type definitions to only entry types that can start a sequence via `startJobSequence` (includes only job types with `entry: true`).
+- `EntryJobTypeDefinitions<T>`: Filters job type definitions to only entry types that can start a chain via `startJobChain` (includes only job types with `entry: true`).
 - `HasBlockers<TJobTypeDefinitions, TJobTypeName>`: Returns `true` if the job type has blockers defined, `false` otherwise. Used internally to enforce `startBlockers` requirement.
-- `JobSequenceOf<TJobId, TJobTypeDefinitions, TJobTypeName>`: Resolves to `JobSequence<TJobId, TJobTypeName, Input, Output>` for all jobs reachable in the sequence.
-- `BlockerSequences<TJobId, TJobTypeDefinitions, TJobTypeName>`: Tuple of `JobSequence` types for all declared blockers of a job type.
+- `JobChainOf<TJobId, TJobTypeDefinitions, TJobTypeName>`: Resolves to `JobChain<TJobId, TJobTypeName, Input, Output>` for all jobs reachable in the chain.
+- `BlockerChains<TJobId, TJobTypeDefinitions, TJobTypeName>`: Tuple of `JobChain` types for all declared blockers of a job type.
 
 ### Type Organization
 
 - `job-type.ts`: Base type definitions (`BaseJobTypeDefinition`) and `defineJobTypes` factory (uses `createNoopJobTypeRegistry` internally). Re-exports navigation types.
 - `job-type-registry.ts`: Runtime validation types (`JobTypeRegistry`, `JobTypeRegistryConfig`, `JobTypeReference`) and factories (`createJobTypeRegistry` for runtime validation, `createNoopJobTypeRegistry` for internal use).
-- `job-type.navigation.ts`: Type-level navigation logic (`JobOf`, `SequenceJobTypes`, `ContinuationJobTypes`, `EntryJobTypeDefinitions`, blocker resolution types).
+- `job-type.navigation.ts`: Type-level navigation logic (`JobOf`, `ChainJobTypes`, `ContinuationJobTypes`, `EntryJobTypeDefinitions`, blocker resolution types).
 - `job-type.validation.ts`: Compile-time validation types (`ValidatedJobTypeDefinitions`).
-- `job-sequence.types.ts`: Core entity types (`JobSequence`, `CompletedJobSequence`, `JobSequenceStatus`).
+- `job-chain.types.ts`: Core entity types (`JobChain`, `CompletedJobChain`, `JobChainStatus`).
 - `job.types.ts`: Core job entity types (`Job`, `JobWithoutBlockers`) and status narrowing types (`PendingJob`, `RunningJob`, etc.).
 
 ## Testing Patterns

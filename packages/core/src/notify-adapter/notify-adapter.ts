@@ -4,9 +4,9 @@ export type NotifyAdapter = {
     typeNames: string[],
     onNotification: (typeName: string) => void,
   ) => Promise<() => Promise<void>>;
-  notifyJobSequenceCompleted: (sequenceId: string) => Promise<void>;
-  listenJobSequenceCompleted: (
-    sequenceId: string,
+  notifyJobChainCompleted: (chainId: string) => Promise<void>;
+  listenJobChainCompleted: (
+    chainId: string,
     onNotification: () => void,
   ) => Promise<() => Promise<void>>;
   notifyJobOwnershipLost: (jobId: string) => Promise<void>;

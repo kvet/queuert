@@ -58,9 +58,9 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       },
     });
 
-    const failJobSequence = await queuert.withNotify(async () =>
+    const failJobChain = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...context,
           typeName: "test",
           input: null,
@@ -77,9 +77,9 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         await jobStarted.promise;
         await sleep(10);
 
-        const successJobSequence = await queuert.withNotify(async () =>
+        const successJobChain = await queuert.withNotify(async () =>
           runInTransaction(async (context) =>
-            queuert.startJobSequence({
+            queuert.startJobChain({
               ...context,
               typeName: "test",
               input: null,
@@ -88,8 +88,8 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         );
 
         await Promise.all([
-          queuert.waitForJobSequenceCompletion(successJobSequence, completionOptions),
-          queuert.waitForJobSequenceCompletion(failJobSequence, completionOptions),
+          queuert.waitForJobChainCompletion(successJobChain, completionOptions),
+          queuert.waitForJobChainCompletion(failJobChain, completionOptions),
         ]);
 
         await jobCompleted.promise;
@@ -152,9 +152,9 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       },
     });
 
-    const failJobSequence = await queuert.withNotify(async () =>
+    const failJobChain = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...context,
           typeName: "test",
           input: null,
@@ -171,9 +171,9 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         await jobStarted.promise;
         await sleep(10);
 
-        const successJobSequence = await queuert.withNotify(async () =>
+        const successJobChain = await queuert.withNotify(async () =>
           runInTransaction(async (context) =>
-            queuert.startJobSequence({
+            queuert.startJobChain({
               ...context,
               typeName: "test",
               input: null,
@@ -182,8 +182,8 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         );
 
         await Promise.all([
-          queuert.waitForJobSequenceCompletion(successJobSequence, completionOptions),
-          queuert.waitForJobSequenceCompletion(failJobSequence, completionOptions),
+          queuert.waitForJobChainCompletion(successJobChain, completionOptions),
+          queuert.waitForJobChainCompletion(failJobChain, completionOptions),
         ]);
 
         await jobCompleted.promise;

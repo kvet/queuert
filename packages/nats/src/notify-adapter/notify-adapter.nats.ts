@@ -125,12 +125,12 @@ export const createNatsNotifyAdapter = async ({
   subjectPrefix = "queuert",
 }: CreateNatsNotifyAdapterOptions): Promise<NotifyAdapter> => {
   const jobScheduledSubject = `${subjectPrefix}.sched`;
-  const sequenceCompletedSubject = `${subjectPrefix}.seqc`;
+  const chainCompletedSubject = `${subjectPrefix}.chainc`;
   const ownershipLostSubject = `${subjectPrefix}.owls`;
   const hintKeyPrefix = `${subjectPrefix}_hint_`;
 
   const jobScheduledListener = createSharedListener(nc, jobScheduledSubject);
-  const sequenceCompletedListener = createSharedListener(nc, sequenceCompletedSubject);
+  const chainCompletedListener = createSharedListener(nc, chainCompletedSubject);
   const ownershipLostListener = createSharedListener(nc, ownershipLostSubject);
 
   return {
@@ -171,13 +171,13 @@ export const createNatsNotifyAdapter = async ({
       });
     },
 
-    notifyJobSequenceCompleted: async (sequenceId) => {
-      nc.publish(sequenceCompletedSubject, new TextEncoder().encode(sequenceId));
+    notifyJobChainCompleted: async (chainId) => {
+      nc.publish(chainCompletedSubject, new TextEncoder().encode(chainId));
     },
 
-    listenJobSequenceCompleted: async (sequenceId, onNotification) => {
-      return sequenceCompletedListener.subscribe((payload) => {
-        if (payload === sequenceId) {
+    listenJobChainCompleted: async (chainId, onNotification) => {
+      return chainCompletedListener.subscribe((payload) => {
+        if (payload === chainId) {
           onNotification();
         }
       });

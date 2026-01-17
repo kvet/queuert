@@ -130,12 +130,12 @@ const worker = qrt
 
 const stopWorker = await worker.start({ workerId: "worker-1" });
 
-// 4. Run a sequence
-console.log("\n=== Running fetch-data sequence ===");
-const sequence = await qrt.withNotify(async () =>
+// 4. Run a chain
+console.log("\n=== Running fetch-data chain ===");
+const chain = await qrt.withNotify(async () =>
   stateAdapter.provideContext(async (ctx) =>
     stateAdapter.runInTransaction(ctx, async (ctx) =>
-      qrt.startJobSequence({
+      qrt.startJobChain({
         ...ctx,
         typeName: "fetch-data",
         input: { url: "https://api.example.com/data" },
@@ -144,8 +144,8 @@ const sequence = await qrt.withNotify(async () =>
   ),
 );
 
-const result = await qrt.waitForJobSequenceCompletion(sequence, { timeoutMs: 5000 });
-console.log("Sequence completed:", result.output);
+const result = await qrt.waitForJobChainCompletion(chain, { timeoutMs: 5000 });
+console.log("Chain completed:", result.output);
 
 // 5. Cleanup
 await stopWorker();

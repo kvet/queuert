@@ -8,10 +8,10 @@ export const mapStateJobToJob = (
 ): JobWithoutBlockers<Job<any, any, any, any, any[]>> => {
   const base = {
     id: stateJob.id,
-    sequenceId: stateJob.sequenceId,
-    sequenceTypeName: stateJob.sequenceTypeName,
+    chainId: stateJob.chainId,
+    chainTypeName: stateJob.chainTypeName,
     originId: stateJob.originId,
-    rootSequenceId: stateJob.rootSequenceId,
+    rootChainId: stateJob.rootChainId,
     typeName: stateJob.typeName,
     input: stateJob.input,
     createdAt: stateJob.createdAt,

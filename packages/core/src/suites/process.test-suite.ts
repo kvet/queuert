@@ -45,9 +45,9 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
         expect(job.input).toEqual({ test: true });
         expect(job.status).toBe("running");
         expect(job.id).toBeDefined();
-        expect(job.sequenceId).toEqual(job.id);
+        expect(job.chainId).toEqual(job.id);
         expect(job.originId).toBeNull();
-        expect(job.rootSequenceId).toEqual(job.id);
+        expect(job.rootChainId).toEqual(job.id);
 
         const result = await prepare({ mode: "staged" }, (context) => {
           expectTypeOf(context).toEqualTypeOf<{ $test: true }>();
@@ -75,57 +75,57 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       },
     });
 
-    const jobSequence = await queuert.withNotify(async () =>
+    const jobChain = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...context,
           typeName: "test",
           input: { test: true },
         }),
       ),
     );
-    // expectTypeOf<(typeof jobSequence)["status"]>().toEqualTypeOf<"pending" | "blocked">();
-    expectTypeOf<(typeof jobSequence)["input"]>().toEqualTypeOf<{ test: boolean }>();
-    expectTypeOf<(typeof jobSequence)["typeName"]>().toEqualTypeOf<"test">();
-    expect(jobSequence.input).toEqual({ test: true });
+    // expectTypeOf<(typeof jobChain)["status"]>().toEqualTypeOf<"pending" | "blocked">();
+    expectTypeOf<(typeof jobChain)["input"]>().toEqualTypeOf<{ test: boolean }>();
+    expectTypeOf<(typeof jobChain)["typeName"]>().toEqualTypeOf<"test">();
+    expect(jobChain.input).toEqual({ test: true });
 
     await withWorkers([await worker.start({ workerId: "worker" })], async () => {
-      const completedJobSequence = await queuert.waitForJobSequenceCompletion(
-        jobSequence,
+      const completedJobChain = await queuert.waitForJobChainCompletion(
+        jobChain,
         completionOptions,
       );
-      expectTypeOf<(typeof completedJobSequence)["status"]>().toEqualTypeOf<"completed">();
-      expectTypeOf<(typeof completedJobSequence)["output"]>().toEqualTypeOf<{
+      expectTypeOf<(typeof completedJobChain)["status"]>().toEqualTypeOf<"completed">();
+      expectTypeOf<(typeof completedJobChain)["output"]>().toEqualTypeOf<{
         result: boolean;
       }>();
-      expect(completedJobSequence.status).toBe("completed");
-      expect(completedJobSequence.output).toEqual({ result: true });
+      expect(completedJobChain.status).toBe("completed");
+      expect(completedJobChain.output).toEqual({ result: true });
     });
 
     // Verify completedBy is set to workerId for worker completion
     const completedJob = await stateAdapter.provideContext(async (context) =>
-      stateAdapter.getJobById({ context, jobId: jobSequence.id }),
+      stateAdapter.getJobById({ context, jobId: jobChain.id }),
     );
     expect(completedJob?.status).toBe("completed");
     expect(completedJob?.completedBy).toBe("worker");
 
     const workerArgs = { workerId: "worker" };
-    const jobSequenceArgs = {
+    const jobChainArgs = {
       typeName: "test",
-      id: jobSequence.id,
-      rootSequenceId: jobSequence.id,
+      id: jobChain.id,
+      rootChainId: jobChain.id,
       originId: null,
     };
     const jobArgs = {
       typeName: "test",
-      id: jobSequence.id,
-      rootSequenceId: jobSequence.id,
+      id: jobChain.id,
+      rootChainId: jobChain.id,
       originId: null,
-      sequenceId: jobSequence.id,
-      sequenceTypeName: "test",
+      chainId: jobChain.id,
+      chainTypeName: "test",
     };
     expectLogs([
-      { type: "job_sequence_created", data: { ...jobSequenceArgs, input: { test: true } } },
+      { type: "job_chain_created", data: { ...jobChainArgs, input: { test: true } } },
       { type: "job_created", data: { ...jobArgs, input: { test: true } } },
       { type: "worker_started", data: { ...workerArgs, jobTypeNames: ["test"] } },
       {
@@ -153,28 +153,28 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
         },
       },
       {
-        type: "job_sequence_completed",
-        data: { ...jobSequenceArgs, output: { result: true } },
+        type: "job_chain_completed",
+        data: { ...jobChainArgs, output: { result: true } },
       },
       { type: "worker_stopping", data: { ...workerArgs } },
       { type: "worker_stopped", data: { ...workerArgs } },
     ]);
 
     await expectMetrics([
-      { method: "jobSequenceCreated", args: { typeName: "test" } },
+      { method: "jobChainCreated", args: { typeName: "test" } },
       { method: "jobCreated", args: { typeName: "test" } },
       { method: "workerStarted", args: { workerId: "worker" } },
       { method: "jobAttemptStarted", args: { typeName: "test", status: "running" } },
       { method: "jobAttemptCompleted", args: { typeName: "test", output: { result: true } } },
       { method: "jobCompleted", args: { typeName: "test", output: { result: true } } },
-      { method: "jobSequenceCompleted", args: { typeName: "test", output: { result: true } } },
+      { method: "jobChainCompleted", args: { typeName: "test", output: { result: true } } },
       { method: "workerStopping", args: { workerId: "worker" } },
       { method: "workerStopped", args: { workerId: "worker" } },
     ]);
 
     await expectHistograms([
       { method: "jobDuration", args: { typeName: "test" } },
-      { method: "jobSequenceDuration", args: { typeName: "test" } },
+      { method: "jobChainDuration", args: { typeName: "test" } },
       { method: "jobAttemptDuration", args: { typeName: "test", workerId: "worker" } },
     ]);
   });
@@ -281,32 +281,32 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     ] = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
         Promise.all([
-          queuert.startJobSequence({
+          queuert.startJobChain({
             ...context,
             typeName: "atomic-complete",
             input: { value: 10 },
           }),
-          queuert.startJobSequence({
+          queuert.startJobChain({
             ...context,
             typeName: "staged-complete",
             input: { value: 10 },
           }),
-          queuert.startJobSequence({
+          queuert.startJobChain({
             ...context,
             typeName: "staged-with-callback",
             input: { value: 10 },
           }),
-          queuert.startJobSequence({
+          queuert.startJobChain({
             ...context,
             typeName: "staged-without-callback",
             input: { value: 10 },
           }),
-          queuert.startJobSequence({
+          queuert.startJobChain({
             ...context,
             typeName: "atomic-with-callback",
             input: { value: 10 },
           }),
-          queuert.startJobSequence({
+          queuert.startJobChain({
             ...context,
             typeName: "atomic-without-callback",
             input: { value: 10 },
@@ -324,12 +324,12 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
         completedAtomicCallback,
         completedAtomicNoCallback,
       ] = await Promise.all([
-        queuert.waitForJobSequenceCompletion(atomicCompleteJob, completionOptions),
-        queuert.waitForJobSequenceCompletion(stagedCompleteJob, completionOptions),
-        queuert.waitForJobSequenceCompletion(stagedCallbackJob, completionOptions),
-        queuert.waitForJobSequenceCompletion(stagedNoCallbackJob, completionOptions),
-        queuert.waitForJobSequenceCompletion(atomicCallbackJob, completionOptions),
-        queuert.waitForJobSequenceCompletion(atomicNoCallbackJob, completionOptions),
+        queuert.waitForJobChainCompletion(atomicCompleteJob, completionOptions),
+        queuert.waitForJobChainCompletion(stagedCompleteJob, completionOptions),
+        queuert.waitForJobChainCompletion(stagedCallbackJob, completionOptions),
+        queuert.waitForJobChainCompletion(stagedNoCallbackJob, completionOptions),
+        queuert.waitForJobChainCompletion(atomicCallbackJob, completionOptions),
+        queuert.waitForJobChainCompletion(atomicNoCallbackJob, completionOptions),
       ]);
 
       expect(completedAtomicComplete.output).toEqual({ result: 20 });
@@ -445,29 +445,29 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       });
 
     const [
-      prepareJobSequence,
-      completeJobSequence,
-      prepareAfterAutoSetupJobSequence,
-      continueWithJobSequence,
+      prepareJobChain,
+      completeJobChain,
+      prepareAfterAutoSetupJobChain,
+      continueWithJobChain,
     ] = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
         Promise.all([
-          queuert.startJobSequence({
+          queuert.startJobChain({
             ...context,
             typeName: "test-prepare-twice",
             input: null,
           }),
-          queuert.startJobSequence({
+          queuert.startJobChain({
             ...context,
             typeName: "test-complete-twice",
             input: null,
           }),
-          queuert.startJobSequence({
+          queuert.startJobChain({
             ...context,
             typeName: "test-prepare-after-auto-setup",
             input: null,
           }),
-          queuert.startJobSequence({
+          queuert.startJobChain({
             ...context,
             typeName: "test-continueWith-twice",
             input: null,
@@ -478,10 +478,10 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
 
     await withWorkers([await worker.start()], async () => {
       await Promise.all([
-        queuert.waitForJobSequenceCompletion(prepareJobSequence, completionOptions),
-        queuert.waitForJobSequenceCompletion(completeJobSequence, completionOptions),
-        queuert.waitForJobSequenceCompletion(prepareAfterAutoSetupJobSequence, completionOptions),
-        queuert.waitForJobSequenceCompletion(continueWithJobSequence, completionOptions),
+        queuert.waitForJobChainCompletion(prepareJobChain, completionOptions),
+        queuert.waitForJobChainCompletion(completeJobChain, completionOptions),
+        queuert.waitForJobChainCompletion(prepareAfterAutoSetupJobChain, completionOptions),
+        queuert.waitForJobChainCompletion(continueWithJobChain, completionOptions),
       ]);
     });
   });
@@ -518,9 +518,9 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       },
     });
 
-    const jobSequence = await queuert.withNotify(async () =>
+    const jobChain = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...context,
           typeName: "test",
           input: null,
@@ -531,7 +531,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     await withWorkers(
       [await worker.start({ defaultLeaseConfig: { leaseMs: 1, renewIntervalMs: 100 } })],
       async () => {
-        await queuert.waitForJobSequenceCompletion(jobSequence, completionOptions);
+        await queuert.waitForJobChainCompletion(jobChain, completionOptions);
       },
     );
 
@@ -577,7 +577,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
 
     const job = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...context,
           typeName: "test",
           input: { test: true },
@@ -586,7 +586,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     );
 
     await withWorkers(await Promise.all([worker.start(), worker.start()]), async () => {
-      await queuert.waitForJobSequenceCompletion(job, completionOptions);
+      await queuert.waitForJobChainCompletion(job, completionOptions);
     });
 
     expect(processFn).toHaveBeenCalledTimes(1);
@@ -645,9 +645,9 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       },
     });
 
-    const jobSequence = await queuert.withNotify(async () =>
+    const jobChain = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...context,
           typeName: "test",
           input: null,
@@ -665,7 +665,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
         }),
       ],
       async () => {
-        await queuert.waitForJobSequenceCompletion(jobSequence, completionOptions);
+        await queuert.waitForJobChainCompletion(jobChain, completionOptions);
       },
     );
 
@@ -716,7 +716,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
 
     const job = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...context,
           typeName: "test",
           input: null,
@@ -735,7 +735,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
         }),
       ],
       async () => {
-        await queuert.waitForJobSequenceCompletion(job, completionOptions);
+        await queuert.waitForJobChainCompletion(job, completionOptions);
       },
     );
 
@@ -744,7 +744,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     expect(errors[1]).toBe("Error: Unexpected error");
     expect(errors[2]).toBe("Error: Unexpected error");
     expectLogs([
-      { type: "job_sequence_created" },
+      { type: "job_chain_created" },
       { type: "job_created" },
       { type: "worker_started" },
       { type: "job_attempt_started" },
@@ -768,13 +768,13 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       { type: "job_attempt_started" },
       { type: "job_attempt_completed" },
       { type: "job_completed" },
-      { type: "job_sequence_completed" },
+      { type: "job_chain_completed" },
       { type: "worker_stopping" },
       { type: "worker_stopped" },
     ]);
 
     await expectMetrics([
-      { method: "jobSequenceCreated" },
+      { method: "jobChainCreated" },
       { method: "jobCreated" },
       { method: "workerStarted" },
       { method: "jobAttemptStarted" },
@@ -786,7 +786,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       { method: "jobAttemptStarted" },
       { method: "jobAttemptCompleted" },
       { method: "jobCompleted" },
-      { method: "jobSequenceCompleted" },
+      { method: "jobChainCompleted" },
       { method: "workerStopping" },
       { method: "workerStopped" },
     ]);
@@ -850,11 +850,11 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       },
     });
 
-    const jobSequences = await queuert.withNotify(async () =>
+    const jobChains = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
         Promise.all(
           (["prepare", "process", "complete"] as ErrorPhase[]).map(async (phase) =>
-            queuert.startJobSequence({
+            queuert.startJobChain({
               ...context,
               typeName: "test",
               input: { phase },
@@ -876,8 +876,8 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       ],
       async () => {
         await Promise.all(
-          jobSequences.map(async (job) =>
-            queuert.waitForJobSequenceCompletion(job, completionOptions),
+          jobChains.map(async (job) =>
+            queuert.waitForJobChainCompletion(job, completionOptions),
           ),
         );
       },
@@ -979,9 +979,9 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       },
     });
 
-    const jobSequence = await queuert.withNotify(async () =>
+    const jobChain = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...context,
           typeName: "test",
           input: null,
@@ -990,7 +990,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     );
 
     await withWorkers([await worker.start()], async () => {
-      await queuert.waitForJobSequenceCompletion(jobSequence, completionOptions);
+      await queuert.waitForJobChainCompletion(jobChain, completionOptions);
     });
 
     expect(attempts).toBe(2);

@@ -4,7 +4,7 @@ import { createQueuert, defineJobTypes } from "../index.js";
 import { TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
-  it("deduplicates job sequences with same deduplication key", async ({
+  it("deduplicates job chains with same deduplication key", async ({
     stateAdapter,
     notifyAdapter,
     runInTransaction,
@@ -26,21 +26,21 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       }>(),
     });
 
-    const [sequence1, sequence2, sequence3] = await queuert.withNotify(async () =>
+    const [chain1, chain2, chain3] = await queuert.withNotify(async () =>
       runInTransaction(async (context) => [
-        await queuert.startJobSequence({
+        await queuert.startJobChain({
           ...context,
           typeName: "test",
           input: { value: 1 },
           deduplication: { key: "same-key" },
         }),
-        await queuert.startJobSequence({
+        await queuert.startJobChain({
           ...context,
           typeName: "test",
           input: { value: 2 },
           deduplication: { key: "same-key" },
         }),
-        await queuert.startJobSequence({
+        await queuert.startJobChain({
           ...context,
           typeName: "test",
           input: { value: 3 },
@@ -49,16 +49,16 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       ]),
     );
 
-    expect(sequence1.deduplicated).toBe(false);
-    expect(sequence2.deduplicated).toBe(true);
-    expect(sequence2.id).toBe(sequence1.id);
-    expect(sequence3.deduplicated).toBe(false);
-    expect(sequence3.id).not.toBe(sequence1.id);
+    expect(chain1.deduplicated).toBe(false);
+    expect(chain2.deduplicated).toBe(true);
+    expect(chain2.id).toBe(chain1.id);
+    expect(chain3.deduplicated).toBe(false);
+    expect(chain3.id).not.toBe(chain1.id);
 
     const completed1 = await runInTransaction(async (context) =>
-      queuert.completeJobSequence({
+      queuert.completeJobChain({
         ...context,
-        ...sequence1,
+        ...chain1,
         complete: async ({ job, complete }) => {
           return complete(job, async () => ({ result: job.input.value }));
         },
@@ -66,9 +66,9 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     );
 
     const completed3 = await runInTransaction(async (context) =>
-      queuert.completeJobSequence({
+      queuert.completeJobChain({
         ...context,
-        ...sequence3,
+        ...chain3,
         complete: async ({ job, complete }) => {
           return complete(job, async () => ({ result: job.input.value }));
         },
@@ -78,9 +78,9 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expect(completed1.output).toEqual({ result: 1 });
     expect(completed3.output).toEqual({ result: 3 });
 
-    // sequence2 was deduplicated to sequence1, so it should have the same output
+    // chain2 was deduplicated to chain1, so it should have the same output
     const fetched2 = await runInTransaction(async (context) =>
-      queuert.getJobSequence({ ...context, ...sequence2 }),
+      queuert.getJobChain({ ...context, ...chain2 }),
     );
     expect("output" in fetched2! && fetched2.output).toEqual({ result: 1 });
   });
@@ -108,9 +108,9 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     });
 
     // Test 'all' strategy - deduplicates against completed jobs
-    const allSequence1 = await queuert.withNotify(async () =>
+    const allChain1 = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...context,
           typeName: "test",
           input: { value: 1 },
@@ -120,18 +120,18 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     );
 
     await runInTransaction(async (context) =>
-      queuert.completeJobSequence({
+      queuert.completeJobChain({
         ...context,
-        ...allSequence1,
+        ...allChain1,
         complete: async ({ job, complete }) => {
           await complete(job, async () => ({ result: job.input.value }));
         },
       }),
     );
 
-    const allSequence2 = await queuert.withNotify(async () =>
+    const allChain2 = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...context,
           typeName: "test",
           input: { value: 2 },
@@ -140,13 +140,13 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       ),
     );
 
-    expect(allSequence2.deduplicated).toBe(true);
-    expect(allSequence2.id).toBe(allSequence1.id);
+    expect(allChain2.deduplicated).toBe(true);
+    expect(allChain2.id).toBe(allChain1.id);
 
     // Test 'completed' strategy - does NOT deduplicate against completed jobs
-    const completedSequence1 = await queuert.withNotify(async () =>
+    const completedChain1 = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...context,
           typeName: "test",
           input: { value: 3 },
@@ -156,18 +156,18 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     );
 
     await runInTransaction(async (context) =>
-      queuert.completeJobSequence({
+      queuert.completeJobChain({
         ...context,
-        ...completedSequence1,
+        ...completedChain1,
         complete: async ({ job, complete }) => {
           await complete(job, async () => ({ result: job.input.value }));
         },
       }),
     );
 
-    const completedSequence2 = await queuert.withNotify(async () =>
+    const completedChain2 = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...context,
           typeName: "test",
           input: { value: 4 },
@@ -176,13 +176,13 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       ),
     );
 
-    expect(completedSequence2.deduplicated).toBe(false);
-    expect(completedSequence2.id).not.toBe(completedSequence1.id);
+    expect(completedChain2.deduplicated).toBe(false);
+    expect(completedChain2.id).not.toBe(completedChain1.id);
 
     const completed2 = await runInTransaction(async (context) =>
-      queuert.completeJobSequence({
+      queuert.completeJobChain({
         ...context,
-        ...completedSequence2,
+        ...completedChain2,
         complete: async ({ job, complete }) => {
           return complete(job, async () => ({ result: job.input.value }));
         },
@@ -214,9 +214,9 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     });
 
     // Test 'all' strategy with windowMs
-    const allSequence1 = await queuert.withNotify(async () =>
+    const allChain1 = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...context,
           typeName: "test",
           input: { value: 1 },
@@ -225,13 +225,13 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       ),
     );
 
-    expect(allSequence1.deduplicated).toBe(false);
+    expect(allChain1.deduplicated).toBe(false);
 
     await sleep(100);
 
-    const allSequence2 = await queuert.withNotify(async () =>
+    const allChain2 = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...context,
           typeName: "test",
           input: { value: 2 },
@@ -240,13 +240,13 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       ),
     );
 
-    expect(allSequence2.deduplicated).toBe(false);
-    expect(allSequence2.id).not.toBe(allSequence1.id);
+    expect(allChain2.deduplicated).toBe(false);
+    expect(allChain2.id).not.toBe(allChain1.id);
 
     // Test 'completed' strategy with windowMs
-    const completedSequence1 = await queuert.withNotify(async () =>
+    const completedChain1 = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...context,
           typeName: "test",
           input: { value: 3 },
@@ -256,9 +256,9 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     );
 
     await runInTransaction(async (context) =>
-      queuert.completeJobSequence({
+      queuert.completeJobChain({
         ...context,
-        ...completedSequence1,
+        ...completedChain1,
         complete: async ({ job, complete }) => {
           await complete(job, async () => ({ result: job.input.value }));
         },
@@ -267,9 +267,9 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     await sleep(100);
 
-    const completedSequence2 = await queuert.withNotify(async () =>
+    const completedChain2 = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...context,
           typeName: "test",
           input: { value: 4 },
@@ -278,7 +278,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       ),
     );
 
-    expect(completedSequence2.deduplicated).toBe(false);
-    expect(completedSequence2.id).not.toBe(completedSequence1.id);
+    expect(completedChain2.deduplicated).toBe(false);
+    expect(completedChain2.id).not.toBe(completedChain1.id);
   });
 };

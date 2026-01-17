@@ -38,9 +38,9 @@ export const createMockObservabilityAdapter = (): MockObservabilityAdapter => {
     jobCompleted: mock("jobCompleted"),
     jobReaped: mock("jobReaped"),
 
-    // job sequence
-    jobSequenceCreated: mock("jobSequenceCreated"),
-    jobSequenceCompleted: mock("jobSequenceCompleted"),
+    // job chain
+    jobChainCreated: mock("jobChainCreated"),
+    jobChainCompleted: mock("jobChainCompleted"),
 
     // blockers
     jobBlocked: mock("jobBlocked"),
@@ -54,7 +54,7 @@ export const createMockObservabilityAdapter = (): MockObservabilityAdapter => {
     stateAdapterError: mock("stateAdapterError"),
 
     // histograms
-    jobSequenceDuration: mock("jobSequenceDuration"),
+    jobChainDuration: mock("jobChainDuration"),
     jobDuration: mock("jobDuration"),
     jobAttemptDuration: mock("jobAttemptDuration"),
 

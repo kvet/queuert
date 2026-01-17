@@ -19,7 +19,7 @@ type PartialJobTypeReference = { typeName?: string; input?: unknown };
  * Schema definition for a single job type using Valibot.
  */
 export type ValibotJobTypeSchema = {
-  /** Whether this job type can start a sequence (entry point). Default: false */
+  /** Whether this job type can start a chain (entry point). Default: false */
   entry?: boolean;
   /** Valibot schema for validating job input */
   input: v.GenericSchema;

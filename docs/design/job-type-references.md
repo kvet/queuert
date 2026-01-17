@@ -162,9 +162,9 @@ In the common case (single job type match), this resolves to a specific type. In
 
 ## Output Behavior
 
-### Output Only (Sequence Termination)
+### Output Only (Chain Termination)
 
-A job with only `output` terminates the sequence:
+A job with only `output` terminates the chain:
 
 ```typescript
 {
@@ -284,7 +284,7 @@ When using validation libraries (Zod, Valibot, etc.), references are validated a
 
 ## Examples
 
-### Simple Sequence
+### Single Job Chain
 
 ```typescript
 defineJobTypes<{

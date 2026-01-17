@@ -1,14 +1,14 @@
 import {
-  blockerSequencesTestSuite,
+  blockerChainsTestSuite,
   extendWithCommon,
   extendWithNoopNotify,
   extendWithResourceLeakDetection,
   processTestSuite,
   reaperTestSuite,
   schedulingTestSuite,
-  sequencesTestSuite,
+  chainsTestSuite,
   stateResilienceTestSuite,
-  waitSequenceCompletionTestSuite,
+  waitChainCompletionTestSuite,
   workerlessCompletionTestSuite,
   workerTestSuite,
 } from "queuert/testing";
@@ -31,16 +31,16 @@ describe("Reaper", () => {
   reaperTestSuite({ it: sqliteNoopIt });
 });
 
-describe("Sequences", () => {
-  sequencesTestSuite({ it: sqliteNoopIt });
+describe("Chains", () => {
+  chainsTestSuite({ it: sqliteNoopIt });
 });
 
-describe("Blocker Sequences", () => {
-  blockerSequencesTestSuite({ it: sqliteNoopIt });
+describe("Blocker Chains", () => {
+  blockerChainsTestSuite({ it: sqliteNoopIt });
 });
 
-describe("Wait Sequence Completion", () => {
-  waitSequenceCompletionTestSuite({ it: sqliteNoopIt });
+describe("Wait Chain Completion", () => {
+  waitChainCompletionTestSuite({ it: sqliteNoopIt });
 });
 
 describe("State Resilience", () => {

@@ -26,15 +26,15 @@ const methodToMetricName: Record<string, string> = {
   jobAttemptCompleted: "queuert.job.attempt.completed",
   jobCompleted: "queuert.job.completed",
   jobReaped: "queuert.job.reaped",
-  jobSequenceCreated: "queuert.job_sequence.created",
-  jobSequenceCompleted: "queuert.job_sequence.completed",
+  jobChainCreated: "queuert.job_chain.created",
+  jobChainCompleted: "queuert.job_chain.completed",
   jobBlocked: "queuert.job.blocked",
   jobUnblocked: "queuert.job.unblocked",
   notifyContextAbsence: "queuert.notify_adapter.context_absence",
   notifyAdapterError: "queuert.notify_adapter.error",
   stateAdapterError: "queuert.state_adapter.error",
   // histograms
-  jobSequenceDuration: "queuert.job_sequence.duration",
+  jobChainDuration: "queuert.job_chain.duration",
   jobDuration: "queuert.job.duration",
   jobAttemptDuration: "queuert.job.attempt.duration",
   // gauges
@@ -136,7 +136,7 @@ export const extendWithOtelObservability = <T extends {}>(
 
           // Note: We only verify counts here, not attribute details.
           // The test expectations use ObservabilityAdapter method args which don't map 1:1
-          // to OTEL attributes (e.g., typeName -> sequenceTypeName, rescheduledAfterMs not stored).
+          // to OTEL attributes (e.g., typeName -> chainTypeName, rescheduledAfterMs not stored).
           // Attribute verification should be done via unit tests on the adapter itself.
         });
       },

@@ -108,11 +108,11 @@ export const createPgNotifyAdapter = async <TContext>({
   channelPrefix?: string;
 }): Promise<NotifyAdapter> => {
   const jobScheduledChannel = `${channelPrefix}_sched`;
-  const sequenceCompletedChannel = `${channelPrefix}_seqc`;
+  const chainCompletedChannel = `${channelPrefix}_chainc`;
   const ownershipLostChannel = `${channelPrefix}_owls`;
 
   const jobScheduledListener = createSharedListener(provider, jobScheduledChannel);
-  const sequenceCompletedListener = createSharedListener(provider, sequenceCompletedChannel);
+  const chainCompletedListener = createSharedListener(provider, chainCompletedChannel);
   const ownershipLostListener = createSharedListener(provider, ownershipLostChannel);
 
   return {
@@ -131,15 +131,15 @@ export const createPgNotifyAdapter = async <TContext>({
       });
     },
 
-    notifyJobSequenceCompleted: async (sequenceId) => {
+    notifyJobChainCompleted: async (chainId) => {
       await provider.provideContext("query", async (ctx) => {
-        await provider.publish(ctx, sequenceCompletedChannel, sequenceId);
+        await provider.publish(ctx, chainCompletedChannel, chainId);
       });
     },
 
-    listenJobSequenceCompleted: async (sequenceId, onNotification) => {
-      return sequenceCompletedListener.subscribe((payload) => {
-        if (payload === sequenceId) {
+    listenJobChainCompleted: async (chainId, onNotification) => {
+      return chainCompletedListener.subscribe((payload) => {
+        if (payload === chainId) {
           onNotification();
         }
       });

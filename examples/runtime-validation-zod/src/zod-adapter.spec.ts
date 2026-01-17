@@ -302,7 +302,7 @@ describe("createZodJobTypeRegistry", () => {
 });
 
 describe("integration", () => {
-  it("runs a sequence with continuation and validates at runtime", async () => {
+  it("runs a chain with continuation and validates at runtime", async () => {
     const registry = createZodJobTypeRegistry({
       "fetch-data": {
         entry: true,
@@ -349,10 +349,10 @@ describe("integration", () => {
 
     const stop = await worker.start({ workerId: "test-worker" });
 
-    const sequence = await qrt.withNotify(async () =>
+    const chain = await qrt.withNotify(async () =>
       stateAdapter.provideContext(async (ctx) =>
         stateAdapter.runInTransaction(ctx, async (ctx) =>
-          qrt.startJobSequence({
+          qrt.startJobChain({
             ...ctx,
             typeName: "fetch-data",
             input: { url: "https://example.com/api" },
@@ -361,13 +361,13 @@ describe("integration", () => {
       ),
     );
 
-    const result = await qrt.waitForJobSequenceCompletion(sequence, { timeoutMs: 5000 });
+    const result = await qrt.waitForJobChainCompletion(chain, { timeoutMs: 5000 });
     expect(result.output).toEqual({ processed: true, itemCount: 3 });
 
     await stop();
   });
 
-  it("rejects invalid input at sequence start", async () => {
+  it("rejects invalid input at chain start", async () => {
     const registry = createZodJobTypeRegistry({
       main: {
         entry: true,
@@ -388,7 +388,7 @@ describe("integration", () => {
       qrt.withNotify(async () =>
         stateAdapter.provideContext(async (ctx) =>
           stateAdapter.runInTransaction(ctx, async (ctx) =>
-            qrt.startJobSequence({
+            qrt.startJobChain({
               ...ctx,
               typeName: "main",
               input: { url: "not-a-valid-url" },
@@ -399,7 +399,7 @@ describe("integration", () => {
     ).rejects.toThrow(JobTypeValidationError);
   });
 
-  it("rejects non-entry type at sequence start", async () => {
+  it("rejects non-entry type at chain start", async () => {
     const registry = createZodJobTypeRegistry({
       internal: {
         input: z.object({ data: z.string() }),
@@ -419,7 +419,7 @@ describe("integration", () => {
       qrt.withNotify(async () =>
         stateAdapter.provideContext(async (ctx) =>
           stateAdapter.runInTransaction(ctx, async (ctx) =>
-            qrt.startJobSequence({
+            qrt.startJobChain({
               ...ctx,
               // @ts-ignore to test runtime validation
               typeName: "internal",
@@ -462,7 +462,7 @@ describe("integration", () => {
       qrt.withNotify(async () =>
         stateAdapter.provideContext(async (ctx) =>
           stateAdapter.runInTransaction(ctx, async (ctx) =>
-            qrt.startJobSequence(
+            qrt.startJobChain(
               // @ts-ignore to test runtime validation
               {
                 ...ctx,
@@ -477,7 +477,7 @@ describe("integration", () => {
     ).rejects.toThrow(JobTypeValidationError);
   });
 
-  it("runs a sequence with structural blocker validation", async () => {
+  it("runs a chain with structural blocker validation", async () => {
     const registry = createZodJobTypeRegistry({
       main: {
         entry: true,
@@ -517,15 +517,15 @@ describe("integration", () => {
 
     const stop = await worker.start({ workerId: "test-worker" });
 
-    const sequence = await qrt.withNotify(async () =>
+    const chain = await qrt.withNotify(async () =>
       stateAdapter.provideContext(async (ctx) =>
         stateAdapter.runInTransaction(ctx, async (ctx) =>
-          qrt.startJobSequence({
+          qrt.startJobChain({
             ...ctx,
             typeName: "main",
             input: { id: "main-1" },
             startBlockers: async () => {
-              const blocker = await qrt.startJobSequence({
+              const blocker = await qrt.startJobChain({
                 ...ctx,
                 typeName: "auth",
                 input: { token: "abc123" },
@@ -537,7 +537,7 @@ describe("integration", () => {
       ),
     );
 
-    const result = await qrt.waitForJobSequenceCompletion(sequence, { timeoutMs: 5000 });
+    const result = await qrt.waitForJobChainCompletion(chain, { timeoutMs: 5000 });
     expect(result.output).toEqual({ success: true });
 
     await stop();

@@ -1,19 +1,19 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { UUID } from "node:crypto";
 import {
-  CompletedJobSequence,
-  JobSequence,
-  mapStateJobPairToJobSequence,
-} from "./entities/job-sequence.js";
+  CompletedJobChain,
+  JobChain,
+  mapStateJobPairToJobChain,
+} from "./entities/job-chain.js";
 import {
   BaseJobTypeDefinitions,
-  BlockerSequences,
+  BlockerChains,
   ContinuationJobs,
   EntryJobTypeDefinitions,
   JobOf,
-  JobSequenceOf,
-  SequenceJobs,
-  SequenceJobTypes,
+  JobChainOf,
+  ChainJobs,
+  ChainJobTypes,
 } from "./entities/job-type.js";
 import { Job, JobWithoutBlockers, mapStateJobToJob, PendingJob } from "./entities/job.js";
 import { ScheduleOptions } from "./entities/schedule.js";
@@ -43,25 +43,25 @@ export type StartBlockersFn<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions & string,
-  TSequenceTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string =
+  TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string =
     keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
 > = (options: {
   job: PendingJob<
-    JobWithoutBlockers<JobOf<TJobId, TJobTypeDefinitions, TJobTypeName, TSequenceTypeName>>
+    JobWithoutBlockers<JobOf<TJobId, TJobTypeDefinitions, TJobTypeName, TChainTypeName>>
   >;
-}) => Promise<BlockerSequences<TJobId, TJobTypeDefinitions, TJobTypeName>>;
+}) => Promise<BlockerChains<TJobId, TJobTypeDefinitions, TJobTypeName>>;
 
 const notifyCompletionStorage = new AsyncLocalStorage<{
   storeId: UUID;
   jobTypeCounts: Map<string, number>;
-  sequenceIds: Set<string>;
+  chainIds: Set<string>;
   jobOwnershipLostIds: Set<string>;
 }>();
 const jobContextStorage = new AsyncLocalStorage<{
   storeId: UUID;
-  sequenceId: string;
-  sequenceTypeName: string;
-  rootSequenceId: string;
+  chainId: string;
+  chainTypeName: string;
+  rootChainId: string;
   originId: string;
 }>();
 
@@ -83,7 +83,7 @@ export class JobAlreadyCompletedError extends Error {
   }
 }
 
-export class WaitForJobSequenceCompletionTimeoutError extends Error {
+export class WaitForJobChainCompletionTimeoutError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
     super(message, options);
   }
@@ -164,7 +164,7 @@ export const queuertHelper = ({
     input,
     context,
     startBlockers,
-    isSequence,
+    isChain,
     deduplication,
     schedule,
   }: {
@@ -172,11 +172,11 @@ export const queuertHelper = ({
     input: unknown;
     context: BaseStateAdapterContext;
     startBlockers?: StartBlockersFn<string, BaseJobTypeDefinitions, string>;
-    isSequence: boolean;
+    isChain: boolean;
     deduplication?: DeduplicationOptions;
     schedule?: ScheduleOptions;
   }): Promise<{ job: StateJob; deduplicated: boolean }> => {
-    if (isSequence) {
+    if (isChain) {
       registry.validateEntry(typeName);
     }
 
@@ -186,11 +186,11 @@ export const queuertHelper = ({
     const createJobResult = await stateAdapter.createJob({
       context,
       typeName,
-      sequenceTypeName: isSequence ? typeName : jobContext!.sequenceTypeName,
+      chainTypeName: isChain ? typeName : jobContext!.chainTypeName,
       input: parsedInput,
       originId: jobContext?.originId,
-      sequenceId: isSequence ? undefined : jobContext!.sequenceId,
-      rootSequenceId: isSequence ? jobContext?.rootSequenceId : jobContext!.rootSequenceId,
+      chainId: isChain ? undefined : jobContext!.chainId,
+      rootChainId: isChain ? jobContext?.rootChainId : jobContext!.rootChainId,
       deduplication,
       schedule,
     });
@@ -201,46 +201,46 @@ export const queuertHelper = ({
       return { job, deduplicated };
     }
 
-    let blockerSequences: JobSequence<any, any, any, any>[] = [];
-    let incompleteBlockerSequenceIds: string[] = [];
+    let blockerChains: JobChain<any, any, any, any>[] = [];
+    let incompleteBlockerChainIds: string[] = [];
     if (startBlockers) {
       const blockers = await withJobContext(
         {
-          sequenceId: job.sequenceId,
-          sequenceTypeName: job.sequenceTypeName,
-          rootSequenceId: job.rootSequenceId,
+          chainId: job.chainId,
+          chainTypeName: job.chainTypeName,
+          rootChainId: job.rootChainId,
           originId: job.id,
         },
         async () => startBlockers({ job: mapStateJobToJob(job) as any }),
       );
 
-      blockerSequences = [...blockers] as JobSequence<any, any, any, any>[];
-      const blockerSequenceIds = blockerSequences.map((b) => b.id);
+      blockerChains = [...blockers] as JobChain<any, any, any, any>[];
+      const blockerChainIds = blockerChains.map((b) => b.id);
 
       const addBlockersResult = await stateAdapter.addJobBlockers({
         context,
         jobId: job.id,
-        blockedBySequenceIds: blockerSequenceIds,
+        blockedByChainIds: blockerChainIds,
       });
       job = addBlockersResult.job;
-      incompleteBlockerSequenceIds = addBlockersResult.incompleteBlockerSequenceIds;
+      incompleteBlockerChainIds = addBlockersResult.incompleteBlockerChainIds;
     }
 
-    const blockerRefs = blockerSequences.map((b) => ({ typeName: b.typeName, input: b.input }));
+    const blockerRefs = blockerChains.map((b) => ({ typeName: b.typeName, input: b.input }));
     registry.validateBlockers(typeName, blockerRefs);
 
-    if (isSequence) {
-      observabilityHelper.jobSequenceCreated(job, { input });
+    if (isChain) {
+      observabilityHelper.jobChainCreated(job, { input });
     }
 
-    observabilityHelper.jobCreated(job, { input, blockers: blockerSequences, schedule });
+    observabilityHelper.jobCreated(job, { input, blockers: blockerChains, schedule });
 
-    if (incompleteBlockerSequenceIds.length > 0) {
-      const incompleteBlockerSet = new Set(incompleteBlockerSequenceIds);
-      const incompleteBlockerSequences = blockerSequences.filter((b) =>
+    if (incompleteBlockerChainIds.length > 0) {
+      const incompleteBlockerSet = new Set(incompleteBlockerChainIds);
+      const incompleteBlockerChains = blockerChains.filter((b) =>
         incompleteBlockerSet.has(b.id),
       );
-      observabilityHelper.jobBlocked(job, { blockedBySequences: incompleteBlockerSequences });
+      observabilityHelper.jobBlocked(job, { blockedByChains: incompleteBlockerChains });
     }
 
     notifyJobScheduled(job);
@@ -257,10 +257,10 @@ export const queuertHelper = ({
     }
   };
 
-  const notifySequenceCompletion = (job: StateJob): void => {
+  const notifyChainCompletion = (job: StateJob): void => {
     const store = notifyCompletionStorage.getStore();
     if (store) {
-      store.sequenceIds.add(job.sequenceId);
+      store.chainIds.add(job.chainId);
     }
   };
 
@@ -279,7 +279,7 @@ export const queuertHelper = ({
     const store = {
       storeId: crypto.randomUUID(),
       jobTypeCounts: new Map<string, number>(),
-      sequenceIds: new Set<string>(),
+      chainIds: new Set<string>(),
       jobOwnershipLostIds: new Set<string>(),
     };
     return notifyCompletionStorage.run(store, async () => {
@@ -291,9 +291,9 @@ export const queuertHelper = ({
             await notifyAdapter.notifyJobScheduled(typeName, count);
           } catch {}
         }),
-        ...Array.from(store.sequenceIds).map(async (sequenceId) => {
+        ...Array.from(store.chainIds).map(async (chainId) => {
           try {
-            await notifyAdapter.notifyJobSequenceCompleted(sequenceId);
+            await notifyAdapter.notifyJobChainCompleted(chainId);
           } catch {}
         }),
         ...Array.from(store.jobOwnershipLostIds).map(async (jobId) => {
@@ -310,9 +310,9 @@ export const queuertHelper = ({
   const withJobContext = async <T>(
     context: {
       originId: string;
-      sequenceId: string;
-      rootSequenceId: string;
-      sequenceTypeName: string;
+      chainId: string;
+      rootChainId: string;
+      chainTypeName: string;
     },
     cb: () => Promise<T>,
   ): Promise<T> => {
@@ -335,7 +335,7 @@ export const queuertHelper = ({
     context: BaseStateAdapterContext;
     workerId: string | null;
   } & (
-    | { type: "completeSequence"; output: unknown }
+    | { type: "completeChain"; output: unknown }
     | { type: "continueWith"; continuedJob: Job<any, any, any, any, any[]> }
   )): Promise<StateJob> => {
     const hasContinuedJob = rest.type === "continueWith";
@@ -360,29 +360,29 @@ export const queuertHelper = ({
     observabilityHelper.jobDuration(job);
 
     if (!hasContinuedJob) {
-      const jobSequenceStartJob = await stateAdapter.getJobById({
+      const jobChainStartJob = await stateAdapter.getJobById({
         context,
-        jobId: job.sequenceId,
+        jobId: job.chainId,
       });
 
-      if (!jobSequenceStartJob) {
-        throw new JobNotFoundError(`Job sequence with id ${job.sequenceId} not found`);
+      if (!jobChainStartJob) {
+        throw new JobNotFoundError(`Job chain with id ${job.chainId} not found`);
       }
 
-      observabilityHelper.jobSequenceCompleted(jobSequenceStartJob, { output });
-      observabilityHelper.jobSequenceDuration(jobSequenceStartJob, job);
-      notifySequenceCompletion(job);
+      observabilityHelper.jobChainCompleted(jobChainStartJob, { output });
+      observabilityHelper.jobChainDuration(jobChainStartJob, job);
+      notifyChainCompletion(job);
 
       const unblockedJobs = await stateAdapter.scheduleBlockedJobs({
         context,
-        blockedBySequenceId: jobSequenceStartJob.id,
+        blockedByChainId: jobChainStartJob.id,
       });
 
       if (unblockedJobs.length > 0) {
         unblockedJobs.forEach((unblockedJob) => {
           notifyJobScheduled(unblockedJob);
           observabilityHelper.jobUnblocked(unblockedJob, {
-            unblockedBySequence: jobSequenceStartJob,
+            unblockedByChain: jobChainStartJob,
           });
         });
       }
@@ -399,9 +399,9 @@ export const queuertHelper = ({
     withNotifyContext: withNotifyContext as <T>(cb: () => Promise<T>) => Promise<T>,
     withJobContext: withJobContext as <T>(
       context: {
-        sequenceId: string;
-        sequenceTypeName: string;
-        rootSequenceId: string;
+        chainId: string;
+        chainTypeName: string;
+        rootChainId: string;
         originId: string;
       },
       cb: () => Promise<T>,
@@ -421,7 +421,7 @@ export const queuertHelper = ({
       context: BaseStateAdapterContext;
     }): Promise<[StateJob, StateJob | undefined][]> =>
       stateAdapter.getJobBlockers({ context, jobId }),
-    startJobSequence: async <TSequenceTypeName extends string, TInput, TOutput>({
+    startJobChain: async <TChainTypeName extends string, TInput, TOutput>({
       typeName,
       input,
       context,
@@ -429,14 +429,14 @@ export const queuertHelper = ({
       schedule,
       startBlockers,
     }: {
-      typeName: TSequenceTypeName;
+      typeName: TChainTypeName;
       input: TInput;
       context: any;
       deduplication?: DeduplicationOptions;
       schedule?: ScheduleOptions;
       startBlockers?: StartBlockersFn<string, BaseJobTypeDefinitions, string>;
     }): Promise<
-      JobSequence<string, TSequenceTypeName, TInput, TOutput> & { deduplicated: boolean }
+      JobChain<string, TChainTypeName, TInput, TOutput> & { deduplicated: boolean }
     > => {
       await assertInTransaction(context);
 
@@ -445,27 +445,27 @@ export const queuertHelper = ({
         input,
         context,
         startBlockers,
-        isSequence: true,
+        isChain: true,
         deduplication,
         schedule,
       });
 
-      return { ...mapStateJobPairToJobSequence([job, undefined]), deduplicated };
+      return { ...mapStateJobPairToJobChain([job, undefined]), deduplicated };
     },
-    getJobSequence: async <TSequenceTypeName extends string, TInput, TOutput>({
+    getJobChain: async <TChainTypeName extends string, TInput, TOutput>({
       id,
       context,
     }: {
       id: string;
-      typeName: TSequenceTypeName;
+      typeName: TChainTypeName;
       context: any;
-    }): Promise<JobSequence<string, TSequenceTypeName, TInput, TOutput> | null> => {
-      const jobSequence = await stateAdapter.getJobSequenceById({
+    }): Promise<JobChain<string, TChainTypeName, TInput, TOutput> | null> => {
+      const jobChain = await stateAdapter.getJobChainById({
         context,
         jobId: id,
       });
 
-      return jobSequence ? mapStateJobPairToJobSequence(jobSequence) : null;
+      return jobChain ? mapStateJobPairToJobChain(jobChain) : null;
     },
     continueWith: async <TJobTypeName extends string, TInput>({
       typeName,
@@ -489,7 +489,7 @@ export const queuertHelper = ({
         input,
         context,
         startBlockers,
-        isSequence: false,
+        isChain: false,
         schedule,
       });
 
@@ -537,7 +537,7 @@ export const queuertHelper = ({
         context: BaseStateAdapterContext;
         workerId: string | null;
       } & (
-        | { type: "completeSequence"; output: unknown }
+        | { type: "completeChain"; output: unknown }
         | { type: "continueWith"; continuedJob: Job<any, any, any, any, any[]> }
       ),
     ) => Promise<StateJob>,
@@ -680,66 +680,66 @@ export const queuertHelper = ({
         } catch {}
       }
     },
-    deleteJobSequences: async ({
-      rootSequenceIds,
+    deleteJobChains: async ({
+      rootChainIds,
       context,
     }: {
-      rootSequenceIds: string[];
+      rootChainIds: string[];
       context: BaseStateAdapterContext;
     }): Promise<void> => {
       await assertInTransaction(context);
 
-      const sequenceJobs = await Promise.all(
-        rootSequenceIds.map(async (sequenceId) =>
+      const chainJobs = await Promise.all(
+        rootChainIds.map(async (chainId) =>
           stateAdapter.getJobById({
             context,
-            jobId: sequenceId,
+            jobId: chainId,
           }),
         ),
       );
 
-      for (let i = 0; i < rootSequenceIds.length; i++) {
-        const sequenceJob = sequenceJobs[i];
-        const sequenceId = rootSequenceIds[i];
+      for (let i = 0; i < rootChainIds.length; i++) {
+        const chainJob = chainJobs[i];
+        const chainId = rootChainIds[i];
 
-        if (!sequenceJob) {
-          throw new JobNotFoundError(`Job sequence with id ${sequenceId} not found`);
+        if (!chainJob) {
+          throw new JobNotFoundError(`Job chain with id ${chainId} not found`);
         }
 
-        if (sequenceJob.rootSequenceId !== sequenceJob.id) {
+        if (chainJob.rootChainId !== chainJob.id) {
           throw new Error(
-            `Cannot delete job sequence ${sequenceId}: must delete from the root sequence (rootSequenceId: ${sequenceJob.rootSequenceId})`,
+            `Cannot delete job chain ${chainId}: must delete from the root chain (rootChainId: ${chainJob.rootChainId})`,
           );
         }
       }
 
       const externalBlockers = await stateAdapter.getExternalBlockers({
         context,
-        rootSequenceIds,
+        rootChainIds,
       });
 
       if (externalBlockers.length > 0) {
         const uniqueBlockedRootIds = [
-          ...new Set(externalBlockers.map((b) => b.blockedRootSequenceId)),
+          ...new Set(externalBlockers.map((b) => b.blockedRootChainId)),
         ];
         throw new Error(
-          `Cannot delete job sequences: external job sequences depend on them. ` +
-            `Include the following root sequences in the deletion: ${uniqueBlockedRootIds.join(", ")}`,
+          `Cannot delete job chains: external job chains depend on them. ` +
+            `Include the following root chains in the deletion: ${uniqueBlockedRootIds.join(", ")}`,
         );
       }
 
-      await stateAdapter.deleteJobsByRootSequenceIds({
+      await stateAdapter.deleteJobsByRootChainIds({
         context,
-        rootSequenceIds,
+        rootChainIds,
       });
     },
-    completeJobSequence: async <TSequenceTypeName extends string, TInput, TOutput>({
+    completeJobChain: async <TChainTypeName extends string, TInput, TOutput>({
       id,
       context,
       complete: completeCallback,
     }: {
       id: string;
-      typeName: TSequenceTypeName;
+      typeName: TChainTypeName;
       context: BaseStateAdapterContext;
       complete: (options: {
         job: StateJob;
@@ -756,16 +756,16 @@ export const queuertHelper = ({
           ) => unknown,
         ) => Promise<unknown>;
       }) => Promise<void>;
-    }): Promise<JobSequence<string, TSequenceTypeName, TInput, TOutput>> => {
+    }): Promise<JobChain<string, TChainTypeName, TInput, TOutput>> => {
       await assertInTransaction(context);
 
       const currentJob = await stateAdapter.getCurrentJobForUpdate({
         context,
-        sequenceId: id,
+        chainId: id,
       });
 
       if (!currentJob) {
-        throw new JobNotFoundError(`Job sequence with id ${id} not found`);
+        throw new JobNotFoundError(`Job chain with id ${id} not found`);
       }
 
       const complete = async (
@@ -800,9 +800,9 @@ export const queuertHelper = ({
             continuedJob = await withJobContext(
               {
                 originId: job.originId ?? job.id,
-                sequenceId: job.sequenceId,
-                rootSequenceId: job.rootSequenceId,
-                sequenceTypeName: job.sequenceTypeName,
+                chainId: job.chainId,
+                rootChainId: job.rootChainId,
+                chainTypeName: job.chainTypeName,
               },
               async () => {
                 const { job: newJob } = await createStateJob({
@@ -810,7 +810,7 @@ export const queuertHelper = ({
                   input,
                   context,
                   startBlockers: startBlockers as any,
-                  isSequence: false,
+                  isChain: false,
                   schedule,
                 });
 
@@ -828,7 +828,7 @@ export const queuertHelper = ({
         await finishJob(
           continuedJob
             ? { job, context, workerId: null, type: "continueWith", continuedJob }
-            : { job, context, workerId: null, type: "completeSequence", output },
+            : { job, context, workerId: null, type: "completeChain", output },
         );
 
         if (wasRunning) {
@@ -840,49 +840,49 @@ export const queuertHelper = ({
 
       await completeCallback({ job: currentJob, complete });
 
-      const updatedSequence = await stateAdapter.getJobSequenceById({
+      const updatedChain = await stateAdapter.getJobChainById({
         context,
         jobId: id,
       });
 
-      if (!updatedSequence) {
-        throw new JobNotFoundError(`Job sequence with id ${id} not found after complete`);
+      if (!updatedChain) {
+        throw new JobNotFoundError(`Job chain with id ${id} not found after complete`);
       }
 
-      return mapStateJobPairToJobSequence(updatedSequence);
+      return mapStateJobPairToJobChain(updatedChain);
     },
-    waitForJobSequenceCompletion: async <TSequenceTypeName extends string, TInput, TOutput>({
+    waitForJobChainCompletion: async <TChainTypeName extends string, TInput, TOutput>({
       id,
       timeoutMs,
       pollIntervalMs = 15_000,
       signal,
     }: {
       id: string;
-      typeName: TSequenceTypeName;
+      typeName: TChainTypeName;
       timeoutMs: number;
       pollIntervalMs?: number;
       signal?: AbortSignal;
-    }): Promise<CompletedJobSequence<JobSequence<string, TSequenceTypeName, TInput, TOutput>>> => {
-      const checkSequence = async (): Promise<CompletedJobSequence<
-        JobSequence<string, TSequenceTypeName, TInput, TOutput>
+    }): Promise<CompletedJobChain<JobChain<string, TChainTypeName, TInput, TOutput>>> => {
+      const checkChain = async (): Promise<CompletedJobChain<
+        JobChain<string, TChainTypeName, TInput, TOutput>
       > | null> => {
-        const sequence = await stateAdapter.provideContext(async (context) =>
-          stateAdapter.getJobSequenceById({ context, jobId: id }),
+        const chain = await stateAdapter.provideContext(async (context) =>
+          stateAdapter.getJobChainById({ context, jobId: id }),
         );
-        if (!sequence) {
-          throw new JobNotFoundError(`Job sequence with id ${id} not found`);
+        if (!chain) {
+          throw new JobNotFoundError(`Job chain with id ${id} not found`);
         }
-        const jobSequence = mapStateJobPairToJobSequence(sequence);
-        return jobSequence.status === "completed"
-          ? (jobSequence as CompletedJobSequence<
-              JobSequence<string, TSequenceTypeName, TInput, TOutput>
+        const jobChain = mapStateJobPairToJobChain(chain);
+        return jobChain.status === "completed"
+          ? (jobChain as CompletedJobChain<
+              JobChain<string, TChainTypeName, TInput, TOutput>
             >)
           : null;
       };
 
-      const completedSequence = await checkSequence();
-      if (completedSequence) {
-        return completedSequence;
+      const completedChain = await checkChain();
+      if (completedChain) {
+        return completedChain;
       }
 
       const timeoutSignal = AbortSignal.timeout(timeoutMs);
@@ -899,7 +899,7 @@ export const queuertHelper = ({
 
       let dispose: () => Promise<void> = async () => {};
       try {
-        dispose = await notifyAdapter.listenJobSequenceCompleted(id, () => {
+        dispose = await notifyAdapter.listenJobChainCompleted(id, () => {
           resolveNotification?.();
         });
       } catch {}
@@ -908,17 +908,17 @@ export const queuertHelper = ({
           await raceWithSleep(notificationPromise, pollIntervalMs, { signal: combinedSignal });
           resetNotificationPromise();
 
-          const sequence = await checkSequence();
-          if (sequence) return sequence;
+          const chain = await checkChain();
+          if (chain) return chain;
 
           if (combinedSignal.aborted) break;
         }
 
-        throw new WaitForJobSequenceCompletionTimeoutError(
+        throw new WaitForJobChainCompletionTimeoutError(
           signal?.aborted
-            ? `Wait for job sequence ${id} was aborted`
-            : `Timeout waiting for job sequence ${id} to complete after ${timeoutMs}ms`,
-          { cause: { sequenceId: id, timeoutMs } },
+            ? `Wait for job chain ${id} was aborted`
+            : `Timeout waiting for job chain ${id} to complete after ${timeoutMs}ms`,
+          { cause: { chainId: id, timeoutMs } },
         );
       } finally {
         await dispose();
@@ -928,22 +928,22 @@ export const queuertHelper = ({
 };
 export type ProcessHelper = ReturnType<typeof queuertHelper>;
 
-export type JobSequenceCompleteOptions<
+export type JobChainCompleteOptions<
   TStateAdapter extends StateAdapter<any, any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TSequenceTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
+  TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
   TCompleteReturn,
 > = (options: {
-  job: SequenceJobs<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TSequenceTypeName>;
+  job: ChainJobs<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TChainTypeName>;
   complete: <
-    TJobTypeName extends SequenceJobTypes<TJobTypeDefinitions, TSequenceTypeName> & string,
+    TJobTypeName extends ChainJobTypes<TJobTypeDefinitions, TChainTypeName> & string,
     TReturn extends
       | TJobTypeDefinitions[TJobTypeName]["output"]
       | ContinuationJobs<
           GetStateAdapterJobId<TStateAdapter>,
           TJobTypeDefinitions,
           TJobTypeName,
-          TSequenceTypeName
+          TChainTypeName
         >
       | Promise<TJobTypeDefinitions[TJobTypeName]["output"]>
       | Promise<
@@ -951,7 +951,7 @@ export type JobSequenceCompleteOptions<
             GetStateAdapterJobId<TStateAdapter>,
             TJobTypeDefinitions,
             TJobTypeName,
-            TSequenceTypeName
+            TChainTypeName
           >
         >,
   >(
@@ -959,33 +959,33 @@ export type JobSequenceCompleteOptions<
       GetStateAdapterJobId<TStateAdapter>,
       TJobTypeDefinitions,
       TJobTypeName,
-      TSequenceTypeName
+      TChainTypeName
     >,
     completeCallback: (
       completeOptions: CompleteCallbackOptions<
         TStateAdapter,
         TJobTypeDefinitions,
         TJobTypeName,
-        TSequenceTypeName
+        TChainTypeName
       >,
     ) => TReturn,
   ) => Promise<Awaited<TReturn>>;
 }) => Promise<TCompleteReturn>;
 
-export type CompleteJobSequenceResult<
+export type CompleteJobChainResult<
   TStateAdapter extends StateAdapter<any, any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TSequenceTypeName extends keyof TJobTypeDefinitions & string,
+  TChainTypeName extends keyof TJobTypeDefinitions & string,
   TCompleteReturn,
 > = [TCompleteReturn] extends [void]
-  ? JobSequenceOf<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TSequenceTypeName>
+  ? JobChainOf<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TChainTypeName>
   : TCompleteReturn extends Job<any, any, any, any, any[]>
-    ? JobSequenceOf<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TSequenceTypeName>
-    : CompletedJobSequence<
-        JobSequence<
+    ? JobChainOf<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TChainTypeName>
+    : CompletedJobChain<
+        JobChain<
           GetStateAdapterJobId<TStateAdapter>,
-          TSequenceTypeName,
-          TJobTypeDefinitions[TSequenceTypeName]["input"],
+          TChainTypeName,
+          TJobTypeDefinitions[TChainTypeName]["input"],
           TCompleteReturn
         >
       >;

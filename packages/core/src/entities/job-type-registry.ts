@@ -16,7 +16,7 @@ export type JobTypeReference = {
  * Functions should throw on validation failure (any error type).
  */
 export type JobTypeRegistryConfig = {
-  /** Validate that a job type can start a sequence. Throw on failure. */
+  /** Validate that a job type can start a chain. Throw on failure. */
   validateEntry: (typeName: string) => void;
   /** Parse and validate input. Return transformed value or throw on failure. */
   parseInput: (typeName: string, input: unknown) => unknown;
@@ -36,7 +36,7 @@ export type JobTypeRegistryConfig = {
  * - parse* → throws JobTypeValidationError or returns transformed value (validation + transformation)
  */
 export interface JobTypeRegistry<TJobTypeDefinitions = unknown> {
-  /** Validate that a job type can start a sequence (is an entry point). Throws JobTypeValidationError on failure. */
+  /** Validate that a job type can start a chain (is an entry point). Throws JobTypeValidationError on failure. */
   validateEntry: (typeName: string) => void;
 
   /** Parse and validate input. Returns transformed value. Throws JobTypeValidationError on failure. */

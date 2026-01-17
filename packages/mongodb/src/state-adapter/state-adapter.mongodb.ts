@@ -15,12 +15,12 @@ type JobStatus = "blocked" | "pending" | "running" | "completed";
 type DbJob = {
   _id: string;
   typeName: string;
-  sequenceId: string;
-  sequenceTypeName: string;
+  chainId: string;
+  chainTypeName: string;
   input: unknown;
   output: unknown;
 
-  rootSequenceId: string;
+  rootChainId: string;
   originId: string | null;
 
   status: JobStatus;
@@ -40,7 +40,7 @@ type DbJob = {
 
   updatedAt: Date;
 
-  blockers: Array<{ blockedBySequenceId: string; index: number }>;
+  blockers: Array<{ blockedByChainId: string; index: number }>;
 };
 
 const mapDbJobToStateJob = (dbJob: WithId<Document> | DbJob): StateJob => {
@@ -48,12 +48,12 @@ const mapDbJobToStateJob = (dbJob: WithId<Document> | DbJob): StateJob => {
   return {
     id: job._id,
     typeName: job.typeName,
-    sequenceId: job.sequenceId,
-    sequenceTypeName: job.sequenceTypeName,
+    chainId: job.chainId,
+    chainTypeName: job.chainTypeName,
     input: job.input,
     output: job.output,
 
-    rootSequenceId: job.rootSequenceId,
+    rootChainId: job.rootChainId,
     originId: job.originId,
 
     status: job.status,
@@ -108,14 +108,14 @@ export const createMongoStateAdapter = async <
     runInTransaction: stateProvider.runInTransaction,
     isInTransaction: stateProvider.isInTransaction,
 
-    getJobSequenceById: async ({ context, jobId }) => {
+    getJobChainById: async ({ context, jobId }) => {
       const collection = getCollection(context);
       // Get root job
       const rootJob = await collection.findOne({ _id: jobId });
       if (!rootJob) return undefined;
 
-      // Get last job in sequence
-      const lastJob = await collection.findOne({ sequenceId: jobId }, { sort: { createdAt: -1 } });
+      // Get last job in chain
+      const lastJob = await collection.findOne({ chainId: jobId }, { sort: { createdAt: -1 } });
 
       return [
         mapDbJobToStateJob(rootJob),
@@ -132,10 +132,10 @@ export const createMongoStateAdapter = async <
     createJob: async ({
       context,
       typeName,
-      sequenceId,
-      sequenceTypeName,
+      chainId,
+      chainTypeName,
       input,
-      rootSequenceId,
+      rootChainId,
       originId,
       deduplication,
       schedule,
@@ -144,9 +144,9 @@ export const createMongoStateAdapter = async <
       const newId = idGenerator();
 
       // Check for existing continuation or deduplicated job
-      if ((sequenceId && originId) || deduplication) {
+      if ((chainId && originId) || deduplication) {
         const existingQuery = buildDeduplicationQuery(
-          sequenceId as string | undefined,
+          chainId as string | undefined,
           originId as string | undefined,
           deduplication,
         );
@@ -171,12 +171,12 @@ export const createMongoStateAdapter = async <
             $set: {
               _id: { $literal: newId },
               typeName: { $literal: typeName },
-              sequenceId: { $literal: (sequenceId as string) ?? newId },
-              sequenceTypeName: { $literal: sequenceTypeName },
+              chainId: { $literal: (chainId as string) ?? newId },
+              chainTypeName: { $literal: chainTypeName },
               input: { $literal: input ?? null },
               output: null,
 
-              rootSequenceId: { $literal: (rootSequenceId as string) ?? newId },
+              rootChainId: { $literal: (rootChainId as string) ?? newId },
               originId: { $literal: (originId as string) ?? null },
 
               status: "pending",
@@ -206,33 +206,33 @@ export const createMongoStateAdapter = async <
       return { job: mapDbJobToStateJob(job!), deduplicated: false };
     },
 
-    addJobBlockers: async ({ context, jobId, blockedBySequenceIds }) => {
+    addJobBlockers: async ({ context, jobId, blockedByChainIds }) => {
       const collection = getCollection(context);
       // Add blockers to the job
-      const blockers = blockedBySequenceIds.map((id, index) => ({
-        blockedBySequenceId: id as string,
+      const blockers = blockedByChainIds.map((id, index) => ({
+        blockedByChainId: id as string,
         index,
       }));
 
       await collection.updateOne({ _id: jobId }, { $push: { blockers: { $each: blockers } } });
 
       // Check status of each blocker
-      const incompleteBlockerSequenceIds: string[] = [];
+      const incompleteBlockerChainIds: string[] = [];
 
       for (const blocker of blockers) {
-        // Get the last job in the blocker sequence
+        // Get the last job in the blocker chain
         const lastBlockerJob = await collection.findOne(
-          { sequenceId: blocker.blockedBySequenceId },
+          { chainId: blocker.blockedByChainId },
           { sort: { createdAt: -1 } },
         );
 
         if (!lastBlockerJob || lastBlockerJob.status !== "completed") {
-          incompleteBlockerSequenceIds.push(blocker.blockedBySequenceId);
+          incompleteBlockerChainIds.push(blocker.blockedByChainId);
         }
       }
 
       // If there are incomplete blockers, update status to blocked
-      if (incompleteBlockerSequenceIds.length > 0) {
+      if (incompleteBlockerChainIds.length > 0) {
         const updatedJob = await collection.findOneAndUpdate(
           { _id: jobId, status: "pending" },
           { $set: { status: "blocked", updatedAt: new Date() } },
@@ -240,20 +240,20 @@ export const createMongoStateAdapter = async <
         );
 
         if (updatedJob) {
-          return { job: mapDbJobToStateJob(updatedJob), incompleteBlockerSequenceIds };
+          return { job: mapDbJobToStateJob(updatedJob), incompleteBlockerChainIds };
         }
       }
 
       const job = await collection.findOne({ _id: jobId });
-      return { job: mapDbJobToStateJob(job!), incompleteBlockerSequenceIds: [] };
+      return { job: mapDbJobToStateJob(job!), incompleteBlockerChainIds: [] };
     },
 
-    scheduleBlockedJobs: async ({ context, blockedBySequenceId }) => {
+    scheduleBlockedJobs: async ({ context, blockedByChainId }) => {
       const collection = getCollection(context);
-      // Find all jobs that have this sequence as a blocker
+      // Find all jobs that have this chain as a blocker
       const blockedJobs = await collection
         .find({
-          "blockers.blockedBySequenceId": blockedBySequenceId,
+          "blockers.blockedByChainId": blockedByChainId,
           status: "blocked",
         })
         .toArray();
@@ -267,7 +267,7 @@ export const createMongoStateAdapter = async <
 
         for (const blocker of dbJob.blockers) {
           const lastBlockerJob = await collection.findOne(
-            { sequenceId: blocker.blockedBySequenceId },
+            { chainId: blocker.blockedByChainId },
             { sort: { createdAt: -1 } },
           );
 
@@ -306,13 +306,13 @@ export const createMongoStateAdapter = async <
       const sortedBlockers = [...dbJob.blockers].sort((a, b) => a.index - b.index);
 
       for (const blocker of sortedBlockers) {
-        // Get root job of blocker sequence
-        const rootJob = await collection.findOne({ _id: blocker.blockedBySequenceId });
+        // Get root job of blocker chain
+        const rootJob = await collection.findOne({ _id: blocker.blockedByChainId });
         if (!rootJob) continue;
 
-        // Get last job in sequence
+        // Get last job in chain
         const lastJob = await collection.findOne(
-          { sequenceId: blocker.blockedBySequenceId },
+          { chainId: blocker.blockedByChainId },
           { sort: { createdAt: -1 } },
         );
 
@@ -469,35 +469,35 @@ export const createMongoStateAdapter = async <
       return job ? mapDbJobToStateJob(job) : undefined;
     },
 
-    getExternalBlockers: async ({ context, rootSequenceIds }) => {
+    getExternalBlockers: async ({ context, rootChainIds }) => {
       const collection = getCollection(context);
-      const rootSequenceIdSet = new Set(rootSequenceIds as string[]);
+      const rootChainIdSet = new Set(rootChainIds as string[]);
 
       // Find all jobs in the given roots
       const jobsInRoots = await collection
-        .find({ rootSequenceId: { $in: rootSequenceIds as string[] } }, { projection: { _id: 1 } })
+        .find({ rootChainId: { $in: rootChainIds as string[] } }, { projection: { _id: 1 } })
         .toArray();
       const jobIdsInRoots = new Set(jobsInRoots.map((j) => j._id));
 
       // Find jobs outside these roots that have blockers pointing to jobs in these roots
       const externalJobs = await collection
         .find({
-          rootSequenceId: { $nin: rootSequenceIds as string[] },
-          "blockers.blockedBySequenceId": { $in: Array.from(jobIdsInRoots) },
+          rootChainId: { $nin: rootChainIds as string[] },
+          "blockers.blockedByChainId": { $in: Array.from(jobIdsInRoots) },
         })
         .toArray();
 
-      const result: { jobId: TIdType; blockedRootSequenceId: TIdType }[] = [];
+      const result: { jobId: TIdType; blockedRootChainId: TIdType }[] = [];
 
       for (const externalJob of externalJobs) {
         for (const blocker of externalJob.blockers) {
-          if (jobIdsInRoots.has(blocker.blockedBySequenceId)) {
+          if (jobIdsInRoots.has(blocker.blockedByChainId)) {
             // Find the root of this blocker
-            const blockerJob = await collection.findOne({ _id: blocker.blockedBySequenceId });
-            if (blockerJob && rootSequenceIdSet.has(blockerJob.rootSequenceId)) {
+            const blockerJob = await collection.findOne({ _id: blocker.blockedByChainId });
+            if (blockerJob && rootChainIdSet.has(blockerJob.rootChainId)) {
               result.push({
                 jobId: externalJob._id as TIdType,
-                blockedRootSequenceId: blockerJob.rootSequenceId as TIdType,
+                blockedRootChainId: blockerJob.rootChainId as TIdType,
               });
             }
           }
@@ -507,15 +507,15 @@ export const createMongoStateAdapter = async <
       return result;
     },
 
-    deleteJobsByRootSequenceIds: async ({ context, rootSequenceIds }) => {
+    deleteJobsByRootChainIds: async ({ context, rootChainIds }) => {
       const collection = getCollection(context);
       // First get all jobs that will be deleted
       const jobs = await collection
-        .find({ rootSequenceId: { $in: rootSequenceIds as string[] } })
+        .find({ rootChainId: { $in: rootChainIds as string[] } })
         .toArray();
 
       // Delete them
-      await collection.deleteMany({ rootSequenceId: { $in: rootSequenceIds as string[] } });
+      await collection.deleteMany({ rootChainId: { $in: rootChainIds as string[] } });
 
       return jobs.map(mapDbJobToStateJob);
     },
@@ -528,9 +528,9 @@ export const createMongoStateAdapter = async <
       return job ? mapDbJobToStateJob(job) : undefined;
     },
 
-    getCurrentJobForUpdate: async ({ context, sequenceId }) => {
+    getCurrentJobForUpdate: async ({ context, chainId }) => {
       const collection = getCollection(context);
-      const job = await collection.findOne({ sequenceId }, { sort: { createdAt: -1 } });
+      const job = await collection.findOne({ chainId }, { sort: { createdAt: -1 } });
       return job ? mapDbJobToStateJob(job) : undefined;
     },
   };
@@ -552,11 +552,11 @@ export const createMongoStateAdapter = async <
           { partialFilterExpression: { status: "pending" } },
         );
 
-        // Sequence lookup index
-        await collection.createIndex({ sequenceId: 1, createdAt: -1 });
+        // Chain lookup index
+        await collection.createIndex({ chainId: 1, createdAt: -1 });
 
         // Root lookup for cascading deletes
-        await collection.createIndex({ rootSequenceId: 1 });
+        await collection.createIndex({ rootChainId: 1 });
 
         // Deduplication lookup (use $type to filter non-null strings since $ne is not supported in partial indexes)
         await collection.createIndex(
@@ -571,11 +571,11 @@ export const createMongoStateAdapter = async <
         );
 
         // Blocker lookup
-        await collection.createIndex({ "blockers.blockedBySequenceId": 1 });
+        await collection.createIndex({ "blockers.blockedByChainId": 1 });
 
         // Continuation uniqueness
         await collection.createIndex(
-          { sequenceId: 1, originId: 1 },
+          { chainId: 1, originId: 1 },
           { unique: true, partialFilterExpression: { originId: { $type: "string" } } },
         );
       });
@@ -584,22 +584,22 @@ export const createMongoStateAdapter = async <
 };
 
 function buildDeduplicationQuery(
-  sequenceId: string | undefined,
+  chainId: string | undefined,
   originId: string | undefined,
   deduplication: DeduplicationOptions | undefined,
 ): Document | null {
   const conditions: Document[] = [];
 
   // Check for existing continuation
-  if (sequenceId && originId) {
-    conditions.push({ sequenceId, originId });
+  if (chainId && originId) {
+    conditions.push({ chainId, originId });
   }
 
   // Check for deduplication
   if (deduplication) {
     const dedupCondition: Document = {
       deduplicationKey: deduplication.key,
-      $expr: { $eq: ["$_id", "$sequenceId"] }, // First job in sequence
+      $expr: { $eq: ["$_id", "$chainId"] }, // First job in chain
     };
 
     // Apply strategy filter

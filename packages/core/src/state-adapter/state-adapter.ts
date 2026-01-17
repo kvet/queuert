@@ -6,12 +6,12 @@ export type { DeduplicationOptions, DeduplicationStrategy, ScheduleOptions };
 export type StateJob = {
   id: string;
   typeName: string;
-  sequenceId: string;
-  sequenceTypeName: string;
+  chainId: string;
+  chainTypeName: string;
   input: unknown;
   output: unknown;
 
-  rootSequenceId: string;
+  rootChainId: string;
   originId: string | null;
 
   status: "blocked" | "pending" | "running" | "completed";
@@ -58,8 +58,8 @@ export type StateAdapter<
   /** Checks if the given context is within a transaction. */
   isInTransaction: (context: TTxContext) => Promise<boolean>;
 
-  /** Gets a job sequence by its root job ID. Returns [rootJob, lastJob] or undefined. */
-  getJobSequenceById: (params: {
+  /** Gets a job chain by its root job ID. Returns [rootJob, lastJob] or undefined. */
+  getJobChainById: (params: {
     context: TTxContext;
     jobId: TJobId;
   }) => Promise<[StateJob, StateJob | undefined] | undefined>;
@@ -71,10 +71,10 @@ export type StateAdapter<
   createJob: (params: {
     context: TTxContext;
     typeName: string;
-    sequenceId: TJobId | undefined;
-    sequenceTypeName: string;
+    chainId: TJobId | undefined;
+    chainTypeName: string;
     input: unknown;
-    rootSequenceId: TJobId | undefined;
+    rootChainId: TJobId | undefined;
     originId: TJobId | undefined;
     deduplication?: DeduplicationOptions;
     schedule?: ScheduleOptions;
@@ -84,16 +84,16 @@ export type StateAdapter<
   addJobBlockers: (params: {
     context: TTxContext;
     jobId: TJobId;
-    blockedBySequenceIds: TJobId[];
-  }) => Promise<{ job: StateJob; incompleteBlockerSequenceIds: string[] }>;
+    blockedByChainIds: TJobId[];
+  }) => Promise<{ job: StateJob; incompleteBlockerChainIds: string[] }>;
 
-  /** Schedules blocked jobs when a blocker sequence completes. */
+  /** Schedules blocked jobs when a blocker chain completes. */
   scheduleBlockedJobs: (params: {
     context: TTxContext;
-    blockedBySequenceId: TJobId;
+    blockedByChainId: TJobId;
   }) => Promise<StateJob[]>;
 
-  /** Gets the blocker sequences for a job. */
+  /** Gets the blocker chains for a job. */
   getJobBlockers: (params: {
     context: TTxContext;
     jobId: TJobId;
@@ -141,16 +141,16 @@ export type StateAdapter<
     typeNames: string[];
   }) => Promise<StateJob | undefined>;
 
-  /** Gets external blockers that depend on the given root sequences. */
+  /** Gets external blockers that depend on the given root chains. */
   getExternalBlockers: (params: {
     context: TTxContext;
-    rootSequenceIds: TJobId[];
-  }) => Promise<{ jobId: TJobId; blockedRootSequenceId: TJobId }[]>;
+    rootChainIds: TJobId[];
+  }) => Promise<{ jobId: TJobId; blockedRootChainId: TJobId }[]>;
 
-  /** Deletes all jobs in the given root sequences. */
-  deleteJobsByRootSequenceIds: (params: {
+  /** Deletes all jobs in the given root chains. */
+  deleteJobsByRootChainIds: (params: {
     context: TTxContext;
-    rootSequenceIds: TJobId[];
+    rootChainIds: TJobId[];
   }) => Promise<StateJob[]>;
 
   /** Gets a job by ID with a FOR UPDATE lock. */
@@ -159,10 +159,10 @@ export type StateAdapter<
     jobId: TJobId;
   }) => Promise<StateJob | undefined>;
 
-  /** Gets the current (latest) job in a sequence with a FOR UPDATE lock. */
+  /** Gets the current (latest) job in a chain with a FOR UPDATE lock. */
   getCurrentJobForUpdate: (params: {
     context: TTxContext;
-    sequenceId: TJobId;
+    chainId: TJobId;
   }) => Promise<StateJob | undefined>;
 };
 

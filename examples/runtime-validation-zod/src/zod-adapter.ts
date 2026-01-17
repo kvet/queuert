@@ -19,7 +19,7 @@ type PartialJobTypeReference = { typeName?: string; input?: unknown };
  * Schema definition for a single job type using Zod.
  */
 export type ZodJobTypeSchema = {
-  /** Whether this job type can start a sequence (entry point). Default: false */
+  /** Whether this job type can start a chain (entry point). Default: false */
   entry?: boolean;
   /** Zod schema for validating job input */
   input: z.ZodType;

@@ -19,8 +19,8 @@ import {
   checkBlockersStatusSql,
   completeJobSql,
   type DbJob,
-  type DbJobSequenceRow,
-  deleteJobsByRootSequenceIdsSql,
+  type DbJobChainRow,
+  deleteJobsByRootChainIdsSql,
   findExistingJobSql,
   findReadyJobsSql,
   getCurrentJobForUpdateSql,
@@ -29,7 +29,7 @@ import {
   getJobByIdForBlockersSql,
   getJobByIdSql,
   getJobForUpdateSql,
-  getJobSequenceByIdSql,
+  getJobChainByIdSql,
   getNextJobAvailableInMsSql,
   insertJobBlockersSql,
   insertJobSql,
@@ -56,12 +56,12 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
   return {
     id: dbJob.id,
     typeName: dbJob.type_name,
-    sequenceId: dbJob.sequence_id,
-    sequenceTypeName: dbJob.sequence_type_name,
+    chainId: dbJob.chain_id,
+    chainTypeName: dbJob.chain_type_name,
     input: parseJson(dbJob.input),
     output: parseJson(dbJob.output),
 
-    rootSequenceId: dbJob.root_sequence_id,
+    rootChainId: dbJob.root_chain_id,
     originId: dbJob.origin_id,
 
     status: dbJob.status,
@@ -83,17 +83,17 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
   };
 };
 
-const parseDbJobSequenceRow = (
-  row: DbJobSequenceRow,
-): { rootJob: DbJob; lastSequenceJob: DbJob | null } => {
+const parseDbJobChainRow = (
+  row: DbJobChainRow,
+): { rootJob: DbJob; lastChainJob: DbJob | null } => {
   const rootJob: DbJob = {
     id: row.id,
     type_name: row.type_name,
-    sequence_id: row.sequence_id,
-    sequence_type_name: row.sequence_type_name,
+    chain_id: row.chain_id,
+    chain_type_name: row.chain_type_name,
     input: row.input,
     output: row.output,
-    root_sequence_id: row.root_sequence_id,
+    root_chain_id: row.root_chain_id,
     origin_id: row.origin_id,
     status: row.status,
     created_at: row.created_at,
@@ -109,15 +109,15 @@ const parseDbJobSequenceRow = (
     updated_at: row.updated_at,
   };
 
-  const lastSequenceJob: DbJob | null = row.lc_id
+  const lastChainJob: DbJob | null = row.lc_id
     ? {
         id: row.lc_id,
         type_name: row.lc_type_name!,
-        sequence_id: row.lc_sequence_id!,
-        sequence_type_name: row.lc_sequence_type_name!,
+        chain_id: row.lc_chain_id!,
+        chain_type_name: row.lc_chain_type_name!,
         input: row.lc_input,
         output: row.lc_output,
-        root_sequence_id: row.lc_root_sequence_id!,
+        root_chain_id: row.lc_root_chain_id!,
         origin_id: row.lc_origin_id,
         status: row.lc_status!,
         created_at: row.lc_created_at!,
@@ -134,7 +134,7 @@ const parseDbJobSequenceRow = (
       }
     : null;
 
-  return { rootJob, lastSequenceJob };
+  return { rootJob, lastChainJob };
 };
 
 export const createSqliteStateAdapter = async <
@@ -201,21 +201,21 @@ export const createSqliteStateAdapter = async <
     runInTransaction: stateProvider.runInTransaction,
     isInTransaction: stateProvider.isInTransaction,
 
-    getJobSequenceById: async ({ context, jobId }) => {
+    getJobChainById: async ({ context, jobId }) => {
       const [row] = await executeTypedSql({
         context,
-        sql: getJobSequenceByIdSql,
+        sql: getJobChainByIdSql,
         params: [jobId, jobId],
       });
 
       if (!row) return undefined;
 
-      const { rootJob, lastSequenceJob } = parseDbJobSequenceRow(row);
+      const { rootJob, lastChainJob } = parseDbJobChainRow(row);
 
       return [
         mapDbJobToStateJob(rootJob),
-        lastSequenceJob && lastSequenceJob.id !== rootJob.id
-          ? mapDbJobToStateJob(lastSequenceJob)
+        lastChainJob && lastChainJob.id !== rootJob.id
+          ? mapDbJobToStateJob(lastChainJob)
           : undefined,
       ];
     },
@@ -232,10 +232,10 @@ export const createSqliteStateAdapter = async <
     createJob: async ({
       context,
       typeName,
-      sequenceTypeName,
+      chainTypeName,
       input,
-      rootSequenceId,
-      sequenceId,
+      rootChainId,
+      chainId,
       originId,
       deduplication,
       schedule,
@@ -246,9 +246,9 @@ export const createSqliteStateAdapter = async <
       const deduplicationStrategy = deduplication ? (deduplication.strategy ?? "completed") : null;
       const deduplicationWindowMs = deduplication?.windowMs ?? null;
 
-      const sequenceIdOrNull = sequenceId ?? null;
+      const chainIdOrNull = chainId ?? null;
       const originIdOrNull = originId ?? null;
-      const rootSequenceIdOrNull = rootSequenceId ?? null;
+      const rootChainIdOrNull = rootChainId ?? null;
       const scheduledAtIso = schedule?.at?.toISOString().replace("T", " ").replace("Z", "") ?? null;
       const scheduleAfterMsOrNull = schedule?.afterMs ?? null;
 
@@ -256,9 +256,9 @@ export const createSqliteStateAdapter = async <
         context,
         sql: findExistingJobSql,
         params: [
-          sequenceIdOrNull,
+          chainIdOrNull,
           originIdOrNull,
-          sequenceIdOrNull,
+          chainIdOrNull,
           originIdOrNull,
           deduplicationKey,
           deduplicationKey,
@@ -280,11 +280,11 @@ export const createSqliteStateAdapter = async <
         params: [
           newId,
           typeName,
-          sequenceIdOrNull,
+          chainIdOrNull,
           newId,
-          sequenceTypeName,
+          chainTypeName,
           inputJson,
-          rootSequenceIdOrNull,
+          rootChainIdOrNull,
           newId,
           originIdOrNull,
           deduplicationKey,
@@ -297,11 +297,11 @@ export const createSqliteStateAdapter = async <
       return { job: mapDbJobToStateJob(result), deduplicated: false };
     },
 
-    addJobBlockers: async ({ context, jobId, blockedBySequenceIds }) => {
+    addJobBlockers: async ({ context, jobId, blockedByChainIds }) => {
       await executeTypedSql({
         context,
         sql: insertJobBlockersSql,
-        params: [jobId, JSON.stringify(blockedBySequenceIds)],
+        params: [jobId, JSON.stringify(blockedByChainIds)],
       });
 
       const blockerStatuses = await executeTypedSql({
@@ -310,18 +310,18 @@ export const createSqliteStateAdapter = async <
         params: [jobId],
       });
 
-      const incompleteBlockerSequenceIds = blockerStatuses
+      const incompleteBlockerChainIds = blockerStatuses
         .filter((b) => b.blocker_status !== "completed")
-        .map((b) => b.blocked_by_sequence_id);
+        .map((b) => b.blocked_by_chain_id);
 
-      if (incompleteBlockerSequenceIds.length > 0) {
+      if (incompleteBlockerChainIds.length > 0) {
         const [updatedJob] = await executeTypedSql({
           context,
           sql: updateJobToBlockedSql,
           params: [jobId],
         });
         if (updatedJob) {
-          return { job: mapDbJobToStateJob(updatedJob), incompleteBlockerSequenceIds };
+          return { job: mapDbJobToStateJob(updatedJob), incompleteBlockerChainIds };
         }
       }
 
@@ -330,13 +330,13 @@ export const createSqliteStateAdapter = async <
         sql: getJobByIdForBlockersSql,
         params: [jobId],
       });
-      return { job: mapDbJobToStateJob(job), incompleteBlockerSequenceIds: [] };
+      return { job: mapDbJobToStateJob(job), incompleteBlockerChainIds: [] };
     },
-    scheduleBlockedJobs: async ({ context, blockedBySequenceId }) => {
+    scheduleBlockedJobs: async ({ context, blockedByChainId }) => {
       const readyJobs = await executeTypedSql({
         context,
         sql: findReadyJobsSql,
-        params: [blockedBySequenceId],
+        params: [blockedByChainId],
       });
 
       const scheduledJobs: StateJob[] = [];
@@ -361,11 +361,11 @@ export const createSqliteStateAdapter = async <
       });
 
       return rows.map((row) => {
-        const { rootJob, lastSequenceJob } = parseDbJobSequenceRow(row);
+        const { rootJob, lastChainJob } = parseDbJobChainRow(row);
         return [
           mapDbJobToStateJob(rootJob),
-          lastSequenceJob && lastSequenceJob.id !== rootJob.id
-            ? mapDbJobToStateJob(lastSequenceJob)
+          lastChainJob && lastChainJob.id !== rootJob.id
+            ? mapDbJobToStateJob(lastChainJob)
             : undefined,
         ];
       });
@@ -431,23 +431,23 @@ export const createSqliteStateAdapter = async <
       });
       return job ? mapDbJobToStateJob(job) : undefined;
     },
-    getExternalBlockers: async ({ context, rootSequenceIds }) => {
-      const rootSequenceIdsJson = JSON.stringify(rootSequenceIds);
+    getExternalBlockers: async ({ context, rootChainIds }) => {
+      const rootChainIdsJson = JSON.stringify(rootChainIds);
       const blockers = await executeTypedSql({
         context,
         sql: getExternalBlockersSql,
-        params: [rootSequenceIdsJson, rootSequenceIdsJson],
+        params: [rootChainIdsJson, rootChainIdsJson],
       });
       return blockers.map((b) => ({
         jobId: b.job_id as TIdType,
-        blockedRootSequenceId: b.blocked_root_sequence_id as TIdType,
+        blockedRootChainId: b.blocked_root_chain_id as TIdType,
       }));
     },
-    deleteJobsByRootSequenceIds: async ({ context, rootSequenceIds }) => {
+    deleteJobsByRootChainIds: async ({ context, rootChainIds }) => {
       const jobs = await executeTypedSql({
         context,
-        sql: deleteJobsByRootSequenceIdsSql,
-        params: [JSON.stringify(rootSequenceIds)],
+        sql: deleteJobsByRootChainIdsSql,
+        params: [JSON.stringify(rootChainIds)],
       });
       return jobs.map(mapDbJobToStateJob);
     },
@@ -459,11 +459,11 @@ export const createSqliteStateAdapter = async <
       });
       return job ? mapDbJobToStateJob(job) : undefined;
     },
-    getCurrentJobForUpdate: async ({ context, sequenceId }) => {
+    getCurrentJobForUpdate: async ({ context, chainId }) => {
       const [job] = await executeTypedSql({
         context,
         sql: getCurrentJobForUpdateSql,
-        params: [sequenceId],
+        params: [chainId],
       });
       return job ? mapDbJobToStateJob(job) : undefined;
     },

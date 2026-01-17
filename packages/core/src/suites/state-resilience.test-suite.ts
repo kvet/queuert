@@ -49,11 +49,11 @@ export const stateResilienceTestSuite = ({
       },
     });
 
-    const jobSequences = await queuert.withNotify(async () =>
+    const jobChains = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
         Promise.all(
           Array.from({ length: 20 }, async (_, i) =>
-            queuert.startJobSequence({
+            queuert.startJobChain({
               ...context,
               typeName: "test",
               input: { value: i, atomic: i % 2 === 0 },
@@ -86,8 +86,8 @@ export const stateResilienceTestSuite = ({
       ],
       async () => {
         await Promise.all(
-          jobSequences.map(async (seq) =>
-            queuert.waitForJobSequenceCompletion(seq, { timeoutMs: 1000 }),
+          jobChains.map(async (chain) =>
+            queuert.waitForJobChainCompletion(chain, { timeoutMs: 1000 }),
           ),
         );
       },

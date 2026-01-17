@@ -32,10 +32,10 @@ it("should infer types correctly with custom ID", async ({ db }) => {
     }>(),
   });
 
-  const jobSequence = await queuert.withNotify(async () => {
+  const jobChain = await queuert.withNotify(async () => {
     db.exec("BEGIN IMMEDIATE");
     try {
-      return await queuert.startJobSequence({
+      return await queuert.startJobChain({
         db,
         typeName: "test",
         input: { foo: "hello" },
@@ -44,7 +44,7 @@ it("should infer types correctly with custom ID", async ({ db }) => {
       db.exec("COMMIT");
     }
   });
-  expectTypeOf(jobSequence.id).toEqualTypeOf<`job.${UUID}`>();
+  expectTypeOf(jobChain.id).toEqualTypeOf<`job.${UUID}`>();
 
   const worker = queuert.createWorker().implementJobType({
     typeName: "test",
@@ -57,7 +57,7 @@ it("should infer types correctly with custom ID", async ({ db }) => {
 
   const stopWorker = await worker.start();
 
-  await queuert.waitForJobSequenceCompletion(jobSequence, { timeoutMs: 1000 });
+  await queuert.waitForJobChainCompletion(jobChain, { timeoutMs: 1000 });
 
   await stopWorker();
 });

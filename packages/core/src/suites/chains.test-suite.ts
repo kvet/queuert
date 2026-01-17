@@ -1,14 +1,14 @@
 import { expectTypeOf, TestAPI } from "vitest";
-import { CompletedJobSequence, createQueuert, defineJobTypes } from "../index.js";
+import { CompletedJobChain, createQueuert, defineJobTypes } from "../index.js";
 import { TestSuiteContext } from "./spec-context.spec-helper.js";
 
-export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
+export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
   const completionOptions = {
     pollIntervalMs: 100,
     timeoutMs: 5000,
   };
 
-  it("handles sequenced jobs", async ({
+  it("handles chained jobs", async ({
     stateAdapter,
     notifyAdapter,
     runInTransaction,
@@ -49,10 +49,10 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
       .implementJobType({
         typeName: "linear",
         process: async ({ job, complete }) => {
-          expect(job.id).toEqual(jobSequence.id);
-          expect(job.sequenceId).toEqual(jobSequence.id);
+          expect(job.id).toEqual(jobChain.id);
+          expect(job.chainId).toEqual(jobChain.id);
           expect(job.originId).toBeNull();
-          expect(job.rootSequenceId).toEqual(jobSequence.id);
+          expect(job.rootChainId).toEqual(jobChain.id);
           originIds.push(job.id);
 
           return complete(async ({ continueWith }) => {
@@ -68,7 +68,7 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
             expectTypeOf(continuedJob.status).toEqualTypeOf<"pending" | "blocked">();
             expect(continuedJob.typeName).toBe("linear_next");
             expect(continuedJob.status).toBeOneOf(["pending", "blocked"]);
-            expect(continuedJob.sequenceId).toEqual(jobSequence.id);
+            expect(continuedJob.chainId).toEqual(jobChain.id);
             return continuedJob;
           });
         },
@@ -76,10 +76,10 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
       .implementJobType({
         typeName: "linear_next",
         process: async ({ job, complete }) => {
-          expect(job.id).not.toEqual(jobSequence.id);
-          expect(job.sequenceId).toEqual(jobSequence.id);
+          expect(job.id).not.toEqual(jobChain.id);
+          expect(job.chainId).toEqual(jobChain.id);
           expect(job.originId).toEqual(originIds[0]);
-          expect(job.rootSequenceId).toEqual(jobSequence.id);
+          expect(job.rootChainId).toEqual(jobChain.id);
           originIds.push(job.id);
 
           return complete(async ({ continueWith }) => {
@@ -100,10 +100,10 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
       .implementJobType({
         typeName: "linear_next_next",
         process: async ({ job, complete }) => {
-          expect(job.id).not.toEqual(jobSequence.id);
-          expect(job.sequenceId).toEqual(jobSequence.id);
+          expect(job.id).not.toEqual(jobChain.id);
+          expect(job.chainId).toEqual(jobChain.id);
           expect(job.originId).toEqual(originIds[1]);
-          expect(job.rootSequenceId).toEqual(jobSequence.id);
+          expect(job.rootChainId).toEqual(jobChain.id);
 
           const result = await complete(async () => ({
             result: job.input.valueNextNext,
@@ -114,37 +114,37 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
         },
       });
 
-    const jobSequence = await queuert.withNotify(async () =>
+    const jobChain = await queuert.withNotify(async () =>
       runInTransaction(async (context) => {
-        return queuert.startJobSequence({
+        return queuert.startJobChain({
           ...context,
           typeName: "linear",
           input: { value: 1 },
         });
       }),
     );
-    expectTypeOf<CompletedJobSequence<typeof jobSequence>["output"]>().toEqualTypeOf<{
+    expectTypeOf<CompletedJobChain<typeof jobChain>["output"]>().toEqualTypeOf<{
       result: number;
     }>();
     expectTypeOf<
-      Parameters<(typeof queuert)["startJobSequence"]>[0]["typeName"]
+      Parameters<(typeof queuert)["startJobChain"]>[0]["typeName"]
     >().toEqualTypeOf<"linear">();
     expectTypeOf<
-      Parameters<(typeof queuert)["getJobSequence"]>[0]["typeName"]
+      Parameters<(typeof queuert)["getJobChain"]>[0]["typeName"]
     >().toEqualTypeOf<"linear">();
 
     await withWorkers([await worker.start()], async () => {
-      const finishedJobSequence = await queuert.waitForJobSequenceCompletion(
-        jobSequence,
+      const finishedJobChain = await queuert.waitForJobChainCompletion(
+        jobChain,
         completionOptions,
       );
 
-      expectTypeOf(finishedJobSequence.output).toEqualTypeOf<{ result: number }>();
-      expect(finishedJobSequence.output).toEqual({ result: 3 });
+      expectTypeOf(finishedJobChain.output).toEqualTypeOf<{ result: number }>();
+      expect(finishedJobChain.output).toEqual({ result: 3 });
     });
 
     expectLogs([
-      { type: "job_sequence_created", data: { typeName: "linear" } },
+      { type: "job_chain_created", data: { typeName: "linear" } },
       { type: "job_created", data: { typeName: "linear" } },
       { type: "worker_started" },
       { type: "job_attempt_started", data: { typeName: "linear" } },
@@ -152,9 +152,9 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
         type: "job_created",
         data: {
           typeName: "linear_next",
-          sequenceId: jobSequence.id,
-          sequenceTypeName: "linear",
-          rootSequenceId: jobSequence.id,
+          chainId: jobChain.id,
+          chainTypeName: "linear",
+          rootChainId: jobChain.id,
           originId: originIds[0],
         },
       },
@@ -165,9 +165,9 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
         type: "job_created",
         data: {
           typeName: "linear_next_next",
-          sequenceId: jobSequence.id,
-          sequenceTypeName: "linear",
-          rootSequenceId: jobSequence.id,
+          chainId: jobChain.id,
+          chainTypeName: "linear",
+          rootChainId: jobChain.id,
           originId: originIds[1],
         },
       },
@@ -176,27 +176,27 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
       { type: "job_attempt_started", data: { typeName: "linear_next_next" } },
       { type: "job_attempt_completed", data: { typeName: "linear_next_next" } },
       { type: "job_completed", data: { typeName: "linear_next_next" } },
-      { type: "job_sequence_completed", data: { typeName: "linear" } },
+      { type: "job_chain_completed", data: { typeName: "linear" } },
       { type: "worker_stopping" },
       { type: "worker_stopped" },
     ]);
 
     await expectMetrics([
-      { method: "jobSequenceCreated", args: { typeName: "linear" } },
+      { method: "jobChainCreated", args: { typeName: "linear" } },
       { method: "jobCreated", args: { typeName: "linear" } },
       { method: "workerStarted" },
       { method: "jobAttemptStarted", args: { typeName: "linear" } },
-      { method: "jobCreated", args: { typeName: "linear_next", sequenceTypeName: "linear" } },
+      { method: "jobCreated", args: { typeName: "linear_next", chainTypeName: "linear" } },
       { method: "jobAttemptCompleted", args: { typeName: "linear" } },
       { method: "jobCompleted", args: { typeName: "linear" } },
       { method: "jobAttemptStarted", args: { typeName: "linear_next" } },
-      { method: "jobCreated", args: { typeName: "linear_next_next", sequenceTypeName: "linear" } },
+      { method: "jobCreated", args: { typeName: "linear_next_next", chainTypeName: "linear" } },
       { method: "jobAttemptCompleted", args: { typeName: "linear_next" } },
       { method: "jobCompleted", args: { typeName: "linear_next" } },
       { method: "jobAttemptStarted", args: { typeName: "linear_next_next" } },
       { method: "jobAttemptCompleted", args: { typeName: "linear_next_next" } },
       { method: "jobCompleted", args: { typeName: "linear_next_next" } },
-      { method: "jobSequenceCompleted", args: { typeName: "linear" } },
+      { method: "jobChainCompleted", args: { typeName: "linear" } },
       { method: "workerStopping" },
       { method: "workerStopped" },
     ]);
@@ -207,12 +207,12 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
       { method: "jobDuration", args: { typeName: "linear_next" } },
       { method: "jobAttemptDuration", args: { typeName: "linear_next" } },
       { method: "jobDuration", args: { typeName: "linear_next_next" } },
-      { method: "jobSequenceDuration", args: { typeName: "linear" } },
+      { method: "jobChainDuration", args: { typeName: "linear" } },
       { method: "jobAttemptDuration", args: { typeName: "linear_next_next" } },
     ]);
   });
 
-  it("handles branched sequences", async ({
+  it("handles branched chains", async ({
     stateAdapter,
     notifyAdapter,
     runInTransaction,
@@ -280,35 +280,35 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
         },
       });
 
-    const evenJobSequence = await queuert.withNotify(async () =>
+    const evenJobChain = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...context,
           typeName: "main",
           input: { value: 2 },
         }),
       ),
     );
-    const oddJobSequence = await queuert.withNotify(async () =>
+    const oddJobChain = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...context,
           typeName: "main",
           input: { value: 3 },
         }),
       ),
     );
-    expectTypeOf<CompletedJobSequence<typeof evenJobSequence>["output"]>().toEqualTypeOf<
+    expectTypeOf<CompletedJobChain<typeof evenJobChain>["output"]>().toEqualTypeOf<
       { result1: number } | { result2: number }
     >();
-    expectTypeOf<CompletedJobSequence<typeof oddJobSequence>["output"]>().toEqualTypeOf<
+    expectTypeOf<CompletedJobChain<typeof oddJobChain>["output"]>().toEqualTypeOf<
       { result1: number } | { result2: number }
     >();
 
     await withWorkers([await worker.start()], async () => {
       const [succeededJobEven, succeededJobOdd] = await Promise.all([
-        queuert.waitForJobSequenceCompletion(evenJobSequence, completionOptions),
-        queuert.waitForJobSequenceCompletion(oddJobSequence, completionOptions),
+        queuert.waitForJobChainCompletion(evenJobChain, completionOptions),
+        queuert.waitForJobChainCompletion(oddJobChain, completionOptions),
       ]);
 
       expectTypeOf(succeededJobEven.output).toEqualTypeOf<
@@ -363,25 +363,25 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
       },
     });
 
-    const jobSequence = await queuert.withNotify(async () =>
+    const jobChain = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...context,
           typeName: "loop",
           input: { counter: 0 },
         }),
       ),
     );
-    expectTypeOf<CompletedJobSequence<typeof jobSequence>["output"]>().toEqualTypeOf<{
+    expectTypeOf<CompletedJobChain<typeof jobChain>["output"]>().toEqualTypeOf<{
       done: true;
     }>();
 
     await withWorkers([await worker.start()], async () => {
-      const succeededJobSequence = await queuert.waitForJobSequenceCompletion(
-        jobSequence,
+      const succeededJobChain = await queuert.waitForJobChainCompletion(
+        jobChain,
         completionOptions,
       );
-      expect(succeededJobSequence.output).toEqual({ done: true });
+      expect(succeededJobChain.output).toEqual({ done: true });
     });
   });
 
@@ -448,31 +448,31 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
         },
       });
 
-    const jobSequence = await queuert.withNotify(async () =>
+    const jobChain = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({
+        queuert.startJobChain({
           ...context,
           typeName: "start",
           input: { value: 0 },
         }),
       ),
     );
-    expectTypeOf<CompletedJobSequence<typeof jobSequence>["output"]>().toEqualTypeOf<{
+    expectTypeOf<CompletedJobChain<typeof jobChain>["output"]>().toEqualTypeOf<{
       finalResult: number;
     }>();
 
     await withWorkers([await worker.start()], async () => {
-      const succeededJobSequence = await queuert.waitForJobSequenceCompletion(
-        jobSequence,
+      const succeededJobChain = await queuert.waitForJobChainCompletion(
+        jobChain,
         completionOptions,
       );
 
-      expectTypeOf(succeededJobSequence.output).toEqualTypeOf<{ finalResult: number }>();
-      expect(succeededJobSequence.output).toEqual({ finalResult: 3 });
+      expectTypeOf(succeededJobChain.output).toEqualTypeOf<{ finalResult: number }>();
+      expect(succeededJobChain.output).toEqual({ finalResult: 3 });
     });
   });
 
-  it("correctly types sequenceTypeName for jobs reachable from multiple sequences", async ({
+  it("correctly types chainTypeName for jobs reachable from multiple chains", async ({
     stateAdapter,
     notifyAdapter,
     runInTransaction,
@@ -498,9 +498,9 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
       .implementJobType({
         typeName: "entryA",
         process: async ({ job, complete }) => {
-          // Entry job's sequenceTypeName should match its own typeName
-          expectTypeOf(job.sequenceTypeName).toEqualTypeOf<"entryA">();
-          expect(job.sequenceTypeName).toBe("entryA");
+          // Entry job's chainTypeName should match its own typeName
+          expectTypeOf(job.chainTypeName).toEqualTypeOf<"entryA">();
+          expect(job.chainTypeName).toBe("entryA");
           return complete(async ({ continueWith }) =>
             continueWith({ typeName: "shared", input: { data: 1 } }),
           );
@@ -509,9 +509,9 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
       .implementJobType({
         typeName: "entryB",
         process: async ({ job, complete }) => {
-          // Entry job's sequenceTypeName should match its own typeName
-          expectTypeOf(job.sequenceTypeName).toEqualTypeOf<"entryB">();
-          expect(job.sequenceTypeName).toBe("entryB");
+          // Entry job's chainTypeName should match its own typeName
+          expectTypeOf(job.chainTypeName).toEqualTypeOf<"entryB">();
+          expect(job.chainTypeName).toBe("entryB");
           return complete(async ({ continueWith }) =>
             continueWith({ typeName: "shared", input: { data: 2 } }),
           );
@@ -520,33 +520,33 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
       .implementJobType({
         typeName: "shared",
         process: async ({ job, complete }) => {
-          // Shared job's sequenceTypeName should be union of both entry types
-          expectTypeOf(job.sequenceTypeName).toEqualTypeOf<"entryA" | "entryB">();
-          expect(["entryA", "entryB"]).toContain(job.sequenceTypeName);
+          // Shared job's chainTypeName should be union of both entry types
+          expectTypeOf(job.chainTypeName).toEqualTypeOf<"entryA" | "entryB">();
+          expect(["entryA", "entryB"]).toContain(job.chainTypeName);
           return complete(async () => ({ done: true }));
         },
       });
 
-    const sequenceA = await queuert.withNotify(async () =>
+    const chainA = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({ ...context, typeName: "entryA", input: { fromA: true } }),
+        queuert.startJobChain({ ...context, typeName: "entryA", input: { fromA: true } }),
       ),
     );
-    const sequenceB = await queuert.withNotify(async () =>
+    const chainB = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({ ...context, typeName: "entryB", input: { fromB: true } }),
+        queuert.startJobChain({ ...context, typeName: "entryB", input: { fromB: true } }),
       ),
     );
 
     await withWorkers([await worker.start()], async () => {
       const [resultA, resultB] = await Promise.all([
-        queuert.waitForJobSequenceCompletion(sequenceA, { pollIntervalMs: 100, timeoutMs: 5000 }),
-        queuert.waitForJobSequenceCompletion(sequenceB, { pollIntervalMs: 100, timeoutMs: 5000 }),
+        queuert.waitForJobChainCompletion(chainA, { pollIntervalMs: 100, timeoutMs: 5000 }),
+        queuert.waitForJobChainCompletion(chainB, { pollIntervalMs: 100, timeoutMs: 5000 }),
       ]);
       expect(resultA.output).toEqual({ done: true });
       expect(resultB.output).toEqual({ done: true });
     });
   });
 
-  // TODO: add a test where a sequence is distributed across multiple workers
+  // TODO: add a test where a chain is distributed across multiple workers
 };

@@ -2,18 +2,18 @@ import { TestAPI } from "vitest";
 import {
   createQueuert,
   defineJobTypes,
-  WaitForJobSequenceCompletionTimeoutError,
+  WaitForJobChainCompletionTimeoutError,
 } from "../index.js";
 import { TestSuiteContext } from "./spec-context.spec-helper.js";
 
-export const waitSequenceCompletionTestSuite = ({
+export const waitChainCompletionTestSuite = ({
   it,
 }: {
   it: TestAPI<TestSuiteContext>;
 }): void => {
   // check completion scenario with workers completing jobs
 
-  it("handles already completed sequences", async ({
+  it("handles already completed chains", async ({
     stateAdapter,
     notifyAdapter,
     runInTransaction,
@@ -35,17 +35,17 @@ export const waitSequenceCompletionTestSuite = ({
       }>(),
     });
 
-    const jobSequence = await queuert.withNotify(async () =>
+    const jobChain = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({ ...context, typeName: "test", input: null }),
+        queuert.startJobChain({ ...context, typeName: "test", input: null }),
       ),
     );
 
     await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.completeJobSequence({
+        queuert.completeJobChain({
           ...context,
-          ...jobSequence,
+          ...jobChain,
           complete: async ({ job, complete }) => {
             return complete(job, async () => ({ result: "done" }));
           },
@@ -54,17 +54,17 @@ export const waitSequenceCompletionTestSuite = ({
     );
 
     const signal = AbortSignal.timeout(100);
-    const completedSequence = await queuert.waitForJobSequenceCompletion(jobSequence, {
+    const completedChain = await queuert.waitForJobChainCompletion(jobChain, {
       signal,
       timeoutMs: 5000,
     });
     expect(signal.aborted).toBe(false);
 
-    expect(completedSequence.status).toBe("completed");
-    expect(completedSequence.output).toEqual({ result: "done" });
+    expect(completedChain.status).toBe("completed");
+    expect(completedChain.output).toEqual({ result: "done" });
   });
 
-  it("throws timeout error when sequence does not complete in time with abort signal", async ({
+  it("throws timeout error when chain does not complete in time with abort signal", async ({
     stateAdapter,
     notifyAdapter,
     runInTransaction,
@@ -86,25 +86,25 @@ export const waitSequenceCompletionTestSuite = ({
       }>(),
     });
 
-    const jobSequence = await queuert.withNotify(async () =>
+    const jobChain = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({ ...context, typeName: "test", input: null }),
+        queuert.startJobChain({ ...context, typeName: "test", input: null }),
       ),
     );
 
     const fastSignal = AbortSignal.timeout(1);
     const slowSignal = AbortSignal.timeout(100);
     await expect(
-      queuert.waitForJobSequenceCompletion(jobSequence, {
+      queuert.waitForJobChainCompletion(jobChain, {
         signal: fastSignal,
         timeoutMs: 5000,
       }),
-    ).rejects.toThrow(WaitForJobSequenceCompletionTimeoutError);
+    ).rejects.toThrow(WaitForJobChainCompletionTimeoutError);
     expect(fastSignal.aborted).toBe(true);
     expect(slowSignal.aborted).toBe(false);
   });
 
-  it("throws timeout error when sequence does not complete in time", async ({
+  it("throws timeout error when chain does not complete in time", async ({
     stateAdapter,
     notifyAdapter,
     runInTransaction,
@@ -126,20 +126,20 @@ export const waitSequenceCompletionTestSuite = ({
       }>(),
     });
 
-    const jobSequence = await queuert.withNotify(async () =>
+    const jobChain = await queuert.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobSequence({ ...context, typeName: "test", input: null }),
+        queuert.startJobChain({ ...context, typeName: "test", input: null }),
       ),
     );
 
     await expect(
-      queuert.waitForJobSequenceCompletion(jobSequence, {
+      queuert.waitForJobChainCompletion(jobChain, {
         timeoutMs: 1,
       }),
-    ).rejects.toThrow(WaitForJobSequenceCompletionTimeoutError);
+    ).rejects.toThrow(WaitForJobChainCompletionTimeoutError);
   });
 
-  it("throws error when sequence does not exist", async ({
+  it("throws error when chain does not exist", async ({
     stateAdapter,
     notifyAdapter,
     observabilityAdapter,
@@ -162,10 +162,10 @@ export const waitSequenceCompletionTestSuite = ({
 
     const nonExistentId = crypto.randomUUID();
     await expect(
-      queuert.waitForJobSequenceCompletion(
+      queuert.waitForJobChainCompletion(
         { typeName: "test", id: nonExistentId },
         { timeoutMs: 5000 },
       ),
-    ).rejects.toThrow(`Job sequence with id ${nonExistentId} not found`);
+    ).rejects.toThrow(`Job chain with id ${nonExistentId} not found`);
   });
 };

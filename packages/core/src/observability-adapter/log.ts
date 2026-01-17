@@ -45,9 +45,9 @@ type WorkerStoppedLogEntry = LogEntry<
 export type JobBasicData = {
   id: string;
   typeName: string;
-  sequenceId: string;
-  sequenceTypeName: string;
-  rootSequenceId: string;
+  chainId: string;
+  chainTypeName: string;
+  rootChainId: string;
   originId: string | null;
 };
 export type JobProcessingData = JobBasicData & { status: StateJob["status"]; attempt: number };
@@ -57,7 +57,7 @@ type JobCreatedLogEntry = LogEntry<
   "Job created",
   {
     input: unknown;
-    blockers: JobSequenceData[];
+    blockers: JobChainData[];
     scheduledAt?: Date;
     scheduleAfterMs?: number;
   } & JobBasicData
@@ -118,36 +118,36 @@ type JobCompletedLogEntry = LogEntry<
   { output?: unknown; continuedWith?: JobBasicData } & JobProcessingData & WorkerBasicData
 >;
 
-export type JobSequenceData = {
+export type JobChainData = {
   id: string;
   typeName: string;
   originId: string | null;
-  rootSequenceId: string;
+  rootChainId: string;
 };
-type JobSequenceCreatedLogEntry = LogEntry<
-  "job_sequence_created",
+type JobChainCreatedLogEntry = LogEntry<
+  "job_chain_created",
   "info",
-  "Job sequence created",
-  JobSequenceData & { input: unknown }
+  "Job chain created",
+  JobChainData & { input: unknown }
 >;
-type JobSequenceCompletedLogEntry = LogEntry<
-  "job_sequence_completed",
+type JobChainCompletedLogEntry = LogEntry<
+  "job_chain_completed",
   "info",
-  "Job sequence completed",
-  { output: unknown } & JobSequenceData
+  "Job chain completed",
+  { output: unknown } & JobChainData
 >;
 
 type JobBlockedLogEntry = LogEntry<
   "job_blocked",
   "info",
-  "Job blocked by incomplete sequences",
-  { blockedBySequences: JobSequenceData[] } & JobBasicData
+  "Job blocked by incomplete chains",
+  { blockedByChains: JobChainData[] } & JobBasicData
 >;
 type JobUnblockedLogEntry = LogEntry<
   "job_unblocked",
   "info",
   "Job unblocked",
-  { unblockedBySequence: JobSequenceData } & JobBasicData
+  { unblockedByChain: JobChainData } & JobBasicData
 >;
 
 type NotifyContextAbsenceLogEntry = LogEntry<
@@ -197,9 +197,9 @@ type TypedLogEntry =
   | JobAttemptFailedLogEntry
   | JobAttemptCompletedLogEntry
   | JobCompletedLogEntry
-  // job sequence
-  | JobSequenceCreatedLogEntry
-  | JobSequenceCompletedLogEntry
+  // job chain
+  | JobChainCreatedLogEntry
+  | JobChainCompletedLogEntry
   // blockers
   | JobBlockedLogEntry
   | JobUnblockedLogEntry

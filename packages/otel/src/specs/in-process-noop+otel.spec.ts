@@ -1,5 +1,5 @@
 import {
-  blockerSequencesTestSuite,
+  blockerChainsTestSuite,
   deduplicationTestSuite,
   deletionTestSuite,
   extendWithCommon,
@@ -8,8 +8,8 @@ import {
   processTestSuite,
   reaperTestSuite,
   schedulingTestSuite,
-  sequencesTestSuite,
-  waitSequenceCompletionTestSuite,
+  chainsTestSuite,
+  waitChainCompletionTestSuite,
   workerlessCompletionTestSuite,
   workerTestSuite,
 } from "queuert/testing";
@@ -32,12 +32,12 @@ describe("Reaper", () => {
   reaperTestSuite({ it: otelIt });
 });
 
-describe("Sequences", () => {
-  sequencesTestSuite({ it: otelIt });
+describe("Chains", () => {
+  chainsTestSuite({ it: otelIt });
 });
 
-describe("Blocker Sequences", () => {
-  blockerSequencesTestSuite({ it: otelIt });
+describe("Blocker Chains", () => {
+  blockerChainsTestSuite({ it: otelIt });
 });
 
 describe("Deduplication", () => {
@@ -48,8 +48,8 @@ describe("Deletion", () => {
   deletionTestSuite({ it: otelIt });
 });
 
-describe("Wait Sequence Completion", () => {
-  waitSequenceCompletionTestSuite({ it: otelIt });
+describe("Wait Chain Completion", () => {
+  waitChainCompletionTestSuite({ it: otelIt });
 });
 
 describe("Workerless Completion", () => {
