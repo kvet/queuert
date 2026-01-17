@@ -1,11 +1,6 @@
 import { expectTypeOf, TestAPI, vi } from "vitest";
 import { sleep } from "../helpers/sleep.js";
-import {
-  createQueuert,
-  DefineContinuationInput,
-  DefineContinuationOutput,
-  defineUnionJobTypes,
-} from "../index.js";
+import { createQueuert, defineJobTypes } from "../index.js";
 import { TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -29,8 +24,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         test: {
+          entry: true;
           input: { value: number };
           output: { result: number };
         };
@@ -58,7 +54,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
             expect(job.status).toEqual("pending");
             expect(job.input).toEqual({ value: 42 });
 
-            return complete(job, () => ({ result: 84 }));
+            return complete(job, async () => ({ result: 84 }));
           },
         }),
       ),
@@ -95,14 +91,15 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         "awaiting-approval": {
+          entry: true;
           input: { requestId: string };
-          output: DefineContinuationOutput<"process-approved">;
+          continuesTo: { typeName: "process-approved" };
         };
         "process-approved": {
-          input: DefineContinuationInput<{ approved: boolean }>;
-          output: { done: true };
+          input: { approved: boolean };
+          output: { done: boolean };
         };
       }>(),
     });
@@ -135,7 +132,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
               });
               expectTypeOf<(typeof job)["typeName"]>().toEqualTypeOf<"process-approved">();
             }
-            return complete(job, () => ({ done: true }));
+            return complete(job, async () => ({ done: true }));
           },
         }),
       ),
@@ -159,13 +156,14 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         "awaiting-approval": {
+          entry: true;
           input: { requestId: string };
-          output: DefineContinuationOutput<"process-approved">;
+          continuesTo: { typeName: "process-approved" };
         };
         "process-approved": {
-          input: DefineContinuationInput<{ approved: boolean }>;
+          input: { approved: boolean };
           output: { done: true };
         };
       }>(),
@@ -236,8 +234,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         test: {
+          entry: true;
           input: null;
           output: { result: boolean };
         };
@@ -261,7 +260,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           typeName: "test",
           id: jobSequence.id,
           complete: async ({ job, complete }) => {
-            return complete(job, () => ({ result: false }));
+            return complete(job, async () => ({ result: false }));
           },
         }),
       ),
@@ -275,7 +274,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
             typeName: "test",
             id: jobSequence.id,
             complete: async ({ job, complete }) => {
-              return complete(job, () => ({ result: false }));
+              return complete(job, async () => ({ result: false }));
             },
           }),
         ),
@@ -296,8 +295,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         test: {
+          entry: true;
           input: { value: number };
           output: { result: number };
         };
@@ -355,8 +355,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         test: {
+          entry: true;
           input: null;
           output: { result: string };
         };
@@ -404,7 +405,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
             typeName: "test",
             id: jobSequence.id,
             complete: async ({ job, complete }) => {
-              await complete(job, () => ({ result: "from-external" }));
+              await complete(job, async () => ({ result: "from-external" }));
             },
           }),
         ),
@@ -428,10 +429,10 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
-        entryA: { input: null; output: DefineContinuationOutput<"shared"> };
-        entryB: { input: null; output: DefineContinuationOutput<"shared"> };
-        shared: { input: DefineContinuationInput<null>; output: { done: true } };
+      jobTypeRegistry: defineJobTypes<{
+        entryA: { entry: true; input: null; continuesTo: { typeName: "shared" } };
+        entryB: { entry: true; input: null; continuesTo: { typeName: "shared" } };
+        shared: { input: null; output: { done: boolean } };
       }>(),
     });
 

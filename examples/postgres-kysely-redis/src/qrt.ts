@@ -3,7 +3,7 @@ import { createRedisNotifyAdapter, RedisNotifyProvider } from "@queuert/redis";
 import { CompiledQuery } from "kysely";
 import { createConsoleLog, createQueuert } from "queuert";
 import { Db } from "./db.js";
-import { qrtJobDefinitions } from "./qrt-schema.js";
+import { qrtJobTypeDefinitions } from "./qrt-schema.js";
 import { Redis } from "./redis.js";
 
 export const createQrt = async ({
@@ -61,7 +61,7 @@ export const createQrt = async ({
     stateAdapter,
     notifyAdapter,
     log: createConsoleLog(),
-    jobTypeDefinitions: qrtJobDefinitions,
+    jobTypeRegistry: qrtJobTypeDefinitions,
   });
 };
 

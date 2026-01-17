@@ -1,75 +1,98 @@
 import {
   BaseJobTypeDefinitions,
-  blockerSymbol,
-  continuationInputSymbol,
-  continuationOutputSymbol,
-  DefineBlocker,
-  DefineContinuationInput,
-  DefineContinuationOutput,
+  JobTypeReference,
+  NominalReference,
+  StructuralReference,
 } from "./job-type.js";
-import type { ExternalJobTypeDefinitions } from "./job-type.navigation.js";
 
-type NoVoidOrUndefined<T> = [T] extends [never]
-  ? never
-  : [T] extends [void]
-    ? never
-    : [T] extends [undefined]
-      ? never
-      : T;
+type NoVoid<T> = [T] extends [void] ? never : T;
+type NoVoidOrUndefined<T> = [T] extends [void | undefined] ? never : T;
 
-type StripContinuationOutput<T> = Exclude<T, { [continuationOutputSymbol]: unknown }>;
+type MatchingJobTypesByInput<TDefs extends BaseJobTypeDefinitions, TInput> = {
+  [K in keyof TDefs]: TDefs[K] extends { input: infer I }
+    ? [TInput] extends [I]
+      ? K
+      : never
+    : never;
+}[keyof TDefs] &
+  string;
 
-type ValidateInput<TInput> = TInput extends {
-  [continuationInputSymbol]: true;
-  $inputType: infer U;
-}
-  ? DefineContinuationInput<NoVoidOrUndefined<U>>
-  : NoVoidOrUndefined<TInput>;
+type HasContinuesTo<TJobType> = TJobType extends { continuesTo: JobTypeReference } ? true : false;
 
-type ValidateContinuationRef<TOutput, TValidKeys extends string> = TOutput extends {
-  [continuationOutputSymbol]: true;
-  $outputType: infer Ref;
-}
-  ? Ref extends TValidKeys
-    ? TOutput
-    : DefineContinuationOutput<TValidKeys>
-  : TOutput;
+type ValidateOutput<TJobType> =
+  HasContinuesTo<TJobType> extends true
+    ? TJobType extends { output: infer O }
+      ? O extends undefined
+        ? undefined
+        : NoVoid<O>
+      : undefined
+    : TJobType extends { output: infer O }
+      ? NoVoidOrUndefined<O>
+      : never;
 
-type ValidateOutput<TOutput, TValidKeys extends string> = [
-  StripContinuationOutput<TOutput>,
-] extends [never]
-  ? ValidateContinuationRef<TOutput, TValidKeys>
-  :
-      | NoVoidOrUndefined<StripContinuationOutput<TOutput>>
-      | ValidateContinuationRef<
-          Extract<TOutput, { [continuationOutputSymbol]: unknown }>,
-          TValidKeys
-        >;
+type ValidateReference<TRef, TDefs extends BaseJobTypeDefinitions, TValidKeys extends string> =
+  TRef extends NominalReference<infer TN>
+    ? TN extends TValidKeys
+      ? TRef
+      : NominalReference<TValidKeys>
+    : TRef extends StructuralReference<infer TI>
+      ? [MatchingJobTypesByInput<TDefs, TI>] extends [never]
+        ? never
+        : TRef
+      : never;
 
-type ValidateBlockerRef<TBlocker, TValidKeys extends string> = TBlocker extends {
-  [blockerSymbol]: infer Ref;
-}
-  ? Ref extends TValidKeys
-    ? TBlocker
-    : DefineBlocker<TValidKeys>
-  : TBlocker;
+type ValidateContinuesTo<
+  T,
+  TDefs extends BaseJobTypeDefinitions,
+  TValidKeys extends string,
+> = T extends JobTypeReference ? ValidateReference<T, TDefs, TValidKeys> : T;
 
-type ValidateBlockers<TBlockers, TValidKeys extends string> = TBlockers extends readonly [
-  infer First,
-  ...infer Rest,
-]
-  ? readonly [ValidateBlockerRef<First, TValidKeys>, ...ValidateBlockers<Rest, TValidKeys>]
-  : TBlockers extends readonly (infer TElement)[]
-    ? readonly ValidateBlockerRef<TElement, TValidKeys>[]
-    : TBlockers;
+type EntryTypeKeys<T extends BaseJobTypeDefinitions> = {
+  [K in keyof T]: T[K] extends { entry: true } ? K : never;
+}[keyof T] &
+  string;
+
+type ValidateBlockers<
+  T,
+  TDefs extends BaseJobTypeDefinitions,
+  TEntryKeys extends string,
+> = T extends readonly [infer First extends JobTypeReference, ...infer Rest]
+  ? readonly [
+      ValidateReference<First, TDefs, TEntryKeys>,
+      ...ValidateBlockers<Rest, TDefs, TEntryKeys>,
+    ]
+  : T extends readonly (infer TElement extends JobTypeReference)[]
+    ? readonly ValidateReference<TElement, TDefs, TEntryKeys>[]
+    : T;
+
+type ExtractOutput<T> = T extends { output: infer O } ? O : undefined;
+
+type ExtractBlockers<T> = T extends { blockers: infer B } ? B : undefined;
+
+type OutputProperty<TJobType> =
+  HasContinuesTo<TJobType> extends true
+    ? [ExtractOutput<TJobType>] extends [undefined]
+      ? { output?: ValidateOutput<TJobType> }
+      : { output: ValidateOutput<TJobType> }
+    : { output: ValidateOutput<TJobType> };
+
+type BlockersProperty<TJobType, T extends BaseJobTypeDefinitions> = [
+  ExtractBlockers<TJobType>,
+] extends [undefined]
+  ? { blockers?: undefined }
+  : { blockers: ValidateBlockers<ExtractBlockers<TJobType>, T, EntryTypeKeys<T>> };
+
+type ValidateJobType<TJobType, TValidKeys extends string, T extends BaseJobTypeDefinitions> = {
+  entry?: TJobType extends { entry: infer E extends boolean } ? E : never;
+  input: NoVoidOrUndefined<TJobType extends { input: infer I } ? I : never>;
+  continuesTo?: ValidateContinuesTo<
+    TJobType extends { continuesTo: infer CT } ? CT : undefined,
+    T,
+    TValidKeys
+  >;
+} & OutputProperty<TJobType> &
+  BlockersProperty<TJobType, T>;
 
 export type ValidatedJobTypeDefinitions<T extends BaseJobTypeDefinitions> = {
-  [K in keyof T]: {
-    input: ValidateInput<T[K]["input"]>;
-    output: ValidateOutput<T[K]["output"], keyof T & string>;
-    blockers?: ValidateBlockers<
-      T[K] extends { blockers: infer B } ? B : undefined,
-      keyof ExternalJobTypeDefinitions<T> & string
-    >;
-  };
+  [K in keyof T]: ValidateJobType<T[K], keyof T & string, T>;
 };

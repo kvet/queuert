@@ -7,7 +7,7 @@ import {
   BaseJobTypeDefinitions,
   ContinuationJobs,
   ContinuationJobTypes,
-  ExternalJobTypeDefinitions,
+  EntryJobTypeDefinitions,
   HasBlockers,
   JobOf,
   SequenceTypesReaching,
@@ -68,7 +68,7 @@ export type CompleteCallbackOptions<
   TStateAdapter extends StateAdapter<BaseStateAdapterContext, BaseStateAdapterContext, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions & string,
-  TSequenceTypeName extends keyof ExternalJobTypeDefinitions<TJobTypeDefinitions> & string,
+  TSequenceTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
 > = {
   continueWith: <
     TContinueJobTypeName extends ContinuationJobTypes<TJobTypeDefinitions, TJobTypeName> & string,
@@ -395,6 +395,7 @@ export const runJobProcess = async ({
                 context,
                 schedule,
                 startBlockers: startBlockers as any,
+                fromTypeName: job.typeName,
               });
               return continuedJob;
             },

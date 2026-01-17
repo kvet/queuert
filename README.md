@@ -9,18 +9,22 @@ Run your application logic as a series of background jobs that are started along
 Imagine you have some long-running process. For example, performing image processing and asset distribution after a user uploads an image.
 
 ```ts
+const jobTypes = defineJobTypes<{
+  'process-image': {
+    entry: true;  // Can be started via startJobSequence
+    input: { imageId: string };
+    continuesTo: { typeName: 'distribute-image' };
+  };
+  'distribute-image': {
+    // No entry field - continuation-only (default)
+    input: { imageId: string; minifiedImageId: string };
+    output: { done: true };
+  };
+}>();
+
 const queuert = createQueuert({
   stateAdapter: ...,
-  jobTypeDefinitions: defineUnionJobTypes<{
-    'process-image': {
-      input: { imageId: string };
-      output: DefineContinuationOutput<"distribute-image">;
-    };
-    'distribute-image': {
-      input: DefineContinuationInput<{ imageId: string; minifiedImageId: string }>;
-      output: { done: true };
-    };
-  }>(),
+  jobTypeRegistry: jobTypes,
 })
 
 queuert.withNotify(async () => db.transaction(async (tx) => {
@@ -164,7 +168,7 @@ Queuert provides end-to-end type safety with full type inference. Define your jo
 - **Job inputs and outputs** are inferred and validated at compile time
 - **Continuations** are type-checked — `continueWith` only accepts valid target job types with matching inputs
 - **Blockers** are fully typed — access `job.blockers` with correct output types for each blocker
-- **Internal job types** marked with `DefineContinuationInput` cannot be started directly via `startJobSequence`
+- **Internal job types** without `entry: true` cannot be started directly via `startJobSequence`
 
 No runtime type errors. No mismatched job names. Your workflow logic is verified before your code ever runs.
 
@@ -235,10 +239,10 @@ Sequences support various execution patterns via `continueWith`:
 Jobs execute one after another: `A → B`
 
 ```ts
-type Definitions = DefineJobTypeDefinitions<{
-  step1: { input: { id: string }; output: DefineContinuationOutput<"step2"> };
-  step2: { input: DefineContinuationInput<{ id: string }>; output: { done: true } };
-}>;
+type Definitions = {
+  step1: { entry: true; input: { id: string }; continuesTo: { typeName: 'step2' } };
+  step2: { input: { id: string }; output: { done: true } };
+};
 
 // Start the sequence
 await queuert.startJobSequence({
@@ -269,14 +273,15 @@ queuert.createWorker()
 Jobs can conditionally continue to different types: `A → B1 | B2`
 
 ```ts
-type Definitions = DefineJobTypeDefinitions<{
+type Definitions = {
   main: {
+    entry: true;
     input: { value: number };
-    output: DefineContinuationOutput<"branch1"> | DefineContinuationOutput<"branch2">;
+    continuesTo: { typeName: 'branch1' | 'branch2' };  // Union of allowed targets
   };
-  branch1: { input: DefineContinuationInput<{ value: number }>; output: { result1: number } };
-  branch2: { input: DefineContinuationInput<{ value: number }>; output: { result2: number } };
-}>;
+  branch1: { input: { value: number }; output: { result1: number } };
+  branch2: { input: { value: number }; output: { result2: number } };
+};
 
 // Start the sequence
 await queuert.startJobSequence({
@@ -304,12 +309,14 @@ queuert.createWorker()
 Jobs can continue to the same type: `A → A → A → done`
 
 ```ts
-type Definitions = DefineJobTypeDefinitions<{
+type Definitions = {
   loop: {
+    entry: true;
     input: { counter: number };
-    output: DefineContinuationOutput<"loop"> | { done: true };
+    output: { done: true };  // Terminal output when done
+    continuesTo: { typeName: 'loop' };     // Can continue to self
   };
-}>;
+};
 
 // Start the sequence
 await queuert.startJobSequence({
@@ -336,13 +343,14 @@ queuert.createWorker()
 Jobs can jump back to earlier types: `A → B → A → B → done`
 
 ```ts
-type Definitions = DefineJobTypeDefinitions<{
-  start: { input: { value: number }; output: DefineContinuationOutput<"end"> };
+type Definitions = {
+  start: { entry: true; input: { value: number }; continuesTo: { typeName: 'end' } };
   end: {
-    input: DefineContinuationInput<{ result: number }>;
-    output: DefineContinuationOutput<"start"> | { finalResult: number };
+    input: { result: number };
+    output: { finalResult: number };  // Terminal output when done
+    continuesTo: { typeName: 'start' };             // Can jump back to start
   };
-}>;
+};
 
 // Start the sequence
 await queuert.startJobSequence({
@@ -377,17 +385,19 @@ queuert.createWorker()
 Jobs can depend on other job sequences to complete before they start. A job with incomplete blockers starts as `blocked` and transitions to `pending` when all blockers complete.
 
 ```ts
-type Definitions = DefineJobTypeDefinitions<{
+type Definitions = {
   'fetch-data': {
+    entry: true;
     input: { url: string };
     output: { data: string };
   };
   'process-all': {
+    entry: true;
     input: { ids: string[] };
     output: { results: string[] };
-    blockers: DefineBlocker<'fetch-data'>[];  // Wait for multiple fetches
+    blockers: [{ typeName: 'fetch-data' }, ...{ typeName: 'fetch-data' }[]];  // Wait for multiple fetches (tuple with rest)
   };
-}>;
+};
 
 // Start with blockers
 await queuert.startJobSequence({
@@ -417,31 +427,34 @@ Queuert provides only job completion — there is no built-in "failure" state. T
 Handle failures by returning error information in your output types:
 
 ```ts
-type Definitions = DefineJobTypeDefinitions<{
+type Definitions = {
   'process-payment': {
+    entry: true;
     input: { orderId: string };
     output: { success: true; transactionId: string } | { success: false; error: string };
   };
-}>;
+};
 ```
 
 For workflows that need rollback, use the compensation pattern — a "failed" job can continue to a compensation job that undoes previous steps:
 
 ```ts
-type Definitions = DefineJobTypeDefinitions<{
+type Definitions = {
   'charge-card': {
+    entry: true;
     input: { orderId: string };
-    output: DefineContinuationOutput<"ship-order"> | DefineContinuationOutput<"refund-charge">;
+    continuesTo: { typeName: 'ship-order' | 'refund-charge' };
   };
   'ship-order': {
-    input: DefineContinuationInput<{ orderId: string; chargeId: string }>;
-    output: { shipped: true } | DefineContinuationOutput<"refund-charge">;
+    input: { orderId: string; chargeId: string };
+    output: { shipped: true };
+    continuesTo: { typeName: 'refund-charge' };  // Can continue to refund on failure
   };
   'refund-charge': {
-    input: DefineContinuationInput<{ chargeId: string }>;
+    input: { chargeId: string };
     output: { refunded: true };
   };
-}>;
+};
 ```
 
 ## Deferred Start
@@ -481,16 +494,18 @@ await complete(job, async ({ continueWith }) =>
 Jobs can be completed without a worker using `completeJobSequence`. This enables approval workflows, webhook-triggered completions, and patterns where jobs wait for external events. Deferred start pairs well with this — schedule a job to auto-reject after a timeout, but allow early completion based on user action.
 
 ```ts
-type Definitions = DefineJobTypeDefinitions<{
+type Definitions = {
   'await-approval': {
+    entry: true;
     input: { requestId: string };
-    output: { rejected: true } | DefineContinuationOutput<'process-request'>;
+    output: { rejected: true };
+    continuesTo: { typeName: 'process-request' };
   };
   'process-request': {
-    input: DefineContinuationInput<{ requestId: string }>;
+    input: { requestId: string };
     output: { processed: true };
   };
-}>;
+};
 
 // Start a job that auto-rejects in 2 hours if not handled
 const sequence = await queuert.startJobSequence({

@@ -3,14 +3,14 @@ import {
   createInProcessStateAdapter,
   createQueuert,
   createConsoleLog,
-  defineUnionJobTypes,
+  defineJobTypes,
 } from "queuert";
 import { observabilityAdapter, flushMetrics, shutdownMetrics } from "./observability.js";
 
 // 1. Define job types
-const jobTypeDefinitions = defineUnionJobTypes<{
-  greet: { input: { name: string }; output: { greeting: string } };
-  "might-fail": { input: { shouldFail: boolean }; output: { success: true } };
+const jobTypeRegistry = defineJobTypes<{
+  greet: { entry: true; input: { name: string }; output: { greeting: string } };
+  "might-fail": { entry: true; input: { shouldFail: boolean }; output: { success: true } };
 }>();
 
 // 2. Create adapters and queuert with OTEL observability
@@ -20,7 +20,7 @@ const qrt = await createQueuert({
   notifyAdapter: createInProcessNotifyAdapter(),
   log: createConsoleLog(),
   observabilityAdapter,
-  jobTypeDefinitions,
+  jobTypeRegistry,
 });
 
 // 3. Create and start worker

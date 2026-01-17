@@ -1,11 +1,5 @@
 import { expectTypeOf, TestAPI } from "vitest";
-import {
-  CompletedJobSequence,
-  createQueuert,
-  DefineContinuationInput,
-  DefineContinuationOutput,
-  defineUnionJobTypes,
-} from "../index.js";
+import { CompletedJobSequence, createQueuert, defineJobTypes } from "../index.js";
 import { TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -31,17 +25,18 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         linear: {
+          entry: true;
           input: { value: number };
-          output: DefineContinuationOutput<"linear_next">;
+          continuesTo: { typeName: "linear_next" };
         };
         linear_next: {
-          input: DefineContinuationInput<{ valueNext: number }>;
-          output: DefineContinuationOutput<"linear_next_next">;
+          input: { valueNext: number };
+          continuesTo: { typeName: "linear_next_next" };
         };
         linear_next_next: {
-          input: DefineContinuationInput<{ valueNextNext: number }>;
+          input: { valueNextNext: number };
           output: { result: number };
         };
       }>(),
@@ -231,17 +226,18 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         main: {
+          entry: true;
           input: { value: number };
-          output: DefineContinuationOutput<"branch1"> | DefineContinuationOutput<"branch2">;
+          continuesTo: { typeName: "branch1" | "branch2" };
         };
         branch1: {
-          input: DefineContinuationInput<{ valueBranched: number }>;
+          input: { valueBranched: number };
           output: { result1: number };
         };
         branch2: {
-          input: DefineContinuationInput<{ valueBranched: number }>;
+          input: { valueBranched: number };
           output: { result2: number };
         };
       }>(),
@@ -340,10 +336,12 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         loop: {
+          entry: true;
           input: { counter: number };
-          output: DefineContinuationOutput<"loop"> | { done: true };
+          output: { done: true };
+          continuesTo: { typeName: "loop" };
         };
       }>(),
     });
@@ -401,14 +399,16 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         start: {
+          entry: true;
           input: { value: number };
-          output: DefineContinuationOutput<"end">;
+          continuesTo: { typeName: "end" };
         };
         end: {
-          input: DefineContinuationInput<{ result: number }>;
-          output: DefineContinuationOutput<"start"> | { finalResult: number };
+          input: { result: number };
+          output: { finalResult: number };
+          continuesTo: { typeName: "start" };
         };
       }>(),
     });
@@ -486,10 +486,10 @@ export const sequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): v
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
-        entryA: { input: { fromA: true }; output: DefineContinuationOutput<"shared"> };
-        entryB: { input: { fromB: true }; output: DefineContinuationOutput<"shared"> };
-        shared: { input: DefineContinuationInput<{ data: number }>; output: { done: true } };
+      jobTypeRegistry: defineJobTypes<{
+        entryA: { entry: true; input: { fromA: true }; continuesTo: { typeName: "shared" } };
+        entryB: { entry: true; input: { fromB: true }; continuesTo: { typeName: "shared" } };
+        shared: { input: { data: number }; output: { done: true } };
       }>(),
     });
 

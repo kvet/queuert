@@ -2,7 +2,7 @@ import {
   createInProcessNotifyAdapter,
   createInProcessStateAdapter,
   createQueuert,
-  defineUnionJobTypes,
+  defineJobTypes,
 } from "queuert";
 import winston from "winston";
 import { createWinstonLog } from "./log.js";
@@ -23,9 +23,17 @@ const logger = winston.createLogger({
 });
 
 // 2. Define job types
-const jobTypeDefinitions = defineUnionJobTypes<{
-  greet: { input: { name: string }; output: { greeting: string } };
-  "might-fail": { input: { shouldFail: boolean }; output: { success: true } };
+const jobTypeRegistry = defineJobTypes<{
+  greet: {
+    entry: true;
+    input: { name: string };
+    output: { greeting: string };
+  };
+  "might-fail": {
+    entry: true;
+    input: { shouldFail: boolean };
+    output: { success: true };
+  };
 }>();
 
 // 3. Create adapters and queuert with Winston logging
@@ -34,7 +42,7 @@ const qrt = await createQueuert({
   stateAdapter,
   notifyAdapter: createInProcessNotifyAdapter(),
   log: createWinstonLog(logger),
-  jobTypeDefinitions,
+  jobTypeRegistry,
 });
 
 // 4. Create and start worker

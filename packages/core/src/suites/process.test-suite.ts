@@ -1,6 +1,6 @@
 import { expectTypeOf, TestAPI, vi } from "vitest";
 import { sleep } from "../helpers/sleep.js";
-import { createQueuert, defineUnionJobTypes } from "../index.js";
+import { createQueuert, defineJobTypes } from "../index.js";
 import { TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -26,8 +26,9 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         test: {
+          entry: true;
           input: { test: boolean };
           output: { result: boolean };
         };
@@ -192,28 +193,34 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         "atomic-complete": {
+          entry: true;
           input: { value: number };
           output: { result: number };
         };
         "staged-complete": {
+          entry: true;
           input: { value: number };
           output: { result: number };
         };
         "staged-with-callback": {
+          entry: true;
           input: { value: number };
           output: { result: number };
         };
         "staged-without-callback": {
+          entry: true;
           input: { value: number };
           output: { result: number };
         };
         "atomic-with-callback": {
+          entry: true;
           input: { value: number };
           output: { result: number };
         };
         "atomic-without-callback": {
+          entry: true;
           input: { value: number };
           output: { result: number };
         };
@@ -348,22 +355,26 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         "test-prepare-twice": {
+          entry: true;
           input: null;
           output: null;
         };
         "test-complete-twice": {
+          entry: true;
           input: null;
           output: null;
         };
         "test-prepare-after-auto-setup": {
+          entry: true;
           input: null;
           output: null;
         };
         "test-continueWith-twice": {
+          entry: true;
           input: null;
-          output: { value: number };
+          continuesTo: { typeName: "test-next" };
         };
         "test-next": {
           input: { value: number };
@@ -489,8 +500,9 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         test: {
+          entry: true;
           input: null;
           output: null;
         };
@@ -549,8 +561,9 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         test: {
+          entry: true;
           input: { test: boolean };
           output: { success: boolean };
         };
@@ -593,8 +606,9 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         test: {
+          entry: true;
           input: null;
           output: null;
         };
@@ -674,8 +688,9 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         test: {
+          entry: true;
           input: null;
           output: null;
         };
@@ -794,8 +809,9 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         test: {
+          entry: true;
           input: { phase: ErrorPhase };
           output: null;
         };
@@ -935,8 +951,9 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         test: {
+          entry: true;
           input: null;
           output: { result: string };
         };

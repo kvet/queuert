@@ -2,6 +2,7 @@ import { JobSequence } from "../entities/job-sequence.js";
 import { Job } from "../entities/job.js";
 import { ScheduleOptions } from "../entities/schedule.js";
 import { NotifyAdapter } from "../notify-adapter/notify-adapter.js";
+import type { JobTypeValidationError } from "../queuert-helper.js";
 import { StateAdapter, StateJob } from "../state-adapter/state-adapter.js";
 import { JobBasicData, JobProcessingData, JobSequenceData, Log } from "./log.js";
 import { ObservabilityAdapter } from "./observability-adapter.js";
@@ -104,6 +105,8 @@ export type ObservabilityHelper = {
   notifyAdapterError: (operation: keyof NotifyAdapter, error: unknown) => void;
   // state adapter
   stateAdapterError: (operation: keyof StateAdapter<any, any, any>, error: unknown) => void;
+  // job type validation
+  jobTypeValidationError: (error: JobTypeValidationError) => void;
   // histograms
   jobSequenceDuration: (firstJob: StateJob, lastJob: StateJob) => void;
   jobDuration: (job: StateJob) => void;
@@ -418,6 +421,21 @@ export const createObservabilityHelper = ({
       error,
     });
     adapter.stateAdapterError({ operation, error });
+  },
+
+  // job type validation
+  jobTypeValidationError(error) {
+    log({
+      type: "job_type_validation_error",
+      level: "error",
+      message: error.message,
+      data: {
+        code: error.code,
+        typeName: error.typeName,
+        ...error.details,
+      },
+      error,
+    });
   },
 
   // histograms (no logging, metrics only)

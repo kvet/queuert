@@ -1,12 +1,6 @@
 import { TestAPI } from "vitest";
 import { sleep } from "../helpers/sleep.js";
-import {
-  createQueuert,
-  DefineBlocker,
-  DefineContinuationInput,
-  DefineContinuationOutput,
-  defineUnionJobTypes,
-} from "../index.js";
+import { createQueuert, defineJobTypes } from "../index.js";
 import { TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -24,8 +18,9 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         test: {
+          entry: true;
           input: { value: number };
           output: { result: number };
         };
@@ -73,8 +68,9 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         test: {
+          entry: true;
           input: { value: number };
           output: { result: number };
         };
@@ -133,15 +129,17 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         blocker: {
+          entry: true;
           input: null;
           output: { allowed: boolean };
         };
         main: {
+          entry: true;
           input: null;
           output: { done: true };
-          blockers: [DefineBlocker<"blocker">];
+          blockers: [{ typeName: "blocker" }];
         };
       }>(),
     });
@@ -205,14 +203,14 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         step1: {
+          entry: true;
           input: null;
-          output: DefineContinuationOutput<"step2">;
+          continuesTo: { typeName: "step2" };
         };
         step2: {
-          // TODO: fix DefineContinuationInput to allow null
-          input: DefineContinuationInput<{}>;
+          input: null;
           output: { finished: true };
         };
       }>(),
@@ -225,7 +223,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         return complete(async ({ continueWith }) =>
           continueWith({
             typeName: "step2",
-            input: {},
+            input: null,
           }),
         );
       },
@@ -275,8 +273,9 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         test: {
+          entry: true;
           input: null;
           output: { result: string };
         };
@@ -321,7 +320,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             typeName: "test",
             id: jobSequence.id,
             complete: async ({ job, complete }) => {
-              return complete(job, () => ({ result: "from-external" }));
+              return complete(job, async () => ({ result: "from-external" }));
             },
           }),
         ),
@@ -345,8 +344,9 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         test: {
+          entry: true;
           input: null;
           output: { result: string };
         };

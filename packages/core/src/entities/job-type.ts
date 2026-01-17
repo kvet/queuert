@@ -1,38 +1,63 @@
-export type BaseJobTypeDefinitions = Record<
-  string,
-  {
-    input: unknown;
-    output: unknown;
-    blockers?: readonly unknown[];
-  }
->;
+// Reference types for job type relationships
+export type NominalReference<T extends string = string> = { typeName: T };
+export type StructuralReference<T = unknown> = { input: T };
+export type JobTypeReference = NominalReference | StructuralReference;
 
-export type DefineJobTypeDefinitions<T extends BaseJobTypeDefinitions> = T;
-
-export const continuationInputSymbol: unique symbol = Symbol("continuationInput");
-
-export type DefineContinuationInput<T> = {
-  [continuationInputSymbol]: true;
-  $inputType: T;
+export type BaseJobTypeDefinition = {
+  entry?: boolean;
+  input: unknown;
+  output?: unknown;
+  continuesTo?: JobTypeReference;
+  blockers?: readonly JobTypeReference[];
 };
 
-export const continuationOutputSymbol: unique symbol = Symbol("continuationOutput");
+export type BaseJobTypeDefinitions = Record<string, BaseJobTypeDefinition>;
 
-export type DefineContinuationOutput<T extends string> = {
-  [continuationOutputSymbol]: true;
-  $outputType: T;
-};
+export type DefineJobTypes<T extends BaseJobTypeDefinitions> = T;
 
-export const blockerSymbol: unique symbol = Symbol("blocker");
-
-export type DefineBlocker<T extends string> = { [blockerSymbol]: T };
-
+import { createNoopJobTypeRegistry, JobTypeRegistry } from "./job-type-registry.js";
 import { ValidatedJobTypeDefinitions } from "./job-type.validation.js";
 
-export const defineUnionJobTypes = <
+/**
+ * Define job types with compile-time type checking only (no runtime validation).
+ * Returns a JobTypeRegistry that passes all values through without validation.
+ *
+ * @example
+ * // Inline definition
+ * const jobTypes = defineJobTypes<{
+ *   'fetch': {
+ *     entry: true;
+ *     input: { url: string };
+ *     output: { data: unknown };
+ *   };
+ *   'process': {
+ *     entry: true;
+ *     input: { id: string };
+ *     continuesTo: { typeName: 'finalize' };
+ *     blockers: [{ typeName: 'fetch' }];
+ *   };
+ *   'finalize': {
+ *     input: { result: string };
+ *     output: { done: boolean };
+ *   };
+ * }>();
+ *
+ * @example
+ * // With DefineJobTypes for better IntelliSense
+ * type MyJobDefinitions = DefineJobTypes<{
+ *   'process': {
+ *     entry: true;
+ *     input: { id: string };
+ *     output: { result: string };
+ *   };
+ * }>;
+ *
+ * const jobTypes = defineJobTypes<MyJobDefinitions>();
+ */
+export const defineJobTypes = <
   T extends BaseJobTypeDefinitions & ValidatedJobTypeDefinitions<T>,
->() => {
-  return {} as T;
+>(): JobTypeRegistry<T> => {
+  return createNoopJobTypeRegistry<T>();
 };
 
 export * from "./job-type.navigation.js";

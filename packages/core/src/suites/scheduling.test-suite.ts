@@ -1,10 +1,5 @@
 import { TestAPI } from "vitest";
-import {
-  createQueuert,
-  DefineContinuationOutput,
-  defineUnionJobTypes,
-  rescheduleJob,
-} from "../index.js";
+import { createQueuert, defineJobTypes, rescheduleJob } from "../index.js";
 import { TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -22,8 +17,9 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         test: {
+          entry: true;
           input: { value: number };
           output: { result: number };
         };
@@ -79,8 +75,9 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         test: {
+          entry: true;
           input: { value: number };
           output: { result: number };
         };
@@ -136,10 +133,11 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         first: {
+          entry: true;
           input: { value: number };
-          output: DefineContinuationOutput<"second">;
+          continuesTo: { typeName: "second" };
         };
         second: {
           input: { continued: boolean };
@@ -218,10 +216,11 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         first: {
+          entry: true;
           input: { value: number };
-          output: DefineContinuationOutput<"second">;
+          continuesTo: { typeName: "second" };
         };
         second: {
           input: { continued: boolean };
@@ -300,8 +299,9 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         test: {
+          entry: true;
           input: { value: number };
           output: { result: number };
         };
@@ -368,8 +368,9 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         test: {
+          entry: true;
           input: { value: number };
           output: { result: number };
         };

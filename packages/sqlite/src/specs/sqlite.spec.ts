@@ -1,5 +1,5 @@
-import { createInProcessNotifyAdapter, createQueuert, defineUnionJobTypes } from "queuert";
 import { UUID } from "crypto";
+import { createInProcessNotifyAdapter, createQueuert, defineJobTypes } from "queuert";
 import { it as baseIt, expectTypeOf, vi } from "vitest";
 import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
 import { extendWithStateSqlite } from "../testing.js";
@@ -22,8 +22,9 @@ it("should infer types correctly with custom ID", async ({ db }) => {
     stateAdapter,
     notifyAdapter: createInProcessNotifyAdapter(),
     log: vi.fn(),
-    jobTypeDefinitions: defineUnionJobTypes<{
+    jobTypeRegistry: defineJobTypes<{
       test: {
+        entry: true;
         input: { foo: string };
         output: { bar: number };
       };

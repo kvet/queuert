@@ -1,12 +1,5 @@
 import { expectTypeOf, TestAPI } from "vitest";
-import {
-  createQueuert,
-  DefineBlocker,
-  DefineContinuationInput,
-  DefineContinuationOutput,
-  defineUnionJobTypes,
-  JobSequence,
-} from "../index.js";
+import { createQueuert, defineJobTypes, JobSequence } from "../index.js";
 import { TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -31,15 +24,18 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         blocker: {
+          entry: true;
           input: { value: number };
-          output: DefineContinuationOutput<"blocker"> | { done: true };
+          output: { done: true };
+          continuesTo: { typeName: "blocker" };
         };
         main: {
+          entry: true;
           input: { start: boolean };
           output: { finalResult: number };
-          blockers: [DefineBlocker<"blocker">];
+          blockers: [{ typeName: "blocker" }];
         };
       }>(),
     });
@@ -250,15 +246,17 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         blocker: {
+          entry: true;
           input: { value: number };
           output: { result: number };
         };
         main: {
+          entry: true;
           input: null;
           output: { finalResult: number };
-          blockers: [DefineBlocker<"blocker">];
+          blockers: [{ typeName: "blocker" }];
         };
       }>(),
     });
@@ -346,12 +344,14 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         inner: {
+          entry: true;
           input: null;
           output: null;
         };
         outer: {
+          entry: true;
           input: null;
           output: null;
         };
@@ -455,10 +455,11 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         test: {
+          entry: true;
           input: { value: number };
-          output: { valueNext: number };
+          continuesTo: { typeName: "finish" };
         };
         finish: {
           input: { valueNext: number };
@@ -534,15 +535,17 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         blocker: {
+          entry: true;
           input: { value: number };
           output: { result: number };
         };
         main: {
+          entry: true;
           input: null;
           output: { finalResult: number[] };
-          blockers: DefineBlocker<"blocker">[];
+          blockers: [{ typeName: "blocker" }, ...{ typeName: "blocker" }[]];
         };
       }>(),
     });
@@ -570,8 +573,8 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
           ...context,
           typeName: "main",
           input: null,
-          startBlockers: async () =>
-            Promise.all(
+          startBlockers: async () => {
+            const blockers = await Promise.all(
               Array.from({ length: 5 }, async (_, i) =>
                 queuert.startJobSequence({
                   ...context,
@@ -579,7 +582,10 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
                   input: { value: i + 1 },
                 }),
               ),
-            ),
+            );
+            // Assert non-empty tuple type - length 5 is guaranteed by Array.from
+            return blockers as [(typeof blockers)[number], ...(typeof blockers)[number][]];
+          },
         }),
       ),
     );
@@ -610,19 +616,21 @@ export const blockerSequencesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         blocker: {
+          entry: true;
           input: { value: number };
           output: { result: number };
         };
         first: {
+          entry: true;
           input: { id: string };
-          output: DefineContinuationOutput<"second">;
+          continuesTo: { typeName: "second" };
         };
         second: {
-          input: DefineContinuationInput<{ fromFirst: string }>;
+          input: { fromFirst: string };
           output: { finalResult: number };
-          blockers: [DefineBlocker<"blocker">];
+          blockers: [{ typeName: "blocker" }];
         };
       }>(),
     });

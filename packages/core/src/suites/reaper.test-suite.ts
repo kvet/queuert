@@ -1,6 +1,6 @@
 import { TestAPI } from "vitest";
 import { sleep } from "../helpers/sleep.js";
-import { createQueuert, defineUnionJobTypes, LeaseConfig } from "../index.js";
+import { createQueuert, defineJobTypes, LeaseConfig } from "../index.js";
 import { JobAlreadyCompletedError } from "../queuert-helper.js";
 import { TestSuiteContext } from "./spec-context.spec-helper.js";
 
@@ -24,8 +24,9 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         test: {
+          entry: true;
           input: null;
           output: null;
         };
@@ -116,8 +117,9 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         test: {
+          entry: true;
           input: null;
           output: null;
         };

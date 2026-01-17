@@ -3,7 +3,7 @@ import { createRedisNotifyAdapter, RedisNotifyProvider } from "@queuert/redis";
 import { PoolClient } from "pg";
 import { createConsoleLog, createQueuert } from "queuert";
 import { Db } from "./db.js";
-import { qrtJobDefinitions } from "./qrt-schema.js";
+import { qrtJobTypeDefinitions } from "./qrt-schema.js";
 import { Redis } from "./redis.js";
 
 export type DbContext = { poolClient: PoolClient };
@@ -80,7 +80,7 @@ export const createQrt = async ({
     stateAdapter,
     notifyAdapter,
     log: createConsoleLog(),
-    jobTypeDefinitions: qrtJobDefinitions,
+    jobTypeRegistry: qrtJobTypeDefinitions,
   });
 };
 

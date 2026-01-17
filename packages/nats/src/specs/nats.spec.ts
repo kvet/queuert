@@ -1,6 +1,6 @@
 import { extendWithNats } from "@queuert/testcontainers";
 import { connect } from "nats";
-import { createInProcessStateAdapter, createQueuert, defineUnionJobTypes } from "queuert";
+import { createInProcessStateAdapter, createQueuert, defineJobTypes } from "queuert";
 import { it as baseIt, vi } from "vitest";
 import { createNatsNotifyAdapter } from "../notify-adapter/notify-adapter.nats.js";
 
@@ -24,8 +24,9 @@ it("should work end-to-end with NATS notify adapter", async ({ natsConnectionOpt
     stateAdapter,
     notifyAdapter,
     log: vi.fn(),
-    jobTypeDefinitions: defineUnionJobTypes<{
+    jobTypeRegistry: defineJobTypes<{
       test: {
+        entry: true;
         input: { message: string };
         output: { processed: true };
       };
@@ -74,8 +75,9 @@ it("should work end-to-end without JetStream KV", async ({ natsConnectionOptions
     stateAdapter,
     notifyAdapter,
     log: vi.fn(),
-    jobTypeDefinitions: defineUnionJobTypes<{
+    jobTypeRegistry: defineJobTypes<{
       test: {
+        entry: true;
         input: { value: number };
         output: { doubled: number };
       };

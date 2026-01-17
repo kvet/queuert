@@ -2,22 +2,19 @@ import { describe, expectTypeOf, it } from "vitest";
 import {
   BlockerSequences,
   ContinuationJobTypes,
-  DefineBlocker,
-  DefineContinuationInput,
-  DefineContinuationOutput,
-  defineUnionJobTypes,
-  ExternalJobTypeDefinitions,
+  defineJobTypes,
+  EntryJobTypeDefinitions,
   JobOf,
   JobSequenceOf,
   SequenceJobTypes,
   SequenceTypesReaching,
 } from "./job-type.js";
 
-describe("defineUnionJobTypes", () => {
+describe("defineJobTypes", () => {
   describe("validation", () => {
     it("allows valid job type definitions", () => {
       // All valid JSON-like types should work
-      const defs = defineUnionJobTypes<{
+      const defs = defineJobTypes<{
         nullInput: { input: null; output: { done: true } };
         booleanInput: { input: boolean; output: { done: true } };
         numberInput: { input: number; output: { done: true } };
@@ -30,242 +27,235 @@ describe("defineUnionJobTypes", () => {
         };
       }>();
 
-      expectTypeOf(defs).toHaveProperty("nullInput");
-      expectTypeOf(defs).toHaveProperty("booleanInput");
-      expectTypeOf(defs).toHaveProperty("numberInput");
-      expectTypeOf(defs).toHaveProperty("stringInput");
-      expectTypeOf(defs).toHaveProperty("objectInput");
-      expectTypeOf(defs).toHaveProperty("arrayInput");
-      expectTypeOf(defs).toHaveProperty("nestedInput");
+      expectTypeOf<(typeof defs)["$definitions"]>().toHaveProperty("nullInput");
+      expectTypeOf<(typeof defs)["$definitions"]>().toHaveProperty("booleanInput");
+      expectTypeOf<(typeof defs)["$definitions"]>().toHaveProperty("numberInput");
+      expectTypeOf<(typeof defs)["$definitions"]>().toHaveProperty("stringInput");
+      expectTypeOf<(typeof defs)["$definitions"]>().toHaveProperty("objectInput");
+      expectTypeOf<(typeof defs)["$definitions"]>().toHaveProperty("arrayInput");
+      expectTypeOf<(typeof defs)["$definitions"]>().toHaveProperty("nestedInput");
     });
 
     it("rejects void as input", () => {
       // @ts-expect-error void is not allowed as input
-      defineUnionJobTypes<{
+      defineJobTypes<{
         invalid: { input: void; output: { done: true } };
       }>();
     });
 
     it("rejects undefined as input", () => {
       // @ts-expect-error undefined is not allowed as input
-      defineUnionJobTypes<{
+      defineJobTypes<{
         invalid: { input: undefined; output: { done: true } };
       }>();
     });
 
     it("rejects void as terminal output", () => {
       // @ts-expect-error void is not allowed as terminal output
-      defineUnionJobTypes<{
+      defineJobTypes<{
         invalid: { input: null; output: void };
       }>();
     });
 
     it("rejects undefined as terminal output", () => {
       // @ts-expect-error undefined is not allowed as terminal output
-      defineUnionJobTypes<{
+      defineJobTypes<{
         invalid: { input: null; output: undefined };
       }>();
     });
 
     it("allows pure continuation outputs", () => {
-      // Pure continuation output should be valid (no terminal output to validate)
-      const defs = defineUnionJobTypes<{
-        first: { input: null; output: DefineContinuationOutput<"second"> };
-        second: { input: DefineContinuationInput<null>; output: { done: true } };
+      // Pure continuation output should be valid
+      const defs = defineJobTypes<{
+        first: { entry: true; input: null; continuesTo: { typeName: "second" } };
+        second: { input: null; output: { done: true } };
       }>();
 
-      expectTypeOf(defs).toHaveProperty("first");
-      expectTypeOf(defs).toHaveProperty("second");
+      expectTypeOf<(typeof defs)["$definitions"]>().toHaveProperty("first");
+      expectTypeOf<(typeof defs)["$definitions"]>().toHaveProperty("second");
     });
 
     it("allows mixed continuation and terminal outputs", () => {
-      // Can continue or complete
-      const defs = defineUnionJobTypes<{
+      // Can continue or complete (continuesTo with non-null output)
+      const defs = defineJobTypes<{
         loop: {
           input: { counter: number };
-          output: DefineContinuationOutput<"loop"> | { done: true };
+          output: { done: true };
+          continuesTo: { typeName: "loop" };
         };
       }>();
 
-      expectTypeOf(defs).toHaveProperty("loop");
+      expectTypeOf<(typeof defs)["$definitions"]>().toHaveProperty("loop");
     });
 
-    it("rejects void in mixed outputs", () => {
-      // @ts-expect-error void is not allowed even in mixed output
-      defineUnionJobTypes<{
-        invalid: {
-          input: null;
-          output: DefineContinuationOutput<"invalid"> | void;
-        };
+    it("rejects continuesTo referencing undefined job type", () => {
+      // @ts-expect-error "nonexistent" is not a defined job type
+      defineJobTypes<{
+        start: { input: null; continuesTo: { typeName: "nonexistent" } };
       }>();
     });
 
-    it("rejects DefineContinuationOutput referencing undefined job type", () => {
+    it("rejects blockers referencing undefined job type", () => {
       // @ts-expect-error "nonexistent" is not a defined job type
-      defineUnionJobTypes<{
-        start: { input: null; output: DefineContinuationOutput<"nonexistent"> };
-      }>();
-    });
-
-    it("rejects DefineBlocker referencing undefined job type", () => {
-      // @ts-expect-error "nonexistent" is not a defined job type
-      defineUnionJobTypes<{
+      defineJobTypes<{
         main: {
           input: null;
           output: { done: true };
-          blockers: [DefineBlocker<"nonexistent">];
+          blockers: [{ typeName: "nonexistent" }];
         };
       }>();
     });
 
-    it("rejects DefineBlocker referencing continuation-only job type", () => {
+    it("rejects blockers referencing continuation-only job type", () => {
       // @ts-expect-error "internal" is a continuation-only type, cannot be a blocker
-      defineUnionJobTypes<{
-        start: { input: null; output: DefineContinuationOutput<"internal"> };
-        internal: { input: DefineContinuationInput<null>; output: { done: true } };
+      defineJobTypes<{
+        start: { entry: true; input: null; continuesTo: { typeName: "internal" } };
+        internal: { input: null; output: { done: true } };
         main: {
+          entry: true;
           input: { id: string };
           output: { result: number };
-          blockers: [DefineBlocker<"internal">];
+          blockers: [{ typeName: "internal" }];
         };
       }>();
     });
 
-    it("allows valid DefineContinuationOutput references", () => {
-      const defs = defineUnionJobTypes<{
-        first: { input: null; output: DefineContinuationOutput<"second"> };
-        second: { input: DefineContinuationInput<null>; output: { done: true } };
+    it("allows valid continuesTo references", () => {
+      const defs = defineJobTypes<{
+        first: { entry: true; input: null; continuesTo: { typeName: "second" } };
+        second: { input: null; output: { done: true } };
       }>();
 
-      expectTypeOf(defs).toHaveProperty("first");
-      expectTypeOf(defs).toHaveProperty("second");
+      expectTypeOf<(typeof defs)["$definitions"]>().toHaveProperty("first");
+      expectTypeOf<(typeof defs)["$definitions"]>().toHaveProperty("second");
     });
 
-    it("allows valid DefineBlocker references", () => {
-      const defs = defineUnionJobTypes<{
-        blocker: { input: { value: number }; output: { result: number } };
+    it("allows valid blocker references", () => {
+      const defs = defineJobTypes<{
+        blocker: { entry: true; input: { value: number }; output: { result: number } };
         main: {
+          entry: true;
           input: null;
           output: { done: true };
-          blockers: [DefineBlocker<"blocker">];
+          blockers: [{ typeName: "blocker" }];
         };
       }>();
 
-      expectTypeOf(defs).toHaveProperty("blocker");
-      expectTypeOf(defs).toHaveProperty("main");
+      expectTypeOf<(typeof defs)["$definitions"]>().toHaveProperty("blocker");
+      expectTypeOf<(typeof defs)["$definitions"]>().toHaveProperty("main");
     });
   });
 });
 
-describe("DefineContinuationInput", () => {
-  it("supports null as inner type", () => {
-    const defs = defineUnionJobTypes<{
-      first: { input: { start: true }; output: DefineContinuationOutput<"second"> };
-      second: { input: DefineContinuationInput<null>; output: { done: true } };
+describe("continuation-only jobs (default behavior)", () => {
+  it("supports null as input type", () => {
+    const defs = defineJobTypes<{
+      first: { entry: true; input: { start: true }; continuesTo: { typeName: "second" } };
+      second: { input: null; output: { done: true } };
     }>();
 
-    type SecondJob = JobOf<string, typeof defs, "second">;
+    type SecondJob = JobOf<string, (typeof defs)["$definitions"], "second">;
     expectTypeOf<SecondJob["input"]>().toEqualTypeOf<null>();
   });
 
   it("supports object types", () => {
-    const defs = defineUnionJobTypes<{
-      first: { input: null; output: DefineContinuationOutput<"second"> };
+    const defs = defineJobTypes<{
+      first: { entry: true; input: null; continuesTo: { typeName: "second" } };
       second: {
-        input: DefineContinuationInput<{ value: number; name: string }>;
+        input: { value: number; name: string };
         output: { done: true };
       };
     }>();
 
-    type SecondJob = JobOf<string, typeof defs, "second">;
+    type SecondJob = JobOf<string, (typeof defs)["$definitions"], "second">;
     expectTypeOf<SecondJob["input"]>().toEqualTypeOf<{ value: number; name: string }>();
   });
 
   it("supports primitive types", () => {
-    const defs = defineUnionJobTypes<{
-      first: { input: null; output: DefineContinuationOutput<"second"> };
-      second: { input: DefineContinuationInput<number>; output: { done: true } };
+    const defs = defineJobTypes<{
+      first: { entry: true; input: null; continuesTo: { typeName: "second" } };
+      second: { input: number; output: { done: true } };
     }>();
 
-    type SecondJob = JobOf<string, typeof defs, "second">;
+    type SecondJob = JobOf<string, (typeof defs)["$definitions"], "second">;
     expectTypeOf<SecondJob["input"]>().toEqualTypeOf<number>();
   });
 
   it("supports array types", () => {
-    const defs = defineUnionJobTypes<{
-      first: { input: null; output: DefineContinuationOutput<"second"> };
-      second: { input: DefineContinuationInput<string[]>; output: { done: true } };
+    const defs = defineJobTypes<{
+      first: { entry: true; input: null; continuesTo: { typeName: "second" } };
+      second: { input: string[]; output: { done: true } };
     }>();
 
-    type SecondJob = JobOf<string, typeof defs, "second">;
+    type SecondJob = JobOf<string, (typeof defs)["$definitions"], "second">;
     expectTypeOf<SecondJob["input"]>().toEqualTypeOf<string[]>();
   });
 
-  it("rejects void in continuation input", () => {
-    // @ts-expect-error void is not allowed in DefineContinuationInput
-    defineUnionJobTypes<{
-      first: { input: null; output: DefineContinuationOutput<"second"> };
-      second: { input: DefineContinuationInput<void>; output: { done: true } };
+  it("rejects void as continuation input", () => {
+    // @ts-expect-error void is not allowed as input
+    defineJobTypes<{
+      first: { entry: true; input: null; continuesTo: { typeName: "second" } };
+      second: { input: void; output: { done: true } };
     }>();
   });
 
-  it("rejects undefined in continuation input", () => {
-    // @ts-expect-error undefined is not allowed in DefineContinuationInput
-    defineUnionJobTypes<{
-      first: { input: null; output: DefineContinuationOutput<"second"> };
-      second: { input: DefineContinuationInput<undefined>; output: { done: true } };
+  it("rejects undefined as continuation input", () => {
+    // @ts-expect-error undefined is not allowed as input
+    defineJobTypes<{
+      first: { entry: true; input: null; continuesTo: { typeName: "second" } };
+      second: { input: undefined; output: { done: true } };
     }>();
   });
 });
 
-describe("ExternalJobTypeDefinitions", () => {
-  it("filters out continuation-only job types", () => {
+describe("EntryJobTypeDefinitions", () => {
+  it("includes only job types with entry: true", () => {
     type Defs = {
-      public: { input: { id: string }; output: DefineContinuationOutput<"internal"> };
-      internal: { input: DefineContinuationInput<{ data: number }>; output: { done: true } };
-      alsoPublic: { input: null; output: { result: string } };
+      public: { entry: true; input: { id: string }; continuesTo: { typeName: "internal" } };
+      internal: { input: { data: number }; output: { done: true } };
+      alsoPublic: { entry: true; input: null; output: { result: string } };
     };
 
-    type ExternalDefs = ExternalJobTypeDefinitions<Defs>;
+    type EntryDefs = EntryJobTypeDefinitions<Defs>;
 
-    expectTypeOf<keyof ExternalDefs>().toEqualTypeOf<"public" | "alsoPublic">();
+    expectTypeOf<keyof EntryDefs>().toEqualTypeOf<"public" | "alsoPublic">();
   });
 
-  it("returns empty when all are continuation types", () => {
+  it("returns empty when no types have entry: true", () => {
     type Defs = {
-      a: { input: DefineContinuationInput<null>; output: { done: true } };
-      b: { input: DefineContinuationInput<{ x: number }>; output: { done: true } };
+      a: { input: null; output: { done: true } };
+      b: { input: { x: number }; output: { done: true } };
     };
 
-    type ExternalDefs = ExternalJobTypeDefinitions<Defs>;
+    type EntryDefs = EntryJobTypeDefinitions<Defs>;
 
-    expectTypeOf<keyof ExternalDefs>().toEqualTypeOf<never>();
+    expectTypeOf<keyof EntryDefs>().toEqualTypeOf<never>();
   });
 });
 
 describe("JobOf", () => {
-  it("unwraps DefineContinuationInput for job.input", () => {
-    const defs = defineUnionJobTypes<{
-      first: { input: { value: number }; output: DefineContinuationOutput<"second"> };
+  it("extracts input type correctly for continuation jobs", () => {
+    const defs = defineJobTypes<{
+      first: { entry: true; input: { value: number }; continuesTo: { typeName: "second" } };
       second: {
-        input: DefineContinuationInput<{ continued: boolean }>;
+        input: { continued: boolean };
         output: { done: true };
       };
     }>();
 
-    type FirstJob = JobOf<string, typeof defs, "first">;
-    type SecondJob = JobOf<string, typeof defs, "second">;
+    type FirstJob = JobOf<string, (typeof defs)["$definitions"], "first">;
+    type SecondJob = JobOf<string, (typeof defs)["$definitions"], "second">;
 
     expectTypeOf<FirstJob["input"]>().toEqualTypeOf<{ value: number }>();
     expectTypeOf<SecondJob["input"]>().toEqualTypeOf<{ continued: boolean }>();
   });
 
   it("preserves job metadata types", () => {
-    const defs = defineUnionJobTypes<{
-      test: { input: { id: string }; output: { result: number } };
+    const defs = defineJobTypes<{
+      test: { entry: true; input: { id: string }; output: { result: number } };
     }>();
 
-    type TestJob = JobOf<string, typeof defs, "test">;
+    type TestJob = JobOf<string, (typeof defs)["$definitions"], "test">;
 
     expectTypeOf<TestJob["id"]>().toEqualTypeOf<string>();
     expectTypeOf<TestJob["sequenceId"]>().toEqualTypeOf<string>();
@@ -278,38 +268,40 @@ describe("JobOf", () => {
 });
 
 describe("ContinuationJobTypes", () => {
-  it("resolves continuation types from DefineContinuationOutput", () => {
-    const defs = defineUnionJobTypes<{
-      first: { input: null; output: DefineContinuationOutput<"second"> };
-      second: { input: DefineContinuationInput<null>; output: { done: true } };
+  it("resolves continuation types from continuesTo", () => {
+    const defs = defineJobTypes<{
+      first: { entry: true; input: null; continuesTo: { typeName: "second" } };
+      second: { input: null; output: { done: true } };
     }>();
 
-    type NextFromFirst = ContinuationJobTypes<typeof defs, "first">;
+    type NextFromFirst = ContinuationJobTypes<(typeof defs)["$definitions"], "first">;
 
     expectTypeOf<NextFromFirst>().toEqualTypeOf<"second">();
   });
 
   it("resolves union of continuation types", () => {
-    const defs = defineUnionJobTypes<{
+    const defs = defineJobTypes<{
       start: {
+        entry: true;
         input: null;
-        output: DefineContinuationOutput<"branchA"> | DefineContinuationOutput<"branchB">;
+
+        continuesTo: { typeName: "branchA" | "branchB" };
       };
-      branchA: { input: DefineContinuationInput<null>; output: { a: true } };
-      branchB: { input: DefineContinuationInput<null>; output: { b: true } };
+      branchA: { input: null; output: { a: true } };
+      branchB: { input: null; output: { b: true } };
     }>();
 
-    type NextFromStart = ContinuationJobTypes<typeof defs, "start">;
+    type NextFromStart = ContinuationJobTypes<(typeof defs)["$definitions"], "start">;
 
     expectTypeOf<NextFromStart>().toEqualTypeOf<"branchA" | "branchB">();
   });
 
   it("returns never for terminal jobs", () => {
-    const defs = defineUnionJobTypes<{
-      terminal: { input: null; output: { done: true } };
+    const defs = defineJobTypes<{
+      terminal: { entry: true; input: null; output: { done: true } };
     }>();
 
-    type NextFromTerminal = ContinuationJobTypes<typeof defs, "terminal">;
+    type NextFromTerminal = ContinuationJobTypes<(typeof defs)["$definitions"], "terminal">;
 
     expectTypeOf<NextFromTerminal>().toEqualTypeOf<never>();
   });
@@ -317,27 +309,29 @@ describe("ContinuationJobTypes", () => {
 
 describe("SequenceJobTypes", () => {
   it("collects all job types in a sequence", () => {
-    const defs = defineUnionJobTypes<{
-      first: { input: null; output: DefineContinuationOutput<"second"> };
-      second: { input: DefineContinuationInput<null>; output: DefineContinuationOutput<"third"> };
-      third: { input: DefineContinuationInput<null>; output: { done: true } };
-      unrelated: { input: { other: true }; output: { other: true } };
+    const defs = defineJobTypes<{
+      first: { entry: true; input: null; continuesTo: { typeName: "second" } };
+      second: { input: null; continuesTo: { typeName: "third" } };
+      third: { input: null; output: { done: true } };
+      unrelated: { entry: true; input: { other: true }; output: { other: true } };
     }>();
 
-    type SeqTypes = SequenceJobTypes<typeof defs, "first">;
+    type SeqTypes = SequenceJobTypes<(typeof defs)["$definitions"], "first">;
 
     expectTypeOf<SeqTypes>().toEqualTypeOf<"first" | "second" | "third">();
   });
 
   it("handles loops without infinite recursion", () => {
-    const defs = defineUnionJobTypes<{
+    const defs = defineJobTypes<{
       loop: {
+        entry: true;
         input: { counter: number };
-        output: DefineContinuationOutput<"loop"> | { done: true };
+        output: { done: true };
+        continuesTo: { typeName: "loop" };
       };
     }>();
 
-    type SeqTypes = SequenceJobTypes<typeof defs, "loop">;
+    type SeqTypes = SequenceJobTypes<(typeof defs)["$definitions"], "loop">;
 
     expectTypeOf<SeqTypes>().toEqualTypeOf<"loop">();
   });
@@ -345,48 +339,49 @@ describe("SequenceJobTypes", () => {
 
 describe("BlockerSequences", () => {
   it("resolves blocker sequence types", () => {
-    const defs = defineUnionJobTypes<{
-      blocker: { input: { value: number }; output: { result: number } };
+    const defs = defineJobTypes<{
+      blocker: { entry: true; input: { value: number }; output: { result: number } };
       main: {
+        entry: true;
         input: { start: boolean };
         output: { finalResult: number };
-        blockers: [DefineBlocker<"blocker">];
+        blockers: [{ typeName: "blocker" }];
       };
     }>();
 
-    type MainBlockers = BlockerSequences<string, typeof defs, "main">;
+    type MainBlockers = BlockerSequences<string, (typeof defs)["$definitions"], "main">;
 
     // Should be a tuple with one blocker sequence - verify it's an array type
     expectTypeOf<MainBlockers>().toBeArray();
   });
 
   it("returns empty tuple for jobs without blockers", () => {
-    const defs = defineUnionJobTypes<{
-      simple: { input: null; output: { done: true } };
+    const defs = defineJobTypes<{
+      simple: { entry: true; input: null; output: { done: true } };
     }>();
 
-    type SimpleBlockers = BlockerSequences<string, typeof defs, "simple">;
+    type SimpleBlockers = BlockerSequences<string, (typeof defs)["$definitions"], "simple">;
 
     expectTypeOf<SimpleBlockers>().toEqualTypeOf<[]>();
   });
 });
 
 describe("JobSequenceOf", () => {
-  it("unwraps DefineContinuationInput in sequence input types", () => {
-    const defs = defineUnionJobTypes<{
-      first: { input: { start: number }; output: DefineContinuationOutput<"second"> };
+  it("extracts input types correctly for sequences", () => {
+    const defs = defineJobTypes<{
+      first: { entry: true; input: { start: number }; continuesTo: { typeName: "second" } };
       second: {
-        input: DefineContinuationInput<{ continued: string }>;
+        input: { continued: string };
         output: { done: true };
       };
     }>();
 
-    type Seq = JobSequenceOf<string, typeof defs, "first">;
+    type Seq = JobSequenceOf<string, (typeof defs)["$definitions"], "first">;
 
-    // The sequence input should be the unwrapped type
+    // The sequence input should be the type from each job in the sequence
     type SeqInput = Seq extends { input: infer I } ? I : never;
 
-    // Input can be either first job's input or second job's unwrapped input
+    // Input can be either first job's input or second job's input
     expectTypeOf<SeqInput>().toEqualTypeOf<{ start: number } | { continued: string }>();
   });
 });
@@ -394,133 +389,416 @@ describe("JobSequenceOf", () => {
 describe("SequenceTypesReaching", () => {
   it("computes reaching sequence types for complex job graphs", () => {
     // Complex graph with:
-    // - 5 entry points (external job types)
+    // - 5 entry points
     // - Multiple shared internal jobs reachable from different sequences
     // - Branching paths
     // - Deep chains (up to 6 levels)
     // - Diamond patterns (multiple paths converging)
-    const defs = defineUnionJobTypes<{
+    const defs = defineJobTypes<{
       // Entry points
-      entryA: { input: { a: true }; output: DefineContinuationOutput<"sharedStep1"> };
-      entryB: { input: { b: true }; output: DefineContinuationOutput<"sharedStep1"> };
-      entryC: { input: { c: true }; output: DefineContinuationOutput<"branchC1"> };
-      entryD: { input: { d: true }; output: DefineContinuationOutput<"deepChain1"> };
+      entryA: { entry: true; input: { a: true }; continuesTo: { typeName: "sharedStep1" } };
+      entryB: { entry: true; input: { b: true }; continuesTo: { typeName: "sharedStep1" } };
+      entryC: { entry: true; input: { c: true }; continuesTo: { typeName: "branchC1" } };
+      entryD: { entry: true; input: { d: true }; continuesTo: { typeName: "deepChain1" } };
       entryE: {
+        entry: true;
         input: { e: true };
-        output: DefineContinuationOutput<"branchE1"> | DefineContinuationOutput<"branchE2">;
+
+        continuesTo: { typeName: "branchE1" | "branchE2" };
       };
 
       // Shared step reachable from A and B
       sharedStep1: {
-        input: DefineContinuationInput<{ step: 1 }>;
-        output: DefineContinuationOutput<"sharedStep2">;
+        input: { step: 1 };
+
+        continuesTo: { typeName: "sharedStep2" };
       };
       sharedStep2: {
-        input: DefineContinuationInput<{ step: 2 }>;
-        output: DefineContinuationOutput<"finalShared">;
+        input: { step: 2 };
+
+        continuesTo: { typeName: "finalShared" };
       };
       finalShared: {
-        input: DefineContinuationInput<{ final: true }>;
+        input: { final: true };
         output: { done: "shared" };
       };
 
       // Branch from C
       branchC1: {
-        input: DefineContinuationInput<{ c1: true }>;
-        output: DefineContinuationOutput<"branchC2">;
+        input: { c1: true };
+
+        continuesTo: { typeName: "branchC2" };
       };
       branchC2: {
-        input: DefineContinuationInput<{ c2: true }>;
-        output: DefineContinuationOutput<"finalShared">; // Converges to shared final
+        input: { c2: true };
+
+        continuesTo: { typeName: "finalShared" }; // Converges to shared final
       };
 
       // Deep chain from D (6 levels)
       deepChain1: {
-        input: DefineContinuationInput<{ depth: 1 }>;
-        output: DefineContinuationOutput<"deepChain2">;
+        input: { depth: 1 };
+
+        continuesTo: { typeName: "deepChain2" };
       };
       deepChain2: {
-        input: DefineContinuationInput<{ depth: 2 }>;
-        output: DefineContinuationOutput<"deepChain3">;
+        input: { depth: 2 };
+
+        continuesTo: { typeName: "deepChain3" };
       };
       deepChain3: {
-        input: DefineContinuationInput<{ depth: 3 }>;
-        output: DefineContinuationOutput<"deepChain4">;
+        input: { depth: 3 };
+
+        continuesTo: { typeName: "deepChain4" };
       };
       deepChain4: {
-        input: DefineContinuationInput<{ depth: 4 }>;
-        output: DefineContinuationOutput<"deepChain5">;
+        input: { depth: 4 };
+
+        continuesTo: { typeName: "deepChain5" };
       };
       deepChain5: {
-        input: DefineContinuationInput<{ depth: 5 }>;
-        output: DefineContinuationOutput<"deepChain6">;
+        input: { depth: 5 };
+
+        continuesTo: { typeName: "deepChain6" };
       };
       deepChain6: {
-        input: DefineContinuationInput<{ depth: 6 }>;
+        input: { depth: 6 };
         output: { done: "deep" };
       };
 
       // Branches from E (both converge to same final)
       branchE1: {
-        input: DefineContinuationInput<{ e1: true }>;
-        output: DefineContinuationOutput<"convergencePoint">;
+        input: { e1: true };
+
+        continuesTo: { typeName: "convergencePoint" };
       };
       branchE2: {
-        input: DefineContinuationInput<{ e2: true }>;
-        output: DefineContinuationOutput<"convergencePoint">;
+        input: { e2: true };
+
+        continuesTo: { typeName: "convergencePoint" };
       };
       convergencePoint: {
-        input: DefineContinuationInput<{ converged: true }>;
+        input: { converged: true };
         output: { done: "converged" };
       };
     }>();
 
     // Entry points reach only themselves
-    expectTypeOf<SequenceTypesReaching<typeof defs, "entryA">>().toEqualTypeOf<"entryA">();
-    expectTypeOf<SequenceTypesReaching<typeof defs, "entryB">>().toEqualTypeOf<"entryB">();
-    expectTypeOf<SequenceTypesReaching<typeof defs, "entryC">>().toEqualTypeOf<"entryC">();
-    expectTypeOf<SequenceTypesReaching<typeof defs, "entryD">>().toEqualTypeOf<"entryD">();
-    expectTypeOf<SequenceTypesReaching<typeof defs, "entryE">>().toEqualTypeOf<"entryE">();
+    expectTypeOf<
+      SequenceTypesReaching<(typeof defs)["$definitions"], "entryA">
+    >().toEqualTypeOf<"entryA">();
+    expectTypeOf<
+      SequenceTypesReaching<(typeof defs)["$definitions"], "entryB">
+    >().toEqualTypeOf<"entryB">();
+    expectTypeOf<
+      SequenceTypesReaching<(typeof defs)["$definitions"], "entryC">
+    >().toEqualTypeOf<"entryC">();
+    expectTypeOf<
+      SequenceTypesReaching<(typeof defs)["$definitions"], "entryD">
+    >().toEqualTypeOf<"entryD">();
+    expectTypeOf<
+      SequenceTypesReaching<(typeof defs)["$definitions"], "entryE">
+    >().toEqualTypeOf<"entryE">();
 
     // Shared steps reachable from A and B
-    expectTypeOf<SequenceTypesReaching<typeof defs, "sharedStep1">>().toEqualTypeOf<
-      "entryA" | "entryB"
-    >();
-    expectTypeOf<SequenceTypesReaching<typeof defs, "sharedStep2">>().toEqualTypeOf<
-      "entryA" | "entryB"
-    >();
+    expectTypeOf<
+      SequenceTypesReaching<(typeof defs)["$definitions"], "sharedStep1">
+    >().toEqualTypeOf<"entryA" | "entryB">();
+    expectTypeOf<
+      SequenceTypesReaching<(typeof defs)["$definitions"], "sharedStep2">
+    >().toEqualTypeOf<"entryA" | "entryB">();
 
     // Final shared is reachable from A, B, and C (via diamond pattern)
-    expectTypeOf<SequenceTypesReaching<typeof defs, "finalShared">>().toEqualTypeOf<
-      "entryA" | "entryB" | "entryC"
-    >();
+    expectTypeOf<
+      SequenceTypesReaching<(typeof defs)["$definitions"], "finalShared">
+    >().toEqualTypeOf<"entryA" | "entryB" | "entryC">();
 
     // C-only branches
-    expectTypeOf<SequenceTypesReaching<typeof defs, "branchC1">>().toEqualTypeOf<"entryC">();
-    expectTypeOf<SequenceTypesReaching<typeof defs, "branchC2">>().toEqualTypeOf<"entryC">();
+    expectTypeOf<
+      SequenceTypesReaching<(typeof defs)["$definitions"], "branchC1">
+    >().toEqualTypeOf<"entryC">();
+    expectTypeOf<
+      SequenceTypesReaching<(typeof defs)["$definitions"], "branchC2">
+    >().toEqualTypeOf<"entryC">();
 
     // Deep chain only from D
-    expectTypeOf<SequenceTypesReaching<typeof defs, "deepChain1">>().toEqualTypeOf<"entryD">();
-    expectTypeOf<SequenceTypesReaching<typeof defs, "deepChain6">>().toEqualTypeOf<"entryD">();
+    expectTypeOf<
+      SequenceTypesReaching<(typeof defs)["$definitions"], "deepChain1">
+    >().toEqualTypeOf<"entryD">();
+    expectTypeOf<
+      SequenceTypesReaching<(typeof defs)["$definitions"], "deepChain6">
+    >().toEqualTypeOf<"entryD">();
 
     // E branches and convergence point
-    expectTypeOf<SequenceTypesReaching<typeof defs, "branchE1">>().toEqualTypeOf<"entryE">();
-    expectTypeOf<SequenceTypesReaching<typeof defs, "branchE2">>().toEqualTypeOf<"entryE">();
     expectTypeOf<
-      SequenceTypesReaching<typeof defs, "convergencePoint">
+      SequenceTypesReaching<(typeof defs)["$definitions"], "branchE1">
+    >().toEqualTypeOf<"entryE">();
+    expectTypeOf<
+      SequenceTypesReaching<(typeof defs)["$definitions"], "branchE2">
+    >().toEqualTypeOf<"entryE">();
+    expectTypeOf<
+      SequenceTypesReaching<(typeof defs)["$definitions"], "convergencePoint">
     >().toEqualTypeOf<"entryE">();
 
     // JobOf uses the computed sequence type by default
-    type SharedStep1Job = JobOf<string, typeof defs, "sharedStep1">;
+    type SharedStep1Job = JobOf<string, (typeof defs)["$definitions"], "sharedStep1">;
     expectTypeOf<SharedStep1Job["sequenceTypeName"]>().toEqualTypeOf<"entryA" | "entryB">();
 
-    type FinalSharedJob = JobOf<string, typeof defs, "finalShared">;
+    type FinalSharedJob = JobOf<string, (typeof defs)["$definitions"], "finalShared">;
     expectTypeOf<FinalSharedJob["sequenceTypeName"]>().toEqualTypeOf<
       "entryA" | "entryB" | "entryC"
     >();
 
     // Can narrow with explicit 4th param
-    type FinalSharedFromA = JobOf<string, typeof defs, "finalShared", "entryA">;
+    type FinalSharedFromA = JobOf<string, (typeof defs)["$definitions"], "finalShared", "entryA">;
     expectTypeOf<FinalSharedFromA["sequenceTypeName"]>().toEqualTypeOf<"entryA">();
+  });
+});
+
+describe("structural references", () => {
+  it("resolves structural reference to single matching type", () => {
+    const defs = defineJobTypes<{
+      router: {
+        entry: true;
+        input: { path: string };
+        continuesTo: { input: { payload: unknown } };
+      };
+      handler: {
+        input: { payload: unknown };
+        output: { result: string };
+      };
+    }>();
+
+    type NextFromRouter = ContinuationJobTypes<(typeof defs)["$definitions"], "router">;
+
+    expectTypeOf<NextFromRouter>().toEqualTypeOf<"handler">();
+  });
+
+  it("resolves structural reference to union of matching types", () => {
+    const defs = defineJobTypes<{
+      router: {
+        entry: true;
+        input: { path: string };
+        continuesTo: { input: { payload: unknown } };
+      };
+      handlerA: {
+        input: { payload: unknown };
+        output: { result: string };
+      };
+      handlerB: {
+        input: { payload: unknown };
+        output: { result: number };
+      };
+    }>();
+
+    type NextFromRouter = ContinuationJobTypes<(typeof defs)["$definitions"], "router">;
+
+    expectTypeOf<NextFromRouter>().toEqualTypeOf<"handlerA" | "handlerB">();
+  });
+
+  it("rejects structural reference with no matching types", () => {
+    // @ts-expect-error no job type has input { nonexistent: boolean }
+    defineJobTypes<{
+      router: {
+        entry: true;
+        input: { path: string };
+        continuesTo: { input: { nonexistent: boolean } };
+      };
+      handler: {
+        input: { payload: unknown };
+        output: { result: string };
+      };
+    }>();
+  });
+
+  it("allows combined nominal and structural references in continuesTo", () => {
+    const defs = defineJobTypes<{
+      router: {
+        entry: true;
+        input: { path: string };
+        continuesTo: { typeName: "handlerA" } | { input: { payload: unknown } };
+      };
+      handlerA: {
+        input: { id: string };
+        output: { result: string };
+      };
+      handlerB: {
+        input: { payload: unknown };
+        output: { result: number };
+      };
+    }>();
+
+    type NextFromRouter = ContinuationJobTypes<(typeof defs)["$definitions"], "router">;
+
+    // handlerA from nominal, handlerB from structural
+    expectTypeOf<NextFromRouter>().toEqualTypeOf<"handlerA" | "handlerB">();
+  });
+});
+
+describe("structural references in blockers", () => {
+  it("resolves structural blocker reference to matching type", () => {
+    const defs = defineJobTypes<{
+      auth: { entry: true; input: { token: string }; output: { userId: string } };
+      main: {
+        entry: true;
+        input: { data: string };
+        output: { done: boolean };
+        blockers: [{ input: { token: string } }];
+      };
+    }>();
+
+    type MainBlockers = BlockerSequences<string, (typeof defs)["$definitions"], "main">;
+
+    expectTypeOf<MainBlockers>().toBeArray();
+  });
+
+  it("resolves structural blocker to union of matching types", () => {
+    const defs = defineJobTypes<{
+      authA: { entry: true; input: { token: string }; output: { userId: string } };
+      authB: { entry: true; input: { token: string }; output: { userId: string; extra: boolean } };
+      main: {
+        entry: true;
+        input: { data: string };
+        output: { done: boolean };
+        blockers: [{ input: { token: string } }];
+      };
+    }>();
+
+    type MainBlockers = BlockerSequences<string, (typeof defs)["$definitions"], "main">;
+
+    expectTypeOf<MainBlockers>().toBeArray();
+  });
+});
+
+describe("rest/variadic blocker slots", () => {
+  it("allows rest blocker slots with spread syntax", () => {
+    const defs = defineJobTypes<{
+      auth: { entry: true; input: { token: string }; output: { userId: string } };
+      validator: { entry: true; input: { data: unknown }; output: { valid: boolean } };
+      main: {
+        entry: true;
+        input: { data: string };
+        output: { done: boolean };
+        blockers: [{ typeName: "auth" }, ...{ typeName: "validator" }[]];
+      };
+    }>();
+
+    expectTypeOf<(typeof defs)["$definitions"]>().toHaveProperty("main");
+
+    type MainBlockers = BlockerSequences<string, (typeof defs)["$definitions"], "main">;
+    expectTypeOf<MainBlockers>().toBeArray();
+  });
+
+  it("allows rest-only blocker slots", () => {
+    const defs = defineJobTypes<{
+      processor: { entry: true; input: { item: unknown }; output: { processed: boolean } };
+      aggregator: {
+        entry: true;
+        input: { data: string };
+        output: { done: boolean };
+        blockers: { typeName: "processor" }[];
+      };
+    }>();
+
+    expectTypeOf<(typeof defs)["$definitions"]>().toHaveProperty("aggregator");
+
+    type AggregatorBlockers = BlockerSequences<string, (typeof defs)["$definitions"], "aggregator">;
+    expectTypeOf<AggregatorBlockers>().toBeArray();
+  });
+
+  it("allows mixed fixed and rest blocker slots", () => {
+    const defs = defineJobTypes<{
+      auth: { entry: true; input: { token: string }; output: { userId: string } };
+      config: { entry: true; input: { key: string }; output: { value: string } };
+      processor: { entry: true; input: { item: unknown }; output: { processed: boolean } };
+      main: {
+        entry: true;
+        input: { data: string };
+        output: { done: boolean };
+        blockers: [{ typeName: "auth" }, { typeName: "config" }, ...{ typeName: "processor" }[]];
+      };
+    }>();
+
+    expectTypeOf<(typeof defs)["$definitions"]>().toHaveProperty("main");
+
+    type MainBlockers = BlockerSequences<string, (typeof defs)["$definitions"], "main">;
+    expectTypeOf<MainBlockers>().toBeArray();
+  });
+
+  it("allows structural reference in rest blocker slots", () => {
+    const defs = defineJobTypes<{
+      processorA: { entry: true; input: { item: unknown }; output: { processed: boolean } };
+      processorB: { entry: true; input: { item: unknown }; output: { processed: boolean } };
+      aggregator: {
+        entry: true;
+        input: { data: string };
+        output: { done: boolean };
+        blockers: { input: { item: unknown } }[];
+      };
+    }>();
+
+    expectTypeOf<(typeof defs)["$definitions"]>().toHaveProperty("aggregator");
+
+    type AggregatorBlockers = BlockerSequences<string, (typeof defs)["$definitions"], "aggregator">;
+    expectTypeOf<AggregatorBlockers>().toBeArray();
+  });
+
+  it("allows union of type names within a single blocker slot", () => {
+    const defs = defineJobTypes<{
+      auth: { entry: true; input: { token: string }; output: { userId: string } };
+      authAlt: { entry: true; input: { token: string }; output: { userId: string } };
+      main: {
+        entry: true;
+        input: { data: string };
+        output: { done: boolean };
+        blockers: [{ typeName: "auth" | "authAlt" }];
+      };
+    }>();
+
+    expectTypeOf<(typeof defs)["$definitions"]>().toHaveProperty("main");
+
+    type MainBlockers = BlockerSequences<string, (typeof defs)["$definitions"], "main">;
+    expectTypeOf<MainBlockers>().toBeArray();
+  });
+
+  it("allows union of nominal and structural references in a single blocker slot", () => {
+    const defs = defineJobTypes<{
+      perform: { entry: true; input: { action: string }; output: { result: boolean } };
+      performAlt: { entry: true; input: { action: string }; output: { result: boolean } };
+      main: {
+        entry: true;
+        input: { data: string };
+        output: { done: boolean };
+        // Can be filled by 'perform' (nominal) OR any job with { action: string } input (structural)
+        blockers: [{ typeName: "perform" } | { input: { action: string } }];
+      };
+    }>();
+
+    expectTypeOf<(typeof defs)["$definitions"]>().toHaveProperty("main");
+
+    type MainBlockers = BlockerSequences<string, (typeof defs)["$definitions"], "main">;
+    expectTypeOf<MainBlockers>().toBeArray();
+  });
+
+  it("allows complex mixed references as shown in design doc", () => {
+    const defs = defineJobTypes<{
+      auth: { entry: true; input: { token: string }; output: { userId: string } };
+      authAlt: { entry: true; input: { token: string }; output: { userId: string } };
+      perform: { entry: true; input: { action: string }; output: { result: boolean } };
+      main: {
+        entry: true;
+        input: { data: string };
+        output: { done: boolean };
+        blockers: [
+          { typeName: "auth" | "authAlt" },
+          { typeName: "perform" } | { input: { action: string } },
+        ];
+      };
+    }>();
+
+    expectTypeOf<(typeof defs)["$definitions"]>().toHaveProperty("main");
+
+    type MainBlockers = BlockerSequences<string, (typeof defs)["$definitions"], "main">;
+    expectTypeOf<MainBlockers>().toBeArray();
   });
 });

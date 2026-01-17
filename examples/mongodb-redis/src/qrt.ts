@@ -3,7 +3,7 @@ import { createRedisNotifyAdapter, RedisNotifyProvider } from "@queuert/redis";
 import { ClientSession } from "mongodb";
 import { createConsoleLog, createQueuert } from "queuert";
 import { DbConnection } from "./db.js";
-import { qrtJobDefinitions } from "./qrt-schema.js";
+import { qrtJobTypeDefinitions } from "./qrt-schema.js";
 import { Redis } from "./redis.js";
 
 type MongoContext = {
@@ -75,7 +75,7 @@ export const createQrt = async ({
     stateAdapter,
     notifyAdapter,
     log: createConsoleLog(),
-    jobTypeDefinitions: qrtJobDefinitions,
+    jobTypeRegistry: qrtJobTypeDefinitions,
   });
 };
 

@@ -1,6 +1,6 @@
 import { TestAPI } from "vitest";
 import { sleep } from "../helpers/sleep.js";
-import { createQueuert, DefineBlocker, defineUnionJobTypes, JobSequence } from "../index.js";
+import { createQueuert, defineJobTypes, JobSequence } from "../index.js";
 import { TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -17,8 +17,9 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         test: {
+          entry: true;
           input: { value: number };
           output: { result: number };
         };
@@ -66,8 +67,9 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         test: {
+          entry: true;
           input: null;
           output: null;
         };
@@ -130,15 +132,17 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         blocker: {
+          entry: true;
           input: { value: number };
           output: { result: number };
         };
         main: {
+          entry: true;
           input: null;
           output: { finalResult: number };
-          blockers: [DefineBlocker<"blocker">];
+          blockers: [{ typeName: "blocker" }];
         };
       }>(),
     });
@@ -241,15 +245,17 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         blocker: {
+          entry: true;
           input: { value: number };
           output: { result: number };
         };
         main: {
+          entry: true;
           input: null;
           output: { finalResult: number };
-          blockers: [DefineBlocker<"blocker">];
+          blockers: [{ typeName: "blocker" }];
         };
       }>(),
     });
@@ -304,8 +310,9 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         test: {
+          entry: true;
           input: null;
           output: null;
         };

@@ -9,7 +9,7 @@ import {
   BaseJobTypeDefinitions,
   BlockerSequences,
   ContinuationJobs,
-  ExternalJobTypeDefinitions,
+  EntryJobTypeDefinitions,
   JobOf,
   JobSequenceOf,
   SequenceJobs,
@@ -43,8 +43,8 @@ export type StartBlockersFn<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions & string,
-  TSequenceTypeName extends keyof ExternalJobTypeDefinitions<TJobTypeDefinitions> & string =
-    keyof ExternalJobTypeDefinitions<TJobTypeDefinitions> & string,
+  TSequenceTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string =
+    keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
 > = (options: {
   job: PendingJob<
     JobWithoutBlockers<JobOf<TJobId, TJobTypeDefinitions, TJobTypeName, TSequenceTypeName>>
@@ -95,15 +95,44 @@ export class StateNotInTransactionError extends Error {
   }
 }
 
+export type JobTypeValidationErrorCode =
+  | "not_entry_point"
+  | "invalid_continuation"
+  | "invalid_blockers"
+  | "invalid_input"
+  | "invalid_output";
+
+export class JobTypeValidationError extends Error {
+  readonly code: JobTypeValidationErrorCode;
+  readonly typeName: string;
+  readonly details: Record<string, unknown>;
+
+  constructor(options: {
+    code: JobTypeValidationErrorCode;
+    message: string;
+    typeName: string;
+    details?: Record<string, unknown>;
+  }) {
+    super(options.message);
+    this.code = options.code;
+    this.typeName = options.typeName;
+    this.details = options.details ?? {};
+  }
+}
+
+import { JobTypeRegistry } from "./entities/job-type-registry.js";
+
 export const queuertHelper = ({
   stateAdapter: stateAdapterOption,
   notifyAdapter: notifyAdapterOption,
   observabilityAdapter: observabilityAdapterOption,
+  jobTypeRegistry,
   log,
 }: {
   stateAdapter: StateAdapter<BaseStateAdapterContext, BaseStateAdapterContext, any>;
   notifyAdapter?: NotifyAdapter;
   observabilityAdapter?: ObservabilityAdapter;
+  jobTypeRegistry: JobTypeRegistry;
   log: Log;
 }) => {
   const observabilityAdapter = observabilityAdapterOption ?? createNoopObservabilityAdapter();
@@ -118,6 +147,7 @@ export const queuertHelper = ({
         observabilityHelper,
       })
     : createNoopNotifyAdapter();
+  const registry = jobTypeRegistry;
 
   const assertInTransaction = async (context: BaseStateAdapterContext): Promise<void> => {
     if (!(await stateAdapter.isInTransaction(context))) {
@@ -133,6 +163,7 @@ export const queuertHelper = ({
     isSequence,
     deduplication,
     schedule,
+    fromTypeName,
   }: {
     typeName: string;
     input: unknown;
@@ -141,13 +172,33 @@ export const queuertHelper = ({
     isSequence: boolean;
     deduplication?: DeduplicationOptions;
     schedule?: ScheduleOptions;
+    fromTypeName?: string;
   }): Promise<{ job: StateJob; deduplicated: boolean }> => {
+    try {
+      registry.validate(typeName, fromTypeName);
+    } catch (error) {
+      if (error instanceof JobTypeValidationError) {
+        observabilityHelper.jobTypeValidationError(error);
+      }
+      throw error;
+    }
+
+    let parsedInput: unknown;
+    try {
+      parsedInput = registry.parseInput(typeName, input);
+    } catch (error) {
+      if (error instanceof JobTypeValidationError) {
+        observabilityHelper.jobTypeValidationError(error);
+      }
+      throw error;
+    }
+
     const jobContext = jobContextStorage.getStore();
     const createJobResult = await stateAdapter.createJob({
       context,
       typeName,
       sequenceTypeName: isSequence ? typeName : jobContext!.sequenceTypeName,
-      input,
+      input: parsedInput,
       originId: jobContext?.originId,
       sequenceId: isSequence ? undefined : jobContext!.sequenceId,
       rootSequenceId: isSequence ? jobContext?.rootSequenceId : jobContext!.rootSequenceId,
@@ -176,6 +227,17 @@ export const queuertHelper = ({
 
       blockerSequences = [...blockers] as JobSequence<any, any, any, any>[];
       const blockerSequenceIds = blockerSequences.map((b) => b.id);
+
+      // TODO: Validate blockers outside of if statement to report all validation errors
+      const blockerTypeNames = blockerSequences.map((b) => b.typeName);
+      try {
+        registry.validateBlockers(typeName, blockerTypeNames);
+      } catch (error) {
+        if (error instanceof JobTypeValidationError) {
+          observabilityHelper.jobTypeValidationError(error);
+        }
+        throw error;
+      }
 
       const addBlockersResult = await stateAdapter.addJobBlockers({
         context,
@@ -296,7 +358,18 @@ export const queuertHelper = ({
     | { type: "continueWith"; continuedJob: Job<any, any, any, any, any[]> }
   )): Promise<StateJob> => {
     const hasContinuedJob = rest.type === "continueWith";
-    const output = hasContinuedJob ? null : rest.output;
+    let output = hasContinuedJob ? null : rest.output;
+
+    if (!hasContinuedJob) {
+      try {
+        output = registry.parseOutput(job.typeName, output);
+      } catch (error) {
+        if (error instanceof JobTypeValidationError) {
+          observabilityHelper.jobTypeValidationError(error);
+        }
+        throw error;
+      }
+    }
 
     job = await stateAdapter.completeJob({
       context,
@@ -426,12 +499,14 @@ export const queuertHelper = ({
       context,
       schedule,
       startBlockers,
+      fromTypeName,
     }: {
       typeName: TJobTypeName;
       input: TInput;
       context: any;
       schedule?: ScheduleOptions;
       startBlockers?: StartBlockersFn<string, BaseJobTypeDefinitions, string>;
+      fromTypeName: string;
     }): Promise<JobOf<string, BaseJobTypeDefinitions, TJobTypeName, string>> => {
       const { job } = await createStateJob({
         typeName,
@@ -440,6 +515,7 @@ export const queuertHelper = ({
         startBlockers,
         isSequence: false,
         schedule,
+        fromTypeName,
       });
 
       return mapStateJobToJob(job) as JobOf<string, BaseJobTypeDefinitions, TJobTypeName, string>;
@@ -759,6 +835,7 @@ export const queuertHelper = ({
                   startBlockers: startBlockers as any,
                   isSequence: false,
                   schedule,
+                  fromTypeName: job.typeName,
                 });
 
                 return mapStateJobToJob(newJob) as Job<any, any, any, any, any[]>;
@@ -878,7 +955,7 @@ export type ProcessHelper = ReturnType<typeof queuertHelper>;
 export type JobSequenceCompleteOptions<
   TStateAdapter extends StateAdapter<any, any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TSequenceTypeName extends keyof ExternalJobTypeDefinitions<TJobTypeDefinitions> & string,
+  TSequenceTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
   TCompleteReturn,
 > = (options: {
   job: SequenceJobs<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TSequenceTypeName>;

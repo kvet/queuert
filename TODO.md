@@ -2,10 +2,16 @@
 
 - Logs: add metrics for logs (like common attributes inside spans, e.g. winston.log can show context attributes)
 - ObservabilityAdapter: Add histograms (job duration, wait time, total time, attempts, poll duration), gauges (active workers, processing jobs), and tracing spans
+- Setup `files` field in package.json for public packages to exclude unnecessary files (\*.tsbuildinfo, tests, etc.) from npm packages
+- Runtime validation:
+  - Remove fromTypeName from createStateJob
+  - Rework errors
+  - Tests
+  - Zod, Valibot, Ark examples
+- review transitive dep versions for public packages (e.g. pg)
 
 # Medium term
 
-- Refactor `jobTypeDefinitions` parameter - Currently required but only used for type inference; integrate with optional Zod schema to provide actual runtime value (input/output validation)
 - Polish providers:
   - Prepare more examples like SQLite with kysely, drizzle, prisma; redis with ioredis, node-redis
   - Restore generic return types on `StateProvider.provideContext` and `NotifyProvider.provideContext` - Currently uses `unknown`, should use `<T>` for type-safe return values without casting

@@ -1,5 +1,5 @@
 import { TestAPI } from "vitest";
-import { createQueuert, defineUnionJobTypes, StateAdapter } from "../index.js";
+import { createQueuert, defineJobTypes, StateAdapter } from "../index.js";
 import { TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const stateResilienceTestSuite = ({
@@ -18,8 +18,9 @@ export const stateResilienceTestSuite = ({
     observabilityAdapter,
     log,
   }) => {
-    const jobTypeDefinitions = defineUnionJobTypes<{
+    const jobTypeRegistry = defineJobTypes<{
       test: {
+        entry: true;
         input: { value: number; atomic: boolean };
         output: { result: number };
       };
@@ -30,14 +31,14 @@ export const stateResilienceTestSuite = ({
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions,
+      jobTypeRegistry,
     });
     const flakyQueuert = await createQueuert({
       stateAdapter: flakyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions,
+      jobTypeRegistry,
     });
 
     const flakyWorker = flakyQueuert.createWorker().implementJobType({

@@ -1,7 +1,7 @@
 import { TestAPI } from "vitest";
 import {
   createQueuert,
-  defineUnionJobTypes,
+  defineJobTypes,
   WaitForJobSequenceCompletionTimeoutError,
 } from "../index.js";
 import { TestSuiteContext } from "./spec-context.spec-helper.js";
@@ -26,8 +26,12 @@ export const waitSequenceCompletionTestSuite = ({
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
-        test: { input: null; output: { result: string } };
+      jobTypeRegistry: defineJobTypes<{
+        test: {
+          entry: true;
+          input: null;
+          output: { result: string };
+        };
       }>(),
     });
 
@@ -73,8 +77,12 @@ export const waitSequenceCompletionTestSuite = ({
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
-        test: { input: null; output: { result: string } };
+      jobTypeRegistry: defineJobTypes<{
+        test: {
+          entry: true;
+          input: null;
+          output: { result: string };
+        };
       }>(),
     });
 
@@ -109,8 +117,12 @@ export const waitSequenceCompletionTestSuite = ({
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
-        test: { input: null; output: { result: string } };
+      jobTypeRegistry: defineJobTypes<{
+        test: {
+          entry: true;
+          input: null;
+          output: { result: string };
+        };
       }>(),
     });
 
@@ -139,8 +151,12 @@ export const waitSequenceCompletionTestSuite = ({
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
-        test: { input: null; output: { result: string } };
+      jobTypeRegistry: defineJobTypes<{
+        test: {
+          entry: true;
+          input: null;
+          output: { result: string };
+        };
       }>(),
     });
 

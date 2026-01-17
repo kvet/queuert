@@ -1,10 +1,11 @@
-import { DefineJobTypeDefinitions, defineUnionJobTypes } from "queuert";
+import { DefineJobTypes, defineJobTypes } from "queuert";
 
-export type QrtJobDefinitions = DefineJobTypeDefinitions<{
+type QrtJobTypeDefinitions = DefineJobTypes<{
   add_pet_to_user: {
+    entry: true;
     input: { userId: string; petName: string };
     output: { petId: string };
   };
 }>;
 
-export const qrtJobDefinitions = defineUnionJobTypes<QrtJobDefinitions>();
+export const qrtJobTypeDefinitions = defineJobTypes<QrtJobTypeDefinitions>();

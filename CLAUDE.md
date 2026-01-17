@@ -14,7 +14,7 @@ Core abstractions, interfaces, and in-memory implementations for testing.
 
 **Exports:**
 
-- `.` (main): `createQueuert`, `createConsoleLog`, adapter interfaces (`StateAdapter`, `NotifyAdapter`, `ObservabilityAdapter`), type definitions, error classes, in-process adapters (`createInProcessStateAdapter`, `createInProcessNotifyAdapter`)
+- `.` (main): `createQueuert`, `createConsoleLog`, adapter interfaces (`StateAdapter`, `NotifyAdapter`, `ObservabilityAdapter`), type definitions (`defineJobTypes`, `createJobTypeRegistry`), error classes, in-process adapters (`createInProcessStateAdapter`, `createInProcessNotifyAdapter`)
 - `./testing`: Test suites and context helpers for adapter packages (`processTestSuite`, `sequencesTestSuite`, etc., `extendWithCommon`, `extendWithStateInProcess`)
 - `./internal`: Internal utilities for adapter packages only (`withRetry`, `createAsyncLock`, `wrapStateAdapterWithRetry`)
 
@@ -178,15 +178,56 @@ Like a Promise chain, a sequence of linked jobs where each job can `continueWith
 
 Defines a named job type with its input/output types and process function. JobTypes are registered with workers via `implementJobType`. The process function receives the job (with resolved blockers accessible via `job.blockers`) and a context for continuing the sequence.
 
+### JobTypeRegistry
+
+Queuert supports two approaches for defining job types:
+
+**Compile-time only** (most common): Use `defineJobTypes` for pure TypeScript type checking without runtime validation. Returns a `JobTypeRegistry` that passes all values through without validation.
+
+```typescript
+const jobTypes = defineJobTypes<{
+  'process': {
+    input: { id: string };
+    output: { result: number };
+  };
+}>();
+```
+
+**Runtime validation** (production APIs, external input): Use `createJobTypeRegistry` with parser functions from validation libraries (Zod, Valibot, ArkType, etc.). Validates input/output at runtime and throws `JobTypeValidationError` on invalid data.
+
+```typescript
+import { z } from 'zod';
+
+const jobTypes = createJobTypeRegistry({
+  'process': {
+    input: z.object({ id: z.string() }).parse,
+    output: z.object({ result: z.number() }).parse,
+  },
+});
+```
+
+The `JobTypeRegistry` is passed to `createQueuert` via the `jobTypeRegistry` parameter. Both approaches provide the same compile-time type safety; runtime validation adds safety for external input.
+
+**Parser interface**: A `Parser<T>` is any function `(input: unknown) => T` that validates and returns typed output. Compatible with all major validation libraries.
+
+**Validation points**:
+
+- `parseInput`: Validates job input when starting sequences or continuing
+- `parseOutput`: Validates job output when completing
+- `validate`: Validates job type access (entry points) and continuation targets (via `continuesTo` parser)
+- `validateBlockers`: Validates blocker types match declarations (via `blockers` parser)
+
+**Error handling**: All validation errors are thrown as `JobTypeValidationError` with error codes (`invalid_input`, `invalid_output`, `not_entry_point`, `invalid_continuation`, `invalid_blockers`) and detailed context.
+
 ### Blockers
 
-Jobs can depend on other job sequences. Blockers are declared at the type level with `DefineBlocker<T>` and provided via `startBlockers` callback:
+Jobs can depend on other job sequences. Blockers are declared at the type level with the `blockers` field and provided via `startBlockers` callback:
 
 ```typescript
 // Type declaration
-defineUnionJobTypes<{
-  blocker: { input: {...}; output: {...} };
-  main: { input: {...}; output: {...}; blockers: [DefineBlocker<'blocker'>] };
+defineJobTypes<{
+  blocker: { entry: true; input: {...}; output: {...} };
+  main: { entry: true; input: {...}; output: {...}; blockers: [{ typeName: 'blocker' }] };
 }>()
 
 // Usage - startBlockers callback creates blockers via startJobSequence
@@ -377,27 +418,25 @@ await queuert.startJobSequence({
 
 ### Continuation Types
 
-Job types use two marker types to define their relationships:
-
-**`DefineContinuationOutput<T>`**: Marks that a job continues to another job type. Used in the `output` type:
+Job types use explicit fields to define their relationships:
 
 ```typescript
-'process-image': {
-  input: { imageId: string };
-  output: DefineContinuationOutput<"distribute-image">;
-}
-```
-
-**`DefineContinuationInput<T>`**: Marks a job type as internal (can only be reached via `continueWith`, not `startJobSequence`). Wrap the input type:
-
-```typescript
-defineUnionJobTypes<{
-  'public-entry': { input: { id: string }; output: DefineContinuationOutput<"internal-step"> };
-  'internal-step': { input: DefineContinuationInput<{ result: number }>; output: { done: true } };
+defineJobTypes<{
+  'process-image': {
+    entry: true;  // Can be started via startJobSequence
+    input: { imageId: string };
+    // output field omitted - must continue (cannot complete with output)
+    continuesTo: { typeName: 'distribute-image' };  // Allowed continuation target
+  };
+  'distribute-image': {
+    // No entry field - defaults to false (continuation-only)
+    input: { processedUrl: string };
+    output: { distributed: true };
+  };
 }>()
 ```
 
-TypeScript prevents calling `startJobSequence` with internal job types at compile-time.
+TypeScript prevents calling `startJobSequence` with internal job types (those without `entry: true`) at compile-time.
 
 ### Timeouts
 
@@ -535,9 +574,12 @@ In-process and internal-only factories remain sync since they have no I/O:
 - `completedBy`: Records which worker completed the job (`workerId` string), or `null` for workerless completion. DB column uses `completed_by`. Available on completed jobs.
 - `deduplicationKey`: Explicit key for sequence-level deduplication. DB column uses `deduplication_key`.
 - `deduplicated`: Boolean flag returned when a job/sequence was deduplicated instead of created.
-- `DefineContinuationInput<T>`: Type wrapper marking job types as internal (only reachable via `continueWith`).
-- `DefineContinuationOutput<T>`: Type marker in output indicating continuation to another job type.
-- `DefineBlocker<T>`: Type marker for declaring blocker dependencies. Used in `blockers` field of job type definitions.
+- `entry`: Boolean field in job type definition. `true` marks job types as entry points (can be started via `startJobSequence`). Defaults to `false` (continuation-only, reachable only via `continueWith`).
+- `continuesTo`: Reference field in job type definition specifying allowed continuation targets. Supports nominal references (`{ typeName: 'step2' }`), structural references (`{ input: { data: string } }`), or unions of both. Example: `continuesTo: { typeName: 'step2' | 'step3' }`.
+- `blockers`: Tuple/array field in job type definition specifying blocker dependencies using references. Supports fixed slots, rest/variadic slots with spread syntax, or combinations. Example: `blockers: [{ typeName: 'auth' }, ...{ typeName: 'validator' }[]]`.
+- `NominalReference`: Reference type `{ typeName: T }` for referencing job types by name. Used in `continuesTo` and `blockers`.
+- `StructuralReference`: Reference type `{ input: T }` for referencing job types by input signature. Matches all job types with compatible input type.
+- `JobTypeReference`: Union type `NominalReference | StructuralReference` representing any job type reference.
 - `startBlockers`: Callback parameter in `startJobSequence` and `continueWith` for providing blockers. Required when job type has blockers defined; must not be provided when job type has no blockers. Create new blocker sequences via `startJobSequence` within the callback - they automatically inherit rootSequenceId/originId from the main job via context propagation. Can also return existing sequences.
 - `deleteJobSequences`: Deletes entire job trees by `rootSequenceId`. Accepts `rootSequenceIds` array parameter. Must be called on root sequences. Throws error if external job sequences depend on sequences being deleted; include those dependents in the deletion set to proceed. Primarily intended for testing environments.
 - `completeJobSequence`: Completes jobs without a worker (`workerId: null`). Takes a `complete` callback that receives the current job and can complete it (with output or continuation). Supports partial completion and multi-step sequences.
@@ -556,24 +598,31 @@ In-process and internal-only factories remain sync since they have no I/O:
 - `schedule`: Optional parameter in `startJobSequence` and `continueWith` for deferred job execution. Accepts `ScheduleOptions`. Jobs are created transactionally but not processable until the specified time. `afterMs` is computed at the database level using `now() + interval` to avoid clock skew.
 - `rescheduleJob`: Helper function to reschedule a job from within a process function. Takes `ScheduleOptions` and optional cause. Throws `RescheduleJobError`.
 - `RescheduleJobError`: Error class with `schedule: ScheduleOptions` property. Used by `rescheduleJob` helper.
+- `defineJobTypes`: Factory function for compile-time-only job type definitions. Returns a `JobTypeRegistry` that passes all values through without runtime validation.
+- `createJobTypeRegistry`: Factory function for job type definitions with runtime validation. Accepts parser functions for input/output validation. Returns a `JobTypeRegistry` that validates at runtime.
+- `jobTypeRegistry`: Parameter in `createQueuert` for passing the job type registry. Replaced the old `jobTypeDefinitions` parameter name for clarity.
+- `Parser`: Type alias for validation functions `(input: unknown) => T`. Compatible with Zod, Valibot, ArkType, and other validation libraries.
+- `JobTypeValidationError`: Error thrown when runtime validation fails. Contains error code and detailed context.
 
 ### Type Helpers
 
-- `JobOf<TJobId, TJobTypeDefinitions, TJobTypeName, TSequenceTypeName?>`: Resolves to `Job<TJobId, TJobTypeName, Input, BlockerSequences, SequenceTypeName>` from job type definitions. Automatically unwraps `DefineContinuationInput` markers and includes typed blocker sequences. The optional 4th parameter `TSequenceTypeName` defaults to `SequenceTypesReaching<TJobTypeDefinitions, TJobTypeName>` (union of all sequence types that can reach this job type).
+- `JobOf<TJobId, TJobTypeDefinitions, TJobTypeName, TSequenceTypeName?>`: Resolves to `Job<TJobId, TJobTypeName, Input, BlockerSequences, SequenceTypeName>` from job type definitions. Includes typed blocker sequences. The optional 4th parameter `TSequenceTypeName` defaults to `SequenceTypesReaching<TJobTypeDefinitions, TJobTypeName>` (union of all sequence types that can reach this job type).
 - `JobWithoutBlockers<TJob>`: Strips the `blockers` field from a `Job` type. Used in `startBlockers` callback where blockers haven't been created yet. Example: `JobWithoutBlockers<JobOf<string, Defs, "process">>`.
 - `PendingJob<TJob>`, `BlockedJob<TJob>`, `RunningJob<TJob>`, `CompletedJob<TJob>`, `CreatedJob<TJob>`: Job status types that take a `Job` type and narrow by status. Example: `PendingJob<JobOf<string, Defs, "process">>`.
 - `SequenceJobTypes<TJobTypeDefinitions, TSequenceTypeName>`: Union of all job type names reachable in a sequence starting from `TSequenceTypeName`.
 - `SequenceTypesReaching<TJobTypeDefinitions, TJobTypeName>`: Inverse of `SequenceJobTypes`. Given a job type, computes the union of all sequence types (external job types) that can reach it. For entry jobs, this is their own type; for continuation-only jobs, this is the union of all entry types that eventually continue to them.
 - `ContinuationJobTypes<TJobTypeDefinitions, TJobTypeName>`: Job type names that `TJobTypeName` can continue to.
-- `ExternalJobTypeDefinitions<T>`: Filters job type definitions to only external job types that can be started via `startJobSequence` (excludes internal `DefineContinuationInput` types).
+- `EntryJobTypeDefinitions<T>`: Filters job type definitions to only entry types that can start a sequence via `startJobSequence` (includes only job types with `entry: true`).
 - `HasBlockers<TJobTypeDefinitions, TJobTypeName>`: Returns `true` if the job type has blockers defined, `false` otherwise. Used internally to enforce `startBlockers` requirement.
 - `JobSequenceOf<TJobId, TJobTypeDefinitions, TJobTypeName>`: Resolves to `JobSequence<TJobId, TJobTypeName, Input, Output>` for all jobs reachable in the sequence.
 - `BlockerSequences<TJobId, TJobTypeDefinitions, TJobTypeName>`: Tuple of `JobSequence` types for all declared blockers of a job type.
 
 ### Type Organization
 
-- `job-type.ts`: Public marker types (`DefineContinuationInput`, `DefineContinuationOutput`, `DefineBlocker`) and their symbols. Re-exports navigation types.
-- `job-type.navigation.ts`: Type-level navigation logic (`JobOf`, `SequenceJobTypes`, `ContinuationJobTypes`, `ExternalJobTypeDefinitions`, blocker resolution types).
+- `job-type.ts`: Base type definitions (`BaseJobTypeDefinition`) and `defineJobTypes` factory (uses `createNoopJobTypeRegistry` internally). Re-exports navigation types.
+- `job-type-registry.ts`: Runtime validation types (`JobTypeRegistry`, `Parser`, `JobTypeSchemaDefinition`) and factories (`createJobTypeRegistry` for runtime validation, `createNoopJobTypeRegistry` for internal use, `InferJobTypeDefinitions` type helper).
+- `job-type.navigation.ts`: Type-level navigation logic (`JobOf`, `SequenceJobTypes`, `ContinuationJobTypes`, `EntryJobTypeDefinitions`, blocker resolution types).
+- `job-type.validation.ts`: Compile-time validation types (`ValidatedJobTypeDefinitions`).
 - `job-sequence.types.ts`: Core entity types (`JobSequence`, `CompletedJobSequence`, `JobSequenceStatus`).
 - `job.types.ts`: Core job entity types (`Job`, `JobWithoutBlockers`) and status narrowing types (`PendingJob`, `RunningJob`, etc.).
 

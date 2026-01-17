@@ -172,6 +172,14 @@ type StateAdapterErrorLogEntry = LogEntry<
   unknown
 >;
 
+type JobTypeValidationErrorLogEntry = LogEntry<
+  "job_type_validation_error",
+  "error",
+  string, // Dynamic message from the error
+  { code: string; typeName: string } & Record<string, unknown>,
+  unknown
+>;
+
 type TypedLogEntry =
   // worker
   | WorkerStartedLogEntry
@@ -199,6 +207,8 @@ type TypedLogEntry =
   | NotifyContextAbsenceLogEntry
   | NotifyAdapterErrorLogEntry
   // state adapter
-  | StateAdapterErrorLogEntry;
+  | StateAdapterErrorLogEntry
+  // job type validation
+  | JobTypeValidationErrorLogEntry;
 
 export type Log = (options: TypedLogEntry) => void;

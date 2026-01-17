@@ -1,6 +1,6 @@
 import { TestAPI } from "vitest";
 import { sleep } from "../helpers/sleep.js";
-import { createQueuert, defineUnionJobTypes, JobSequence } from "../index.js";
+import { createQueuert, defineJobTypes, JobSequence } from "../index.js";
 import { TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -23,8 +23,9 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         test: {
+          entry: true;
           input: { test: boolean };
           output: { result: boolean };
         };
@@ -91,9 +92,9 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
-        email: { input: { to: string }; output: { sent: boolean } };
-        sms: { input: { phone: string }; output: { sent: boolean } };
+      jobTypeRegistry: defineJobTypes<{
+        email: { entry: true; input: { to: string }; output: { sent: boolean } };
+        sms: { entry: true; input: { phone: string }; output: { sent: boolean } };
       }>(),
     });
 
@@ -189,8 +190,9 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         test: {
+          entry: true;
           input: { test: boolean };
           output: { result: boolean };
         };
@@ -242,8 +244,9 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         test: {
+          entry: true;
           input: { jobNumber: number };
           output: { success: boolean };
         };
@@ -303,8 +306,9 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeDefinitions: defineUnionJobTypes<{
+      jobTypeRegistry: defineJobTypes<{
         test: {
+          entry: true;
           input: { jobNumber: number };
           output: { success: boolean };
         };
