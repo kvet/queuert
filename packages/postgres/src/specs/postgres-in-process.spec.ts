@@ -2,7 +2,7 @@ import { extendWithPostgres, TESTCONTAINER_RESOURCE_TYPES } from "@queuert/testc
 import {
   blockerChainsTestSuite,
   extendWithCommon,
-  extendWithInProcessNotify,
+  extendWithNotifyInProcess,
   extendWithResourceLeakDetection,
   notifyTestSuite,
   processTestSuite,
@@ -18,7 +18,7 @@ import { describe, it } from "vitest";
 import { extendWithStatePostgres } from "./state-adapter.pg.spec-helper.js";
 
 const postgresInProcessIt = extendWithResourceLeakDetection(
-  extendWithInProcessNotify(
+  extendWithNotifyInProcess(
     extendWithCommon(extendWithStatePostgres(extendWithPostgres(it, import.meta.url))),
   ),
   { additionalAllowedTypes: TESTCONTAINER_RESOURCE_TYPES },

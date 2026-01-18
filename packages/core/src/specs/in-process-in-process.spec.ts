@@ -8,7 +8,7 @@ import { schedulingTestSuite } from "../suites/scheduling.test-suite.js";
 import { chainsTestSuite } from "../suites/chains.test-suite.js";
 import {
   extendWithCommon,
-  extendWithInProcessNotify,
+  extendWithNotifyInProcess,
   extendWithResourceLeakDetection,
 } from "../suites/spec-context.spec-helper.js";
 import { waitChainCompletionTestSuite } from "../suites/wait-chain-completion.test-suite.js";
@@ -16,7 +16,7 @@ import { workerTestSuite } from "../suites/worker.test-suite.js";
 import { workerlessCompletionTestSuite } from "../suites/workerless-completion.test-suite.js";
 
 const inProcessInProcessIt = extendWithResourceLeakDetection(
-  extendWithInProcessNotify(extendWithCommon(extendWithStateInProcess(it))),
+  extendWithNotifyInProcess(extendWithCommon(extendWithStateInProcess(it))),
 );
 
 describe("Process", () => {

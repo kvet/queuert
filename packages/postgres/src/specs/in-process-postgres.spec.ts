@@ -7,10 +7,10 @@ import {
   notifyTestSuite,
 } from "queuert/testing";
 import { describe, it } from "vitest";
-import { extendWithPostgresNotify } from "./notify-adapter.pg.spec-helper.js";
+import { extendWithNotifyPostgres } from "./notify-adapter.pg.spec-helper.js";
 
 const inProcessPostgresIt = extendWithResourceLeakDetection(
-  extendWithPostgresNotify(
+  extendWithNotifyPostgres(
     extendWithCommon(extendWithStateInProcess(extendWithPostgres(it, import.meta.url))),
   ),
   { additionalAllowedTypes: TESTCONTAINER_RESOURCE_TYPES },

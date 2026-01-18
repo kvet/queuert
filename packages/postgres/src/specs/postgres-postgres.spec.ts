@@ -15,11 +15,11 @@ import {
   workerTestSuite,
 } from "queuert/testing";
 import { describe, it } from "vitest";
-import { extendWithPostgresNotify } from "./notify-adapter.pg.spec-helper.js";
+import { extendWithNotifyPostgres } from "./notify-adapter.pg.spec-helper.js";
 import { extendWithStatePostgres } from "./state-adapter.pg.spec-helper.js";
 
 const postgresPostgresIt = extendWithResourceLeakDetection(
-  extendWithPostgresNotify(
+  extendWithNotifyPostgres(
     extendWithCommon(extendWithStatePostgres(extendWithPostgres(it, import.meta.url))),
   ),
   { additionalAllowedTypes: TESTCONTAINER_RESOURCE_TYPES },

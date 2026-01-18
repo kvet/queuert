@@ -110,6 +110,9 @@ npm install @queuert/mongodb   # MongoDB (requires 4.0+ for transactions)
 npm install @queuert/redis     # Redis pub/sub (recommended for production)
 npm install @queuert/nats      # NATS pub/sub (with optional JetStream KV for hints)
 # Or use PostgreSQL LISTEN/NOTIFY via @queuert/postgres (no extra infra)
+
+# Observability (optional)
+npm install @queuert/otel      # OpenTelemetry metrics and histograms
 ```
 
 ## Core Concepts
@@ -135,7 +138,6 @@ Abstracts database operations for job persistence. Queuert provides adapters for
 - `@queuert/postgres` - PostgreSQL state adapter
 - `@queuert/sqlite` - SQLite state adapter
 - `@queuert/mongodb` - MongoDB state adapter (requires MongoDB 4.0+ for multi-document transactions)
-- `createInProcessStateAdapter()` - In-memory adapter (for testing)
 
 ### State Provider
 
@@ -150,7 +152,6 @@ Handles pub/sub notifications for efficient job scheduling. When a job is create
 - `@queuert/redis` - Redis notify adapter (recommended for production, includes hint-based optimization)
 - `@queuert/nats` - NATS notify adapter (with optional JetStream KV for hint-based optimization)
 - `@queuert/postgres` - PostgreSQL notify adapter (uses LISTEN/NOTIFY, no additional infrastructure)
-- `createInProcessNotifyAdapter()` - In-memory adapter (for single-process apps)
 - None (default) - polling only, no real-time notifications
 
 ### Notify Provider
@@ -174,7 +175,7 @@ No runtime type errors. No mismatched job names. Your workflow logic is verified
 
 ## Runtime Validation
 
-For production APIs accepting external input, you can add runtime validation using any schema library (Zod, Valibot, ArkType, etc.). The core is minimal — schema-specific adapters are implemented in user-land.
+For production APIs accepting external input, you can add runtime validation using any schema library (Zod, Valibot, TypeBox, etc.). The core is minimal — schema-specific adapters are implemented in user-land.
 
 ```ts
 import { z } from 'zod';
@@ -642,6 +643,33 @@ worker.implementJobType({
   process: async ({ job, complete }) => { ... },
 });
 ```
+
+## Observability
+
+Queuert provides an OpenTelemetry adapter for metrics collection. Configure your OTEL SDK with desired exporters (Prometheus, OTLP, Jaeger, etc.) before using this adapter.
+
+```ts
+import { createOtelObservabilityAdapter } from '@queuert/otel';
+import { metrics } from '@opentelemetry/api';
+
+const queuert = await createQueuert({
+  stateAdapter,
+  jobTypeRegistry: jobTypes,
+  observabilityAdapter: createOtelObservabilityAdapter({
+    meter: metrics.getMeter('my-app'),
+    metricPrefix: 'queuert',
+  }),
+  log: createConsoleLog(),
+});
+```
+
+The adapter emits:
+
+- **Counters:** worker lifecycle, job attempts, completions, errors
+- **Histograms:** job duration, chain duration, attempt duration
+- **Gauges:** idle workers per job type, jobs being processed
+
+See [examples/observability-otel](./examples/observability-otel) for a complete example.
 
 ## Testing & Resilience
 

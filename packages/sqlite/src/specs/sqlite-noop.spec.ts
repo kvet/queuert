@@ -1,7 +1,7 @@
 import {
   blockerChainsTestSuite,
   extendWithCommon,
-  extendWithNoopNotify,
+  extendWithNotifyNoop,
   extendWithResourceLeakDetection,
   processTestSuite,
   reaperTestSuite,
@@ -16,7 +16,7 @@ import { describe, it } from "vitest";
 import { extendWithStateSqlite } from "./state-adapter.sqlite.spec-helper.js";
 
 const sqliteNoopIt = extendWithResourceLeakDetection(
-  extendWithNoopNotify(extendWithCommon(extendWithStateSqlite(it))),
+  extendWithNotifyNoop(extendWithCommon(extendWithStateSqlite(it))),
 );
 
 describe("Process", () => {

@@ -25,7 +25,7 @@ PostgreSQL state adapter and notify adapter implementations. Users provide their
 **Exports:**
 
 - `.` (main): `createPgStateAdapter`, `PgStateAdapter` type, `createPgNotifyAdapter`, `PgNotifyProvider` type
-- `./testing`: Test helpers for PostgreSQL tests (`extendWithStatePostgres`, `extendWithPostgresNotify`, `createPgPoolNotifyProvider`)
+- `./testing`: Test helpers for PostgreSQL tests (`extendWithStatePostgres`, `extendWithNotifyPostgres`, `createPgPoolNotifyProvider`)
 
 **Dependencies:**
 
@@ -102,7 +102,7 @@ NATS notify adapter implementation for distributed pub/sub notifications with op
 **Exports:**
 
 - `.` (main): `createNatsNotifyAdapter`
-- `./testing`: Test helper for NATS tests (`extendWithNatsNotify`)
+- `./testing`: Test helper for NATS tests (`extendWithNotifyNats`)
 
 **Dependencies:**
 
@@ -665,7 +665,7 @@ describe("MyFeature", () => {
 - `packages/redis/src/specs/` - Spec files that run the same test suites with Redis notify adapter
 - `packages/nats/src/specs/` - Spec files that run the same test suites with NATS notify adapter
 - State adapter test helpers (`extendWithStateInProcess`, `extendWithStatePostgres`, `extendWithStateSqlite`) configure the test context with the appropriate state adapter
-- Notify adapter test helpers (`extendWithNotifyInProcess`, `extendWithNotifyNoop`, `extendWithNotifyRedis`, `extendWithNatsNotify`) configure the test context with the appropriate notify adapter
+- Notify adapter test helpers (`extendWithNotifyInProcess`, `extendWithNotifyNoop`, `extendWithNotifyRedis`, `extendWithNotifyNats`) configure the test context with the appropriate notify adapter
 
 ## Code Style
 

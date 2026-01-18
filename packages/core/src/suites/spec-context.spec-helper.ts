@@ -274,7 +274,7 @@ export const extendWithCommon = <
     ],
   }) as any;
 
-export const extendWithInProcessNotify = <T extends {}>(
+export const extendWithNotifyInProcess = <T extends {}>(
   it: TestAPI<T>,
 ): TestAPI<T & Pick<TestSuiteContext, "notifyAdapter">> =>
   it.extend<Pick<TestSuiteContext, "notifyAdapter">>({
@@ -286,7 +286,7 @@ export const extendWithInProcessNotify = <T extends {}>(
     ],
   }) as any;
 
-export const extendWithNoopNotify = <T extends {}>(
+export const extendWithNotifyNoop = <T extends {}>(
   it: TestAPI<T>,
 ): TestAPI<T & Pick<TestSuiteContext, "notifyAdapter">> =>
   it.extend<Pick<TestSuiteContext, "notifyAdapter">>({

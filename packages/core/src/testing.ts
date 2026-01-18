@@ -16,8 +16,8 @@ export { workerlessCompletionTestSuite } from "./suites/workerless-completion.te
 // Test Context Helpers
 export {
   extendWithCommon,
-  extendWithInProcessNotify,
-  extendWithNoopNotify,
+  extendWithNotifyInProcess,
+  extendWithNotifyNoop,
   extendWithResourceLeakDetection,
   type TestSuiteContext,
 } from "./suites/spec-context.spec-helper.js";

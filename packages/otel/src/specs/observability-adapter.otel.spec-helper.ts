@@ -42,7 +42,7 @@ const methodToMetricName: Record<string, string> = {
   jobTypeProcessingChange: "queuert.job_type.processing",
 };
 
-export const extendWithOtelObservability = <T extends {}>(
+export const extendWithObservabilityOtel = <T extends {}>(
   api: TestAPI<T>,
 ): TestAPI<
   T & {
@@ -224,5 +224,5 @@ export const extendWithOtelObservability = <T extends {}>(
       },
       { scope: "test" },
     ],
-  }) as ReturnType<typeof extendWithOtelObservability<T>>;
+  }) as ReturnType<typeof extendWithObservabilityOtel<T>>;
 };

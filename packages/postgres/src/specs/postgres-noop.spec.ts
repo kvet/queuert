@@ -4,7 +4,7 @@ import {
   deduplicationTestSuite,
   deletionTestSuite,
   extendWithCommon,
-  extendWithNoopNotify,
+  extendWithNotifyNoop,
   extendWithResourceLeakDetection,
   processTestSuite,
   reaperTestSuite,
@@ -19,7 +19,7 @@ import { describe, it } from "vitest";
 import { extendWithStatePostgres } from "./state-adapter.pg.spec-helper.js";
 
 const postgresNoopIt = extendWithResourceLeakDetection(
-  extendWithNoopNotify(
+  extendWithNotifyNoop(
     extendWithCommon(extendWithStatePostgres(extendWithPostgres(it, import.meta.url))),
   ),
   { additionalAllowedTypes: TESTCONTAINER_RESOURCE_TYPES },

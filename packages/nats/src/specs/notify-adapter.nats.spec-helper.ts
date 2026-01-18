@@ -5,7 +5,7 @@ import { createFlakyBatchGenerator } from "queuert/testing";
 import { type TestAPI } from "vitest";
 import { createNatsNotifyAdapter } from "../notify-adapter/notify-adapter.nats.js";
 
-export const extendWithNatsNotify = <
+export const extendWithNotifyNats = <
   T extends {
     natsConnectionOptions: NatsConnectionOptions;
   },
@@ -90,5 +90,5 @@ export const extendWithNatsNotify = <
       },
       { scope: "test" },
     ],
-  }) as ReturnType<typeof extendWithNatsNotify<T>>;
+  }) as ReturnType<typeof extendWithNotifyNats<T>>;
 };

@@ -7,10 +7,10 @@ import {
   notifyTestSuite,
 } from "queuert/testing";
 import { describe, it } from "vitest";
-import { extendWithRedisNotify } from "./notify-adapter.redis.spec-helper.js";
+import { extendWithNotifyRedis } from "./notify-adapter.redis.spec-helper.js";
 
 const inProcessInProcessIt = extendWithResourceLeakDetection(
-  extendWithRedisNotify(
+  extendWithNotifyRedis(
     extendWithRedis(extendWithCommon(extendWithStateInProcess(it)), import.meta.url),
   ),
   { additionalAllowedTypes: TESTCONTAINER_RESOURCE_TYPES },

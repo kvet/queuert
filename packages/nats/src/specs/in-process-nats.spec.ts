@@ -6,9 +6,9 @@ import {
   notifyTestSuite,
 } from "queuert/testing";
 import { describe, it } from "vitest";
-import { extendWithNatsNotify } from "./notify-adapter.nats.spec-helper.js";
+import { extendWithNotifyNats } from "./notify-adapter.nats.spec-helper.js";
 
-const inProcessNatsIt = extendWithNatsNotify(
+const inProcessNatsIt = extendWithNotifyNats(
   extendWithNats(extendWithCommon(extendWithStateInProcess(it)), import.meta.url),
 );
 

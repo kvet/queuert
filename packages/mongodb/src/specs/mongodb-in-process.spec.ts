@@ -2,7 +2,7 @@ import { extendWithMongodb, TESTCONTAINER_RESOURCE_TYPES } from "@queuert/testco
 import {
   blockerChainsTestSuite,
   extendWithCommon,
-  extendWithInProcessNotify,
+  extendWithNotifyInProcess,
   extendWithResourceLeakDetection,
   notifyTestSuite,
   processTestSuite,
@@ -36,7 +36,7 @@ afterAll(() => {
 });
 
 const mongodbInProcessIt = extendWithResourceLeakDetection(
-  extendWithInProcessNotify(
+  extendWithNotifyInProcess(
     extendWithCommon(extendWithStateMongodb(extendWithMongodb(baseIt, import.meta.url))),
   ),
   { additionalAllowedTypes: TESTCONTAINER_RESOURCE_TYPES },

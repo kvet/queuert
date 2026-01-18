@@ -3,7 +3,7 @@ import {
   deduplicationTestSuite,
   deletionTestSuite,
   extendWithCommon,
-  extendWithInProcessNotify,
+  extendWithNotifyInProcess,
   extendWithStateInProcess,
   processTestSuite,
   reaperTestSuite,
@@ -14,10 +14,10 @@ import {
   workerTestSuite,
 } from "queuert/testing";
 import { describe, it } from "vitest";
-import { extendWithOtelObservability } from "./observability-adapter.otel.spec-helper.js";
+import { extendWithObservabilityOtel } from "./observability-adapter.otel.spec-helper.js";
 
-const otelIt = extendWithOtelObservability(
-  extendWithInProcessNotify(extendWithCommon(extendWithStateInProcess(it))),
+const otelIt = extendWithObservabilityOtel(
+  extendWithNotifyInProcess(extendWithCommon(extendWithStateInProcess(it))),
 );
 
 describe("Process", () => {

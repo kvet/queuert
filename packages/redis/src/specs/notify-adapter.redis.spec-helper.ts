@@ -5,7 +5,7 @@ import { type TestAPI } from "vitest";
 import { createRedisNotifyAdapter } from "../notify-adapter/notify-adapter.redis.js";
 import { createNodeRedisNotifyProvider } from "./notify-provider.node-redis.js";
 
-export const extendWithRedisNotify = <
+export const extendWithNotifyRedis = <
   T extends {
     redisConnectionUrl: string;
   },
@@ -89,5 +89,5 @@ export const extendWithRedisNotify = <
       },
       { scope: "test" },
     ],
-  }) as ReturnType<typeof extendWithRedisNotify<T>>;
+  }) as ReturnType<typeof extendWithNotifyRedis<T>>;
 };

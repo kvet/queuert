@@ -9,7 +9,7 @@ import { schedulingTestSuite } from "../suites/scheduling.test-suite.js";
 import { chainsTestSuite } from "../suites/chains.test-suite.js";
 import {
   extendWithCommon,
-  extendWithNoopNotify,
+  extendWithNotifyNoop,
   extendWithResourceLeakDetection,
 } from "../suites/spec-context.spec-helper.js";
 import { waitChainCompletionTestSuite } from "../suites/wait-chain-completion.test-suite.js";
@@ -17,7 +17,7 @@ import { workerTestSuite } from "../suites/worker.test-suite.js";
 import { workerlessCompletionTestSuite } from "../suites/workerless-completion.test-suite.js";
 
 const inProcessNoopIt = extendWithResourceLeakDetection(
-  extendWithNoopNotify(extendWithCommon(extendWithStateInProcess(it))),
+  extendWithNotifyNoop(extendWithCommon(extendWithStateInProcess(it))),
 );
 
 describe("Process", () => {

@@ -8,24 +8,24 @@ This document describes the runtime validation system for job types. While `defi
 
 ```typescript
 interface JobTypeRegistry<TJobTypeDefinitions = unknown> {
-  validateEntry(typeName: string): boolean;
-  parseInput(typeName: string, input: unknown): unknown;
-  parseOutput(typeName: string, output: unknown): unknown;
-  validateContinueWith(typeName: string, to: { typeName: string; input: unknown }): void;
-  validateBlockers(typeName: string, blockers: readonly { typeName: string; input: unknown }[]): void;
+  validateEntry: (typeName: string) => void;
+  parseInput: (typeName: string, input: unknown) => unknown;
+  parseOutput: (typeName: string, output: unknown) => unknown;
+  validateContinueWith: (typeName: string, to: { typeName: string; input: unknown }) => void;
+  validateBlockers: (typeName: string, blockers: readonly { typeName: string; input: unknown }[]) => void;
   readonly $definitions: TJobTypeDefinitions;
 }
 ```
 
 ### Method Mapping
 
-| BaseJobTypeDefinition             | Registry Method                        | Purpose                              |
-| --------------------------------- | -------------------------------------- | ------------------------------------ |
-| `entry?: boolean`                 | `validateEntry(typeName)`              | Validates job type can start a chain |
-| `input: unknown`                  | `parseInput(typeName, input)`          | Parses and validates job input       |
-| `output?: unknown`                | `parseOutput(typeName, output)`        | Parses and validates job output      |
-| `continueWith?: JobTypeReference` | `validateContinueWith(typeName, to)`   | Validates continuation target        |
-| `blockers?: JobTypeReference[]`   | `validateBlockers(typeName, blockers)` | Validates blocker references         |
+| BaseJobTypeDefinition             | Registry Method                          | Purpose                              |
+| --------------------------------- | ---------------------------------------- | ------------------------------------ |
+| `entry?: boolean`                 | `validateEntry(typeName)`                | Validates job type can start a chain |
+| `input: unknown`                  | `parseInput(typeName, input)`            | Parses and validates job input       |
+| `output?: unknown`                | `parseOutput(typeName, output)`          | Parses and validates job output      |
+| `continueWith?: JobTypeReference` | `validateContinueWith(typeName, target)` | Validates continuation target        |
+| `blockers?: JobTypeReference[]`   | `validateBlockers(typeName, blockers)`   | Validates blocker references         |
 
 ## Creating a Registry
 
@@ -33,7 +33,7 @@ The core `createJobTypeRegistry` accepts validation functions directly:
 
 ```typescript
 const registry = createJobTypeRegistry<TJobTypeDefinitions>({
-  validateEntry: (typeName: string) => void,
+  validateEntry: (typeName: string): void => void,
   parseInput: (typeName: string, input: unknown) => unknown,
   parseOutput: (typeName: string, output: unknown) => unknown,
   validateContinueWith: (typeName: string, to: { typeName: string; input: unknown }) => void,
@@ -88,7 +88,7 @@ const createZodJobTypeRegistry = <T extends Record<string, ZodJobTypeSchema>>(
   };
 
   return createJobTypeRegistry<InferZodJobTypes<T>>({
-    validateEntry: (typeName) => getSchema(typeName).entry === true,
+    validateEntry: (typeName) => { if (!getSchema(typeName).entry) throw new Error('Not an entry point'); },
     parseInput: (typeName, input) => getSchema(typeName).input.parse(input),
     parseOutput: (typeName, output) => getSchema(typeName).output?.parse(output) ?? output,
     validateContinueWith: (typeName, to) => getSchema(typeName).continueWith?.parse(to),
@@ -139,7 +139,7 @@ const createValibotJobTypeRegistry = <T extends Record<string, ValibotJobTypeSch
   };
 
   return createJobTypeRegistry<InferValibotJobTypes<T>>({
-    validateEntry: (typeName) => getSchema(typeName).entry === true,
+    validateEntry: (typeName) => { if (!getSchema(typeName).entry) throw new Error('Not an entry point'); },
     parseInput: (typeName, input) => v.parse(getSchema(typeName).input, input),
     parseOutput: (typeName, output) => v.parse(getSchema(typeName).output, output),
     // ... other methods
@@ -157,7 +157,7 @@ const createArkJobTypeRegistry = <T extends Record<string, ArkJobTypeSchema>>(
   };
 
   return createJobTypeRegistry<InferArkJobTypes<T>>({
-    validateEntry: (typeName) => getSchema(typeName).entry === true,
+    validateEntry: (typeName) => { if (!getSchema(typeName).entry) throw new Error('Not an entry point'); },
     parseInput: (typeName, input) => getSchema(typeName).input.assert(input),
     parseOutput: (typeName, output) => getSchema(typeName).output.assert(output),
     // ... other methods
