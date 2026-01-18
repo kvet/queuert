@@ -1,6 +1,5 @@
 # Short term
 
-- Logs: add metrics for logs (like common attributes inside spans, e.g. winston.log can show context attributes)
 - ObservabilityAdapter: tracing spans
 
 # Medium term

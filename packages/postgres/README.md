@@ -102,7 +102,6 @@ You need to implement a state provider that bridges your PostgreSQL client (raw 
 
 - `extendWithStatePostgres` - Test context helper for PostgreSQL state adapter
 - `extendWithNotifyPostgres` - Test context helper for PostgreSQL notify adapter
-- `createPgPoolNotifyProvider` - Factory for pool-based notify provider
 
 ## Documentation
 

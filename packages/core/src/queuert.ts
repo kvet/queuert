@@ -37,7 +37,7 @@ export type QueuertWorkerDefinition<
     retryConfig?: BackoffConfig;
     leaseConfig?: LeaseConfig;
   }) => QueuertWorkerDefinition<TJobTypeDefinitions, TStateAdapter>;
-  start: Executor;
+  start: Executor<TStateAdapter, TJobTypeDefinitions>;
 };
 
 export type Queuert<
@@ -164,7 +164,7 @@ export const createQueuert = async <
             return createWorkerInstance(newRegisteredJobTypes);
           },
           start: async (startOptions) =>
-            createExecutor({
+            createExecutor<TStateAdapter, TJobTypeRegistry["$definitions"]>({
               helper,
               registeredJobTypes,
             })(startOptions),

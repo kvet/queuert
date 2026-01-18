@@ -446,6 +446,12 @@ export const queuertHelper = ({
 
   return {
     // oxlint-disable-next-line no-unnecessary-type-assertion -- needed for --isolatedDeclarations
+    stateAdapter: stateAdapter as StateAdapter<
+      BaseStateAdapterContext,
+      BaseStateAdapterContext,
+      any
+    >,
+    // oxlint-disable-next-line no-unnecessary-type-assertion -- needed for --isolatedDeclarations
     notifyAdapter: notifyAdapter as NotifyAdapter,
     // oxlint-disable-next-line no-unnecessary-type-assertion -- needed for --isolatedDeclarations
     observabilityHelper: observabilityHelper as ObservabilityHelper,
@@ -579,19 +585,6 @@ export const queuertHelper = ({
         | { type: "continueWith"; continuedJob: Job<any, any, any, any, any[]> }
       ),
     ) => Promise<StateJob>,
-    logJobAttemptCompleted: ({
-      job,
-      output,
-      continuedWith,
-      workerId,
-    }: {
-      job: StateJob;
-      output: unknown;
-      continuedWith?: Job<any, any, any, any, any[]>;
-      workerId: string;
-    }): void => {
-      observabilityHelper.jobAttemptCompleted(job, { output, continuedWith, workerId });
-    },
     refetchJobForUpdate: async ({
       context,
       job,
@@ -678,26 +671,6 @@ export const queuertHelper = ({
       return nextJobAvailableInMs !== null
         ? Math.min(Math.max(0, nextJobAvailableInMs), pollIntervalMs)
         : pollIntervalMs;
-    },
-    acquireJob: async ({
-      typeNames,
-      context,
-      workerId,
-    }: {
-      typeNames: string[];
-      context: BaseStateAdapterContext;
-      workerId: string;
-    }): Promise<StateJob | undefined> => {
-      const job = await stateAdapter.acquireJob({
-        context,
-        typeNames,
-      });
-
-      if (job) {
-        observabilityHelper.jobAttemptStarted(job, { workerId });
-      }
-
-      return job;
     },
     removeExpiredJobLease: async ({
       typeNames,

@@ -12,7 +12,7 @@ export {
   type DefineJobTypes,
 } from "./entities/job-type.js";
 export { type ValidatedJobTypeDefinitions } from "./entities/job-type.validation.js";
-export { type CompletedJob, type Job } from "./entities/job.js";
+export { type CompletedJob, type Job, type JobWithoutBlockers } from "./entities/job.js";
 export { type ScheduleOptions } from "./entities/schedule.js";
 export { type TypedAbortSignal } from "./helpers/abort.js";
 export { type BackoffConfig } from "./helpers/backoff.js";
@@ -43,5 +43,6 @@ export {
   rescheduleJob,
   RescheduleJobError,
   type JobAbortReason,
+  type JobAttemptMiddleware,
   type LeaseConfig,
 } from "./worker/job-process.js";

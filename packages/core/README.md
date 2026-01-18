@@ -107,6 +107,15 @@ await worker.start({
     leaseMs: 60_000,                 // How long a worker holds a job (default: 60s)
     renewIntervalMs: 30_000,         // How often to renew the lease (default: 30s)
   },
+
+  // Middlewares that wrap each job attempt (e.g., for contextual logging)
+  jobAttemptMiddlewares: [
+    async ({ job, workerId }, next) => {
+      // Setup context before job processing
+      return await next();
+      // Cleanup after job processing
+    },
+  ],
 });
 ```
 
@@ -141,7 +150,7 @@ worker.implementJobType({
 **Job types:**
 
 - `Job`, `JobWithoutBlockers` - Job entity types
-- `PendingJob`, `RunningJob`, `BlockedJob`, `CompletedJob`, `CreatedJob` - Status-narrowed job types
+- `CompletedJob` - Status-narrowed job type for completed jobs
 - `JobChain`, `CompletedJobChain` - Job chain types
 
 **Configuration:**
@@ -150,6 +159,7 @@ worker.implementJobType({
 - `DeduplicationOptions`, `DeduplicationStrategy` - Chain deduplication
 - `LeaseConfig`, `RetryConfig`, `BackoffConfig` - Worker configuration
 - `TypedAbortSignal`, `JobAbortReason` - Typed abort signal for process functions
+- `JobAttemptMiddleware` - Middleware type for wrapping job attempt processing
 
 **Error classes:**
 

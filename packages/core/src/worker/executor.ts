@@ -9,7 +9,7 @@ import {
   ProcessHelper,
 } from "../queuert-helper.js";
 import { BaseStateAdapterContext, StateAdapter } from "../state-adapter/state-adapter.js";
-import { JobProcessFn, LeaseConfig, runJobProcess } from "./job-process.js";
+import { JobAttemptMiddleware, JobProcessFn, LeaseConfig, runJobProcess } from "./job-process.js";
 
 export type RegisteredJobTypes = Map<
   string,
@@ -24,20 +24,31 @@ export type RegisteredJobTypes = Map<
   }
 >;
 
-export const createExecutor = ({
-  helper,
-  registeredJobTypes,
-}: {
-  helper: ProcessHelper;
-  registeredJobTypes: RegisteredJobTypes;
-}): ((startOptions?: {
+export type ExecutorStartOptions<
+  TStateAdapter extends StateAdapter<any, any, any>,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+> = {
   workerId?: string;
   pollIntervalMs?: number;
   nextJobDelayMs?: number;
   defaultRetryConfig?: BackoffConfig;
   defaultLeaseConfig?: LeaseConfig;
   workerLoopRetryConfig?: BackoffConfig;
-}) => Promise<() => Promise<void>>) => {
+  jobAttemptMiddlewares?: JobAttemptMiddleware<TStateAdapter, TJobTypeDefinitions>[];
+};
+
+export const createExecutor = <
+  TStateAdapter extends StateAdapter<any, any, any>,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+>({
+  helper,
+  registeredJobTypes,
+}: {
+  helper: ProcessHelper;
+  registeredJobTypes: RegisteredJobTypes;
+}): ((
+  startOptions?: ExecutorStartOptions<TStateAdapter, TJobTypeDefinitions>,
+) => Promise<() => Promise<void>>) => {
   const typeNames = Array.from(registeredJobTypes.keys());
   const { notifyAdapter, observabilityHelper } = helper;
 
@@ -59,6 +70,7 @@ export const createExecutor = ({
       multiplier: 2.0,
       maxDelayMs: 300_000,
     },
+    jobAttemptMiddlewares,
   } = {}) => {
     observabilityHelper.workerStarted({ workerId, jobTypeNames: typeNames });
     observabilityHelper.jobTypeIdleChange(1, workerId, typeNames);
@@ -94,10 +106,9 @@ export const createExecutor = ({
       try {
         const [hasMore, continueProcessing] = await helper.runInTransaction(
           async (context): Promise<[boolean, (() => Promise<void>) | undefined]> => {
-            let job = await helper.acquireJob({
-              typeNames,
+            let job = await helper.stateAdapter.acquireJob({
               context,
-              workerId,
+              typeNames,
             });
             if (!job) {
               return [false, undefined];
@@ -120,6 +131,7 @@ export const createExecutor = ({
                 workerId,
                 notifyAdapter,
                 typeNames,
+                jobAttemptMiddlewares: jobAttemptMiddlewares as any[],
               }),
             ];
           },
@@ -189,4 +201,9 @@ export const createExecutor = ({
   };
 };
 
-export type Executor = ReturnType<typeof createExecutor>;
+export type Executor<
+  TStateAdapter extends StateAdapter<any, any, any> = StateAdapter<any, any, any>,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions = BaseJobTypeDefinitions,
+> = (
+  startOptions?: ExecutorStartOptions<TStateAdapter, TJobTypeDefinitions>,
+) => Promise<() => Promise<void>>;

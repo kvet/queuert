@@ -349,4 +349,83 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
     expect(processedJobs.indexOf(0) < processedJobs.indexOf(4)).toBeTruthy();
   });
+
+  it("calls jobAttemptMiddlewares with job context and composes them correctly", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const order: string[] = [];
+    const capturedJobs: { id: unknown; typeName: string; input: unknown }[] = [];
+
+    const queuert = await createQueuert({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry: defineJobTypes<{
+        test: {
+          entry: true;
+          input: { value: number };
+          output: null;
+        };
+      }>(),
+    });
+
+    const worker = queuert.createWorker().implementJobType({
+      typeName: "test",
+      process: async ({ complete }) => {
+        order.push("process");
+        return complete(async () => null);
+      },
+    });
+
+    const jobChain = await queuert.withNotify(async () =>
+      runInTransaction(async (context) =>
+        queuert.startJobChain({
+          ...context,
+          typeName: "test",
+          input: { value: 42 },
+        }),
+      ),
+    );
+
+    await withWorkers(
+      [
+        await worker.start({
+          jobAttemptMiddlewares: [
+            async (ctx, next) => {
+              order.push("mw1-before");
+              capturedJobs.push({
+                id: ctx.job.id,
+                typeName: ctx.job.typeName,
+                input: ctx.job.input,
+              });
+              const result = await next();
+              order.push("mw1-after");
+              return result;
+            },
+            async (ctx, next) => {
+              order.push("mw2-before");
+              const result = await next();
+              order.push("mw2-after");
+              return result;
+            },
+          ],
+        }),
+      ],
+      async () => {
+        await queuert.waitForJobChainCompletion(jobChain, completionOptions);
+      },
+    );
+
+    expect(order).toEqual(["mw1-before", "mw2-before", "process", "mw2-after", "mw1-after"]);
+    expect(capturedJobs).toHaveLength(1);
+    expect(capturedJobs[0].typeName).toBe("test");
+    expect(capturedJobs[0].input).toEqual({ value: 42 });
+  });
 };

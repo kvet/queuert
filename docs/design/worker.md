@@ -217,6 +217,84 @@ When notified, workers immediately check for available jobs. This reduces latenc
 
 The notification layer is optional—workers function correctly with polling alone.
 
+## Job Attempt Middlewares
+
+Workers support middlewares that wrap each job attempt, enabling cross-cutting concerns like contextual logging, tracing, or metrics.
+
+### Configuration
+
+```typescript
+await worker.start({
+  workerId: 'worker-1',
+  jobAttemptMiddlewares: [
+    async ({ job, workerId }, next) => {
+      console.log('Before job processing');
+      const result = await next();
+      console.log('After job processing');
+      return result;
+    },
+  ],
+});
+```
+
+### Middleware Signature
+
+```typescript
+type JobAttemptMiddleware<TStateAdapter, TJobTypeDefinitions> = <T>(
+  context: {
+    job: RunningJob<...>;  // The job being processed
+    workerId: string;      // The worker processing the job
+  },
+  next: () => Promise<T>,  // Call to continue to next middleware or job processing
+) => Promise<T>;
+```
+
+### Middleware Composition
+
+Middlewares execute in order, wrapping the job processing:
+
+```typescript
+jobAttemptMiddlewares: [middleware1, middleware2, middleware3]
+
+// Execution order:
+// middleware1 before → middleware2 before → middleware3 before
+// → job processing →
+// middleware3 after → middleware2 after → middleware1 after
+```
+
+### Use Cases
+
+**Contextual Logging with AsyncLocalStorage:**
+
+```typescript
+const jobContextStore = new AsyncLocalStorage<JobContext>();
+
+const contextMiddleware: JobAttemptMiddleware<...> = async ({ job, workerId }, next) => {
+  return jobContextStore.run(
+    { jobId: job.id, typeName: job.typeName, workerId },
+    next,
+  );
+};
+
+// Now any logger can access job context via jobContextStore.getStore()
+```
+
+**OpenTelemetry Tracing:**
+
+```typescript
+const tracingMiddleware: JobAttemptMiddleware<...> = async ({ job }, next) => {
+  return tracer.startActiveSpan(`job:${job.typeName}`, async (span) => {
+    try {
+      return await next();
+    } finally {
+      span.end();
+    }
+  });
+};
+```
+
+See the `examples/log-pino` and `examples/log-winston` examples for complete contextual logging implementations.
+
 ## Summary
 
 The worker design emphasizes:
@@ -226,3 +304,4 @@ The worker design emphasizes:
 3. **Flexibility**: Per-type configuration, multi-type workers
 4. **Observability**: All state transitions emit structured events
 5. **Graceful degradation**: Works without notification layer
+6. **Extensibility**: Middlewares enable cross-cutting concerns
