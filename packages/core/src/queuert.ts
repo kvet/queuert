@@ -29,7 +29,7 @@ import { CompletedJobChain } from "./entities/job-chain.js";
 
 export type QueuertWorkerDefinition<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TStateAdapter extends StateAdapter<any, any, any>,
+  TStateAdapter extends StateAdapter<any, any>,
 > = {
   implementJobType: <TJobTypeName extends keyof TJobTypeDefinitions & string>(options: {
     typeName: TJobTypeName;
@@ -42,7 +42,7 @@ export type QueuertWorkerDefinition<
 
 export type Queuert<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TStateAdapter extends StateAdapter<any, any, any>,
+  TStateAdapter extends StateAdapter<any, any>,
 > = {
   createWorker: () => QueuertWorkerDefinition<TJobTypeDefinitions, TStateAdapter>;
   startJobChain: <
@@ -122,7 +122,7 @@ export type Queuert<
 
 export const createQueuert = async <
   TJobTypeRegistry extends JobTypeRegistry<any>,
-  TStateAdapter extends StateAdapter<any, any, any>,
+  TStateAdapter extends StateAdapter<any, any>,
 >({
   stateAdapter,
   notifyAdapter,
@@ -179,25 +179,25 @@ export const createQueuert = async <
       deduplication,
       schedule,
       startBlockers,
-      ...context
+      ...txContext
     }) =>
       helper.startJobChain({
         typeName,
         input,
-        context,
+        txContext,
         deduplication,
         schedule,
         startBlockers,
       })) as Queuert<TJobTypeRegistry["$definitions"], TStateAdapter>["startJobChain"],
-    getJobChain: (async ({ id, typeName, ...context }) =>
-      helper.getJobChain({ id, typeName, context })) as Queuert<
+    getJobChain: (async ({ id, typeName, ...txContext }) =>
+      helper.getJobChain({ id, typeName, txContext })) as Queuert<
       TJobTypeRegistry["$definitions"],
       TStateAdapter
     >["getJobChain"],
-    deleteJobChains: async ({ rootChainIds, ...context }) =>
-      helper.deleteJobChains({ rootChainIds, context }),
-    completeJobChain: (async ({ id, typeName, complete, ...context }) =>
-      helper.completeJobChain({ id, typeName, context, complete })) as Queuert<
+    deleteJobChains: async ({ rootChainIds, ...txContext }) =>
+      helper.deleteJobChains({ rootChainIds, txContext }),
+    completeJobChain: (async ({ id, typeName, complete, ...txContext }) =>
+      helper.completeJobChain({ id, typeName, txContext, complete })) as Queuert<
       TJobTypeRegistry["$definitions"],
       TStateAdapter
     >["completeJobChain"],

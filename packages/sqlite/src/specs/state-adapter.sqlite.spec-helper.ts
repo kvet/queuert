@@ -10,15 +10,15 @@ import {
   SqliteContext,
 } from "./state-provider.better-sqlite3.js";
 
-export type SqliteStateAdapter = StateAdapter<SqliteContext, SqliteContext, UUID>;
+export type SqliteStateAdapter = StateAdapter<SqliteContext, UUID>;
 
 export const extendWithStateSqlite = <T>(
   api: TestAPI<T>,
 ): TestAPI<
   T & {
     db: Database.Database;
-    stateAdapter: StateAdapter<{ $test: true }, { $test: true }, string>;
-    flakyStateAdapter: StateAdapter<{ $test: true }, { $test: true }, string>;
+    stateAdapter: StateAdapter<{ $test: true }, string>;
+    flakyStateAdapter: StateAdapter<{ $test: true }, string>;
   }
 > => {
   return api.extend<{
@@ -83,7 +83,7 @@ export const extendWithStateSqlite = <T>(
         const originalExecuteSql = stateProvider.executeSql.bind(stateProvider);
         const flakyStateProvider: typeof stateProvider = {
           ...stateProvider,
-          executeSql: async (context, sql, params, returns) => {
+          executeSql: async ({ txContext, sql, params, returns }) => {
             queryCount++;
 
             if (shouldError()) {
@@ -95,7 +95,7 @@ export const extendWithStateSqlite = <T>(
               throw error;
             }
 
-            return originalExecuteSql(context, sql, params, returns);
+            return originalExecuteSql({ txContext, sql, params, returns });
           },
         };
 

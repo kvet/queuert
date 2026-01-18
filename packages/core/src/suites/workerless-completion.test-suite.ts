@@ -34,9 +34,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     });
 
     const jobChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "test",
           input: { value: 42 },
         }),
@@ -44,9 +44,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
 
     const completedChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.completeJobChain({
-          ...context,
+          ...txContext,
           typeName: "test",
           id: jobChain.id,
           complete: async ({ job, complete }) => {
@@ -105,9 +105,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     });
 
     const jobChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "awaiting-approval",
           input: { requestId: "req-123" },
         }),
@@ -117,9 +117,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     expect(jobChain.status).toEqual("pending");
 
     const completedChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.completeJobChain({
-          ...context,
+          ...txContext,
           typeName: "awaiting-approval",
           id: jobChain.id,
           complete: async ({ job, complete }) => {
@@ -170,9 +170,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     });
 
     const jobChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "awaiting-approval",
           input: { requestId: "req-123" },
         }),
@@ -182,9 +182,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     expect(jobChain.status).toEqual("pending");
 
     const partiallyCompletedChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.completeJobChain({
-          ...context,
+          ...txContext,
           typeName: "awaiting-approval",
           id: jobChain.id,
           complete: async ({ job, complete }) => {
@@ -244,9 +244,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     });
 
     const jobChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "test",
           input: null,
         }),
@@ -254,9 +254,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
 
     await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.completeJobChain({
-          ...context,
+          ...txContext,
           typeName: "test",
           id: jobChain.id,
           complete: async ({ job, complete }) => {
@@ -268,9 +268,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     await expect(
       queuert.withNotify(async () =>
-        runInTransaction(async (context) =>
+        runInTransaction(async (txContext) =>
           queuert.completeJobChain({
-            ...context,
+            ...txContext,
             typeName: "test",
             id: jobChain.id,
             complete: async ({ job, complete }) => {
@@ -305,9 +305,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     });
 
     const jobChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "test",
           input: { value: 42 },
         }),
@@ -316,9 +316,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const completeFn = vi.fn();
     const updatedChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.completeJobChain({
-          ...context,
+          ...txContext,
           typeName: "test",
           id: jobChain.id,
           complete: completeFn,
@@ -385,9 +385,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     });
 
     const jobChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "test",
           input: null,
         }),
@@ -399,9 +399,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       await sleep(10);
 
       await queuert.withNotify(async () =>
-        runInTransaction(async (context) =>
+        runInTransaction(async (txContext) =>
           queuert.completeJobChain({
-            ...context,
+            ...txContext,
             typeName: "test",
             id: jobChain.id,
             complete: async ({ job, complete }) => {
@@ -437,15 +437,15 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     });
 
     const jobChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
-        queuert.startJobChain({ ...context, typeName: "entryA", input: null }),
+      runInTransaction(async (txContext) =>
+        queuert.startJobChain({ ...txContext, typeName: "entryA", input: null }),
       ),
     );
 
     await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.completeJobChain({
-          ...context,
+          ...txContext,
           typeName: "entryA",
           id: jobChain.id,
           complete: async ({ job, complete }) => {

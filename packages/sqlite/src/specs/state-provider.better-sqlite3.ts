@@ -12,22 +12,23 @@ export const createBetterSqlite3Provider = ({
   const lock = createAsyncLock();
 
   return {
-    provideContext: async (fn) => {
-      return fn({ db });
-    },
-    executeSql: async ({ db }, sql, params, returns) => {
-      const stmt = db.prepare(sql);
+    executeSql: async ({ txContext, sql, params, returns }) => {
+      const database = txContext?.db ?? db;
       if (returns) {
+        const stmt = database.prepare(sql);
         return stmt.all(...(params ?? [])) as any;
       } else {
-        stmt.run(...(params ?? []));
+        // Use exec for multi-statement SQL (migrations), prepare for single statements with params
+        if (params && params.length > 0) {
+          const stmt = database.prepare(sql);
+          stmt.run(...params);
+        } else {
+          database.exec(sql);
+        }
         return [] as any;
       }
     },
-    isInTransaction: async ({ db }) => {
-      return db.inTransaction;
-    },
-    runInTransaction: async ({ db }, fn) => {
+    runInTransaction: async (fn) => {
       await lock.acquire();
       try {
         db.exec("BEGIN IMMEDIATE");

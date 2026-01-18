@@ -46,14 +46,12 @@ const stopWorker = await worker.start({ workerId: "worker-1" });
 // 4. Run successful job
 console.log("\n--- Running successful job ---\n");
 const successJob = await qrt.withNotify(async () =>
-  stateAdapter.provideContext(async (ctx) =>
-    stateAdapter.runInTransaction(ctx, async (ctx) =>
-      qrt.startJobChain({
-        ...ctx,
-        typeName: "greet",
-        input: { name: "World" },
-      }),
-    ),
+  stateAdapter.runInTransaction(async (ctx) =>
+    qrt.startJobChain({
+      ...ctx,
+      typeName: "greet",
+      input: { name: "World" },
+    }),
   ),
 );
 
@@ -65,14 +63,12 @@ console.log("Successful job completed:", successCompleted.output);
 // 5. Run job that fails then succeeds (demonstrates attempt_failed metric)
 console.log("\n--- Running job that fails first attempt ---\n");
 const failThenSucceedJob = await qrt.withNotify(async () =>
-  stateAdapter.provideContext(async (ctx) =>
-    stateAdapter.runInTransaction(ctx, async (ctx) =>
-      qrt.startJobChain({
-        ...ctx,
-        typeName: "might-fail",
-        input: { shouldFail: true },
-      }),
-    ),
+  stateAdapter.runInTransaction(async (ctx) =>
+    qrt.startJobChain({
+      ...ctx,
+      typeName: "might-fail",
+      input: { shouldFail: true },
+    }),
   ),
 );
 

@@ -95,8 +95,10 @@ You need to implement a state provider that bridges your PostgreSQL client (raw 
 
 - `createPgStateAdapter` - Factory to create PostgreSQL state adapter
 - `PgStateAdapter` - Type for the PostgreSQL state adapter
+- `PgStateProvider` - Type for the state provider interface (you implement this)
 - `createPgNotifyAdapter` - Factory to create PostgreSQL notify adapter
-- `PgNotifyProvider` - Type for the notify provider
+- `PgNotifyProvider` - Type for the notify provider interface (you implement this)
+- `pgLiteral` - SQL literal escaping utility for ORM compatibility (e.g., Prisma's `$queryRawUnsafe`)
 
 ### Testing (`./testing`)
 

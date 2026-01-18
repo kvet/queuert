@@ -88,7 +88,7 @@ Creation, usage, and disposal should be consistent.
 
 **Usage:**
 
-- Same context patterns (`provideContext`, `runInTransaction`)?
+- Same context patterns (`runInTransaction`, optional context on operations)?
 - Same method naming?
 
 **Disposal:**

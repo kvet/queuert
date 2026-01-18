@@ -1,27 +1,21 @@
 import { RetryConfig, withRetry } from "../helpers/retry.js";
-import { BaseStateAdapterContext, StateAdapter } from "./state-adapter.js";
+import { BaseTxContext, StateAdapter } from "./state-adapter.js";
 
-export const wrapStateAdapterWithRetry = <
-  TTxContext extends BaseStateAdapterContext,
-  TContext extends BaseStateAdapterContext,
-  TJobId extends string,
->({
+export const wrapStateAdapterWithRetry = <TTxContext extends BaseTxContext, TJobId extends string>({
   stateAdapter,
   retryConfig,
   isRetryableError,
 }: {
-  stateAdapter: StateAdapter<TTxContext, TContext, TJobId>;
+  stateAdapter: StateAdapter<TTxContext, TJobId>;
   retryConfig: RetryConfig;
   isRetryableError: (error: unknown) => boolean;
-}): StateAdapter<TTxContext, TContext, TJobId> => {
+}): StateAdapter<TTxContext, TJobId> => {
   const wrap = <T extends (...args: never[]) => Promise<unknown>>(fn: T): T =>
     (async (...args) => withRetry(async () => fn(...args), retryConfig, { isRetryableError })) as T;
 
   return {
     // Infrastructure methods - pass through without wrapping
-    provideContext: stateAdapter.provideContext,
     runInTransaction: stateAdapter.runInTransaction,
-    isInTransaction: stateAdapter.isInTransaction,
 
     // Operation methods - wrap with retry
     getJobChainById: wrap(stateAdapter.getJobChainById),

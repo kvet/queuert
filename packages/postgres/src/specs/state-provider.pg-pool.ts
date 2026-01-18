@@ -6,33 +6,31 @@ export type PgPoolProvider = PgStateProvider<PgPoolContext>;
 
 export const createPgPoolProvider = ({ pool }: { pool: Pool }): PgPoolProvider => {
   return {
-    provideContext: async (fn) => {
+    executeSql: async ({ txContext, sql, params }) => {
+      if (txContext) {
+        const result = await txContext.poolClient.query(sql, params);
+        return result.rows as any;
+      }
       const poolClient = await pool.connect();
       try {
-        return await fn({ poolClient });
+        const result = await poolClient.query(sql, params);
+        return result.rows as any;
       } finally {
         poolClient.release();
       }
     },
-    executeSql: async ({ poolClient }, sql, params) => {
-      const result = await poolClient.query(sql, params);
-      return result.rows as any;
-    },
-    isInTransaction: async () => {
-      // NOTE: pg PoolClient does not expose transaction state,
-      // so we cannot determine whether we are in a transaction or not.
-      // Return true to allow operations that require transactions to proceed.
-      return true;
-    },
-    runInTransaction: async ({ poolClient }, fn) => {
-      await poolClient.query("BEGIN");
+    runInTransaction: async (fn) => {
+      const poolClient = await pool.connect();
       try {
+        await poolClient.query("BEGIN");
         const result = await fn({ poolClient });
         await poolClient.query("COMMIT");
         return result;
       } catch (error) {
         await poolClient.query("ROLLBACK").catch(() => {});
         throw error;
+      } finally {
+        poolClient.release();
       }
     },
   };

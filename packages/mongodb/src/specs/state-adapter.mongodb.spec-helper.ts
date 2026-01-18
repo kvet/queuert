@@ -78,7 +78,7 @@ const createFlakyCollection = (
   });
 };
 
-export type MongoStateAdapter = StateAdapter<MongoContext, MongoContext, string>;
+export type MongoStateAdapter = StateAdapter<MongoContext, string>;
 
 export const extendWithStateMongodb = <
   T extends {
@@ -89,8 +89,8 @@ export const extendWithStateMongodb = <
 ): TestAPI<
   T & {
     mongoClient: MongoClient;
-    stateAdapter: StateAdapter<{ $test: true }, { $test: true }, string>;
-    flakyStateAdapter: StateAdapter<{ $test: true }, { $test: true }, string>;
+    stateAdapter: StateAdapter<{ $test: true }, string>;
+    flakyStateAdapter: StateAdapter<{ $test: true }, string>;
   }
 > => {
   const collectionName = "queuert_jobs";
@@ -168,8 +168,8 @@ export const extendWithStateMongodb = <
         const originalGetCollection = stateProvider.getCollection.bind(stateProvider);
         const flakyStateProvider: typeof stateProvider = {
           ...stateProvider,
-          getCollection: (context) => {
-            const collection = originalGetCollection(context);
+          getCollection: (txContext) => {
+            const collection = originalGetCollection(txContext);
             return createFlakyCollection(
               collection,
               shouldError,

@@ -49,17 +49,17 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
         expect(job.originId).toBeNull();
         expect(job.rootChainId).toEqual(job.id);
 
-        const result = await prepare({ mode: "staged" }, (context) => {
-          expectTypeOf(context).toEqualTypeOf<{ $test: true }>();
-          expect(context).toBeDefined();
+        const result = await prepare({ mode: "staged" }, (txContext) => {
+          expectTypeOf(txContext).toEqualTypeOf<{ $test: true }>();
+          expect(txContext).toBeDefined();
 
           return "prepare";
         });
         expect(result).toEqual("prepare");
 
-        const completedJob = await complete(async ({ continueWith: _, ...context }) => {
-          expectTypeOf(context).toEqualTypeOf<{ $test: true }>();
-          expect(context).toBeDefined();
+        const completedJob = await complete(async ({ continueWith: _, ...txContext }) => {
+          expectTypeOf(txContext).toEqualTypeOf<{ $test: true }>();
+          expect(txContext).toBeDefined();
 
           return { result: true };
         });
@@ -76,9 +76,9 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     });
 
     const jobChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "test",
           input: { test: true },
         }),
@@ -103,9 +103,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     });
 
     // Verify completedBy is set to workerId for worker completion
-    const completedJob = await stateAdapter.provideContext(async (context) =>
-      stateAdapter.getJobById({ context, jobId: jobChain.id }),
-    );
+    const completedJob = await stateAdapter.getJobById({ jobId: jobChain.id });
     expect(completedJob?.status).toBe("completed");
     expect(completedJob?.completedBy).toBe("worker");
 
@@ -279,35 +277,35 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       atomicCallbackJob,
       atomicNoCallbackJob,
     ] = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         Promise.all([
           queuert.startJobChain({
-            ...context,
+            ...txContext,
             typeName: "atomic-complete",
             input: { value: 10 },
           }),
           queuert.startJobChain({
-            ...context,
+            ...txContext,
             typeName: "staged-complete",
             input: { value: 10 },
           }),
           queuert.startJobChain({
-            ...context,
+            ...txContext,
             typeName: "staged-with-callback",
             input: { value: 10 },
           }),
           queuert.startJobChain({
-            ...context,
+            ...txContext,
             typeName: "staged-without-callback",
             input: { value: 10 },
           }),
           queuert.startJobChain({
-            ...context,
+            ...txContext,
             typeName: "atomic-with-callback",
             input: { value: 10 },
           }),
           queuert.startJobChain({
-            ...context,
+            ...txContext,
             typeName: "atomic-without-callback",
             input: { value: 10 },
           }),
@@ -446,25 +444,25 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
 
     const [prepareJobChain, completeJobChain, prepareAfterAutoSetupJobChain, continueWithJobChain] =
       await queuert.withNotify(async () =>
-        runInTransaction(async (context) =>
+        runInTransaction(async (txContext) =>
           Promise.all([
             queuert.startJobChain({
-              ...context,
+              ...txContext,
               typeName: "test-prepare-twice",
               input: null,
             }),
             queuert.startJobChain({
-              ...context,
+              ...txContext,
               typeName: "test-complete-twice",
               input: null,
             }),
             queuert.startJobChain({
-              ...context,
+              ...txContext,
               typeName: "test-prepare-after-auto-setup",
               input: null,
             }),
             queuert.startJobChain({
-              ...context,
+              ...txContext,
               typeName: "test-continueWith-twice",
               input: null,
             }),
@@ -515,9 +513,9 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     });
 
     const jobChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "test",
           input: null,
         }),
@@ -572,9 +570,9 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     });
 
     const job = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "test",
           input: { test: true },
         }),
@@ -642,9 +640,9 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     });
 
     const jobChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "test",
           input: null,
         }),
@@ -711,9 +709,9 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     });
 
     const job = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "test",
           input: null,
         }),
@@ -847,11 +845,11 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     });
 
     const jobChains = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         Promise.all(
           (["prepare", "process", "complete"] as ErrorPhase[]).map(async (phase) =>
             queuert.startJobChain({
-              ...context,
+              ...txContext,
               typeName: "test",
               input: { phase },
             }),
@@ -974,9 +972,9 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     });
 
     const jobChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "test",
           input: null,
         }),

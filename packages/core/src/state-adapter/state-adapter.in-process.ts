@@ -13,7 +13,7 @@ const deepCloneStore = (store: InProcessStore): InProcessStore => ({
   jobBlockers: new Map(Array.from(store.jobBlockers).map(([k, v]) => [k, new Map(v)])),
 });
 
-export type InProcessStateAdapter = StateAdapter<InProcessContext, InProcessContext, string>;
+export type InProcessStateAdapter = StateAdapter<InProcessContext, string>;
 
 export const createInProcessStateAdapter = (): InProcessStateAdapter => {
   const store: InProcessStore = {
@@ -75,11 +75,7 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
   };
 
   return {
-    provideContext: async (fn) => {
-      return fn({});
-    },
-
-    runInTransaction: async (context, fn) => {
+    runInTransaction: async (fn) => {
       await lock.acquire();
 
       const snapshot = deepCloneStore(store);
@@ -94,10 +90,6 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       } finally {
         lock.release();
       }
-    },
-
-    isInTransaction: async (context) => {
-      return context.inTransaction === true;
     },
 
     getJobChainById: async ({ jobId }) => {

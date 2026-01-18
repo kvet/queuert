@@ -484,6 +484,48 @@ type Definitions = {
 };
 ```
 
+### Explicit Rescheduling
+
+When a job throws an error, it's automatically rescheduled with exponential backoff. For transient failures where you want explicit control over retry timing, use `rescheduleJob`:
+
+```ts
+import { rescheduleJob } from 'queuert';
+
+worker.implementJobType({
+  typeName: 'call-external-api',
+  process: async ({ job, prepare, complete }) => {
+    const response = await fetch(job.input.url);
+
+    if (response.status === 429) {
+      // Rate limited — retry after the specified delay
+      const retryAfter = parseInt(response.headers.get('Retry-After') || '60', 10);
+      rescheduleJob({ afterMs: retryAfter * 1000 });
+    }
+
+    if (!response.ok) {
+      // Other errors use default exponential backoff
+      throw new Error(`API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return complete(() => ({ data }));
+  },
+});
+```
+
+The `rescheduleJob` function throws a `RescheduleJobError` which the worker catches specially. Unlike regular errors that trigger exponential backoff based on attempt count, `rescheduleJob` uses your specified schedule exactly:
+
+```ts
+// Retry after a delay
+rescheduleJob({ afterMs: 30_000 });  // 30 seconds from now
+
+// Retry at a specific time
+rescheduleJob({ at: new Date('2025-01-15T09:00:00Z') });
+
+// Include the original error as cause (for logging/debugging)
+rescheduleJob({ afterMs: 60_000 }, originalError);
+```
+
 ## Deferred Start
 
 Jobs can be scheduled to start at a future time using the `schedule` option. The job is created transactionally but won't be processed until the specified time.

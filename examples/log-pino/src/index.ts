@@ -26,7 +26,9 @@ export const getJobContext = () => jobContextStore.getStore();
 const logger = pino({
   transport: {
     target: "pino-pretty",
-    options: { colorize: true },
+    options: {
+      colorize: true,
+    },
   },
   // Pino mixin automatically adds job context to every log entry
   mixin: () => {
@@ -119,14 +121,12 @@ const stopWorker = await worker.start({
 // 7. Run successful job
 logger.info("--- Running successful job ---");
 const successJob = await qrt.withNotify(async () =>
-  stateAdapter.provideContext(async (ctx) =>
-    stateAdapter.runInTransaction(ctx, async (ctx) =>
-      qrt.startJobChain({
-        ...ctx,
-        typeName: "greet",
-        input: { name: "World" },
-      }),
-    ),
+  stateAdapter.runInTransaction(async (ctx) =>
+    qrt.startJobChain({
+      ...ctx,
+      typeName: "greet",
+      input: { name: "World" },
+    }),
   ),
 );
 
@@ -138,21 +138,19 @@ logger.info({ output: successCompleted.output }, "Successful job completed");
 // 8. Run job that fails then succeeds (demonstrates error logging with stack trace)
 logger.info("--- Running job that fails first attempt ---");
 const failThenSucceedJob = await qrt.withNotify(async () =>
-  stateAdapter.provideContext(async (ctx) =>
-    stateAdapter.runInTransaction(ctx, async (ctx) =>
-      qrt.startJobChain({
-        ...ctx,
-        typeName: "might-fail",
-        input: { shouldFail: true },
-      }),
-    ),
+  stateAdapter.runInTransaction(async (ctx) =>
+    qrt.startJobChain({
+      ...ctx,
+      typeName: "might-fail",
+      input: { shouldFail: true },
+    }),
   ),
 );
 
 const retryCompleted = await qrt.waitForJobChainCompletion(failThenSucceedJob, {
   timeoutMs: 5000,
 });
-logger.info({ output: retryCompleted.output }, "Retry job completed after failure");
+logger.info({ output: retryCompleted.output }, "Retry job eventually succeeded");
 
 // 9. Cleanup
 await stopWorker();

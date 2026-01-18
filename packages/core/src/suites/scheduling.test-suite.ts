@@ -34,9 +34,9 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     const jobChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "test",
           input: { value: 1 },
           schedule: { afterMs: 300 },
@@ -92,9 +92,9 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     const jobChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "test",
           input: { value: 1 },
           schedule: { at: new Date(Date.now() + 300) },
@@ -174,9 +174,9 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       });
 
     const jobChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "first",
           input: { value: 1 },
         }),
@@ -257,9 +257,9 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       });
 
     const jobChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "first",
           input: { value: 1 },
         }),
@@ -324,9 +324,9 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     const jobChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "test",
           input: { value: 1 },
         }),
@@ -393,9 +393,9 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     const jobChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "test",
           input: { value: 1 },
         }),

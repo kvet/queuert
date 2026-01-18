@@ -34,7 +34,7 @@ npm install @queuert/redis
 import { createQueuert, defineJobTypes } from 'queuert';
 import { createPgStateAdapter } from '@queuert/postgres';
 import { createRedisNotifyAdapter } from '@queuert/redis';
-import Redis from 'ioredis';
+import { createClient } from 'redis';
 
 const jobTypes = defineJobTypes<{
   'send-email': { entry: true; input: { to: string }; output: { sent: true } };
@@ -42,13 +42,27 @@ const jobTypes = defineJobTypes<{
 
 const stateAdapter = await createPgStateAdapter({ stateProvider: myPgProvider });
 
-// Redis requires two separate connections
-const commandClient = new Redis();
-const subscribeClient = new Redis();
+// Redis requires two separate connections (subscribe mode is exclusive)
+const redis = createClient();
+const redisSubscription = createClient();
+await redis.connect();
+await redisSubscription.connect();
 
 const notifyAdapter = await createRedisNotifyAdapter({
-  commandClient,
-  subscribeClient,
+  provider: {
+    publish: async (channel, message) => {
+      await redis.publish(channel, message);
+    },
+    subscribe: async (channel, onMessage) => {
+      await redisSubscription.subscribe(channel, onMessage);
+      return async () => {
+        await redisSubscription.unsubscribe(channel);
+      };
+    },
+    eval: async (script, keys, args) => {
+      return redis.eval(script, { keys, arguments: args });
+    },
+  },
 });
 
 const queuert = await createQueuert({
@@ -62,9 +76,8 @@ const queuert = await createQueuert({
 
 ```typescript
 const notifyAdapter = await createRedisNotifyAdapter({
-  commandClient: redisClient,        // Redis client for PUBLISH and EVAL commands
-  subscribeClient: redisSubscriber,  // Separate Redis client for SUBSCRIBE
-  channelPrefix: 'queuert',          // Channel prefix (default: "queuert")
+  provider: myRedisNotifyProvider,  // You provide this - see Quick Start
+  channelPrefix: 'queuert',         // Channel prefix (default: "queuert")
 });
 ```
 
@@ -80,7 +93,6 @@ const notifyAdapter = await createRedisNotifyAdapter({
 
 - `createRedisNotifyAdapter` - Factory to create Redis notify adapter
 - `RedisNotifyProvider` - Type for the Redis notify provider
-- `RedisNotifyProviderContextType` - Type for context type (`"command"` | `"subscribe"`)
 
 ### Testing (`./testing`)
 

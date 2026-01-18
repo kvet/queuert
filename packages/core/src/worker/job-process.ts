@@ -22,7 +22,7 @@ import {
   StartBlockersFn,
 } from "../queuert-helper.js";
 import {
-  BaseStateAdapterContext,
+  BaseTxContext,
   GetStateAdapterJobId,
   GetStateAdapterTxContext,
   StateAdapter,
@@ -34,7 +34,7 @@ export type { BackoffConfig } from "../helpers/backoff.js";
 export type { LeaseConfig } from "./lease.js";
 
 export type JobAttemptMiddleware<
-  TStateAdapter extends StateAdapter<any, any, any>,
+  TStateAdapter extends StateAdapter<any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
 > = <T>(
   context: {
@@ -80,7 +80,7 @@ export const rescheduleJob = (schedule: ScheduleOptions, cause?: unknown): never
 };
 
 export type CompleteCallbackOptions<
-  TStateAdapter extends StateAdapter<BaseStateAdapterContext, BaseStateAdapterContext, any>,
+  TStateAdapter extends StateAdapter<BaseTxContext, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions & string,
   TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
@@ -119,7 +119,7 @@ export type CompleteCallbackOptions<
 } & GetStateAdapterTxContext<TStateAdapter>;
 
 export type CompleteCallback<
-  TStateAdapter extends StateAdapter<BaseStateAdapterContext, BaseStateAdapterContext, any>,
+  TStateAdapter extends StateAdapter<BaseTxContext, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions & string,
   TResult,
@@ -133,7 +133,7 @@ export type CompleteCallback<
 ) => Promise<TResult>;
 
 export type CompleteFn<
-  TStateAdapter extends StateAdapter<BaseStateAdapterContext, BaseStateAdapterContext, any>,
+  TStateAdapter extends StateAdapter<BaseTxContext, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions & string,
 > = <
@@ -174,14 +174,11 @@ export type CompleteFn<
 
 export type PrepareConfig = { mode: "atomic" | "staged" };
 
-export type PrepareCallback<
-  TStateAdapter extends StateAdapter<BaseStateAdapterContext, BaseStateAdapterContext, any>,
-  T,
-> = (prepareCallbackOptions: GetStateAdapterTxContext<TStateAdapter>) => T | Promise<T>;
+export type PrepareCallback<TStateAdapter extends StateAdapter<BaseTxContext, any>, T> = (
+  prepareCallbackOptions: GetStateAdapterTxContext<TStateAdapter>,
+) => T | Promise<T>;
 
-export type PrepareFn<
-  TStateAdapter extends StateAdapter<BaseStateAdapterContext, BaseStateAdapterContext, any>,
-> = {
+export type PrepareFn<TStateAdapter extends StateAdapter<BaseTxContext, any>> = {
   (config: PrepareConfig): Promise<void>;
   <T>(
     config: PrepareConfig,
@@ -190,7 +187,7 @@ export type PrepareFn<
 };
 
 export type JobProcessFn<
-  TStateAdapter extends StateAdapter<BaseStateAdapterContext, BaseStateAdapterContext, any>,
+  TStateAdapter extends StateAdapter<BaseTxContext, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions & string,
 > = (processOptions: {
@@ -225,7 +222,7 @@ export type JobProcessFn<
 export const runJobProcess = async ({
   helper,
   process,
-  context,
+  txContext,
   job,
   retryConfig,
   leaseConfig,
@@ -235,12 +232,8 @@ export const runJobProcess = async ({
   jobAttemptMiddlewares,
 }: {
   helper: ProcessHelper;
-  process: JobProcessFn<
-    StateAdapter<BaseStateAdapterContext, BaseStateAdapterContext, any>,
-    BaseJobTypeDefinitions,
-    string
-  >;
-  context: BaseStateAdapterContext;
+  process: JobProcessFn<StateAdapter<BaseTxContext, any>, BaseJobTypeDefinitions, string>;
+  txContext: BaseTxContext;
   job: StateJob;
   retryConfig: BackoffConfig;
   leaseConfig: LeaseConfig;
@@ -248,7 +241,7 @@ export const runJobProcess = async ({
   notifyAdapter: NotifyAdapter;
   typeNames: readonly string[];
   jobAttemptMiddlewares?: JobAttemptMiddleware<
-    StateAdapter<BaseStateAdapterContext, BaseStateAdapterContext, any>,
+    StateAdapter<BaseTxContext, any>,
     BaseJobTypeDefinitions
   >[];
 }): Promise<() => Promise<void>> => {
@@ -258,16 +251,16 @@ export const runJobProcess = async ({
   const abortController = new AbortController() as TypedAbortController<JobAbortReason>;
 
   const runInGuardedTransaction = async <T>(
-    cb: (context: BaseStateAdapterContext) => Promise<T>,
+    cb: (txContext: BaseTxContext) => Promise<T>,
   ): Promise<T> => {
     if (!firstLeaseCommitted.signalled) {
-      return cb(context);
+      return cb(txContext);
     }
 
-    return helper.runInTransaction(async (context) => {
+    return helper.stateAdapter.runInTransaction(async (txContext) => {
       await helper
         .refetchJobForUpdate({
-          context,
+          txContext,
           job,
           allowEmptyWorker: !firstLeaseCommitted.signalled,
           workerId,
@@ -291,7 +284,7 @@ export const runJobProcess = async ({
           throw error;
         });
 
-      return cb(context);
+      return cb(txContext);
     });
   };
 
@@ -299,9 +292,9 @@ export const runJobProcess = async ({
   const leaseManager = createLeaseManager({
     commitLease: async (leaseMs: number) => {
       try {
-        await runInGuardedTransaction(async (context) => {
+        await runInGuardedTransaction(async (txContext) => {
           await helper.renewJobLease({
-            context,
+            txContext,
             job,
             leaseMs,
             workerId,
@@ -332,7 +325,7 @@ export const runJobProcess = async ({
     helper.observabilityHelper.jobAttemptStarted(job, { workerId });
     try {
       const attemptStartTime = Date.now();
-      const blockerPairs = await helper.getJobBlockers({ jobId: job.id, context });
+      const blockerPairs = await helper.getJobBlockers({ jobId: job.id, txContext });
       const runningJob = {
         ...mapStateJobToJob(job),
         blockers: blockerPairs.map(mapStateJobPairToJobChain) as CompletedJobChain<
@@ -345,17 +338,17 @@ export const runJobProcess = async ({
         let prepareCalled = false;
         const prepare = (async <T>(
           config: { mode: "atomic" | "staged" },
-          prepareCallback?: (options: BaseStateAdapterContext) => T | Promise<T>,
+          prepareCallback?: (options: BaseTxContext) => T | Promise<T>,
         ) => {
           if (prepareCalled) {
             throw new Error("Prepare can only be called once");
           }
           prepareCalled = true;
 
-          const callbackOutput = await prepareCallback?.({ ...context });
+          const callbackOutput = await prepareCallback?.({ ...txContext });
 
           await helper.renewJobLease({
-            context,
+            txContext,
             job,
             leaseMs: leaseConfig.leaseMs,
             workerId,
@@ -375,7 +368,7 @@ export const runJobProcess = async ({
           }
 
           return callbackOutput;
-        }) as PrepareFn<StateAdapter<BaseStateAdapterContext, BaseStateAdapterContext, any>>;
+        }) as PrepareFn<StateAdapter<BaseTxContext, any>>;
 
         let completeCalled = false;
         let completeSucceeded = false;
@@ -389,9 +382,9 @@ export const runJobProcess = async ({
                   input: unknown;
                   schedule?: ScheduleOptions;
                   startBlockers?: StartBlockersFn<any, BaseJobTypeDefinitions, string>;
-                } & BaseStateAdapterContext,
+                } & BaseTxContext,
               ) => Promise<unknown>;
-            } & BaseStateAdapterContext,
+            } & BaseTxContext,
           ) => unknown,
         ) => {
           if (!prepareCalled) {
@@ -404,7 +397,7 @@ export const runJobProcess = async ({
           completeCalled = true;
           await disposeOwnershipListener?.();
           await leaseManager.stop();
-          const result = await runInGuardedTransaction(async (context) => {
+          const result = await runInGuardedTransaction(async (txContext) => {
             let continuedJob: Job<any, any, any, any, any[]> | null = null;
             const output = await completeCallback({
               continueWith: async ({ typeName, input, schedule, startBlockers }) => {
@@ -422,7 +415,7 @@ export const runJobProcess = async ({
                     helper.continueWith({
                       typeName,
                       input,
-                      context,
+                      txContext,
                       schedule,
                       startBlockers: startBlockers as any,
                       fromTypeName: job.typeName,
@@ -430,7 +423,7 @@ export const runJobProcess = async ({
                 );
                 return continuedJob;
               },
-              ...context,
+              ...txContext,
             });
             helper.observabilityHelper.jobAttemptCompleted(job, {
               output: continuedJob ? null : output,
@@ -439,8 +432,8 @@ export const runJobProcess = async ({
             });
             const completedStateJob = await helper.finishJob(
               continuedJob
-                ? { job, context, workerId, type: "continueWith", continuedJob }
-                : { job, context, workerId, type: "completeChain", output },
+                ? { job, txContext, workerId, type: "continueWith", continuedJob }
+                : { job, txContext, workerId, type: "completeChain", output },
             );
             return (
               continuedJob ?? {
@@ -455,11 +448,7 @@ export const runJobProcess = async ({
             workerId,
           });
           return result;
-        }) as CompleteFn<
-          StateAdapter<BaseStateAdapterContext, BaseStateAdapterContext, any>,
-          BaseJobTypeDefinitions,
-          string
-        >;
+        }) as CompleteFn<StateAdapter<BaseTxContext, any>, BaseJobTypeDefinitions, string>;
 
         let autoSetupDone = false;
         try {
@@ -487,13 +476,13 @@ export const runJobProcess = async ({
           await processPromise;
         } catch (error) {
           const runInTx = completeSucceeded
-            ? helper.runInTransaction.bind(helper)
+            ? helper.stateAdapter.runInTransaction.bind(helper)
             : runInGuardedTransaction;
-          await runInTx(async (context) =>
+          await runInTx(async (txContext) =>
             helper.handleJobHandlerError({
               job,
               error,
-              context,
+              txContext,
               retryConfig,
               workerId,
             }),

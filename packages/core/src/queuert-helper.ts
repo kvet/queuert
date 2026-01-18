@@ -26,7 +26,7 @@ import {
   ObservabilityHelper,
 } from "./observability-adapter/observability-helper.js";
 import {
-  BaseStateAdapterContext,
+  BaseTxContext,
   DeduplicationOptions,
   GetStateAdapterJobId,
   StateAdapter,
@@ -113,13 +113,6 @@ export class WaitForJobChainCompletionTimeoutError extends Error {
   }
 }
 
-export class StateNotInTransactionError extends Error {
-  constructor(message: string, options?: { cause?: unknown }) {
-    super(message, options);
-    this.name = "StateNotInTransactionError";
-  }
-}
-
 export type JobTypeValidationErrorCode =
   | "not_entry_point"
   | "invalid_continuation"
@@ -156,7 +149,7 @@ export const queuertHelper = ({
   jobTypeRegistry,
   log,
 }: {
-  stateAdapter: StateAdapter<BaseStateAdapterContext, BaseStateAdapterContext, any>;
+  stateAdapter: StateAdapter<BaseTxContext, any>;
   notifyAdapter?: NotifyAdapter;
   observabilityAdapter?: ObservabilityAdapter;
   jobTypeRegistry: JobTypeRegistry;
@@ -179,16 +172,10 @@ export const queuertHelper = ({
     observabilityHelper,
   });
 
-  const assertInTransaction = async (context: BaseStateAdapterContext): Promise<void> => {
-    if (!(await stateAdapter.isInTransaction(context))) {
-      throw new StateNotInTransactionError("Operation must be called within a transaction");
-    }
-  };
-
   const createStateJob = async ({
     typeName,
     input,
-    context,
+    txContext,
     startBlockers,
     isChain,
     deduplication,
@@ -196,7 +183,7 @@ export const queuertHelper = ({
   }: {
     typeName: string;
     input: unknown;
-    context: BaseStateAdapterContext;
+    txContext: BaseTxContext;
     startBlockers?: StartBlockersFn<string, BaseJobTypeDefinitions, string>;
     isChain: boolean;
     deduplication?: DeduplicationOptions;
@@ -210,7 +197,7 @@ export const queuertHelper = ({
 
     const jobContext = jobContextStorage.getStore();
     const createJobResult = await stateAdapter.createJob({
-      context,
+      txContext,
       typeName,
       chainTypeName: isChain ? typeName : jobContext!.chainTypeName,
       input: parsedInput,
@@ -244,7 +231,7 @@ export const queuertHelper = ({
       const blockerChainIds = blockerChains.map((b) => b.id);
 
       const addBlockersResult = await stateAdapter.addJobBlockers({
-        context,
+        txContext,
         jobId: job.id,
         blockedByChainIds: blockerChainIds,
       });
@@ -352,14 +339,14 @@ export const queuertHelper = ({
   const continueWith = async <TJobTypeName extends string, TInput>({
     typeName,
     input,
-    context,
+    txContext,
     schedule,
     startBlockers,
     fromTypeName,
   }: {
     typeName: TJobTypeName;
     input: TInput;
-    context: any;
+    txContext: any;
     schedule?: ScheduleOptions;
     startBlockers?: StartBlockersFn<string, BaseJobTypeDefinitions, string>;
     fromTypeName: string;
@@ -369,7 +356,7 @@ export const queuertHelper = ({
     const { job } = await createStateJob({
       typeName,
       input,
-      context,
+      txContext,
       startBlockers,
       isChain: false,
       schedule,
@@ -380,12 +367,12 @@ export const queuertHelper = ({
 
   const finishJob = async ({
     job,
-    context,
+    txContext,
     workerId,
     ...rest
   }: {
     job: StateJob;
-    context: BaseStateAdapterContext;
+    txContext: BaseTxContext;
     workerId: string | null;
   } & (
     | { type: "completeChain"; output: unknown }
@@ -399,7 +386,7 @@ export const queuertHelper = ({
     }
 
     job = await stateAdapter.completeJob({
-      context,
+      txContext,
       jobId: job.id,
       output,
       workerId,
@@ -414,7 +401,7 @@ export const queuertHelper = ({
 
     if (!hasContinuedJob) {
       const jobChainStartJob = await stateAdapter.getJobById({
-        context,
+        txContext,
         jobId: job.chainId,
       });
 
@@ -427,7 +414,7 @@ export const queuertHelper = ({
       notifyChainCompletion(job);
 
       const unblockedJobs = await stateAdapter.scheduleBlockedJobs({
-        context,
+        txContext,
         blockedByChainId: jobChainStartJob.id,
       });
 
@@ -446,11 +433,7 @@ export const queuertHelper = ({
 
   return {
     // oxlint-disable-next-line no-unnecessary-type-assertion -- needed for --isolatedDeclarations
-    stateAdapter: stateAdapter as StateAdapter<
-      BaseStateAdapterContext,
-      BaseStateAdapterContext,
-      any
-    >,
+    stateAdapter: stateAdapter as StateAdapter<BaseTxContext, any>,
     // oxlint-disable-next-line no-unnecessary-type-assertion -- needed for --isolatedDeclarations
     notifyAdapter: notifyAdapter as NotifyAdapter,
     // oxlint-disable-next-line no-unnecessary-type-assertion -- needed for --isolatedDeclarations
@@ -465,42 +448,33 @@ export const queuertHelper = ({
       },
       cb: () => Promise<T>,
     ) => Promise<T>,
-    runInTransaction: async <T>(
-      cb: (context: BaseStateAdapterContext) => Promise<T>,
-    ): Promise<T> => {
-      return stateAdapter.provideContext(async (context) =>
-        stateAdapter.runInTransaction(context, cb),
-      );
-    },
     getJobBlockers: async ({
       jobId,
-      context,
+      txContext,
     }: {
       jobId: string;
-      context: BaseStateAdapterContext;
+      txContext: BaseTxContext;
     }): Promise<[StateJob, StateJob | undefined][]> =>
-      stateAdapter.getJobBlockers({ context, jobId }),
+      stateAdapter.getJobBlockers({ txContext, jobId }),
     startJobChain: async <TChainTypeName extends string, TInput, TOutput>({
       typeName,
       input,
-      context,
+      txContext,
       deduplication,
       schedule,
       startBlockers,
     }: {
       typeName: TChainTypeName;
       input: TInput;
-      context: any;
+      txContext: any;
       deduplication?: DeduplicationOptions;
       schedule?: ScheduleOptions;
       startBlockers?: StartBlockersFn<string, BaseJobTypeDefinitions, string>;
     }): Promise<JobChain<string, TChainTypeName, TInput, TOutput> & { deduplicated: boolean }> => {
-      await assertInTransaction(context);
-
       const { job, deduplicated } = await createStateJob({
         typeName,
         input,
-        context,
+        txContext,
         startBlockers,
         isChain: true,
         deduplication,
@@ -511,14 +485,14 @@ export const queuertHelper = ({
     },
     getJobChain: async <TChainTypeName extends string, TInput, TOutput>({
       id,
-      context,
+      txContext,
     }: {
       id: string;
       typeName: TChainTypeName;
-      context: any;
+      txContext: any;
     }): Promise<JobChain<string, TChainTypeName, TInput, TOutput> | null> => {
       const jobChain = await stateAdapter.getJobChainById({
-        context,
+        txContext,
         jobId: id,
       });
 
@@ -527,14 +501,14 @@ export const queuertHelper = ({
     continueWith: continueWith as <TJobTypeName extends string, TInput>({
       typeName,
       input,
-      context,
+      txContext,
       schedule,
       startBlockers,
       fromTypeName,
     }: {
       typeName: TJobTypeName;
       input: TInput;
-      context: any;
+      txContext: any;
       schedule?: ScheduleOptions;
       startBlockers?: StartBlockersFn<string, BaseJobTypeDefinitions, string>;
       fromTypeName: string;
@@ -542,13 +516,13 @@ export const queuertHelper = ({
     handleJobHandlerError: async ({
       job,
       error,
-      context,
+      txContext,
       retryConfig,
       workerId,
     }: {
       job: StateJob;
       error: unknown;
-      context: BaseStateAdapterContext;
+      txContext: BaseTxContext;
       retryConfig: BackoffConfig;
       workerId: string;
     }): Promise<void> => {
@@ -569,7 +543,7 @@ export const queuertHelper = ({
       observabilityHelper.jobAttemptFailed(job, { workerId, rescheduledSchedule: schedule, error });
 
       await stateAdapter.rescheduleJob({
-        context,
+        txContext,
         jobId: job.id,
         schedule,
         error: errorString,
@@ -578,7 +552,7 @@ export const queuertHelper = ({
     finishJob: finishJob as (
       options: {
         job: StateJob;
-        context: BaseStateAdapterContext;
+        txContext: BaseTxContext;
         workerId: string | null;
       } & (
         | { type: "completeChain"; output: unknown }
@@ -586,18 +560,18 @@ export const queuertHelper = ({
       ),
     ) => Promise<StateJob>,
     refetchJobForUpdate: async ({
-      context,
+      txContext,
       job,
       workerId,
       allowEmptyWorker,
     }: {
-      context: BaseStateAdapterContext;
+      txContext: BaseTxContext;
       job: StateJob;
       workerId: string;
       allowEmptyWorker: boolean;
     }): Promise<StateJob> => {
       const fetchedJob = await stateAdapter.getJobForUpdate({
-        context,
+        txContext,
         jobId: job.id,
       });
 
@@ -637,18 +611,18 @@ export const queuertHelper = ({
       return fetchedJob;
     },
     renewJobLease: async ({
-      context,
+      txContext,
       job,
       leaseMs,
       workerId,
     }: {
-      context: BaseStateAdapterContext;
+      txContext: BaseTxContext;
       job: StateJob;
       leaseMs: number;
       workerId: string;
     }): Promise<StateJob> => {
       return stateAdapter.renewJobLease({
-        context,
+        txContext,
         jobId: job.id,
         workerId,
         leaseDurationMs: leaseMs,
@@ -661,12 +635,9 @@ export const queuertHelper = ({
       typeNames: string[];
       pollIntervalMs: number;
     }): Promise<number> => {
-      const nextJobAvailableInMs = await stateAdapter.provideContext(async (context) =>
-        stateAdapter.getNextJobAvailableInMs({
-          context,
-          typeNames,
-        }),
-      );
+      const nextJobAvailableInMs = await stateAdapter.getNextJobAvailableInMs({
+        typeNames,
+      });
 
       return nextJobAvailableInMs !== null
         ? Math.min(Math.max(0, nextJobAvailableInMs), pollIntervalMs)
@@ -679,9 +650,7 @@ export const queuertHelper = ({
       typeNames: string[];
       workerId: string;
     }): Promise<void> => {
-      const job = await stateAdapter.provideContext(async (context) =>
-        stateAdapter.removeExpiredJobLease({ context, typeNames }),
-      );
+      const job = await stateAdapter.removeExpiredJobLease({ typeNames });
       if (job) {
         observabilityHelper.jobReaped(job, { workerId });
 
@@ -695,17 +664,15 @@ export const queuertHelper = ({
     },
     deleteJobChains: async ({
       rootChainIds,
-      context,
+      txContext,
     }: {
       rootChainIds: string[];
-      context: BaseStateAdapterContext;
+      txContext: BaseTxContext;
     }): Promise<void> => {
-      await assertInTransaction(context);
-
       const chainJobs = await Promise.all(
         rootChainIds.map(async (chainId) =>
           stateAdapter.getJobById({
-            context,
+            txContext,
             jobId: chainId,
           }),
         ),
@@ -727,7 +694,7 @@ export const queuertHelper = ({
       }
 
       const externalBlockers = await stateAdapter.getExternalBlockers({
-        context,
+        txContext,
         rootChainIds,
       });
 
@@ -742,18 +709,18 @@ export const queuertHelper = ({
       }
 
       await stateAdapter.deleteJobsByRootChainIds({
-        context,
+        txContext,
         rootChainIds,
       });
     },
     completeJobChain: async <TChainTypeName extends string, TInput, TOutput>({
       id,
-      context,
+      txContext,
       complete: completeCallback,
     }: {
       id: string;
       typeName: TChainTypeName;
-      context: BaseStateAdapterContext;
+      txContext: BaseTxContext;
       complete: (options: {
         job: StateJob;
         complete: (
@@ -765,15 +732,13 @@ export const queuertHelper = ({
                 input: unknown;
                 startBlockers?: StartBlockersFn<string, BaseJobTypeDefinitions, string>;
               }) => Promise<unknown>;
-            } & BaseStateAdapterContext,
+            } & BaseTxContext,
           ) => unknown,
         ) => Promise<unknown>;
       }) => Promise<void>;
     }): Promise<JobChain<string, TChainTypeName, TInput, TOutput>> => {
-      await assertInTransaction(context);
-
       const currentJob = await stateAdapter.getCurrentJobForUpdate({
-        context,
+        txContext,
         chainId: id,
       });
 
@@ -791,7 +756,7 @@ export const queuertHelper = ({
               schedule?: ScheduleOptions;
               startBlockers?: StartBlockersFn<string, BaseJobTypeDefinitions, string>;
             }) => Promise<unknown>;
-          } & BaseStateAdapterContext,
+          } & BaseTxContext,
         ) => unknown,
       ): Promise<unknown> => {
         if (job.status === "completed") {
@@ -820,22 +785,22 @@ export const queuertHelper = ({
                 continueWith({
                   typeName,
                   input,
-                  context,
+                  txContext,
                   schedule,
                   startBlockers: startBlockers as any,
                   fromTypeName: job.typeName,
                 }),
             );
           },
-          ...context,
+          ...txContext,
         });
 
         const wasRunning = job.status === "running";
 
         await finishJob(
           continuedJob
-            ? { job, context, workerId: null, type: "continueWith", continuedJob }
-            : { job, context, workerId: null, type: "completeChain", output },
+            ? { job, txContext, workerId: null, type: "continueWith", continuedJob }
+            : { job, txContext, workerId: null, type: "completeChain", output },
         );
 
         if (wasRunning) {
@@ -848,7 +813,7 @@ export const queuertHelper = ({
       await completeCallback({ job: currentJob, complete });
 
       const updatedChain = await stateAdapter.getJobChainById({
-        context,
+        txContext,
         jobId: id,
       });
 
@@ -873,9 +838,7 @@ export const queuertHelper = ({
       const checkChain = async (): Promise<CompletedJobChain<
         JobChain<string, TChainTypeName, TInput, TOutput>
       > | null> => {
-        const chain = await stateAdapter.provideContext(async (context) =>
-          stateAdapter.getJobChainById({ context, jobId: id }),
-        );
+        const chain = await stateAdapter.getJobChainById({ jobId: id });
         if (!chain) {
           throw new JobNotFoundError(`Job chain with id ${id} not found`);
         }
@@ -934,7 +897,7 @@ export const queuertHelper = ({
 export type ProcessHelper = ReturnType<typeof queuertHelper>;
 
 export type JobChainCompleteOptions<
-  TStateAdapter extends StateAdapter<any, any, any>,
+  TStateAdapter extends StateAdapter<any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
   TCompleteReturn,
@@ -978,7 +941,7 @@ export type JobChainCompleteOptions<
 }) => Promise<TCompleteReturn>;
 
 export type CompleteJobChainResult<
-  TStateAdapter extends StateAdapter<any, any, any>,
+  TStateAdapter extends StateAdapter<any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TChainTypeName extends keyof TJobTypeDefinitions & string,
   TCompleteReturn,

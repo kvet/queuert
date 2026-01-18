@@ -5,9 +5,7 @@ import { TestSuiteContext } from "./spec-context.spec-helper.js";
 export const stateResilienceTestSuite = ({
   it,
 }: {
-  it: TestAPI<
-    TestSuiteContext & { flakyStateAdapter: StateAdapter<{ $test: true }, { $test: true }, string> }
-  >;
+  it: TestAPI<TestSuiteContext & { flakyStateAdapter: StateAdapter<{ $test: true }, string> }>;
 }): void => {
   it("handles transient database errors gracefully", async ({
     flakyStateAdapter,
@@ -50,11 +48,11 @@ export const stateResilienceTestSuite = ({
     });
 
     const jobChains = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         Promise.all(
           Array.from({ length: 20 }, async (_, i) =>
             queuert.startJobChain({
-              ...context,
+              ...txContext,
               typeName: "test",
               input: { value: i, atomic: i % 2 === 0 },
             }),

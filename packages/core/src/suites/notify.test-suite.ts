@@ -37,9 +37,9 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
     await withWorkers([await worker.start()], async () => {
       const jobChain = await queuert.withNotify(async () =>
-        runInTransaction(async (context) =>
+        runInTransaction(async (txContext) =>
           queuert.startJobChain({
-            ...context,
+            ...txContext,
             typeName: "test",
             input: { value: 1 },
           }),
@@ -89,11 +89,11 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       await Promise.all(Array.from({ length: 5 }, async () => worker.start())),
       async () => {
         const jobChains = await queuert.withNotify(async () =>
-          runInTransaction(async (context) =>
+          runInTransaction(async (txContext) =>
             Promise.all(
               Array.from({ length: 5 }, async (_, i) =>
                 queuert.startJobChain({
-                  ...context,
+                  ...txContext,
                   typeName: "test",
                   input: { value: i },
                 }),
@@ -162,14 +162,14 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
     await withWorkers([await worker1.start(), await worker2.start()], async () => {
       const jobChain = await queuert.withNotify(async () =>
-        runInTransaction(async (context) =>
+        runInTransaction(async (txContext) =>
           queuert.startJobChain({
-            ...context,
+            ...txContext,
             typeName: "main",
             input: null,
             startBlockers: async () => [
               await queuert.startJobChain({
-                ...context,
+                ...txContext,
                 typeName: "blocker",
                 input: null,
               }),
@@ -239,9 +239,9 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
     await withWorkers([await worker1.start(), await worker2.start()], async () => {
       const jobChain = await queuert.withNotify(async () =>
-        runInTransaction(async (context) =>
+        runInTransaction(async (txContext) =>
           queuert.startJobChain({
-            ...context,
+            ...txContext,
             typeName: "step1",
             input: null,
           }),
@@ -302,9 +302,9 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
     await withWorkers([await worker.start({ workerId: "worker" })], async () => {
       const jobChain = await queuert.withNotify(async () =>
-        runInTransaction(async (context) =>
+        runInTransaction(async (txContext) =>
           queuert.startJobChain({
-            ...context,
+            ...txContext,
             typeName: "test",
             input: null,
           }),
@@ -314,9 +314,9 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       await jobStarted.promise;
 
       await queuert.withNotify(async () =>
-        runInTransaction(async (context) =>
+        runInTransaction(async (txContext) =>
           queuert.completeJobChain({
-            ...context,
+            ...txContext,
             typeName: "test",
             id: jobChain.id,
             complete: async ({ job, complete }) => {
@@ -382,9 +382,9 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
     await withWorkers([await worker.start()], async () => {
       const jobChain = await queuert.withNotify(async () =>
-        runInTransaction(async (context) =>
+        runInTransaction(async (txContext) =>
           queuert.startJobChain({
-            ...context,
+            ...txContext,
             typeName: "test",
             input: null,
           }),

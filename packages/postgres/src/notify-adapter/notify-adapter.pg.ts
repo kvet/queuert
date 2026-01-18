@@ -8,13 +8,11 @@ type SharedListenerState =
       status: "running";
       callbacks: Set<(payload: string) => void>;
       unsubscribe: () => Promise<void>;
-      signalClose: () => void;
-      connectionPromise: Promise<void>;
     }
   | { status: "stopping"; stoppedPromise: Promise<void> };
 
-const createSharedListener = <TContext>(
-  provider: PgNotifyProvider<TContext>,
+const createSharedListener = (
+  provider: PgNotifyProvider,
   channel: string,
 ): {
   subscribe: (callback: (payload: string) => void) => Promise<() => Promise<void>>;
@@ -26,32 +24,22 @@ const createSharedListener = <TContext>(
       if (state.status === "idle") {
         const callbacks = new Set<(payload: string) => void>();
         const { promise: readyPromise, resolve: resolveReady } = Promise.withResolvers<void>();
-        const { promise: closeSignal, resolve: signalClose } = Promise.withResolvers<void>();
 
         state = { status: "starting", readyPromise };
 
-        let unsubscribe: () => Promise<void>;
-        const connectionPromise = provider.provideContext("listen", async (ctx) => {
-          unsubscribe = await provider.subscribe(ctx, channel, (payload) => {
-            if (state.status === "running") {
-              for (const cb of state.callbacks) {
-                cb(payload);
-              }
+        const unsubscribe = await provider.subscribe(channel, (payload) => {
+          if (state.status === "running") {
+            for (const cb of state.callbacks) {
+              cb(payload);
             }
-          });
+          }
+        });
 
-          resolveReady();
-          await closeSignal;
-          await unsubscribe();
-        }) as Promise<void>;
-
-        await readyPromise;
+        resolveReady();
         state = {
           status: "running",
           callbacks,
-          unsubscribe: unsubscribe!,
-          signalClose,
-          connectionPromise,
+          unsubscribe,
         };
         return callbacks;
       }
@@ -78,12 +66,11 @@ const createSharedListener = <TContext>(
     if (state.status !== "running") return;
     if (state.callbacks.size > 0) return;
 
-    const { signalClose, connectionPromise } = state;
-    state = { status: "stopping", stoppedPromise: connectionPromise };
+    const { unsubscribe } = state;
+    const stoppedPromise = unsubscribe();
+    state = { status: "stopping", stoppedPromise };
 
-    signalClose();
-    await connectionPromise;
-
+    await stoppedPromise;
     state = { status: "idle" };
   };
 
@@ -100,11 +87,11 @@ const createSharedListener = <TContext>(
   };
 };
 
-export const createPgNotifyAdapter = async <TContext>({
+export const createPgNotifyAdapter = async ({
   provider,
   channelPrefix = "queuert",
 }: {
-  provider: PgNotifyProvider<TContext>;
+  provider: PgNotifyProvider;
   channelPrefix?: string;
 }): Promise<NotifyAdapter> => {
   const jobScheduledChannel = `${channelPrefix}_sched`;
@@ -117,9 +104,7 @@ export const createPgNotifyAdapter = async <TContext>({
 
   return {
     notifyJobScheduled: async (typeName, _count) => {
-      await provider.provideContext("query", async (ctx) => {
-        await provider.publish(ctx, jobScheduledChannel, typeName);
-      });
+      await provider.publish(jobScheduledChannel, typeName);
     },
 
     listenJobScheduled: async (typeNames, onNotification) => {
@@ -132,9 +117,7 @@ export const createPgNotifyAdapter = async <TContext>({
     },
 
     notifyJobChainCompleted: async (chainId) => {
-      await provider.provideContext("query", async (ctx) => {
-        await provider.publish(ctx, chainCompletedChannel, chainId);
-      });
+      await provider.publish(chainCompletedChannel, chainId);
     },
 
     listenJobChainCompleted: async (chainId, onNotification) => {
@@ -146,9 +129,7 @@ export const createPgNotifyAdapter = async <TContext>({
     },
 
     notifyJobOwnershipLost: async (jobId) => {
-      await provider.provideContext("query", async (ctx) => {
-        await provider.publish(ctx, ownershipLostChannel, jobId);
-      });
+      await provider.publish(ownershipLostChannel, jobId);
     },
 
     listenJobOwnershipLost: async (jobId, onNotification) => {

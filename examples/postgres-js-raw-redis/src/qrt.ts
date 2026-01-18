@@ -14,21 +14,20 @@ export const createQrt = async ({
   redis: Redis;
   redisSubscription: Redis;
 }) => {
-  const stateProvider: PgStateProvider<{ sql: TransactionSql }, { sql: Sql }> = {
-    provideContext: async (cb) => cb({ sql }),
-    isInTransaction: async () => true,
-    runInTransaction: async ({ sql }, cb) => {
+  const stateProvider: PgStateProvider<{ sql: TransactionSql }> = {
+    runInTransaction: async (cb) => {
       let result: any;
-      await sql.begin(async (sql) => {
-        result = await cb({ sql: sql as TransactionSql });
+      await sql.begin(async (txSql) => {
+        result = await cb({ sql: txSql as TransactionSql });
       });
       return result;
     },
-    executeSql: async ({ sql }, query, params) => {
+    executeSql: async ({ txContext, sql: query, params }) => {
+      const sqlClient = txContext?.sql ?? sql;
       const normalizedParams = params
         ? (params as any[]).map((p) => (p === undefined ? null : p))
         : [];
-      const result = await sql.unsafe(query, normalizedParams);
+      const result = await sqlClient.unsafe(query, normalizedParams);
       return result as any;
     },
   };
@@ -39,25 +38,17 @@ export const createQrt = async ({
 
   await stateAdapter.migrateToLatest();
 
-  const notifyProvider: RedisNotifyProvider<{ redis: Redis }> = {
-    provideContext: async (type, cb) => {
-      switch (type) {
-        case "command":
-          return cb({ redis });
-        case "subscribe":
-          return cb({ redis: redisSubscription });
-      }
-    },
-    publish: async ({ redis }, channel, message) => {
+  const notifyProvider: RedisNotifyProvider = {
+    publish: async (channel, message) => {
       await redis.publish(channel, message);
     },
-    subscribe: async ({ redis }, channel, onMessage) => {
-      await redis.subscribe(channel, onMessage);
+    subscribe: async (channel, onMessage) => {
+      await redisSubscription.subscribe(channel, onMessage);
       return async () => {
-        await redis.unsubscribe(channel);
+        await redisSubscription.unsubscribe(channel);
       };
     },
-    eval: async ({ redis }, script, keys, args) => {
+    eval: async (script, keys, args) => {
       return redis.eval(script, { keys, arguments: args });
     },
   };

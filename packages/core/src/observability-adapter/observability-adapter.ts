@@ -76,10 +76,7 @@ export type ObservabilityAdapter = {
   notifyAdapterError: (data: { operation: keyof NotifyAdapter; error: unknown }) => void;
 
   // state adapter
-  stateAdapterError: (data: {
-    operation: keyof StateAdapter<any, any, any>;
-    error: unknown;
-  }) => void;
+  stateAdapterError: (data: { operation: keyof StateAdapter<any, any>; error: unknown }) => void;
 
   // histograms
   jobChainDuration: (data: JobChainData & { durationMs: number }) => void;

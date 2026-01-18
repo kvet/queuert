@@ -1,6 +1,6 @@
 import { Collection, type Document, type WithId } from "mongodb";
 import {
-  BaseStateAdapterContext,
+  BaseTxContext,
   type DeduplicationOptions,
   type RetryConfig,
   type StateAdapter,
@@ -76,8 +76,7 @@ const mapDbJobToStateJob = (dbJob: WithId<Document> | DbJob): StateJob => {
 };
 
 export const createMongoStateAdapter = async <
-  TTxContext extends BaseStateAdapterContext,
-  TContext extends BaseStateAdapterContext,
+  TTxContext extends BaseTxContext,
   TIdType extends string = string,
 >({
   stateProvider,
@@ -90,26 +89,24 @@ export const createMongoStateAdapter = async <
   isTransientError = isTransientMongoError,
   idGenerator = () => crypto.randomUUID() as TIdType,
 }: {
-  stateProvider: MongoStateProvider<TTxContext, TContext>;
+  stateProvider: MongoStateProvider<TTxContext>;
   connectionRetryConfig?: RetryConfig;
   isTransientError?: (error: unknown) => boolean;
   idGenerator?: () => TIdType;
 }): Promise<
-  StateAdapter<TTxContext, TContext, TIdType> & {
+  StateAdapter<TTxContext, TIdType> & {
     migrateToLatest: () => Promise<void>;
   }
 > => {
-  const getCollection = (context: TTxContext | TContext): Collection<DbJob> => {
-    return stateProvider.getCollection(context) as unknown as Collection<DbJob>;
+  const getCollection = (txContext?: TTxContext): Collection<DbJob> => {
+    return stateProvider.getCollection(txContext) as unknown as Collection<DbJob>;
   };
 
-  const rawAdapter: StateAdapter<TTxContext, TContext, TIdType> = {
-    provideContext: stateProvider.provideContext,
+  const rawAdapter: StateAdapter<TTxContext, TIdType> = {
     runInTransaction: stateProvider.runInTransaction,
-    isInTransaction: stateProvider.isInTransaction,
 
-    getJobChainById: async ({ context, jobId }) => {
-      const collection = getCollection(context);
+    getJobChainById: async ({ txContext, jobId }) => {
+      const collection = getCollection(txContext);
       // Get root job
       const rootJob = await collection.findOne({ _id: jobId });
       if (!rootJob) return undefined;
@@ -123,14 +120,14 @@ export const createMongoStateAdapter = async <
       ];
     },
 
-    getJobById: async ({ context, jobId }) => {
-      const collection = getCollection(context);
+    getJobById: async ({ txContext, jobId }) => {
+      const collection = getCollection(txContext);
       const job = await collection.findOne({ _id: jobId });
       return job ? mapDbJobToStateJob(job) : undefined;
     },
 
     createJob: async ({
-      context,
+      txContext,
       typeName,
       chainId,
       chainTypeName,
@@ -140,7 +137,7 @@ export const createMongoStateAdapter = async <
       deduplication,
       schedule,
     }) => {
-      const collection = getCollection(context);
+      const collection = getCollection(txContext);
       const newId = idGenerator();
 
       // Check for existing continuation or deduplicated job
@@ -206,8 +203,8 @@ export const createMongoStateAdapter = async <
       return { job: mapDbJobToStateJob(job!), deduplicated: false };
     },
 
-    addJobBlockers: async ({ context, jobId, blockedByChainIds }) => {
-      const collection = getCollection(context);
+    addJobBlockers: async ({ txContext, jobId, blockedByChainIds }) => {
+      const collection = getCollection(txContext);
       // Add blockers to the job
       const blockers = blockedByChainIds.map((id, index) => ({
         blockedByChainId: id as string,
@@ -248,8 +245,8 @@ export const createMongoStateAdapter = async <
       return { job: mapDbJobToStateJob(job!), incompleteBlockerChainIds: [] };
     },
 
-    scheduleBlockedJobs: async ({ context, blockedByChainId }) => {
-      const collection = getCollection(context);
+    scheduleBlockedJobs: async ({ txContext, blockedByChainId }) => {
+      const collection = getCollection(txContext);
       // Find all jobs that have this chain as a blocker
       const blockedJobs = await collection
         .find({
@@ -294,8 +291,8 @@ export const createMongoStateAdapter = async <
       return scheduledJobs;
     },
 
-    getJobBlockers: async ({ context, jobId }) => {
-      const collection = getCollection(context);
+    getJobBlockers: async ({ txContext, jobId }) => {
+      const collection = getCollection(txContext);
       const job = await collection.findOne({ _id: jobId });
       if (!job) return [];
 
@@ -325,8 +322,8 @@ export const createMongoStateAdapter = async <
       return result;
     },
 
-    getNextJobAvailableInMs: async ({ context, typeNames }) => {
-      const collection = getCollection(context);
+    getNextJobAvailableInMs: async ({ txContext, typeNames }) => {
+      const collection = getCollection(txContext);
       const job = await collection.findOne(
         {
           typeName: { $in: typeNames },
@@ -344,8 +341,8 @@ export const createMongoStateAdapter = async <
       return Math.max(0, diff);
     },
 
-    acquireJob: async ({ context, typeNames }) => {
-      const collection = getCollection(context);
+    acquireJob: async ({ txContext, typeNames }) => {
+      const collection = getCollection(txContext);
 
       // Use aggregation pipeline for server-side date computation with $$NOW
       const job = await collection.findOneAndUpdate(
@@ -369,8 +366,8 @@ export const createMongoStateAdapter = async <
       return job ? mapDbJobToStateJob(job) : undefined;
     },
 
-    renewJobLease: async ({ context, jobId, workerId, leaseDurationMs }) => {
-      const collection = getCollection(context);
+    renewJobLease: async ({ txContext, jobId, workerId, leaseDurationMs }) => {
+      const collection = getCollection(txContext);
 
       // Use aggregation pipeline for server-side date computation with $$NOW
       const job = await collection.findOneAndUpdate(
@@ -391,8 +388,8 @@ export const createMongoStateAdapter = async <
       return mapDbJobToStateJob(job!);
     },
 
-    rescheduleJob: async ({ context, jobId, schedule, error }) => {
-      const collection = getCollection(context);
+    rescheduleJob: async ({ txContext, jobId, schedule, error }) => {
+      const collection = getCollection(txContext);
 
       // Use aggregation pipeline for server-side date computation with $$NOW
       const job = await collection.findOneAndUpdate(
@@ -418,8 +415,8 @@ export const createMongoStateAdapter = async <
       return mapDbJobToStateJob(job!);
     },
 
-    completeJob: async ({ context, jobId, output, workerId }) => {
-      const collection = getCollection(context);
+    completeJob: async ({ txContext, jobId, output, workerId }) => {
+      const collection = getCollection(txContext);
 
       // Use aggregation pipeline for server-side date computation with $$NOW
       const job = await collection.findOneAndUpdate(
@@ -443,8 +440,8 @@ export const createMongoStateAdapter = async <
       return mapDbJobToStateJob(job!);
     },
 
-    removeExpiredJobLease: async ({ context, typeNames }) => {
-      const collection = getCollection(context);
+    removeExpiredJobLease: async ({ txContext, typeNames }) => {
+      const collection = getCollection(txContext);
 
       // Use aggregation pipeline for server-side date computation with $$NOW
       const job = await collection.findOneAndUpdate(
@@ -469,8 +466,8 @@ export const createMongoStateAdapter = async <
       return job ? mapDbJobToStateJob(job) : undefined;
     },
 
-    getExternalBlockers: async ({ context, rootChainIds }) => {
-      const collection = getCollection(context);
+    getExternalBlockers: async ({ txContext, rootChainIds }) => {
+      const collection = getCollection(txContext);
       const rootChainIdSet = new Set(rootChainIds as string[]);
 
       // Find all jobs in the given roots
@@ -507,8 +504,8 @@ export const createMongoStateAdapter = async <
       return result;
     },
 
-    deleteJobsByRootChainIds: async ({ context, rootChainIds }) => {
-      const collection = getCollection(context);
+    deleteJobsByRootChainIds: async ({ txContext, rootChainIds }) => {
+      const collection = getCollection(txContext);
       // First get all jobs that will be deleted
       const jobs = await collection
         .find({ rootChainId: { $in: rootChainIds as string[] } })
@@ -520,16 +517,16 @@ export const createMongoStateAdapter = async <
       return jobs.map(mapDbJobToStateJob);
     },
 
-    getJobForUpdate: async ({ context, jobId }) => {
-      const collection = getCollection(context);
+    getJobForUpdate: async ({ txContext, jobId }) => {
+      const collection = getCollection(txContext);
       // In MongoDB, within a transaction, reads are consistent
       // There's no explicit FOR UPDATE, but the transaction provides isolation
       const job = await collection.findOne({ _id: jobId });
       return job ? mapDbJobToStateJob(job) : undefined;
     },
 
-    getCurrentJobForUpdate: async ({ context, chainId }) => {
-      const collection = getCollection(context);
+    getCurrentJobForUpdate: async ({ txContext, chainId }) => {
+      const collection = getCollection(txContext);
       const job = await collection.findOne({ chainId }, { sort: { createdAt: -1 } });
       return job ? mapDbJobToStateJob(job) : undefined;
     },
@@ -542,43 +539,41 @@ export const createMongoStateAdapter = async <
       isRetryableError: isTransientError,
     }),
     migrateToLatest: async () => {
-      await stateProvider.provideContext(async (context) => {
-        const collection = getCollection(context);
+      const collection = getCollection();
 
-        // Create indexes
-        // Job acquisition index
-        await collection.createIndex(
-          { typeName: 1, scheduledAt: 1 },
-          { partialFilterExpression: { status: "pending" } },
-        );
+      // Create indexes
+      // Job acquisition index
+      await collection.createIndex(
+        { typeName: 1, scheduledAt: 1 },
+        { partialFilterExpression: { status: "pending" } },
+      );
 
-        // Chain lookup index
-        await collection.createIndex({ chainId: 1, createdAt: -1 });
+      // Chain lookup index
+      await collection.createIndex({ chainId: 1, createdAt: -1 });
 
-        // Root lookup for cascading deletes
-        await collection.createIndex({ rootChainId: 1 });
+      // Root lookup for cascading deletes
+      await collection.createIndex({ rootChainId: 1 });
 
-        // Deduplication lookup (use $type to filter non-null strings since $ne is not supported in partial indexes)
-        await collection.createIndex(
-          { deduplicationKey: 1, createdAt: -1 },
-          { partialFilterExpression: { deduplicationKey: { $type: "string" } } },
-        );
+      // Deduplication lookup (use $type to filter non-null strings since $ne is not supported in partial indexes)
+      await collection.createIndex(
+        { deduplicationKey: 1, createdAt: -1 },
+        { partialFilterExpression: { deduplicationKey: { $type: "string" } } },
+      );
 
-        // Expired lease detection
-        await collection.createIndex(
-          { typeName: 1, leasedUntil: 1 },
-          { partialFilterExpression: { status: "running", leasedUntil: { $type: "date" } } },
-        );
+      // Expired lease detection
+      await collection.createIndex(
+        { typeName: 1, leasedUntil: 1 },
+        { partialFilterExpression: { status: "running", leasedUntil: { $type: "date" } } },
+      );
 
-        // Blocker lookup
-        await collection.createIndex({ "blockers.blockedByChainId": 1 });
+      // Blocker lookup
+      await collection.createIndex({ "blockers.blockedByChainId": 1 });
 
-        // Continuation uniqueness
-        await collection.createIndex(
-          { chainId: 1, originId: 1 },
-          { unique: true, partialFilterExpression: { originId: { $type: "string" } } },
-        );
-      });
+      // Continuation uniqueness
+      await collection.createIndex(
+        { chainId: 1, originId: 1 },
+        { unique: true, partialFilterExpression: { originId: { $type: "string" } } },
+      );
     },
   };
 };
@@ -623,7 +618,6 @@ function buildDeduplicationQuery(
 }
 
 export type MongoStateAdapter<
-  TTxContext extends BaseStateAdapterContext,
-  TContext extends BaseStateAdapterContext,
+  TTxContext extends BaseTxContext,
   TJobId extends string,
-> = StateAdapter<TTxContext, TContext, TJobId>;
+> = StateAdapter<TTxContext, TJobId>;

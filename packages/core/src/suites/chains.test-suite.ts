@@ -115,9 +115,9 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       });
 
     const jobChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) => {
+      runInTransaction(async (txContext) => {
         return queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "linear",
           input: { value: 1 },
         });
@@ -278,18 +278,18 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       });
 
     const evenJobChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "main",
           input: { value: 2 },
         }),
       ),
     );
     const oddJobChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "main",
           input: { value: 3 },
         }),
@@ -361,9 +361,9 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     const jobChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "loop",
           input: { counter: 0 },
         }),
@@ -446,9 +446,9 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       });
 
     const jobChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "start",
           input: { value: 0 },
         }),
@@ -525,13 +525,13 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       });
 
     const chainA = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
-        queuert.startJobChain({ ...context, typeName: "entryA", input: { fromA: true } }),
+      runInTransaction(async (txContext) =>
+        queuert.startJobChain({ ...txContext, typeName: "entryA", input: { fromA: true } }),
       ),
     );
     const chainB = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
-        queuert.startJobChain({ ...context, typeName: "entryB", input: { fromB: true } }),
+      runInTransaction(async (txContext) =>
+        queuert.startJobChain({ ...txContext, typeName: "entryB", input: { fromB: true } }),
       ),
     );
 
@@ -584,9 +584,9 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         process: async ({ job, complete }) => {
           // Create an independent chain during job processing
           const independentChain = await queuert.withNotify(async () =>
-            runInTransaction(async (context) =>
+            runInTransaction(async (txContext) =>
               queuert.startJobChain({
-                ...context,
+                ...txContext,
                 typeName: "independent",
                 input: { fromParent: job.input.value },
               }),
@@ -614,9 +614,9 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       });
 
     const parentChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "parent",
           input: { value: 42 },
         }),

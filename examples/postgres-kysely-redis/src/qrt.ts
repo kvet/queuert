@@ -16,11 +16,12 @@ export const createQrt = async ({
   redisSubscription: Redis;
 }) => {
   const stateProvider: PgStateProvider<{ db: Db }> = {
-    provideContext: async (cb) => cb({ db }),
-    isInTransaction: async ({ db }) => db.isTransaction,
-    runInTransaction: async ({ db }, cb) => db.transaction().execute(async (db) => cb({ db })),
-    executeSql: async ({ db }, sql, params) => {
-      const result = await db.executeQuery(CompiledQuery.raw(sql, params));
+    runInTransaction: async (cb) => db.transaction().execute(async (txDb) => cb({ db: txDb })),
+    executeSql: async ({ txContext, sql, params }) => {
+      if (txContext && !txContext.db.isTransaction) {
+        throw new Error("Provided context is not in a transaction");
+      }
+      const result = await (txContext?.db ?? db).executeQuery(CompiledQuery.raw(sql, params));
       return result.rows;
     },
   };
@@ -31,25 +32,17 @@ export const createQrt = async ({
 
   await stateAdapter.migrateToLatest();
 
-  const notifyProvider: RedisNotifyProvider<{ redis: Redis }> = {
-    provideContext: async (type, cb) => {
-      switch (type) {
-        case "command":
-          return cb({ redis });
-        case "subscribe":
-          return cb({ redis: redisSubscription });
-      }
-    },
-    publish: async ({ redis }, channel, message) => {
+  const notifyProvider: RedisNotifyProvider = {
+    publish: async (channel, message) => {
       await redis.publish(channel, message);
     },
-    subscribe: async ({ redis }, channel, onMessage) => {
-      await redis.subscribe(channel, onMessage);
+    subscribe: async (channel, onMessage) => {
+      await redisSubscription.subscribe(channel, onMessage);
       return async () => {
-        await redis.unsubscribe(channel);
+        await redisSubscription.unsubscribe(channel);
       };
     },
-    eval: async ({ redis }, script, keys, args) => {
+    eval: async (script, keys, args) => {
       return redis.eval(script, { keys, arguments: args });
     },
   };

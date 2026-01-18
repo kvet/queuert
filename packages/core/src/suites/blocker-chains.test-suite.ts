@@ -92,14 +92,14 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       });
 
     const jobChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) => {
+      runInTransaction(async (txContext) => {
         const jobChain = await queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "main",
           input: { start: true },
           startBlockers: async () => {
             const dependencyJobChain = await queuert.startJobChain({
-              ...context,
+              ...txContext,
               typeName: "blocker",
               input: { value: 0 },
             });
@@ -289,17 +289,17 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       });
 
     const blockerJobChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "blocker",
           input: { value: 1 },
         }),
       ),
     );
-    const completedBlockerJobChain = await runInTransaction(async (context) =>
+    const completedBlockerJobChain = await runInTransaction(async (txContext) =>
       queuert.completeJobChain({
-        ...context,
+        ...txContext,
         ...blockerJobChain,
         complete: async ({ job, complete }) => {
           return complete(job, async () => ({ result: job.input.value }));
@@ -308,9 +308,9 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     );
 
     const jobChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "main",
           input: null,
           startBlockers: async () => [completedBlockerJobChain],
@@ -379,11 +379,11 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         process: async ({ job, prepare, complete }) => {
           expect(job.originId).toBeNull();
 
-          await prepare({ mode: "staged" }, async (context) => {
+          await prepare({ mode: "staged" }, async (txContext) => {
             childJobChains.push(
               await queuert.withNotify(async () =>
                 queuert.startJobChain({
-                  ...context,
+                  ...txContext,
                   typeName: "inner",
                   input: null,
                 }),
@@ -393,9 +393,9 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
           childJobChains.push(
             await queuert.withNotify(async () =>
-              runInTransaction(async (context) =>
+              runInTransaction(async (txContext) =>
                 queuert.startJobChain({
-                  ...context,
+                  ...txContext,
                   typeName: "inner",
                   input: null,
                 }),
@@ -403,11 +403,11 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
             ),
           );
 
-          return complete(async (context) => {
+          return complete(async (txContext) => {
             childJobChains.push(
               await queuert.withNotify(async () =>
                 queuert.startJobChain({
-                  ...context,
+                  ...txContext,
                   typeName: "inner",
                   input: null,
                 }),
@@ -420,9 +420,9 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       });
 
     const jobChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "outer",
           input: null,
         }),
@@ -493,9 +493,9 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     });
 
     const jobChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "test",
           input: { value: 1 },
         }),
@@ -569,16 +569,16 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       });
 
     const jobChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "main",
           input: null,
           startBlockers: async () => {
             const blockers = await Promise.all(
               Array.from({ length: 5 }, async (_, i) =>
                 queuert.startJobChain({
-                  ...context,
+                  ...txContext,
                   typeName: "blocker",
                   input: { value: i + 1 },
                 }),
@@ -655,14 +655,13 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         typeName: "first",
         process: async ({ job, prepare, complete }) => {
           await prepare({ mode: "atomic" });
-          return complete(async (context) => {
-            const { continueWith } = context;
+          return complete(async ({ continueWith, ...txContext }) => {
             const continuedJob = await continueWith({
               typeName: "second",
               input: { fromFirst: job.input.id },
               startBlockers: async () => [
                 await queuert.startJobChain({
-                  ...context,
+                  ...txContext,
                   typeName: "blocker",
                   input: { value: 5 },
                 }),
@@ -688,9 +687,9 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       });
 
     const jobChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "first",
           input: { id: "test-123" },
         }),

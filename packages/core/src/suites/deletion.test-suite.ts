@@ -27,25 +27,25 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     });
 
     const jobChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "test",
           input: { value: 1 },
         }),
       ),
     );
 
-    await runInTransaction(async (context) =>
+    await runInTransaction(async (txContext) =>
       queuert.deleteJobChains({
-        ...context,
+        ...txContext,
         rootChainIds: [jobChain.id],
       }),
     );
 
-    await runInTransaction(async (context) => {
+    await runInTransaction(async (txContext) => {
       const fetchedJobChain = await queuert.getJobChain({
-        ...context,
+        ...txContext,
         id: jobChain.id,
         typeName: "test",
       });
@@ -95,9 +95,9 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     });
 
     const jobChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "test",
           input: null,
         }),
@@ -107,9 +107,9 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     await withWorkers([await worker.start()], async () => {
       await jobStarted.promise;
 
-      await runInTransaction(async (context) =>
+      await runInTransaction(async (txContext) =>
         queuert.deleteJobChains({
-          ...context,
+          ...txContext,
           rootChainIds: [jobChain.id],
         }),
       );
@@ -173,9 +173,9 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       });
 
     const blockerChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "blocker",
           input: { value: 1 },
         }),
@@ -183,9 +183,9 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     );
 
     const mainChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "main",
           input: null,
           startBlockers: async () => [blockerChain],
@@ -197,17 +197,17 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
 
     await withWorkers(await Promise.all([worker.start(), worker.start()]), async () => {
       await expect(
-        runInTransaction(async (context) =>
+        runInTransaction(async (txContext) =>
           queuert.deleteJobChains({
-            ...context,
+            ...txContext,
             rootChainIds: [blockerChain.id],
           }),
         ),
       ).rejects.toThrow("external job chains depend on them");
 
-      await runInTransaction(async (context) =>
+      await runInTransaction(async (txContext) =>
         queuert.deleteJobChains({
-          ...context,
+          ...txContext,
           rootChainIds: [blockerChain.id, mainChain.id],
         }),
       );
@@ -215,14 +215,14 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       blockerCanComplete.resolve();
     });
 
-    await runInTransaction(async (context) => {
+    await runInTransaction(async (txContext) => {
       const fetchedBlocker = await queuert.getJobChain({
-        ...context,
+        ...txContext,
         id: blockerChain.id,
         typeName: "blocker",
       });
       const fetchedMain = await queuert.getJobChain({
-        ...context,
+        ...txContext,
         id: mainChain.id,
         typeName: "main",
       });
@@ -262,14 +262,14 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
 
     let blockerChain: JobChain<string, "blocker", { value: number }, { result: number }>;
     const mainChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "main",
           input: null,
           startBlockers: async () => {
             blockerChain = await queuert.startJobChain({
-              ...context,
+              ...txContext,
               typeName: "blocker",
               input: { value: 1 },
             });
@@ -280,17 +280,17 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     );
 
     await expect(
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.deleteJobChains({
-          ...context,
+          ...txContext,
           rootChainIds: [blockerChain.id],
         }),
       ),
     ).rejects.toThrow("must delete from the root chain");
 
-    await runInTransaction(async (context) =>
+    await runInTransaction(async (txContext) =>
       queuert.deleteJobChains({
-        ...context,
+        ...txContext,
         rootChainIds: [mainChain.id],
       }),
     );
@@ -339,9 +339,9 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     });
 
     const jobChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "test",
           input: null,
         }),
@@ -351,9 +351,9 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     await withWorkers([await worker.start()], async () => {
       await jobStarted.promise;
 
-      await runInTransaction(async (context) =>
+      await runInTransaction(async (txContext) =>
         queuert.deleteJobChains({
-          ...context,
+          ...txContext,
           rootChainIds: [jobChain.id],
         }),
       );

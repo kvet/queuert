@@ -1,4 +1,4 @@
-import { BaseStateAdapterContext } from "queuert";
+import { BaseTxContext } from "queuert";
 
 /**
  * PostgreSQL state provider interface.
@@ -7,42 +7,24 @@ import { BaseStateAdapterContext } from "queuert";
  * and SQL execution. Users create their own implementation to integrate with their preferred
  * client (raw `pg`, Drizzle, Prisma, etc.).
  *
- * @typeParam TTxContext - Transaction context type, used within `runInTransaction` callbacks
- * @typeParam TContext - General context type, provided by `provideContext`. Defaults to TTxContext.
- *
- * When TTxContext !== TContext, operations like migrations can run outside transactions,
- * enabling PostgreSQL operations like `CREATE INDEX CONCURRENTLY`.
+ * @typeParam TTxContext - The transaction context type containing database client/connection info
  */
-export type PgStateProvider<
-  TTxContext extends BaseStateAdapterContext,
-  TContext extends BaseStateAdapterContext = TTxContext,
-> = {
-  /**
-   * Provides a database context for operations.
-   * The context may or may not be within a transaction depending on implementation.
-   */
-  provideContext: <T>(fn: (context: TContext) => Promise<T>) => Promise<T>;
-
+export type PgStateProvider<TTxContext extends BaseTxContext> = {
   /**
    * Executes a callback within a database transaction.
-   * @param context - The general context (from provideContext)
-   * @param fn - Callback receiving transaction context
+   * Acquires a connection, starts a transaction, executes the callback,
+   * commits on success, rolls back on error, and releases the connection.
    */
-  runInTransaction: <T>(context: TContext, fn: (context: TTxContext) => Promise<T>) => Promise<T>;
+  runInTransaction: <T>(fn: (txContext: TTxContext) => Promise<T>) => Promise<T>;
 
   /**
    * Executes a SQL query.
-   * Accepts either transaction context or general context.
+   * When txContext is provided, uses that transaction connection.
+   * When txContext is omitted, acquires a connection from the pool, executes, and releases.
    */
-  executeSql: (
-    context: TTxContext | TContext,
-    query: string,
-    params?: unknown[],
-  ) => Promise<unknown[]>;
-
-  /**
-   * Checks if the given context is within a transaction.
-   * Useful when TTxContext extends TContext and it's easy to confuse them.
-   */
-  isInTransaction: (context: TTxContext | TContext) => Promise<boolean>;
+  executeSql: (options: {
+    txContext?: TTxContext;
+    sql: string;
+    params?: unknown[];
+  }) => Promise<unknown[]>;
 };

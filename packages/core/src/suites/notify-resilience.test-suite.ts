@@ -63,11 +63,11 @@ export const notifyResilienceTestSuite = ({
       async () => {
         // at least one notify pushes worker to process jobs
         const jobChains = await queuert.withNotify(async () =>
-          runInTransaction(async (context) =>
+          runInTransaction(async (txContext) =>
             Promise.all(
               Array.from({ length: 20 }, async (_, i) =>
                 queuert.startJobChain({
-                  ...context,
+                  ...txContext,
                   typeName: "test",
                   input: { value: i, atomic: i % 2 === 0 },
                 }),

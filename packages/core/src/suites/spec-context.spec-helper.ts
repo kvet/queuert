@@ -11,9 +11,9 @@ import {
 import { StateAdapter } from "../state-adapter/state-adapter.js";
 
 export type TestSuiteContext = {
-  stateAdapter: StateAdapter<{ $test: true }, { $test: true }, string>;
+  stateAdapter: StateAdapter<{ $test: true }, string>;
   notifyAdapter: NotifyAdapter;
-  runInTransaction: <T>(cb: (context: { $test: true }) => Promise<T>) => Promise<T>;
+  runInTransaction: <T>(cb: (txContext: { $test: true }) => Promise<T>) => Promise<T>;
   withWorkers: <T>(workers: (() => Promise<void>)[], cb: () => Promise<T>) => Promise<T>;
   log: MockedFunction<Log>;
   expectLogs: (
@@ -36,7 +36,7 @@ export type TestSuiteContext = {
 
 export const extendWithCommon = <
   T extends {
-    stateAdapter: StateAdapter<{ $test: true }, { $test: true }, string>;
+    stateAdapter: StateAdapter<{ $test: true }, string>;
   },
 >(
   it: TestAPI<T>,
@@ -70,9 +70,7 @@ export const extendWithCommon = <
     runInTransaction: [
       async ({ stateAdapter }, use) => {
         await use(async (cb) => {
-          return stateAdapter.provideContext(async (context) =>
-            stateAdapter.runInTransaction(context, cb),
-          );
+          return stateAdapter.runInTransaction(cb);
         });
       },
       { scope: "test" },

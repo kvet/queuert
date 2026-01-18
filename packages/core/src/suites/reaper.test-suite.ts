@@ -59,9 +59,9 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     const failJobChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "test",
           input: null,
         }),
@@ -78,9 +78,9 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         await sleep(10);
 
         const successJobChain = await queuert.withNotify(async () =>
-          runInTransaction(async (context) =>
+          runInTransaction(async (txContext) =>
             queuert.startJobChain({
-              ...context,
+              ...txContext,
               typeName: "test",
               input: null,
             }),
@@ -153,9 +153,9 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     const failJobChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "test",
           input: null,
         }),
@@ -172,9 +172,9 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         await sleep(10);
 
         const successJobChain = await queuert.withNotify(async () =>
-          runInTransaction(async (context) =>
+          runInTransaction(async (txContext) =>
             queuert.startJobChain({
-              ...context,
+              ...txContext,
               typeName: "test",
               input: null,
             }),

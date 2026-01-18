@@ -26,13 +26,12 @@ export {
   JobNotFoundError,
   JobTakenByAnotherWorkerError,
   JobTypeValidationError,
-  StateNotInTransactionError,
   WaitForJobChainCompletionTimeoutError,
   type JobTypeValidationErrorCode,
 } from "./queuert-helper.js";
 export { createQueuert, type Queuert, type QueuertWorkerDefinition } from "./queuert.js";
 export {
-  type BaseStateAdapterContext,
+  type BaseTxContext,
   type DeduplicationOptions,
   type DeduplicationStrategy,
   type GetStateAdapterJobId,

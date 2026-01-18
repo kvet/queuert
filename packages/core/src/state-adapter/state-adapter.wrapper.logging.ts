@@ -1,19 +1,18 @@
 import { ObservabilityHelper } from "../observability-adapter/observability-helper.js";
-import { BaseStateAdapterContext, StateAdapter } from "./state-adapter.js";
+import { BaseTxContext, StateAdapter } from "./state-adapter.js";
 
 export const wrapStateAdapterWithLogging = <
-  TTxContext extends BaseStateAdapterContext,
-  TContext extends BaseStateAdapterContext,
+  TTxContext extends BaseTxContext,
   TJobId extends string,
 >({
   stateAdapter,
   observabilityHelper,
 }: {
-  stateAdapter: StateAdapter<TTxContext, TContext, TJobId>;
+  stateAdapter: StateAdapter<TTxContext, TJobId>;
   observabilityHelper: ObservabilityHelper;
-}): StateAdapter<TTxContext, TContext, TJobId> => {
+}): StateAdapter<TTxContext, TJobId> => {
   const wrap = <T extends (...args: never[]) => Promise<unknown>>(
-    operationName: keyof StateAdapter<any, any, any>,
+    operationName: keyof StateAdapter<any, any>,
     fn: T,
   ): T =>
     (async (...args) => {
@@ -27,9 +26,7 @@ export const wrapStateAdapterWithLogging = <
 
   return {
     // Infrastructure methods - pass through without wrapping
-    provideContext: stateAdapter.provideContext,
     runInTransaction: stateAdapter.runInTransaction,
-    isInTransaction: stateAdapter.isInTransaction,
 
     // Operation methods - wrap with error logging
     getJobChainById: wrap("getJobChainById", stateAdapter.getJobChainById),

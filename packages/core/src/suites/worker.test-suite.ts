@@ -40,9 +40,9 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     const jobChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "test",
           input: { test: true },
         }),
@@ -116,17 +116,17 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       });
 
     const emailJob = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "email",
           input: { to: "test@example.com" },
         }),
       ),
     );
     const smsJob = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
-        queuert.startJobChain({ ...context, typeName: "sms", input: { phone: "+1234567890" } }),
+      runInTransaction(async (txContext) =>
+        queuert.startJobChain({ ...txContext, typeName: "sms", input: { phone: "+1234567890" } }),
       ),
     );
 
@@ -214,9 +214,9 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       ],
       async () => {
         const jobChain = await queuert.withNotify(async () =>
-          runInTransaction(async (context) =>
+          runInTransaction(async (txContext) =>
             queuert.startJobChain({
-              ...context,
+              ...txContext,
               typeName: "test",
               input: { test: true },
             }),
@@ -267,9 +267,9 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     for (let i = 0; i < 5; i++) {
       jobChains.push(
         await queuert.withNotify(async () =>
-          runInTransaction(async (context) =>
+          runInTransaction(async (txContext) =>
             queuert.startJobChain({
-              ...context,
+              ...txContext,
               typeName: "test",
               input: { jobNumber: i },
             }),
@@ -328,9 +328,9 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     for (let i = 0; i < 5; i++) {
       jobChains.push(
         await queuert.withNotify(async () =>
-          runInTransaction(async (context) =>
+          runInTransaction(async (txContext) =>
             queuert.startJobChain({
-              ...context,
+              ...txContext,
               typeName: "test",
               input: { jobNumber: i },
             }),

@@ -2,8 +2,8 @@ import type { NotifyAdapter } from "queuert";
 import type { RedisNotifyProvider } from "../notify-provider/notify-provider.redis.js";
 import { DECR_IF_POSITIVE_SCRIPT, SET_AND_PUBLISH_SCRIPT } from "./lua.js";
 
-export type CreateRedisNotifyAdapterOptions<TContext> = {
-  provider: RedisNotifyProvider<TContext>;
+export type CreateRedisNotifyAdapterOptions = {
+  provider: RedisNotifyProvider;
   channelPrefix?: string;
 };
 
@@ -17,8 +17,8 @@ type SharedListenerState =
     }
   | { status: "stopping"; stoppedPromise: Promise<void> };
 
-const createSharedListener = <TContext>(
-  provider: RedisNotifyProvider<TContext>,
+const createSharedListener = (
+  provider: RedisNotifyProvider,
   channel: string,
 ): {
   subscribe: (callback: (payload: string) => void) => Promise<() => Promise<void>>;
@@ -33,18 +33,15 @@ const createSharedListener = <TContext>(
 
         state = { status: "starting", readyPromise };
 
-        const unsubscribe = (await provider.provideContext("subscribe", async (ctx) => {
-          const unsub = await provider.subscribe(ctx, channel, (payload) => {
-            if (state.status === "running") {
-              for (const cb of state.callbacks) {
-                cb(payload);
-              }
+        const unsubscribe = await provider.subscribe(channel, (payload) => {
+          if (state.status === "running") {
+            for (const cb of state.callbacks) {
+              cb(payload);
             }
-          });
-          resolveReady();
-          return unsub;
-        })) as () => Promise<void>;
+          }
+        });
 
+        resolveReady();
         state = { status: "running", callbacks, unsubscribe };
         return callbacks;
       }
@@ -92,10 +89,10 @@ const createSharedListener = <TContext>(
   };
 };
 
-export const createRedisNotifyAdapter = async <TContext>({
+export const createRedisNotifyAdapter = async ({
   provider,
   channelPrefix = "queuert",
-}: CreateRedisNotifyAdapterOptions<TContext>): Promise<NotifyAdapter> => {
+}: CreateRedisNotifyAdapterOptions): Promise<NotifyAdapter> => {
   const jobScheduledChannel = `${channelPrefix}:sched`;
   const chainCompletedChannel = `${channelPrefix}:chainc`;
   const ownershipLostChannel = `${channelPrefix}:owls`;
@@ -110,14 +107,11 @@ export const createRedisNotifyAdapter = async <TContext>({
       const hintId = crypto.randomUUID();
       const hintKey = `${hintKeyPrefix}${hintId}`;
 
-      await provider.provideContext("command", async (ctx) => {
-        await provider.eval(
-          ctx,
-          SET_AND_PUBLISH_SCRIPT,
-          [hintKey, jobScheduledChannel],
-          [String(count), `${hintId}:${typeName}`],
-        );
-      });
+      await provider.eval(
+        SET_AND_PUBLISH_SCRIPT,
+        [hintKey, jobScheduledChannel],
+        [String(count), `${hintId}:${typeName}`],
+      );
     },
 
     listenJobScheduled: async (typeNames, onNotification) => {
@@ -133,19 +127,17 @@ export const createRedisNotifyAdapter = async <TContext>({
         if (!typeNameSet.has(typeName)) return;
 
         const hintKey = `${hintKeyPrefix}${hintId}`;
-        void provider.provideContext("command", async (ctx) => {
-          const result = await provider.eval(ctx, DECR_IF_POSITIVE_SCRIPT, [hintKey], []);
+        void (async () => {
+          const result = await provider.eval(DECR_IF_POSITIVE_SCRIPT, [hintKey], []);
           if (result === 1) {
             onNotification(typeName);
           }
-        });
+        })();
       });
     },
 
     notifyJobChainCompleted: async (chainId) => {
-      await provider.provideContext("command", async (ctx) => {
-        await provider.publish(ctx, chainCompletedChannel, chainId);
-      });
+      await provider.publish(chainCompletedChannel, chainId);
     },
 
     listenJobChainCompleted: async (chainId, onNotification) => {
@@ -157,9 +149,7 @@ export const createRedisNotifyAdapter = async <TContext>({
     },
 
     notifyJobOwnershipLost: async (jobId) => {
-      await provider.provideContext("command", async (ctx) => {
-        await provider.publish(ctx, ownershipLostChannel, jobId);
-      });
+      await provider.publish(ownershipLostChannel, jobId);
     },
 
     listenJobOwnershipLost: async (jobId, onNotification) => {

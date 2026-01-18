@@ -77,14 +77,17 @@ worker.implementJobType({
 
 await worker.start({ workerId: 'worker-1' });
 
-// Start a job chain
-await queuert.withClient(async (client) => {
-  await queuert.startJobChain({
-    client,
-    typeName: 'send-email',
-    input: { to: 'user@example.com', subject: 'Hello!' },
-  });
-});
+// Start a job chain (within your database transaction)
+// Use your database client's transaction mechanism and pass the context
+await queuert.withNotify(async () =>
+  db.transaction(async (tx) =>
+    queuert.startJobChain({
+      tx,  // Transaction context - matches your stateProvider's TTxContext
+      typeName: 'send-email',
+      input: { to: 'user@example.com', subject: 'Hello!' },
+    }),
+  ),
+);
 ```
 
 ## Worker Configuration
@@ -167,7 +170,6 @@ worker.implementJobType({
 - `JobAlreadyCompletedError` - Job was already completed
 - `JobTakenByAnotherWorkerError` - Another worker took the job
 - `JobTypeValidationError` - Runtime validation failed (with `code` and `details`)
-- `StateNotInTransactionError` - Operation requires transaction
 - `WaitForJobChainCompletionTimeoutError` - Timeout waiting for chain
 - `RescheduleJobError` - Thrown by `rescheduleJob()` helper
 

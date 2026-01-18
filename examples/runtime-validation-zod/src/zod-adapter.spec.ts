@@ -350,14 +350,12 @@ describe("integration", () => {
     const stop = await worker.start({ workerId: "test-worker" });
 
     const chain = await qrt.withNotify(async () =>
-      stateAdapter.provideContext(async (ctx) =>
-        stateAdapter.runInTransaction(ctx, async (ctx) =>
-          qrt.startJobChain({
-            ...ctx,
-            typeName: "fetch-data",
-            input: { url: "https://example.com/api" },
-          }),
-        ),
+      stateAdapter.runInTransaction(async (ctx) =>
+        qrt.startJobChain({
+          ...ctx,
+          typeName: "fetch-data",
+          input: { url: "https://example.com/api" },
+        }),
       ),
     );
 
@@ -386,14 +384,12 @@ describe("integration", () => {
 
     await expect(
       qrt.withNotify(async () =>
-        stateAdapter.provideContext(async (ctx) =>
-          stateAdapter.runInTransaction(ctx, async (ctx) =>
-            qrt.startJobChain({
-              ...ctx,
-              typeName: "main",
-              input: { url: "not-a-valid-url" },
-            }),
-          ),
+        stateAdapter.runInTransaction(async (ctx) =>
+          qrt.startJobChain({
+            ...ctx,
+            typeName: "main",
+            input: { url: "not-a-valid-url" },
+          }),
         ),
       ),
     ).rejects.toThrow(JobTypeValidationError);
@@ -417,16 +413,14 @@ describe("integration", () => {
 
     await expect(
       qrt.withNotify(async () =>
-        stateAdapter.provideContext(async (ctx) =>
-          stateAdapter.runInTransaction(ctx, async (ctx) =>
-            qrt.startJobChain({
-              ...ctx,
-              // @ts-ignore to test runtime validation
-              typeName: "internal",
-              // @ts-ignore to test runtime validation
-              input: { data: "test" },
-            }),
-          ),
+        stateAdapter.runInTransaction(async (ctx) =>
+          qrt.startJobChain({
+            ...ctx,
+            // @ts-ignore to test runtime validation
+            typeName: "internal",
+            // @ts-ignore to test runtime validation
+            input: { data: "test" },
+          }),
         ),
       ),
     ).rejects.toThrow(JobTypeValidationError);
@@ -460,17 +454,15 @@ describe("integration", () => {
     // Use type assertion to bypass compile-time check and test runtime validation
     await expect(
       qrt.withNotify(async () =>
-        stateAdapter.provideContext(async (ctx) =>
-          stateAdapter.runInTransaction(ctx, async (ctx) =>
-            qrt.startJobChain(
-              // @ts-ignore to test runtime validation
-              {
-                ...ctx,
-                typeName: "main",
-                input: { id: "main-1" },
-                // No startBlockers provided, but blockers are required
-              },
-            ),
+        stateAdapter.runInTransaction(async (ctx) =>
+          qrt.startJobChain(
+            // @ts-ignore to test runtime validation
+            {
+              ...ctx,
+              typeName: "main",
+              input: { id: "main-1" },
+              // No startBlockers provided, but blockers are required
+            },
           ),
         ),
       ),
@@ -518,22 +510,20 @@ describe("integration", () => {
     const stop = await worker.start({ workerId: "test-worker" });
 
     const chain = await qrt.withNotify(async () =>
-      stateAdapter.provideContext(async (ctx) =>
-        stateAdapter.runInTransaction(ctx, async (ctx) =>
-          qrt.startJobChain({
-            ...ctx,
-            typeName: "main",
-            input: { id: "main-1" },
-            startBlockers: async () => {
-              const blocker = await qrt.startJobChain({
-                ...ctx,
-                typeName: "auth",
-                input: { token: "abc123" },
-              });
-              return [blocker];
-            },
-          }),
-        ),
+      stateAdapter.runInTransaction(async (ctx) =>
+        qrt.startJobChain({
+          ...ctx,
+          typeName: "main",
+          input: { id: "main-1" },
+          startBlockers: async () => {
+            const blocker = await qrt.startJobChain({
+              ...ctx,
+              typeName: "auth",
+              input: { token: "abc123" },
+            });
+            return [blocker];
+          },
+        }),
       ),
     );
 

@@ -28,15 +28,15 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
     });
 
     const jobChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
-        queuert.startJobChain({ ...context, typeName: "test", input: null }),
+      runInTransaction(async (txContext) =>
+        queuert.startJobChain({ ...txContext, typeName: "test", input: null }),
       ),
     );
 
     await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.completeJobChain({
-          ...context,
+          ...txContext,
           ...jobChain,
           complete: async ({ job, complete }) => {
             return complete(job, async () => ({ result: "done" }));
@@ -79,8 +79,8 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
     });
 
     const jobChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
-        queuert.startJobChain({ ...context, typeName: "test", input: null }),
+      runInTransaction(async (txContext) =>
+        queuert.startJobChain({ ...txContext, typeName: "test", input: null }),
       ),
     );
 
@@ -119,8 +119,8 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
     });
 
     const jobChain = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
-        queuert.startJobChain({ ...context, typeName: "test", input: null }),
+      runInTransaction(async (txContext) =>
+        queuert.startJobChain({ ...txContext, typeName: "test", input: null }),
       ),
     );
 

@@ -15,47 +15,42 @@ export const createQrt = async ({
   redis: Redis;
   redisSubscription: Redis;
 }) => {
-  const stateProvider: PgStateProvider<
-    { prisma: PrismaTransactionClient },
-    { prisma: PrismaClient }
-  > = {
-    provideContext: async (cb) => cb({ prisma }),
-    isInTransaction: async ({ prisma }) => {
-      return !("$transaction" in prisma);
-    },
-    runInTransaction: async ({ prisma }, cb) => {
+  const stateProvider: PgStateProvider<{ prisma: PrismaTransactionClient }> = {
+    runInTransaction: async (cb) => {
       return prisma.$transaction(async (prisma) => cb({ prisma }));
     },
-    executeSql: async ({ prisma }, query, params) => {
+    executeSql: async ({ txContext, sql, params }) => {
+      const prismaClient = txContext?.prisma ?? prisma;
+
       // Prisma's $queryRawUnsafe only supports single statements (uses prepared statements)
       // For multi-statement queries (like migrations), we need to split and execute each
       if (params && params.length > 0) {
         // Parameterized query - must be single statement
-        return (prisma as any).$queryRawUnsafe(query, ...params);
+        return (prismaClient as any).$queryRawUnsafe(sql, ...params);
       }
 
       // Split SQL into statements, respecting dollar-quoted strings (DO $$ ... $$)
-      const splitStatements = (sql: string): string[] => {
+      const splitStatements = (sqlQuery: string): string[] => {
         const statements: string[] = [];
         let current = "";
         let i = 0;
 
-        while (i < sql.length) {
+        while (i < sqlQuery.length) {
           // Check for dollar-quote start ($$)
-          if (sql[i] === "$" && sql[i + 1] === "$") {
+          if (sqlQuery[i] === "$" && sqlQuery[i + 1] === "$") {
             current += "$$";
             i += 2;
             // Find matching $$
-            while (i < sql.length) {
-              if (sql[i] === "$" && sql[i + 1] === "$") {
+            while (i < sqlQuery.length) {
+              if (sqlQuery[i] === "$" && sqlQuery[i + 1] === "$") {
                 current += "$$";
                 i += 2;
                 break;
               }
-              current += sql[i];
+              current += sqlQuery[i];
               i++;
             }
-          } else if (sql[i] === ";") {
+          } else if (sqlQuery[i] === ";") {
             // Statement terminator
             const stmt = current.trim();
             if (stmt.length > 0) {
@@ -64,7 +59,7 @@ export const createQrt = async ({
             current = "";
             i++;
           } else {
-            current += sql[i];
+            current += sqlQuery[i];
             i++;
           }
         }
@@ -77,7 +72,7 @@ export const createQrt = async ({
         return statements;
       };
 
-      const statements = splitStatements(query);
+      const statements = splitStatements(sql);
 
       let result: unknown[] = [];
       for (const statement of statements) {
@@ -94,9 +89,9 @@ export const createQrt = async ({
         // Use $executeRawUnsafe for DDL/DML, $queryRawUnsafe for SELECT
         const isSelect = /^\s*SELECT\b/i.test(strippedStatement);
         if (isSelect) {
-          result = await (prisma as any).$queryRawUnsafe(statement);
+          result = await (prismaClient as any).$queryRawUnsafe(statement);
         } else {
-          await (prisma as any).$executeRawUnsafe(statement);
+          await (prismaClient as any).$executeRawUnsafe(statement);
         }
       }
       return result;
@@ -114,25 +109,17 @@ export const createQrt = async ({
 
   await stateAdapter.migrateToLatest();
 
-  const notifyProvider: RedisNotifyProvider<{ redis: Redis }> = {
-    provideContext: async (type, cb) => {
-      switch (type) {
-        case "command":
-          return cb({ redis });
-        case "subscribe":
-          return cb({ redis: redisSubscription });
-      }
-    },
-    publish: async ({ redis }, channel, message) => {
+  const notifyProvider: RedisNotifyProvider = {
+    publish: async (channel, message) => {
       await redis.publish(channel, message);
     },
-    subscribe: async ({ redis }, channel, onMessage) => {
-      await redis.subscribe(channel, onMessage);
+    subscribe: async (channel, onMessage) => {
+      await redisSubscription.subscribe(channel, onMessage);
       return async () => {
-        await redis.unsubscribe(channel);
+        await redisSubscription.unsubscribe(channel);
       };
     },
-    eval: async ({ redis }, script, keys, args) => {
+    eval: async (script, keys, args) => {
       return redis.eval(script, { keys, arguments: args });
     },
   };

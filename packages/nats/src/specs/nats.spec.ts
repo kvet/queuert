@@ -35,14 +35,12 @@ it("should work end-to-end with NATS notify adapter", async ({ natsConnectionOpt
   });
 
   const jobChain = await queuert.withNotify(async () =>
-    stateAdapter.provideContext(async (ctx) =>
-      stateAdapter.runInTransaction(ctx, async (txCtx) =>
-        queuert.startJobChain({
-          ...txCtx,
-          typeName: "test",
-          input: { message: "hello from nats" },
-        }),
-      ),
+    stateAdapter.runInTransaction(async (ctx) =>
+      queuert.startJobChain({
+        ...ctx,
+        typeName: "test",
+        input: { message: "hello from nats" },
+      }),
     ),
   );
 
@@ -86,14 +84,12 @@ it("should work end-to-end without JetStream KV", async ({ natsConnectionOptions
   });
 
   const jobChain = await queuert.withNotify(async () =>
-    stateAdapter.provideContext(async (ctx) =>
-      stateAdapter.runInTransaction(ctx, async (txCtx) =>
-        queuert.startJobChain({
-          ...txCtx,
-          typeName: "test",
-          input: { value: 21 },
-        }),
-      ),
+    stateAdapter.runInTransaction(async (ctx) =>
+      queuert.startJobChain({
+        ...ctx,
+        typeName: "test",
+        input: { value: 21 },
+      }),
     ),
   );
 

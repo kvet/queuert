@@ -5,7 +5,7 @@ import { type TestAPI } from "vitest";
 import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.js";
 import { createPgPoolProvider, PgPoolContext, PgPoolProvider } from "./state-provider.pg-pool.js";
 
-export type PgStateAdapter = StateAdapter<PgPoolContext, PgPoolContext, string>;
+export type PgStateAdapter = StateAdapter<PgPoolContext, string>;
 
 export const extendWithStatePostgres = <
   T extends {
@@ -16,8 +16,8 @@ export const extendWithStatePostgres = <
 ): TestAPI<
   T & {
     pool: Pool;
-    stateAdapter: StateAdapter<{ $test: true }, { $test: true }, string>;
-    flakyStateAdapter: StateAdapter<{ $test: true }, { $test: true }, string>;
+    stateAdapter: StateAdapter<{ $test: true }, string>;
+    flakyStateAdapter: StateAdapter<{ $test: true }, string>;
   }
 > => {
   return api.extend<{
@@ -57,12 +57,13 @@ export const extendWithStatePostgres = <
           stateProvider,
         });
 
-        await stateAdapter.provideContext(async ({ poolClient: client }) =>
-          client.query(`
+        // Run schema setup without context (will manage its own connection)
+        await stateProvider.executeSql({
+          sql: `
             CREATE SCHEMA IF NOT EXISTS queuert;
             GRANT USAGE ON SCHEMA queuert TO test;
-          `),
-        );
+          `,
+        });
         await stateAdapter.migrateToLatest();
 
         await use();
@@ -100,7 +101,7 @@ export const extendWithStatePostgres = <
         const originalExecuteSql = stateProvider.executeSql.bind(stateProvider);
         const flakyStateProvider: typeof stateProvider = {
           ...stateProvider,
-          executeSql: async (context, sql, params) => {
+          executeSql: async ({ txContext, sql, params }) => {
             queryCount++;
 
             if (shouldError()) {
@@ -110,7 +111,7 @@ export const extendWithStatePostgres = <
               throw error;
             }
 
-            return originalExecuteSql(context, sql, params);
+            return originalExecuteSql({ txContext, sql, params });
           },
         };
 

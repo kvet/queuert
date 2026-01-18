@@ -1,5 +1,5 @@
 import { type Collection } from "mongodb";
-import { BaseStateAdapterContext } from "queuert";
+import { BaseTxContext } from "queuert";
 
 /**
  * MongoDB state provider interface.
@@ -8,37 +8,20 @@ import { BaseStateAdapterContext } from "queuert";
  * and collection access. Users create their own implementation to integrate with their
  * MongoDB client.
  *
- * @typeParam TTxContext - Transaction context type, used within `runInTransaction` callbacks
- * @typeParam TContext - General context type, provided by `provideContext`. Defaults to TTxContext.
- *
- * When TTxContext !== TContext, operations like migrations can run outside transactions.
+ * @typeParam TTxContext - The transaction context type containing session info
  */
-export type MongoStateProvider<
-  TTxContext extends BaseStateAdapterContext,
-  TContext extends BaseStateAdapterContext = TTxContext,
-> = {
-  /**
-   * Provides a database context for operations.
-   * The context may or may not be within a transaction depending on implementation.
-   */
-  provideContext: <T>(fn: (context: TContext) => Promise<T>) => Promise<T>;
-
+export type MongoStateProvider<TTxContext extends BaseTxContext> = {
   /**
    * Executes a callback within a database transaction.
-   * @param context - The general context (from provideContext)
-   * @param fn - Callback receiving transaction context
+   * Acquires a session, starts a transaction, executes the callback,
+   * commits on success, aborts on error, and ends the session.
    */
-  runInTransaction: <T>(context: TContext, fn: (context: TTxContext) => Promise<T>) => Promise<T>;
+  runInTransaction: <T>(fn: (txContext: TTxContext) => Promise<T>) => Promise<T>;
 
   /**
    * Gets the MongoDB collection for job storage.
-   * Accepts either transaction context or general context.
+   * When txContext is provided, uses that transaction session for the operation.
+   * When txContext is omitted, returns a collection without session binding.
    */
-  getCollection: (context: TTxContext | TContext) => Collection;
-
-  /**
-   * Checks if the given context is within a transaction.
-   * Useful when TTxContext extends TContext and it's easy to confuse them.
-   */
-  isInTransaction: (context: TTxContext | TContext) => Promise<boolean>;
+  getCollection: (txContext?: TTxContext) => Collection;
 };

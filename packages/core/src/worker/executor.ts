@@ -8,24 +8,20 @@ import {
   JobTakenByAnotherWorkerError,
   ProcessHelper,
 } from "../queuert-helper.js";
-import { BaseStateAdapterContext, StateAdapter } from "../state-adapter/state-adapter.js";
+import { BaseTxContext, StateAdapter } from "../state-adapter/state-adapter.js";
 import { JobAttemptMiddleware, JobProcessFn, LeaseConfig, runJobProcess } from "./job-process.js";
 
 export type RegisteredJobTypes = Map<
   string,
   {
-    process: JobProcessFn<
-      StateAdapter<BaseStateAdapterContext, BaseStateAdapterContext, any>,
-      BaseJobTypeDefinitions,
-      string
-    >;
+    process: JobProcessFn<StateAdapter<BaseTxContext, any>, BaseJobTypeDefinitions, string>;
     retryConfig?: BackoffConfig;
     leaseConfig?: LeaseConfig;
   }
 >;
 
 export type ExecutorStartOptions<
-  TStateAdapter extends StateAdapter<any, any, any>,
+  TStateAdapter extends StateAdapter<any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
 > = {
   workerId?: string;
@@ -38,7 +34,7 @@ export type ExecutorStartOptions<
 };
 
 export const createExecutor = <
-  TStateAdapter extends StateAdapter<any, any, any>,
+  TStateAdapter extends StateAdapter<any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
 >({
   helper,
@@ -104,10 +100,10 @@ export const createExecutor = <
 
     const performJob = async (): Promise<boolean> => {
       try {
-        const [hasMore, continueProcessing] = await helper.runInTransaction(
-          async (context): Promise<[boolean, (() => Promise<void>) | undefined]> => {
+        const [hasMore, continueProcessing] = await helper.stateAdapter.runInTransaction(
+          async (txContext): Promise<[boolean, (() => Promise<void>) | undefined]> => {
             let job = await helper.stateAdapter.acquireJob({
-              context,
+              txContext,
               typeNames,
             });
             if (!job) {
@@ -124,7 +120,7 @@ export const createExecutor = <
               await runJobProcess({
                 helper,
                 process: jobType.process,
-                context,
+                txContext,
                 job,
                 retryConfig: jobType.retryConfig ?? defaultRetryConfig,
                 leaseConfig: jobType.leaseConfig ?? defaultLeaseConfig,
@@ -202,7 +198,7 @@ export const createExecutor = <
 };
 
 export type Executor<
-  TStateAdapter extends StateAdapter<any, any, any> = StateAdapter<any, any, any>,
+  TStateAdapter extends StateAdapter<any, any> = StateAdapter<any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions = BaseJobTypeDefinitions,
 > = (
   startOptions?: ExecutorStartOptions<TStateAdapter, TJobTypeDefinitions>,

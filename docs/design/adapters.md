@@ -36,41 +36,95 @@ createNoopNotifyAdapter → NotifyAdapter
 
 ## StateAdapter Design
 
-### Dual-Context Architecture
+### Context Architecture
 
-The `StateAdapter` type accepts three generic parameters:
+The `StateAdapter` type accepts two generic parameters:
 
 ```typescript
-StateAdapter<TTxContext, TContext, TJobId>
+StateAdapter<TTxContext, TJobId>
 ```
 
-- `TTxContext extends BaseStateAdapterContext`: Transaction context type, used within `runInTransaction` callbacks
-- `TContext extends BaseStateAdapterContext`: General context type, provided by `provideContext`
+- `TTxContext extends BaseTxContext`: Transaction context type containing database client/session info
 - `TJobId extends string`: The job ID type for input parameters
 
-This dual-context design enables operations like migrations to run outside transactions. For example, PostgreSQL's `CREATE INDEX CONCURRENTLY` cannot run inside a transaction, so the provider needs a way to execute non-transactional operations.
-
-When transaction and general contexts are identical, use the same type for both:
-
-```typescript
-// SQLite - same context for both
-StateAdapter<TContext, TContext, TJobId>
-```
+The context is named `TTxContext` (transaction context) because it's exclusively used within transactions. When you call `runInTransaction`, the callback receives a context that represents an active transaction.
 
 ### StateProvider Interface
 
 Users create a `StateProvider` implementation to integrate with their database client:
 
 ```typescript
-interface StateProvider<TTxContext, TContext> {
-  provideContext: <T>(callback: (ctx: TContext) => Promise<T>) => Promise<T>;
-  runInTransaction: <T>(ctx: TContext, callback: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
-  execute: (ctx: TTxContext | TContext, sql: string, params?: unknown[]) => Promise<Row[]>;
-  // ... other methods
+interface PgStateProvider<TTxContext> {
+  // Manages connection and transaction - called for transactional operations
+  runInTransaction: <T>(fn: (txContext: TTxContext) => Promise<T>) => Promise<T>;
+
+  // Execute SQL - when txContext is provided uses it, when omitted manages own connection
+  executeSql: (options: {
+    txContext?: TTxContext;
+    sql: string;
+    params?: unknown[];
+  }) => Promise<unknown[]>;
 }
 ```
 
-This abstraction allows the same state adapter to work with raw `pg`, Drizzle, Prisma, Kysely, or any other database client.
+### Optional txContext Semantics
+
+All `StateAdapter` operation methods accept an optional `txContext` parameter:
+
+- **With txContext**: Uses the provided transaction connection. The txContext must come from a `runInTransaction` callback.
+- **Without txContext**: The adapter acquires its own connection from the pool, executes the operation, and releases it.
+
+This design enables:
+
+1. **Transactional operations**: Multiple operations within a single transaction
+
+   ```typescript
+   await stateAdapter.runInTransaction(async (txContext) => {
+     const job = await stateAdapter.getJobById({ txContext, jobId });
+     await stateAdapter.completeJob({ txContext, jobId, output, workerId });
+   });
+   ```
+
+2. **Non-transactional operations**: Standalone operations that manage their own connection
+
+   ```typescript
+   // No transaction needed for simple reads
+   const job = await stateAdapter.getJobById({ jobId });
+   ```
+
+3. **DDL operations**: Migrations like `CREATE INDEX CONCURRENTLY` that cannot run inside transactions
+   ```typescript
+   // executeSql without txContext for DDL
+   await stateProvider.executeSql({ sql: 'CREATE INDEX CONCURRENTLY ...' });
+   ```
+
+Provider implementations can validate that contexts passed to `executeSql` are valid transaction contexts:
+
+```typescript
+// Example: Kysely provider validation
+executeSql: async ({ txContext, sql, params }) => {
+  if (txContext && !txContext.db.isTransaction) {
+    throw new Error("Provided context is not in a transaction");
+  }
+  // ...
+}
+```
+
+### NotifyProvider Interface
+
+NotifyProvider implementations manage connections internally - no context parameters:
+
+```typescript
+interface PgNotifyProvider {
+  publish: (channel: string, message: string) => Promise<void>;
+  subscribe: (
+    channel: string,
+    onMessage: (message: string) => void,
+  ) => Promise<() => Promise<void>>;
+}
+```
+
+The provider maintains a dedicated connection for subscriptions and acquires/releases connections for publish operations automatically.
 
 ### Internal Type Design
 
@@ -90,7 +144,6 @@ The `StateAdapter` methods accept `TJobId` for input parameters but return plain
 
 ```typescript
 type GetStateAdapterTxContext<TStateAdapter> = // extracts TTxContext
-type GetStateAdapterContext<TStateAdapter> = // extracts TContext
 type GetStateAdapterJobId<TStateAdapter> = // extracts TJobId
 ```
 
@@ -171,6 +224,7 @@ When no `observabilityAdapter` is provided, a noop implementation is used automa
 Queuert's adapter design emphasizes:
 
 1. **Consistent async factories**: Public adapters are always async
-2. **Dual-context flexibility**: StateAdapter supports transactional and non-transactional operations
-3. **Broadcast with optimization**: NotifyAdapter uses hints to prevent thundering herd
-4. **Two-layer observability**: Low-level primitives for adapters, high-level objects for internal use
+2. **Optional txContext**: StateProvider operations support optional txContext for non-transactional operations
+3. **Internal connection management**: NotifyProvider manages connections internally with no txContext parameters
+4. **Broadcast with optimization**: NotifyAdapter uses hints to prevent thundering herd
+5. **Two-layer observability**: Low-level primitives for adapters, high-level objects for internal use

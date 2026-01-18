@@ -14,17 +14,15 @@ export const createQrt = async ({
   redis: Redis;
   redisSubscription: Redis;
 }) => {
-  const stateProvider: PgStateProvider<{ tx: DbTransaction }, { db: Db }> = {
-    provideContext: async (cb) => cb({ db }),
-    isInTransaction: async () => true,
-    runInTransaction: async (ctx, cb) => {
-      return ctx.db.transaction(async (tx) => cb({ tx }));
+  const stateProvider: PgStateProvider<{ tx: DbTransaction }> = {
+    runInTransaction: async (cb) => {
+      return db.transaction(async (tx) => cb({ tx }));
     },
-    executeSql: async (ctx, query, params) => {
+    executeSql: async ({ txContext, sql, params }) => {
       // Inside transaction: access Drizzle's internal pg client
       // Outside transaction (migrations): use db.$client (the pool)
-      const client = "tx" in ctx ? (ctx.tx as any).session.client : (db as any).$client;
-      const result = await client.query(query, params);
+      const client = txContext ? (txContext.tx as any).session.client : (db as any).$client;
+      const result = await client.query(sql, params);
       return result.rows;
     },
   };
@@ -35,25 +33,17 @@ export const createQrt = async ({
 
   await stateAdapter.migrateToLatest();
 
-  const notifyProvider: RedisNotifyProvider<{ redis: Redis }> = {
-    provideContext: async (type, cb) => {
-      switch (type) {
-        case "command":
-          return cb({ redis });
-        case "subscribe":
-          return cb({ redis: redisSubscription });
-      }
-    },
-    publish: async ({ redis }, channel, message) => {
+  const notifyProvider: RedisNotifyProvider = {
+    publish: async (channel, message) => {
       await redis.publish(channel, message);
     },
-    subscribe: async ({ redis }, channel, onMessage) => {
-      await redis.subscribe(channel, onMessage);
+    subscribe: async (channel, onMessage) => {
+      await redisSubscription.subscribe(channel, onMessage);
       return async () => {
-        await redis.unsubscribe(channel);
+        await redisSubscription.unsubscribe(channel);
       };
     },
-    eval: async ({ redis }, script, keys, args) => {
+    eval: async (script, keys, args) => {
       return redis.eval(script, { keys, arguments: args });
     },
   };

@@ -95,14 +95,6 @@ await lock(async () => {
 });
 ```
 
-## Design Notes
-
-### Single Context Type
-
-Unlike PostgreSQL and MongoDB adapters which use separate transaction and general context types (`TTxContext` and `TContext`), SQLite uses a single context type for both. This is because SQLite connections are single-threaded and don't support concurrent transactions in the same way.
-
-This means your state provider's `runInTransaction` and `provideContext` can use the same context type.
-
 ## Documentation
 
 For full documentation, examples, and API reference, see the [main Queuert README](https://github.com/kvet/queuert#readme).

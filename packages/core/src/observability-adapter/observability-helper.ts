@@ -101,7 +101,7 @@ export type ObservabilityHelper = {
   notifyContextAbsence: (job: StateJob) => void;
   notifyAdapterError: (operation: keyof NotifyAdapter, error: unknown) => void;
   // state adapter
-  stateAdapterError: (operation: keyof StateAdapter<any, any, any>, error: unknown) => void;
+  stateAdapterError: (operation: keyof StateAdapter<any, any>, error: unknown) => void;
   // job type validation
   jobTypeValidationError: (error: JobTypeValidationError) => void;
   // histograms

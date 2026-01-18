@@ -17,22 +17,16 @@ export const createMongoProvider = ({
   const collection = db.collection(collectionName);
 
   return {
-    provideContext: async (fn) => {
-      const session = client.startSession();
-      try {
-        return await fn({ session });
-      } finally {
-        await session.endSession();
-      }
-    },
     getCollection: () => {
       return collection;
     },
-    isInTransaction: async (context) => {
-      return context.session.inTransaction();
-    },
-    runInTransaction: async (context, fn) => {
-      return context.session.withTransaction(async (session) => fn({ session }));
+    runInTransaction: async (fn) => {
+      const session = client.startSession();
+      try {
+        return await session.withTransaction(async () => fn({ session }));
+      } finally {
+        await session.endSession();
+      }
     },
   };
 };

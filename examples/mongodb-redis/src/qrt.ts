@@ -24,46 +24,33 @@ export const createQrt = async ({
   const collection = db.collection(collectionName);
 
   const stateProvider: MongoStateProvider<MongoContext> = {
-    provideContext: async (cb) => {
+    getCollection: () => collection,
+    runInTransaction: async (cb) => {
       const session = client.startSession();
       try {
-        return await cb({ session });
+        return await session.withTransaction(async () => cb({ session }));
       } finally {
         await session.endSession();
       }
     },
-    getCollection: () => collection,
-    isInTransaction: async (context) => context.session.inTransaction(),
-    runInTransaction: async (context, cb) => {
-      return context.session.withTransaction(async (session) => cb({ session }));
-    },
   };
-
   const stateAdapter = await createMongoStateAdapter({
     stateProvider,
   });
 
   await stateAdapter.migrateToLatest();
 
-  const notifyProvider: RedisNotifyProvider<{ redis: Redis }> = {
-    provideContext: async (type, cb) => {
-      switch (type) {
-        case "command":
-          return cb({ redis });
-        case "subscribe":
-          return cb({ redis: redisSubscription });
-      }
-    },
-    publish: async ({ redis }, channel, message) => {
+  const notifyProvider: RedisNotifyProvider = {
+    publish: async (channel, message) => {
       await redis.publish(channel, message);
     },
-    subscribe: async ({ redis }, channel, onMessage) => {
-      await redis.subscribe(channel, onMessage);
+    subscribe: async (channel, onMessage) => {
+      await redisSubscription.subscribe(channel, onMessage);
       return async () => {
-        await redis.unsubscribe(channel);
+        await redisSubscription.unsubscribe(channel);
       };
     },
-    eval: async ({ redis }, script, keys, args) => {
+    eval: async (script, keys, args) => {
       return redis.eval(script, { keys, arguments: args });
     },
   };

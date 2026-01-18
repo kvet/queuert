@@ -27,21 +27,21 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     });
 
     const [chain1, chain2, chain3] = await queuert.withNotify(async () =>
-      runInTransaction(async (context) => [
+      runInTransaction(async (txContext) => [
         await queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "test",
           input: { value: 1 },
           deduplication: { key: "same-key" },
         }),
         await queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "test",
           input: { value: 2 },
           deduplication: { key: "same-key" },
         }),
         await queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "test",
           input: { value: 3 },
           deduplication: { key: "different-key" },
@@ -55,9 +55,9 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expect(chain3.deduplicated).toBe(false);
     expect(chain3.id).not.toBe(chain1.id);
 
-    const completed1 = await runInTransaction(async (context) =>
+    const completed1 = await runInTransaction(async (txContext) =>
       queuert.completeJobChain({
-        ...context,
+        ...txContext,
         ...chain1,
         complete: async ({ job, complete }) => {
           return complete(job, async () => ({ result: job.input.value }));
@@ -65,9 +65,9 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       }),
     );
 
-    const completed3 = await runInTransaction(async (context) =>
+    const completed3 = await runInTransaction(async (txContext) =>
       queuert.completeJobChain({
-        ...context,
+        ...txContext,
         ...chain3,
         complete: async ({ job, complete }) => {
           return complete(job, async () => ({ result: job.input.value }));
@@ -79,8 +79,8 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expect(completed3.output).toEqual({ result: 3 });
 
     // chain2 was deduplicated to chain1, so it should have the same output
-    const fetched2 = await runInTransaction(async (context) =>
-      queuert.getJobChain({ ...context, ...chain2 }),
+    const fetched2 = await runInTransaction(async (txContext) =>
+      queuert.getJobChain({ ...txContext, ...chain2 }),
     );
     expect("output" in fetched2! && fetched2.output).toEqual({ result: 1 });
   });
@@ -109,9 +109,9 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     // Test 'all' strategy - deduplicates against completed jobs
     const allChain1 = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "test",
           input: { value: 1 },
           deduplication: { key: "all-key", strategy: "all" },
@@ -119,9 +119,9 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       ),
     );
 
-    await runInTransaction(async (context) =>
+    await runInTransaction(async (txContext) =>
       queuert.completeJobChain({
-        ...context,
+        ...txContext,
         ...allChain1,
         complete: async ({ job, complete }) => {
           await complete(job, async () => ({ result: job.input.value }));
@@ -130,9 +130,9 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     );
 
     const allChain2 = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "test",
           input: { value: 2 },
           deduplication: { key: "all-key", strategy: "all" },
@@ -145,9 +145,9 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     // Test 'completed' strategy - does NOT deduplicate against completed jobs
     const completedChain1 = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "test",
           input: { value: 3 },
           deduplication: { key: "completed-key", strategy: "completed" },
@@ -155,9 +155,9 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       ),
     );
 
-    await runInTransaction(async (context) =>
+    await runInTransaction(async (txContext) =>
       queuert.completeJobChain({
-        ...context,
+        ...txContext,
         ...completedChain1,
         complete: async ({ job, complete }) => {
           await complete(job, async () => ({ result: job.input.value }));
@@ -166,9 +166,9 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     );
 
     const completedChain2 = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "test",
           input: { value: 4 },
           deduplication: { key: "completed-key", strategy: "completed" },
@@ -179,9 +179,9 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expect(completedChain2.deduplicated).toBe(false);
     expect(completedChain2.id).not.toBe(completedChain1.id);
 
-    const completed2 = await runInTransaction(async (context) =>
+    const completed2 = await runInTransaction(async (txContext) =>
       queuert.completeJobChain({
-        ...context,
+        ...txContext,
         ...completedChain2,
         complete: async ({ job, complete }) => {
           return complete(job, async () => ({ result: job.input.value }));
@@ -215,9 +215,9 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     // Test 'all' strategy with windowMs
     const allChain1 = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "test",
           input: { value: 1 },
           deduplication: { key: "all-key", strategy: "all", windowMs: 50 },
@@ -230,9 +230,9 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     await sleep(100);
 
     const allChain2 = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "test",
           input: { value: 2 },
           deduplication: { key: "all-key", strategy: "all", windowMs: 50 },
@@ -245,9 +245,9 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     // Test 'completed' strategy with windowMs
     const completedChain1 = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "test",
           input: { value: 3 },
           deduplication: { key: "completed-key", strategy: "completed", windowMs: 50 },
@@ -255,9 +255,9 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       ),
     );
 
-    await runInTransaction(async (context) =>
+    await runInTransaction(async (txContext) =>
       queuert.completeJobChain({
-        ...context,
+        ...txContext,
         ...completedChain1,
         complete: async ({ job, complete }) => {
           await complete(job, async () => ({ result: job.input.value }));
@@ -268,9 +268,9 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     await sleep(100);
 
     const completedChain2 = await queuert.withNotify(async () =>
-      runInTransaction(async (context) =>
+      runInTransaction(async (txContext) =>
         queuert.startJobChain({
-          ...context,
+          ...txContext,
           typeName: "test",
           input: { value: 4 },
           deduplication: { key: "completed-key", strategy: "completed", windowMs: 50 },
