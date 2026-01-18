@@ -1,13 +1,12 @@
 # Short term
 
-- single queries for migrations to simplify prisma example; if needed, migration can use runInTransaction directly
 - ObservabilityAdapter: tracing spans
 - Separate queuert client and worker. The worker should accept a queuert client instance to allow job definition reuse. The change is pure cosmetic but would clarify the separation of concerns.
 
 # Medium term
 
 - Polish providers:
-  - Prepare more examples like SQLite with kysely, drizzle, prisma; redis with ioredis, node-redis
+  - Prepare more examples like SQLite with kysely, drizzle, prisma, better-sqlite3
 - MonogoDB ready:
   - MongoDB: Use native ObjectId instead of app-side UUID generation
   - MongoDB: Move collection configuration from provider to adapter - Provider should only handle context/transactions, collection name is an adapter concern (like schema/tablePrefix in PostgreSQL/SQLite)

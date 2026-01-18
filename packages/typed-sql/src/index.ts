@@ -35,6 +35,47 @@ export const sql = <
     returns,
   }) as TypedSql<TParams, TResult>;
 
+export type MigrationStatement = {
+  sql: TypedSql<[], void>;
+  noTransaction?: boolean;
+};
+
+export type MigrationGroup = {
+  noTransaction: boolean;
+  statements: MigrationStatement[];
+};
+
+export const groupMigrationStatements = (statements: MigrationStatement[]): MigrationGroup[] => {
+  const groups: MigrationGroup[] = [];
+  let currentGroup: MigrationStatement[] = [];
+  let currentNoTransaction = false;
+
+  for (const stmt of statements) {
+    const stmtNoTransaction = stmt.noTransaction ?? false;
+
+    if (stmtNoTransaction) {
+      if (currentGroup.length > 0) {
+        groups.push({ noTransaction: currentNoTransaction, statements: currentGroup });
+        currentGroup = [];
+      }
+      groups.push({ noTransaction: true, statements: [stmt] });
+    } else {
+      if (currentNoTransaction && currentGroup.length > 0) {
+        groups.push({ noTransaction: currentNoTransaction, statements: currentGroup });
+        currentGroup = [];
+      }
+      currentNoTransaction = false;
+      currentGroup.push(stmt);
+    }
+  }
+
+  if (currentGroup.length > 0) {
+    groups.push({ noTransaction: currentNoTransaction, statements: currentGroup });
+  }
+
+  return groups;
+};
+
 export const createTemplateApplier = (
   variables: Record<string, string>,
   functions?: Record<string, (...args: string[]) => string>,

@@ -1,5 +1,6 @@
 import {
   createTemplateApplier,
+  groupMigrationStatements,
   type NamedParameter,
   type TypedSql,
   type UnwrapNamedParameters,
@@ -30,7 +31,7 @@ import {
   insertJobSql,
   jobColumnsPrefixedSelect,
   jobColumnsSelect,
-  migrateSql,
+  migrationStatements,
   removeExpiredJobLeaseSql,
   renewJobLeaseSql,
   rescheduleJobSql,
@@ -467,10 +468,26 @@ export const createSqliteStateAdapter = async <
       isRetryableError: isTransientError,
     }),
     migrateToLatest: async () => {
-      await stateProvider.executeSql({
-        sql: applyTemplate(migrateSql).sql,
-        returns: false,
-      });
+      const groups = groupMigrationStatements(migrationStatements);
+
+      for (const group of groups) {
+        if (group.noTransaction) {
+          await stateProvider.executeSql({
+            sql: applyTemplate(group.statements[0].sql).sql,
+            returns: false,
+          });
+        } else {
+          await stateProvider.runInTransaction(async (txContext) => {
+            for (const stmt of group.statements) {
+              await stateProvider.executeSql({
+                txContext,
+                sql: applyTemplate(stmt.sql).sql,
+                returns: false,
+              });
+            }
+          });
+        }
+      }
     },
   };
 };

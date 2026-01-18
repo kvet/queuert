@@ -1,4 +1,9 @@
-import { type NamedParameter, sql, type TypedSql } from "@queuert/typed-sql";
+import {
+  type MigrationStatement,
+  type NamedParameter,
+  sql,
+  type TypedSql,
+} from "@queuert/typed-sql";
 import { type DeduplicationStrategy } from "queuert";
 
 export const jobColumns = [
@@ -63,9 +68,11 @@ export type DbJobChainRow = DbJob & {
   [K in keyof DbJob as `lc_${K}`]: DbJob[K] | null;
 };
 
-export const migrateSql: TypedSql<[], void> = sql(
-  /* sql */ `
--- Tables: job table
+export const migrationStatements: MigrationStatement[] = [
+  // Tables: job table
+  {
+    sql: sql(
+      /* sql */ `
 CREATE TABLE IF NOT EXISTS {{table_prefix}}job (
   id                            {{id_type}} PRIMARY KEY,
   type_name                     TEXT NOT NULL,
@@ -100,54 +107,103 @@ CREATE TABLE IF NOT EXISTS {{table_prefix}}job (
 
   -- metadata
   updated_at                    TEXT NOT NULL DEFAULT (datetime('now', 'subsec'))
-);
+)`,
+      false,
+    ),
+  },
 
--- Tables: job_blocker table
+  // Tables: job_blocker table
+  {
+    sql: sql(
+      /* sql */ `
 CREATE TABLE IF NOT EXISTS {{table_prefix}}job_blocker (
   job_id                        {{id_type}} NOT NULL REFERENCES {{table_prefix}}job(id) ON DELETE CASCADE,
   blocked_by_chain_id           {{id_type}} NOT NULL REFERENCES {{table_prefix}}job(id) ON DELETE CASCADE,
   "index"                       INTEGER NOT NULL,
   PRIMARY KEY (job_id, blocked_by_chain_id)
-);
+)`,
+      false,
+    ),
+  },
 
--- Constraints: continuation deduplication
+  // Constraints: continuation deduplication
+  {
+    sql: sql(
+      /* sql */ `
 CREATE UNIQUE INDEX IF NOT EXISTS {{table_prefix}}job_chain_origin_unique_idx
 ON {{table_prefix}}job (chain_id, origin_id)
-WHERE origin_id IS NOT NULL;
+WHERE origin_id IS NOT NULL`,
+      false,
+    ),
+  },
 
--- Indexes: job acquisition
+  // Indexes: job acquisition
+  {
+    sql: sql(
+      /* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_acquisition_idx
 ON {{table_prefix}}job (type_name, scheduled_at)
-WHERE status = 'pending';
+WHERE status = 'pending'`,
+      false,
+    ),
+  },
 
--- Indexes: last chain job lookup
+  // Indexes: last chain job lookup
+  {
+    sql: sql(
+      /* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_chain_created_at_idx
-ON {{table_prefix}}job (chain_id, created_at DESC);
+ON {{table_prefix}}job (chain_id, created_at DESC)`,
+      false,
+    ),
+  },
 
--- Indexes: deduplication lookup
+  // Indexes: deduplication lookup
+  {
+    sql: sql(
+      /* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_deduplication_idx
 ON {{table_prefix}}job (deduplication_key, created_at DESC)
-WHERE deduplication_key IS NOT NULL;
+WHERE deduplication_key IS NOT NULL`,
+      false,
+    ),
+  },
 
--- Indexes: expired lease reaping
+  // Indexes: expired lease reaping
+  {
+    sql: sql(
+      /* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_expired_lease_idx
 ON {{table_prefix}}job (type_name, leased_until)
-WHERE status = 'running' AND leased_until IS NOT NULL;
+WHERE status = 'running' AND leased_until IS NOT NULL`,
+      false,
+    ),
+  },
 
--- Indexes: blocker lookup
+  // Indexes: blocker lookup
+  {
+    sql: sql(
+      /* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_blocker_chain_idx
-ON {{table_prefix}}job_blocker (blocked_by_chain_id);
+ON {{table_prefix}}job_blocker (blocked_by_chain_id)`,
+      false,
+    ),
+  },
 
--- Triggers: updated_at trigger
+  // Triggers: updated_at trigger
+  {
+    sql: sql(
+      /* sql */ `
 CREATE TRIGGER IF NOT EXISTS {{table_prefix}}update_job_updated_at
 AFTER UPDATE ON {{table_prefix}}job
 FOR EACH ROW
 BEGIN
   UPDATE {{table_prefix}}job SET updated_at = datetime('now', 'subsec') WHERE id = NEW.id;
-END;
-`,
-  false,
-);
+END`,
+      false,
+    ),
+  },
+];
 
 export const findExistingJobSql: TypedSql<
   [

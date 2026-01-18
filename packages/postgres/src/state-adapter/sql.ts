@@ -1,4 +1,9 @@
-import { type NamedParameter, sql, type TypedSql } from "@queuert/typed-sql";
+import {
+  type MigrationStatement,
+  type NamedParameter,
+  sql,
+  type TypedSql,
+} from "@queuert/typed-sql";
 import { type DeduplicationStrategy } from "queuert";
 
 export type DbJob = {
@@ -35,17 +40,25 @@ export type DbJobWithIncompleteBlockers = DbJob & {
   incomplete_blocker_chain_ids: string[];
 };
 
-export const migrateSql: TypedSql<[], void> = sql(
-  /* sql */ `
--- Types: job_status enum
+export const migrationStatements: MigrationStatement[] = [
+  // Types: job_status enum
+  {
+    sql: sql(
+      /* sql */ `
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'job_status' AND typnamespace = '{{schema}}'::regnamespace) THEN
     CREATE TYPE {{schema}}.job_status AS ENUM ('blocked','pending','running','completed');
   END IF;
-END$$;
+END$$`,
+      false,
+    ),
+  },
 
--- Tables: job table
+  // Tables: job table
+  {
+    sql: sql(
+      /* sql */ `
 CREATE TABLE IF NOT EXISTS {{schema}}.job (
   id                            {{id_type}} PRIMARY KEY DEFAULT {{id_default}},
   type_name                     text NOT NULL,
@@ -80,61 +93,121 @@ CREATE TABLE IF NOT EXISTS {{schema}}.job (
 
   -- metadata
   updated_at                    timestamptz NOT NULL DEFAULT now()
-);
+)`,
+      false,
+    ),
+  },
 
--- Tables: job_blocker table
+  // Tables: job_blocker table
+  {
+    sql: sql(
+      /* sql */ `
 CREATE TABLE IF NOT EXISTS {{schema}}.job_blocker (
   job_id                        {{id_type}} NOT NULL REFERENCES {{schema}}.job(id) ON DELETE CASCADE,
   blocked_by_chain_id           {{id_type}} NOT NULL REFERENCES {{schema}}.job(id) ON DELETE CASCADE,
   index                         integer NOT NULL,
   PRIMARY KEY (job_id, blocked_by_chain_id)
-);
+)`,
+      false,
+    ),
+  },
 
--- Triggers: updated_at triggers
+  // Triggers: updated_at trigger function
+  {
+    sql: sql(
+      /* sql */ `
 CREATE OR REPLACE FUNCTION {{schema}}.update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
    NEW.updated_at = now();
    RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql`,
+      false,
+    ),
+  },
 
-DROP TRIGGER IF EXISTS update_job_updated_at ON {{schema}}.job;
+  // Triggers: drop existing trigger
+  {
+    sql: sql(/* sql */ `DROP TRIGGER IF EXISTS update_job_updated_at ON {{schema}}.job`, false),
+  },
+
+  // Triggers: create trigger
+  {
+    sql: sql(
+      /* sql */ `
 CREATE TRIGGER update_job_updated_at
 BEFORE UPDATE ON {{schema}}.job
 FOR EACH ROW
-EXECUTE PROCEDURE {{schema}}.update_updated_at_column();
+EXECUTE PROCEDURE {{schema}}.update_updated_at_column()`,
+      false,
+    ),
+  },
 
--- Constraints: continuation deduplication
+  // Constraints: continuation deduplication
+  {
+    sql: sql(
+      /* sql */ `
 CREATE UNIQUE INDEX IF NOT EXISTS job_chain_origin_unique_idx
 ON {{schema}}.job (chain_id, origin_id)
-WHERE origin_id IS NOT NULL;
+WHERE origin_id IS NOT NULL`,
+      false,
+    ),
+  },
 
--- Indexes: job acquisition
+  // Indexes: job acquisition
+  {
+    sql: sql(
+      /* sql */ `
 CREATE INDEX IF NOT EXISTS job_acquisition_idx
 ON {{schema}}.job (type_name, scheduled_at)
-WHERE status = 'pending';
+WHERE status = 'pending'`,
+      false,
+    ),
+  },
 
--- Indexes: last chain job lookup
+  // Indexes: last chain job lookup
+  {
+    sql: sql(
+      /* sql */ `
 CREATE INDEX IF NOT EXISTS job_chain_created_at_idx
-ON {{schema}}.job (chain_id, created_at DESC);
+ON {{schema}}.job (chain_id, created_at DESC)`,
+      false,
+    ),
+  },
 
--- Indexes: deduplication lookup
+  // Indexes: deduplication lookup
+  {
+    sql: sql(
+      /* sql */ `
 CREATE INDEX IF NOT EXISTS job_deduplication_idx
 ON {{schema}}.job (deduplication_key, created_at DESC)
-WHERE deduplication_key IS NOT NULL;
+WHERE deduplication_key IS NOT NULL`,
+      false,
+    ),
+  },
 
--- Indexes: expired lease reaping
+  // Indexes: expired lease reaping
+  {
+    sql: sql(
+      /* sql */ `
 CREATE INDEX IF NOT EXISTS job_expired_lease_idx
 ON {{schema}}.job (type_name, leased_until)
-WHERE status = 'running' AND leased_until IS NOT NULL;
+WHERE status = 'running' AND leased_until IS NOT NULL`,
+      false,
+    ),
+  },
 
--- Indexes: blocker lookup
+  // Indexes: blocker lookup
+  {
+    sql: sql(
+      /* sql */ `
 CREATE INDEX IF NOT EXISTS job_blocker_chain_idx
-ON {{schema}}.job_blocker (blocked_by_chain_id);
-`,
-  false,
-);
+ON {{schema}}.job_blocker (blocked_by_chain_id)`,
+      false,
+    ),
+  },
+];
 
 export const createJobSql: TypedSql<
   readonly [
