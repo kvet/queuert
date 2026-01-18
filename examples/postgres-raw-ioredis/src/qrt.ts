@@ -53,18 +53,30 @@ export const createQrt = async ({
 
   await stateAdapter.migrateToLatest();
 
+  // ioredis pub/sub: track handlers per channel since ioredis uses a single 'message' event
+  const channelHandlers = new Map<string, (message: string) => void>();
+
+  redisSubscription.on("message", (channel: string, message: string) => {
+    const handler = channelHandlers.get(channel);
+    if (handler) {
+      handler(message);
+    }
+  });
+
   const notifyProvider: RedisNotifyProvider = {
     publish: async (channel, message) => {
       await redis.publish(channel, message);
     },
     subscribe: async (channel, onMessage) => {
-      await redisSubscription.subscribe(channel, onMessage);
+      channelHandlers.set(channel, onMessage);
+      await redisSubscription.subscribe(channel);
       return async () => {
         await redisSubscription.unsubscribe(channel);
+        channelHandlers.delete(channel);
       };
     },
     eval: async (script, keys, args) => {
-      return redis.eval(script, { keys, arguments: args });
+      return redis.eval(script, keys.length, ...keys, ...args);
     },
   };
   const notifyAdapter = await createRedisNotifyAdapter({

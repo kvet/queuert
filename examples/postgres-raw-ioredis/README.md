@@ -1,13 +1,13 @@
-# Postgres (Raw pg) + Redis Example
+# Postgres (Raw pg) + ioredis Example
 
 This example demonstrates how to use Queuert with:
 
 - **PostgreSQL** (via raw `pg` client) for state storage
-- **Redis** for notifications
+- **ioredis** for notifications
 
 ## What it does
 
-1. Connects to PostgreSQL and Redis
+1. Connects to PostgreSQL and Redis using ioredis
 2. Creates a pg Pool connection and runs schema migrations
 3. Sets up Queuert with PostgreSQL state adapter and Redis notify adapter
 4. Starts a worker that processes `add_pet_to_user` jobs
@@ -21,5 +21,5 @@ This example demonstrates how to use Queuert with:
 pnpm install
 
 # Run the example
-pnpm --filter @queuert/postgres-raw-redis start
+pnpm --filter @queuert/postgres-raw-ioredis start
 ```

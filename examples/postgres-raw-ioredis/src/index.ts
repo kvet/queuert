@@ -14,11 +14,11 @@ const redisContainer = await new RedisContainer("redis:6").withExposedPorts(6379
 const db = await createDb({
   connectionString: pgContainer.getConnectionUri(),
 });
-const redis = await createRedis({
+const redis = createRedis({
   url: redisContainer.getConnectionUrl(),
 });
-// Separate Redis client for subscriptions (node-redis requires dedicated clients for pub/sub)
-const redisSubscription = await createRedis({
+// Separate Redis client for subscriptions (ioredis requires dedicated clients for pub/sub)
+const redisSubscription = createRedis({
   url: redisContainer.getConnectionUrl(),
 });
 
@@ -63,8 +63,8 @@ await qrt.waitForJobChainCompletion(jobChain, { timeoutMs: 1000 });
 
 // 7. Cleanup
 await stopQrtWorker();
-await redis.close();
-await redisSubscription.close();
+await redis.quit();
+await redisSubscription.quit();
 await db.end();
 await redisContainer.stop();
 await pgContainer.stop();
