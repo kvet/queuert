@@ -65,26 +65,44 @@ importers:
         specifier: ^5.7.0
         version: 5.9.3
 
-  examples/mongodb-redis:
+  examples/notify-ioredis:
     devDependencies:
-      '@queuert/mongodb':
-        specifier: workspace:*
-        version: link:../../packages/mongodb
       '@queuert/redis':
         specifier: workspace:*
         version: link:../../packages/redis
-      '@testcontainers/mongodb':
-        specifier: ^11.10.0
-        version: 11.11.0
       '@testcontainers/redis':
         specifier: ^11.10.0
         version: 11.11.0
       '@types/node':
         specifier: ^24.10.4
         version: 24.10.4
-      mongodb:
-        specifier: ^6.12.0
-        version: 6.21.0
+      ioredis:
+        specifier: ^5.6.1
+        version: 5.9.2
+      queuert:
+        specifier: workspace:*
+        version: link:../../packages/core
+      testcontainers:
+        specifier: ^11.10.0
+        version: 11.11.0
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  examples/notify-redis:
+    devDependencies:
+      '@queuert/redis':
+        specifier: workspace:*
+        version: link:../../packages/redis
+      '@testcontainers/redis':
+        specifier: ^11.10.0
+        version: 11.11.0
+      '@types/node':
+        specifier: ^24.10.4
+        version: 24.10.4
       queuert:
         specifier: workspace:*
         version: link:../../packages/core
@@ -126,20 +144,14 @@ importers:
         specifier: ^5.7.0
         version: 5.9.3
 
-  examples/postgres-drizzle-redis:
+  examples/state-postgres-drizzle:
     devDependencies:
       '@queuert/postgres':
         specifier: workspace:*
         version: link:../../packages/postgres
-      '@queuert/redis':
-        specifier: workspace:*
-        version: link:../../packages/redis
       '@testcontainers/postgresql':
         specifier: ^11.10.0
         version: 11.10.0
-      '@testcontainers/redis':
-        specifier: ^11.10.0
-        version: 11.11.0
       '@types/node':
         specifier: ^24.10.4
         version: 24.10.4
@@ -155,9 +167,6 @@ importers:
       queuert:
         specifier: workspace:*
         version: link:../../packages/core
-      redis:
-        specifier: ^5.0.0
-        version: 5.10.0
       testcontainers:
         specifier: ^11.10.0
         version: 11.11.0
@@ -168,56 +177,14 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  examples/postgres-js-raw-redis:
+  examples/state-postgres-kysely:
     devDependencies:
       '@queuert/postgres':
         specifier: workspace:*
         version: link:../../packages/postgres
-      '@queuert/redis':
-        specifier: workspace:*
-        version: link:../../packages/redis
       '@testcontainers/postgresql':
         specifier: ^11.10.0
         version: 11.10.0
-      '@testcontainers/redis':
-        specifier: ^11.10.0
-        version: 11.11.0
-      '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.4
-      postgres:
-        specifier: ^3.4.7
-        version: 3.4.8
-      queuert:
-        specifier: workspace:*
-        version: link:../../packages/core
-      redis:
-        specifier: ^5.0.0
-        version: 5.10.0
-      testcontainers:
-        specifier: ^11.10.0
-        version: 11.11.0
-      tsx:
-        specifier: ^4.21.0
-        version: 4.21.0
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-
-  examples/postgres-kysely-redis:
-    devDependencies:
-      '@queuert/postgres':
-        specifier: workspace:*
-        version: link:../../packages/postgres
-      '@queuert/redis':
-        specifier: workspace:*
-        version: link:../../packages/redis
-      '@testcontainers/postgresql':
-        specifier: ^11.10.0
-        version: 11.10.0
-      '@testcontainers/redis':
-        specifier: ^11.10.0
-        version: 11.11.0
       '@types/node':
         specifier: ^24.10.4
         version: 24.10.4
@@ -233,9 +200,6 @@ importers:
       queuert:
         specifier: workspace:*
         version: link:../../packages/core
-      redis:
-        specifier: ^5.0.0
-        version: 5.10.0
       testcontainers:
         specifier: ^11.10.0
         version: 11.11.0
@@ -246,68 +210,20 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  examples/postgres-prisma-redis:
-    devDependencies:
-      '@prisma/client':
-        specifier: ^6.10.1
-        version: 6.19.1(prisma@6.19.1(typescript@5.9.3))(typescript@5.9.3)
-      '@queuert/postgres':
-        specifier: workspace:*
-        version: link:../../packages/postgres
-      '@queuert/redis':
-        specifier: workspace:*
-        version: link:../../packages/redis
-      '@testcontainers/postgresql':
-        specifier: ^11.10.0
-        version: 11.10.0
-      '@testcontainers/redis':
-        specifier: ^11.10.0
-        version: 11.11.0
-      '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.4
-      prisma:
-        specifier: ^6.10.1
-        version: 6.19.1(typescript@5.9.3)
-      queuert:
-        specifier: workspace:*
-        version: link:../../packages/core
-      redis:
-        specifier: ^5.0.0
-        version: 5.10.0
-      testcontainers:
-        specifier: ^11.10.0
-        version: 11.11.0
-      tsx:
-        specifier: ^4.21.0
-        version: 4.21.0
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-
-  examples/postgres-raw-ioredis:
+  examples/state-postgres-pg:
     devDependencies:
       '@queuert/postgres':
         specifier: workspace:*
         version: link:../../packages/postgres
-      '@queuert/redis':
-        specifier: workspace:*
-        version: link:../../packages/redis
       '@testcontainers/postgresql':
         specifier: ^11.10.0
         version: 11.10.0
-      '@testcontainers/redis':
-        specifier: ^11.10.0
-        version: 11.11.0
       '@types/node':
         specifier: ^24.10.4
         version: 24.10.4
       '@types/pg':
         specifier: ^8.16.0
         version: 8.16.0
-      ioredis:
-        specifier: ^5.6.1
-        version: 5.9.2
       pg:
         specifier: ^8.16.3
         version: 8.16.3
@@ -324,7 +240,64 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  examples/runtime-validation-typebox:
+  examples/state-postgres-postgres-js:
+    devDependencies:
+      '@queuert/postgres':
+        specifier: workspace:*
+        version: link:../../packages/postgres
+      '@testcontainers/postgresql':
+        specifier: ^11.10.0
+        version: 11.10.0
+      '@types/node':
+        specifier: ^24.10.4
+        version: 24.10.4
+      postgres:
+        specifier: ^3.4.7
+        version: 3.4.8
+      queuert:
+        specifier: workspace:*
+        version: link:../../packages/core
+      testcontainers:
+        specifier: ^11.10.0
+        version: 11.11.0
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  examples/state-postgres-prisma:
+    devDependencies:
+      '@prisma/client':
+        specifier: ^6.10.1
+        version: 6.19.1(prisma@6.19.1(typescript@5.9.3))(typescript@5.9.3)
+      '@queuert/postgres':
+        specifier: workspace:*
+        version: link:../../packages/postgres
+      '@testcontainers/postgresql':
+        specifier: ^11.10.0
+        version: 11.10.0
+      '@types/node':
+        specifier: ^24.10.4
+        version: 24.10.4
+      prisma:
+        specifier: ^6.10.1
+        version: 6.19.1(typescript@5.9.3)
+      queuert:
+        specifier: workspace:*
+        version: link:../../packages/core
+      testcontainers:
+        specifier: ^11.10.0
+        version: 11.11.0
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  examples/validation-typebox:
     dependencies:
       '@sinclair/typebox':
         specifier: ^0.34.0
@@ -346,7 +319,7 @@ importers:
         specifier: ^4.0.16
         version: 4.0.16(@opentelemetry/api@1.9.0)(@types/node@22.19.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
 
-  examples/runtime-validation-valibot:
+  examples/validation-valibot:
     dependencies:
       queuert:
         specifier: workspace:*
@@ -368,7 +341,7 @@ importers:
         specifier: ^4.0.16
         version: 4.0.16(@opentelemetry/api@1.9.0)(@types/node@22.19.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
 
-  examples/runtime-validation-zod:
+  examples/validation-zod:
     dependencies:
       queuert:
         specifier: workspace:*

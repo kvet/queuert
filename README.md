@@ -181,7 +181,7 @@ For production APIs accepting external input, you can add runtime validation usi
 import { z } from 'zod';
 import { createJobTypeRegistry } from 'queuert';
 
-// Create a Zod-based registry (see examples/runtime-validation-zod for full implementation)
+// Create a Zod-based registry (see examples/validation-zod for full implementation)
 const jobTypes = createJobTypeRegistry<{
   'process-data': { entry: true; input: { url: string }; output: { data: unknown } };
 }>({
@@ -197,7 +197,7 @@ const jobTypes = createJobTypeRegistry<{
 
 Both `defineJobTypes` (compile-time only) and `createJobTypeRegistry` (runtime validation) provide the same compile-time type safety. Runtime validation adds protection against invalid external data.
 
-See complete adapter examples: [Zod](./examples/runtime-validation-zod), [Valibot](./examples/runtime-validation-valibot), [TypeBox](./examples/runtime-validation-typebox).
+See complete adapter examples: [Zod](./examples/validation-zod), [Valibot](./examples/validation-valibot), [TypeBox](./examples/validation-typebox).
 
 ## Job Processing Modes
 
@@ -737,7 +737,7 @@ These suites run against all supported adapters (PostgreSQL, SQLite, MongoDB, in
 
 ## Full Example
 
-For a complete working example with PostgreSQL (Kysely) and Redis, see the [examples/postgres-kysely-redis](./examples/postgres-kysely-redis) directory.
+For a complete working example with PostgreSQL (Kysely), see the [examples/state-postgres-kysely](./examples/state-postgres-kysely) directory. For Redis notify adapter integration, see [examples/notify-redis](./examples/notify-redis).
 
 ## License
 

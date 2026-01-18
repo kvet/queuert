@@ -84,6 +84,63 @@ pnpm test       # Run tests
 pnpm check      # Run all checks together
 ```
 
+## Examples
+
+### Naming Convention
+
+Examples are organized by prefix to indicate their primary focus:
+
+- `log-xxx`: Logging adapter integration
+- `observability-xxx`: OpenTelemetry and metrics
+- `state-xxx`: State adapter examples (PostgreSQL, SQLite, etc.)
+- `notify-xxx`: Notify adapter examples (Redis, NATS, etc.)
+- `validation-xxx`: Runtime validation with schema libraries
+
+### Single-Purpose Design
+
+Each example demonstrates **one integration concern**:
+
+- **State examples** use `createInProcessNotifyAdapter` from `queuert/internal`
+- **Notify examples** use `createInProcessStateAdapter` from `queuert/internal`
+
+This ensures users can copy-paste relevant code without untangling unrelated integrations.
+
+### State Examples
+
+State examples showcase different database client integrations with the same database:
+
+```
+state-postgres-pg       # node-postgres (pg)
+state-postgres-postgres-js  # postgres.js
+state-postgres-prisma   # Prisma
+state-postgres-drizzle  # Drizzle ORM
+state-postgres-kysely   # Kysely
+```
+
+Each implements a `PgStateProvider` with `runInTransaction` and `executeSql` methods specific to that client library.
+
+### Notify Examples
+
+Notify examples showcase different pub/sub client integrations:
+
+```
+notify-redis    # node-redis
+notify-ioredis  # ioredis
+```
+
+Each implements a `RedisNotifyProvider` with `publish`, `subscribe`, and `eval` methods specific to that client library.
+
+### In-Process Adapters
+
+The `queuert/internal` export provides adapters for isolating examples:
+
+```typescript
+import { createInProcessNotifyAdapter } from "queuert/internal";  // For state examples
+import { createInProcessStateAdapter } from "queuert/internal";   // For notify examples
+```
+
+These adapters are synchronous factories (no `await` needed) and work without external dependencies.
+
 ## Documentation Updates
 
 When making changes:

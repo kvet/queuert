@@ -14,7 +14,7 @@ High-level design decisions are documented in [docs/design/](docs/design/):
 - [Job Processing](docs/design/job-processing.md) - Prepare/complete pattern, timeouts, workerless completion
 - [Deduplication](docs/design/deduplication.md) - Chain-level deduplication, continuation restriction
 - [Adapters](docs/design/adapters.md) - Factory patterns, dual-context design, notification optimization
-- [Code Style](docs/design/code-style.md) - Code conventions, testing patterns, project organization
+- [Code Style](docs/design/code-style.md) - Code conventions, testing patterns, project organization, examples structure
 - [Worker](docs/design/worker.md) - Worker lifecycle, leasing, reaper, retry logic
 
 ## Packages
@@ -26,7 +26,7 @@ High-level design decisions are documented in [docs/design/](docs/design/):
 - `@queuert/redis` - Redis notify adapter
 - `@queuert/nats` - NATS notify adapter with optional JetStream KV
 - `@queuert/otel` - OpenTelemetry observability adapter
-- `examples/` - Integration examples (Postgres with Prisma/Drizzle/Kysely, MongoDB, logging, OpenTelemetry, runtime validation)
+- `examples/` - Integration examples organized by prefix: `state-*`, `notify-*`, `validation-*`, `log-*`, `observability-*`
 
 See each package's README.md for exports, configuration, and usage.
 
@@ -34,4 +34,5 @@ See each package's README.md for exports, configuration, and usage.
 
 - Run `pnpm fmt` before running checks to fix formatting issues
 - Run `pnpm check` to run all checks together (or separately: `pnpm lint`, `pnpm typecheck`, `pnpm test`)
-- See [Code Style](docs/design/code-style.md) for testing patterns and documentation update guidelines
+- See [Code Style](docs/design/code-style.md) for testing patterns, documentation update guidelines, and examples naming conventions
+- When creating or modifying examples, follow the naming convention and single-purpose design described in Code Style

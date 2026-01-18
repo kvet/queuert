@@ -1,6 +1,5 @@
 # Short term
 
-- ioredis example
 - single queries for migrations to simplify prisma example; if needed, migration can use runInTransaction directly
 - ObservabilityAdapter: tracing spans
 - Separate queuert client and worker. The worker should accept a queuert client instance to allow job definition reuse. The change is pure cosmetic but would clarify the separation of concerns.
