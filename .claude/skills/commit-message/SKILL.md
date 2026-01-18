@@ -37,6 +37,7 @@ If nothing is staged, inform the user they need to stage changes first.
 ### Step 2: Analyze Changes
 
 Determine:
+
 1. **Type** - What kind of change is this?
 2. **Scope** - Which package(s) are affected?
 3. **Description** - What does this change do?
@@ -44,33 +45,33 @@ Determine:
 
 ### Step 3: Map to Conventional Commit Types
 
-| Type | When to Use | Semver Impact |
-|------|-------------|---------------|
-| `feat` | New feature or capability | minor |
-| `fix` | Bug fix | patch |
-| `refactor` | Code change that doesn't fix a bug or add a feature | patch |
-| `perf` | Performance improvement | patch |
-| `docs` | Documentation only | none |
-| `chore` | Maintenance, dependencies, configs | none |
-| `test` | Adding or fixing tests | none |
-| `build` | Build system or external dependencies | none |
-| `ci` | CI configuration | none |
+| Type       | When to Use                                         | Semver Impact |
+| ---------- | --------------------------------------------------- | ------------- |
+| `feat`     | New feature or capability                           | minor         |
+| `fix`      | Bug fix                                             | patch         |
+| `refactor` | Code change that doesn't fix a bug or add a feature | patch         |
+| `perf`     | Performance improvement                             | patch         |
+| `docs`     | Documentation only                                  | none          |
+| `chore`    | Maintenance, dependencies, configs                  | none          |
+| `test`     | Adding or fixing tests                              | none          |
+| `build`    | Build system or external dependencies               | none          |
+| `ci`       | CI configuration                                    | none          |
 
 ### Step 4: Determine Scope
 
 Map changed files to package scopes:
 
-| Path Pattern | Scope |
-|--------------|-------|
-| `packages/core/**` | `core` |
-| `packages/postgres/**` | `postgres` |
-| `packages/sqlite/**` | `sqlite` |
-| `packages/mongodb/**` | `mongodb` |
-| `packages/redis/**` | `redis` |
-| `packages/nats/**` | `nats` |
-| `packages/otel/**` | `otel` or `observability` |
-| `examples/**` | `examples` |
-| `docs/**` | `docs` |
+| Path Pattern           | Scope                     |
+| ---------------------- | ------------------------- |
+| `packages/core/**`     | `core`                    |
+| `packages/postgres/**` | `postgres`                |
+| `packages/sqlite/**`   | `sqlite`                  |
+| `packages/mongodb/**`  | `mongodb`                 |
+| `packages/redis/**`    | `redis`                   |
+| `packages/nats/**`     | `nats`                    |
+| `packages/otel/**`     | `otel` or `observability` |
+| `examples/**`          | `examples`                |
+| `docs/**`              | `docs`                    |
 
 If multiple packages are affected equally, omit the scope or use the primary one.
 
@@ -113,6 +114,7 @@ feat(core): add new feature description
 ```
 
 If the change is significant, also suggest whether a changeset file is needed:
+
 - `feat` and `fix` changes to packages → changeset recommended
 - `docs`, `chore`, `test` → usually no changeset needed
 

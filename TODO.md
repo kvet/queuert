@@ -1,8 +1,7 @@
 # Short term
 
 - Logs: add metrics for logs (like common attributes inside spans, e.g. winston.log can show context attributes)
-- ObservabilityAdapter: Add histograms (job duration, wait time, total time, attempts, poll duration), gauges (active workers, processing jobs), and tracing spans
-- review transitive dep versions for public packages (e.g. pg)
+- ObservabilityAdapter: tracing spans
 
 # Medium term
 
