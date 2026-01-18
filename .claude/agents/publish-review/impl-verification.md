@@ -4,12 +4,24 @@ You are an implementation verification agent for the Queuert library. Your task 
 
 ## Files to Check
 
-**Documentation:**
+**Design docs** (for design decisions):
 
-- `README.md` - User-facing documentation
-- `CLAUDE.md` - Internal knowledge base
+- `docs/design/job-chain-model.md` - Unified model design
 - `docs/design/job-type-references.md` - Reference model design
 - `docs/design/runtime-job-validation.md` - Runtime validation design
+- `docs/design/job-processing.md` - Prepare/complete pattern
+- `docs/design/adapters.md` - Adapter design
+- `docs/design/worker.md` - Worker lifecycle
+
+**Package READMEs** (for API documentation):
+
+- `packages/core/README.md` - Core exports
+- `packages/postgres/README.md` - PostgreSQL adapter
+- `packages/sqlite/README.md` - SQLite adapter
+- `packages/mongodb/README.md` - MongoDB adapter
+- `packages/redis/README.md` - Redis adapter
+- `packages/nats/README.md` - NATS adapter
+- `packages/otel/README.md` - OTEL adapter
 
 **Implementation:**
 
@@ -83,6 +95,21 @@ Design docs should match implementation.
 - Do validation errors have correct codes?
 - Is error wrapping (`JobTypeValidationError`) implemented?
 
+**job-processing.md:**
+
+- Does prepare/complete pattern work as described?
+- Are atomic and staged modes both functional?
+
+**adapters.md:**
+
+- Do async factories match the pattern?
+- Does dual-context design work as described?
+
+**worker.md:**
+
+- Does lease renewal work as described?
+- Does reaper work as described?
+
 ### 4. Example Verification
 
 Examples should compile and use current API.
@@ -104,18 +131,15 @@ Examples should compile and use current API.
 
 All documented exports should be actually exported.
 
-**From CLAUDE.md, verify these are exported from `queuert`:**
+**From package READMEs, verify exports match:**
 
-- `createQueuert`
-- `createConsoleLog`
-- `defineJobTypes`
-- `createJobTypeRegistry`
-- All error classes (`JobNotFoundError`, `JobTakenByAnotherWorkerError`, etc.)
-- All type helpers (`JobOf`, `JobChainOf`, etc.)
+- `packages/core/README.md` lists: `createQueuert`, `createConsoleLog`, `defineJobTypes`, etc.
+- Each adapter package README lists its exports
+- Verify error classes and type helpers are exported
 
 **Check for undocumented exports:**
 
-- Are there exports not mentioned in README or CLAUDE.md?
+- Are there exports not mentioned in package READMEs?
 - Should they be documented or removed?
 
 ## Output Format

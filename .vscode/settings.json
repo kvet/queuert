@@ -1,7 +1,6 @@
 {
   "oxc.enable": true,
   "oxc.typeAware": true,
-  "oxc.fmt.experimental": true,
   "editor.defaultFormatter": "oxc.oxc-vscode",
   "editor.formatOnSave": true,
   "editor.codeActionsOnSave": {
@@ -22,6 +21,12 @@
     "editor.defaultFormatter": "oxc.oxc-vscode"
   },
   "[typescriptreact]": {
+    "editor.defaultFormatter": "oxc.oxc-vscode"
+  },
+  "[json]": {
+    "editor.defaultFormatter": "oxc.oxc-vscode"
+  },
+  "[md]": {
     "editor.defaultFormatter": "oxc.oxc-vscode"
   }
 }

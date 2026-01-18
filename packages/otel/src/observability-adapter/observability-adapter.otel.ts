@@ -7,13 +7,13 @@ import type { ObservabilityAdapter } from "queuert";
  * Users must configure their OTEL SDK with desired exporters (Prometheus, OTLP, Jaeger, etc.)
  * before using this adapter.
  */
-export const createOtelObservabilityAdapter = ({
+export const createOtelObservabilityAdapter = async ({
   meter = metrics.getMeter("queuert"),
   metricPrefix = "queuert",
 }: {
   meter?: Meter;
   metricPrefix?: string;
-} = {}): ObservabilityAdapter => {
+} = {}): Promise<ObservabilityAdapter> => {
   // worker
   const workerStartedCounter = meter.createCounter(`${metricPrefix}.worker.started`);
   const workerErrorCounter = meter.createCounter(`${metricPrefix}.worker.error`);

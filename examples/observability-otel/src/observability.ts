@@ -22,7 +22,7 @@ const provider = new MeterProvider({
 metrics.setGlobalMeterProvider(provider);
 
 // Create queuert observability adapter using the global meter
-export const observabilityAdapter = createOtelObservabilityAdapter({
+export const observabilityAdapter = await createOtelObservabilityAdapter({
   meter: metrics.getMeter("queuert-example"),
   metricPrefix: "queuert",
 });

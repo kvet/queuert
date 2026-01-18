@@ -62,32 +62,61 @@ const jobContextStorage = new AsyncLocalStorage<{
 }>();
 
 export class JobTakenByAnotherWorkerError extends Error {
+  readonly jobId: string | undefined;
+  readonly workerId: string | undefined;
+  readonly leasedBy: string | null | undefined;
+
   constructor(message: string, options?: { cause?: unknown }) {
     super(message, options);
+    this.name = "JobTakenByAnotherWorkerError";
+    const causeObj = options?.cause as
+      | { jobId?: string; workerId?: string; leasedBy?: string | null }
+      | undefined;
+    this.jobId = causeObj?.jobId;
+    this.workerId = causeObj?.workerId;
+    this.leasedBy = causeObj?.leasedBy;
   }
 }
 
 export class JobNotFoundError extends Error {
+  readonly jobId: string | undefined;
+
   constructor(message: string, options?: { cause?: unknown }) {
     super(message, options);
+    this.name = "JobNotFoundError";
+    const causeObj = options?.cause as { jobId?: string } | undefined;
+    this.jobId = causeObj?.jobId;
   }
 }
 
 export class JobAlreadyCompletedError extends Error {
+  readonly jobId: string | undefined;
+
   constructor(message: string, options?: { cause?: unknown }) {
     super(message, options);
+    this.name = "JobAlreadyCompletedError";
+    const causeObj = options?.cause as { jobId?: string } | undefined;
+    this.jobId = causeObj?.jobId;
   }
 }
 
 export class WaitForJobChainCompletionTimeoutError extends Error {
+  readonly chainId: string | undefined;
+  readonly timeoutMs: number | undefined;
+
   constructor(message: string, options?: { cause?: unknown }) {
     super(message, options);
+    this.name = "WaitForJobChainCompletionTimeoutError";
+    const causeObj = options?.cause as { chainId?: string; timeoutMs?: number } | undefined;
+    this.chainId = causeObj?.chainId;
+    this.timeoutMs = causeObj?.timeoutMs;
   }
 }
 
 export class StateNotInTransactionError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
     super(message, options);
+    this.name = "StateNotInTransactionError";
   }
 }
 
@@ -110,6 +139,7 @@ export class JobTypeValidationError extends Error {
     details?: Record<string, unknown>;
   }) {
     super(options.message);
+    this.name = "JobTypeValidationError";
     this.code = options.code;
     this.typeName = options.typeName;
     this.details = options.details ?? {};
@@ -588,7 +618,9 @@ export const queuertHelper = ({
 
       if (fetchedJob.status === "completed") {
         observabilityHelper.jobAttemptAlreadyCompleted(fetchedJob, { workerId });
-        throw new JobAlreadyCompletedError("Job is already completed");
+        throw new JobAlreadyCompletedError("Job is already completed", {
+          cause: { jobId: fetchedJob.id },
+        });
       }
 
       if (
@@ -792,6 +824,7 @@ export const queuertHelper = ({
         if (job.status === "completed") {
           throw new JobAlreadyCompletedError(
             `Cannot complete job ${job.id}: job is already completed`,
+            { cause: { jobId: job.id } },
           );
         }
 

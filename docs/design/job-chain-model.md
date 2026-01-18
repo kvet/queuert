@@ -184,6 +184,15 @@ return complete(({ continueWith }) =>
 await queuert.waitForJobChainCompletion(chain.id);
 ```
 
+## Consistent Terminology
+
+Parallel entities use consistent lifecycle terminology to reduce cognitive load:
+
+- Job: `blocked`/`pending` → `running` → `completed`
+- JobChain: `blocked`/`pending` → `running` → `completed` (reflects status of current job in chain)
+
+Avoid asymmetric naming (e.g., `started`/`finished` vs `created`/`completed`) even if individual terms seem natural. Consistency across the API produces fewer questions and faster comprehension.
+
 ## Summary
 
 The Job Chain model:

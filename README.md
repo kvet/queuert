@@ -102,13 +102,13 @@ However, instead of introducing a new persistence layer, Queuert leverages your 
 npm install queuert
 
 # State adapters (pick one)
-npm install @queuert/postgres  # PostgreSQL (also includes notify adapter)
-npm install @queuert/sqlite    # SQLite
-npm install @queuert/mongodb   # MongoDB (requires 4.0+ for transactions)
+npm install @queuert/postgres  # PostgreSQL - recommended for production
+npm install @queuert/sqlite    # SQLite (experimental)
+npm install @queuert/mongodb   # MongoDB (experimental)
 
 # Notify adapters (optional, for reduced latency)
-npm install @queuert/redis     # Redis pub/sub (recommended for production)
-npm install @queuert/nats      # NATS pub/sub (with optional JetStream KV for hints)
+npm install @queuert/redis     # Redis pub/sub - recommended for production
+npm install @queuert/nats      # NATS pub/sub (experimental)
 # Or use PostgreSQL LISTEN/NOTIFY via @queuert/postgres (no extra infra)
 
 # Observability (optional)
@@ -135,9 +135,9 @@ Abstracts database operations for job persistence. Queuert provides adapters for
 
 **Available adapters:**
 
-- `@queuert/postgres` - PostgreSQL state adapter
-- `@queuert/sqlite` - SQLite state adapter
-- `@queuert/mongodb` - MongoDB state adapter (requires MongoDB 4.0+ for multi-document transactions)
+- `@queuert/postgres` - PostgreSQL state adapter (recommended for production)
+- `@queuert/sqlite` - SQLite state adapter _(experimental)_
+- `@queuert/mongodb` - MongoDB state adapter _(experimental)_
 
 ### State Provider
 
@@ -149,8 +149,8 @@ Handles pub/sub notifications for efficient job scheduling. When a job is create
 
 **Available adapters:**
 
-- `@queuert/redis` - Redis notify adapter (recommended for production, includes hint-based optimization)
-- `@queuert/nats` - NATS notify adapter (with optional JetStream KV for hint-based optimization)
+- `@queuert/redis` - Redis notify adapter (recommended for production)
+- `@queuert/nats` - NATS notify adapter _(experimental)_
 - `@queuert/postgres` - PostgreSQL notify adapter (uses LISTEN/NOTIFY, no additional infrastructure)
 - None (default) - polling only, no real-time notifications
 
@@ -683,6 +683,10 @@ Test suites available in [`packages/core/src/suites/`](./packages/core/src/suite
 - [`workerless-completion.test-suite.ts`](./packages/core/src/suites/workerless-completion.test-suite.ts) — External job completion
 - [`scheduling.test-suite.ts`](./packages/core/src/suites/scheduling.test-suite.ts) — Scheduled job execution and rescheduling
 - [`deduplication.test-suite.ts`](./packages/core/src/suites/deduplication.test-suite.ts) — Duplicate job prevention
+- [`deletion.test-suite.ts`](./packages/core/src/suites/deletion.test-suite.ts) — Job chain deletion
+- [`wait-chain-completion.test-suite.ts`](./packages/core/src/suites/wait-chain-completion.test-suite.ts) — Waiting for chain completion
+- [`notify.test-suite.ts`](./packages/core/src/suites/notify.test-suite.ts) — Notification adapter tests
+- [`notify-resilience.test-suite.ts`](./packages/core/src/suites/notify-resilience.test-suite.ts) — Notification resilience under failures
 - [`state-resilience.test-suite.ts`](./packages/core/src/suites/state-resilience.test-suite.ts) — Transient error handling
 - [`reaper.test-suite.ts`](./packages/core/src/suites/reaper.test-suite.ts) — Expired lease reclamation
 - [`worker.test-suite.ts`](./packages/core/src/suites/worker.test-suite.ts) — Worker lifecycle and polling

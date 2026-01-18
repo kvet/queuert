@@ -1,12 +1,6 @@
 import type { KV, NatsConnection } from "nats";
 import type { NotifyAdapter } from "queuert";
 
-export type CreateNatsNotifyAdapterOptions = {
-  nc: NatsConnection;
-  kv?: KV;
-  subjectPrefix?: string;
-};
-
 type SharedListenerState =
   | { status: "idle" }
   | { status: "starting"; readyPromise: Promise<void> }
@@ -123,7 +117,11 @@ export const createNatsNotifyAdapter = async ({
   nc,
   kv,
   subjectPrefix = "queuert",
-}: CreateNatsNotifyAdapterOptions): Promise<NotifyAdapter> => {
+}: {
+  nc: NatsConnection;
+  kv?: KV;
+  subjectPrefix?: string;
+}): Promise<NotifyAdapter> => {
   const jobScheduledSubject = `${subjectPrefix}.sched`;
   const chainCompletedSubject = `${subjectPrefix}.chainc`;
   const ownershipLostSubject = `${subjectPrefix}.owls`;

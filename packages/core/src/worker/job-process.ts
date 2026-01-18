@@ -49,6 +49,7 @@ export class RescheduleJobError extends Error {
     },
   ) {
     super(message, { cause: options.cause });
+    this.name = "RescheduleJobError";
     this.schedule = options.schedule;
   }
 }

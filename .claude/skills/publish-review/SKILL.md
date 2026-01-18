@@ -1,3 +1,8 @@
+---
+name: publish-review
+description: Run a comprehensive review of the Queuert library before publishing, launching 5 parallel agents to check documentation coherence, API design, implementation verification, feature completeness, and API consistency. Use when preparing to publish or validating publish readiness.
+---
+
 # Publish Readiness Review
 
 Run a comprehensive review of the Queuert library before publishing. This skill launches 5 specialized review agents in parallel to check different aspects of publish readiness.
@@ -26,16 +31,17 @@ prompt: |
   First, read the detailed instructions in .claude/agents/publish-review/docs-coherence.md
 
   Then review all documentation for coherence and consistency:
-  - README.md - User-facing guide
-  - CLAUDE.md - Internal knowledge base
-  - docs/design/*.md - Design documents
+  - README.md - User-facing overview
+  - CLAUDE.md - Index to design docs and packages
+  - docs/design/*.md - Design documents (design decisions)
+  - packages/*/README.md - Package READMEs (API documentation)
 
   Check for:
   1. Terminology consistency across all docs
-  2. Feature parity between README and CLAUDE.md
+  2. Feature parity between design docs and package READMEs
   3. Code example accuracy (syntax, current API)
   4. Cross-reference integrity (valid links/paths)
-  5. Completeness gaps (undocumented exports)
+  5. Completeness gaps (exports not documented in package READMEs)
 
   Categorize findings as CRITICAL, WARNING, or SUGGESTION.
   Return a structured report with specific file locations.
@@ -81,11 +87,11 @@ prompt: |
   First, read the detailed instructions in .claude/agents/publish-review/impl-verification.md
 
   Then verify implementation matches documentation:
-  - Compare README.md and CLAUDE.md claims against actual code
-  - Check design docs match implementation
+  - Compare design docs claims against actual code
+  - Compare package README exports against actual exports
   - Verify test suites exist for documented features
   - Check examples compile and use current API
-  - Verify all documented exports are actually exported
+  - Verify all exports documented in package READMEs are actually exported
 
   Focus on:
   1. JobTypeRegistry interface compliance

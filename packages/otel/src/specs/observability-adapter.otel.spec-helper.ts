@@ -97,7 +97,7 @@ export const extendWithObservabilityOtel = <T extends {}>(
     observabilityAdapter: [
       async ({ _otelProvider }, use) => {
         await use(
-          createOtelObservabilityAdapter({ meter: _otelProvider.getMeter("queuert-test") }),
+          await createOtelObservabilityAdapter({ meter: _otelProvider.getMeter("queuert-test") }),
         );
       },
       { scope: "test" },
