@@ -1,7 +1,6 @@
-import { createPgStateAdapter, PgStateProvider } from "@queuert/postgres";
-import { PostgreSqlContainer } from "@testcontainers/postgresql";
-import { CompiledQuery, Generated, Kysely, PostgresDialect } from "kysely";
-import { Pool } from "pg";
+import { createAsyncLock, createSqliteStateAdapter, SqliteStateProvider } from "@queuert/sqlite";
+import BetterSqlite3 from "better-sqlite3";
+import { CompiledQuery, Generated, Kysely, sql, SqliteDialect } from "kysely";
 import {
   createConsoleLog,
   createQueuertClient,
@@ -10,35 +9,34 @@ import {
 } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 
-// 1. Start PostgreSQL using testcontainers
-const pgContainer = await new PostgreSqlContainer("postgres:14").withExposedPorts(5432).start();
+// 1. Create in-memory SQLite database
+const sqliteDb = new BetterSqlite3(":memory:");
 
-// 2. Define Kysely database schema
+// 2. Configure SQLite pragmas
+sqliteDb.pragma("foreign_keys = ON");
+
+// 3. Define Kysely database schema
 interface Database {
   users: { id: Generated<number>; name: string; email: string };
 }
 
-// 3. Create database connection and schema
+// 4. Create Kysely database connection
 const db = new Kysely<Database>({
-  dialect: new PostgresDialect({
-    pool: new Pool({
-      connectionString: pgContainer.getConnectionUri(),
-      max: 10,
-    }),
+  dialect: new SqliteDialect({
+    database: sqliteDb,
   }),
 });
 
-await db.executeQuery(
-  CompiledQuery.raw(`
-    CREATE TABLE IF NOT EXISTS users (
-      id SERIAL PRIMARY KEY,
-      name TEXT NOT NULL,
-      email TEXT NOT NULL
-    );
-  `),
-);
+// Create users table
+await sql`
+  CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL
+  )
+`.execute(db);
 
-// 4. Define job types
+// 5. Define job types
 const jobTypeRegistry = defineJobTypes<{
   send_welcome_email: {
     entry: true;
@@ -47,22 +45,28 @@ const jobTypeRegistry = defineJobTypes<{
   };
 }>();
 
-// 5. Create state provider for Kysely
-const stateProvider: PgStateProvider<{ db: Kysely<Database> }> = {
-  runInTransaction: async (cb) => db.transaction().execute(async (txDb) => cb({ db: txDb })),
-  executeSql: async ({ txContext, sql, params }) => {
-    if (txContext && !txContext.db.isTransaction) {
-      throw new Error("Provided context is not in a transaction");
+// 6. Create state provider for Kysely with write serialization
+const lock = createAsyncLock();
+
+const stateProvider: SqliteStateProvider<{ db: Kysely<Database> }> = {
+  runInTransaction: async (cb) => {
+    await lock.acquire();
+    try {
+      return await db.transaction().execute(async (txDb) => cb({ db: txDb }));
+    } finally {
+      lock.release();
     }
-    const result = await (txContext?.db ?? db).executeQuery(CompiledQuery.raw(sql, params));
-    return result.rows;
+  },
+  executeSql: async ({ txContext, sql: sqlStr, params, returns }) => {
+    const database = txContext?.db ?? db;
+    const result = await database.executeQuery(CompiledQuery.raw(sqlStr, params));
+    return returns ? result.rows : [];
   },
 };
 
-// 6. Create adapters and queuert client/worker
-const stateAdapter = await createPgStateAdapter({
+// 7. Create adapters and queuert client/worker
+const stateAdapter = await createSqliteStateAdapter({
   stateProvider,
-  schema: "public",
 });
 await stateAdapter.migrateToLatest();
 
@@ -76,7 +80,7 @@ const qrtClient = await createQueuertClient({
   jobTypeRegistry,
 });
 
-// 7. Create qrtWorker with job type processors
+// 8. Create qrtWorker with job type processors
 const qrtWorker = await createQueuertInProcessWorker({
   stateAdapter,
   notifyAdapter,
@@ -98,10 +102,10 @@ const qrtWorker = await createQueuertInProcessWorker({
 
 const stopWorker = await qrtWorker.start();
 
-// 8. Register a new user and queue welcome email atomically
+// 9. Register a new user and queue welcome email atomically
 const jobChain = await qrtClient.withNotify(async () =>
-  db.transaction().execute(async (db) => {
-    const user = await db
+  db.transaction().execute(async (txDb) => {
+    const user = await txDb
       .insertInto("users")
       .values({ name: "Alice", email: "alice@example.com" })
       .returningAll()
@@ -109,18 +113,17 @@ const jobChain = await qrtClient.withNotify(async () =>
 
     // Queue welcome email - if user creation fails, no email job is created
     return qrtClient.startJobChain({
-      db,
+      db: txDb,
       typeName: "send_welcome_email",
       input: { userId: user.id, email: user.email, name: user.name },
     });
   }),
 );
 
-// 9. Wait for the job chain to complete
+// 10. Wait for the job chain to complete
 const result = await qrtClient.waitForJobChainCompletion(jobChain, { timeoutMs: 1000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);
 
-// 10. Cleanup
+// 11. Cleanup
 await stopWorker();
-await db.destroy();
-await pgContainer.stop();
+sqliteDb.close();

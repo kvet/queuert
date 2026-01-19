@@ -1,0 +1,27 @@
+{
+  "name": "example-notify-redis-ioredis",
+  "version": "0.0.1",
+  "private": true,
+  "description": "An example demonstrating the Redis notify adapter with ioredis.",
+  "license": "MIT",
+  "author": "kvet",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kvet/queuert.git"
+  },
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@queuert/redis": "workspace:*",
+    "@testcontainers/redis": "^11.10.0",
+    "@types/node": "^24.10.4",
+    "ioredis": "^5.6.1",
+    "queuert": "workspace:*",
+    "testcontainers": "^11.10.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

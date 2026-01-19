@@ -1,5 +1,6 @@
 import { createRedisNotifyAdapter, RedisNotifyProvider } from "@queuert/redis";
 import { RedisContainer } from "@testcontainers/redis";
+import { Redis } from "ioredis";
 import {
   createConsoleLog,
   createQueuertClient,
@@ -7,24 +8,25 @@ import {
   defineJobTypes,
 } from "queuert";
 import { createInProcessStateAdapter } from "queuert/internal";
-import { createRedis } from "./redis.js";
 
 // 1. Start Redis using testcontainers
+console.log("Starting Redis...");
 const redisContainer = await new RedisContainer("redis:6").withExposedPorts(6379).start();
+const redisUrl = redisContainer.getConnectionUrl();
 
 // 2. Create Redis connections
-const redis = createRedis({
-  url: redisContainer.getConnectionUrl(),
-});
-// Separate Redis client for subscriptions (ioredis requires dedicated clients for pub/sub)
-const redisSubscription = createRedis({
-  url: redisContainer.getConnectionUrl(),
+const redis = new Redis(redisUrl);
+redis.on("error", (err: Error) => {
+  console.error("Redis Client Error", err);
 });
 
-// 3. Create notify provider for ioredis
-// ioredis uses a single 'message' event for all subscriptions, so we track handlers per channel.
-// Queuert subscribes once per channel (multiplexing internally), so a simple Map suffices here.
-// For multi-subscriber scenarios outside Queuert, use Map<string, Set<Handler>> instead.
+const redisSubscription = new Redis(redisUrl);
+redisSubscription.on("error", (err: Error) => {
+  console.error("Redis Subscription Error", err);
+});
+
+// 3. Create the notify provider using ioredis
+// ioredis uses a single 'message' event for all subscriptions
 const channelHandlers = new Map<string, (message: string) => void>();
 
 redisSubscription.on("message", (channel: string, message: string) => {
@@ -53,20 +55,19 @@ const notifyProvider: RedisNotifyProvider = {
 
 // 4. Define job types
 const jobTypeRegistry = defineJobTypes<{
-  greet: {
+  generate_report: {
     entry: true;
-    input: { name: string };
-    output: { greeting: string };
+    input: { reportType: string; dateRange: { from: string; to: string } };
+    output: { reportId: string; rowCount: number };
   };
 }>();
 
-// 5. Create shared adapters for Queuert client and worker
+// 5. Create adapters
 const stateAdapter = createInProcessStateAdapter();
-const notifyAdapter = await createRedisNotifyAdapter({
-  provider: notifyProvider,
-});
+const notifyAdapter = await createRedisNotifyAdapter({ provider: notifyProvider });
 const log = createConsoleLog();
 
+// 6. Create client and worker
 const qrtClient = await createQueuertClient({
   stateAdapter,
   notifyAdapter,
@@ -74,43 +75,57 @@ const qrtClient = await createQueuertClient({
   jobTypeRegistry,
 });
 
-// 6. Create and start qrtWorker
 const qrtWorker = await createQueuertInProcessWorker({
   stateAdapter,
   notifyAdapter,
   log,
   jobTypeRegistry,
   jobTypeProcessors: {
-    greet: {
+    generate_report: {
       process: async ({ job, complete }) => {
-        console.log(`Processing greet job for ${job.input.name}`);
+        console.log(`Generating ${job.input.reportType} report...`);
+        // Simulate report generation work
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        const rowCount = Math.floor(Math.random() * 1000) + 100;
+        console.log(`Report generated with ${rowCount} rows`);
         return complete(async () => ({
-          greeting: `Hello, ${job.input.name}!`,
+          reportId: `RPT-${Date.now()}`,
+          rowCount,
         }));
       },
     },
   },
 });
 
+// 7. Start worker and queue a job
 const stopWorker = await qrtWorker.start();
 
-// 7. Start a job chain
+console.log("Requesting sales report...");
 const jobChain = await qrtClient.withNotify(async () =>
   stateAdapter.runInTransaction(async (ctx) =>
     qrtClient.startJobChain({
       ...ctx,
-      typeName: "greet",
-      input: { name: "World" },
+      typeName: "generate_report",
+      input: { reportType: "sales", dateRange: { from: "2024-01-01", to: "2024-12-31" } },
     }),
   ),
 );
 
-// 8. Wait for completion
-const completed = await qrtClient.waitForJobChainCompletion(jobChain, { timeoutMs: 5000 });
-console.log("Job completed with output:", completed.output);
+// 8. Main thread continues with other work while job processes
+console.log("Report queued! Continuing with other work...");
+console.log("Preparing email template...");
+await new Promise((resolve) => setTimeout(resolve, 100));
+console.log("Loading recipient list...");
+await new Promise((resolve) => setTimeout(resolve, 100));
 
-// 9. Cleanup
+// 9. Now wait for the report to be ready
+console.log("Waiting for report...");
+const result = await qrtClient.waitForJobChainCompletion(jobChain, { timeoutMs: 5000 });
+console.log(`Report ready! ID: ${result.output.reportId}, Rows: ${result.output.rowCount}`);
+
+// 10. Cleanup
 await stopWorker();
 await redis.quit();
 await redisSubscription.quit();
 await redisContainer.stop();
+console.log("Done!");

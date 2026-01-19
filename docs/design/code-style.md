@@ -110,22 +110,28 @@ This ensures users can copy-paste relevant code without untangling unrelated int
 State examples showcase different database client integrations with the same database:
 
 ```
-state-postgres-pg       # node-postgres (pg)
+state-postgres-pg           # node-postgres (pg)
 state-postgres-postgres-js  # postgres.js
-state-postgres-prisma   # Prisma
-state-postgres-drizzle  # Drizzle ORM
-state-postgres-kysely   # Kysely
+state-postgres-prisma       # Prisma
+state-postgres-drizzle      # Drizzle ORM
+state-postgres-kysely       # Kysely
+
+state-sqlite-better-sqlite3 # better-sqlite3
+state-sqlite-sqlite3        # sqlite3
+state-sqlite-prisma         # Prisma
+state-sqlite-drizzle        # Drizzle ORM
+state-sqlite-kysely         # Kysely
 ```
 
-Each implements a `PgStateProvider` with `runInTransaction` and `executeSql` methods specific to that client library.
+Each implements a state provider (`PgStateProvider` or `SqliteStateProvider`) with `runInTransaction` and `executeSql` methods specific to that client library.
 
 ### Notify Examples
 
 Notify examples showcase different pub/sub client integrations:
 
 ```
-notify-redis    # node-redis
-notify-ioredis  # ioredis
+notify-redis-redis    # node-redis
+notify-redis-ioredis  # ioredis
 ```
 
 Each implements a `RedisNotifyProvider` with `publish`, `subscribe`, and `eval` methods specific to that client library.

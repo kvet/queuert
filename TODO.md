@@ -16,12 +16,11 @@
   - Prisma MongoDB support - via generic StateProvider interface
 - Sqlite ready:
   - Better concurrency handling - WAL mode, busy timeout, retries
-  - Different sqlite client libraries - e.g. better-sqlite3
-  - Prisma SQLite support - via generic StateProvider interface
 - test against bun and it's built-in sqlite, postgres clients
 
 # Long term
 
+- Revisit Prisma SQLite example - poor fit for raw SQL (BigInt returns, no :memory:, runtime db push)
 - Hard timeout (worker threads) - True isolation with `terminate()`; enables memory limits and untrusted code sandboxing
 - Singletons/concurrency limit
 - Partitioning (PG) - Scaling concern; defer until users hit limits

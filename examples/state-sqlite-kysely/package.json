@@ -1,8 +1,8 @@
 {
-  "name": "example-notify-ioredis",
+  "name": "example-state-sqlite-kysely",
   "version": "0.0.1",
   "private": true,
-  "description": "An example demonstrating the Redis notify adapter with ioredis.",
+  "description": "An example demonstrating the SQLite state adapter with Kysely.",
   "license": "MIT",
   "author": "kvet",
   "repository": {
@@ -15,12 +15,12 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@queuert/redis": "workspace:*",
-    "@testcontainers/redis": "^11.10.0",
+    "@queuert/sqlite": "workspace:*",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^24.10.4",
-    "ioredis": "^5.6.1",
+    "better-sqlite3": "^11.10.0",
+    "kysely": "^0.28.9",
     "queuert": "workspace:*",
-    "testcontainers": "^11.10.0",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }

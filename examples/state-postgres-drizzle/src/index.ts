@@ -2,7 +2,7 @@ import { createPgStateAdapter, PgStateProvider } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import { ExtractTablesWithRelations, sql } from "drizzle-orm";
 import { drizzle, NodePgQueryResultHKT } from "drizzle-orm/node-postgres";
-import { integer, pgTable, PgTransaction, serial, text } from "drizzle-orm/pg-core";
+import { pgTable, PgTransaction, serial, text } from "drizzle-orm/pg-core";
 import { Pool } from "pg";
 import {
   createConsoleLog,
@@ -19,17 +19,10 @@ const pgContainer = await new PostgreSqlContainer("postgres:14").withExposedPort
 const users = pgTable("users", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
+  email: text("email").notNull(),
 });
 
-const pet = pgTable("pet", {
-  id: serial("id").primaryKey(),
-  ownerId: integer("owner_id")
-    .references(() => users.id)
-    .notNull(),
-  name: text("name").notNull(),
-});
-
-const schema = { users, pet };
+const schema = { users };
 
 // 3. Create database connection and schema
 const pool = new Pool({
@@ -42,23 +35,17 @@ const db = drizzle(pool, { schema });
 await db.execute(sql`
   CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
-    name TEXT NOT NULL
-  )
-`);
-await db.execute(sql`
-  CREATE TABLE IF NOT EXISTS pet (
-    id SERIAL PRIMARY KEY,
-    owner_id INTEGER REFERENCES users(id),
-    name TEXT NOT NULL
+    name TEXT NOT NULL,
+    email TEXT NOT NULL
   )
 `);
 
 // 4. Define job types
 const jobTypeRegistry = defineJobTypes<{
-  add_pet_to_user: {
+  send_welcome_email: {
     entry: true;
-    input: { userId: number; petName: string };
-    output: { petId: number };
+    input: { userId: number; email: string; name: string };
+    output: { sentAt: string };
   };
 }>();
 
@@ -105,19 +92,14 @@ const qrtWorker = await createQueuertInProcessWorker({
   log,
   jobTypeRegistry,
   jobTypeProcessors: {
-    add_pet_to_user: {
+    send_welcome_email: {
       process: async ({ job, complete }) => {
-        return complete(async ({ tx }) => {
-          const [result] = await tx
-            .insert(pet)
-            .values({
-              ownerId: job.input.userId,
-              name: job.input.petName,
-            })
-            .returning();
+        // Simulate sending email (in real app, call email service here)
+        console.log(`Sending welcome email to ${job.input.email} for ${job.input.name}`);
 
-          return { petId: result.id };
-        });
+        return complete(async () => ({
+          sentAt: new Date().toISOString(),
+        }));
       },
     },
   },
@@ -126,21 +108,26 @@ const qrtWorker = await createQueuertInProcessWorker({
 // 7. Start qrtWorker
 const stopWorker = await qrtWorker.start();
 
-// 8. Create a user and queue a job atomically in the same transaction
+// 8. Register a new user and queue welcome email atomically
 const jobChain = await qrtClient.withNotify(async () =>
   db.transaction(async (tx) => {
-    const [user] = await tx.insert(users).values({ name: "Alice" }).returning();
+    const [user] = await tx
+      .insert(users)
+      .values({ name: "Alice", email: "alice@example.com" })
+      .returning();
 
+    // Queue welcome email - if user creation fails, no email job is created
     return qrtClient.startJobChain({
       tx,
-      typeName: "add_pet_to_user",
-      input: { userId: user.id, petName: "Fluffy" },
+      typeName: "send_welcome_email",
+      input: { userId: user.id, email: user.email, name: user.name },
     });
   }),
 );
 
 // 9. Wait for the job chain to complete
-await qrtClient.waitForJobChainCompletion(jobChain, { timeoutMs: 1000 });
+const result = await qrtClient.waitForJobChainCompletion(jobChain, { timeoutMs: 1000 });
+console.log(`Welcome email sent at: ${result.output.sentAt}`);
 
 // 10. Cleanup
 await stopWorker();

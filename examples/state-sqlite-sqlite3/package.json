@@ -1,0 +1,25 @@
+{
+  "name": "example-state-sqlite-sqlite3",
+  "version": "0.0.1",
+  "private": true,
+  "description": "An example demonstrating the SQLite state adapter with async sqlite3 driver.",
+  "license": "MIT",
+  "author": "kvet",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kvet/queuert.git"
+  },
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@queuert/sqlite": "workspace:*",
+    "@types/node": "^24.10.4",
+    "queuert": "workspace:*",
+    "sqlite3": "^5.1.7",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

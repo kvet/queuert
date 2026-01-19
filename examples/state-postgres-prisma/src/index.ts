@@ -32,10 +32,10 @@ await prisma.$connect();
 
 // 3. Define job types
 const jobTypeRegistry = defineJobTypes<{
-  add_pet_to_user: {
+  send_welcome_email: {
     entry: true;
-    input: { userId: number; petName: string };
-    output: { petId: number };
+    input: { userId: number; email: string; name: string };
+    output: { sentAt: string };
   };
 }>();
 
@@ -96,17 +96,14 @@ const qrtWorker = await createQueuertInProcessWorker({
   log,
   jobTypeRegistry,
   jobTypeProcessors: {
-    add_pet_to_user: {
+    send_welcome_email: {
       process: async ({ job, complete }) => {
-        return complete(async ({ prisma }) => {
-          const result = await prisma.pet.create({
-            data: {
-              ownerId: job.input.userId,
-              name: job.input.petName,
-            },
-          });
-          return { petId: result.id };
-        });
+        // Simulate sending email (in real app, call email service here)
+        console.log(`Sending welcome email to ${job.input.email} for ${job.input.name}`);
+
+        return complete(async () => ({
+          sentAt: new Date().toISOString(),
+        }));
       },
     },
   },
@@ -114,23 +111,25 @@ const qrtWorker = await createQueuertInProcessWorker({
 
 const stopWorker = await qrtWorker.start();
 
-// 7. Create a user and queue a job atomically in the same transaction
+// 7. Register a new user and queue welcome email atomically
 const jobChain = await qrtClient.withNotify(async () =>
   prisma.$transaction(async (prisma) => {
     const user = await prisma.user.create({
-      data: { name: "Alice" },
+      data: { name: "Alice", email: "alice@example.com" },
     });
 
+    // Queue welcome email - if user creation fails, no email job is created
     return qrtClient.startJobChain({
       prisma,
-      typeName: "add_pet_to_user",
-      input: { userId: user.id, petName: "Fluffy" },
+      typeName: "send_welcome_email",
+      input: { userId: user.id, email: user.email, name: user.name },
     });
   }),
 );
 
 // 8. Wait for the job chain to complete
-await qrtClient.waitForJobChainCompletion(jobChain, { timeoutMs: 1000 });
+const result = await qrtClient.waitForJobChainCompletion(jobChain, { timeoutMs: 1000 });
+console.log(`Welcome email sent at: ${result.output.sentAt}`);
 
 // 9. Cleanup
 await stopWorker();

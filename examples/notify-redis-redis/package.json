@@ -1,5 +1,5 @@
 {
-  "name": "example-notify-redis",
+  "name": "example-notify-redis-redis",
   "version": "0.0.1",
   "private": true,
   "description": "An example demonstrating the Redis notify adapter with node-redis.",

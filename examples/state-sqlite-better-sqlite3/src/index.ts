@@ -1,6 +1,5 @@
-import { createPgStateAdapter, PgStateProvider } from "@queuert/postgres";
-import { PostgreSqlContainer } from "@testcontainers/postgresql";
-import { Pool, PoolClient } from "pg";
+import { createAsyncLock, createSqliteStateAdapter, SqliteStateProvider } from "@queuert/sqlite";
+import Database from "better-sqlite3";
 import {
   createConsoleLog,
   createQueuertClient,
@@ -9,18 +8,14 @@ import {
 } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 
-// 1. Start PostgreSQL using testcontainers
-const pgContainer = await new PostgreSqlContainer("postgres:14").withExposedPorts(5432).start();
+// 1. Create in-memory SQLite database
+const db = new Database(":memory:");
+db.pragma("foreign_keys = ON");
 
-// 2. Create database connection and schema
-const db = new Pool({
-  connectionString: pgContainer.getConnectionUri(),
-  max: 10,
-});
-
-await db.query(`
+// 2. Create application schema
+db.exec(`
   CREATE TABLE IF NOT EXISTS users (
-    id SERIAL PRIMARY KEY,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     email TEXT NOT NULL
   );
@@ -35,44 +30,52 @@ const jobTypeRegistry = defineJobTypes<{
   };
 }>();
 
-// 4. Create state provider for pg
-type DbContext = { poolClient: PoolClient };
+// 4. Create state provider for better-sqlite3
+type DbContext = { db: Database.Database };
+const lock = createAsyncLock();
 
-const stateProvider: PgStateProvider<DbContext> = {
-  runInTransaction: async (cb) => {
-    const poolClient = await db.connect();
+const stateProvider: SqliteStateProvider<DbContext> = {
+  runInTransaction: async (fn) => {
+    await lock.acquire();
     try {
-      await poolClient.query("BEGIN");
-      const result = await cb({ poolClient });
-      await poolClient.query("COMMIT");
-      return result;
-    } catch (error) {
-      await poolClient.query("ROLLBACK").catch(() => {});
-      throw error;
+      db.exec("BEGIN IMMEDIATE");
+      try {
+        const result = await fn({ db });
+        db.exec("COMMIT");
+        return result;
+      } catch (error) {
+        if (db.inTransaction) {
+          try {
+            db.exec("ROLLBACK");
+          } catch {
+            // ignore rollback errors
+          }
+        }
+        throw error;
+      }
     } finally {
-      poolClient.release();
+      lock.release();
     }
   },
-  executeSql: async ({ txContext, sql, params }) => {
-    if (txContext) {
-      const result = await txContext.poolClient.query(sql, params);
-      return result.rows;
-    }
-    const poolClient = await db.connect();
-    try {
-      const result = await poolClient.query(sql, params);
-      return result.rows;
-    } finally {
-      poolClient.release();
+  executeSql: async ({ txContext, sql, params, returns }) => {
+    const database = txContext?.db ?? db;
+    if (returns) {
+      const stmt = database.prepare(sql);
+      return stmt.all(...(params ?? []));
+    } else {
+      if (params && params.length > 0) {
+        const stmt = database.prepare(sql);
+        stmt.run(...params);
+      } else {
+        database.exec(sql);
+      }
+      return [];
     }
   },
 };
 
 // 5. Create adapters and queuert client/worker
-const stateAdapter = await createPgStateAdapter({
-  stateProvider,
-  schema: "public",
-});
+const stateAdapter = await createSqliteStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 
 const notifyAdapter = createInProcessNotifyAdapter();
@@ -109,30 +112,37 @@ const stopWorker = await qrtWorker.start();
 
 // 7. Register a new user and queue welcome email atomically
 const jobChain = await qrtClient.withNotify(async () => {
-  const poolClient = await db.connect();
+  await lock.acquire();
   try {
-    await poolClient.query("BEGIN");
+    db.exec("BEGIN IMMEDIATE");
 
-    const userResult = await poolClient.query<{ id: number; name: string; email: string }>(
-      "INSERT INTO users (name, email) VALUES ($1, $2) RETURNING *",
-      ["Alice", "alice@example.com"],
-    );
-    const user = userResult.rows[0];
+    const insertStmt = db.prepare("INSERT INTO users (name, email) VALUES (?, ?) RETURNING *");
+    const user = insertStmt.get("Alice", "alice@example.com") as {
+      id: number;
+      name: string;
+      email: string;
+    };
 
     // Queue welcome email - if user creation fails, no email job is created
     const result = await qrtClient.startJobChain({
-      poolClient,
+      db,
       typeName: "send_welcome_email",
       input: { userId: user.id, email: user.email, name: user.name },
     });
 
-    await poolClient.query("COMMIT");
+    db.exec("COMMIT");
     return result;
   } catch (error) {
-    await poolClient.query("ROLLBACK").catch(() => {});
+    if (db.inTransaction) {
+      try {
+        db.exec("ROLLBACK");
+      } catch {
+        // ignore rollback errors
+      }
+    }
     throw error;
   } finally {
-    poolClient.release();
+    lock.release();
   }
 });
 
@@ -142,5 +152,4 @@ console.log(`Welcome email sent at: ${result.output.sentAt}`);
 
 // 9. Cleanup
 await stopWorker();
-await db.end();
-await pgContainer.stop();
+db.close();

@@ -23,8 +23,8 @@ This step is required because Prisma generates TypeScript types from your schema
 1. Connects to PostgreSQL
 2. Creates a Prisma client and runs schema migrations
 3. Sets up Queuert with PostgreSQL state adapter
-4. Starts a worker that processes `add_pet_to_user` jobs
-5. Creates a user and queues a job to add a pet (atomically in one transaction)
+4. Starts a worker that processes `send_welcome_email` jobs
+5. Registers a new user and queues a welcome email job (atomically in one transaction)
 6. Waits for the job to complete
 
 ## Running the example
