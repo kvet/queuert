@@ -2,14 +2,6 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execSync } from "node:child_process";
-
-// 1. Create temp directory and set DATABASE_URL before importing PrismaClient
-const tempDir = mkdtempSync(join(tmpdir(), "queuert-sqlite-prisma-"));
-const dbPath = join(tempDir, "test.db");
-process.env.DATABASE_URL = `file:${dbPath}`;
-
-// Now we can import PrismaClient (it reads DATABASE_URL at import time)
-const { PrismaClient } = await import("@prisma/client");
 import { createSqliteStateAdapter, createAsyncLock, SqliteStateProvider } from "@queuert/sqlite";
 import {
   createConsoleLog,
@@ -19,11 +11,19 @@ import {
 } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 
-// 2. Push Prisma schema to database and create client
-execSync("pnpm prisma db push --skip-generate", {
-  env: { ...process.env, DATABASE_URL: `file:${dbPath}` },
+// 1. Create temp directory and set DATABASE_URL
+const tempDir = mkdtempSync(join(tmpdir(), "queuert-sqlite-prisma-"));
+const dbPath = join(tempDir, "test.db");
+
+// 2. Push Prisma schema to database and generate client
+// Note: generate runs here because the module cache may have a stale client from another example
+process.env.DATABASE_URL = `file:${dbPath}`;
+execSync("pnpm prisma db push", {
   stdio: "inherit",
 });
+
+// Dynamic import after generate to get the freshly generated client
+const { PrismaClient } = await import("@prisma/client");
 
 const prisma = new PrismaClient();
 await prisma.$connect();

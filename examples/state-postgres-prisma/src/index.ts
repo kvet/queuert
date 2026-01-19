@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import type { PrismaClient as PrismaClientType } from "@prisma/client";
 import { createPgStateAdapter, PgStateProvider } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import { execSync } from "node:child_process";
@@ -14,13 +14,16 @@ import { createInProcessNotifyAdapter } from "queuert/internal";
 const pgContainer = await new PostgreSqlContainer("postgres:14").withExposedPorts(5432).start();
 const connectionString = pgContainer.getConnectionUri();
 
-// 2. Push Prisma schema to database and create client
-execSync("pnpm prisma db push --skip-generate", {
+// 2. Push Prisma schema to database and generate client
+// Note: generate runs here because the module cache may have a stale client from another example
+execSync("pnpm prisma db push", {
   env: { ...process.env, DATABASE_URL: connectionString },
   stdio: "inherit",
 });
 
-const prisma = new PrismaClient({
+// Dynamic import after generate to get the freshly generated client
+const { PrismaClient } = await import("@prisma/client");
+const prisma: PrismaClientType = new PrismaClient({
   datasources: {
     db: {
       url: connectionString,
@@ -41,7 +44,7 @@ const jobTypeRegistry = defineJobTypes<{
 
 // 4. Create state provider for Prisma
 type PrismaTransactionClient = Omit<
-  PrismaClient,
+  PrismaClientType,
   "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends"
 >;
 type DbContext = { prisma: PrismaTransactionClient };
