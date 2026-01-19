@@ -34,7 +34,7 @@ npm install @queuert/sqlite
 ## Quick Start
 
 ```typescript
-import { createQueuert, defineJobTypes } from 'queuert';
+import { createQueuertClient, createConsoleLog, defineJobTypes } from 'queuert';
 import { createSqliteStateAdapter } from '@queuert/sqlite';
 
 const jobTypes = defineJobTypes<{
@@ -45,9 +45,10 @@ const stateAdapter = await createSqliteStateAdapter({
   stateProvider: mySqliteStateProvider, // You provide this - see below
 });
 
-const queuert = await createQueuert({
+const client = await createQueuertClient({
   stateAdapter,
   jobTypeRegistry: jobTypes,
+  log: createConsoleLog(),
 });
 ```
 
@@ -74,6 +75,8 @@ You need to implement a state provider that bridges your SQLite client with this
 
 - `createSqliteStateAdapter` - Factory to create SQLite state adapter
 - `SqliteStateAdapter` - Type for the SQLite state adapter
+- `SqliteStateProvider` - Type for the state provider interface (you implement this)
+- `sqliteLiteral` - SQL literal escaping utility for ORM compatibility
 - `createAsyncLock` - Re-exported from `queuert/internal`
 
 ### Testing (`./testing`)

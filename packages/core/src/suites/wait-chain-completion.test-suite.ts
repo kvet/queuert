@@ -1,5 +1,9 @@
 import { TestAPI } from "vitest";
-import { createQueuert, defineJobTypes, WaitForJobChainCompletionTimeoutError } from "../index.js";
+import {
+  createQueuertClient,
+  defineJobTypes,
+  WaitForJobChainCompletionTimeoutError,
+} from "../index.js";
 import { TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -13,29 +17,31 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
     log,
     expect,
   }) => {
-    const queuert = await createQueuert({
+    const jobTypeRegistry = defineJobTypes<{
+      test: {
+        entry: true;
+        input: null;
+        output: { result: string };
+      };
+    }>();
+
+    const client = await createQueuertClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry: defineJobTypes<{
-        test: {
-          entry: true;
-          input: null;
-          output: { result: string };
-        };
-      }>(),
+      jobTypeRegistry,
     });
 
-    const jobChain = await queuert.withNotify(async () =>
+    const jobChain = await client.withNotify(async () =>
       runInTransaction(async (txContext) =>
-        queuert.startJobChain({ ...txContext, typeName: "test", input: null }),
+        client.startJobChain({ ...txContext, typeName: "test", input: null }),
       ),
     );
 
-    await queuert.withNotify(async () =>
+    await client.withNotify(async () =>
       runInTransaction(async (txContext) =>
-        queuert.completeJobChain({
+        client.completeJobChain({
           ...txContext,
           ...jobChain,
           complete: async ({ job, complete }) => {
@@ -46,7 +52,7 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
     );
 
     const signal = AbortSignal.timeout(100);
-    const completedChain = await queuert.waitForJobChainCompletion(jobChain, {
+    const completedChain = await client.waitForJobChainCompletion(jobChain, {
       signal,
       timeoutMs: 5000,
     });
@@ -64,30 +70,32 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
     log,
     expect,
   }) => {
-    const queuert = await createQueuert({
+    const jobTypeRegistry = defineJobTypes<{
+      test: {
+        entry: true;
+        input: null;
+        output: { result: string };
+      };
+    }>();
+
+    const client = await createQueuertClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry: defineJobTypes<{
-        test: {
-          entry: true;
-          input: null;
-          output: { result: string };
-        };
-      }>(),
+      jobTypeRegistry,
     });
 
-    const jobChain = await queuert.withNotify(async () =>
+    const jobChain = await client.withNotify(async () =>
       runInTransaction(async (txContext) =>
-        queuert.startJobChain({ ...txContext, typeName: "test", input: null }),
+        client.startJobChain({ ...txContext, typeName: "test", input: null }),
       ),
     );
 
     const fastSignal = AbortSignal.timeout(1);
     const slowSignal = AbortSignal.timeout(100);
     await expect(
-      queuert.waitForJobChainCompletion(jobChain, {
+      client.waitForJobChainCompletion(jobChain, {
         signal: fastSignal,
         timeoutMs: 5000,
       }),
@@ -104,28 +112,30 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
     log,
     expect,
   }) => {
-    const queuert = await createQueuert({
+    const jobTypeRegistry = defineJobTypes<{
+      test: {
+        entry: true;
+        input: null;
+        output: { result: string };
+      };
+    }>();
+
+    const client = await createQueuertClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry: defineJobTypes<{
-        test: {
-          entry: true;
-          input: null;
-          output: { result: string };
-        };
-      }>(),
+      jobTypeRegistry,
     });
 
-    const jobChain = await queuert.withNotify(async () =>
+    const jobChain = await client.withNotify(async () =>
       runInTransaction(async (txContext) =>
-        queuert.startJobChain({ ...txContext, typeName: "test", input: null }),
+        client.startJobChain({ ...txContext, typeName: "test", input: null }),
       ),
     );
 
     await expect(
-      queuert.waitForJobChainCompletion(jobChain, {
+      client.waitForJobChainCompletion(jobChain, {
         timeoutMs: 1,
       }),
     ).rejects.toThrow(WaitForJobChainCompletionTimeoutError);
@@ -138,23 +148,25 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
     log,
     expect,
   }) => {
-    const queuert = await createQueuert({
+    const jobTypeRegistry = defineJobTypes<{
+      test: {
+        entry: true;
+        input: null;
+        output: { result: string };
+      };
+    }>();
+
+    const client = await createQueuertClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry: defineJobTypes<{
-        test: {
-          entry: true;
-          input: null;
-          output: { result: string };
-        };
-      }>(),
+      jobTypeRegistry,
     });
 
     const nonExistentId = crypto.randomUUID();
     await expect(
-      queuert.waitForJobChainCompletion(
+      client.waitForJobChainCompletion(
         { typeName: "test", id: nonExistentId },
         { timeoutMs: 5000 },
       ),

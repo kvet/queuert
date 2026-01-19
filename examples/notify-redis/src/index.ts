@@ -1,6 +1,11 @@
 import { createRedisNotifyAdapter, RedisNotifyProvider } from "@queuert/redis";
 import { RedisContainer } from "@testcontainers/redis";
-import { createConsoleLog, createQueuert, defineJobTypes } from "queuert";
+import {
+  createConsoleLog,
+  createQueuertClient,
+  createQueuertInProcessWorker,
+  defineJobTypes,
+} from "queuert";
 import { createInProcessStateAdapter } from "queuert/internal";
 import { createRedis } from "./redis.js";
 
@@ -41,36 +46,44 @@ const jobTypeRegistry = defineJobTypes<{
   };
 }>();
 
-// 5. Create Queuert with Redis notify adapter and in-process state adapter
+// 5. Create shared adapters for Queuert client and worker
 const stateAdapter = createInProcessStateAdapter();
 const notifyAdapter = await createRedisNotifyAdapter({
   provider: notifyProvider,
 });
+const log = createConsoleLog();
 
-const qrt = await createQueuert({
+const qrtClient = await createQueuertClient({
   stateAdapter,
   notifyAdapter,
-  log: createConsoleLog(),
+  log,
   jobTypeRegistry,
 });
 
-// 6. Create and start a worker
-const worker = qrt.createWorker().implementJobType({
-  typeName: "greet",
-  process: async ({ job, complete }) => {
-    console.log(`Processing greet job for ${job.input.name}`);
-    return complete(async () => ({
-      greeting: `Hello, ${job.input.name}!`,
-    }));
+// 6. Create and start qrtWorker
+const qrtWorker = await createQueuertInProcessWorker({
+  stateAdapter,
+  notifyAdapter,
+  log,
+  jobTypeRegistry,
+  jobTypeProcessors: {
+    greet: {
+      process: async ({ job, complete }) => {
+        console.log(`Processing greet job for ${job.input.name}`);
+        return complete(async () => ({
+          greeting: `Hello, ${job.input.name}!`,
+        }));
+      },
+    },
   },
 });
 
-const stopWorker = await worker.start({ workerId: "worker-1" });
+const stopWorker = await qrtWorker.start();
 
 // 7. Start a job chain
-const jobChain = await qrt.withNotify(async () =>
+const jobChain = await qrtClient.withNotify(async () =>
   stateAdapter.runInTransaction(async (ctx) =>
-    qrt.startJobChain({
+    qrtClient.startJobChain({
       ...ctx,
       typeName: "greet",
       input: { name: "World" },
@@ -79,7 +92,7 @@ const jobChain = await qrt.withNotify(async () =>
 );
 
 // 8. Wait for completion
-const completed = await qrt.waitForJobChainCompletion(jobChain, { timeoutMs: 5000 });
+const completed = await qrtClient.waitForJobChainCompletion(jobChain, { timeoutMs: 5000 });
 console.log("Job completed with output:", completed.output);
 
 // 9. Cleanup

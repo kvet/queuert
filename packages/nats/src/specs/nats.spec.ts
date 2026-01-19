@@ -1,7 +1,8 @@
 import { extendWithNats } from "@queuert/testcontainers";
 import { connect } from "nats";
-import { createQueuert, defineJobTypes } from "queuert";
+import { createQueuertClient, createQueuertInProcessWorker, defineJobTypes } from "queuert";
 import { createInProcessStateAdapter } from "queuert/internal";
+import { withWorkers } from "queuert/testing";
 import { it as baseIt, vi } from "vitest";
 import { createNatsNotifyAdapter } from "../notify-adapter/notify-adapter.nats.js";
 
@@ -21,22 +22,38 @@ it("should work end-to-end with NATS notify adapter", async ({ natsConnectionOpt
 
   const stateAdapter = createInProcessStateAdapter();
 
-  const queuert = await createQueuert({
+  const log = vi.fn();
+  const jobTypeRegistry = defineJobTypes<{
+    test: {
+      entry: true;
+      input: { message: string };
+      output: { processed: true };
+    };
+  }>();
+
+  const client = await createQueuertClient({
     stateAdapter,
     notifyAdapter,
-    log: vi.fn(),
-    jobTypeRegistry: defineJobTypes<{
+    log,
+    jobTypeRegistry,
+  });
+  const worker = await createQueuertInProcessWorker({
+    stateAdapter,
+    notifyAdapter,
+    log,
+    jobTypeRegistry,
+    jobTypeProcessors: {
       test: {
-        entry: true;
-        input: { message: string };
-        output: { processed: true };
-      };
-    }>(),
+        process: async ({ complete }) => {
+          return complete(async () => ({ processed: true }));
+        },
+      },
+    },
   });
 
-  const jobChain = await queuert.withNotify(async () =>
+  const jobChain = await client.withNotify(async () =>
     stateAdapter.runInTransaction(async (ctx) =>
-      queuert.startJobChain({
+      client.startJobChain({
         ...ctx,
         typeName: "test",
         input: { message: "hello from nats" },
@@ -44,18 +61,9 @@ it("should work end-to-end with NATS notify adapter", async ({ natsConnectionOpt
     ),
   );
 
-  const worker = queuert.createWorker().implementJobType({
-    typeName: "test",
-    process: async ({ complete }) => {
-      return complete(async () => ({ processed: true }));
-    },
+  await withWorkers([await worker.start()], async () => {
+    await client.waitForJobChainCompletion(jobChain, { timeoutMs: 5000 });
   });
-
-  const stopWorker = await worker.start();
-
-  await queuert.waitForJobChainCompletion(jobChain, { timeoutMs: 5000 });
-
-  await stopWorker();
 
   await nc.close();
 });
@@ -70,22 +78,38 @@ it("should work end-to-end without JetStream KV", async ({ natsConnectionOptions
 
   const stateAdapter = createInProcessStateAdapter();
 
-  const queuert = await createQueuert({
+  const log = vi.fn();
+  const jobTypeRegistry = defineJobTypes<{
+    test: {
+      entry: true;
+      input: { value: number };
+      output: { doubled: number };
+    };
+  }>();
+
+  const client = await createQueuertClient({
     stateAdapter,
     notifyAdapter,
-    log: vi.fn(),
-    jobTypeRegistry: defineJobTypes<{
+    log,
+    jobTypeRegistry,
+  });
+  const worker = await createQueuertInProcessWorker({
+    stateAdapter,
+    notifyAdapter,
+    log,
+    jobTypeRegistry,
+    jobTypeProcessors: {
       test: {
-        entry: true;
-        input: { value: number };
-        output: { doubled: number };
-      };
-    }>(),
+        process: async ({ job, complete }) => {
+          return complete(async () => ({ doubled: job.input.value * 2 }));
+        },
+      },
+    },
   });
 
-  const jobChain = await queuert.withNotify(async () =>
+  const jobChain = await client.withNotify(async () =>
     stateAdapter.runInTransaction(async (ctx) =>
-      queuert.startJobChain({
+      client.startJobChain({
         ...ctx,
         typeName: "test",
         input: { value: 21 },
@@ -93,18 +117,9 @@ it("should work end-to-end without JetStream KV", async ({ natsConnectionOptions
     ),
   );
 
-  const worker = queuert.createWorker().implementJobType({
-    typeName: "test",
-    process: async ({ job, complete }) => {
-      return complete(async () => ({ doubled: job.input.value * 2 }));
-    },
+  await withWorkers([await worker.start()], async () => {
+    await client.waitForJobChainCompletion(jobChain, { timeoutMs: 5000 });
   });
-
-  const stopWorker = await worker.start();
-
-  await queuert.waitForJobChainCompletion(jobChain, { timeoutMs: 5000 });
-
-  await stopWorker();
 
   await nc.close();
 });

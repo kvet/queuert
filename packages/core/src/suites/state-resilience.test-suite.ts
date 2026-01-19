@@ -1,5 +1,10 @@
 import { TestAPI } from "vitest";
-import { createQueuert, defineJobTypes, StateAdapter } from "../index.js";
+import {
+  createQueuertClient,
+  createQueuertInProcessWorker,
+  defineJobTypes,
+  StateAdapter,
+} from "../index.js";
 import { TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const stateResilienceTestSuite = ({
@@ -24,34 +29,52 @@ export const stateResilienceTestSuite = ({
       };
     }>();
 
-    const queuert = await createQueuert({
+    const client = await createQueuertClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypeRegistry,
     });
-    const flakyQueuert = await createQueuert({
+    const flakyWorker = await createQueuertInProcessWorker({
       stateAdapter: flakyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypeRegistry,
-    });
-
-    const flakyWorker = flakyQueuert.createWorker().implementJobType({
-      typeName: "test",
-      process: async ({ job, prepare, complete }) => {
-        await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
-        return complete(async () => ({ result: job.input.value * 2 }));
+      jobTypeProcessing: {
+        pollIntervalMs: 1_000_000, // should be processed in a single loop invocations
+        nextJobDelayMs: 0,
+        defaultLeaseConfig: {
+          leaseMs: 10,
+          renewIntervalMs: 5,
+        },
+        defaultRetryConfig: {
+          initialDelayMs: 1,
+          multiplier: 1,
+          maxDelayMs: 1,
+        },
+        workerLoopRetryConfig: {
+          initialDelayMs: 1,
+          multiplier: 1,
+          maxDelayMs: 1,
+        },
+      },
+      jobTypeProcessors: {
+        test: {
+          process: async ({ job, prepare, complete }) => {
+            await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
+            return complete(async () => ({ result: job.input.value * 2 }));
+          },
+        },
       },
     });
 
-    const jobChains = await queuert.withNotify(async () =>
+    const jobChains = await client.withNotify(async () =>
       runInTransaction(async (txContext) =>
         Promise.all(
           Array.from({ length: 20 }, async (_, i) =>
-            queuert.startJobChain({
+            client.startJobChain({
               ...txContext,
               typeName: "test",
               input: { value: i, atomic: i % 2 === 0 },
@@ -61,34 +84,12 @@ export const stateResilienceTestSuite = ({
       ),
     );
 
-    await withWorkers(
-      [
-        await flakyWorker.start({
-          pollIntervalMs: 1_000_000, // should be processed in a single loop invocations
-          nextJobDelayMs: 0,
-          defaultLeaseConfig: {
-            leaseMs: 10,
-            renewIntervalMs: 5,
-          },
-          defaultRetryConfig: {
-            initialDelayMs: 1,
-            multiplier: 1,
-            maxDelayMs: 1,
-          },
-          workerLoopRetryConfig: {
-            initialDelayMs: 1,
-            multiplier: 1,
-            maxDelayMs: 1,
-          },
-        }),
-      ],
-      async () => {
-        await Promise.all(
-          jobChains.map(async (chain) =>
-            queuert.waitForJobChainCompletion(chain, { timeoutMs: 1000 }),
-          ),
-        );
-      },
-    );
+    await withWorkers([await flakyWorker.start()], async () => {
+      await Promise.all(
+        jobChains.map(async (chain) =>
+          client.waitForJobChainCompletion(chain, { timeoutMs: 1000 }),
+        ),
+      );
+    });
   });
 };

@@ -4,24 +4,140 @@
 
 This document describes the worker and reaper design in Queuert, including job acquisition, lease management, retry logic, and graceful shutdown.
 
+## Client-Worker Separation
+
+### Overview
+
+Queuert provides two independent constructions for job queue management:
+
+- `createQueuertClient()` - Job chain management (creating, retrieving, completing chains)
+- `createQueuertInProcessWorker()` - Job processing (executing job handlers)
+
+These can be used together in the same process or deployed separately for different scaling patterns.
+
+### QueuertClient
+
+The client handles job chain lifecycle operations without processing jobs:
+
+```typescript
+import { createQueuertClient } from "queuert";
+
+const client = await createQueuertClient({
+  stateAdapter,
+  notifyAdapter,     // optional
+  observabilityAdapter, // optional
+  jobTypeRegistry,
+  log,
+});
+
+// Available methods:
+// - startJobChain() - Create job chain
+// - getJobChain() - Retrieve job chain
+// - deleteJobChains() - Delete job chains
+// - completeJobChain() - Complete job chain externally
+// - waitForJobChainCompletion() - Poll for completion
+// - withNotify() - Batch notifications
+```
+
+### QueuertInProcessWorker
+
+The worker is configured declaratively and started as a simple lifecycle method:
+
+```typescript
+import { createQueuertInProcessWorker } from "queuert";
+
+const worker = await createQueuertInProcessWorker({
+  // Adapters (same as client)
+  stateAdapter,
+  notifyAdapter,     // optional
+  observabilityAdapter, // optional
+  jobTypeRegistry,
+  log,
+
+  // Worker identity
+  workerId: 'worker-1',  // optional, defaults to random UUID
+
+  // Processing configuration (optional)
+  jobTypeProcessing: {
+    pollIntervalMs: 60_000,
+    nextJobDelayMs: 0,
+    defaultRetryConfig: { ... },
+    defaultLeaseConfig: { ... },
+    jobAttemptMiddlewares: [...],
+  },
+
+  // Job handlers (required)
+  jobTypeProcessors: {
+    myJob: {
+      process: async ({ job, complete }) => { ... },
+      leaseConfig: { ... },  // optional per-type override
+      retryConfig: { ... },  // optional per-type override
+    },
+  },
+});
+
+const stop = await worker.start();
+```
+
+### Why "InProcess"?
+
+The "InProcess" suffix indicates that this worker runs in the same Node.js process as the calling code. This design is:
+
+- **Ideal for I/O-bound workloads**: Network calls, database queries, and external API interactions benefit from Node.js's event loop without blocking
+- **Simple to deploy**: No inter-process communication overhead
+- **Easy to debug**: Stack traces and logging remain in a single process
+
+Future worker types may include subprocess workers for CPU-bound tasks that would otherwise block the event loop.
+
+### Shared Adapters
+
+Both client and worker accept the same adapter parameters. Create adapters once and pass to both:
+
+```typescript
+const client = await createQueuertClient({
+  stateAdapter,
+  notifyAdapter,
+  log,
+  jobTypeRegistry,
+});
+
+const worker = await createQueuertInProcessWorker({
+  stateAdapter,
+  notifyAdapter,
+  log,
+  jobTypeRegistry,
+  jobTypeProcessors: { ... },
+});
+```
+
+This ensures consistent configuration and allows client and worker to share database connections and notification channels efficiently.
+
 ## Worker Lifecycle
 
 ### Creation and Configuration
 
-Workers are created via the builder pattern:
+Workers are configured declaratively at creation time:
 
 ```typescript
-const worker = queuert.createWorker()
-  .implementJobType({ typeName: 'step1', process: ... })
-  .implementJobType({ typeName: 'step2', process: ... });
-
-const stop = await worker.start({
+const worker = await createQueuertInProcessWorker({
+  stateAdapter,
+  notifyAdapter,
+  log,
+  jobTypeRegistry,
   workerId: 'worker-1',           // default: random UUID
-  pollIntervalMs: 60_000,         // default: 60s
-  nextJobDelayMs: 0,              // delay between jobs
-  defaultRetryConfig: { ... },
-  defaultLeaseConfig: { ... },
+  jobTypeProcessing: {
+    pollIntervalMs: 60_000,       // default: 60s
+    nextJobDelayMs: 0,            // delay between jobs
+    defaultRetryConfig: { ... },
+    defaultLeaseConfig: { ... },
+  },
+  jobTypeProcessors: {
+    step1: { process: ... },
+    step2: { process: ... },
+  },
 });
+
+const stop = await worker.start();
 ```
 
 ### Worker Loop
@@ -52,10 +168,18 @@ Calling `stop()` triggers graceful shutdown:
 For parallelism, run multiple workers:
 
 ```typescript
-await Promise.all([
-  worker1.start({ workerId: 'w1' }),
-  worker2.start({ workerId: 'w2' }),
-]);
+const worker1 = await createQueuertInProcessWorker({
+  ...sharedConfig,
+  workerId: 'w1',
+  jobTypeProcessors: { ... },
+});
+const worker2 = await createQueuertInProcessWorker({
+  ...sharedConfig,
+  workerId: 'w2',
+  jobTypeProcessors: { ... },
+});
+
+await Promise.all([worker1.start(), worker2.start()]);
 ```
 
 Workers compete for jobs via database-level locking (`FOR UPDATE SKIP LOCKED` in PostgreSQL).
@@ -187,10 +311,16 @@ At the start of each worker loop iteration:
 A single worker can handle multiple job types:
 
 ```typescript
-worker
-  .implementJobType({ typeName: 'type-a', process: processA })
-  .implementJobType({ typeName: 'type-b', process: processB })
-  .start({ workerId: 'multi-worker' });
+const worker = await createQueuertInProcessWorker({
+  ...adapters,
+  workerId: 'multi-worker',
+  jobTypeProcessors: {
+    'type-a': { process: processA },
+    'type-b': { process: processB },
+  },
+});
+
+await worker.start();
 ```
 
 The worker polls all registered types together and processes whichever is available first.
@@ -198,12 +328,13 @@ The worker polls all registered types together and processes whichever is availa
 Per-type configuration overrides worker defaults:
 
 ```typescript
-.implementJobType({
-  typeName: 'long-running',
-  leaseConfig: { leaseMs: 300_000, renewIntervalMs: 60_000 },
-  retryConfig: { initialDelayMs: 30_000, maxDelayMs: 600_000 },
-  process: ...
-})
+jobTypeProcessors: {
+  'long-running': {
+    leaseConfig: { leaseMs: 300_000, renewIntervalMs: 60_000 },
+    retryConfig: { initialDelayMs: 30_000, maxDelayMs: 600_000 },
+    process: ...
+  },
+}
 ```
 
 ## Notification Integration
@@ -224,17 +355,23 @@ Workers support middlewares that wrap each job attempt, enabling cross-cutting c
 ### Configuration
 
 ```typescript
-await worker.start({
+const worker = await createQueuertInProcessWorker({
+  ...adapters,
   workerId: 'worker-1',
-  jobAttemptMiddlewares: [
-    async ({ job, workerId }, next) => {
-      console.log('Before job processing');
-      const result = await next();
-      console.log('After job processing');
-      return result;
-    },
-  ],
+  jobTypeProcessing: {
+    jobAttemptMiddlewares: [
+      async ({ job, workerId }, next) => {
+        console.log('Before job processing');
+        const result = await next();
+        console.log('After job processing');
+        return result;
+      },
+    ],
+  },
+  jobTypeProcessors: { ... },
 });
+
+await worker.start();
 ```
 
 ### Middleware Signature

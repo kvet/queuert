@@ -1,4 +1,9 @@
-import { createQueuert, createConsoleLog, defineJobTypes } from "queuert";
+import {
+  createQueuertClient,
+  createQueuertInProcessWorker,
+  createConsoleLog,
+  defineJobTypes,
+} from "queuert";
 import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
 import { observabilityAdapter, flushMetrics, shutdownMetrics } from "./observability.js";
 
@@ -8,46 +13,54 @@ const jobTypeRegistry = defineJobTypes<{
   "might-fail": { entry: true; input: { shouldFail: boolean }; output: { success: true } };
 }>();
 
-// 2. Create adapters and queuert with OTEL observability
+// 2. Create adapters and queuert client/worker with OTEL observability
 const stateAdapter = createInProcessStateAdapter();
-const qrt = await createQueuert({
+const notifyAdapter = createInProcessNotifyAdapter();
+const log = createConsoleLog();
+
+const qrtClient = await createQueuertClient({
   stateAdapter,
-  notifyAdapter: createInProcessNotifyAdapter(),
-  log: createConsoleLog(),
+  notifyAdapter,
+  log,
   observabilityAdapter,
   jobTypeRegistry,
 });
-
-// 3. Create and start worker
-const worker = qrt
-  .createWorker()
-  .implementJobType({
-    typeName: "greet",
-    process: async ({ job, complete }) => {
-      return complete(async () => ({
-        greeting: `Hello, ${job.input.name}!`,
-      }));
+// 3. Create and start qrtWorker
+const qrtWorker = await createQueuertInProcessWorker({
+  stateAdapter,
+  notifyAdapter,
+  log,
+  observabilityAdapter,
+  jobTypeRegistry,
+  workerId: "worker-1",
+  jobTypeProcessors: {
+    greet: {
+      process: async ({ job, complete }) => {
+        return complete(async () => ({
+          greeting: `Hello, ${job.input.name}!`,
+        }));
+      },
     },
-  })
-  .implementJobType({
-    typeName: "might-fail",
-    process: async ({ job, complete }) => {
-      if (job.input.shouldFail && job.attempt < 2) {
-        // Throw an error on first attempt to demonstrate metrics
-        throw new Error("Simulated failure for demonstration");
-      }
-      return complete(async () => ({ success: true as const }));
+    "might-fail": {
+      process: async ({ job, complete }) => {
+        if (job.input.shouldFail && job.attempt < 2) {
+          // Throw an error on first attempt to demonstrate metrics
+          throw new Error("Simulated failure for demonstration");
+        }
+        return complete(async () => ({ success: true as const }));
+      },
+      retryConfig: { initialDelayMs: 100, maxDelayMs: 100 },
     },
-    retryConfig: { initialDelayMs: 100, maxDelayMs: 100 },
-  });
+  },
+});
 
-const stopWorker = await worker.start({ workerId: "worker-1" });
+const stopWorker = await qrtWorker.start();
 
 // 4. Run successful job
 console.log("\n--- Running successful job ---\n");
-const successJob = await qrt.withNotify(async () =>
+const successJob = await qrtClient.withNotify(async () =>
   stateAdapter.runInTransaction(async (ctx) =>
-    qrt.startJobChain({
+    qrtClient.startJobChain({
       ...ctx,
       typeName: "greet",
       input: { name: "World" },
@@ -55,16 +68,16 @@ const successJob = await qrt.withNotify(async () =>
   ),
 );
 
-const successCompleted = await qrt.waitForJobChainCompletion(successJob, {
+const successCompleted = await qrtClient.waitForJobChainCompletion(successJob, {
   timeoutMs: 5000,
 });
 console.log("Successful job completed:", successCompleted.output);
 
 // 5. Run job that fails then succeeds (demonstrates attempt_failed metric)
 console.log("\n--- Running job that fails first attempt ---\n");
-const failThenSucceedJob = await qrt.withNotify(async () =>
+const failThenSucceedJob = await qrtClient.withNotify(async () =>
   stateAdapter.runInTransaction(async (ctx) =>
-    qrt.startJobChain({
+    qrtClient.startJobChain({
       ...ctx,
       typeName: "might-fail",
       input: { shouldFail: true },
@@ -72,7 +85,7 @@ const failThenSucceedJob = await qrt.withNotify(async () =>
   ),
 );
 
-const retryCompleted = await qrt.waitForJobChainCompletion(failThenSucceedJob, {
+const retryCompleted = await qrtClient.waitForJobChainCompletion(failThenSucceedJob, {
   timeoutMs: 5000,
 });
 console.log("Retry job completed after failure:", retryCompleted.output);

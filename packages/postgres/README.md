@@ -38,7 +38,7 @@ npm install @queuert/postgres
 ## Quick Start
 
 ```typescript
-import { createQueuert, defineJobTypes } from 'queuert';
+import { createQueuertClient, createConsoleLog, defineJobTypes } from 'queuert';
 import { createPgStateAdapter, createPgNotifyAdapter } from '@queuert/postgres';
 
 const jobTypes = defineJobTypes<{
@@ -53,10 +53,11 @@ const notifyAdapter = await createPgNotifyAdapter({
   notifyProvider: myPgNotifyProvider, // You provide this - see below
 });
 
-const queuert = await createQueuert({
+const client = await createQueuertClient({
   stateAdapter,
   notifyAdapter,
   jobTypeRegistry: jobTypes,
+  log: createConsoleLog(),
 });
 ```
 

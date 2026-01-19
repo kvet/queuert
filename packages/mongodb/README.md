@@ -35,7 +35,7 @@ npm install @queuert/mongodb
 ## Quick Start
 
 ```typescript
-import { createQueuert, defineJobTypes } from 'queuert';
+import { createQueuertClient, createConsoleLog, defineJobTypes } from 'queuert';
 import { createMongoStateAdapter } from '@queuert/mongodb';
 
 const jobTypes = defineJobTypes<{
@@ -46,9 +46,10 @@ const stateAdapter = await createMongoStateAdapter({
   stateProvider: myMongoStateProvider, // You provide this - see below
 });
 
-const queuert = await createQueuert({
+const client = await createQueuertClient({
   stateAdapter,
   jobTypeRegistry: jobTypes,
+  log: createConsoleLog(),
 });
 ```
 
@@ -73,6 +74,7 @@ You need to implement a state provider that bridges your MongoDB client with thi
 
 - `createMongoStateAdapter` - Factory to create MongoDB state adapter
 - `MongoStateAdapter` - Type for the MongoDB state adapter
+- `MongoStateProvider` - Type for the state provider interface (you implement this)
 
 ### Testing (`./testing`)
 

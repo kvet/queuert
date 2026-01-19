@@ -178,10 +178,18 @@ const chain = await queuert.startJobChain({
 });
 
 // Worker handles timeout case (auto-reject)
-worker.implementJobType({
-  typeName: 'await-approval',
-  process: async ({ complete }) => complete(() => ({ rejected: true })),
+const worker = await createQueuertInProcessWorker({
+  stateAdapter,
+  jobTypeRegistry: jobTypes,
+  log: createConsoleLog(),
+  jobTypeProcessors: {
+    'await-approval': {
+      process: async ({ complete }) => complete(() => ({ rejected: true })),
+    },
+  },
 });
+
+await worker.start();
 
 // Job can be completed early without a worker
 await queuert.completeJobChain({

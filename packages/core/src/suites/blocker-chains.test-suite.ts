@@ -1,5 +1,10 @@
 import { expectTypeOf, TestAPI } from "vitest";
-import { createQueuert, defineJobTypes, JobChain } from "../index.js";
+import {
+  createQueuertClient,
+  createQueuertInProcessWorker,
+  defineJobTypes,
+  JobChain,
+} from "../index.js";
 import { TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -19,86 +24,92 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expectLogs,
     expectMetrics,
   }) => {
-    const queuert = await createQueuert({
+    const jobTypeRegistry = defineJobTypes<{
+      blocker: {
+        entry: true;
+        input: { value: number };
+        output: { done: true };
+        continueWith: { typeName: "blocker" };
+      };
+      main: {
+        entry: true;
+        input: { start: boolean };
+        output: { finalResult: number };
+        blockers: [{ typeName: "blocker" }];
+      };
+    }>();
+
+    const client = await createQueuertClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry: defineJobTypes<{
-        blocker: {
-          entry: true;
-          input: { value: number };
-          output: { done: true };
-          continueWith: { typeName: "blocker" };
-        };
-        main: {
-          entry: true;
-          input: { start: boolean };
-          output: { finalResult: number };
-          blockers: [{ typeName: "blocker" }];
-        };
-      }>(),
+      jobTypeRegistry,
     });
-
-    expectTypeOf<
-      Parameters<typeof queuert.startJobChain<"main">>[0]["startBlockers"]
-    >().not.toBeUndefined();
-
     let mainChainId: string;
     let blockerChainId: string;
     let originId: string;
 
-    const worker = queuert
-      .createWorker()
-      .implementJobType({
-        typeName: "blocker",
-        process: async ({ job, complete }) => {
-          expect(job.chainId).toEqual(blockerChainId);
-          expect(job.rootChainId).toEqual(mainChainId);
-          expect(job.originId).toEqual(originId);
-          originId = job.id;
+    const worker = await createQueuertInProcessWorker({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+      jobTypeProcessors: {
+        blocker: {
+          process: async ({ job, complete }) => {
+            expect(job.chainId).toEqual(blockerChainId);
+            expect(job.rootChainId).toEqual(mainChainId);
+            expect(job.originId).toEqual(originId);
+            originId = job.id;
 
-          return complete(async ({ continueWith }) =>
-            job.input.value < 1
-              ? continueWith({
-                  typeName: "blocker",
-                  input: { value: job.input.value + 1 },
-                })
-              : { done: true },
-          );
-        },
-      })
-      .implementJobType({
-        typeName: "main",
-        process: async ({
-          job: {
-            blockers: [blocker],
-            id,
-            input,
+            return complete(async ({ continueWith }) =>
+              job.input.value < 1
+                ? continueWith({
+                    typeName: "blocker",
+                    input: { value: job.input.value + 1 },
+                  })
+                : { done: true },
+            );
           },
-          complete,
-        }) => {
-          expectTypeOf<(typeof blocker)["output"]>().toEqualTypeOf<{
-            done: true;
-          }>();
-
-          expectTypeOf<(typeof blocker)["originId"]>().toEqualTypeOf<string | null>();
-          expect(blocker.originId).toEqual(id);
-
-          return complete(async () => ({
-            finalResult: (blocker.output.done ? 1 : 0) + (input.start ? 1 : 0),
-          }));
         },
-      });
+        main: {
+          process: async ({
+            job: {
+              blockers: [blocker],
+              id,
+              input,
+            },
+            complete,
+          }) => {
+            expectTypeOf<(typeof blocker)["output"]>().toEqualTypeOf<{
+              done: true;
+            }>();
 
-    const jobChain = await queuert.withNotify(async () =>
+            expectTypeOf<(typeof blocker)["originId"]>().toEqualTypeOf<string | null>();
+            expect(blocker.originId).toEqual(id);
+
+            return complete(async () => ({
+              finalResult: (blocker.output.done ? 1 : 0) + (input.start ? 1 : 0),
+            }));
+          },
+        },
+      },
+    });
+
+    expectTypeOf<
+      Parameters<typeof client.startJobChain<"main">>[0]["startBlockers"]
+    >().not.toBeUndefined();
+
+    const jobChain = await client.withNotify(async () =>
       runInTransaction(async (txContext) => {
-        const jobChain = await queuert.startJobChain({
+        const jobChain = await client.startJobChain({
           ...txContext,
           typeName: "main",
           input: { start: true },
           startBlockers: async () => {
-            const dependencyJobChain = await queuert.startJobChain({
+            const dependencyJobChain = await client.startJobChain({
               ...txContext,
               typeName: "blocker",
               input: { value: 0 },
@@ -116,10 +127,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     );
 
     await withWorkers([await worker.start()], async () => {
-      const succeededJobChain = await queuert.waitForJobChainCompletion(
-        jobChain,
-        completionOptions,
-      );
+      const succeededJobChain = await client.waitForJobChainCompletion(jobChain, completionOptions);
 
       expect(succeededJobChain.output).toEqual({ finalResult: 2 });
     });
@@ -241,56 +249,62 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     log,
     expect,
   }) => {
-    const queuert = await createQueuert({
+    const jobTypeRegistry = defineJobTypes<{
+      blocker: {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+      main: {
+        entry: true;
+        input: null;
+        output: { finalResult: number };
+        blockers: [{ typeName: "blocker" }];
+      };
+    }>();
+
+    const client = await createQueuertClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry: defineJobTypes<{
+      jobTypeRegistry,
+    });
+    const worker = await createQueuertInProcessWorker({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+      jobTypeProcessors: {
         blocker: {
-          entry: true;
-          input: { value: number };
-          output: { result: number };
-        };
+          process: async ({ job, complete }) => {
+            expect(job.originId).toBeNull();
+
+            return complete(async () => ({ result: job.input.value }));
+          },
+        },
         main: {
-          entry: true;
-          input: null;
-          output: { finalResult: number };
-          blockers: [{ typeName: "blocker" }];
-        };
-      }>(),
+          process: async ({
+            job: {
+              blockers: [blocker],
+            },
+            complete,
+          }) => {
+            // Blocker originId is null since it was created independently
+            expect(blocker.originId).toBeNull();
+
+            return complete(async () => ({
+              finalResult: blocker.output.result,
+            }));
+          },
+        },
+      },
     });
 
-    const worker = queuert
-      .createWorker()
-      .implementJobType({
-        typeName: "blocker",
-        process: async ({ job, complete }) => {
-          expect(job.originId).toBeNull();
-
-          return complete(async () => ({ result: job.input.value }));
-        },
-      })
-      .implementJobType({
-        typeName: "main",
-        process: async ({
-          job: {
-            blockers: [blocker],
-          },
-          complete,
-        }) => {
-          // Blocker originId is null since it was created independently
-          expect(blocker.originId).toBeNull();
-
-          return complete(async () => ({
-            finalResult: blocker.output.result,
-          }));
-        },
-      });
-
-    const blockerJobChain = await queuert.withNotify(async () =>
+    const blockerJobChain = await client.withNotify(async () =>
       runInTransaction(async (txContext) =>
-        queuert.startJobChain({
+        client.startJobChain({
           ...txContext,
           typeName: "blocker",
           input: { value: 1 },
@@ -298,7 +312,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       ),
     );
     const completedBlockerJobChain = await runInTransaction(async (txContext) =>
-      queuert.completeJobChain({
+      client.completeJobChain({
         ...txContext,
         ...blockerJobChain,
         complete: async ({ job, complete }) => {
@@ -307,9 +321,9 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       }),
     );
 
-    const jobChain = await queuert.withNotify(async () =>
+    const jobChain = await client.withNotify(async () =>
       runInTransaction(async (txContext) =>
-        queuert.startJobChain({
+        client.startJobChain({
           ...txContext,
           typeName: "main",
           input: null,
@@ -319,10 +333,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     );
 
     await withWorkers([await worker.start()], async () => {
-      const succeededJobChain = await queuert.waitForJobChainCompletion(
-        jobChain,
-        completionOptions,
-      );
+      const succeededJobChain = await client.waitForJobChainCompletion(jobChain, completionOptions);
 
       expect(succeededJobChain.output).toEqual({
         finalResult: completedBlockerJobChain.output.result,
@@ -339,89 +350,95 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     log,
     expect,
   }) => {
-    const queuert = await createQueuert({
+    const jobTypeRegistry = defineJobTypes<{
+      inner: {
+        entry: true;
+        input: null;
+        output: null;
+      };
+      outer: {
+        entry: true;
+        input: null;
+        output: null;
+      };
+    }>();
+
+    const client = await createQueuertClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry: defineJobTypes<{
-        inner: {
-          entry: true;
-          input: null;
-          output: null;
-        };
-        outer: {
-          entry: true;
-          input: null;
-          output: null;
-        };
-      }>(),
+      jobTypeRegistry,
     });
-
     const childJobChains: JobChain<string, "inner", null, null>[] = [];
 
-    const worker = queuert
-      .createWorker()
-      .implementJobType({
-        typeName: "inner",
-        process: async ({ job, complete }) => {
-          return complete(async () => {
-            // Independent chains should NOT inherit originId from parent
+    const worker = await createQueuertInProcessWorker({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+      jobTypeProcessors: {
+        inner: {
+          process: async ({ job, complete }) => {
+            return complete(async () => {
+              // Independent chains should NOT inherit originId from parent
+              expect(job.originId).toBeNull();
+              // Independent chains should have self-referential rootChainId
+              expect(job.rootChainId).toEqual(job.id);
+              return null;
+            });
+          },
+        },
+        outer: {
+          process: async ({ job, prepare, complete }) => {
             expect(job.originId).toBeNull();
-            // Independent chains should have self-referential rootChainId
-            expect(job.rootChainId).toEqual(job.id);
-            return null;
-          });
-        },
-      })
-      .implementJobType({
-        typeName: "outer",
-        process: async ({ job, prepare, complete }) => {
-          expect(job.originId).toBeNull();
 
-          await prepare({ mode: "staged" }, async (txContext) => {
+            await prepare({ mode: "staged" }, async (txContext) => {
+              childJobChains.push(
+                await client.withNotify(async () =>
+                  client.startJobChain({
+                    ...txContext,
+                    typeName: "inner",
+                    input: null,
+                  }),
+                ),
+              );
+            });
+
             childJobChains.push(
-              await queuert.withNotify(async () =>
-                queuert.startJobChain({
-                  ...txContext,
-                  typeName: "inner",
-                  input: null,
-                }),
-              ),
-            );
-          });
-
-          childJobChains.push(
-            await queuert.withNotify(async () =>
-              runInTransaction(async (txContext) =>
-                queuert.startJobChain({
-                  ...txContext,
-                  typeName: "inner",
-                  input: null,
-                }),
-              ),
-            ),
-          );
-
-          return complete(async (txContext) => {
-            childJobChains.push(
-              await queuert.withNotify(async () =>
-                queuert.startJobChain({
-                  ...txContext,
-                  typeName: "inner",
-                  input: null,
-                }),
+              await client.withNotify(async () =>
+                runInTransaction(async (txContext) =>
+                  client.startJobChain({
+                    ...txContext,
+                    typeName: "inner",
+                    input: null,
+                  }),
+                ),
               ),
             );
 
-            return null;
-          });
-        },
-      });
+            return complete(async (txContext) => {
+              childJobChains.push(
+                await client.withNotify(async () =>
+                  client.startJobChain({
+                    ...txContext,
+                    typeName: "inner",
+                    input: null,
+                  }),
+                ),
+              );
 
-    const jobChain = await queuert.withNotify(async () =>
+              return null;
+            });
+          },
+        },
+      },
+    });
+
+    const jobChain = await client.withNotify(async () =>
       runInTransaction(async (txContext) =>
-        queuert.startJobChain({
+        client.startJobChain({
           ...txContext,
           typeName: "outer",
           input: null,
@@ -430,11 +447,11 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     );
 
     await withWorkers([await worker.start()], async () => {
-      await queuert.waitForJobChainCompletion(jobChain, completionOptions);
+      await client.waitForJobChainCompletion(jobChain, completionOptions);
 
       const succeededChildJobChains = await Promise.all(
         childJobChains.map(async (chain) =>
-          queuert.waitForJobChainCompletion(chain, completionOptions),
+          client.waitForJobChainCompletion(chain, completionOptions),
         ),
       );
 
@@ -451,50 +468,72 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     log,
     expect,
   }) => {
-    const queuert = await createQueuert({
+    const jobTypeRegistry = defineJobTypes<{
+      test: {
+        entry: true;
+        input: { value: number };
+        continueWith: { typeName: "finish" };
+      };
+      finish: {
+        input: { valueNext: number };
+        output: { result: number };
+      };
+    }>();
+
+    const client = await createQueuertClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry: defineJobTypes<{
+      jobTypeRegistry,
+    });
+    const worker1 = await createQueuertInProcessWorker({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+      jobTypeProcessing: {
+        pollIntervalMs: 100,
+      },
+      jobTypeProcessors: {
         test: {
-          entry: true;
-          input: { value: number };
-          continueWith: { typeName: "finish" };
-        };
+          process: async ({ job, prepare, complete }) => {
+            await prepare({ mode: "atomic" });
+            return complete(async ({ continueWith }) =>
+              continueWith({
+                typeName: "finish",
+                input: { valueNext: job.input.value + 1 },
+              }),
+            );
+          },
+        },
+      },
+    });
+    const worker2 = await createQueuertInProcessWorker({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+      jobTypeProcessing: {
+        pollIntervalMs: 100,
+      },
+      jobTypeProcessors: {
         finish: {
-          input: { valueNext: number };
-          output: { result: number };
-        };
-      }>(),
-    });
-
-    const worker1 = queuert.createWorker().implementJobType({
-      typeName: "test",
-      process: async ({ job, prepare, complete }) => {
-        await prepare({ mode: "atomic" });
-        return complete(async ({ continueWith }) =>
-          continueWith({
-            typeName: "finish",
-            input: { valueNext: job.input.value + 1 },
-          }),
-        );
+          process: async ({ job, prepare, complete }) => {
+            await prepare({ mode: "atomic" });
+            return complete(async () => ({
+              result: job.input.valueNext + 1,
+            }));
+          },
+        },
       },
     });
 
-    const worker2 = queuert.createWorker().implementJobType({
-      typeName: "finish",
-      process: async ({ job, prepare, complete }) => {
-        await prepare({ mode: "atomic" });
-        return complete(async () => ({
-          result: job.input.valueNext + 1,
-        }));
-      },
-    });
-
-    const jobChain = await queuert.withNotify(async () =>
+    const jobChain = await client.withNotify(async () =>
       runInTransaction(async (txContext) =>
-        queuert.startJobChain({
+        client.startJobChain({
           ...txContext,
           typeName: "test",
           input: { value: 1 },
@@ -502,24 +541,11 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       ),
     );
 
-    await withWorkers(
-      [
-        await worker1.start({
-          pollIntervalMs: 100,
-        }),
-        await worker2.start({
-          pollIntervalMs: 100,
-        }),
-      ],
-      async () => {
-        const finishedJobChain = await queuert.waitForJobChainCompletion(
-          jobChain,
-          completionOptions,
-        );
+    await withWorkers([await worker1.start(), await worker2.start()], async () => {
+      const finishedJobChain = await client.waitForJobChainCompletion(jobChain, completionOptions);
 
-        expect(finishedJobChain.output).toEqual({ result: 3 });
-      },
-    );
+      expect(finishedJobChain.output).toEqual({ result: 3 });
+    });
   });
 
   it("handles multiple blocker chains", async ({
@@ -531,53 +557,59 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     log,
     expect,
   }) => {
-    const queuert = await createQueuert({
+    const jobTypeRegistry = defineJobTypes<{
+      blocker: {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+      main: {
+        entry: true;
+        input: null;
+        output: { finalResult: number[] };
+        blockers: [{ typeName: "blocker" }, ...{ typeName: "blocker" }[]];
+      };
+    }>();
+
+    const client = await createQueuertClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry: defineJobTypes<{
+      jobTypeRegistry,
+    });
+    const worker = await createQueuertInProcessWorker({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+      jobTypeProcessors: {
         blocker: {
-          entry: true;
-          input: { value: number };
-          output: { result: number };
-        };
+          process: async ({ job, complete }) => {
+            return complete(async () => ({ result: job.input.value }));
+          },
+        },
         main: {
-          entry: true;
-          input: null;
-          output: { finalResult: number[] };
-          blockers: [{ typeName: "blocker" }, ...{ typeName: "blocker" }[]];
-        };
-      }>(),
+          process: async ({ job, complete }) => {
+            return complete(async () => ({
+              finalResult: job.blockers.map((blocker) => blocker.output.result),
+            }));
+          },
+        },
+      },
     });
 
-    const worker = queuert
-      .createWorker()
-      .implementJobType({
-        typeName: "blocker",
-        process: async ({ job, complete }) => {
-          return complete(async () => ({ result: job.input.value }));
-        },
-      })
-      .implementJobType({
-        typeName: "main",
-        process: async ({ job, complete }) => {
-          return complete(async () => ({
-            finalResult: job.blockers.map((blocker) => blocker.output.result),
-          }));
-        },
-      });
-
-    const jobChain = await queuert.withNotify(async () =>
+    const jobChain = await client.withNotify(async () =>
       runInTransaction(async (txContext) =>
-        queuert.startJobChain({
+        client.startJobChain({
           ...txContext,
           typeName: "main",
           input: null,
           startBlockers: async () => {
             const blockers = await Promise.all(
               Array.from({ length: 5 }, async (_, i) =>
-                queuert.startJobChain({
+                client.startJobChain({
                   ...txContext,
                   typeName: "blocker",
                   input: { value: i + 1 },
@@ -592,10 +624,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     );
 
     await withWorkers([await worker.start()], async () => {
-      const succeededJobChain = await queuert.waitForJobChainCompletion(
-        jobChain,
-        completionOptions,
-      );
+      const succeededJobChain = await client.waitForJobChainCompletion(jobChain, completionOptions);
 
       expect(succeededJobChain.output).toEqual({
         finalResult: Array.from({ length: 5 }, (_, i) => i + 1),
@@ -612,83 +641,88 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     log,
     expect,
   }) => {
-    const queuert = await createQueuert({
+    const jobTypeRegistry = defineJobTypes<{
+      blocker: {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+      first: {
+        entry: true;
+        input: { id: string };
+        continueWith: { typeName: "second" };
+      };
+      second: {
+        input: { fromFirst: string };
+        output: { finalResult: number };
+        blockers: [{ typeName: "blocker" }];
+      };
+    }>();
+
+    const client = await createQueuertClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry: defineJobTypes<{
-        blocker: {
-          entry: true;
-          input: { value: number };
-          output: { result: number };
-        };
-        first: {
-          entry: true;
-          input: { id: string };
-          continueWith: { typeName: "second" };
-        };
-        second: {
-          input: { fromFirst: string };
-          output: { finalResult: number };
-          blockers: [{ typeName: "blocker" }];
-        };
-      }>(),
+      jobTypeRegistry,
     });
-
     let blockerRootChainId: string;
     let blockerOriginId: string | null;
     let secondJobId: string;
 
-    const worker = queuert
-      .createWorker()
-      .implementJobType({
-        typeName: "blocker",
-        process: async ({ job, prepare, complete }) => {
-          blockerRootChainId = job.rootChainId;
-          blockerOriginId = job.originId;
-          await prepare({ mode: "atomic" });
-          return complete(async () => ({ result: job.input.value * 10 }));
-        },
-      })
-      .implementJobType({
-        typeName: "first",
-        process: async ({ job, prepare, complete }) => {
-          await prepare({ mode: "atomic" });
-          return complete(async ({ continueWith, ...txContext }) => {
-            const continuedJob = await continueWith({
-              typeName: "second",
-              input: { fromFirst: job.input.id },
-              startBlockers: async () => [
-                await queuert.startJobChain({
-                  ...txContext,
-                  typeName: "blocker",
-                  input: { value: 5 },
-                }),
-              ],
-            });
-            secondJobId = continuedJob.id;
-            return continuedJob;
-          });
-        },
-      })
-      .implementJobType({
-        typeName: "second",
-        process: async ({
-          job: {
-            blockers: [blocker],
+    const worker = await createQueuertInProcessWorker({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+      jobTypeProcessors: {
+        blocker: {
+          process: async ({ job, prepare, complete }) => {
+            blockerRootChainId = job.rootChainId;
+            blockerOriginId = job.originId;
+            await prepare({ mode: "atomic" });
+            return complete(async () => ({ result: job.input.value * 10 }));
           },
-          prepare,
-          complete,
-        }) => {
-          await prepare({ mode: "atomic" });
-          return complete(async () => ({ finalResult: blocker.output.result }));
         },
-      });
+        first: {
+          process: async ({ job, prepare, complete }) => {
+            await prepare({ mode: "atomic" });
+            return complete(async ({ continueWith, ...txContext }) => {
+              const continuedJob = await continueWith({
+                typeName: "second",
+                input: { fromFirst: job.input.id },
+                startBlockers: async () => [
+                  await client.startJobChain({
+                    ...txContext,
+                    typeName: "blocker",
+                    input: { value: 5 },
+                  }),
+                ],
+              });
+              secondJobId = continuedJob.id;
+              return continuedJob;
+            });
+          },
+        },
+        second: {
+          process: async ({
+            job: {
+              blockers: [blocker],
+            },
+            prepare,
+            complete,
+          }) => {
+            await prepare({ mode: "atomic" });
+            return complete(async () => ({ finalResult: blocker.output.result }));
+          },
+        },
+      },
+    });
 
-    const jobChain = await queuert.withNotify(async () =>
+    const jobChain = await client.withNotify(async () =>
       runInTransaction(async (txContext) =>
-        queuert.startJobChain({
+        client.startJobChain({
           ...txContext,
           typeName: "first",
           input: { id: "test-123" },
@@ -697,10 +731,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     );
 
     await withWorkers([await worker.start()], async () => {
-      const succeededJobChain = await queuert.waitForJobChainCompletion(
-        jobChain,
-        completionOptions,
-      );
+      const succeededJobChain = await client.waitForJobChainCompletion(jobChain, completionOptions);
 
       expect(succeededJobChain.output).toEqual({ finalResult: 50 });
 

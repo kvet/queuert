@@ -1,6 +1,11 @@
 import { TestAPI } from "vitest";
 import { sleep } from "../helpers/sleep.js";
-import { createQueuert, defineJobTypes, JobChain } from "../index.js";
+import {
+  createQueuertClient,
+  createQueuertInProcessWorker,
+  defineJobTypes,
+  JobChain,
+} from "../index.js";
 import { TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -18,30 +23,39 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     log,
     expectGauges,
   }) => {
-    const queuert = await createQueuert({
+    const jobTypeRegistry = defineJobTypes<{
+      test: {
+        entry: true;
+        input: { test: boolean };
+        output: { result: boolean };
+      };
+    }>();
+
+    const client = await createQueuertClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry: defineJobTypes<{
-        test: {
-          entry: true;
-          input: { test: boolean };
-          output: { result: boolean };
-        };
-      }>(),
+      jobTypeRegistry,
     });
-
-    const worker = queuert.createWorker().implementJobType({
-      typeName: "test",
-      process: async ({ job, complete }) => {
-        return complete(async () => ({ result: job.input.test }));
+    const worker = await createQueuertInProcessWorker({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+      jobTypeProcessors: {
+        test: {
+          process: async ({ job, complete }) => {
+            return complete(async () => ({ result: job.input.test }));
+          },
+        },
       },
     });
 
-    const jobChain = await queuert.withNotify(async () =>
+    const jobChain = await client.withNotify(async () =>
       runInTransaction(async (txContext) =>
-        queuert.startJobChain({
+        client.startJobChain({
           ...txContext,
           typeName: "test",
           input: { test: true },
@@ -54,7 +68,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       jobTypeProcessingChange: [],
     });
     await withWorkers([await worker.start()], async () => {
-      await queuert.waitForJobChainCompletion(jobChain, completionOptions);
+      await client.waitForJobChainCompletion(jobChain, completionOptions);
 
       await expectGauges({
         jobTypeIdleChange: [
@@ -87,53 +101,59 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
   }) => {
     const processedTypes: string[] = [];
 
-    const queuert = await createQueuert({
+    const jobTypeRegistry = defineJobTypes<{
+      email: { entry: true; input: { to: string }; output: { sent: boolean } };
+      sms: { entry: true; input: { phone: string }; output: { sent: boolean } };
+    }>();
+
+    const client = await createQueuertClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry: defineJobTypes<{
-        email: { entry: true; input: { to: string }; output: { sent: boolean } };
-        sms: { entry: true; input: { phone: string }; output: { sent: boolean } };
-      }>(),
+      jobTypeRegistry,
+    });
+    const worker = await createQueuertInProcessWorker({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+      jobTypeProcessors: {
+        email: {
+          process: async ({ complete }) => {
+            processedTypes.push("email");
+            return complete(async () => ({ sent: true }));
+          },
+        },
+        sms: {
+          process: async ({ complete }) => {
+            processedTypes.push("sms");
+            return complete(async () => ({ sent: true }));
+          },
+        },
+      },
     });
 
-    const worker = queuert
-      .createWorker()
-      .implementJobType({
-        typeName: "email",
-        process: async ({ complete }) => {
-          processedTypes.push("email");
-          return complete(async () => ({ sent: true }));
-        },
-      })
-      .implementJobType({
-        typeName: "sms",
-        process: async ({ complete }) => {
-          processedTypes.push("sms");
-          return complete(async () => ({ sent: true }));
-        },
-      });
-
-    const emailJob = await queuert.withNotify(async () =>
+    const emailJob = await client.withNotify(async () =>
       runInTransaction(async (txContext) =>
-        queuert.startJobChain({
+        client.startJobChain({
           ...txContext,
           typeName: "email",
           input: { to: "test@example.com" },
         }),
       ),
     );
-    const smsJob = await queuert.withNotify(async () =>
+    const smsJob = await client.withNotify(async () =>
       runInTransaction(async (txContext) =>
-        queuert.startJobChain({ ...txContext, typeName: "sms", input: { phone: "+1234567890" } }),
+        client.startJobChain({ ...txContext, typeName: "sms", input: { phone: "+1234567890" } }),
       ),
     );
 
     await withWorkers([await worker.start()], async () => {
       await Promise.all([
-        queuert.waitForJobChainCompletion(emailJob, completionOptions),
-        queuert.waitForJobChainCompletion(smsJob, completionOptions),
+        client.waitForJobChainCompletion(emailJob, completionOptions),
+        client.waitForJobChainCompletion(smsJob, completionOptions),
       ]);
 
       expect(processedTypes).toContain("email");
@@ -185,47 +205,52 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     observabilityAdapter,
     log,
   }) => {
-    const queuert = await createQueuert({
+    const jobTypeRegistry = defineJobTypes<{
+      test: {
+        entry: true;
+        input: { test: boolean };
+        output: { result: boolean };
+      };
+    }>();
+
+    const client = await createQueuertClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry: defineJobTypes<{
+      jobTypeRegistry,
+    });
+    const worker = await createQueuertInProcessWorker({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+      jobTypeProcessing: {
+        pollIntervalMs: 100,
+      },
+      jobTypeProcessors: {
         test: {
-          entry: true;
-          input: { test: boolean };
-          output: { result: boolean };
-        };
-      }>(),
-    });
-
-    const worker = queuert.createWorker().implementJobType({
-      typeName: "test",
-      process: async ({ job, complete }) => {
-        return complete(async () => ({ result: job.input.test }));
+          process: async ({ job, complete }) => {
+            return complete(async () => ({ result: job.input.test }));
+          },
+        },
       },
     });
 
-    await withWorkers(
-      [
-        await worker.start({
-          pollIntervalMs: 100,
-        }),
-      ],
-      async () => {
-        const jobChain = await queuert.withNotify(async () =>
-          runInTransaction(async (txContext) =>
-            queuert.startJobChain({
-              ...txContext,
-              typeName: "test",
-              input: { test: true },
-            }),
-          ),
-        );
+    await withWorkers([await worker.start()], async () => {
+      const jobChain = await client.withNotify(async () =>
+        runInTransaction(async (txContext) =>
+          client.startJobChain({
+            ...txContext,
+            typeName: "test",
+            input: { test: true },
+          }),
+        ),
+      );
 
-        await queuert.waitForJobChainCompletion(jobChain, completionOptions);
-      },
-    );
+      await client.waitForJobChainCompletion(jobChain, completionOptions);
+    });
   });
 
   it("processes jobs in order", async ({
@@ -239,36 +264,45 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
   }) => {
     const processedJobs: number[] = [];
 
-    const queuert = await createQueuert({
+    const jobTypeRegistry = defineJobTypes<{
+      test: {
+        entry: true;
+        input: { jobNumber: number };
+        output: { success: boolean };
+      };
+    }>();
+
+    const client = await createQueuertClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry: defineJobTypes<{
-        test: {
-          entry: true;
-          input: { jobNumber: number };
-          output: { success: boolean };
-        };
-      }>(),
+      jobTypeRegistry,
     });
+    const worker = await createQueuertInProcessWorker({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+      jobTypeProcessors: {
+        test: {
+          process: async ({ job, complete }) => {
+            processedJobs.push(job.input.jobNumber);
+            await sleep(10);
 
-    const worker = queuert.createWorker().implementJobType({
-      typeName: "test",
-      process: async ({ job, complete }) => {
-        processedJobs.push(job.input.jobNumber);
-        await sleep(10);
-
-        return complete(async () => ({ success: true }));
+            return complete(async () => ({ success: true }));
+          },
+        },
       },
     });
 
     const jobChains: JobChain<string, "test", { jobNumber: number }, { success: boolean }>[] = [];
     for (let i = 0; i < 5; i++) {
       jobChains.push(
-        await queuert.withNotify(async () =>
+        await client.withNotify(async () =>
           runInTransaction(async (txContext) =>
-            queuert.startJobChain({
+            client.startJobChain({
               ...txContext,
               typeName: "test",
               input: { jobNumber: i },
@@ -281,7 +315,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     await withWorkers([await worker.start()], async () => {
       await Promise.all(
         jobChains.map(async (jobChain) =>
-          queuert.waitForJobChainCompletion(jobChain, completionOptions),
+          client.waitForJobChainCompletion(jobChain, completionOptions),
         ),
       );
     });
@@ -300,36 +334,28 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
   }) => {
     const processedJobs: number[] = [];
 
-    const queuert = await createQueuert({
+    const jobTypeRegistry = defineJobTypes<{
+      test: {
+        entry: true;
+        input: { jobNumber: number };
+        output: { success: boolean };
+      };
+    }>();
+
+    const client = await createQueuertClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry: defineJobTypes<{
-        test: {
-          entry: true;
-          input: { jobNumber: number };
-          output: { success: boolean };
-        };
-      }>(),
-    });
-
-    const worker = queuert.createWorker().implementJobType({
-      typeName: "test",
-      process: async ({ job, complete }) => {
-        processedJobs.push(job.input.jobNumber);
-        await sleep(10);
-
-        return complete(async () => ({ success: true }));
-      },
+      jobTypeRegistry,
     });
 
     const jobChains: JobChain<string, "test", { jobNumber: number }, { success: boolean }>[] = [];
     for (let i = 0; i < 5; i++) {
       jobChains.push(
-        await queuert.withNotify(async () =>
+        await client.withNotify(async () =>
           runInTransaction(async (txContext) =>
-            queuert.startJobChain({
+            client.startJobChain({
               ...txContext,
               typeName: "test",
               input: { jobNumber: i },
@@ -339,10 +365,48 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       );
     }
 
-    await withWorkers(await Promise.all([worker.start(), worker.start()]), async () => {
+    const worker1 = await createQueuertInProcessWorker({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+      workerId: "w1",
+      jobTypeProcessors: {
+        test: {
+          process: async ({ job, complete }) => {
+            processedJobs.push(job.input.jobNumber);
+            await sleep(10);
+
+            return complete(async () => ({ success: true }));
+          },
+        },
+      },
+    });
+
+    const worker2 = await createQueuertInProcessWorker({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+      workerId: "w2",
+      jobTypeProcessors: {
+        test: {
+          process: async ({ job, complete }) => {
+            processedJobs.push(job.input.jobNumber);
+            await sleep(10);
+
+            return complete(async () => ({ success: true }));
+          },
+        },
+      },
+    });
+
+    await withWorkers([await worker1.start(), await worker2.start()], async () => {
       await Promise.all(
         jobChains.map(async (jobChain) =>
-          queuert.waitForJobChainCompletion(jobChain, completionOptions),
+          client.waitForJobChainCompletion(jobChain, completionOptions),
         ),
       );
     });
@@ -362,31 +426,61 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const order: string[] = [];
     const capturedJobs: { id: unknown; typeName: string; input: unknown }[] = [];
 
-    const queuert = await createQueuert({
+    const jobTypeRegistry = defineJobTypes<{
+      test: {
+        entry: true;
+        input: { value: number };
+        output: null;
+      };
+    }>();
+
+    const client = await createQueuertClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry: defineJobTypes<{
-        test: {
-          entry: true;
-          input: { value: number };
-          output: null;
-        };
-      }>(),
+      jobTypeRegistry,
     });
-
-    const worker = queuert.createWorker().implementJobType({
-      typeName: "test",
-      process: async ({ complete }) => {
-        order.push("process");
-        return complete(async () => null);
+    const worker = await createQueuertInProcessWorker({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+      jobTypeProcessing: {
+        jobAttemptMiddlewares: [
+          async (ctx, next) => {
+            order.push("mw1-before");
+            capturedJobs.push({
+              id: ctx.job.id,
+              typeName: ctx.job.typeName,
+              input: ctx.job.input,
+            });
+            const result = await next();
+            order.push("mw1-after");
+            return result;
+          },
+          async (ctx, next) => {
+            order.push("mw2-before");
+            const result = await next();
+            order.push("mw2-after");
+            return result;
+          },
+        ],
+      },
+      jobTypeProcessors: {
+        test: {
+          process: async ({ complete }) => {
+            order.push("process");
+            return complete(async () => null);
+          },
+        },
       },
     });
 
-    const jobChain = await queuert.withNotify(async () =>
+    const jobChain = await client.withNotify(async () =>
       runInTransaction(async (context) =>
-        queuert.startJobChain({
+        client.startJobChain({
           ...context,
           typeName: "test",
           input: { value: 42 },
@@ -394,34 +488,9 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       ),
     );
 
-    await withWorkers(
-      [
-        await worker.start({
-          jobAttemptMiddlewares: [
-            async (ctx, next) => {
-              order.push("mw1-before");
-              capturedJobs.push({
-                id: ctx.job.id,
-                typeName: ctx.job.typeName,
-                input: ctx.job.input,
-              });
-              const result = await next();
-              order.push("mw1-after");
-              return result;
-            },
-            async (ctx, next) => {
-              order.push("mw2-before");
-              const result = await next();
-              order.push("mw2-after");
-              return result;
-            },
-          ],
-        }),
-      ],
-      async () => {
-        await queuert.waitForJobChainCompletion(jobChain, completionOptions);
-      },
-    );
+    await withWorkers([await worker.start()], async () => {
+      await client.waitForJobChainCompletion(jobChain, completionOptions);
+    });
 
     expect(order).toEqual(["mw1-before", "mw2-before", "process", "mw2-after", "mw1-after"]);
     expect(capturedJobs).toHaveLength(1);

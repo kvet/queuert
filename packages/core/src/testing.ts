@@ -30,3 +30,6 @@ export {
 
 // State Adapter Test Helper
 export { extendWithStateInProcess } from "./state-adapter/state-adapter.in-process.spec-helper.js";
+
+// Worker Test Helper
+export { withWorkers } from "./helpers/with-workers.js";

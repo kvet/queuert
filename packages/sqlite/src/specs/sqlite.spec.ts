@@ -1,6 +1,7 @@
 import { UUID } from "crypto";
-import { createQueuert, defineJobTypes } from "queuert";
+import { createQueuertClient, createQueuertInProcessWorker, defineJobTypes } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
+import { withWorkers } from "queuert/testing";
 import { it as baseIt, expectTypeOf, vi } from "vitest";
 import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
 import { extendWithStateSqlite } from "../testing.js";
@@ -19,23 +20,42 @@ it("should infer types correctly with custom ID", async ({ db }) => {
 
   await stateAdapter.migrateToLatest();
 
-  const queuert = await createQueuert({
+  const notifyAdapter = createInProcessNotifyAdapter();
+  const log = vi.fn();
+  const jobTypeRegistry = defineJobTypes<{
+    test: {
+      entry: true;
+      input: { foo: string };
+      output: { bar: number };
+    };
+  }>();
+
+  const client = await createQueuertClient({
     stateAdapter,
-    notifyAdapter: createInProcessNotifyAdapter(),
-    log: vi.fn(),
-    jobTypeRegistry: defineJobTypes<{
+    notifyAdapter,
+    log,
+    jobTypeRegistry,
+  });
+  const worker = await createQueuertInProcessWorker({
+    stateAdapter,
+    notifyAdapter,
+    log,
+    jobTypeRegistry,
+    jobTypeProcessors: {
       test: {
-        entry: true;
-        input: { foo: string };
-        output: { bar: number };
-      };
-    }>(),
+        process: async ({ job, complete }) => {
+          expectTypeOf(job.id).toEqualTypeOf<`job.${UUID}`>();
+
+          return complete(async () => ({ bar: 42 }));
+        },
+      },
+    },
   });
 
-  const jobChain = await queuert.withNotify(async () => {
+  const jobChain = await client.withNotify(async () => {
     db.exec("BEGIN IMMEDIATE");
     try {
-      return await queuert.startJobChain({
+      return await client.startJobChain({
         db,
         typeName: "test",
         input: { foo: "hello" },
@@ -46,18 +66,7 @@ it("should infer types correctly with custom ID", async ({ db }) => {
   });
   expectTypeOf(jobChain.id).toEqualTypeOf<`job.${UUID}`>();
 
-  const worker = queuert.createWorker().implementJobType({
-    typeName: "test",
-    process: async ({ job, complete }) => {
-      expectTypeOf(job.id).toEqualTypeOf<`job.${UUID}`>();
-
-      return complete(async () => ({ bar: 42 }));
-    },
+  await withWorkers([await worker.start()], async () => {
+    await client.waitForJobChainCompletion(jobChain, { timeoutMs: 1000 });
   });
-
-  const stopWorker = await worker.start();
-
-  await queuert.waitForJobChainCompletion(jobChain, { timeoutMs: 1000 });
-
-  await stopWorker();
 });

@@ -1,6 +1,11 @@
 import { TestAPI } from "vitest";
 import { sleep } from "../helpers/sleep.js";
-import { createQueuert, defineJobTypes, JobChain } from "../index.js";
+import {
+  createQueuertClient,
+  createQueuertInProcessWorker,
+  defineJobTypes,
+  JobChain,
+} from "../index.js";
 import { TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -12,23 +17,25 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     log,
     expect,
   }) => {
-    const queuert = await createQueuert({
+    const jobTypeRegistry = defineJobTypes<{
+      test: {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+    }>();
+
+    const client = await createQueuertClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry: defineJobTypes<{
-        test: {
-          entry: true;
-          input: { value: number };
-          output: { result: number };
-        };
-      }>(),
+      jobTypeRegistry,
     });
 
-    const jobChain = await queuert.withNotify(async () =>
+    const jobChain = await client.withNotify(async () =>
       runInTransaction(async (txContext) =>
-        queuert.startJobChain({
+        client.startJobChain({
           ...txContext,
           typeName: "test",
           input: { value: 1 },
@@ -37,14 +44,14 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     );
 
     await runInTransaction(async (txContext) =>
-      queuert.deleteJobChains({
+      client.deleteJobChains({
         ...txContext,
         rootChainIds: [jobChain.id],
       }),
     );
 
     await runInTransaction(async (txContext) => {
-      const fetchedJobChain = await queuert.getJobChain({
+      const fetchedJobChain = await client.getJobChain({
         ...txContext,
         id: jobChain.id,
         typeName: "test",
@@ -62,41 +69,51 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     log,
     expect,
   }) => {
-    const queuert = await createQueuert({
+    const jobTypeRegistry = defineJobTypes<{
+      test: {
+        entry: true;
+        input: null;
+        output: null;
+      };
+    }>();
+
+    const client = await createQueuertClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry: defineJobTypes<{
-        test: {
-          entry: true;
-          input: null;
-          output: null;
-        };
-      }>(),
+      jobTypeRegistry,
     });
 
     const jobStarted = Promise.withResolvers<void>();
     const jobDeleted = Promise.withResolvers<void>();
 
-    const worker = queuert.createWorker().implementJobType({
-      typeName: "test",
-      process: async ({ signal }) => {
-        jobStarted.resolve();
+    const worker = await createQueuertInProcessWorker({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+      jobTypeProcessors: {
+        test: {
+          process: async ({ signal }) => {
+            jobStarted.resolve();
 
-        await sleep(5000, { signal });
+            await sleep(5000, { signal });
 
-        expect(signal.reason).toBe("not_found");
-        jobDeleted.resolve();
+            expect(signal.reason).toBe("not_found");
+            jobDeleted.resolve();
 
-        throw new Error();
+            throw new Error();
+          },
+          leaseConfig: { leaseMs: 1000, renewIntervalMs: 100 },
+        },
       },
-      leaseConfig: { leaseMs: 1000, renewIntervalMs: 100 },
     });
 
-    const jobChain = await queuert.withNotify(async () =>
+    const jobChain = await client.withNotify(async () =>
       runInTransaction(async (txContext) =>
-        queuert.startJobChain({
+        client.startJobChain({
           ...txContext,
           typeName: "test",
           input: null,
@@ -108,7 +125,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       await jobStarted.promise;
 
       await runInTransaction(async (txContext) =>
-        queuert.deleteJobChains({
+        client.deleteJobChains({
           ...txContext,
           rootChainIds: [jobChain.id],
         }),
@@ -127,54 +144,61 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     log,
     expect,
   }) => {
-    const queuert = await createQueuert({
+    const jobTypeRegistry = defineJobTypes<{
+      blocker: {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+      main: {
+        entry: true;
+        input: null;
+        output: { finalResult: number };
+        blockers: [{ typeName: "blocker" }];
+      };
+    }>();
+
+    const client = await createQueuertClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry: defineJobTypes<{
-        blocker: {
-          entry: true;
-          input: { value: number };
-          output: { result: number };
-        };
-        main: {
-          entry: true;
-          input: null;
-          output: { finalResult: number };
-          blockers: [{ typeName: "blocker" }];
-        };
-      }>(),
+      jobTypeRegistry,
     });
 
     const blockerCanComplete = Promise.withResolvers<void>();
 
-    const worker = queuert
-      .createWorker()
-      .implementJobType({
-        typeName: "blocker",
-        process: async ({ job, complete }) => {
-          await blockerCanComplete.promise;
-          return complete(async () => ({ result: job.input.value }));
-        },
-      })
-      .implementJobType({
-        typeName: "main",
-        process: async ({
-          job: {
-            blockers: [blocker],
+    const worker = await createQueuertInProcessWorker({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+      jobTypeProcessors: {
+        blocker: {
+          process: async ({ job, complete }) => {
+            await blockerCanComplete.promise;
+            return complete(async () => ({ result: job.input.value }));
           },
-          prepare,
-          complete,
-        }) => {
-          await prepare({ mode: "atomic" });
-          return complete(async () => ({ finalResult: blocker.output.result }));
         },
-      });
+        main: {
+          process: async ({
+            job: {
+              blockers: [blocker],
+            },
+            prepare,
+            complete,
+          }) => {
+            await prepare({ mode: "atomic" });
+            return complete(async () => ({ finalResult: blocker.output.result }));
+          },
+        },
+      },
+    });
 
-    const blockerChain = await queuert.withNotify(async () =>
+    const blockerChain = await client.withNotify(async () =>
       runInTransaction(async (txContext) =>
-        queuert.startJobChain({
+        client.startJobChain({
           ...txContext,
           typeName: "blocker",
           input: { value: 1 },
@@ -182,9 +206,9 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       ),
     );
 
-    const mainChain = await queuert.withNotify(async () =>
+    const mainChain = await client.withNotify(async () =>
       runInTransaction(async (txContext) =>
-        queuert.startJobChain({
+        client.startJobChain({
           ...txContext,
           typeName: "main",
           input: null,
@@ -195,10 +219,10 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
 
     expect(mainChain.status).toBe("blocked");
 
-    await withWorkers(await Promise.all([worker.start(), worker.start()]), async () => {
+    await withWorkers([await worker.start(), await worker.start()], async () => {
       await expect(
         runInTransaction(async (txContext) =>
-          queuert.deleteJobChains({
+          client.deleteJobChains({
             ...txContext,
             rootChainIds: [blockerChain.id],
           }),
@@ -206,7 +230,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       ).rejects.toThrow("external job chains depend on them");
 
       await runInTransaction(async (txContext) =>
-        queuert.deleteJobChains({
+        client.deleteJobChains({
           ...txContext,
           rootChainIds: [blockerChain.id, mainChain.id],
         }),
@@ -216,12 +240,12 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     });
 
     await runInTransaction(async (txContext) => {
-      const fetchedBlocker = await queuert.getJobChain({
+      const fetchedBlocker = await client.getJobChain({
         ...txContext,
         id: blockerChain.id,
         typeName: "blocker",
       });
-      const fetchedMain = await queuert.getJobChain({
+      const fetchedMain = await client.getJobChain({
         ...txContext,
         id: mainChain.id,
         typeName: "main",
@@ -240,35 +264,37 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     log,
     expect,
   }) => {
-    const queuert = await createQueuert({
+    const jobTypeRegistry = defineJobTypes<{
+      blocker: {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+      main: {
+        entry: true;
+        input: null;
+        output: { finalResult: number };
+        blockers: [{ typeName: "blocker" }];
+      };
+    }>();
+
+    const client = await createQueuertClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry: defineJobTypes<{
-        blocker: {
-          entry: true;
-          input: { value: number };
-          output: { result: number };
-        };
-        main: {
-          entry: true;
-          input: null;
-          output: { finalResult: number };
-          blockers: [{ typeName: "blocker" }];
-        };
-      }>(),
+      jobTypeRegistry,
     });
 
     let blockerChain: JobChain<string, "blocker", { value: number }, { result: number }>;
-    const mainChain = await queuert.withNotify(async () =>
+    const mainChain = await client.withNotify(async () =>
       runInTransaction(async (txContext) =>
-        queuert.startJobChain({
+        client.startJobChain({
           ...txContext,
           typeName: "main",
           input: null,
           startBlockers: async () => {
-            blockerChain = await queuert.startJobChain({
+            blockerChain = await client.startJobChain({
               ...txContext,
               typeName: "blocker",
               input: { value: 1 },
@@ -281,7 +307,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
 
     await expect(
       runInTransaction(async (txContext) =>
-        queuert.deleteJobChains({
+        client.deleteJobChains({
           ...txContext,
           rootChainIds: [blockerChain.id],
         }),
@@ -289,7 +315,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     ).rejects.toThrow("must delete from the root chain");
 
     await runInTransaction(async (txContext) =>
-      queuert.deleteJobChains({
+      client.deleteJobChains({
         ...txContext,
         rootChainIds: [mainChain.id],
       }),
@@ -305,42 +331,52 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     log,
     expect,
   }) => {
-    const queuert = await createQueuert({
+    const jobTypeRegistry = defineJobTypes<{
+      test: {
+        entry: true;
+        input: null;
+        output: null;
+      };
+    }>();
+
+    const client = await createQueuertClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry: defineJobTypes<{
-        test: {
-          entry: true;
-          input: null;
-          output: null;
-        };
-      }>(),
+      jobTypeRegistry,
     });
 
     const jobStarted = Promise.withResolvers<void>();
     const processThrown = Promise.withResolvers<void>();
 
-    const worker = queuert.createWorker().implementJobType({
-      typeName: "test",
-      process: async ({ complete }) => {
-        jobStarted.resolve();
-        await sleep(200);
+    const worker = await createQueuertInProcessWorker({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+      jobTypeProcessors: {
+        test: {
+          process: async ({ complete }) => {
+            jobStarted.resolve();
+            await sleep(200);
 
-        try {
-          return await complete(async () => null);
-        } catch (error) {
-          processThrown.resolve();
-          throw error;
-        }
+            try {
+              return await complete(async () => null);
+            } catch (error) {
+              processThrown.resolve();
+              throw error;
+            }
+          },
+          leaseConfig: { leaseMs: 100, renewIntervalMs: 10 },
+        },
       },
-      leaseConfig: { leaseMs: 100, renewIntervalMs: 10 },
     });
 
-    const jobChain = await queuert.withNotify(async () =>
+    const jobChain = await client.withNotify(async () =>
       runInTransaction(async (txContext) =>
-        queuert.startJobChain({
+        client.startJobChain({
           ...txContext,
           typeName: "test",
           input: null,
@@ -352,7 +388,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       await jobStarted.promise;
 
       await runInTransaction(async (txContext) =>
-        queuert.deleteJobChains({
+        client.deleteJobChains({
           ...txContext,
           rootChainIds: [jobChain.id],
         }),

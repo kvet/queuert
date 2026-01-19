@@ -9,7 +9,7 @@
  */
 
 import { z } from "zod";
-import { createConsoleLog, createQueuert } from "queuert";
+import { createConsoleLog, createQueuertClient, createQueuertInProcessWorker } from "queuert";
 import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
 import { createZodJobTypeRegistry } from "./zod-adapter.js";
 
@@ -68,73 +68,77 @@ const jobTypeRegistry = createZodJobTypeRegistry({
   },
 });
 
-// 2. Create queuert with the registry
+// 2. Create queuert client and worker with the registry
 const stateAdapter = createInProcessStateAdapter();
+const notifyAdapter = createInProcessNotifyAdapter();
+const log = createConsoleLog();
 
-const qrt = await createQueuert({
+const qrtClient = await createQueuertClient({
   stateAdapter,
-  notifyAdapter: createInProcessNotifyAdapter(),
-  log: createConsoleLog(),
+  notifyAdapter,
+  log,
   jobTypeRegistry,
 });
 
-// 3. Implement workers
-const worker = qrt
-  .createWorker()
-  .implementJobType({
-    typeName: "fetch-data",
-    process: async ({ job, complete }) => {
-      console.log(`Fetching data from ${job.input.url}`);
-      const data = { items: [1, 2, 3], source: job.input.url };
+// 3. Create and start qrtWorker with job type processors
+const qrtWorker = await createQueuertInProcessWorker({
+  stateAdapter,
+  notifyAdapter,
+  log,
+  jobTypeRegistry,
+  jobTypeProcessors: {
+    "fetch-data": {
+      process: async ({ job, complete }) => {
+        console.log(`Fetching data from ${job.input.url}`);
+        const data = { items: [1, 2, 3], source: job.input.url };
 
-      return complete(async ({ continueWith }) =>
-        continueWith({
-          typeName: "process-data",
-          input: { data },
-        }),
-      );
+        return complete(async ({ continueWith }) =>
+          continueWith({
+            typeName: "process-data",
+            input: { data },
+          }),
+        );
+      },
     },
-  })
-  .implementJobType({
-    typeName: "process-data",
-    process: async ({ job, complete }) => {
-      console.log("Processing data:", job.input.data);
-      const data = job.input.data as { items: number[] };
+    "process-data": {
+      process: async ({ job, complete }) => {
+        console.log("Processing data:", job.input.data);
+        const data = job.input.data as { items: number[] };
 
-      return complete(async () => ({
-        processed: true,
-        itemCount: data.items?.length ?? 0,
-      }));
+        return complete(async () => ({
+          processed: true,
+          itemCount: data.items?.length ?? 0,
+        }));
+      },
     },
-  })
-  .implementJobType({
-    typeName: "batch-process",
-    process: async ({ job, complete }) => {
-      console.log(`Processing batch ${job.input.batchId}`);
-      console.log("Blockers completed:", job.blockers.length);
+    "batch-process": {
+      process: async ({ job, complete }) => {
+        console.log(`Processing batch ${job.input.batchId}`);
+        console.log("Blockers completed:", job.blockers.length);
 
-      return complete(async () => ({
-        success: true,
-      }));
+        return complete(async () => ({
+          success: true,
+        }));
+      },
     },
-  })
-  .implementJobType({
-    typeName: "auth",
-    process: async ({ job, complete }) => {
-      console.log(`Authenticating with token: ${job.input.token.substring(0, 8)}...`);
-      return complete(async () => ({
-        userId: `user-${job.input.token.substring(0, 4)}`,
-      }));
+    auth: {
+      process: async ({ job, complete }) => {
+        console.log(`Authenticating with token: ${job.input.token.substring(0, 8)}...`);
+        return complete(async () => ({
+          userId: `user-${job.input.token.substring(0, 4)}`,
+        }));
+      },
     },
-  });
+  },
+});
 
-const stopWorker = await worker.start({ workerId: "worker-1" });
+const stopWorker = await qrtWorker.start();
 
 // 4. Run a chain
 console.log("\n=== Running fetch-data chain ===");
-const chain = await qrt.withNotify(async () =>
+const chain = await qrtClient.withNotify(async () =>
   stateAdapter.runInTransaction(async (ctx) =>
-    qrt.startJobChain({
+    qrtClient.startJobChain({
       ...ctx,
       typeName: "fetch-data",
       input: { url: "https://api.example.com/data" },
@@ -142,7 +146,7 @@ const chain = await qrt.withNotify(async () =>
   ),
 );
 
-const result = await qrt.waitForJobChainCompletion(chain, { timeoutMs: 5000 });
+const result = await qrtClient.waitForJobChainCompletion(chain, { timeoutMs: 5000 });
 console.log("Chain completed:", result.output);
 
 // 5. Cleanup

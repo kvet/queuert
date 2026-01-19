@@ -29,7 +29,14 @@ export {
   WaitForJobChainCompletionTimeoutError,
   type JobTypeValidationErrorCode,
 } from "./queuert-helper.js";
-export { createQueuert, type Queuert, type QueuertWorkerDefinition } from "./queuert.js";
+export { createQueuertClient, type QueuertClient } from "./queuert-client.js";
+export {
+  createQueuertInProcessWorker,
+  type InProcessWorkerJobTypeProcessor,
+  type InProcessWorkerJobTypeProcessors,
+  type InProcessWorkerProcessingConfig,
+  type QueuertInProcessWorker,
+} from "./queuert-in-process-worker.js";
 export {
   type BaseTxContext,
   type DeduplicationOptions,

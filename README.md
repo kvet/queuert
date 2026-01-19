@@ -22,15 +22,16 @@ const jobTypes = defineJobTypes<{
   };
 }>();
 
-const queuert = createQueuert({
-  stateAdapter: ...,
+const client = await createQueuertClient({
+  stateAdapter,
   jobTypeRegistry: jobTypes,
-})
+  log: createConsoleLog(),
+});
 
-queuert.withNotify(async () => db.transaction(async (tx) => {
+client.withNotify(async () => db.transaction(async (tx) => {
   const image = await tx.images.create({ ... });
 
-  await queuert.startJobChain({
+  await client.startJobChain({
     tx,
     typeName: "process-image",
     input: { imageId: image.id },
@@ -43,50 +44,57 @@ We scheduled the task inside a database transaction. This ensures that if the tr
 Later, a background worker picks up the job and processes it:
 
 ```ts
-queuert.createWorker()
-  .implementJobType({
-    typeName: "process-image",
-    process: async ({ job, prepare, complete }) => {
-      const image = await prepare({ mode: "staged" }, async ({ tx }) => {
-        return tx.images.getById(job.input.imageId);
-      });
-
-      const minifiedImage = await minifyImage(image);
-
-      return complete(async ({ tx, continueWith }) => {
-        const saved = await tx.minifiedImages.create({ image: minifiedImage });
-
-        return continueWith({
-          tx,
-          typeName: "distribute-image",
-          input: { imageId: job.input.imageId, minifiedImageId: saved.id },
-        });
-      });
-    },
-  })
-  .implementJobType({
-    typeName: "distribute-image",
-    process: async ({ job, prepare, complete }) => {
-      const [image, minifiedImage] = await prepare({ mode: "staged" }, async ({ tx }) => {
-        return Promise.all([
-          tx.images.getById(job.input.imageId),
-          tx.minifiedImages.getById(job.input.minifiedImageId),
-        ]);
-      });
-
-      const cdnUrl = await distributeImageToCDN(minifiedImage, 'some-cdn');
-
-      return complete(async ({ tx }) => {
-        await tx.distributions.create({
-          imageId: image.id,
-          minifiedImageId: minifiedImage.id,
-          cdnUrl,
+const worker = await createQueuertInProcessWorker({
+  stateAdapter,
+  jobTypeRegistry: jobTypes,
+  log: createConsoleLog(),
+  workerId: 'worker-1',
+  jobTypeProcessors: {
+    'process-image': {
+      process: async ({ job, prepare, complete }) => {
+        const image = await prepare({ mode: "staged" }, async ({ tx }) => {
+          return tx.images.getById(job.input.imageId);
         });
 
-        return { done: true };
-      });
+        const minifiedImage = await minifyImage(image);
+
+        return complete(async ({ tx, continueWith }) => {
+          const saved = await tx.minifiedImages.create({ image: minifiedImage });
+
+          return continueWith({
+            tx,
+            typeName: "distribute-image",
+            input: { imageId: job.input.imageId, minifiedImageId: saved.id },
+          });
+        });
+      },
     },
-  })
+    'distribute-image': {
+      process: async ({ job, prepare, complete }) => {
+        const [image, minifiedImage] = await prepare({ mode: "staged" }, async ({ tx }) => {
+          return Promise.all([
+            tx.images.getById(job.input.imageId),
+            tx.minifiedImages.getById(job.input.minifiedImageId),
+          ]);
+        });
+
+        const cdnUrl = await distributeImageToCDN(minifiedImage, 'some-cdn');
+
+        return complete(async ({ tx }) => {
+          await tx.distributions.create({
+            imageId: image.id,
+            minifiedImageId: minifiedImage.id,
+            cdnUrl,
+          });
+
+          return { done: true };
+        });
+      },
+    },
+  },
+});
+
+await worker.start();
 ```
 
 ## It looks familiar, right?
@@ -127,7 +135,7 @@ A chain of linked jobs where each job can `continueWith` to the next - just like
 
 ### Job Type
 
-Defines a named job type with its input/output types and process function. Job types are registered with workers via `implementJobType`. The process function receives the job and context for completing or continuing the chain.
+Defines a named job type with its input/output types and process function. Job types are registered with workers via the `jobTypeProcessors` configuration. The process function receives the job and context for completing or continuing the chain.
 
 ### State Adapter
 
@@ -208,19 +216,26 @@ Jobs support two processing modes via the `prepare` function:
 Everything runs in a single transaction. Use for quick operations.
 
 ```ts
-queuert.createWorker()
-  .implementJobType({
-    typeName: "process-item",
-    process: async ({ job, prepare, complete }) => {
-      const data = await prepare({ mode: "atomic" }, async ({ db }) => {
-        return db.query("SELECT * FROM items WHERE id = ?", [job.input.id]);
-      });
-      return complete(async ({ db }) => {
-        await db.query("UPDATE items SET processed = true WHERE id = ?", [job.input.id]);
-        return { processed: true };
-      });
+const worker = await createQueuertInProcessWorker({
+  stateAdapter,
+  jobTypeRegistry: jobTypes,
+  log: createConsoleLog(),
+  jobTypeProcessors: {
+    'process-item': {
+      process: async ({ job, prepare, complete }) => {
+        const data = await prepare({ mode: "atomic" }, async ({ db }) => {
+          return db.query("SELECT * FROM items WHERE id = ?", [job.input.id]);
+        });
+        return complete(async ({ db }) => {
+          await db.query("UPDATE items SET processed = true WHERE id = ?", [job.input.id]);
+          return { processed: true };
+        });
+      },
     },
-  });
+  },
+});
+
+await worker.start();
 ```
 
 ### Staged Mode
@@ -228,26 +243,33 @@ queuert.createWorker()
 Prepare and complete run in separate transactions with a processing phase in between. The worker automatically renews the job lease during the processing phase. Use for long-running operations.
 
 ```ts
-queuert.createWorker()
-  .implementJobType({
-    typeName: "process-item",
-    process: async ({ job, prepare, complete }) => {
-      // Phase 1: Prepare (transaction)
-      const data = await prepare({ mode: "staged" }, async ({ db }) => {
-        return db.query("SELECT * FROM items WHERE id = ?", [job.input.id]);
-      });
+const worker = await createQueuertInProcessWorker({
+  stateAdapter,
+  jobTypeRegistry: jobTypes,
+  log: createConsoleLog(),
+  jobTypeProcessors: {
+    'process-item': {
+      process: async ({ job, prepare, complete }) => {
+        // Phase 1: Prepare (transaction)
+        const data = await prepare({ mode: "staged" }, async ({ db }) => {
+          return db.query("SELECT * FROM items WHERE id = ?", [job.input.id]);
+        });
 
-      // Phase 2: Processing (no transaction, lease auto-renewed)
-      // Implement idempotently - may retry if worker crashes
-      const result = await processData(data);
+        // Phase 2: Processing (no transaction, lease auto-renewed)
+        // Implement idempotently - may retry if worker crashes
+        const result = await processData(data);
 
-      // Phase 3: Complete (transaction)
-      return complete(async ({ db }) => {
-        await db.query("UPDATE items SET result = ? WHERE id = ?", [result, job.input.id]);
-        return { result };
-      });
+        // Phase 3: Complete (transaction)
+        return complete(async ({ db }) => {
+          await db.query("UPDATE items SET result = ? WHERE id = ?", [result, job.input.id]);
+          return { result };
+        });
+      },
     },
-  });
+  },
+});
+
+await worker.start();
 ```
 
 ### Auto-Setup
@@ -278,21 +300,27 @@ await queuert.startJobChain({
 });
 
 // Process in worker
-queuert.createWorker()
-  .implementJobType({
-    typeName: "step1",
-    process: async ({ job, complete }) => {
-      return complete(async ({ continueWith }) => {
-        return continueWith({ typeName: "step2", input: { id: job.input.id } });
-      });
+const worker = await createQueuertInProcessWorker({
+  stateAdapter,
+  jobTypeRegistry: jobTypes,
+  log: createConsoleLog(),
+  jobTypeProcessors: {
+    step1: {
+      process: async ({ job, complete }) => {
+        return complete(async ({ continueWith }) => {
+          return continueWith({ typeName: "step2", input: { id: job.input.id } });
+        });
+      },
     },
-  })
-  .implementJobType({
-    typeName: "step2",
-    process: async ({ job, complete }) => {
-      return complete(() => ({ done: true }));
+    step2: {
+      process: async ({ job, complete }) => {
+        return complete(() => ({ done: true }));
+      },
     },
-  });
+  },
+});
+
+await worker.start();
 ```
 
 ### Branched
@@ -317,18 +345,25 @@ await queuert.startJobChain({
 });
 
 // Process in worker
-queuert.createWorker()
-  .implementJobType({
-    typeName: "main",
-    process: async ({ job, complete }) => {
-      return complete(async ({ continueWith }) => {
-        return continueWith({
-          typeName: job.input.value % 2 === 0 ? "branch1" : "branch2",
-          input: { value: job.input.value },
+const worker = await createQueuertInProcessWorker({
+  stateAdapter,
+  jobTypeRegistry: jobTypes,
+  log: createConsoleLog(),
+  jobTypeProcessors: {
+    main: {
+      process: async ({ job, complete }) => {
+        return complete(async ({ continueWith }) => {
+          return continueWith({
+            typeName: job.input.value % 2 === 0 ? "branch1" : "branch2",
+            input: { value: job.input.value },
+          });
         });
-      });
+      },
     },
-  });
+  },
+});
+
+await worker.start();
 ```
 
 ### Loops
@@ -352,17 +387,24 @@ await queuert.startJobChain({
 });
 
 // Process in worker
-queuert.createWorker()
-  .implementJobType({
-    typeName: "loop",
-    process: async ({ job, complete }) => {
-      return complete(async ({ continueWith }) => {
-        return job.input.counter < 3
-          ? continueWith({ typeName: "loop", input: { counter: job.input.counter + 1 } })
-          : { done: true };
-      });
+const worker = await createQueuertInProcessWorker({
+  stateAdapter,
+  jobTypeRegistry: jobTypes,
+  log: createConsoleLog(),
+  jobTypeProcessors: {
+    loop: {
+      process: async ({ job, complete }) => {
+        return complete(async ({ continueWith }) => {
+          return job.input.counter < 3
+            ? continueWith({ typeName: "loop", input: { counter: job.input.counter + 1 } })
+            : { done: true };
+        });
+      },
     },
-  });
+  },
+});
+
+await worker.start();
 ```
 
 ### Go-to
@@ -386,25 +428,31 @@ await queuert.startJobChain({
 });
 
 // Process in worker
-queuert.createWorker()
-  .implementJobType({
-    typeName: "start",
-    process: async ({ job, complete }) => {
-      return complete(async ({ continueWith }) => {
-        return continueWith({ typeName: "end", input: { result: job.input.value * 2 } });
-      });
+const worker = await createQueuertInProcessWorker({
+  stateAdapter,
+  jobTypeRegistry: jobTypes,
+  log: createConsoleLog(),
+  jobTypeProcessors: {
+    start: {
+      process: async ({ job, complete }) => {
+        return complete(async ({ continueWith }) => {
+          return continueWith({ typeName: "end", input: { result: job.input.value * 2 } });
+        });
+      },
     },
-  })
-  .implementJobType({
-    typeName: "end",
-    process: async ({ job, complete }) => {
-      return complete(async ({ continueWith }) => {
-        return job.input.result < 100
-          ? continueWith({ typeName: "start", input: { value: job.input.result } })
-          : { finalResult: job.input.result };
-      });
+    end: {
+      process: async ({ job, complete }) => {
+        return complete(async ({ continueWith }) => {
+          return job.input.result < 100
+            ? continueWith({ typeName: "start", input: { value: job.input.result } })
+            : { finalResult: job.input.result };
+        });
+      },
     },
-  });
+  },
+});
+
+await worker.start();
 ```
 
 ## Job Blockers
@@ -437,14 +485,21 @@ await queuert.startJobChain({
 });
 
 // Access completed blockers in worker
-queuert.createWorker()
-  .implementJobType({
-    typeName: 'process-all',
-    process: async ({ job, complete }) => {
-      const results = job.blockers.map(b => b.output.data);
-      return complete(() => ({ results }));
+const worker = await createQueuertInProcessWorker({
+  stateAdapter,
+  jobTypeRegistry: jobTypes,
+  log: createConsoleLog(),
+  jobTypeProcessors: {
+    'process-all': {
+      process: async ({ job, complete }) => {
+        const results = job.blockers.map(b => b.output.data);
+        return complete(() => ({ results }));
+      },
     },
-  });
+  },
+});
+
+await worker.start();
 ```
 
 ## Error Handling
@@ -491,26 +546,34 @@ When a job throws an error, it's automatically rescheduled with exponential back
 ```ts
 import { rescheduleJob } from 'queuert';
 
-worker.implementJobType({
-  typeName: 'call-external-api',
-  process: async ({ job, prepare, complete }) => {
-    const response = await fetch(job.input.url);
+const worker = await createQueuertInProcessWorker({
+  stateAdapter,
+  jobTypeRegistry: jobTypes,
+  log: createConsoleLog(),
+  jobTypeProcessors: {
+    'call-external-api': {
+      process: async ({ job, prepare, complete }) => {
+        const response = await fetch(job.input.url);
 
-    if (response.status === 429) {
-      // Rate limited — retry after the specified delay
-      const retryAfter = parseInt(response.headers.get('Retry-After') || '60', 10);
-      rescheduleJob({ afterMs: retryAfter * 1000 });
-    }
+        if (response.status === 429) {
+          // Rate limited — retry after the specified delay
+          const retryAfter = parseInt(response.headers.get('Retry-After') || '60', 10);
+          rescheduleJob({ afterMs: retryAfter * 1000 });
+        }
 
-    if (!response.ok) {
-      // Other errors use default exponential backoff
-      throw new Error(`API error: ${response.status}`);
-    }
+        if (!response.ok) {
+          // Other errors use default exponential backoff
+          throw new Error(`API error: ${response.status}`);
+        }
 
-    const data = await response.json();
-    return complete(() => ({ data }));
+        const data = await response.json();
+        return complete(() => ({ data }));
+      },
+    },
   },
 });
+
+await worker.start();
 ```
 
 The `rescheduleJob` function throws a `RescheduleJobError` which the worker catches specially. Unlike regular errors that trigger exponential backoff based on attempt count, `rescheduleJob` uses your specified schedule exactly:
@@ -583,20 +646,25 @@ const chain = await queuert.startJobChain({
   schedule: { afterMs: 2 * 60 * 60 * 1000 }, // 2 hours
 });
 
-// The worker handles the timeout case (auto-reject, chain ends)
-worker.implementJobType({
-  typeName: 'await-approval',
-  process: async ({ complete }) => complete(() => ({ rejected: true })),
-});
-
-// The worker processes approved requests
-worker.implementJobType({
-  typeName: 'process-request',
-  process: async ({ job, complete }) => {
-    await doSomethingWith(job.input.requestId);
-    return complete(() => ({ processed: true }));
+// The worker handles the timeout case (auto-reject) and processes approved requests
+const worker = await createQueuertInProcessWorker({
+  stateAdapter,
+  jobTypeRegistry: jobTypes,
+  log: createConsoleLog(),
+  jobTypeProcessors: {
+    'await-approval': {
+      process: async ({ complete }) => complete(() => ({ rejected: true })),
+    },
+    'process-request': {
+      process: async ({ job, complete }) => {
+        await doSomethingWith(job.input.requestId);
+        return complete(() => ({ processed: true }));
+      },
+    },
   },
 });
+
+await worker.start();
 
 // The job can be completed early without a worker (e.g., via API call)
 await queuert.completeJobChain({
@@ -625,65 +693,108 @@ This pattern lets you interweave external actions with your job chains — waiti
 For cooperative timeouts, combine `AbortSignal.timeout()` with the provided `signal`:
 
 ```ts
-worker.implementJobType({
-  typeName: 'fetch-data',
-  process: async ({ signal, job, complete }) => {
-    const timeout = AbortSignal.timeout(30_000); // 30 seconds
-    const combined = AbortSignal.any([signal, timeout]);
+const worker = await createQueuertInProcessWorker({
+  stateAdapter,
+  jobTypeRegistry: jobTypes,
+  log: createConsoleLog(),
+  jobTypeProcessors: {
+    'fetch-data': {
+      process: async ({ signal, job, complete }) => {
+        const timeout = AbortSignal.timeout(30_000); // 30 seconds
+        const combined = AbortSignal.any([signal, timeout]);
 
-    // Use combined signal for cancellable operations
-    const response = await fetch(job.input.url, { signal: combined });
-    const data = await response.json();
+        // Use combined signal for cancellable operations
+        const response = await fetch(job.input.url, { signal: combined });
+        const data = await response.json();
 
-    return complete(() => ({ data }));
+        return complete(() => ({ data }));
+      },
+    },
   },
 });
+
+await worker.start();
 ```
 
-For hard timeouts, configure `leaseMs` — if a job doesn't complete or renew its lease in time, the reaper reclaims it for retry:
+For hard timeouts, configure `leaseConfig` in the job type processor — if a job doesn't complete or renew its lease in time, the reaper reclaims it for retry:
 
 ```ts
-worker.implementJobType({
-  typeName: 'long-running-job',
-  leaseConfig: { leaseMs: 300_000, renewIntervalMs: 60_000 }, // 5 min lease
-  process: async ({ job, complete }) => { ... },
+const worker = await createQueuertInProcessWorker({
+  stateAdapter,
+  jobTypeRegistry: jobTypes,
+  log: createConsoleLog(),
+  jobTypeProcessors: {
+    'long-running-job': {
+      leaseConfig: { leaseMs: 300_000, renewIntervalMs: 60_000 }, // 5 min lease
+      process: async ({ job, complete }) => { ... },
+    },
+  },
 });
+
+await worker.start();
 ```
 
 ## Configuration
 
-Workers support various configuration options when started:
+Workers support various configuration options:
 
 ```ts
-await worker.start({
-  workerId: 'worker-1',              // Unique worker identifier
-  pollIntervalMs: 60_000,            // How often to poll for new jobs (default: 60s)
-  nextJobDelayMs: 0,                 // Delay between processing jobs
+const worker = await createQueuertInProcessWorker({
+  stateAdapter,
+  jobTypeRegistry: jobTypes,
+  log: createConsoleLog(),
+  workerId: 'worker-1',              // Unique worker identifier (optional)
+  jobTypeProcessing: {
+    pollIntervalMs: 60_000,          // How often to poll for new jobs (default: 60s)
+    nextJobDelayMs: 0,               // Delay between processing jobs
 
-  // Retry configuration for failed job attempts
-  defaultRetryConfig: {
-    initialDelayMs: 10_000,          // Initial retry delay (default: 10s)
-    multiplier: 2.0,                 // Exponential backoff multiplier
-    maxDelayMs: 300_000,             // Maximum retry delay (default: 5min)
+    // Retry configuration for failed job attempts
+    defaultRetryConfig: {
+      initialDelayMs: 10_000,        // Initial retry delay (default: 10s)
+      multiplier: 2.0,               // Exponential backoff multiplier
+      maxDelayMs: 300_000,           // Maximum retry delay (default: 5min)
+    },
+
+    // Lease configuration for job ownership
+    defaultLeaseConfig: {
+      leaseMs: 60_000,               // How long a worker holds a job (default: 60s)
+      renewIntervalMs: 30_000,       // How often to renew the lease (default: 30s)
+    },
+
+    // Middlewares that wrap each job attempt (e.g., for contextual logging)
+    jobAttemptMiddlewares: [
+      async ({ job, workerId }, next) => {
+        // Setup context before job processing
+        return await next();
+        // Cleanup after job processing
+      },
+    ],
   },
-
-  // Lease configuration for job ownership
-  defaultLeaseConfig: {
-    leaseMs: 60_000,                 // How long a worker holds a job (default: 60s)
-    renewIntervalMs: 30_000,         // How often to renew the lease (default: 30s)
+  jobTypeProcessors: {
+    // ... job type processors
   },
 });
+
+await worker.start();
 ```
 
-Per-job-type configuration can also be set via `implementJobType`:
+Per-job-type configuration can also be set in each processor:
 
 ```ts
-worker.implementJobType({
-  typeName: 'long-running-job',
-  retryConfig: { initialDelayMs: 30_000, multiplier: 2.0, maxDelayMs: 600_000 },
-  leaseConfig: { leaseMs: 300_000, renewIntervalMs: 60_000 },
-  process: async ({ job, complete }) => { ... },
+const worker = await createQueuertInProcessWorker({
+  stateAdapter,
+  jobTypeRegistry: jobTypes,
+  log: createConsoleLog(),
+  jobTypeProcessors: {
+    'long-running-job': {
+      retryConfig: { initialDelayMs: 30_000, multiplier: 2.0, maxDelayMs: 600_000 },
+      leaseConfig: { leaseMs: 300_000, renewIntervalMs: 60_000 },
+      process: async ({ job, complete }) => { ... },
+    },
+  },
 });
+
+await worker.start();
 ```
 
 ## Observability
@@ -694,7 +805,7 @@ Queuert provides an OpenTelemetry adapter for metrics collection. Configure your
 import { createOtelObservabilityAdapter } from '@queuert/otel';
 import { metrics } from '@opentelemetry/api';
 
-const queuert = await createQueuert({
+const client = await createQueuertClient({
   stateAdapter,
   jobTypeRegistry: jobTypes,
   observabilityAdapter: createOtelObservabilityAdapter({

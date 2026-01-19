@@ -34,7 +34,7 @@ npm install @queuert/nats
 ## Quick Start
 
 ```typescript
-import { createQueuert, defineJobTypes } from 'queuert';
+import { createQueuertClient, createConsoleLog, defineJobTypes } from 'queuert';
 import { createPgStateAdapter } from '@queuert/postgres';
 import { createNatsNotifyAdapter } from '@queuert/nats';
 import { connect } from 'nats';
@@ -53,10 +53,11 @@ const notifyAdapter = await createNatsNotifyAdapter({
   // kv: await nc.jetstream().views.kv('queuert-hints'),
 });
 
-const queuert = await createQueuert({
+const client = await createQueuertClient({
   stateAdapter,
   notifyAdapter,
   jobTypeRegistry: jobTypes,
+  log: createConsoleLog(),
 });
 ```
 

@@ -8,8 +8,9 @@ import {
   JobTakenByAnotherWorkerError,
   ProcessHelper,
 } from "../queuert-helper.js";
+import { InProcessWorkerProcessingConfig } from "../queuert-in-process-worker.js";
 import { BaseTxContext, StateAdapter } from "../state-adapter/state-adapter.js";
-import { JobAttemptMiddleware, JobProcessFn, LeaseConfig, runJobProcess } from "./job-process.js";
+import { JobProcessFn, LeaseConfig, runJobProcess } from "./job-process.js";
 
 export type RegisteredJobTypes = Map<
   string,
@@ -20,54 +21,43 @@ export type RegisteredJobTypes = Map<
   }
 >;
 
-export type ExecutorStartOptions<
-  TStateAdapter extends StateAdapter<any, any>,
-  TJobTypeDefinitions extends BaseJobTypeDefinitions,
-> = {
-  workerId?: string;
-  pollIntervalMs?: number;
-  nextJobDelayMs?: number;
-  defaultRetryConfig?: BackoffConfig;
-  defaultLeaseConfig?: LeaseConfig;
-  workerLoopRetryConfig?: BackoffConfig;
-  jobAttemptMiddlewares?: JobAttemptMiddleware<TStateAdapter, TJobTypeDefinitions>[];
-};
-
 export const createExecutor = <
   TStateAdapter extends StateAdapter<any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
 >({
   helper,
   registeredJobTypes,
+  workerId: configuredWorkerId,
+  jobTypeProcessing,
 }: {
   helper: ProcessHelper;
   registeredJobTypes: RegisteredJobTypes;
-}): ((
-  startOptions?: ExecutorStartOptions<TStateAdapter, TJobTypeDefinitions>,
-) => Promise<() => Promise<void>>) => {
+  workerId?: string;
+  jobTypeProcessing?: InProcessWorkerProcessingConfig<TStateAdapter, TJobTypeDefinitions>;
+}): (() => Promise<() => Promise<void>>) => {
   const typeNames = Array.from(registeredJobTypes.keys());
   const { notifyAdapter, observabilityHelper } = helper;
 
-  return async ({
-    workerId = randomUUID(),
-    pollIntervalMs = 60_000,
-    nextJobDelayMs = 0,
-    defaultRetryConfig = {
-      initialDelayMs: 10_000,
-      multiplier: 2.0,
-      maxDelayMs: 300_000,
-    },
-    defaultLeaseConfig = {
-      leaseMs: 60_000,
-      renewIntervalMs: 30_000,
-    },
-    workerLoopRetryConfig = {
-      initialDelayMs: 10_000,
-      multiplier: 2.0,
-      maxDelayMs: 300_000,
-    },
-    jobAttemptMiddlewares,
-  } = {}) => {
+  const workerId = configuredWorkerId ?? randomUUID();
+  const pollIntervalMs = jobTypeProcessing?.pollIntervalMs ?? 60_000;
+  const nextJobDelayMs = jobTypeProcessing?.nextJobDelayMs ?? 0;
+  const defaultRetryConfig = jobTypeProcessing?.defaultRetryConfig ?? {
+    initialDelayMs: 10_000,
+    multiplier: 2.0,
+    maxDelayMs: 300_000,
+  };
+  const defaultLeaseConfig = jobTypeProcessing?.defaultLeaseConfig ?? {
+    leaseMs: 60_000,
+    renewIntervalMs: 30_000,
+  };
+  const workerLoopRetryConfig = jobTypeProcessing?.workerLoopRetryConfig ?? {
+    initialDelayMs: 10_000,
+    multiplier: 2.0,
+    maxDelayMs: 300_000,
+  };
+  const jobAttemptMiddlewares = jobTypeProcessing?.jobAttemptMiddlewares;
+
+  return async () => {
     observabilityHelper.workerStarted({ workerId, jobTypeNames: typeNames });
     observabilityHelper.jobTypeIdleChange(1, workerId, typeNames);
     const stopController = new AbortController();
@@ -196,10 +186,3 @@ export const createExecutor = <
     };
   };
 };
-
-export type Executor<
-  TStateAdapter extends StateAdapter<any, any> = StateAdapter<any, any>,
-  TJobTypeDefinitions extends BaseJobTypeDefinitions = BaseJobTypeDefinitions,
-> = (
-  startOptions?: ExecutorStartOptions<TStateAdapter, TJobTypeDefinitions>,
-) => Promise<() => Promise<void>>;

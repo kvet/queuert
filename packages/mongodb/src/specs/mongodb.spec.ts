@@ -1,7 +1,8 @@
 import { extendWithMongodb } from "@queuert/testcontainers";
 import { MongoClient } from "mongodb";
-import { createQueuert, defineJobTypes } from "queuert";
+import { createQueuertClient, createQueuertInProcessWorker, defineJobTypes } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
+import { withWorkers } from "queuert/testing";
 import { it as baseIt, expectTypeOf, vi } from "vitest";
 import { createMongoStateAdapter } from "../state-adapter/state-adapter.mongodb.js";
 import { createMongoProvider } from "./state-provider.mongodb.js";
@@ -9,15 +10,15 @@ import { createMongoProvider } from "./state-provider.mongodb.js";
 const it = extendWithMongodb(baseIt, import.meta.url);
 
 it("should infer types correctly with custom ID", async ({ mongoConnectionString }) => {
-  const client = new MongoClient(mongoConnectionString);
-  await client.connect();
+  const mongoClient = new MongoClient(mongoConnectionString);
+  await mongoClient.connect();
 
   const dbName = new URL(mongoConnectionString).pathname.slice(1).split("?")[0];
-  const db = client.db(dbName);
+  const db = mongoClient.db(dbName);
   const collectionName = "queuert_jobs";
 
   const stateProvider = createMongoProvider({
-    client,
+    client: mongoClient,
     db,
     collectionName,
   });
@@ -29,24 +30,43 @@ it("should infer types correctly with custom ID", async ({ mongoConnectionString
 
   await stateAdapter.migrateToLatest();
 
-  const queuert = await createQueuert({
+  const notifyAdapter = createInProcessNotifyAdapter();
+  const log = vi.fn();
+  const jobTypeRegistry = defineJobTypes<{
+    test: {
+      entry: true;
+      input: { foo: string };
+      output: { bar: number };
+    };
+  }>();
+
+  const client = await createQueuertClient({
     stateAdapter,
-    notifyAdapter: createInProcessNotifyAdapter(),
-    log: vi.fn(),
-    jobTypeRegistry: defineJobTypes<{
+    notifyAdapter,
+    log,
+    jobTypeRegistry,
+  });
+  const worker = await createQueuertInProcessWorker({
+    stateAdapter,
+    notifyAdapter,
+    log,
+    jobTypeRegistry,
+    jobTypeProcessors: {
       test: {
-        entry: true;
-        input: { foo: string };
-        output: { bar: number };
-      };
-    }>(),
+        process: async ({ job, complete }) => {
+          expectTypeOf(job.id).toEqualTypeOf<`job.${string}`>();
+
+          return complete(async () => ({ bar: 42 }));
+        },
+      },
+    },
   });
 
-  const jobChain = await queuert.withNotify(async () => {
-    const session = client.startSession();
+  const jobChain = await client.withNotify(async () => {
+    const session = mongoClient.startSession();
     try {
       return await session.withTransaction(async () => {
-        return queuert.startJobChain({
+        return client.startJobChain({
           session,
           typeName: "test",
           input: { foo: "hello" },
@@ -58,20 +78,9 @@ it("should infer types correctly with custom ID", async ({ mongoConnectionString
   });
   expectTypeOf(jobChain.id).toEqualTypeOf<`job.${string}`>();
 
-  const worker = queuert.createWorker().implementJobType({
-    typeName: "test",
-    process: async ({ job, complete }) => {
-      expectTypeOf(job.id).toEqualTypeOf<`job.${string}`>();
-
-      return complete(async () => ({ bar: 42 }));
-    },
+  await withWorkers([await worker.start()], async () => {
+    await client.waitForJobChainCompletion(jobChain, { timeoutMs: 1000 });
   });
 
-  const stopWorker = await worker.start();
-
-  await queuert.waitForJobChainCompletion(jobChain, { timeoutMs: 1000 });
-
-  await stopWorker();
-
-  await client.close();
+  await mongoClient.close();
 });

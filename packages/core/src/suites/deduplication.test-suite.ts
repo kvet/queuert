@@ -1,6 +1,6 @@
 import { TestAPI } from "vitest";
 import { sleep } from "../helpers/sleep.js";
-import { createQueuert, defineJobTypes } from "../index.js";
+import { createQueuertClient, defineJobTypes } from "../index.js";
 import { TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -12,35 +12,37 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     log,
     expect,
   }) => {
-    const queuert = await createQueuert({
+    const jobTypeRegistry = defineJobTypes<{
+      test: {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+    }>();
+
+    const client = await createQueuertClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry: defineJobTypes<{
-        test: {
-          entry: true;
-          input: { value: number };
-          output: { result: number };
-        };
-      }>(),
+      jobTypeRegistry,
     });
 
-    const [chain1, chain2, chain3] = await queuert.withNotify(async () =>
+    const [chain1, chain2, chain3] = await client.withNotify(async () =>
       runInTransaction(async (txContext) => [
-        await queuert.startJobChain({
+        await client.startJobChain({
           ...txContext,
           typeName: "test",
           input: { value: 1 },
           deduplication: { key: "same-key" },
         }),
-        await queuert.startJobChain({
+        await client.startJobChain({
           ...txContext,
           typeName: "test",
           input: { value: 2 },
           deduplication: { key: "same-key" },
         }),
-        await queuert.startJobChain({
+        await client.startJobChain({
           ...txContext,
           typeName: "test",
           input: { value: 3 },
@@ -56,7 +58,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expect(chain3.id).not.toBe(chain1.id);
 
     const completed1 = await runInTransaction(async (txContext) =>
-      queuert.completeJobChain({
+      client.completeJobChain({
         ...txContext,
         ...chain1,
         complete: async ({ job, complete }) => {
@@ -66,7 +68,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     );
 
     const completed3 = await runInTransaction(async (txContext) =>
-      queuert.completeJobChain({
+      client.completeJobChain({
         ...txContext,
         ...chain3,
         complete: async ({ job, complete }) => {
@@ -80,7 +82,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     // chain2 was deduplicated to chain1, so it should have the same output
     const fetched2 = await runInTransaction(async (txContext) =>
-      queuert.getJobChain({ ...txContext, ...chain2 }),
+      client.getJobChain({ ...txContext, ...chain2 }),
     );
     expect("output" in fetched2! && fetched2.output).toEqual({ result: 1 });
   });
@@ -93,24 +95,26 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     observabilityAdapter,
     expect,
   }) => {
-    const queuert = await createQueuert({
+    const jobTypeRegistry = defineJobTypes<{
+      test: {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+    }>();
+
+    const client = await createQueuertClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry: defineJobTypes<{
-        test: {
-          entry: true;
-          input: { value: number };
-          output: { result: number };
-        };
-      }>(),
+      jobTypeRegistry,
     });
 
     // Test 'all' strategy - deduplicates against completed jobs
-    const allChain1 = await queuert.withNotify(async () =>
+    const allChain1 = await client.withNotify(async () =>
       runInTransaction(async (txContext) =>
-        queuert.startJobChain({
+        client.startJobChain({
           ...txContext,
           typeName: "test",
           input: { value: 1 },
@@ -120,7 +124,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     );
 
     await runInTransaction(async (txContext) =>
-      queuert.completeJobChain({
+      client.completeJobChain({
         ...txContext,
         ...allChain1,
         complete: async ({ job, complete }) => {
@@ -129,9 +133,9 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       }),
     );
 
-    const allChain2 = await queuert.withNotify(async () =>
+    const allChain2 = await client.withNotify(async () =>
       runInTransaction(async (txContext) =>
-        queuert.startJobChain({
+        client.startJobChain({
           ...txContext,
           typeName: "test",
           input: { value: 2 },
@@ -144,9 +148,9 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expect(allChain2.id).toBe(allChain1.id);
 
     // Test 'completed' strategy - does NOT deduplicate against completed jobs
-    const completedChain1 = await queuert.withNotify(async () =>
+    const completedChain1 = await client.withNotify(async () =>
       runInTransaction(async (txContext) =>
-        queuert.startJobChain({
+        client.startJobChain({
           ...txContext,
           typeName: "test",
           input: { value: 3 },
@@ -156,7 +160,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     );
 
     await runInTransaction(async (txContext) =>
-      queuert.completeJobChain({
+      client.completeJobChain({
         ...txContext,
         ...completedChain1,
         complete: async ({ job, complete }) => {
@@ -165,9 +169,9 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       }),
     );
 
-    const completedChain2 = await queuert.withNotify(async () =>
+    const completedChain2 = await client.withNotify(async () =>
       runInTransaction(async (txContext) =>
-        queuert.startJobChain({
+        client.startJobChain({
           ...txContext,
           typeName: "test",
           input: { value: 4 },
@@ -180,7 +184,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expect(completedChain2.id).not.toBe(completedChain1.id);
 
     const completed2 = await runInTransaction(async (txContext) =>
-      queuert.completeJobChain({
+      client.completeJobChain({
         ...txContext,
         ...completedChain2,
         complete: async ({ job, complete }) => {
@@ -199,24 +203,26 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     log,
     expect,
   }) => {
-    const queuert = await createQueuert({
+    const jobTypeRegistry = defineJobTypes<{
+      test: {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+    }>();
+
+    const client = await createQueuertClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry: defineJobTypes<{
-        test: {
-          entry: true;
-          input: { value: number };
-          output: { result: number };
-        };
-      }>(),
+      jobTypeRegistry,
     });
 
     // Test 'all' strategy with windowMs
-    const allChain1 = await queuert.withNotify(async () =>
+    const allChain1 = await client.withNotify(async () =>
       runInTransaction(async (txContext) =>
-        queuert.startJobChain({
+        client.startJobChain({
           ...txContext,
           typeName: "test",
           input: { value: 1 },
@@ -229,9 +235,9 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     await sleep(100);
 
-    const allChain2 = await queuert.withNotify(async () =>
+    const allChain2 = await client.withNotify(async () =>
       runInTransaction(async (txContext) =>
-        queuert.startJobChain({
+        client.startJobChain({
           ...txContext,
           typeName: "test",
           input: { value: 2 },
@@ -244,9 +250,9 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expect(allChain2.id).not.toBe(allChain1.id);
 
     // Test 'completed' strategy with windowMs
-    const completedChain1 = await queuert.withNotify(async () =>
+    const completedChain1 = await client.withNotify(async () =>
       runInTransaction(async (txContext) =>
-        queuert.startJobChain({
+        client.startJobChain({
           ...txContext,
           typeName: "test",
           input: { value: 3 },
@@ -256,7 +262,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     );
 
     await runInTransaction(async (txContext) =>
-      queuert.completeJobChain({
+      client.completeJobChain({
         ...txContext,
         ...completedChain1,
         complete: async ({ job, complete }) => {
@@ -267,9 +273,9 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     await sleep(100);
 
-    const completedChain2 = await queuert.withNotify(async () =>
+    const completedChain2 = await client.withNotify(async () =>
       runInTransaction(async (txContext) =>
-        queuert.startJobChain({
+        client.startJobChain({
           ...txContext,
           typeName: "test",
           input: { value: 4 },

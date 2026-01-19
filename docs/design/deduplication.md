@@ -102,21 +102,29 @@ defineJobTypes<{
 }>();
 
 // Start trigger, which creates process-item blockers and continues to aggregate
-worker.implementJobType({
-  typeName: 'trigger',
-  process: async ({ job, complete }) => {
-    return complete(async ({ continueWith }) => {
-      return continueWith({
-        typeName: 'aggregate',
-        input: { count: job.input.ids.length },
-        startBlockers: async () =>
-          Promise.all(job.input.ids.map(id =>
-            queuert.startJobChain({ typeName: 'process-item', input: { id } })
-          ))
-      });
-    });
+const worker = await createQueuertInProcessWorker({
+  stateAdapter,
+  jobTypeRegistry: jobTypes,
+  log: createConsoleLog(),
+  jobTypeProcessors: {
+    trigger: {
+      process: async ({ job, complete }) => {
+        return complete(async ({ continueWith }) => {
+          return continueWith({
+            typeName: 'aggregate',
+            input: { count: job.input.ids.length },
+            startBlockers: async () =>
+              Promise.all(job.input.ids.map(id =>
+                queuert.startJobChain({ typeName: 'process-item', input: { id } })
+              ))
+          });
+        });
+      },
+    },
   },
 });
+
+await worker.start();
 ```
 
 ## Summary

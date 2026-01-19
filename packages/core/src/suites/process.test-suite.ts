@@ -1,6 +1,6 @@
 import { expectTypeOf, TestAPI, vi } from "vitest";
 import { sleep } from "../helpers/sleep.js";
-import { createQueuert, defineJobTypes } from "../index.js";
+import { createQueuertClient, createQueuertInProcessWorker, defineJobTypes } from "../index.js";
 import { TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -21,63 +21,73 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     expectHistograms,
     expect,
   }) => {
-    const queuert = await createQueuert({
+    const jobTypeRegistry = defineJobTypes<{
+      test: {
+        entry: true;
+        input: { test: boolean };
+        output: { result: boolean };
+      };
+    }>();
+
+    const client = await createQueuertClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry: defineJobTypes<{
-        test: {
-          entry: true;
-          input: { test: boolean };
-          output: { result: boolean };
-        };
-      }>(),
+      jobTypeRegistry,
     });
+    const worker = await createQueuertInProcessWorker({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+      workerId: "worker",
+      jobTypeProcessors: {
+        test: {
+          process: async ({ job, prepare, complete }) => {
+            expectTypeOf(job.typeName).toEqualTypeOf<"test">();
+            expectTypeOf(job.input).toEqualTypeOf<{ test: boolean }>();
+            expectTypeOf(job.status).toEqualTypeOf<"running">();
+            expect(job.typeName).toBe("test");
+            expect(job.input).toEqual({ test: true });
+            expect(job.status).toBe("running");
+            expect(job.id).toBeDefined();
+            expect(job.chainId).toEqual(job.id);
+            expect(job.originId).toBeNull();
+            expect(job.rootChainId).toEqual(job.id);
 
-    const worker = queuert.createWorker().implementJobType({
-      typeName: "test",
-      process: async ({ job, prepare, complete }) => {
-        expectTypeOf(job.typeName).toEqualTypeOf<"test">();
-        expectTypeOf(job.input).toEqualTypeOf<{ test: boolean }>();
-        expectTypeOf(job.status).toEqualTypeOf<"running">();
-        expect(job.typeName).toBe("test");
-        expect(job.input).toEqual({ test: true });
-        expect(job.status).toBe("running");
-        expect(job.id).toBeDefined();
-        expect(job.chainId).toEqual(job.id);
-        expect(job.originId).toBeNull();
-        expect(job.rootChainId).toEqual(job.id);
+            const result = await prepare({ mode: "staged" }, (txContext) => {
+              expectTypeOf(txContext).toEqualTypeOf<{ $test: true }>();
+              expect(txContext).toBeDefined();
 
-        const result = await prepare({ mode: "staged" }, (txContext) => {
-          expectTypeOf(txContext).toEqualTypeOf<{ $test: true }>();
-          expect(txContext).toBeDefined();
+              return "prepare";
+            });
+            expect(result).toEqual("prepare");
 
-          return "prepare";
-        });
-        expect(result).toEqual("prepare");
+            const completedJob = await complete(async ({ continueWith: _, ...txContext }) => {
+              expectTypeOf(txContext).toEqualTypeOf<{ $test: true }>();
+              expect(txContext).toBeDefined();
 
-        const completedJob = await complete(async ({ continueWith: _, ...txContext }) => {
-          expectTypeOf(txContext).toEqualTypeOf<{ $test: true }>();
-          expect(txContext).toBeDefined();
-
-          return { result: true };
-        });
-        expectTypeOf(completedJob.typeName).toEqualTypeOf<"test">();
-        expectTypeOf(completedJob.status).toEqualTypeOf<"completed">();
-        expect(completedJob.typeName).toBe("test");
-        expect(completedJob.status).toBe("completed");
-        if (completedJob.status === "completed") {
-          expectTypeOf(completedJob.completedBy).toEqualTypeOf<string | null>();
-          expect(completedJob.completedBy).toBe("worker");
-        }
-        return completedJob;
+              return { result: true };
+            });
+            expectTypeOf(completedJob.typeName).toEqualTypeOf<"test">();
+            expectTypeOf(completedJob.status).toEqualTypeOf<"completed">();
+            expect(completedJob.typeName).toBe("test");
+            expect(completedJob.status).toBe("completed");
+            if (completedJob.status === "completed") {
+              expectTypeOf(completedJob.completedBy).toEqualTypeOf<string | null>();
+              expect(completedJob.completedBy).toBe("worker");
+            }
+            return completedJob;
+          },
+        },
       },
     });
 
-    const jobChain = await queuert.withNotify(async () =>
+    const jobChain = await client.withNotify(async () =>
       runInTransaction(async (txContext) =>
-        queuert.startJobChain({
+        client.startJobChain({
           ...txContext,
           typeName: "test",
           input: { test: true },
@@ -89,11 +99,8 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     expectTypeOf<(typeof jobChain)["typeName"]>().toEqualTypeOf<"test">();
     expect(jobChain.input).toEqual({ test: true });
 
-    await withWorkers([await worker.start({ workerId: "worker" })], async () => {
-      const completedJobChain = await queuert.waitForJobChainCompletion(
-        jobChain,
-        completionOptions,
-      );
+    await withWorkers([await worker.start()], async () => {
+      const completedJobChain = await client.waitForJobChainCompletion(jobChain, completionOptions);
       expectTypeOf<(typeof completedJobChain)["status"]>().toEqualTypeOf<"completed">();
       expectTypeOf<(typeof completedJobChain)["output"]>().toEqualTypeOf<{
         result: boolean;
@@ -186,88 +193,90 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     log,
     expect,
   }) => {
-    const queuert = await createQueuert({
+    const jobTypeRegistry = defineJobTypes<{
+      "atomic-complete": {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+      "staged-complete": {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+      "staged-with-callback": {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+      "staged-without-callback": {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+      "atomic-with-callback": {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+      "atomic-without-callback": {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+    }>();
+
+    const client = await createQueuertClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry: defineJobTypes<{
-        "atomic-complete": {
-          entry: true;
-          input: { value: number };
-          output: { result: number };
-        };
-        "staged-complete": {
-          entry: true;
-          input: { value: number };
-          output: { result: number };
-        };
-        "staged-with-callback": {
-          entry: true;
-          input: { value: number };
-          output: { result: number };
-        };
-        "staged-without-callback": {
-          entry: true;
-          input: { value: number };
-          output: { result: number };
-        };
-        "atomic-with-callback": {
-          entry: true;
-          input: { value: number };
-          output: { result: number };
-        };
-        "atomic-without-callback": {
-          entry: true;
-          input: { value: number };
-          output: { result: number };
-        };
-      }>(),
+      jobTypeRegistry,
     });
-
-    const worker = queuert
-      .createWorker()
-      .implementJobType({
-        typeName: "atomic-complete",
-        process: async ({ job, complete }) => {
-          return complete(async () => ({ result: job.input.value * 2 }));
+    const worker = await createQueuertInProcessWorker({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+      jobTypeProcessors: {
+        "atomic-complete": {
+          process: async ({ job, complete }) => {
+            return complete(async () => ({ result: job.input.value * 2 }));
+          },
         },
-      })
-      .implementJobType({
-        typeName: "staged-complete",
-        process: async ({ job, complete }) => {
-          await sleep(1);
-          return complete(async () => ({ result: job.input.value * 3 }));
+        "staged-complete": {
+          process: async ({ job, complete }) => {
+            await sleep(1);
+            return complete(async () => ({ result: job.input.value * 3 }));
+          },
         },
-      })
-      .implementJobType({
-        typeName: "staged-with-callback",
-        process: async ({ job, prepare, complete }) => {
-          const multiplier = await prepare({ mode: "staged" }, () => 4);
-          return complete(async () => ({ result: job.input.value * multiplier }));
+        "staged-with-callback": {
+          process: async ({ job, prepare, complete }) => {
+            const multiplier = await prepare({ mode: "staged" }, () => 4);
+            return complete(async () => ({ result: job.input.value * multiplier }));
+          },
         },
-      })
-      .implementJobType({
-        typeName: "staged-without-callback",
-        process: async ({ job, prepare, complete }) => {
-          await prepare({ mode: "staged" });
-          return complete(async () => ({ result: job.input.value * 5 }));
+        "staged-without-callback": {
+          process: async ({ job, prepare, complete }) => {
+            await prepare({ mode: "staged" });
+            return complete(async () => ({ result: job.input.value * 5 }));
+          },
         },
-      })
-      .implementJobType({
-        typeName: "atomic-with-callback",
-        process: async ({ job, prepare, complete }) => {
-          const multiplier = await prepare({ mode: "atomic" }, () => 6);
-          return complete(async () => ({ result: job.input.value * multiplier }));
+        "atomic-with-callback": {
+          process: async ({ job, prepare, complete }) => {
+            const multiplier = await prepare({ mode: "atomic" }, () => 6);
+            return complete(async () => ({ result: job.input.value * multiplier }));
+          },
         },
-      })
-      .implementJobType({
-        typeName: "atomic-without-callback",
-        process: async ({ job, prepare, complete }) => {
-          await prepare({ mode: "atomic" });
-          return complete(async () => ({ result: job.input.value * 7 }));
+        "atomic-without-callback": {
+          process: async ({ job, prepare, complete }) => {
+            await prepare({ mode: "atomic" });
+            return complete(async () => ({ result: job.input.value * 7 }));
+          },
         },
-      });
+      },
+    });
 
     const [
       atomicCompleteJob,
@@ -276,35 +285,35 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       stagedNoCallbackJob,
       atomicCallbackJob,
       atomicNoCallbackJob,
-    ] = await queuert.withNotify(async () =>
+    ] = await client.withNotify(async () =>
       runInTransaction(async (txContext) =>
         Promise.all([
-          queuert.startJobChain({
+          client.startJobChain({
             ...txContext,
             typeName: "atomic-complete",
             input: { value: 10 },
           }),
-          queuert.startJobChain({
+          client.startJobChain({
             ...txContext,
             typeName: "staged-complete",
             input: { value: 10 },
           }),
-          queuert.startJobChain({
+          client.startJobChain({
             ...txContext,
             typeName: "staged-with-callback",
             input: { value: 10 },
           }),
-          queuert.startJobChain({
+          client.startJobChain({
             ...txContext,
             typeName: "staged-without-callback",
             input: { value: 10 },
           }),
-          queuert.startJobChain({
+          client.startJobChain({
             ...txContext,
             typeName: "atomic-with-callback",
             input: { value: 10 },
           }),
-          queuert.startJobChain({
+          client.startJobChain({
             ...txContext,
             typeName: "atomic-without-callback",
             input: { value: 10 },
@@ -322,12 +331,12 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
         completedAtomicCallback,
         completedAtomicNoCallback,
       ] = await Promise.all([
-        queuert.waitForJobChainCompletion(atomicCompleteJob, completionOptions),
-        queuert.waitForJobChainCompletion(stagedCompleteJob, completionOptions),
-        queuert.waitForJobChainCompletion(stagedCallbackJob, completionOptions),
-        queuert.waitForJobChainCompletion(stagedNoCallbackJob, completionOptions),
-        queuert.waitForJobChainCompletion(atomicCallbackJob, completionOptions),
-        queuert.waitForJobChainCompletion(atomicNoCallbackJob, completionOptions),
+        client.waitForJobChainCompletion(atomicCompleteJob, completionOptions),
+        client.waitForJobChainCompletion(stagedCompleteJob, completionOptions),
+        client.waitForJobChainCompletion(stagedCallbackJob, completionOptions),
+        client.waitForJobChainCompletion(stagedNoCallbackJob, completionOptions),
+        client.waitForJobChainCompletion(atomicCallbackJob, completionOptions),
+        client.waitForJobChainCompletion(atomicNoCallbackJob, completionOptions),
       ]);
 
       expect(completedAtomicComplete.output).toEqual({ result: 20 });
@@ -348,120 +357,123 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     log,
     expect,
   }) => {
-    const queuert = await createQueuert({
+    const jobTypeRegistry = defineJobTypes<{
+      "test-prepare-twice": {
+        entry: true;
+        input: null;
+        output: null;
+      };
+      "test-complete-twice": {
+        entry: true;
+        input: null;
+        output: null;
+      };
+      "test-prepare-after-auto-setup": {
+        entry: true;
+        input: null;
+        output: null;
+      };
+      "test-continueWith-twice": {
+        entry: true;
+        input: null;
+        continueWith: { typeName: "test-next" };
+      };
+      "test-next": {
+        input: { value: number };
+        output: { result: number };
+      };
+    }>();
+
+    const client = await createQueuertClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry: defineJobTypes<{
+      jobTypeRegistry,
+    });
+    const worker = await createQueuertInProcessWorker({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+      jobTypeProcessors: {
         "test-prepare-twice": {
-          entry: true;
-          input: null;
-          output: null;
-        };
+          process: async ({ prepare, complete }) => {
+            await prepare({ mode: "atomic" });
+            await expect(prepare({ mode: "atomic" })).rejects.toThrow(
+              "Prepare can only be called once",
+            );
+            return complete(async () => null);
+          },
+        },
         "test-complete-twice": {
-          entry: true;
-          input: null;
-          output: null;
-        };
+          process: async ({ prepare, complete }) => {
+            await prepare({ mode: "atomic" });
+            const result = complete(async () => null);
+            await expect(complete(async () => null)).rejects.toThrow(
+              "Complete can only be called once",
+            );
+            return result;
+          },
+        },
         "test-prepare-after-auto-setup": {
-          entry: true;
-          input: null;
-          output: null;
-        };
+          process: async (options) => {
+            // Don't access prepare synchronously - auto-setup will run
+            // Use 50ms to ensure auto-setup completes before we continue
+            await sleep(50);
+            // Now try to access prepare after auto-setup
+            expect(() => options.prepare).toThrow("Prepare cannot be accessed after auto-setup");
+            return options.complete(async () => null);
+          },
+        },
         "test-continueWith-twice": {
-          entry: true;
-          input: null;
-          continueWith: { typeName: "test-next" };
-        };
+          process: async ({ prepare, complete }) => {
+            await prepare({ mode: "atomic" });
+            return complete(async ({ continueWith }) => {
+              const continuation1 = await continueWith({
+                typeName: "test-next",
+                input: { value: 1 },
+              });
+              await expect(
+                continueWith({
+                  typeName: "test-next",
+                  input: { value: 2 },
+                }),
+              ).rejects.toThrow("continueWith can only be called once");
+              return continuation1;
+            });
+          },
+        },
         "test-next": {
-          input: { value: number };
-          output: { result: number };
-        };
-      }>(),
+          process: async ({ job, prepare, complete }) => {
+            await prepare({ mode: "atomic" });
+            return complete(async () => ({ result: job.input.value }));
+          },
+        },
+      },
     });
 
-    const worker = queuert
-      .createWorker()
-      .implementJobType({
-        typeName: "test-prepare-twice",
-        process: async ({ prepare, complete }) => {
-          await prepare({ mode: "atomic" });
-          await expect(prepare({ mode: "atomic" })).rejects.toThrow(
-            "Prepare can only be called once",
-          );
-          return complete(async () => null);
-        },
-      })
-      .implementJobType({
-        typeName: "test-complete-twice",
-        process: async ({ prepare, complete }) => {
-          await prepare({ mode: "atomic" });
-          const result = complete(async () => null);
-          await expect(complete(async () => null)).rejects.toThrow(
-            "Complete can only be called once",
-          );
-          return result;
-        },
-      })
-      .implementJobType({
-        typeName: "test-prepare-after-auto-setup",
-        process: async (options) => {
-          // Don't access prepare synchronously - auto-setup will run
-          // Use 50ms to ensure auto-setup completes before we continue
-          await sleep(50);
-          // Now try to access prepare after auto-setup
-          expect(() => options.prepare).toThrow("Prepare cannot be accessed after auto-setup");
-          return options.complete(async () => null);
-        },
-      })
-      .implementJobType({
-        typeName: "test-continueWith-twice",
-        process: async ({ prepare, complete }) => {
-          await prepare({ mode: "atomic" });
-          return complete(async ({ continueWith }) => {
-            const continuation1 = await continueWith({
-              typeName: "test-next",
-              input: { value: 1 },
-            });
-            await expect(
-              continueWith({
-                typeName: "test-next",
-                input: { value: 2 },
-              }),
-            ).rejects.toThrow("continueWith can only be called once");
-            return continuation1;
-          });
-        },
-      })
-      .implementJobType({
-        typeName: "test-next",
-        process: async ({ job, prepare, complete }) => {
-          await prepare({ mode: "atomic" });
-          return complete(async () => ({ result: job.input.value }));
-        },
-      });
-
     const [prepareJobChain, completeJobChain, prepareAfterAutoSetupJobChain, continueWithJobChain] =
-      await queuert.withNotify(async () =>
+      await client.withNotify(async () =>
         runInTransaction(async (txContext) =>
           Promise.all([
-            queuert.startJobChain({
+            client.startJobChain({
               ...txContext,
               typeName: "test-prepare-twice",
               input: null,
             }),
-            queuert.startJobChain({
+            client.startJobChain({
               ...txContext,
               typeName: "test-complete-twice",
               input: null,
             }),
-            queuert.startJobChain({
+            client.startJobChain({
               ...txContext,
               typeName: "test-prepare-after-auto-setup",
               input: null,
             }),
-            queuert.startJobChain({
+            client.startJobChain({
               ...txContext,
               typeName: "test-continueWith-twice",
               input: null,
@@ -472,10 +484,10 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
 
     await withWorkers([await worker.start()], async () => {
       await Promise.all([
-        queuert.waitForJobChainCompletion(prepareJobChain, completionOptions),
-        queuert.waitForJobChainCompletion(completeJobChain, completionOptions),
-        queuert.waitForJobChainCompletion(prepareAfterAutoSetupJobChain, completionOptions),
-        queuert.waitForJobChainCompletion(continueWithJobChain, completionOptions),
+        client.waitForJobChainCompletion(prepareJobChain, completionOptions),
+        client.waitForJobChainCompletion(completeJobChain, completionOptions),
+        client.waitForJobChainCompletion(prepareAfterAutoSetupJobChain, completionOptions),
+        client.waitForJobChainCompletion(continueWithJobChain, completionOptions),
       ]);
     });
   });
@@ -489,32 +501,44 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     log,
     expect,
   }) => {
-    const queuert = await createQueuert({
+    const jobTypeRegistry = defineJobTypes<{
+      test: {
+        entry: true;
+        input: null;
+        output: null;
+      };
+    }>();
+
+    const client = await createQueuertClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry: defineJobTypes<{
-        test: {
-          entry: true;
-          input: null;
-          output: null;
-        };
-      }>(),
+      jobTypeRegistry,
     });
+    const worker = await createQueuertInProcessWorker({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+      jobTypeProcessing: {
+        defaultLeaseConfig: { leaseMs: 1, renewIntervalMs: 100 },
+      },
+      jobTypeProcessors: {
+        test: {
+          process: async ({ complete }) => {
+            await sleep(100);
 
-    const worker = queuert.createWorker().implementJobType({
-      typeName: "test",
-      process: async ({ complete }) => {
-        await sleep(100);
-
-        return complete(async () => null);
+            return complete(async () => null);
+          },
+        },
       },
     });
 
-    const jobChain = await queuert.withNotify(async () =>
+    const jobChain = await client.withNotify(async () =>
       runInTransaction(async (txContext) =>
-        queuert.startJobChain({
+        client.startJobChain({
           ...txContext,
           typeName: "test",
           input: null,
@@ -522,12 +546,9 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       ),
     );
 
-    await withWorkers(
-      [await worker.start({ defaultLeaseConfig: { leaseMs: 1, renewIntervalMs: 100 } })],
-      async () => {
-        await queuert.waitForJobChainCompletion(jobChain, completionOptions);
-      },
-    );
+    await withWorkers([await worker.start()], async () => {
+      await client.waitForJobChainCompletion(jobChain, completionOptions);
+    });
 
     expect(log).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -550,28 +571,39 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       return complete(() => ({ success: true }));
     });
 
-    const queuert = await createQueuert({
+    const jobTypeRegistry = defineJobTypes<{
+      test: {
+        entry: true;
+        input: { test: boolean };
+        output: { success: boolean };
+      };
+    }>();
+
+    const client = await createQueuertClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry: defineJobTypes<{
-        test: {
-          entry: true;
-          input: { test: boolean };
-          output: { success: boolean };
-        };
-      }>(),
+      jobTypeRegistry,
     });
 
-    const worker = queuert.createWorker().implementJobType({
-      typeName: "test",
-      process: processFn,
-    });
+    const createWorker = async () =>
+      createQueuertInProcessWorker({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypeRegistry,
+        jobTypeProcessors: {
+          test: {
+            process: processFn,
+          },
+        },
+      });
 
-    const job = await queuert.withNotify(async () =>
+    const job = await client.withNotify(async () =>
       runInTransaction(async (txContext) =>
-        queuert.startJobChain({
+        client.startJobChain({
           ...txContext,
           typeName: "test",
           input: { test: true },
@@ -579,8 +611,10 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       ),
     );
 
-    await withWorkers(await Promise.all([worker.start(), worker.start()]), async () => {
-      await queuert.waitForJobChainCompletion(job, completionOptions);
+    const [worker1, worker2] = await Promise.all([createWorker(), createWorker()]);
+
+    await withWorkers(await Promise.all([worker1.start(), worker2.start()]), async () => {
+      await client.waitForJobChainCompletion(job, completionOptions);
     });
 
     expect(processFn).toHaveBeenCalledTimes(1);
@@ -595,73 +629,78 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     log,
     expect,
   }) => {
-    const queuert = await createQueuert({
+    const jobTypeRegistry = defineJobTypes<{
+      test: {
+        entry: true;
+        input: null;
+        output: null;
+      };
+    }>();
+
+    const attempts: number[] = [];
+
+    const client = await createQueuertClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry: defineJobTypes<{
-        test: {
-          entry: true;
-          input: null;
-          output: null;
-        };
-      }>(),
+      jobTypeRegistry,
     });
+    const worker = await createQueuertInProcessWorker({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+      jobTypeProcessing: {
+        defaultRetryConfig: {
+          initialDelayMs: 1,
+          multiplier: 1,
+          maxDelayMs: 1,
+        },
+      },
+      jobTypeProcessors: {
+        test: {
+          process: async ({ job, prepare, complete }) => {
+            attempts.push(job.attempt);
 
-    const attempts: number[] = [];
+            expectTypeOf(job.attempt).toEqualTypeOf<number>();
+            expectTypeOf(job.lastAttemptAt).toEqualTypeOf<Date | null>();
+            expectTypeOf(job.lastAttemptError).toEqualTypeOf<string | null>();
 
-    const worker = queuert.createWorker().implementJobType({
-      typeName: "test",
-      process: async ({ job, prepare, complete }) => {
-        attempts.push(job.attempt);
+            expect(job.attempt).toBeGreaterThan(0);
+            if (job.attempt > 1) {
+              expect(job.lastAttemptAt).toBeInstanceOf(Date);
+              expect(job.lastAttemptError).toBe("Error: Simulated failure");
+            } else {
+              expect(job.lastAttemptAt).toBeNull();
+              expect(job.lastAttemptError).toBeNull();
+            }
 
-        expectTypeOf(job.attempt).toEqualTypeOf<number>();
-        expectTypeOf(job.lastAttemptAt).toEqualTypeOf<Date | null>();
-        expectTypeOf(job.lastAttemptError).toEqualTypeOf<string | null>();
+            if (job.attempt < 3) {
+              throw new Error("Simulated failure");
+            }
 
-        expect(job.attempt).toBeGreaterThan(0);
-        if (job.attempt > 1) {
-          expect(job.lastAttemptAt).toBeInstanceOf(Date);
-          expect(job.lastAttemptError).toBe("Error: Simulated failure");
-        } else {
-          expect(job.lastAttemptAt).toBeNull();
-          expect(job.lastAttemptError).toBeNull();
-        }
+            await prepare({ mode: "atomic" });
 
-        if (job.attempt < 3) {
-          throw new Error("Simulated failure");
-        }
-
-        await prepare({ mode: "atomic" });
-
-        return complete(async () => null);
+            return complete(async () => null);
+          },
+        },
       },
     });
 
-    const jobChain = await queuert.withNotify(async () =>
+    const jobChain = await client.withNotify(async () =>
       runInTransaction(async (txContext) =>
-        queuert.startJobChain({
+        client.startJobChain({
           ...txContext,
           typeName: "test",
           input: null,
         }),
       ),
     );
-    await withWorkers(
-      [
-        await worker.start({
-          defaultRetryConfig: {
-            initialDelayMs: 1,
-            multiplier: 1,
-            maxDelayMs: 1,
-          },
-        }),
-      ],
-      async () => {
-        await queuert.waitForJobChainCompletion(jobChain, completionOptions);
-      },
-    );
+    await withWorkers([await worker.start()], async () => {
+      await client.waitForJobChainCompletion(jobChain, completionOptions);
+    });
 
     expect(attempts).toEqual([1, 2, 3]);
   });
@@ -677,40 +716,56 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     expectMetrics,
     expect,
   }) => {
-    const queuert = await createQueuert({
+    const jobTypeRegistry = defineJobTypes<{
+      test: {
+        entry: true;
+        input: null;
+        output: null;
+      };
+    }>();
+
+    const errors: string[] = [];
+
+    const client = await createQueuertClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry: defineJobTypes<{
-        test: {
-          entry: true;
-          input: null;
-          output: null;
-        };
-      }>(),
+      jobTypeRegistry,
     });
+    const worker = await createQueuertInProcessWorker({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+      jobTypeProcessing: {
+        defaultRetryConfig: {
+          initialDelayMs: 10,
+          multiplier: 2.0,
+          maxDelayMs: 100,
+        },
+      },
+      jobTypeProcessors: {
+        test: {
+          process: async ({ job, complete }) => {
+            if (job.lastAttemptError) {
+              errors.push(job.lastAttemptError);
+            }
 
-    const errors: string[] = [];
+            if (job.attempt < 4) {
+              throw new Error("Unexpected error");
+            }
 
-    const worker = queuert.createWorker().implementJobType({
-      typeName: "test",
-      process: async ({ job, complete }) => {
-        if (job.lastAttemptError) {
-          errors.push(job.lastAttemptError);
-        }
-
-        if (job.attempt < 4) {
-          throw new Error("Unexpected error");
-        }
-
-        return complete(async () => null);
+            return complete(async () => null);
+          },
+        },
       },
     });
 
-    const job = await queuert.withNotify(async () =>
+    const job = await client.withNotify(async () =>
       runInTransaction(async (txContext) =>
-        queuert.startJobChain({
+        client.startJobChain({
           ...txContext,
           typeName: "test",
           input: null,
@@ -718,20 +773,9 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       ),
     );
 
-    await withWorkers(
-      [
-        await worker.start({
-          defaultRetryConfig: {
-            initialDelayMs: 10,
-            multiplier: 2.0,
-            maxDelayMs: 100,
-          },
-        }),
-      ],
-      async () => {
-        await queuert.waitForJobChainCompletion(job, completionOptions);
-      },
-    );
+    await withWorkers([await worker.start()], async () => {
+      await client.waitForJobChainCompletion(job, completionOptions);
+    });
 
     expect(errors).toHaveLength(3);
     expect(errors[0]).toBe("Error: Unexpected error");
@@ -798,57 +842,73 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
   }) => {
     type ErrorPhase = "prepare" | "process" | "complete";
 
-    const queuert = await createQueuert({
+    const jobTypeRegistry = defineJobTypes<{
+      test: {
+        entry: true;
+        input: { phase: ErrorPhase };
+        output: null;
+      };
+    }>();
+
+    const errors: { phase: ErrorPhase; error: string }[] = [];
+
+    const client = await createQueuertClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry: defineJobTypes<{
-        test: {
-          entry: true;
-          input: { phase: ErrorPhase };
-          output: null;
-        };
-      }>(),
+      jobTypeRegistry,
     });
+    const worker = await createQueuertInProcessWorker({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+      jobTypeProcessing: {
+        defaultRetryConfig: {
+          initialDelayMs: 1,
+          multiplier: 1,
+          maxDelayMs: 1,
+        },
+      },
+      jobTypeProcessors: {
+        test: {
+          process: async ({ job, prepare, complete }) => {
+            if (job.lastAttemptError) {
+              errors.push({
+                phase: job.input.phase,
+                error: job.lastAttemptError,
+              });
+            }
 
-    const errors: { phase: ErrorPhase; error: string }[] = [];
+            await prepare({ mode: "staged" }, () => {
+              if (job.input.phase === "prepare" && job.attempt === 1) {
+                throw new Error("Simulated failure in prepare");
+              }
+            });
 
-    const worker = queuert.createWorker().implementJobType({
-      typeName: "test",
-      process: async ({ job, prepare, complete }) => {
-        if (job.lastAttemptError) {
-          errors.push({
-            phase: job.input.phase,
-            error: job.lastAttemptError,
-          });
-        }
+            if (job.input.phase === "process" && job.attempt === 1) {
+              throw new Error("Simulated failure in process");
+            }
 
-        await prepare({ mode: "staged" }, () => {
-          if (job.input.phase === "prepare" && job.attempt === 1) {
-            throw new Error("Simulated failure in prepare");
-          }
-        });
+            return complete(async () => {
+              if (job.input.phase === "complete" && job.attempt === 1) {
+                throw new Error("Simulated failure in complete");
+              }
 
-        if (job.input.phase === "process" && job.attempt === 1) {
-          throw new Error("Simulated failure in process");
-        }
-
-        return complete(async () => {
-          if (job.input.phase === "complete" && job.attempt === 1) {
-            throw new Error("Simulated failure in complete");
-          }
-
-          return null;
-        });
+              return null;
+            });
+          },
+        },
       },
     });
 
-    const jobChains = await queuert.withNotify(async () =>
+    const jobChains = await client.withNotify(async () =>
       runInTransaction(async (txContext) =>
         Promise.all(
           (["prepare", "process", "complete"] as ErrorPhase[]).map(async (phase) =>
-            queuert.startJobChain({
+            client.startJobChain({
               ...txContext,
               typeName: "test",
               input: { phase },
@@ -858,22 +918,11 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       ),
     );
 
-    await withWorkers(
-      [
-        await worker.start({
-          defaultRetryConfig: {
-            initialDelayMs: 1,
-            multiplier: 1,
-            maxDelayMs: 1,
-          },
-        }),
-      ],
-      async () => {
-        await Promise.all(
-          jobChains.map(async (job) => queuert.waitForJobChainCompletion(job, completionOptions)),
-        );
-      },
-    );
+    await withWorkers([await worker.start()], async () => {
+      await Promise.all(
+        jobChains.map(async (job) => client.waitForJobChainCompletion(job, completionOptions)),
+      );
+    });
 
     expect(errors).toHaveLength(3);
     expect(errors.find((e) => e.phase === "prepare")?.error).toBe(
@@ -938,42 +987,51 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     log,
     expect,
   }) => {
-    const queuert = await createQueuert({
+    const jobTypeRegistry = defineJobTypes<{
+      test: {
+        entry: true;
+        input: null;
+        output: { result: string };
+      };
+    }>();
+
+    let attempts = 0;
+
+    const client = await createQueuertClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry: defineJobTypes<{
+      jobTypeRegistry,
+    });
+    const worker = await createQueuertInProcessWorker({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+      jobTypeProcessors: {
         test: {
-          entry: true;
-          input: null;
-          output: { result: string };
-        };
-      }>(),
-    });
-
-    let attempts = 0;
-
-    const worker = queuert.createWorker().implementJobType({
-      typeName: "test",
-      retryConfig: {
-        initialDelayMs: 1,
-        multiplier: 1,
-        maxDelayMs: 1,
-      },
-      process: async ({ job, complete }) => {
-        attempts++;
-        const result = await complete(async () => ({ result: "completed" }));
-        if (job.attempt === 1) {
-          throw new Error("Error after complete");
-        }
-        return result;
+          retryConfig: {
+            initialDelayMs: 1,
+            multiplier: 1,
+            maxDelayMs: 1,
+          },
+          process: async ({ job, complete }) => {
+            attempts++;
+            const result = await complete(async () => ({ result: "completed" }));
+            if (job.attempt === 1) {
+              throw new Error("Error after complete");
+            }
+            return result;
+          },
+        },
       },
     });
 
-    const jobChain = await queuert.withNotify(async () =>
+    const jobChain = await client.withNotify(async () =>
       runInTransaction(async (txContext) =>
-        queuert.startJobChain({
+        client.startJobChain({
           ...txContext,
           typeName: "test",
           input: null,
@@ -982,7 +1040,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     );
 
     await withWorkers([await worker.start()], async () => {
-      await queuert.waitForJobChainCompletion(jobChain, completionOptions);
+      await client.waitForJobChainCompletion(jobChain, completionOptions);
     });
 
     expect(attempts).toBe(2);

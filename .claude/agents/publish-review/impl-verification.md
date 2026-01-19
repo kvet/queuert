@@ -133,7 +133,7 @@ All documented exports should be actually exported.
 
 **From package READMEs, verify exports match:**
 
-- `packages/core/README.md` lists: `createQueuert`, `createConsoleLog`, `defineJobTypes`, etc.
+- `packages/core/README.md` lists: `createQueuertClient`, `createQueuertInProcessWorker`, `createConsoleLog`, `defineJobTypes`, etc.
 - Each adapter package README lists its exports
 - Verify error classes and type helpers are exported
 
@@ -180,7 +180,8 @@ Provide your findings in this format:
 ### Export Audit
 | Export | Documented | Actually Exported | Notes |
 |--------|------------|-------------------|-------|
-| createQueuert | README, CLAUDE.md | Yes | OK |
+| createQueuertClient | README, CLAUDE.md | Yes | OK |
+| createQueuertInProcessWorker | README, CLAUDE.md | Yes | OK |
 | ... | ... | ... | ... |
 ```
 
