@@ -26,6 +26,7 @@
     "vitest": "^4.0.16"
   },
   "devDependencies": {
+    "@queuert/tsconfig": "workspace:*",
     "@types/dockerode": "^3.3.38",
     "@types/node": "^24.10.4",
     "@types/pg": "^8.16.0",

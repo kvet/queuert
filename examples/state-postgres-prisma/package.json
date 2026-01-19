@@ -17,6 +17,7 @@
   "devDependencies": {
     "@prisma/client": "^6.10.1",
     "@queuert/postgres": "workspace:*",
+    "@queuert/tsconfig": "workspace:*",
     "@testcontainers/postgresql": "^11.10.0",
     "@types/node": "^24.10.4",
     "prisma": "^6.10.1",

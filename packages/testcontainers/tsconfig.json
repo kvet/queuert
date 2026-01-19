@@ -1,16 +1,5 @@
 {
+  "extends": "@queuert/tsconfig/package",
   "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "dist"],
-  "compilerOptions": {
-    "target": "esnext",
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
-    "noEmit": true,
-    "isolatedDeclarations": true,
-    "isolatedModules": true,
-    "composite": true,
-    "strict": true,
-    "skipLibCheck": true,
-    "skipDefaultLibCheck": true
-  }
+  "exclude": ["node_modules", "dist"]
 }

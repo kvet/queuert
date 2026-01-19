@@ -46,6 +46,7 @@
   },
   "devDependencies": {
     "@queuert/testcontainers": "workspace:*",
+    "@queuert/tsconfig": "workspace:*",
     "@types/node": "^24.10.4",
     "nats": "^2.28.0",
     "queuert": "workspace:*",

@@ -28,5 +28,6 @@
   },
   "[md]": {
     "editor.defaultFormatter": "oxc.oxc-vscode"
-  }
+  },
+  "vitest.disableWorkspaceWarning": true
 }

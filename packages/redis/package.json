@@ -46,6 +46,7 @@
   },
   "devDependencies": {
     "@queuert/testcontainers": "workspace:*",
+    "@queuert/tsconfig": "workspace:*",
     "@types/node": "^24.10.4",
     "queuert": "workspace:*",
     "redis": "^5.0.0",

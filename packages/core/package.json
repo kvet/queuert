@@ -50,6 +50,7 @@
     "test": "vitest --run"
   },
   "devDependencies": {
+    "@queuert/tsconfig": "workspace:*",
     "@types/node": "^24.10.4",
     "tsdown": "^0.18.3",
     "typescript": "^5.9.3",

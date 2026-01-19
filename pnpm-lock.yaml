@@ -36,6 +36,9 @@ importers:
         specifier: workspace:*
         version: link:../../packages/core
     devDependencies:
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.3
@@ -55,6 +58,9 @@ importers:
         specifier: ^3.17.0
         version: 3.19.0
     devDependencies:
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.3
@@ -70,6 +76,9 @@ importers:
       '@queuert/redis':
         specifier: workspace:*
         version: link:../../packages/redis
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
       '@testcontainers/redis':
         specifier: ^11.10.0
         version: 11.11.0
@@ -97,6 +106,9 @@ importers:
       '@queuert/redis':
         specifier: workspace:*
         version: link:../../packages/redis
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
       '@testcontainers/redis':
         specifier: ^11.10.0
         version: 11.11.0
@@ -134,6 +146,9 @@ importers:
         specifier: workspace:*
         version: link:../../packages/core
     devDependencies:
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.3
@@ -149,6 +164,9 @@ importers:
       '@queuert/postgres':
         specifier: workspace:*
         version: link:../../packages/postgres
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
       '@testcontainers/postgresql':
         specifier: ^11.10.0
         version: 11.10.0
@@ -182,6 +200,9 @@ importers:
       '@queuert/postgres':
         specifier: workspace:*
         version: link:../../packages/postgres
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
       '@testcontainers/postgresql':
         specifier: ^11.10.0
         version: 11.10.0
@@ -215,6 +236,9 @@ importers:
       '@queuert/postgres':
         specifier: workspace:*
         version: link:../../packages/postgres
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
       '@testcontainers/postgresql':
         specifier: ^11.10.0
         version: 11.10.0
@@ -245,6 +269,9 @@ importers:
       '@queuert/postgres':
         specifier: workspace:*
         version: link:../../packages/postgres
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
       '@testcontainers/postgresql':
         specifier: ^11.10.0
         version: 11.10.0
@@ -275,6 +302,9 @@ importers:
       '@queuert/postgres':
         specifier: workspace:*
         version: link:../../packages/postgres
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
       '@testcontainers/postgresql':
         specifier: ^11.10.0
         version: 11.10.0
@@ -302,6 +332,9 @@ importers:
       '@queuert/sqlite':
         specifier: workspace:*
         version: link:../../packages/sqlite
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13
@@ -326,6 +359,9 @@ importers:
       '@queuert/sqlite':
         specifier: workspace:*
         version: link:../../packages/sqlite
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13
@@ -353,6 +389,9 @@ importers:
       '@queuert/sqlite':
         specifier: workspace:*
         version: link:../../packages/sqlite
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13
@@ -383,6 +422,9 @@ importers:
       '@queuert/sqlite':
         specifier: workspace:*
         version: link:../../packages/sqlite
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
       '@types/node':
         specifier: ^24.10.4
         version: 24.10.4
@@ -404,6 +446,9 @@ importers:
       '@queuert/sqlite':
         specifier: workspace:*
         version: link:../../packages/sqlite
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
       '@types/node':
         specifier: ^24.10.4
         version: 24.10.4
@@ -429,6 +474,9 @@ importers:
         specifier: workspace:*
         version: link:../../packages/core
     devDependencies:
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.3
@@ -451,6 +499,9 @@ importers:
         specifier: ^1.0.0
         version: 1.2.0(typescript@5.9.3)
     devDependencies:
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.3
@@ -473,6 +524,9 @@ importers:
         specifier: ^4.0.0
         version: 4.3.5
     devDependencies:
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.3
@@ -488,6 +542,9 @@ importers:
 
   packages/core:
     devDependencies:
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
       '@types/node':
         specifier: ^24.10.4
         version: 24.10.4
@@ -506,6 +563,9 @@ importers:
       '@queuert/testcontainers':
         specifier: workspace:*
         version: link:../testcontainers
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
       '@types/node':
         specifier: ^24.10.4
         version: 24.10.4
@@ -530,6 +590,9 @@ importers:
       '@queuert/testcontainers':
         specifier: workspace:*
         version: link:../testcontainers
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
       '@types/node':
         specifier: ^24.10.4
         version: 24.10.4
@@ -557,6 +620,9 @@ importers:
       '@opentelemetry/sdk-metrics':
         specifier: ^1.30.0
         version: 1.30.1(@opentelemetry/api@1.9.0)
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
       '@types/node':
         specifier: ^24.10.4
         version: 24.10.4
@@ -578,6 +644,9 @@ importers:
       '@queuert/testcontainers':
         specifier: workspace:*
         version: link:../testcontainers
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
       '@queuert/typed-sql':
         specifier: workspace:*
         version: link:../typed-sql
@@ -608,6 +677,9 @@ importers:
       '@queuert/testcontainers':
         specifier: workspace:*
         version: link:../testcontainers
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
       '@types/node':
         specifier: ^24.10.4
         version: 24.10.4
@@ -629,6 +701,9 @@ importers:
 
   packages/sqlite:
     devDependencies:
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
       '@queuert/typed-sql':
         specifier: workspace:*
         version: link:../typed-sql
@@ -687,6 +762,9 @@ importers:
         specifier: ^4.0.16
         version: 4.0.16(@opentelemetry/api@1.9.0)(@types/node@24.10.4)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
     devDependencies:
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
       '@types/dockerode':
         specifier: ^3.3.38
         version: 3.3.47
@@ -703,8 +781,13 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  packages/tsconfig: {}
+
   packages/typed-sql:
     devDependencies:
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
       typescript:
         specifier: ^5.9.3
         version: 5.9.3

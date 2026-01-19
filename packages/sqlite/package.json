@@ -44,6 +44,7 @@
     "test": "vitest --run"
   },
   "devDependencies": {
+    "@queuert/tsconfig": "workspace:*",
     "@queuert/typed-sql": "workspace:*",
     "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^24.10.4",

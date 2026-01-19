@@ -1,0 +1,10 @@
+{
+  "name": "@queuert/tsconfig",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./base": "./base.json",
+    "./package": "./published.json"
+  }
+}
