@@ -71,6 +71,69 @@ importers:
         specifier: ^5.7.0
         version: 5.9.3
 
+  examples/notify-postgres-pg:
+    devDependencies:
+      '@queuert/postgres':
+        specifier: workspace:*
+        version: link:../../packages/postgres
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
+      '@testcontainers/postgresql':
+        specifier: ^11.10.0
+        version: 11.10.0
+      '@types/node':
+        specifier: ^24.10.4
+        version: 24.10.4
+      '@types/pg':
+        specifier: ^8.15.4
+        version: 8.16.0
+      pg:
+        specifier: ^8.16.0
+        version: 8.16.3
+      queuert:
+        specifier: workspace:*
+        version: link:../../packages/core
+      testcontainers:
+        specifier: ^11.10.0
+        version: 11.11.0
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  examples/notify-postgres-postgres-js:
+    devDependencies:
+      '@queuert/postgres':
+        specifier: workspace:*
+        version: link:../../packages/postgres
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
+      '@testcontainers/postgresql':
+        specifier: ^11.10.0
+        version: 11.10.0
+      '@types/node':
+        specifier: ^24.10.4
+        version: 24.10.4
+      postgres:
+        specifier: ^3.4.7
+        version: 3.4.8
+      queuert:
+        specifier: workspace:*
+        version: link:../../packages/core
+      testcontainers:
+        specifier: ^11.10.0
+        version: 11.11.0
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   examples/notify-redis-ioredis:
     devDependencies:
       '@queuert/redis':
@@ -149,6 +212,34 @@ importers:
       '@queuert/tsconfig':
         specifier: workspace:*
         version: link:../../packages/tsconfig
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.3
+      tsx:
+        specifier: ^4.0.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  examples/showcase-processing-modes:
+    dependencies:
+      '@queuert/postgres':
+        specifier: workspace:*
+        version: link:../../packages/postgres
+      postgres:
+        specifier: ^3.4.5
+        version: 3.4.8
+      queuert:
+        specifier: workspace:*
+        version: link:../../packages/core
+    devDependencies:
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
+      '@testcontainers/postgresql':
+        specifier: ^10.21.0
+        version: 10.28.0
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.3
@@ -1049,6 +1140,10 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@fastify/busboy@2.1.1':
+    resolution: {integrity: sha512-vBZP4NlzfOlerQTnba4aqZoMhE/a9HY7HRqoOPaETQcSQuWEIyZMHGfVu6w9wGtGK5fED5qRs2DteVCjOH60sA==}
+    engines: {node: '>=14'}
+
   '@gar/promisify@1.1.3':
     resolution: {integrity: sha512-k2Ty1JcVojjJFwrg/ThKi2ujJ7XNLYaFGNB/bWT9wGR+oSMJHMa5w+CUq6p/pVrKeNNgA7pCqEcjSnHVoqJQFw==}
 
@@ -1572,6 +1667,9 @@ packages:
   '@testcontainers/nats@11.11.0':
     resolution: {integrity: sha512-mjFq44jazk1DYTvKPrPNZbqRl6hgucquAOoz2zfg7T4ypVkLNG8cVvd7cZNl7L6JfWeiAJD5Ns/83+2Z3xCjOg==}
 
+  '@testcontainers/postgresql@10.28.0':
+    resolution: {integrity: sha512-NN25rruG5D4Q7pCNIJuHwB+G85OSeJ3xHZ2fWx0O6sPoPEfCYwvpj8mq99cyn68nxFkFYZeyrZJtSFO+FnydiA==}
+
   '@testcontainers/postgresql@11.10.0':
     resolution: {integrity: sha512-d6QeN3KkXLJBdt0T6X3KKtdkHbaZdzCRPo133FSG8yOoGofQAYghtau39iUdeF9GAN8UTWZAxio40uYKBSV7xw==}
 
@@ -2038,6 +2136,10 @@ packages:
   dir-glob@3.0.1:
     resolution: {integrity: sha512-WkrWp9GR4KXfKGYzOLmTuGVi1UWFfws377n9cc55/tb6DuqyF6pcQ5AbiHEshaDpY9v6oaSr2XCDidGmMwdzIA==}
     engines: {node: '>=8'}
+
+  docker-compose@0.24.8:
+    resolution: {integrity: sha512-plizRs/Vf15H+GCVxq2EUvyPK7ei9b/cVesHvjnX4xaXjM9spHe2Ytq0BitndFgvTJ3E3NljPNUEl7BAN43iZw==}
+    engines: {node: '>= 6.0.0'}
 
   docker-compose@1.3.0:
     resolution: {integrity: sha512-7Gevk/5eGD50+eMD+XDnFnOrruFkL0kSd7jEG4cjmqweDSUhB7i0g8is/nBdVpl+Bx338SqIB2GLKm32M+Vs6g==}
@@ -3244,6 +3346,9 @@ packages:
     resolution: {integrity: sha512-wK0Ri4fOGjv/XPy8SBHZChl8CM7uMc5VML7SqiQ0zG7+J5Vr+RMQDoHa2CNT6KHUnTGIXH34UDMkPzAUyapBZg==}
     engines: {node: '>=8'}
 
+  testcontainers@10.28.0:
+    resolution: {integrity: sha512-1fKrRRCsgAQNkarjHCMKzBKXSJFmzNTiTbhb5E/j5hflRXChEtHvkefjaHlgkNUjfw92/Dq8LTgwQn6RDBFbMg==}
+
   testcontainers@11.10.0:
     resolution: {integrity: sha512-8hwK2EnrOZfrHPpDC7CPe03q7H8Vv8j3aXdcmFFyNV8dzpBzgZYmqyDtduJ8YQ5kbzj+A+jUXMQ6zI8B5U3z+g==}
 
@@ -3356,6 +3461,10 @@ packages:
 
   undici-types@7.16.0:
     resolution: {integrity: sha512-Zz+aZWSj8LE6zoxD+xrjh4VfkIG8Ya6LvYkZqtUQGJPZjYl53ypCaUwWqo7eI0x66KBGeRo+mlBEkMSeSZ38Nw==}
+
+  undici@5.29.0:
+    resolution: {integrity: sha512-raqeBD6NQK4SkWhQzeYKd1KmIG6dllBOTt55Rmkt4HtI9mwdWtJljnrXjAFUBLTSN67HWrOIZ3EPF4kjUw80Bg==}
+    engines: {node: '>=14.0'}
 
   undici@7.16.0:
     resolution: {integrity: sha512-QEg3HPMll0o3t2ourKwOeUAZ159Kn9mx5pnzHRQO8+Wixmh88YdZRiIwat0iNzNNXn0yoEtXJqFpyW7eM8BV7g==}
@@ -3814,6 +3923,8 @@ snapshots:
   '@esbuild/win32-x64@0.27.2':
     optional: true
 
+  '@fastify/busboy@2.1.1': {}
+
   '@gar/promisify@1.1.3':
     optional: true
 
@@ -4228,6 +4339,15 @@ snapshots:
   '@testcontainers/nats@11.11.0':
     dependencies:
       testcontainers: 11.11.0
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - react-native-b4a
+      - supports-color
+
+  '@testcontainers/postgresql@10.28.0':
+    dependencies:
+      testcontainers: 10.28.0
     transitivePeerDependencies:
       - bare-abort-controller
       - bare-buffer
@@ -4755,6 +4875,10 @@ snapshots:
   dir-glob@3.0.1:
     dependencies:
       path-type: 4.0.0
+
+  docker-compose@0.24.8:
+    dependencies:
+      yaml: 2.8.2
 
   docker-compose@1.3.0:
     dependencies:
@@ -6018,6 +6142,29 @@ snapshots:
 
   term-size@2.2.1: {}
 
+  testcontainers@10.28.0:
+    dependencies:
+      '@balena/dockerignore': 1.0.2
+      '@types/dockerode': 3.3.47
+      archiver: 7.0.1
+      async-lock: 1.4.1
+      byline: 5.0.0
+      debug: 4.4.3
+      docker-compose: 0.24.8
+      dockerode: 4.0.9
+      get-port: 7.1.0
+      proper-lockfile: 4.1.2
+      properties-reader: 2.3.0
+      ssh-remote-port-forward: 1.0.4
+      tar-fs: 3.1.1
+      tmp: 0.2.5
+      undici: 5.29.0
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - react-native-b4a
+      - supports-color
+
   testcontainers@11.10.0:
     dependencies:
       '@balena/dockerignore': 1.0.2
@@ -6160,6 +6307,10 @@ snapshots:
   undici-types@6.21.0: {}
 
   undici-types@7.16.0: {}
+
+  undici@5.29.0:
+    dependencies:
+      '@fastify/busboy': 2.1.1
 
   undici@7.16.0: {}
 

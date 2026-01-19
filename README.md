@@ -4,6 +4,26 @@ Control flow library for your persistency layer driven applications.
 
 Run your application logic as a series of background jobs that are started alongside state change transactions in your persistency layer. Perform long-running tasks with side-effects reliably in the background and keep track of their progress in your database. Own your stack and avoid vendor lock-in by using the tools you trust.
 
+## Table of Contents
+
+- [Sorry, what?](#sorry-what)
+- [It looks familiar, right?](#it-looks-familiar-right)
+- [Why Queuert?](#why-queuert)
+- [Installation](#installation)
+- [Core Concepts](#core-concepts)
+- [Job Processing Modes](#job-processing-modes)
+- [Job Chain Patterns](#job-chain-patterns)
+- [Job Blockers](#job-blockers)
+- [Error Handling](#error-handling)
+- [Deferred Start](#deferred-start)
+- [Workerless Completion](#workerless-completion)
+- [Complete Type Safety](#complete-type-safety)
+- [Runtime Validation](#runtime-validation)
+- [Timeouts](#timeouts)
+- [Observability](#observability)
+- [Testing & Resilience](#testing--resilience)
+- [License](#license)
+
 ## Sorry, what?
 
 Imagine a user signs up and you want to send them a welcome email. You don't want to block the registration request, so you queue it as a background job.
@@ -152,106 +172,56 @@ Bridges your pub/sub client (Redis, PostgreSQL, etc.) with the notify adapter. S
 
 Processes jobs by polling for available work. Workers automatically renew leases during long-running operations and handle retries with configurable backoff.
 
-## Complete Type Safety
-
-Queuert provides end-to-end type safety with full type inference. Define your job types once, and TypeScript ensures correctness throughout your entire codebase:
-
-- **Job inputs and outputs** are inferred and validated at compile time
-- **Continuations** are type-checked — `continueWith` only accepts valid target job types with matching inputs
-- **Blockers** are fully typed — access `job.blockers` with correct output types for each blocker
-- **Internal job types** without `entry: true` cannot be started directly via `startJobChain`
-
-No runtime type errors. No mismatched job names. Your workflow logic is verified before your code ever runs.
-
-## Runtime Validation
-
-For production APIs accepting external input, you can add runtime validation using any schema library (Zod, Valibot, TypeBox, etc.). The core is minimal — schema-specific adapters are implemented in user-land.
-
-```ts
-import { z } from 'zod';
-import { createJobTypeRegistry } from 'queuert';
-
-// Create a Zod-based registry (see examples/validation-zod for full implementation)
-const jobTypes = createJobTypeRegistry<{
-  'process-data': { entry: true; input: { url: string }; output: { data: unknown } };
-}>({
-  validateEntry: (typeName) => {
-    if (!schemas[typeName]?.entry) throw new Error('Not an entry point');
-  },
-  parseInput: (typeName, input) => schemas[typeName].input.parse(input),
-  parseOutput: (typeName, output) => schemas[typeName].output.parse(output),
-  validateContinueWith: (typeName, continuation) => schemas[typeName].continueWith?.parse(continuation),
-  validateBlockers: (typeName, blockers) => schemas[typeName].blockers?.parse(blockers),
-});
-```
-
-Both `defineJobTypes` (compile-time only) and `createJobTypeRegistry` (runtime validation) provide the same compile-time type safety. Runtime validation adds protection against invalid external data.
-
-See complete adapter examples: [Zod](./examples/validation-zod), [Valibot](./examples/validation-valibot), [TypeBox](./examples/validation-typebox).
-
 ## Job Processing Modes
 
 Jobs support two processing modes via the `prepare` function:
 
 ### Atomic Mode
 
-Everything runs in a single transaction. Use for quick operations.
+Prepare and complete run in ONE transaction. Use when reads and writes must be atomic.
 
 ```ts
-const worker = await createQueuertInProcessWorker({
-  stateAdapter,
-  jobTypeRegistry: jobTypes,
-  log: createConsoleLog(),
-  jobTypeProcessors: {
-    'process-item': {
-      process: async ({ job, prepare, complete }) => {
-        const data = await prepare({ mode: "atomic" }, async ({ db }) => {
-          return db.query("SELECT * FROM items WHERE id = ?", [job.input.id]);
-        });
-        return complete(async ({ db }) => {
-          await db.query("UPDATE items SET processed = true WHERE id = ?", [job.input.id]);
-          return { processed: true };
-        });
-      },
-    },
-  },
-});
+'reserve-inventory': {
+  process: async ({ job, prepare, complete }) => {
+    const item = await prepare({ mode: "atomic" }, async ({ sql }) => {
+      const [row] = await sql`SELECT stock FROM items WHERE id = ${job.input.id}`;
+      if (row.stock < 1) throw new Error("Out of stock");
+      return row;
+    });
 
-await worker.start();
+    // Complete runs in SAME transaction as prepare
+    return complete(async ({ sql }) => {
+      await sql`UPDATE items SET stock = stock - 1 WHERE id = ${job.input.id}`;
+      return { reserved: true };
+    });
+  },
+}
 ```
 
 ### Staged Mode
 
-Prepare and complete run in separate transactions with a processing phase in between. The worker automatically renews the job lease during the processing phase. Use for long-running operations.
+Prepare and complete run in SEPARATE transactions. Use for external API calls or long-running operations that shouldn't hold a database transaction open.
 
 ```ts
-const worker = await createQueuertInProcessWorker({
-  stateAdapter,
-  jobTypeRegistry: jobTypes,
-  log: createConsoleLog(),
-  jobTypeProcessors: {
-    'process-item': {
-      process: async ({ job, prepare, complete }) => {
-        // Phase 1: Prepare (transaction)
-        const data = await prepare({ mode: "staged" }, async ({ db }) => {
-          return db.query("SELECT * FROM items WHERE id = ?", [job.input.id]);
-        });
+'charge-payment': {
+  process: async ({ job, prepare, complete }) => {
+    // Phase 1: Prepare (transaction)
+    const order = await prepare({ mode: "staged" }, async ({ sql }) => {
+      const [row] = await sql`SELECT * FROM orders WHERE id = ${job.input.id}`;
+      return row;
+    });
+    // Transaction closed, lease renewal active
 
-        // Phase 2: Processing (no transaction, lease auto-renewed)
-        // Implement idempotently - may retry if worker crashes
-        const result = await processData(data);
+    // Phase 2: Processing (no transaction)
+    const { paymentId } = await paymentAPI.charge(order.amount);
 
-        // Phase 3: Complete (transaction)
-        return complete(async ({ db }) => {
-          await db.query("UPDATE items SET result = ? WHERE id = ?", [result, job.input.id]);
-          return { result };
-        });
-      },
-    },
+    // Phase 3: Complete (new transaction)
+    return complete(async ({ sql }) => {
+      await sql`UPDATE orders SET payment_id = ${paymentId} WHERE id = ${order.id}`;
+      return { paymentId };
+    });
   },
-});
-
-await worker.start();
+}
 ```
 
 ### Auto-Setup
@@ -260,6 +230,8 @@ If you don't call `prepare`, auto-setup runs based on when you call `complete`:
 
 - Call `complete` synchronously → atomic mode
 - Call `complete` after async work → staged mode (lease renewal active)
+
+See [examples/showcase-processing-modes](./examples/showcase-processing-modes) for a complete working example demonstrating all three modes.
 
 ## Job Chain Patterns
 
@@ -670,6 +642,25 @@ await queuert.completeJobChain({
 
 This pattern lets you interweave external actions with your job chains — waiting for user input, third-party callbacks, or manual approval steps.
 
+## Complete Type Safety
+
+Queuert provides end-to-end type safety with full type inference. Define your job types once, and TypeScript ensures correctness throughout your entire codebase:
+
+- **Job inputs and outputs** are inferred and validated at compile time
+- **Continuations** are type-checked — `continueWith` only accepts valid target job types with matching inputs
+- **Blockers** are fully typed — access `job.blockers` with correct output types for each blocker
+- **Internal job types** without `entry: true` cannot be started directly via `startJobChain`
+
+No runtime type errors. No mismatched job names. Your workflow logic is verified before your code ever runs.
+
+## Runtime Validation
+
+For production APIs accepting external input, you can add runtime validation using any schema library (Zod, Valibot, TypeBox, etc.). The core is minimal — schema-specific adapters are implemented in user-land.
+
+Both `defineJobTypes` (compile-time only) and `createJobTypeRegistry` (runtime validation) provide the same compile-time type safety. Runtime validation adds protection against invalid external data.
+
+See complete adapter examples: [Zod](./examples/validation-zod), [Valibot](./examples/validation-valibot), [TypeBox](./examples/validation-typebox).
+
 ## Timeouts
 
 For cooperative timeouts, combine `AbortSignal.timeout()` with the provided `signal`:
@@ -700,7 +691,7 @@ await worker.start();
 
 For hard timeouts, configure `leaseConfig` in the job type processor — if a job doesn't complete or renew its lease in time, the reaper reclaims it for retry:
 
-```ts
+````ts
 const worker = await createQueuertInProcessWorker({
   stateAdapter,
   jobTypeRegistry: jobTypes,
@@ -713,71 +704,6 @@ const worker = await createQueuertInProcessWorker({
   },
 });
 
-await worker.start();
-```
-
-## Configuration
-
-Workers support various configuration options:
-
-```ts
-const worker = await createQueuertInProcessWorker({
-  stateAdapter,
-  jobTypeRegistry: jobTypes,
-  log: createConsoleLog(),
-  workerId: 'worker-1',              // Unique worker identifier (optional)
-  jobTypeProcessing: {
-    pollIntervalMs: 60_000,          // How often to poll for new jobs (default: 60s)
-    nextJobDelayMs: 0,               // Delay between processing jobs
-
-    // Retry configuration for failed job attempts
-    defaultRetryConfig: {
-      initialDelayMs: 10_000,        // Initial retry delay (default: 10s)
-      multiplier: 2.0,               // Exponential backoff multiplier
-      maxDelayMs: 300_000,           // Maximum retry delay (default: 5min)
-    },
-
-    // Lease configuration for job ownership
-    defaultLeaseConfig: {
-      leaseMs: 60_000,               // How long a worker holds a job (default: 60s)
-      renewIntervalMs: 30_000,       // How often to renew the lease (default: 30s)
-    },
-
-    // Middlewares that wrap each job attempt (e.g., for contextual logging)
-    jobAttemptMiddlewares: [
-      async ({ job, workerId }, next) => {
-        // Setup context before job processing
-        return await next();
-        // Cleanup after job processing
-      },
-    ],
-  },
-  jobTypeProcessors: {
-    // ... job type processors
-  },
-});
-
-await worker.start();
-```
-
-Per-job-type configuration can also be set in each processor:
-
-```ts
-const worker = await createQueuertInProcessWorker({
-  stateAdapter,
-  jobTypeRegistry: jobTypes,
-  log: createConsoleLog(),
-  jobTypeProcessors: {
-    'long-running-job': {
-      retryConfig: { initialDelayMs: 30_000, multiplier: 2.0, maxDelayMs: 600_000 },
-      leaseConfig: { leaseMs: 300_000, renewIntervalMs: 60_000 },
-      process: async ({ job, complete }) => { ... },
-    },
-  },
-});
-
-await worker.start();
-```
 
 ## Observability
 
@@ -796,7 +722,7 @@ const client = await createQueuertClient({
   }),
   log: createConsoleLog(),
 });
-```
+````
 
 The adapter emits:
 
@@ -827,10 +753,6 @@ Test suites available in [`packages/core/src/suites/`](./packages/core/src/suite
 - [`worker.test-suite.ts`](./packages/core/src/suites/worker.test-suite.ts) — Worker lifecycle and polling
 
 These suites run against all supported adapters (PostgreSQL, SQLite, MongoDB, in-memory) to ensure consistent behavior across databases.
-
-## Full Example
-
-For complete working examples, see [examples/state-postgres-kysely](./examples/state-postgres-kysely) (PostgreSQL) or [examples/state-sqlite-kysely](./examples/state-sqlite-kysely) (SQLite). For Redis notify adapter integration, see [examples/notify-redis-redis](./examples/notify-redis-redis).
 
 ## License
 

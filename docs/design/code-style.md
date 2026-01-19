@@ -95,6 +95,7 @@ Examples are organized by prefix to indicate their primary focus:
 - `state-xxx`: State adapter examples (PostgreSQL, SQLite, etc.)
 - `notify-xxx`: Notify adapter examples (Redis, NATS, etc.)
 - `validation-xxx`: Runtime validation with schema libraries
+- `showcase-xxx`: Feature demonstrations combining multiple concerns
 
 ### Single-Purpose Design
 
@@ -130,11 +131,13 @@ Each implements a state provider (`PgStateProvider` or `SqliteStateProvider`) wi
 Notify examples showcase different pub/sub client integrations:
 
 ```
-notify-redis-redis    # node-redis
-notify-redis-ioredis  # ioredis
+notify-redis-redis           # node-redis
+notify-redis-ioredis         # ioredis
+notify-postgres-pg           # pg (node-postgres)
+notify-postgres-postgres-js  # postgres-js
 ```
 
-Each implements a `RedisNotifyProvider` with `publish`, `subscribe`, and `eval` methods specific to that client library.
+Redis examples implement a `RedisNotifyProvider` with `publish`, `subscribe`, and `eval` methods. PostgreSQL examples implement a `PgNotifyProvider` with `publish` and `subscribe` methods using PostgreSQL's LISTEN/NOTIFY.
 
 ### In-Process Adapters
 

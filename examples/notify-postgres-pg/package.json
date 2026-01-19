@@ -1,0 +1,29 @@
+{
+  "name": "example-notify-postgres-pg",
+  "version": "0.0.1",
+  "private": true,
+  "description": "An example demonstrating the PostgreSQL notify adapter with pg (node-postgres).",
+  "license": "MIT",
+  "author": "kvet",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kvet/queuert.git"
+  },
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@queuert/postgres": "workspace:*",
+    "@queuert/tsconfig": "workspace:*",
+    "@testcontainers/postgresql": "^11.10.0",
+    "@types/node": "^24.10.4",
+    "@types/pg": "^8.15.4",
+    "pg": "^8.16.0",
+    "queuert": "workspace:*",
+    "testcontainers": "^11.10.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}
