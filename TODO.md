@@ -1,5 +1,6 @@
 # Short term
 
+- Rename deduplication strategy `'completed'` → `'incomplete'` for clarity (describes what to deduplicate against, not when deduplication stops)
 - ObservabilityAdapter: tracing spans
 - test against multiple versions of node on CI
 - add migration table to skip already applied migrations

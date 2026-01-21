@@ -16,6 +16,7 @@ Run your application logic as a series of background jobs that are started along
 - [Job Blockers](#job-blockers)
 - [Error Handling](#error-handling)
 - [Deferred Start](#deferred-start)
+- [Deduplication](#deduplication)
 - [Workerless Completion](#workerless-completion)
 - [Complete Type Safety](#complete-type-safety)
 - [Runtime Validation](#runtime-validation)
@@ -30,7 +31,7 @@ Imagine a user signs up and you want to send them a welcome email. You don't wan
 
 ```ts
 const jobTypes = defineJobTypes<{
-  'send-welcome-email': {
+  "send-welcome-email": {
     entry: true;
     input: { userId: number; email: string; name: string };
     output: { sentAt: string };
@@ -43,15 +44,20 @@ const client = await createQueuertClient({
   log: createConsoleLog(),
 });
 
-await client.withNotify(async () => db.transaction(async (tx) => {
-  const user = await tx.users.create({ name: 'Alice', email: 'alice@example.com' });
+await client.withNotify(async () =>
+  db.transaction(async (tx) => {
+    const user = await tx.users.create({
+      name: "Alice",
+      email: "alice@example.com",
+    });
 
-  await client.startJobChain({
-    tx,
-    typeName: 'send-welcome-email',
-    input: { userId: user.id, email: user.email, name: user.name },
-  });
-}));
+    await client.startJobChain({
+      tx,
+      typeName: "send-welcome-email",
+      input: { userId: user.id, email: user.email, name: user.name },
+    });
+  }),
+);
 ```
 
 We scheduled the job inside a database transaction. This ensures that if the transaction rolls back (e.g., user creation fails), the job is not started. No orphaned emails. (Refer to transactional outbox pattern.)
@@ -64,11 +70,11 @@ const worker = await createQueuertInProcessWorker({
   jobTypeRegistry: jobTypes,
   log: createConsoleLog(),
   jobTypeProcessors: {
-    'send-welcome-email': {
+    "send-welcome-email": {
       process: async ({ job, complete }) => {
         await sendEmail({
           to: job.input.email,
-          subject: 'Welcome!',
+          subject: "Welcome!",
           body: `Hello ${job.input.name}, welcome to our platform!`,
         });
 
@@ -366,27 +372,28 @@ Jobs can depend on other job chains to complete before they start. A job with in
 
 ```ts
 type Definitions = {
-  'fetch-data': {
+  "fetch-data": {
     entry: true;
     input: { url: string };
     output: { data: string };
   };
-  'process-all': {
+  "process-all": {
     entry: true;
     input: { ids: string[] };
     output: { results: string[] };
-    blockers: [{ typeName: 'fetch-data' }, ...{ typeName: 'fetch-data' }[]];  // Wait for multiple fetches (tuple with rest)
+    blockers: [{ typeName: "fetch-data" }, ...{ typeName: "fetch-data" }[]]; // Wait for multiple fetches (tuple with rest)
   };
 };
 
 // Start with blockers
 await queuert.startJobChain({
-  typeName: 'process-all',
-  input: { ids: ['a', 'b', 'c'] },
-  startBlockers: async () => Promise.all([
-    queuert.startJobChain({ typeName: 'fetch-data', input: { url: '/a' } }),
-    queuert.startJobChain({ typeName: 'fetch-data', input: { url: '/b' } }),
-  ]),
+  typeName: "process-all",
+  input: { ids: ["a", "b", "c"] },
+  startBlockers: async () =>
+    Promise.all([
+      queuert.startJobChain({ typeName: "fetch-data", input: { url: "/a" } }),
+      queuert.startJobChain({ typeName: "fetch-data", input: { url: "/b" } }),
+    ]),
 });
 
 // Access completed blockers in worker
@@ -395,9 +402,9 @@ const worker = await createQueuertInProcessWorker({
   jobTypeRegistry: jobTypes,
   log: createConsoleLog(),
   jobTypeProcessors: {
-    'process-all': {
+    "process-all": {
       process: async ({ job, complete }) => {
-        const results = job.blockers.map(b => b.output.data);
+        const results = job.blockers.map((b) => b.output.data);
         return complete(() => ({ results }));
       },
     },
@@ -415,10 +422,12 @@ Handle failures by returning error information in your output types:
 
 ```ts
 type Definitions = {
-  'process-payment': {
+  "process-payment": {
     entry: true;
     input: { orderId: string };
-    output: { success: true; transactionId: string } | { success: false; error: string };
+    output:
+      | { success: true; transactionId: string }
+      | { success: false; error: string };
   };
 };
 ```
@@ -427,17 +436,17 @@ For workflows that need rollback, use the compensation pattern — a "failed" jo
 
 ```ts
 type Definitions = {
-  'charge-card': {
+  "charge-card": {
     entry: true;
     input: { orderId: string };
-    continueWith: { typeName: 'ship-order' | 'refund-charge' };
+    continueWith: { typeName: "ship-order" | "refund-charge" };
   };
-  'ship-order': {
+  "ship-order": {
     input: { orderId: string; chargeId: string };
     output: { shipped: true };
-    continueWith: { typeName: 'refund-charge' };  // Can continue to refund on failure
+    continueWith: { typeName: "refund-charge" }; // Can continue to refund on failure
   };
-  'refund-charge': {
+  "refund-charge": {
     input: { chargeId: string };
     output: { refunded: true };
   };
@@ -449,20 +458,23 @@ type Definitions = {
 When a job throws an error, it's automatically rescheduled with exponential backoff. For transient failures where you want explicit control over retry timing, use `rescheduleJob`:
 
 ```ts
-import { rescheduleJob } from 'queuert';
+import { rescheduleJob } from "queuert";
 
 const worker = await createQueuertInProcessWorker({
   stateAdapter,
   jobTypeRegistry: jobTypes,
   log: createConsoleLog(),
   jobTypeProcessors: {
-    'call-external-api': {
+    "call-external-api": {
       process: async ({ job, prepare, complete }) => {
         const response = await fetch(job.input.url);
 
         if (response.status === 429) {
           // Rate limited — retry after the specified delay
-          const retryAfter = parseInt(response.headers.get('Retry-After') || '60', 10);
+          const retryAfter = parseInt(
+            response.headers.get("Retry-After") || "60",
+            10,
+          );
           rescheduleJob({ afterMs: retryAfter * 1000 });
         }
 
@@ -485,10 +497,10 @@ The `rescheduleJob` function throws a `RescheduleJobError` which the worker catc
 
 ```ts
 // Retry after a delay
-rescheduleJob({ afterMs: 30_000 });  // 30 seconds from now
+rescheduleJob({ afterMs: 30_000 }); // 30 seconds from now
 
 // Retry at a specific time
-rescheduleJob({ at: new Date('2025-01-15T09:00:00Z') });
+rescheduleJob({ at: new Date("2025-01-15T09:00:00Z") });
 
 // Include the original error as cause (for logging/debugging)
 rescheduleJob({ afterMs: 60_000 }, originalError);
@@ -500,31 +512,127 @@ Jobs can be scheduled to start at a future time using the `schedule` option. The
 
 ```ts
 // Schedule a job to run in 5 minutes
-await queuert.startJobChain({
-  typeName: 'send-reminder',
-  input: { userId: '123' },
+await client.startJobChain({
+  typeName: "send-reminder",
+  input: { userId: "123" },
   schedule: { afterMs: 5 * 60 * 1000 }, // 5 minutes from now
 });
 
 // Or schedule at a specific time
-await queuert.startJobChain({
-  typeName: 'send-reminder',
-  input: { userId: '123' },
-  schedule: { at: new Date('2025-01-15T09:00:00Z') },
+await client.startJobChain({
+  typeName: "send-reminder",
+  input: { userId: "123" },
+  schedule: { at: new Date("2025-01-15T09:00:00Z") },
 });
 ```
 
 The same `schedule` option works with `continueWith` for deferred continuations:
 
 ```ts
-await complete(job, async ({ continueWith }) =>
+return complete(async ({ continueWith }) =>
   continueWith({
-    typeName: 'follow-up',
+    typeName: "follow-up",
     input: { userId: job.input.userId },
     schedule: { afterMs: 24 * 60 * 60 * 1000 }, // 24 hours later
-  })
+  }),
 );
 ```
+
+### Recurring Jobs
+
+For periodic tasks like daily digests, health checks, or billing cycles, use loop chains with scheduled continuations. The job continues to itself with a delay — no external cron job needed.
+
+```ts
+type Definitions = {
+  'daily-digest': {
+    entry: true;
+    input: { userId: string };
+    output: { unsubscribedAt: string };
+    continueWith: { typeName: 'daily-digest' };  // Self-reference for looping
+  };
+};
+
+// In processor — loop with scheduled delay
+'daily-digest': {
+  process: async ({ job, complete }) => {
+    await sendDigestEmail(job.input.userId);
+
+    return complete(async ({ continueWith }) => {
+      if (userStillSubscribed) {
+        return continueWith({
+          typeName: 'daily-digest',
+          input: { userId: job.input.userId },
+          schedule: { afterMs: 24 * 60 * 60 * 1000 }, // Run again tomorrow
+        });
+      }
+      return { unsubscribedAt: new Date().toISOString() };
+    });
+  },
+}
+```
+
+See [examples/showcase-features](./examples/showcase-features) for a complete working example demonstrating recurring jobs with scheduling and deduplication.
+
+## Deduplication
+
+Deduplication prevents duplicate job chains from being created. When you start a job chain with a deduplication key, Queuert checks if a chain with that key already exists and returns the existing chain instead of creating a new one.
+
+```ts
+// First call creates the chain
+const chain1 = await client.startJobChain({
+  typeName: "sync-user",
+  input: { userId: "123" },
+  deduplication: { key: "sync:user:123" },
+});
+
+// Second call with same key returns existing chain
+const chain2 = await client.startJobChain({
+  typeName: "sync-user",
+  input: { userId: "123" },
+  deduplication: { key: "sync:user:123" },
+});
+
+chain2.deduplicated; // true — returned existing chain
+chain2.id === chain1.id; // true
+```
+
+### Deduplication Strategies
+
+The `strategy` option controls when deduplication applies:
+
+- **`completed`** (default) — Only dedup against non-completed chains (allows new chain after previous completes)
+- **`all`** — Dedup against any existing chain with this key
+
+```ts
+// Only one active health check at a time, but can start new after completion
+await client.startJobChain({
+  typeName: "health-check",
+  input: { serviceId: "api-server" },
+  deduplication: {
+    key: "health:api-server",
+    strategy: "completed",
+  },
+});
+```
+
+### Time-Windowed Deduplication
+
+Use `windowMs` to rate-limit job creation. Duplicates are prevented only within the time window.
+
+```ts
+// No duplicate syncs within 1 hour
+await client.startJobChain({
+  typeName: "sync-data",
+  input: { sourceId: "db-primary" },
+  deduplication: {
+    key: "sync:db-primary",
+    strategy: "all",
+    windowMs: 60 * 60 * 1000, // 1 hour
+  },
+});
+```
+
+See [examples/showcase-features](./examples/showcase-features) for a complete working example demonstrating deduplication with recurring jobs.
 
 ## Workerless Completion
 
@@ -532,13 +640,13 @@ Jobs can be completed without a worker using `completeJobChain`. This enables ap
 
 ```ts
 type Definitions = {
-  'await-approval': {
+  "await-approval": {
     entry: true;
     input: { requestId: string };
     output: { rejected: true };
-    continueWith: { typeName: 'process-request' };
+    continueWith: { typeName: "process-request" };
   };
-  'process-request': {
+  "process-request": {
     input: { requestId: string };
     output: { processed: true };
   };
@@ -546,8 +654,8 @@ type Definitions = {
 
 // Start a job that auto-rejects in 2 hours if not handled
 const chain = await queuert.startJobChain({
-  typeName: 'await-approval',
-  input: { requestId: '123' },
+  typeName: "await-approval",
+  input: { requestId: "123" },
   schedule: { afterMs: 2 * 60 * 60 * 1000 }, // 2 hours
 });
 
@@ -557,10 +665,10 @@ const worker = await createQueuertInProcessWorker({
   jobTypeRegistry: jobTypes,
   log: createConsoleLog(),
   jobTypeProcessors: {
-    'await-approval': {
+    "await-approval": {
       process: async ({ complete }) => complete(() => ({ rejected: true })),
     },
-    'process-request': {
+    "process-request": {
       process: async ({ job, complete }) => {
         await doSomethingWith(job.input.requestId);
         return complete(() => ({ processed: true }));
@@ -574,15 +682,18 @@ await worker.start();
 // The job can be completed early without a worker (e.g., via API call)
 await queuert.completeJobChain({
   id: chain.id,
-  typeName: 'await-approval',
+  typeName: "await-approval",
   complete: async ({ job, complete }) => {
-    if (job.typeName !== 'await-approval') {
+    if (job.typeName !== "await-approval") {
       return; // Already past approval stage
     }
     // If approved, continue to process-request; otherwise just reject
     if (userApproved) {
       await complete(job, ({ continueWith }) =>
-        continueWith({ typeName: 'process-request', input: { requestId: job.input.requestId } })
+        continueWith({
+          typeName: "process-request",
+          input: { requestId: job.input.requestId },
+        }),
       );
     } else {
       await complete(job, () => ({ rejected: true }));
@@ -622,7 +733,7 @@ const worker = await createQueuertInProcessWorker({
   jobTypeRegistry: jobTypes,
   log: createConsoleLog(),
   jobTypeProcessors: {
-    'fetch-data': {
+    "fetch-data": {
       process: async ({ signal, job, complete }) => {
         const timeout = AbortSignal.timeout(30_000); // 30 seconds
         const combined = AbortSignal.any([signal, timeout]);

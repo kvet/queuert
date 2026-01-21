@@ -6,14 +6,16 @@
  * Showcases included:
  * - Processing Modes: Atomic, staged, and auto-setup job processing
  * - Chain Patterns: Linear, branched, looped, and go-to execution patterns
+ * - Scheduling: Recurring jobs, deduplication, and time-windowed rate limiting
  *
  * Each showcase runs independently with its own job types and processors,
  * sharing the same PostgreSQL instance and adapters.
  */
 
-import { createSetup } from "./setup.js";
-import { runProcessingModesShowcase } from "./processing-modes.js";
 import { runChainPatternsShowcase } from "./chain-patterns.js";
+import { runProcessingModesShowcase } from "./processing-modes.js";
+import { runSchedulingShowcase } from "./scheduling.js";
+import { createSetup } from "./setup.js";
 
 async function main(): Promise<void> {
   console.log("╔════════════════════════════════════════════════════════════╗");
@@ -26,6 +28,7 @@ async function main(): Promise<void> {
     // Run showcases sequentially
     await runProcessingModesShowcase(setup);
     await runChainPatternsShowcase(setup);
+    await runSchedulingShowcase(setup);
 
     console.log("\n╔════════════════════════════════════════════════════════════╗");
     console.log("║                    ALL SHOWCASES COMPLETE                  ║");

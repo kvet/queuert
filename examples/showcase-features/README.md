@@ -21,14 +21,23 @@ Shows job chain execution patterns through a SaaS subscription workflow:
 - **Loops**: `charge-billing` -> `charge-billing` (recurring billing cycles)
 - **Go-to**: Multiple paths lead to `cancel-subscription` (jump to any type)
 
+### Scheduling (Recurring Jobs)
+
+Shows scheduling patterns for cron-like recurring jobs without external schedulers:
+
+- **Recurring jobs**: `daily-digest` loops to itself with scheduled delays
+- **Deduplication**: `health-check` prevents duplicate instances with `strategy: 'completed'`
+- **Time-windowed**: `sync-data` rate-limits job creation with `windowMs`
+
 ## File structure
 
 ```
 src/
-  index.ts           # Entry point - runs all showcases
-  setup.ts           # Shared PostgreSQL, adapters, utilities
+  index.ts            # Entry point - runs all showcases
+  setup.ts            # Shared PostgreSQL, adapters, utilities
   processing-modes.ts # Order fulfillment workflow
   chain-patterns.ts   # Subscription lifecycle workflow
+  scheduling.ts       # Recurring jobs and deduplication
 ```
 
 ## Processing Modes explained
@@ -274,6 +283,86 @@ Final status: expired
 Billing cycles completed: 0
 Total charged: $0.00
 Expired at: 2026-01-21T...
+
+============================================================
+SCHEDULING SHOWCASE: Recurring Jobs Without Cron
+============================================================
+
+----------------------------------------
+SCENARIO 1: Recurring Daily Digest
+----------------------------------------
+Job loops to itself with scheduled delays - no cron needed!
+
+[daily-digest] Sending digest #1 to user user-123
+  Scheduling next digest in 200ms...
+
+[daily-digest] Sending digest #2 to user user-123
+  Scheduling next digest in 200ms...
+
+[daily-digest] Sending digest #3 to user user-123
+  User unsubscribed or max iterations reached. Stopping.
+
+----------------------------------------
+SCENARIO 1 COMPLETED
+----------------------------------------
+Total digests sent: 3
+Final result: {"unsubscribedAt":"2026-01-21T...","totalSent":3}
+
+----------------------------------------
+SCENARIO 2: Health Check with Deduplication
+----------------------------------------
+Deduplication prevents duplicate recurring job instances.
+
+Started health check chain: abc123
+Deduplicated: false
+
+Attempted duplicate health check: abc123
+Deduplicated: true (returned existing chain)
+
+[health-check] Check #1 for api-server
+  Status: healthy
+  Scheduling next check in 150ms...
+
+[health-check] Check #2 for api-server
+  Status: healthy
+  Scheduling next check in 150ms...
+
+[health-check] Check #3 for api-server
+  Status: healthy
+  Service stopped or max checks reached. Stopping.
+
+----------------------------------------
+SCENARIO 2 COMPLETED
+----------------------------------------
+Total health checks: 3
+Final result: {"stoppedAt":"2026-01-21T...","totalChecks":3}
+
+----------------------------------------
+SCENARIO 3: Time-Windowed Deduplication
+----------------------------------------
+Rate-limiting syncs with 500ms window.
+
+First sync started: xyz789
+Deduplicated: false
+
+[sync-data] Syncing data from db-primary
+  Sync completed at 2026-01-21T...
+
+Second sync (within window): xyz789
+Deduplicated: true (rate-limited)
+
+Waiting 500ms for window to expire...
+
+Third sync (after window): def456
+Deduplicated: false (new chain created)
+
+[sync-data] Syncing data from db-primary
+  Sync completed at 2026-01-21T...
+
+----------------------------------------
+SCENARIO 3 COMPLETED
+----------------------------------------
+Total syncs executed: 2 (2 out of 3 attempts)
 
 ╔════════════════════════════════════════════════════════════╗
 ║                    ALL SHOWCASES COMPLETE                  ║
