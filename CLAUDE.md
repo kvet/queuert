@@ -26,7 +26,7 @@ High-level design decisions are documented in [docs/design/](docs/design/):
 - `@queuert/redis` - Redis notify adapter
 - `@queuert/nats` - NATS notify adapter with optional JetStream KV
 - `@queuert/otel` - OpenTelemetry observability adapter
-- `examples/` - Integration examples organized by prefix: `state-{state_adapter_name}-*`, `notify-{notify_adapter_name}-*`, `validation-*`, `log-*`, `observability-*`, `showcase-*`
+- `examples/` - Integration examples organized by prefix: `state-{state_adapter_name}-*`, `notify-{notify_adapter_name}-*`, `validation-*`, `log-*`, `observability-*`, `showcase-*`, `benchmark-*`
 
 See each package's README.md for exports, configuration, and usage.
 

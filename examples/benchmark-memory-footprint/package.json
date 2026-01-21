@@ -1,0 +1,45 @@
+{
+  "name": "example-benchmark-memory-footprint",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node --expose-gc --import=tsx src/index.ts",
+    "start:all": "node --expose-gc --import=tsx src/index.ts --all",
+    "start:state-postgres": "node --expose-gc --import=tsx src/index.ts --state-postgres",
+    "start:state-sqlite": "node --expose-gc --import=tsx src/index.ts --state-sqlite",
+    "start:state-mongodb": "node --expose-gc --import=tsx src/index.ts --state-mongodb",
+    "start:notify-redis": "node --expose-gc --import=tsx src/index.ts --notify-redis",
+    "start:notify-postgres": "node --expose-gc --import=tsx src/index.ts --notify-postgres",
+    "start:notify-nats": "node --expose-gc --import=tsx src/index.ts --notify-nats",
+    "start:otel": "node --expose-gc --import=tsx src/index.ts --otel",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/sdk-metrics": "^2.0.0",
+    "@queuert/mongodb": "workspace:*",
+    "@queuert/nats": "workspace:*",
+    "@queuert/otel": "workspace:*",
+    "@queuert/postgres": "workspace:*",
+    "@queuert/redis": "workspace:*",
+    "@queuert/sqlite": "workspace:*",
+    "better-sqlite3": "^11.0.0",
+    "mongodb": "^6.0.0",
+    "nats": "^2.28.0",
+    "postgres": "^3.4.5",
+    "queuert": "workspace:*",
+    "redis": "^5.0.0"
+  },
+  "devDependencies": {
+    "@queuert/tsconfig": "workspace:*",
+    "@testcontainers/mongodb": "^10.21.0",
+    "@testcontainers/nats": "^10.21.0",
+    "@testcontainers/postgresql": "^10.21.0",
+    "@testcontainers/redis": "^10.21.0",
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.7.0"
+  }
+}

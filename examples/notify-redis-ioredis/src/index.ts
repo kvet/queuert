@@ -11,7 +11,7 @@ import { createInProcessStateAdapter } from "queuert/internal";
 
 // 1. Start Redis using testcontainers
 console.log("Starting Redis...");
-const redisContainer = await new RedisContainer("redis:6").withExposedPorts(6379).start();
+const redisContainer = await new RedisContainer("redis:7").withExposedPorts(6379).start();
 const redisUrl = redisContainer.getConnectionUrl();
 
 // 2. Create Redis connections

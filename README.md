@@ -23,6 +23,7 @@ Run your application logic as a series of background jobs that are started along
 - [Timeouts](#timeouts)
 - [Observability](#observability)
 - [Testing & Resilience](#testing--resilience)
+- [Benchmarks](#benchmarks)
 - [License](#license)
 
 ## Sorry, what?
@@ -753,7 +754,7 @@ await worker.start();
 
 For hard timeouts, configure `leaseConfig` in the job type processor — if a job doesn't complete or renew its lease in time, the reaper reclaims it for retry:
 
-````ts
+```ts
 const worker = await createQueuertInProcessWorker({
   stateAdapter,
   jobTypeRegistry: jobTypes,
@@ -765,26 +766,26 @@ const worker = await createQueuertInProcessWorker({
     },
   },
 });
-
+```
 
 ## Observability
 
 Queuert provides an OpenTelemetry adapter for metrics collection. Configure your OTEL SDK with desired exporters (Prometheus, OTLP, Jaeger, etc.) before using this adapter.
 
 ```ts
-import { createOtelObservabilityAdapter } from '@queuert/otel';
-import { metrics } from '@opentelemetry/api';
+import { createOtelObservabilityAdapter } from "@queuert/otel";
+import { metrics } from "@opentelemetry/api";
 
 const client = await createQueuertClient({
   stateAdapter,
   jobTypeRegistry: jobTypes,
   observabilityAdapter: createOtelObservabilityAdapter({
-    meter: metrics.getMeter('my-app'),
-    metricPrefix: 'queuert',
+    meter: metrics.getMeter("my-app"),
+    metricPrefix: "queuert",
   }),
   log: createConsoleLog(),
 });
-````
+```
 
 The adapter emits:
 
@@ -815,6 +816,28 @@ Test suites available in [`packages/core/src/suites/`](./packages/core/src/suite
 - [`worker.test-suite.ts`](./packages/core/src/suites/worker.test-suite.ts) — Worker lifecycle and polling
 
 These suites run against all supported adapters (PostgreSQL, SQLite, MongoDB, in-memory) to ensure consistent behavior across databases.
+
+## Benchmarks
+
+Queuert adapters add minimal overhead on top of the database/messaging drivers (Node.js v24, `--expose-gc`):
+
+| State Adapter | Adapter Overhead |
+| ------------- | ---------------- |
+| PostgreSQL    | ~290 KB          |
+| SQLite        | ~45 KB           |
+| MongoDB       | ~370 KB          |
+
+| Notify Adapter | Adapter Overhead |
+| -------------- | ---------------- |
+| Redis          | ~11 KB           |
+| PostgreSQL     | ~10 KB           |
+| NATS           | ~11 KB           |
+
+| Component             | Overhead |
+| --------------------- | -------- |
+| Observability Adapter | ~145 KB  |
+
+See [examples/benchmark-memory-footprint](./examples/benchmark-memory-footprint) for the full measurement tool.
 
 ## License
 

@@ -96,6 +96,7 @@ Examples are organized by prefix to indicate their primary focus:
 - `notify-xxx`: Notify adapter examples (Redis, NATS, etc.)
 - `validation-xxx`: Runtime validation with schema libraries
 - `showcase-xxx`: Feature demonstrations combining multiple concerns
+- `benchmark-xxx`: Performance measurement and benchmarks
 
 ### Single-Purpose Design
 
