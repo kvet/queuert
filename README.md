@@ -231,7 +231,7 @@ If you don't call `prepare`, auto-setup runs based on when you call `complete`:
 - Call `complete` synchronously → atomic mode
 - Call `complete` after async work → staged mode (lease renewal active)
 
-See [examples/showcase-processing-modes](./examples/showcase-processing-modes) for a complete working example demonstrating all three modes.
+See [examples/showcase-features](./examples/showcase-features) for a complete working example demonstrating all three modes through an order fulfillment workflow.
 
 ## Job Chain Patterns
 
@@ -239,175 +239,126 @@ Chains support various execution patterns via `continueWith`:
 
 ### Linear
 
-Jobs execute one after another: `A → B`
+Jobs execute one after another: `create-subscription → activate-trial`
 
 ```ts
 type Definitions = {
-  step1: { entry: true; input: { id: string }; continueWith: { typeName: 'step2' } };
-  step2: { input: { id: string }; output: { done: true } };
+  'create-subscription': {
+    entry: true;
+    input: { userId: string; planId: string };
+    continueWith: { typeName: 'activate-trial' };
+  };
+  'activate-trial': {
+    input: { subscriptionId: number; trialDays: number };
+    continueWith: { typeName: 'trial-decision' };
+  };
 };
 
-// Start the chain
-await queuert.startJobChain({
-  typeName: "step1",
-  input: { id: "123" },
-});
-
-// Process in worker
-const worker = await createQueuertInProcessWorker({
-  stateAdapter,
-  jobTypeRegistry: jobTypes,
-  log: createConsoleLog(),
-  jobTypeProcessors: {
-    step1: {
-      process: async ({ job, complete }) => {
-        return complete(async ({ continueWith }) => {
-          return continueWith({ typeName: "step2", input: { id: job.input.id } });
-        });
-      },
-    },
-    step2: {
-      process: async ({ job, complete }) => {
-        return complete(() => ({ done: true }));
-      },
-    },
+// In processor
+'create-subscription': {
+  process: async ({ job, complete }) => {
+    return complete(async ({ sql, continueWith }) => {
+      const [sub] = await sql`INSERT INTO subscriptions ... RETURNING id`;
+      return continueWith({
+        typeName: "activate-trial",
+        input: { subscriptionId: sub.id, trialDays: 7 },
+      });
+    });
   },
-});
-
-await worker.start();
+},
 ```
 
 ### Branched
 
-Jobs can conditionally continue to different types: `A → B1 | B2`
+Jobs conditionally continue to different types: `trial-decision → convert-to-paid | expire-trial`
 
 ```ts
-type Definitions = {
-  main: {
-    entry: true;
-    input: { value: number };
-    continueWith: { typeName: 'branch1' | 'branch2' };  // Union of allowed targets
-  };
-  branch1: { input: { value: number }; output: { result1: number } };
-  branch2: { input: { value: number }; output: { result2: number } };
+'trial-decision': {
+  input: { subscriptionId: number };
+  continueWith: { typeName: 'convert-to-paid' | 'expire-trial' };  // Union type
 };
 
-// Start the chain
-await queuert.startJobChain({
-  typeName: "main",
-  input: { value: 42 },
-});
-
-// Process in worker
-const worker = await createQueuertInProcessWorker({
-  stateAdapter,
-  jobTypeRegistry: jobTypes,
-  log: createConsoleLog(),
-  jobTypeProcessors: {
-    main: {
-      process: async ({ job, complete }) => {
-        return complete(async ({ continueWith }) => {
-          return continueWith({
-            typeName: job.input.value % 2 === 0 ? "branch1" : "branch2",
-            input: { value: job.input.value },
-          });
-        });
-      },
-    },
+// In processor - choose path based on condition
+'trial-decision': {
+  process: async ({ job, complete }) => {
+    const shouldConvert = userWantsToConvert;
+    return complete(async ({ continueWith }) => {
+      return continueWith({
+        typeName: shouldConvert ? "convert-to-paid" : "expire-trial",
+        input: { subscriptionId: job.input.subscriptionId },
+      });
+    });
   },
-});
-
-await worker.start();
+},
 ```
 
 ### Loops
 
-Jobs can continue to the same type: `A → A → A → done`
+Jobs continue to the same type: `charge-billing → charge-billing → ... → done`
 
 ```ts
 type Definitions = {
-  loop: {
-    entry: true;
-    input: { counter: number };
-    output: { done: true };  // Terminal output when done
-    continueWith: { typeName: 'loop' };     // Can continue to self
+  'charge-billing': {
+    input: { subscriptionId: number; cycle: number };
+    output: { finalCycle: number; totalCharged: number };  // Terminal output
+    continueWith: { typeName: 'charge-billing' };  // Self-reference for looping
   };
 };
 
-// Start the chain
-await queuert.startJobChain({
-  typeName: "loop",
-  input: { counter: 0 },
-});
-
-// Process in worker
-const worker = await createQueuertInProcessWorker({
-  stateAdapter,
-  jobTypeRegistry: jobTypes,
-  log: createConsoleLog(),
-  jobTypeProcessors: {
-    loop: {
-      process: async ({ job, complete }) => {
-        return complete(async ({ continueWith }) => {
-          return job.input.counter < 3
-            ? continueWith({ typeName: "loop", input: { counter: job.input.counter + 1 } })
-            : { done: true };
+// In processor - loop or terminate with output
+'charge-billing': {
+  process: async ({ job, complete }) => {
+    await chargePayment(job.input.subscriptionId);
+    return complete(async ({ continueWith }) => {
+      if (job.input.cycle < MAX_CYCLES) {
+        return continueWith({
+          typeName: "charge-billing",
+          input: { subscriptionId: job.input.subscriptionId, cycle: job.input.cycle + 1 },
         });
-      },
-    },
+      }
+      return { finalCycle: job.input.cycle, totalCharged: calculateTotal() };
+    });
   },
-});
-
-await worker.start();
+},
 ```
 
 ### Go-to
 
-Jobs can jump back to earlier types: `A → B → A → B → done`
+Jobs jump to different types: `charge-billing → cancel-subscription`
 
 ```ts
 type Definitions = {
-  start: { entry: true; input: { value: number }; continueWith: { typeName: 'end' } };
-  end: {
-    input: { result: number };
-    output: { finalResult: number };  // Terminal output when done
-    continueWith: { typeName: 'start' };             // Can jump back to start
+  'charge-billing': {
+    input: { subscriptionId: number; cycle: number };
+    output: { finalCycle: number; totalCharged: number };
+    continueWith: { typeName: 'charge-billing' | 'cancel-subscription' };  // Loop or jump
+  };
+  'cancel-subscription': {
+    input: { subscriptionId: number; reason: string };
+    output: { cancelledAt: string };
   };
 };
 
-// Start the chain
-await queuert.startJobChain({
-  typeName: "start",
-  input: { value: 10 },
-});
-
-// Process in worker
-const worker = await createQueuertInProcessWorker({
-  stateAdapter,
-  jobTypeRegistry: jobTypes,
-  log: createConsoleLog(),
-  jobTypeProcessors: {
-    start: {
-      process: async ({ job, complete }) => {
-        return complete(async ({ continueWith }) => {
-          return continueWith({ typeName: "end", input: { result: job.input.value * 2 } });
+// In processor - jump to cancel when max cycles reached
+'charge-billing': {
+  process: async ({ job, complete }) => {
+    return complete(async ({ continueWith }) => {
+      if (job.input.cycle >= MAX_CYCLES) {
+        return continueWith({
+          typeName: "cancel-subscription",
+          input: { subscriptionId: job.input.subscriptionId, reason: "max_billing_cycles_reached" },
         });
-      },
-    },
-    end: {
-      process: async ({ job, complete }) => {
-        return complete(async ({ continueWith }) => {
-          return job.input.result < 100
-            ? continueWith({ typeName: "start", input: { value: job.input.result } })
-            : { finalResult: job.input.result };
-        });
-      },
-    },
+      }
+      return continueWith({
+        typeName: "charge-billing",
+        input: { subscriptionId: job.input.subscriptionId, cycle: job.input.cycle + 1 },
+      });
+    });
   },
-});
-
-await worker.start();
+},
 ```
+
+See [examples/showcase-features](./examples/showcase-features) for a complete working example demonstrating all four patterns through a subscription lifecycle workflow.
 
 ## Job Blockers
 
