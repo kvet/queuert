@@ -15,13 +15,12 @@ export const extendWithStatePostgres = <
   api: TestAPI<T>,
 ): TestAPI<
   T & {
-    pool: Pool;
     stateAdapter: StateAdapter<{ $test: true }, string>;
     flakyStateAdapter: StateAdapter<{ $test: true }, string>;
   }
 > => {
   return api.extend<{
-    pool: Pool;
+    statePool: Pool;
     _dbMigrateToLatest: void;
     _dbCleanup: void;
     stateProvider: PgPoolProvider;
@@ -29,7 +28,7 @@ export const extendWithStatePostgres = <
     stateAdapter: PgStateAdapter;
     flakyStateAdapter: PgStateAdapter;
   }>({
-    pool: [
+    statePool: [
       async ({ postgresConnectionString }, use) => {
         const pool = new Pool({
           connectionString: postgresConnectionString,
@@ -43,15 +42,15 @@ export const extendWithStatePostgres = <
       { scope: "worker" },
     ],
     _dbMigrateToLatest: [
-      async ({ pool }, use) => {
-        const client = await pool.connect();
+      async ({ statePool }, use) => {
+        const client = await statePool.connect();
         await client.query(`DROP SCHEMA IF EXISTS queuert CASCADE;`).catch(() => {
           // ignore
         });
         client.release();
 
         const stateProvider = createPgPoolProvider({
-          pool: pool,
+          pool: statePool,
         });
         const stateAdapter = await createPgStateAdapter({
           stateProvider,
@@ -71,10 +70,10 @@ export const extendWithStatePostgres = <
       { scope: "worker" },
     ],
     _dbCleanup: [
-      async ({ pool }, use) => {
+      async ({ statePool }, use) => {
         await use();
 
-        const client = await pool.connect();
+        const client = await statePool.connect();
         await client.query(`DELETE FROM queuert.job_blocker;`);
         await client.query(`DELETE FROM queuert.job;`);
         client.release();
@@ -82,13 +81,13 @@ export const extendWithStatePostgres = <
       { scope: "test" },
     ],
     stateProvider: [
-      async ({ pool, _dbMigrateToLatest, _dbCleanup }, use) => {
+      async ({ statePool, _dbMigrateToLatest, _dbCleanup }, use) => {
         // oxlint-disable-next-line no-unused-expressions
         _dbMigrateToLatest;
         // oxlint-disable-next-line no-unused-expressions
         _dbCleanup;
 
-        return use(createPgPoolProvider({ pool }));
+        return use(createPgPoolProvider({ pool: statePool }));
       },
       { scope: "test" },
     ],

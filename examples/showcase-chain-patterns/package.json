@@ -1,0 +1,22 @@
+{
+  "name": "example-showcase-chain-patterns",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@queuert/postgres": "workspace:*",
+    "postgres": "^3.4.5",
+    "queuert": "workspace:*"
+  },
+  "devDependencies": {
+    "@queuert/tsconfig": "workspace:*",
+    "@testcontainers/postgresql": "^10.21.0",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.7.0"
+  }
+}

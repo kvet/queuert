@@ -151,6 +151,16 @@ import { createInProcessStateAdapter } from "queuert/internal";   // For notify 
 
 These adapters are synchronous factories (no `await` needed) and work without external dependencies.
 
+### Code Style for Examples
+
+Examples should follow these conventions for clarity and readability:
+
+- **Top-level await**: Use top-level await directly, not wrapped in `main().catch()` or similar
+- **Direct transaction patterns**: Use database client transactions directly (e.g., `db.transaction()`, `sql.begin()`) instead of abstracting through `stateProvider.runInTransaction()` in the demonstration code
+- **Simple patterns**: Prefer straightforward code over abstraction layers — examples should be copy-paste friendly
+- **No obvious comments**: Users are smart
+- **Workflow visualization**: Examples with job chains should include ASCII workflow diagrams as comments inside the `defineJobTypes` generic, directly above the relevant job type definitions
+
 ## Documentation Updates
 
 When making changes:

@@ -13,25 +13,32 @@ export const extendWithNotifyPostgres = <
   api: TestAPI<T>,
 ): TestAPI<T & { notifyAdapter: NotifyAdapter; flakyNotifyAdapter: NotifyAdapter }> => {
   return api.extend<{
+    notifyPool: Pool;
     notifyAdapter: NotifyAdapter;
     flakyNotifyAdapter: NotifyAdapter;
   }>({
-    notifyAdapter: [
+    notifyPool: [
       async ({ postgresConnectionString }, use) => {
         const pool = new Pool({
           connectionString: postgresConnectionString,
-          allowExitOnIdle: true, // Unref idle timeout timers to prevent resource leak detection
+          allowExitOnIdle: true,
         });
 
-        const provider = createPgPoolNotifyProvider({ pool });
+        await use(pool);
+
+        await pool.end();
+      },
+      { scope: "worker" },
+    ],
+    notifyAdapter: [
+      async ({ notifyPool }, use) => {
+        const provider = createPgPoolNotifyProvider({ pool: notifyPool });
         const notifyAdapter = await createPgNotifyAdapter({
           provider,
           channelPrefix: `queuert_${Date.now()}_${Math.random().toString(36).slice(2)}`,
         });
 
         await use(notifyAdapter);
-
-        await pool.end();
       },
       { scope: "test" },
     ],

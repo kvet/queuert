@@ -238,7 +238,7 @@ If you don't call `prepare`, auto-setup runs based on when you call `complete`:
 - Call `complete` synchronously → atomic mode
 - Call `complete` after async work → staged mode (lease renewal active)
 
-See [examples/showcase-features](./examples/showcase-features) for a complete working example demonstrating all three modes through an order fulfillment workflow.
+See [examples/showcase-processing-modes](./examples/showcase-processing-modes) for a complete working example demonstrating all three modes through an order fulfillment workflow.
 
 ## Job Chain Patterns
 
@@ -365,7 +365,7 @@ type Definitions = {
 },
 ```
 
-See [examples/showcase-features](./examples/showcase-features) for a complete working example demonstrating all four patterns through a subscription lifecycle workflow.
+See [examples/showcase-chain-patterns](./examples/showcase-chain-patterns) for a complete working example demonstrating all four patterns through a subscription lifecycle workflow.
 
 ## Job Blockers
 
@@ -414,6 +414,8 @@ const worker = await createQueuertInProcessWorker({
 
 await worker.start();
 ```
+
+See [examples/showcase-blockers](./examples/showcase-blockers) for a complete working example demonstrating fan-out/fan-in and fixed blocker slots.
 
 ## Error Handling
 
@@ -507,6 +509,8 @@ rescheduleJob({ at: new Date("2025-01-15T09:00:00Z") });
 rescheduleJob({ afterMs: 60_000 }, originalError);
 ```
 
+See [examples/showcase-error-handling](./examples/showcase-error-handling) for a complete working example demonstrating discriminated unions, compensation patterns, and explicit rescheduling.
+
 ## Deferred Start
 
 Jobs can be scheduled to start at a future time using the `schedule` option. The job is created transactionally but won't be processed until the specified time.
@@ -572,7 +576,7 @@ type Definitions = {
 }
 ```
 
-See [examples/showcase-features](./examples/showcase-features) for a complete working example demonstrating recurring jobs with scheduling and deduplication.
+See [examples/showcase-scheduling](./examples/showcase-scheduling) for a complete working example demonstrating recurring jobs with scheduling and deduplication.
 
 ## Deduplication
 
@@ -633,7 +637,7 @@ await client.startJobChain({
 });
 ```
 
-See [examples/showcase-features](./examples/showcase-features) for a complete working example demonstrating deduplication with recurring jobs.
+See [examples/showcase-scheduling](./examples/showcase-scheduling) for a complete working example demonstrating deduplication with recurring jobs.
 
 ## Workerless Completion
 
@@ -705,6 +709,8 @@ await queuert.completeJobChain({
 
 This pattern lets you interweave external actions with your job chains — waiting for user input, third-party callbacks, or manual approval steps.
 
+See [examples/showcase-workerless](./examples/showcase-workerless) for a complete working example demonstrating approval workflows and deferred start with early completion.
+
 ## Complete Type Safety
 
 Queuert provides end-to-end type safety with full type inference. Define your job types once, and TypeScript ensures correctness throughout your entire codebase:
@@ -767,6 +773,8 @@ const worker = await createQueuertInProcessWorker({
   },
 });
 ```
+
+See [examples/showcase-timeouts](./examples/showcase-timeouts) for a complete working example demonstrating cooperative timeouts and hard timeouts via lease.
 
 ## Observability
 

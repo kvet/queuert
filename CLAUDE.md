@@ -32,6 +32,7 @@ See each package's README.md for exports, configuration, and usage.
 
 ## Session Requirements
 
+- No obvious comments
 - Run `pnpm fmt` before running checks to fix formatting issues
 - Run `pnpm check` to run all checks together (or separately: `pnpm lint`, `pnpm typecheck`, `pnpm test`)
 - See [Code Style](docs/design/code-style.md) for testing patterns, documentation update guidelines, and examples naming conventions

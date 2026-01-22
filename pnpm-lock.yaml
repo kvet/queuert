@@ -295,7 +295,175 @@ importers:
         specifier: ^5.7.0
         version: 5.9.3
 
-  examples/showcase-features:
+  examples/showcase-blockers:
+    dependencies:
+      '@queuert/postgres':
+        specifier: workspace:*
+        version: link:../../packages/postgres
+      postgres:
+        specifier: ^3.4.5
+        version: 3.4.8
+      queuert:
+        specifier: workspace:*
+        version: link:../../packages/core
+    devDependencies:
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
+      '@testcontainers/postgresql':
+        specifier: ^10.21.0
+        version: 10.28.0
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.3
+      tsx:
+        specifier: ^4.0.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  examples/showcase-chain-patterns:
+    dependencies:
+      '@queuert/postgres':
+        specifier: workspace:*
+        version: link:../../packages/postgres
+      postgres:
+        specifier: ^3.4.5
+        version: 3.4.8
+      queuert:
+        specifier: workspace:*
+        version: link:../../packages/core
+    devDependencies:
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
+      '@testcontainers/postgresql':
+        specifier: ^10.21.0
+        version: 10.28.0
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.3
+      tsx:
+        specifier: ^4.0.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  examples/showcase-error-handling:
+    dependencies:
+      '@queuert/postgres':
+        specifier: workspace:*
+        version: link:../../packages/postgres
+      postgres:
+        specifier: ^3.4.5
+        version: 3.4.8
+      queuert:
+        specifier: workspace:*
+        version: link:../../packages/core
+    devDependencies:
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
+      '@testcontainers/postgresql':
+        specifier: ^10.21.0
+        version: 10.28.0
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.3
+      tsx:
+        specifier: ^4.0.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  examples/showcase-processing-modes:
+    dependencies:
+      '@queuert/postgres':
+        specifier: workspace:*
+        version: link:../../packages/postgres
+      postgres:
+        specifier: ^3.4.5
+        version: 3.4.8
+      queuert:
+        specifier: workspace:*
+        version: link:../../packages/core
+    devDependencies:
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
+      '@testcontainers/postgresql':
+        specifier: ^10.21.0
+        version: 10.28.0
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.3
+      tsx:
+        specifier: ^4.0.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  examples/showcase-scheduling:
+    dependencies:
+      '@queuert/postgres':
+        specifier: workspace:*
+        version: link:../../packages/postgres
+      postgres:
+        specifier: ^3.4.5
+        version: 3.4.8
+      queuert:
+        specifier: workspace:*
+        version: link:../../packages/core
+    devDependencies:
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
+      '@testcontainers/postgresql':
+        specifier: ^10.21.0
+        version: 10.28.0
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.3
+      tsx:
+        specifier: ^4.0.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  examples/showcase-timeouts:
+    dependencies:
+      '@queuert/postgres':
+        specifier: workspace:*
+        version: link:../../packages/postgres
+      postgres:
+        specifier: ^3.4.5
+        version: 3.4.8
+      queuert:
+        specifier: workspace:*
+        version: link:../../packages/core
+    devDependencies:
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
+      '@testcontainers/postgresql':
+        specifier: ^10.21.0
+        version: 10.28.0
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.3
+      tsx:
+        specifier: ^4.0.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  examples/showcase-workerless:
     dependencies:
       '@queuert/postgres':
         specifier: workspace:*
