@@ -21,7 +21,7 @@ export const extendWithNotifyPostgres = <
       async ({ postgresConnectionString }, use) => {
         const pool = new Pool({
           connectionString: postgresConnectionString,
-          allowExitOnIdle: true,
+          idleTimeoutMillis: 0,
         });
 
         await use(pool);
