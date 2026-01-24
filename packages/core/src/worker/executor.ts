@@ -142,16 +142,6 @@ export const createExecutor = <
     const runWorkerLoop = async () => {
       while (true) {
         try {
-          await helper.removeExpiredJobLease({
-            typeNames,
-            workerId,
-          });
-
-          await waitForNextJob();
-          if (stopController.signal.aborted) {
-            return;
-          }
-
           while (true) {
             const hasMore = await performJob();
             if (!hasMore) {
@@ -165,6 +155,16 @@ export const createExecutor = <
             if (stopController.signal.aborted) {
               return;
             }
+          }
+
+          await helper.removeExpiredJobLease({
+            typeNames,
+            workerId,
+          });
+
+          await waitForNextJob();
+          if (stopController.signal.aborted) {
+            return;
           }
         } catch (error) {
           observabilityHelper.workerError({ workerId }, error);

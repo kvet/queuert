@@ -1,5 +1,10 @@
 # Short term
 
+- Rename worker config for less verbosity:
+  - `jobTypeRegistry` → `registry`
+  - `jobTypeProcessors` → `processors`
+  - `process` → `execute`
+  - Support function shorthand for processors (e.g., `'job': async () => {}` instead of `'job': { execute: async () => {} }`)
 - Rename deduplication strategy `'completed'` → `'incomplete'` for clarity (describes what to deduplicate against, not when deduplication stops)
 - ObservabilityAdapter: tracing spans
 - test against multiple versions of node on CI
