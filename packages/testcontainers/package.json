@@ -23,7 +23,7 @@
     "pg": "^8.16.3",
     "proper-lockfile": "^4.1.2",
     "testcontainers": "^11.10.0",
-    "vitest": "^4.0.16"
+    "vitest": "^4.0.18"
   },
   "devDependencies": {
     "@queuert/tsconfig": "workspace:*",

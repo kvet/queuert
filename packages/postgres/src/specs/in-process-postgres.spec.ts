@@ -1,4 +1,4 @@
-import { extendWithPostgres, TESTCONTAINER_RESOURCE_TYPES } from "@queuert/testcontainers";
+import { TESTCONTAINER_RESOURCE_TYPES, extendWithPostgres } from "@queuert/testcontainers";
 import {
   extendWithCommon,
   extendWithResourceLeakDetection,

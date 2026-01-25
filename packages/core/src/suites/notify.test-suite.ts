@@ -1,7 +1,7 @@
-import { TestAPI } from "vitest";
+import { type TestAPI } from "vitest";
 import { sleep } from "../helpers/sleep.js";
 import { createQueuertClient, createQueuertInProcessWorker, defineJobTypes } from "../index.js";
-import { TestSuiteContext } from "./spec-context.spec-helper.js";
+import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
   it("schedules processing immediately", async ({

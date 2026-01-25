@@ -1,4 +1,4 @@
-import { BackoffConfig, calculateBackoffMs } from "./backoff.js";
+import { type BackoffConfig, calculateBackoffMs } from "./backoff.js";
 import { sleep } from "./sleep.js";
 
 export type RetryConfig = BackoffConfig & { maxAttempts?: number };

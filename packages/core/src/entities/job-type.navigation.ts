@@ -1,11 +1,11 @@
-import { CompletedJobChain, JobChain } from "./job-chain.types.js";
+import { type CompletedJobChain, type JobChain } from "./job-chain.types.js";
 import {
-  BaseJobTypeDefinitions,
-  JobTypeReference,
-  NominalReference,
-  StructuralReference,
+  type BaseJobTypeDefinitions,
+  type JobTypeReference,
+  type NominalReference,
+  type StructuralReference,
 } from "./job-type.js";
-import { CreatedJob, Job, JobWithoutBlockers } from "./job.js";
+import { type CreatedJob, type Job, type JobWithoutBlockers } from "./job.js";
 
 // Detect 'any' type (0 extends 1 & T is true only when T is any)
 type IsAny<T> = 0 extends 1 & T ? true : false;

@@ -1,5 +1,5 @@
-import { ObservabilityHelper } from "../observability-adapter/observability-helper.js";
-import { NotifyAdapter } from "./notify-adapter.js";
+import { type ObservabilityHelper } from "../observability-adapter/observability-helper.js";
+import { type NotifyAdapter } from "./notify-adapter.js";
 
 export const wrapNotifyAdapterWithLogging = ({
   notifyAdapter,

@@ -31,13 +31,13 @@ npm install @queuert/redis
 ## Quick Start
 
 ```typescript
-import { createQueuertClient, createConsoleLog, defineJobTypes } from 'queuert';
-import { createPgStateAdapter } from '@queuert/postgres';
-import { createRedisNotifyAdapter } from '@queuert/redis';
-import { createClient } from 'redis';
+import { createQueuertClient, createConsoleLog, defineJobTypes } from "queuert";
+import { createPgStateAdapter } from "@queuert/postgres";
+import { createRedisNotifyAdapter } from "@queuert/redis";
+import { createClient } from "redis";
 
 const jobTypes = defineJobTypes<{
-  'send-email': { entry: true; input: { to: string }; output: { sent: true } };
+  "send-email": { entry: true; input: { to: string }; output: { sent: true } };
 }>();
 
 const stateAdapter = await createPgStateAdapter({ stateProvider: myPgProvider });
@@ -77,8 +77,8 @@ const client = await createQueuertClient({
 
 ```typescript
 const notifyAdapter = await createRedisNotifyAdapter({
-  provider: myRedisNotifyProvider,  // You provide this - see Quick Start
-  channelPrefix: 'queuert',         // Channel prefix (default: "queuert")
+  provider: myRedisNotifyProvider, // You provide this - see Quick Start
+  channelPrefix: "queuert", // Channel prefix (default: "queuert")
 });
 ```
 

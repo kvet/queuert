@@ -1,12 +1,12 @@
-import { TestAPI } from "vitest";
+import { type TestAPI } from "vitest";
 import { sleep } from "../helpers/sleep.js";
 import {
+  type JobChain,
   createQueuertClient,
   createQueuertInProcessWorker,
   defineJobTypes,
-  JobChain,
 } from "../index.js";
-import { TestSuiteContext } from "./spec-context.spec-helper.js";
+import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
   it("deletes job chain and all jobs in the tree", async ({

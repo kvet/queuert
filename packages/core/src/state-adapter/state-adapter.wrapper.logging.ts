@@ -1,5 +1,5 @@
-import { ObservabilityHelper } from "../observability-adapter/observability-helper.js";
-import { BaseTxContext, StateAdapter } from "./state-adapter.js";
+import { type ObservabilityHelper } from "../observability-adapter/observability-helper.js";
+import { type BaseTxContext, type StateAdapter } from "./state-adapter.js";
 
 export const wrapStateAdapterWithLogging = <
   TTxContext extends BaseTxContext,

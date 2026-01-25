@@ -1,5 +1,6 @@
 import {
   blockerChainsTestSuite,
+  chainsTestSuite,
   extendWithCommon,
   extendWithNotifyInProcess,
   extendWithResourceLeakDetection,
@@ -7,11 +8,10 @@ import {
   processTestSuite,
   reaperTestSuite,
   schedulingTestSuite,
-  chainsTestSuite,
   stateResilienceTestSuite,
   waitChainCompletionTestSuite,
-  workerlessCompletionTestSuite,
   workerTestSuite,
+  workerlessCompletionTestSuite,
 } from "queuert/testing";
 import { describe, it } from "vitest";
 import { extendWithStateSqlite } from "./state-adapter.sqlite.spec-helper.js";

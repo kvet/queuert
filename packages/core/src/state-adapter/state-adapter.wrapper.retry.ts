@@ -1,5 +1,5 @@
-import { RetryConfig, withRetry } from "../helpers/retry.js";
-import { BaseTxContext, StateAdapter } from "./state-adapter.js";
+import { type RetryConfig, withRetry } from "../helpers/retry.js";
+import { type BaseTxContext, type StateAdapter } from "./state-adapter.js";
 
 export const wrapStateAdapterWithRetry = <TTxContext extends BaseTxContext, TJobId extends string>({
   stateAdapter,

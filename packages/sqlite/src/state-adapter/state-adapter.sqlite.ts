@@ -1,21 +1,21 @@
 import {
-  createTemplateApplier,
-  groupMigrationStatements,
   type NamedParameter,
   type TypedSql,
   type UnwrapNamedParameters,
+  createTemplateApplier,
+  groupMigrationStatements,
 } from "@queuert/typed-sql";
-import { UUID } from "crypto";
+import { type UUID } from "node:crypto";
 import { type BaseTxContext, type RetryConfig, type StateAdapter, type StateJob } from "queuert";
 import { wrapStateAdapterWithRetry } from "queuert/internal";
-import { SqliteStateProvider } from "../state-provider/state-provider.sqlite.js";
+import { type SqliteStateProvider } from "../state-provider/state-provider.sqlite.js";
 import { isTransientSqliteError } from "./errors.js";
 import {
+  type DbJob,
+  type DbJobChainRow,
   acquireJobSql,
   checkBlockersStatusSql,
   completeJobSql,
-  type DbJob,
-  type DbJobChainRow,
   deleteJobsByRootChainIdsSql,
   findExistingJobSql,
   findReadyJobsSql,

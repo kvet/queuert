@@ -168,34 +168,43 @@ After all agents complete, write the combined report to `docs/publish-readiness-
 Generated: [current date]
 
 ## Summary
+
 - Critical Issues: [count]
 - Warnings: [count]
 - Suggestions: [count]
 
 ## 1. Documentation Coherence
+
 [Agent 1 findings]
 
 ## 2. API Design
+
 [Agent 2 findings]
 
 ## 3. Implementation Verification
+
 [Agent 3 findings]
 
 ## 4. Feature Completeness
+
 [Agent 4 findings]
 
 ## 5. API Consistency
+
 [Agent 5 findings]
 
 ## Action Items
 
 ### Must Fix Before Publish
+
 [All CRITICAL items from all agents]
 
 ### Should Fix
+
 [All WARNING items from all agents]
 
 ### Consider for Future
+
 [All SUGGESTION items from all agents]
 ```
 

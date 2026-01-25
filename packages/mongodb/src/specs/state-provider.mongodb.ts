@@ -1,5 +1,5 @@
-import { type ClientSession, type Db, MongoClient } from "mongodb";
-import { MongoStateProvider } from "../state-provider/state-provider.mongodb.js";
+import { type ClientSession, type Db, type MongoClient } from "mongodb";
+import { type MongoStateProvider } from "../state-provider/state-provider.mongodb.js";
 
 export type MongoContext = {
   session: ClientSession;

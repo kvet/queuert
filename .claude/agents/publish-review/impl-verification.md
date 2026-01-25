@@ -150,39 +150,46 @@ Provide your findings in this format:
 ## Implementation Verification Findings
 
 ### Critical Issues
+
 [Implementation differs from documented behavior]
 
 ### Warnings
+
 [Minor discrepancies, unclear alignment]
 
 ### Suggestions
+
 [Documentation could be clearer, tests could be better]
 
 ### Interface Compliance
-| Interface | Method | Documented | Implemented | Match? |
-|-----------|--------|------------|-------------|--------|
-| JobTypeRegistry | validateEntry | Yes | Yes | Yes |
-| ... | ... | ... | ... | ... |
+
+| Interface       | Method        | Documented | Implemented | Match? |
+| --------------- | ------------- | ---------- | ----------- | ------ |
+| JobTypeRegistry | validateEntry | Yes        | Yes         | Yes    |
+| ...             | ...           | ...        | ...         | ...    |
 
 ### Test Coverage
-| Feature | Documented | Test Suite | Coverage |
-|---------|------------|------------|----------|
-| Chains | Yes | chains.test-suite.ts | Good |
-| ... | ... | ... | ... |
+
+| Feature | Documented | Test Suite           | Coverage |
+| ------- | ---------- | -------------------- | -------- |
+| Chains  | Yes        | chains.test-suite.ts | Good     |
+| ...     | ...        | ...                  | ...      |
 
 ### Example Status
-| Example | Typechecks | Current API | Complete |
-|---------|------------|-------------|----------|
-| runtime-validation-zod | Yes | Yes | Yes |
-| runtime-validation-valibot | ? | ? | Stub |
-| ... | ... | ... | ... |
+
+| Example                    | Typechecks | Current API | Complete |
+| -------------------------- | ---------- | ----------- | -------- |
+| runtime-validation-zod     | Yes        | Yes         | Yes      |
+| runtime-validation-valibot | ?          | ?           | Stub     |
+| ...                        | ...        | ...         | ...      |
 
 ### Export Audit
-| Export | Documented | Actually Exported | Notes |
-|--------|------------|-------------------|-------|
-| createQueuertClient | README, CLAUDE.md | Yes | OK |
-| createQueuertInProcessWorker | README, CLAUDE.md | Yes | OK |
-| ... | ... | ... | ... |
+
+| Export                       | Documented        | Actually Exported | Notes |
+| ---------------------------- | ----------------- | ----------------- | ----- |
+| createQueuertClient          | README, CLAUDE.md | Yes               | OK    |
+| createQueuertInProcessWorker | README, CLAUDE.md | Yes               | OK    |
+| ...                          | ...               | ...               | ...   |
 ```
 
 For each finding, include:

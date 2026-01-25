@@ -1,5 +1,5 @@
 import { type Collection } from "mongodb";
-import { BaseTxContext } from "queuert";
+import { type BaseTxContext } from "queuert";
 
 /**
  * MongoDB state provider interface.

@@ -11,13 +11,17 @@ This document describes a new model for how job types reference each other. Inst
 Explicitly reference job types by their name:
 
 ```typescript
-{ typeName: 'step2' }
+{
+  typeName: "step2";
+}
 ```
 
 Supports union of names for flexibility:
 
 ```typescript
-{ typeName: 'step2' | 'step2_alt' }
+{
+  typeName: "step2" | "step2_alt";
+}
 ```
 
 ### Structural Reference (by input)
@@ -25,7 +29,11 @@ Supports union of names for flexibility:
 Reference job types by their input type signature:
 
 ```typescript
-{ input: { b: boolean } }
+{
+  input: {
+    b: boolean;
+  }
+}
 ```
 
 Supports union of input types:
@@ -116,10 +124,7 @@ Blockers support two slot types:
 **Fixed slots**: Each position requires exactly one blocker matching the reference.
 
 ```typescript
-blockers: [
-  { typeName: 'auth' },
-  { typeName: 'validate' }
-]
+blockers: [{ typeName: "auth" }, { typeName: "validate" }];
 // Requires exactly 2 blockers: first must be 'auth', second must be 'validate'
 ```
 
@@ -136,7 +141,12 @@ blockers: [
 **Rest-only** (simple array syntax):
 
 ```typescript
-blockers: { input: { data: unknown } }[]
+blockers: {
+  input: {
+    data: unknown;
+  }
+}
+[];
 // Requires 0-N blockers with matching input type
 ```
 
@@ -246,9 +256,9 @@ Multiple implementations can share an input contract:
 The caller chooses the specific implementation when calling `continueWith`:
 
 ```typescript
-continueWith({ typeName: 'step2', input: { b: true } })
+continueWith({ typeName: "step2", input: { b: true } });
 // or
-continueWith({ typeName: 'step2_alt', input: { b: true } })
+continueWith({ typeName: "step2_alt", input: { b: true } });
 ```
 
 Both are valid because both match the `{ input: { b: boolean } }` reference.
@@ -303,7 +313,7 @@ defineJobTypes<{
   step1: {
     entry: true;
     input: { a: boolean };
-    continueWith: { typeName: 'step2' };
+    continueWith: { typeName: "step2" };
   };
   step2: {
     input: { b: boolean };
@@ -319,7 +329,7 @@ defineJobTypes<{
   router: {
     entry: true;
     input: { path: string };
-    continueWith: { typeName: 'handlerA' | 'handlerB' };
+    continueWith: { typeName: "handlerA" | "handlerB" };
   };
   handlerA: {
     input: { dataA: string };
@@ -371,8 +381,8 @@ defineJobTypes<{
     input: { action: string };
     output: { success: boolean };
     blockers: [
-      { typeName: 'fetchUser' },
-      { input: { userId: string } }  // matches fetchUser or fetchPermissions
+      { typeName: "fetchUser" },
+      { input: { userId: string } }, // matches fetchUser or fetchPermissions
     ];
   };
 }>();
@@ -385,8 +395,8 @@ defineJobTypes<{
   process: {
     entry: true;
     input: { data: string };
-    output: { done: true };  // can terminate here
-    continueWith: { typeName: 'postProcess' };  // or continue
+    output: { done: true }; // can terminate here
+    continueWith: { typeName: "postProcess" }; // or continue
   };
   postProcess: {
     input: { processed: string };

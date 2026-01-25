@@ -1,5 +1,5 @@
-import type { Logger } from "winston";
-import type { Log } from "queuert";
+import { type Logger } from "winston";
+import { type Log } from "queuert";
 
 /**
  * Creates a queuert Log adapter for Winston.

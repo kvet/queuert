@@ -2,7 +2,7 @@ import Docker from "dockerode";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as lockfile from "proper-lockfile";
-import type { StartedTestContainer } from "testcontainers";
+import { type StartedTestContainer } from "testcontainers";
 
 const LOCKS_DIR = path.join(import.meta.dirname, "../node_modules/.locks");
 
@@ -34,10 +34,10 @@ const removeContainerByName = async (containerName: string): Promise<void> => {
   } catch {}
 };
 
-export interface WithContainerLockOptions<T extends StartedTestContainer> {
+export type WithContainerLockOptions<T extends StartedTestContainer> = {
   containerName: string;
   start: () => Promise<T>;
-}
+};
 
 export const withContainerLock = async <T extends StartedTestContainer>({
   containerName,

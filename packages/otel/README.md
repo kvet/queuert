@@ -30,22 +30,22 @@ npm install @queuert/otel
 ## Quick Start
 
 ```typescript
-import { createQueuertClient, createConsoleLog, defineJobTypes } from 'queuert';
-import { createPgStateAdapter } from '@queuert/postgres';
-import { createOtelObservabilityAdapter } from '@queuert/otel';
-import { metrics } from '@opentelemetry/api';
+import { createQueuertClient, createConsoleLog, defineJobTypes } from "queuert";
+import { createPgStateAdapter } from "@queuert/postgres";
+import { createOtelObservabilityAdapter } from "@queuert/otel";
+import { metrics } from "@opentelemetry/api";
 
 // Configure your OTEL SDK first (Prometheus, OTLP, etc.)
 // See: https://opentelemetry.io/docs/languages/js/getting-started/
 
 const jobTypes = defineJobTypes<{
-  'send-email': { entry: true; input: { to: string }; output: { sent: true } };
+  "send-email": { entry: true; input: { to: string }; output: { sent: true } };
 }>();
 
 const stateAdapter = await createPgStateAdapter({ stateProvider: myPgProvider });
 
 const observabilityAdapter = await createOtelObservabilityAdapter({
-  meter: metrics.getMeter('my-app'),
+  meter: metrics.getMeter("my-app"),
 });
 
 const client = await createQueuertClient({
@@ -60,8 +60,8 @@ const client = await createQueuertClient({
 
 ```typescript
 const observabilityAdapter = await createOtelObservabilityAdapter({
-  meter: metrics.getMeter('my-app'),  // OTEL Meter instance (default: metrics.getMeter("queuert"))
-  metricPrefix: 'queuert',            // Prefix for all metric names (default: "queuert")
+  meter: metrics.getMeter("my-app"), // OTEL Meter instance (default: metrics.getMeter("queuert"))
+  metricPrefix: "queuert", // Prefix for all metric names (default: "queuert")
 });
 ```
 

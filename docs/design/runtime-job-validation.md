@@ -12,7 +12,10 @@ interface JobTypeRegistry<TJobTypeDefinitions = unknown> {
   parseInput: (typeName: string, input: unknown) => unknown;
   parseOutput: (typeName: string, output: unknown) => unknown;
   validateContinueWith: (typeName: string, to: { typeName: string; input: unknown }) => void;
-  validateBlockers: (typeName: string, blockers: readonly { typeName: string; input: unknown }[]) => void;
+  validateBlockers: (
+    typeName: string,
+    blockers: readonly { typeName: string; input: unknown }[],
+  ) => void;
   readonly $definitions: TJobTypeDefinitions;
 }
 ```
@@ -48,8 +51,8 @@ Validation functions should throw `JobTypeValidationError` on failure. The core 
 For `validateContinueWith` and `validateBlockers`, the validation receives objects with both `typeName` and `input`:
 
 ```typescript
-validateContinueWith('step1', { typeName: 'step2', input: { b: true } })
-validateBlockers('main', [{ typeName: 'auth', input: { token: 'abc' } }])
+validateContinueWith("step1", { typeName: "step2", input: { b: true } });
+validateBlockers("main", [{ typeName: "auth", input: { token: "abc" } }]);
 ```
 
 Validation can check either the `typeName` (nominal) or `input` (structural) part, depending on how the job type's references are defined.
@@ -67,8 +70,8 @@ The core catches any errors thrown by validation functions and wraps them in `Jo
 ### Example: Zod Adapter
 
 ```typescript
-import { z } from 'zod';
-import { createJobTypeRegistry } from 'queuert';
+import { z } from "zod";
+import { createJobTypeRegistry } from "queuert";
 
 type ZodJobTypeSchema = {
   entry?: boolean;
@@ -78,9 +81,7 @@ type ZodJobTypeSchema = {
   blockers?: z.ZodType;
 };
 
-const createZodJobTypeRegistry = <T extends Record<string, ZodJobTypeSchema>>(
-  schemas: T
-) => {
+const createZodJobTypeRegistry = <T extends Record<string, ZodJobTypeSchema>>(schemas: T) => {
   const getSchema = (typeName: string) => {
     const schema = schemas[typeName];
     if (!schema) throw new Error(`Unknown job type: ${typeName}`);
@@ -88,7 +89,9 @@ const createZodJobTypeRegistry = <T extends Record<string, ZodJobTypeSchema>>(
   };
 
   return createJobTypeRegistry<InferZodJobTypes<T>>({
-    validateEntry: (typeName) => { if (!getSchema(typeName).entry) throw new Error('Not an entry point'); },
+    validateEntry: (typeName) => {
+      if (!getSchema(typeName).entry) throw new Error("Not an entry point");
+    },
     parseInput: (typeName, input) => getSchema(typeName).input.parse(input),
     parseOutput: (typeName, output) => getSchema(typeName).output?.parse(output) ?? output,
     validateContinueWith: (typeName, to) => getSchema(typeName).continueWith?.parse(to),
@@ -111,10 +114,8 @@ const registry = createZodJobTypeRegistry({
   main: {
     entry: true,
     input: z.object({ data: z.string() }),
-    continueWith: z.object({ typeName: z.literal('next') }),
-    blockers: z.tuple([
-      z.object({ typeName: z.literal('blocker') }),
-    ]),
+    continueWith: z.object({ typeName: z.literal("next") }),
+    blockers: z.tuple([z.object({ typeName: z.literal("blocker") })]),
   },
   next: {
     input: z.object({ processed: z.boolean() }),
@@ -130,7 +131,7 @@ The same pattern applies to Valibot, ArkType, or any validation library:
 ```typescript
 // Valibot adapter
 const createValibotJobTypeRegistry = <T extends Record<string, ValibotJobTypeSchema>>(
-  schemas: T
+  schemas: T,
 ) => {
   const getSchema = (typeName: string) => {
     const schema = schemas[typeName];
@@ -139,7 +140,9 @@ const createValibotJobTypeRegistry = <T extends Record<string, ValibotJobTypeSch
   };
 
   return createJobTypeRegistry<InferValibotJobTypes<T>>({
-    validateEntry: (typeName) => { if (!getSchema(typeName).entry) throw new Error('Not an entry point'); },
+    validateEntry: (typeName) => {
+      if (!getSchema(typeName).entry) throw new Error("Not an entry point");
+    },
     parseInput: (typeName, input) => v.parse(getSchema(typeName).input, input),
     parseOutput: (typeName, output) => v.parse(getSchema(typeName).output, output),
     // ... other methods
@@ -147,9 +150,7 @@ const createValibotJobTypeRegistry = <T extends Record<string, ValibotJobTypeSch
 };
 
 // ArkType adapter
-const createArkJobTypeRegistry = <T extends Record<string, ArkJobTypeSchema>>(
-  schemas: T
-) => {
+const createArkJobTypeRegistry = <T extends Record<string, ArkJobTypeSchema>>(schemas: T) => {
   const getSchema = (typeName: string) => {
     const schema = schemas[typeName];
     if (!schema) throw new Error(`Unknown job type: ${typeName}`);
@@ -157,7 +158,9 @@ const createArkJobTypeRegistry = <T extends Record<string, ArkJobTypeSchema>>(
   };
 
   return createJobTypeRegistry<InferArkJobTypes<T>>({
-    validateEntry: (typeName) => { if (!getSchema(typeName).entry) throw new Error('Not an entry point'); },
+    validateEntry: (typeName) => {
+      if (!getSchema(typeName).entry) throw new Error("Not an entry point");
+    },
     parseInput: (typeName, input) => getSchema(typeName).input.assert(input),
     parseOutput: (typeName, output) => getSchema(typeName).output.assert(output),
     // ... other methods

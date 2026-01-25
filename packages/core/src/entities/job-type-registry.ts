@@ -1,5 +1,5 @@
-import { JobTypeValidationError } from "../queuert-helper.js";
-import type { BaseJobTypeDefinitions } from "./job-type.js";
+import { JobTypeValidationError } from "../errors.js";
+import { type BaseJobTypeDefinitions } from "./job-type.js";
 
 /**
  * Reference object for continuation and blocker validation.
@@ -35,7 +35,7 @@ export type JobTypeRegistryConfig = {
  * - validate* → throws JobTypeValidationError or returns void (pure validation)
  * - parse* → throws JobTypeValidationError or returns transformed value (validation + transformation)
  */
-export interface JobTypeRegistry<TJobTypeDefinitions = unknown> {
+export type JobTypeRegistry<TJobTypeDefinitions = unknown> = {
   /** Validate that a job type can start a chain (is an entry point). Throws JobTypeValidationError on failure. */
   validateEntry: (typeName: string) => void;
 
@@ -53,7 +53,7 @@ export interface JobTypeRegistry<TJobTypeDefinitions = unknown> {
 
   /** Phantom property for TypeScript type inference. */
   readonly $definitions: TJobTypeDefinitions;
-}
+};
 
 /**
  * Create a noop registry that passes all values through without validation.

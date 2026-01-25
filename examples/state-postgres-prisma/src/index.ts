@@ -1,5 +1,5 @@
-import type { PrismaClient as PrismaClientType } from "@prisma/client";
-import { createPgStateAdapter, PgStateProvider } from "@queuert/postgres";
+import { type PrismaClient as PrismaClientType } from "@prisma/client";
+import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import { execSync } from "node:child_process";
 import {

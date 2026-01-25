@@ -54,8 +54,8 @@ export const extendWithObservabilityOtel = <T extends {}>(
       expected: { method: string; args?: Record<string, unknown> }[],
     ) => Promise<void>;
     expectGauges: (expected: {
-      jobTypeIdleChange?: Array<{ delta: number; typeName?: string; workerId?: string }>;
-      jobTypeProcessingChange?: Array<{ delta: number; typeName?: string; workerId?: string }>;
+      jobTypeIdleChange?: { delta: number; typeName?: string; workerId?: string }[];
+      jobTypeProcessingChange?: { delta: number; typeName?: string; workerId?: string }[];
     }) => Promise<void>;
   }
 > => {
@@ -68,8 +68,8 @@ export const extendWithObservabilityOtel = <T extends {}>(
       expected: { method: string; args?: Record<string, unknown> }[],
     ) => Promise<void>;
     expectGauges: (expected: {
-      jobTypeIdleChange?: Array<{ delta: number; typeName?: string; workerId?: string }>;
-      jobTypeProcessingChange?: Array<{ delta: number; typeName?: string; workerId?: string }>;
+      jobTypeIdleChange?: { delta: number; typeName?: string; workerId?: string }[];
+      jobTypeProcessingChange?: { delta: number; typeName?: string; workerId?: string }[];
     }) => Promise<void>;
     _otelExporter: InMemoryMetricExporter;
     _otelReader: PeriodicExportingMetricReader;
@@ -182,12 +182,10 @@ export const extendWithObservabilityOtel = <T extends {}>(
           await _otelReader.forceFlush();
 
           // Sum expected deltas into cumulative values (grouped by typeName)
-          for (const [method, calls] of Object.entries(expected) as Array<
-            [
-              "jobTypeIdleChange" | "jobTypeProcessingChange",
-              Array<{ delta: number; typeName?: string; workerId?: string }> | undefined,
-            ]
-          >) {
+          for (const [method, calls] of Object.entries(expected) as [
+            "jobTypeIdleChange" | "jobTypeProcessingChange",
+            Array<{ delta: number; typeName?: string; workerId?: string }> | undefined,
+          ][]) {
             if (!calls) continue;
             const metricName = methodToMetricName[method];
             for (const { delta, typeName } of calls) {

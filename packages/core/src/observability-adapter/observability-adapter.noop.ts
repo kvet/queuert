@@ -1,4 +1,4 @@
-import type { ObservabilityAdapter } from "./observability-adapter.js";
+import { type ObservabilityAdapter } from "./observability-adapter.js";
 
 export const createNoopObservabilityAdapter = (): ObservabilityAdapter => ({
   // worker

@@ -7,7 +7,7 @@
  */
 
 import { createJobTypeRegistry } from "queuert";
-import { z } from "zod";
+import { type z } from "zod";
 
 /**
  * Partial reference for validation schemas.

@@ -1,6 +1,6 @@
-import { NotifyAdapter } from "../notify-adapter/notify-adapter.js";
-import { StateAdapter } from "../state-adapter/state-adapter.js";
-import { JobBasicData, JobProcessingData, JobChainData } from "./log.js";
+import { type NotifyAdapter } from "../notify-adapter/notify-adapter.js";
+import { type StateAdapter } from "../state-adapter/state-adapter.js";
+import { type JobBasicData, type JobChainData, type JobProcessingData } from "./log.js";
 
 /**
  * Low-level adapter interface for observability metrics.

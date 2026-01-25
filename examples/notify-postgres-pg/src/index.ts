@@ -1,6 +1,6 @@
-import { createPgNotifyAdapter, PgNotifyProvider } from "@queuert/postgres";
+import { type PgNotifyProvider, createPgNotifyAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
-import { Pool, PoolClient } from "pg";
+import { Pool, type PoolClient } from "pg";
 import {
   createConsoleLog,
   createQueuertClient,

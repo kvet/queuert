@@ -119,31 +119,37 @@ Provide your findings in this format:
 ## API Design Findings
 
 ### Critical Issues
+
 [API breaks, type unsafety, major footguns]
 
 ### Warnings
+
 [Inconsistencies, unclear patterns, minor footguns]
 
 ### Suggestions
+
 [Polish, ergonomics, nice-to-have improvements]
 
 ### Factory Pattern Analysis
-| Factory | Sync/Async | Expected | Notes |
-|---------|------------|----------|-------|
-| createQueuertClient | async | async | OK |
-| createQueuertInProcessWorker | async | async | OK |
-| createOtelObservabilityAdapter | sync | ? | Review |
-| ... | ... | ... | ... |
+
+| Factory                        | Sync/Async | Expected | Notes  |
+| ------------------------------ | ---------- | -------- | ------ |
+| createQueuertClient            | async      | async    | OK     |
+| createQueuertInProcessWorker   | async      | async    | OK     |
+| createOtelObservabilityAdapter | sync       | ?        | Review |
+| ...                            | ...        | ...      | ...    |
 
 ### Naming Consistency
-| Pattern | Examples | Consistent? | Notes |
-|---------|----------|-------------|-------|
-| create* | ... | Yes/No | ... |
+
+| Pattern  | Examples | Consistent? | Notes |
+| -------- | -------- | ----------- | ----- |
+| create\* | ...      | Yes/No      | ...   |
 
 ### Type Safety Analysis
-| Area | Safety Level | Issues |
-|------|--------------|--------|
-| ... | High/Medium/Low | ... |
+
+| Area | Safety Level    | Issues |
+| ---- | --------------- | ------ |
+| ...  | High/Medium/Low | ...    |
 ```
 
 For each finding, include:

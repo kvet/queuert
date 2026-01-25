@@ -15,8 +15,8 @@ export type BaseJobTypeDefinitions = Record<string, BaseJobTypeDefinition>;
 
 export type DefineJobTypes<T extends BaseJobTypeDefinitions> = T;
 
-import { createNoopJobTypeRegistry, JobTypeRegistry } from "./job-type-registry.js";
-import { ValidatedJobTypeDefinitions } from "./job-type.validation.js";
+import { createNoopJobTypeRegistry, type JobTypeRegistry } from "./job-type-registry.js";
+import { type ValidatedJobTypeDefinitions } from "./job-type.validation.js";
 
 /**
  * Define job types with compile-time type checking only (no runtime validation).

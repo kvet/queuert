@@ -1,4 +1,4 @@
-import type { NotifyAdapter } from "./notify-adapter.js";
+import { type NotifyAdapter } from "./notify-adapter.js";
 
 const noop = async (): Promise<void> => {};
 

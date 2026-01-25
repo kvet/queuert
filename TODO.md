@@ -1,11 +1,15 @@
 # Short term
 
+- Rename worker config for less verbosity:
+  - `jobTypeRegistry` → `registry`
+  - `jobTypeProcessors` → `processors`
+  - `process` → `execute`
 - Rename deduplication strategy `'completed'` → `'incomplete'` for clarity (describes what to deduplicate against, not when deduplication stops)
 - ObservabilityAdapter: tracing spans
 - test against multiple versions of node on CI
 - add migration table to skip already applied migrations
   - it should have a name, applied_at
-  - each migration set should have a unique name starting from v1.0.0
+  - each migration set should have a unique name starting from YYYYMMDDHHMMSS_name (e.g. 20240612120000_add_users_table)
   - when running migrations, check if the migration set was already applied, if so skip it
 
 # Medium term

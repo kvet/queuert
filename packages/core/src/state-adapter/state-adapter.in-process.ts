@@ -1,5 +1,5 @@
 import { createAsyncLock } from "../helpers/async-lock.js";
-import { DeduplicationOptions, StateAdapter, StateJob } from "./state-adapter.js";
+import { type DeduplicationOptions, type StateAdapter, type StateJob } from "./state-adapter.js";
 
 export type InProcessContext = { inTransaction?: boolean };
 

@@ -1,13 +1,17 @@
-import { JobTypeRegistry } from "./entities/job-type-registry.js";
-import { BaseJobTypeDefinitions } from "./entities/job-type.js";
-import { BackoffConfig } from "./helpers/backoff.js";
-import { NotifyAdapter } from "./notify-adapter/notify-adapter.js";
-import { Log } from "./observability-adapter/log.js";
-import { ObservabilityAdapter } from "./observability-adapter/observability-adapter.js";
+import { type JobTypeRegistry } from "./entities/job-type-registry.js";
+import { type BaseJobTypeDefinitions } from "./entities/job-type.js";
+import { type BackoffConfig } from "./helpers/backoff.js";
+import { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
+import { type Log } from "./observability-adapter/log.js";
+import { type ObservabilityAdapter } from "./observability-adapter/observability-adapter.js";
 import { queuertHelper } from "./queuert-helper.js";
-import { StateAdapter } from "./state-adapter/state-adapter.js";
-import { createExecutor, RegisteredJobTypes } from "./worker/executor.js";
-import { JobAttemptMiddleware, JobProcessFn, LeaseConfig } from "./worker/job-process.js";
+import { type StateAdapter } from "./state-adapter/state-adapter.js";
+import { type RegisteredJobTypes, createExecutor } from "./worker/executor.js";
+import {
+  type JobAttemptMiddleware,
+  type JobProcessFn,
+  type LeaseConfig,
+} from "./worker/job-process.js";
 
 export type InProcessWorkerProcessingConfig<
   TStateAdapter extends StateAdapter<any, any>,

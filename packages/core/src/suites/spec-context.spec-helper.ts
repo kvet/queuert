@@ -1,14 +1,14 @@
 // oxlint-disable no-empty-pattern
 import inspector from "node:inspector";
-import { MockedFunction, TestAPI, vi } from "vitest";
-import { createConsoleLog, Log, NotifyAdapter } from "../index.js";
+import { type MockedFunction, type TestAPI, vi } from "vitest";
+import { type Log, type NotifyAdapter, createConsoleLog } from "../index.js";
 import { createInProcessNotifyAdapter } from "../notify-adapter/notify-adapter.in-process.js";
 import { createNoopNotifyAdapter } from "../notify-adapter/notify-adapter.noop.js";
 import {
+  type MockObservabilityAdapter,
   createMockObservabilityAdapter,
-  MockObservabilityAdapter,
 } from "../observability-adapter/observability-adapter.mock.js";
-import { StateAdapter } from "../state-adapter/state-adapter.js";
+import { type StateAdapter } from "../state-adapter/state-adapter.js";
 
 export type TestSuiteContext = {
   stateAdapter: StateAdapter<{ $test: true }, string>;
@@ -29,8 +29,8 @@ export type TestSuiteContext = {
     expected: { method: string; args?: Record<string, unknown> }[],
   ) => Promise<void>;
   expectGauges: (expected: {
-    jobTypeIdleChange?: Array<{ delta: number; typeName?: string; workerId?: string }>;
-    jobTypeProcessingChange?: Array<{ delta: number; typeName?: string; workerId?: string }>;
+    jobTypeIdleChange?: { delta: number; typeName?: string; workerId?: string }[];
+    jobTypeProcessingChange?: { delta: number; typeName?: string; workerId?: string }[];
   }) => Promise<void>;
 };
 
@@ -187,21 +187,21 @@ export const extendWithCommon = <
       async ({ observabilityAdapter, expect }, use) => {
         await use(
           async (expected: {
-            jobTypeIdleChange?: Array<{
+            jobTypeIdleChange?: {
               delta: number;
               typeName?: string;
               workerId?: string;
-            }>;
-            jobTypeProcessingChange?: Array<{
+            }[];
+            jobTypeProcessingChange?: {
               delta: number;
               typeName?: string;
               workerId?: string;
-            }>;
+            }[];
           }) => {
             // Collect actual gauge calls and remove them from the calls array
             const actualCalls: Record<
               string,
-              Array<{ delta: number; typeName: string; workerId: string }>
+              { delta: number; typeName: string; workerId: string }[]
             > = {
               jobTypeIdleChange: [],
               jobTypeProcessingChange: [],
@@ -245,12 +245,10 @@ export const extendWithCommon = <
             observabilityAdapter._calls.push(...remainingCalls);
 
             // Verify each gauge type with explicit attribute checking
-            for (const [method, expectedCalls] of Object.entries(expected) as Array<
-              [
-                "jobTypeIdleChange" | "jobTypeProcessingChange",
-                Array<{ delta: number; typeName?: string; workerId?: string }>,
-              ]
-            >) {
+            for (const [method, expectedCalls] of Object.entries(expected) as [
+              "jobTypeIdleChange" | "jobTypeProcessingChange",
+              Array<{ delta: number; typeName?: string; workerId?: string }>,
+            ][]) {
               if (expectedCalls === undefined) continue;
 
               const actualCallsForMethod = actualCalls[method];

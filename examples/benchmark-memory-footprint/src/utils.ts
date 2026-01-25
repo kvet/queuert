@@ -8,12 +8,12 @@ import { defineJobTypes } from "queuert";
 // Memory measurement utilities
 // ============================================================================
 
-export interface MemorySnapshot {
+export type MemorySnapshot = {
   heapUsed: number;
   heapTotal: number;
   external: number;
   rss: number;
-}
+};
 
 export function getMemorySnapshot(): MemorySnapshot {
   const mem = process.memoryUsage();

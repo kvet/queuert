@@ -23,8 +23,6 @@
     "README.md"
   ],
   "type": "module",
-  "main": "./dist/index.mjs",
-  "module": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
   "exports": {
     ".": "./src/index.ts",
@@ -50,9 +48,9 @@
     "@types/node": "^24.10.4",
     "queuert": "workspace:*",
     "redis": "^5.0.0",
-    "tsdown": "^0.18.3",
+    "tsdown": "^0.20.1",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.16"
+    "vitest": "^4.0.18"
   },
   "peerDependencies": {
     "queuert": "workspace:*"

@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["unicorn", "typescript", "oxc"],
+  "plugins": ["unicorn", "typescript", "oxc", "import"],
   "categories": {},
   "rules": {
     "for-direction": "warn",
@@ -55,6 +55,7 @@
     "require-yield": "warn",
     "use-isnan": "warn",
     "valid-typeof": "warn",
+    "sort-imports": ["warn", { "allowSeparatedGroups": true, "ignoreDeclarationSort": true }],
     "oxc/bad-array-method-on-arguments": "warn",
     "oxc/bad-char-at-comparison": "warn",
     "oxc/bad-comparison-sequence": "warn",
@@ -68,7 +69,13 @@
     "oxc/number-arg-out-of-range": "warn",
     "oxc/only-used-in-recursion": "warn",
     "oxc/uninvoked-array-callback": "warn",
+    "oxc/no-accumulating-spread": "warn",
+    "import/no-cycle": "warn",
+    "import/no-self-import": "warn",
+    "import/no-duplicates": ["warn", { "preferInline": true }],
+    "import/consistent-type-specifier-style": ["warn", "prefer-inline"],
     "typescript/await-thenable": "warn",
+    "typescript/consistent-type-imports": "warn",
     "typescript/no-array-delete": "warn",
     "typescript/no-base-to-string": "warn",
     "typescript/no-confusing-void-expression": "warn",
@@ -85,6 +92,11 @@
     "typescript/no-unnecessary-template-expression": "warn",
     "typescript/no-unnecessary-type-arguments": "warn",
     "typescript/no-unnecessary-type-assertion": "warn",
+    "typescript/no-unnecessary-type-constraint": "warn",
+    "typescript/no-deprecated": "warn",
+    "typescript/prefer-nullish-coalescing": "warn",
+    "typescript/array-type": "warn",
+    "typescript/consistent-type-definitions": ["warn", "type"],
     // "typescript/no-unsafe-argument": "warn",
     // "typescript/no-unsafe-assignment": "warn",
     // "typescript/no-unsafe-call": "warn",
@@ -120,7 +132,8 @@
     "unicorn/no-useless-length-check": "warn",
     "unicorn/no-useless-spread": "warn",
     "unicorn/prefer-set-size": "warn",
-    "unicorn/prefer-string-starts-ends-with": "warn"
+    "unicorn/prefer-string-starts-ends-with": "warn",
+    "unicorn/prefer-node-protocol": "warn"
   },
   "settings": {
     "jsx-a11y": {

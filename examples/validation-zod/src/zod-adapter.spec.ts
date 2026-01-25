@@ -1,4 +1,4 @@
-import { createQueuertClient, createQueuertInProcessWorker, JobTypeValidationError } from "queuert";
+import { JobTypeValidationError, createQueuertClient, createQueuertInProcessWorker } from "queuert";
 import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";

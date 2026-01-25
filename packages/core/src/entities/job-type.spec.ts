@@ -1,13 +1,13 @@
 import { describe, expectTypeOf, it } from "vitest";
 import {
-  BlockerChains,
-  ContinuationJobTypes,
+  type BlockerChains,
+  type ChainJobTypes,
+  type ChainTypesReaching,
+  type ContinuationJobTypes,
+  type EntryJobTypeDefinitions,
+  type JobChainOf,
+  type JobOf,
   defineJobTypes,
-  EntryJobTypeDefinitions,
-  JobOf,
-  JobChainOf,
-  ChainJobTypes,
-  ChainTypesReaching,
 } from "./job-type.js";
 
 describe("defineJobTypes", () => {

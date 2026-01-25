@@ -1,13 +1,13 @@
-import { TestAPI } from "vitest";
+import { type TestAPI } from "vitest";
+import { JobAlreadyCompletedError } from "../errors.js";
 import { sleep } from "../helpers/sleep.js";
 import {
+  type LeaseConfig,
   createQueuertClient,
   createQueuertInProcessWorker,
   defineJobTypes,
-  LeaseConfig,
 } from "../index.js";
-import { JobAlreadyCompletedError } from "../queuert-helper.js";
-import { TestSuiteContext } from "./spec-context.spec-helper.js";
+import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
   const completionOptions = {

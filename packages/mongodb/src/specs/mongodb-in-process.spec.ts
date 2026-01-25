@@ -1,6 +1,7 @@
-import { extendWithMongodb, TESTCONTAINER_RESOURCE_TYPES } from "@queuert/testcontainers";
+import { TESTCONTAINER_RESOURCE_TYPES, extendWithMongodb } from "@queuert/testcontainers";
 import {
   blockerChainsTestSuite,
+  chainsTestSuite,
   extendWithCommon,
   extendWithNotifyInProcess,
   extendWithResourceLeakDetection,
@@ -8,13 +9,12 @@ import {
   processTestSuite,
   reaperTestSuite,
   schedulingTestSuite,
-  chainsTestSuite,
   stateResilienceTestSuite,
   waitChainCompletionTestSuite,
-  workerlessCompletionTestSuite,
   workerTestSuite,
+  workerlessCompletionTestSuite,
 } from "queuert/testing";
-import { afterAll, beforeAll, describe, it as baseIt } from "vitest";
+import { afterAll, it as baseIt, beforeAll, describe } from "vitest";
 import { extendWithStateMongodb } from "./state-adapter.mongodb.spec-helper.js";
 
 // Suppress unhandled rejections from flaky connection test cleanup

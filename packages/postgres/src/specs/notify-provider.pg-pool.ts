@@ -1,5 +1,5 @@
-import type { Pool, PoolClient } from "pg";
-import type { PgNotifyProvider } from "../notify-provider/notify-provider.pg.js";
+import { type Pool, type PoolClient } from "pg";
+import { type PgNotifyProvider } from "../notify-provider/notify-provider.pg.js";
 
 export const createPgPoolNotifyProvider = ({ pool }: { pool: Pool }): PgNotifyProvider => {
   // Dedicated listen connection managed internally

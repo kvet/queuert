@@ -9,9 +9,13 @@
  * 3. Auto-Setup Mode: Just call complete() without prepare()
  */
 
-import { createPgStateAdapter, PgStateProvider } from "@queuert/postgres";
+import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
-import postgres, { PendingQuery, Row, TransactionSql as _TransactionSql } from "postgres";
+import postgres, {
+  type PendingQuery,
+  type Row,
+  type TransactionSql as _TransactionSql,
+} from "postgres";
 import { createQueuertClient, createQueuertInProcessWorker, defineJobTypes } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 

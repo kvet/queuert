@@ -42,7 +42,7 @@ createNoopNotifyAdapter → NotifyAdapter
 The `StateAdapter` type accepts two generic parameters:
 
 ```typescript
-StateAdapter<TTxContext, TJobId>
+StateAdapter<TTxContext, TJobId>;
 ```
 
 - `TTxContext extends BaseTxContext`: Transaction context type containing database client/session info
@@ -96,7 +96,7 @@ This design enables:
 3. **DDL operations**: Migrations like `CREATE INDEX CONCURRENTLY` that cannot run inside transactions
    ```typescript
    // executeSql without txContext for DDL
-   await stateProvider.executeSql({ sql: 'CREATE INDEX CONCURRENTLY ...' });
+   await stateProvider.executeSql({ sql: "CREATE INDEX CONCURRENTLY ..." });
    ```
 
 Provider implementations can validate that contexts passed to `executeSql` are valid transaction contexts:
@@ -108,7 +108,7 @@ executeSql: async ({ txContext, sql, params }) => {
     throw new Error("Provided context is not in a transaction");
   }
   // ...
-}
+};
 ```
 
 ### NotifyProvider Interface

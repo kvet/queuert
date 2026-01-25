@@ -1,39 +1,56 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { UUID } from "node:crypto";
-import { CompletedJobChain, JobChain, mapStateJobPairToJobChain } from "./entities/job-chain.js";
+import { type UUID } from "node:crypto";
 import {
-  BaseJobTypeDefinitions,
-  BlockerChains,
-  ChainJobs,
-  ChainJobTypes,
-  ContinuationJobs,
-  EntryJobTypeDefinitions,
-  JobChainOf,
-  JobOf,
+  type CompletedJobChain,
+  type JobChain,
+  mapStateJobPairToJobChain,
+} from "./entities/job-chain.js";
+import { type JobTypeRegistry } from "./entities/job-type-registry.js";
+import { wrapJobTypeRegistryWithLogging } from "./entities/job-type-registry.wrapper.logging.js";
+import {
+  type BaseJobTypeDefinitions,
+  type BlockerChains,
+  type ChainJobTypes,
+  type ChainJobs,
+  type ContinuationJobs,
+  type EntryJobTypeDefinitions,
+  type JobChainOf,
+  type JobOf,
 } from "./entities/job-type.js";
-import { Job, JobWithoutBlockers, mapStateJobToJob, PendingJob } from "./entities/job.js";
-import { ScheduleOptions } from "./entities/schedule.js";
-import { BackoffConfig, calculateBackoffMs } from "./helpers/backoff.js";
+import {
+  type Job,
+  type JobWithoutBlockers,
+  type PendingJob,
+  mapStateJobToJob,
+} from "./entities/job.js";
+import { type ScheduleOptions } from "./entities/schedule.js";
+import {
+  JobAlreadyCompletedError,
+  JobNotFoundError,
+  JobTakenByAnotherWorkerError,
+  WaitForJobChainCompletionTimeoutError,
+} from "./errors.js";
+import { type BackoffConfig, calculateBackoffMs } from "./helpers/backoff.js";
 import { raceWithSleep } from "./helpers/sleep.js";
-import { NotifyAdapter } from "./notify-adapter/notify-adapter.js";
+import { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 import { createNoopNotifyAdapter } from "./notify-adapter/notify-adapter.noop.js";
 import { wrapNotifyAdapterWithLogging } from "./notify-adapter/notify-adapter.wrapper.logging.js";
-import { Log } from "./observability-adapter/log.js";
-import { ObservabilityAdapter } from "./observability-adapter/observability-adapter.js";
+import { type Log } from "./observability-adapter/log.js";
+import { type ObservabilityAdapter } from "./observability-adapter/observability-adapter.js";
 import { createNoopObservabilityAdapter } from "./observability-adapter/observability-adapter.noop.js";
 import {
+  type ObservabilityHelper,
   createObservabilityHelper,
-  ObservabilityHelper,
 } from "./observability-adapter/observability-helper.js";
 import {
-  BaseTxContext,
-  DeduplicationOptions,
-  GetStateAdapterJobId,
-  StateAdapter,
-  StateJob,
+  type BaseTxContext,
+  type DeduplicationOptions,
+  type GetStateAdapterJobId,
+  type StateAdapter,
+  type StateJob,
 } from "./state-adapter/state-adapter.js";
 import { wrapStateAdapterWithLogging } from "./state-adapter/state-adapter.wrapper.logging.js";
-import { CompleteCallbackOptions, RescheduleJobError } from "./worker/job-process.js";
+import { type CompleteCallbackOptions, RescheduleJobError } from "./worker/job-process.js";
 
 export type StartBlockersFn<
   TJobId,
@@ -60,87 +77,6 @@ const jobContextStorage = new AsyncLocalStorage<{
   rootChainId: string;
   originId: string;
 }>();
-
-export class JobTakenByAnotherWorkerError extends Error {
-  readonly jobId: string | undefined;
-  readonly workerId: string | undefined;
-  readonly leasedBy: string | null | undefined;
-
-  constructor(message: string, options?: { cause?: unknown }) {
-    super(message, options);
-    this.name = "JobTakenByAnotherWorkerError";
-    const causeObj = options?.cause as
-      | { jobId?: string; workerId?: string; leasedBy?: string | null }
-      | undefined;
-    this.jobId = causeObj?.jobId;
-    this.workerId = causeObj?.workerId;
-    this.leasedBy = causeObj?.leasedBy;
-  }
-}
-
-export class JobNotFoundError extends Error {
-  readonly jobId: string | undefined;
-
-  constructor(message: string, options?: { cause?: unknown }) {
-    super(message, options);
-    this.name = "JobNotFoundError";
-    const causeObj = options?.cause as { jobId?: string } | undefined;
-    this.jobId = causeObj?.jobId;
-  }
-}
-
-export class JobAlreadyCompletedError extends Error {
-  readonly jobId: string | undefined;
-
-  constructor(message: string, options?: { cause?: unknown }) {
-    super(message, options);
-    this.name = "JobAlreadyCompletedError";
-    const causeObj = options?.cause as { jobId?: string } | undefined;
-    this.jobId = causeObj?.jobId;
-  }
-}
-
-export class WaitForJobChainCompletionTimeoutError extends Error {
-  readonly chainId: string | undefined;
-  readonly timeoutMs: number | undefined;
-
-  constructor(message: string, options?: { cause?: unknown }) {
-    super(message, options);
-    this.name = "WaitForJobChainCompletionTimeoutError";
-    const causeObj = options?.cause as { chainId?: string; timeoutMs?: number } | undefined;
-    this.chainId = causeObj?.chainId;
-    this.timeoutMs = causeObj?.timeoutMs;
-  }
-}
-
-export type JobTypeValidationErrorCode =
-  | "not_entry_point"
-  | "invalid_continuation"
-  | "invalid_blockers"
-  | "invalid_input"
-  | "invalid_output";
-
-export class JobTypeValidationError extends Error {
-  readonly code: JobTypeValidationErrorCode;
-  readonly typeName: string;
-  readonly details: Record<string, unknown>;
-
-  constructor(options: {
-    code: JobTypeValidationErrorCode;
-    message: string;
-    typeName: string;
-    details?: Record<string, unknown>;
-  }) {
-    super(options.message);
-    this.name = "JobTypeValidationError";
-    this.code = options.code;
-    this.typeName = options.typeName;
-    this.details = options.details ?? {};
-  }
-}
-
-import { JobTypeRegistry } from "./entities/job-type-registry.js";
-import { wrapJobTypeRegistryWithLogging } from "./entities/job-type-registry.wrapper.logging.js";
 
 export const queuertHelper = ({
   stateAdapter: stateAdapterOption,

@@ -145,8 +145,8 @@ Redis examples implement a `RedisNotifyProvider` with `publish`, `subscribe`, an
 The `queuert/internal` export provides adapters for isolating examples:
 
 ```typescript
-import { createInProcessNotifyAdapter } from "queuert/internal";  // For state examples
-import { createInProcessStateAdapter } from "queuert/internal";   // For notify examples
+import { createInProcessNotifyAdapter } from "queuert/internal"; // For state examples
+import { createInProcessStateAdapter } from "queuert/internal"; // For notify examples
 ```
 
 These adapters are synchronous factories (no `await` needed) and work without external dependencies.

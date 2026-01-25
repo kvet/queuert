@@ -1,4 +1,4 @@
-import { BaseTxContext } from "queuert";
+import { type BaseTxContext } from "queuert";
 
 /**
  * SQLite state provider interface.

@@ -1,5 +1,5 @@
-import { StateJob } from "../state-adapter/state-adapter.js";
-import { JobChain } from "./job-chain.types.js";
+import { type StateJob } from "../state-adapter/state-adapter.js";
+import { type JobChain } from "./job-chain.types.js";
 
 export * from "./job-chain.types.js";
 

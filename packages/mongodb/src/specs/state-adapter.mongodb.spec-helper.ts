@@ -3,7 +3,11 @@ import { type StateAdapter } from "queuert";
 import { createSeededRandom } from "queuert/testing";
 import { type TestAPI } from "vitest";
 import { createMongoStateAdapter } from "../state-adapter/state-adapter.mongodb.js";
-import { createMongoProvider, MongoContext, MongoProvider } from "./state-provider.mongodb.js";
+import {
+  type MongoContext,
+  type MongoProvider,
+  createMongoProvider,
+} from "./state-provider.mongodb.js";
 
 /**
  * Creates a flaky batch generator optimized for MongoDB's async operations.

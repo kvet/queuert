@@ -15,8 +15,8 @@ await queuert.startJobChain({
   deduplication: {
     key: "user-123",
     strategy: "completed",
-    windowMs: 60000
-  }
+    windowMs: 60000,
+  },
 });
 ```
 
@@ -44,9 +44,9 @@ When a duplicate is detected:
 // POST /orders/:id/process
 // Multiple requests for same order return same job chain
 await queuert.startJobChain({
-  typeName: 'process-order',
+  typeName: "process-order",
   input: { orderId: req.params.id },
-  deduplication: { key: `order-${req.params.id}`, strategy: 'completed' }
+  deduplication: { key: `order-${req.params.id}`, strategy: "completed" },
 });
 ```
 
@@ -55,9 +55,9 @@ await queuert.startJobChain({
 ```typescript
 // Only allow one sync per user per hour
 await queuert.startJobChain({
-  typeName: 'sync-user-data',
+  typeName: "sync-user-data",
   input: { userId },
-  deduplication: { key: `sync-${userId}`, strategy: 'all', windowMs: 60 * 60 * 1000 }
+  deduplication: { key: `sync-${userId}`, strategy: "all", windowMs: 60 * 60 * 1000 },
 });
 ```
 
@@ -83,21 +83,21 @@ If you need to trigger multiple follow-up jobs, use blockers instead. Note that 
 
 ```typescript
 defineJobTypes<{
-  'trigger': {
+  trigger: {
     entry: true;
     input: { ids: string[] };
-    continueWith: { typeName: 'aggregate' };
+    continueWith: { typeName: "aggregate" };
   };
-  'process-item': {
+  "process-item": {
     entry: true;
     input: { id: string };
     output: { result: number };
   };
-  'aggregate': {
+  aggregate: {
     entry: true;
     input: { count: number };
     output: { total: number };
-    blockers: [...{ typeName: 'process-item' }[]];
+    blockers: [...{ typeName: "process-item" }[]];
   };
 }>();
 
@@ -111,12 +111,14 @@ const worker = await createQueuertInProcessWorker({
       process: async ({ job, complete }) => {
         return complete(async ({ continueWith }) => {
           return continueWith({
-            typeName: 'aggregate',
+            typeName: "aggregate",
             input: { count: job.input.ids.length },
             startBlockers: async () =>
-              Promise.all(job.input.ids.map(id =>
-                queuert.startJobChain({ typeName: 'process-item', input: { id } })
-              ))
+              Promise.all(
+                job.input.ids.map((id) =>
+                  queuert.startJobChain({ typeName: "process-item", input: { id } }),
+                ),
+              ),
           });
         });
       },

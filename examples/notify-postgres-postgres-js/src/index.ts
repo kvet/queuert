@@ -1,4 +1,4 @@
-import { createPgNotifyAdapter, PgNotifyProvider } from "@queuert/postgres";
+import { type PgNotifyProvider, createPgNotifyAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import postgres from "postgres";
 import {

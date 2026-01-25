@@ -1,8 +1,8 @@
-export interface TypedAbortSignal<T> extends AbortSignal {
+export type TypedAbortSignal<T> = {
   readonly reason: T | undefined;
-}
+} & AbortSignal;
 
-export interface TypedAbortController<T> {
+export type TypedAbortController<T> = {
   readonly signal: TypedAbortSignal<T>;
   abort(reason: T): void;
-}
+};

@@ -14,13 +14,6 @@ export {
 export { type ValidatedJobTypeDefinitions } from "./entities/job-type.validation.js";
 export { type CompletedJob, type Job, type JobWithoutBlockers } from "./entities/job.js";
 export { type ScheduleOptions } from "./entities/schedule.js";
-export { type TypedAbortSignal } from "./helpers/abort.js";
-export { type BackoffConfig } from "./helpers/backoff.js";
-export { type RetryConfig } from "./helpers/retry.js";
-export { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
-export { createConsoleLog } from "./observability-adapter/log.console.js";
-export { type Log } from "./observability-adapter/log.js";
-export { type ObservabilityAdapter } from "./observability-adapter/observability-adapter.js";
 export {
   JobAlreadyCompletedError,
   JobNotFoundError,
@@ -28,7 +21,14 @@ export {
   JobTypeValidationError,
   WaitForJobChainCompletionTimeoutError,
   type JobTypeValidationErrorCode,
-} from "./queuert-helper.js";
+} from "./errors.js";
+export { type TypedAbortSignal } from "./helpers/abort.js";
+export { type BackoffConfig } from "./helpers/backoff.js";
+export { type RetryConfig } from "./helpers/retry.js";
+export { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
+export { createConsoleLog } from "./observability-adapter/log.console.js";
+export { type Log } from "./observability-adapter/log.js";
+export { type ObservabilityAdapter } from "./observability-adapter/observability-adapter.js";
 export { createQueuertClient, type QueuertClient } from "./queuert-client.js";
 export {
   createQueuertInProcessWorker,

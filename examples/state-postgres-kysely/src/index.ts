@@ -1,6 +1,6 @@
-import { createPgStateAdapter, PgStateProvider } from "@queuert/postgres";
+import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
-import { CompiledQuery, Generated, Kysely, PostgresDialect } from "kysely";
+import { CompiledQuery, type Generated, Kysely, PostgresDialect } from "kysely";
 import { Pool } from "pg";
 import {
   createConsoleLog,
@@ -14,9 +14,9 @@ import { createInProcessNotifyAdapter } from "queuert/internal";
 const pgContainer = await new PostgreSqlContainer("postgres:14").withExposedPorts(5432).start();
 
 // 2. Define Kysely database schema
-interface Database {
+type Database = {
   users: { id: Generated<number>; name: string; email: string };
-}
+};
 
 // 3. Create database connection and schema
 const db = new Kysely<Database>({

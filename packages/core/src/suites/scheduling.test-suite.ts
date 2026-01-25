@@ -1,11 +1,11 @@
-import { TestAPI } from "vitest";
+import { type TestAPI } from "vitest";
 import {
   createQueuertClient,
   createQueuertInProcessWorker,
   defineJobTypes,
   rescheduleJob,
 } from "../index.js";
-import { TestSuiteContext } from "./spec-context.spec-helper.js";
+import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
   it("startJobChain with schedule.afterMs defers job processing", async ({

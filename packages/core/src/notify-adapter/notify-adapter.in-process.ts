@@ -1,13 +1,13 @@
-import type { NotifyAdapter } from "./notify-adapter.js";
+import { type NotifyAdapter } from "./notify-adapter.js";
 
 type JobScheduledNotification = { typeName: string; hintId: string };
 
 export const createInProcessNotifyAdapter = (): NotifyAdapter => {
   const hintCounts = new Map<string, number>();
 
-  const jobScheduledListeners: Array<(notification: JobScheduledNotification) => void> = [];
-  const chainCompletedListeners: Array<(chainId: string) => void> = [];
-  const jobOwnershipLostListeners: Array<(jobId: string) => void> = [];
+  const jobScheduledListeners: ((notification: JobScheduledNotification) => void)[] = [];
+  const chainCompletedListeners: ((chainId: string) => void)[] = [];
+  const jobOwnershipLostListeners: ((jobId: string) => void)[] = [];
 
   const tryConsumeHint = (hintId: string): boolean => {
     const count = hintCounts.get(hintId) ?? 0;

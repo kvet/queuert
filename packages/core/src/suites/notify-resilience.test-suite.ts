@@ -1,11 +1,11 @@
-import { TestAPI } from "vitest";
+import { type TestAPI } from "vitest";
 import {
+  type NotifyAdapter,
   createQueuertClient,
   createQueuertInProcessWorker,
   defineJobTypes,
-  NotifyAdapter,
 } from "../index.js";
-import { TestSuiteContext } from "./spec-context.spec-helper.js";
+import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const notifyResilienceTestSuite = ({
   it,

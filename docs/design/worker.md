@@ -24,7 +24,7 @@ import { createQueuertClient } from "queuert";
 
 const client = await createQueuertClient({
   stateAdapter,
-  notifyAdapter,     // optional
+  notifyAdapter, // optional
   observabilityAdapter, // optional
   jobTypeRegistry,
   log,
@@ -216,7 +216,7 @@ Leases provide distributed mutual exclusion with automatic recovery:
 
 ```typescript
 const defaultLeaseConfig = {
-  leaseMs: 60_000,        // How long before lease expires
+  leaseMs: 60_000, // How long before lease expires
   renewIntervalMs: 30_000, // How often to renew
 };
 ```
@@ -242,10 +242,10 @@ process: async ({ signal, job, complete }) => {
   // signal: TypedAbortSignal<JobAbortReason>
 
   if (signal.aborted) {
-    console.log('Aborted:', signal.reason);
+    console.log("Aborted:", signal.reason);
     // "taken_by_another_worker" | "error" | "not_found" | "already_completed"
   }
-}
+};
 ```
 
 Abort triggers:
@@ -261,9 +261,9 @@ Abort triggers:
 
 ```typescript
 const retryConfig = {
-  initialDelayMs: 10_000,   // First retry delay
-  maxDelayMs: 300_000,      // Maximum delay (5 minutes)
-  multiplier: 2.0,          // Exponential backoff
+  initialDelayMs: 10_000, // First retry delay
+  maxDelayMs: 300_000, // Maximum delay (5 minutes)
+  multiplier: 2.0, // Exponential backoff
 };
 ```
 
@@ -313,10 +313,10 @@ A single worker can handle multiple job types:
 ```typescript
 const worker = await createQueuertInProcessWorker({
   ...adapters,
-  workerId: 'multi-worker',
+  workerId: "multi-worker",
   jobTypeProcessors: {
-    'type-a': { process: processA },
-    'type-b': { process: processB },
+    "type-a": { process: processA },
+    "type-b": { process: processB },
   },
 });
 
@@ -391,7 +391,7 @@ type JobAttemptMiddleware<TStateAdapter, TJobTypeDefinitions> = <T>(
 Middlewares execute in order, wrapping the job processing:
 
 ```typescript
-jobAttemptMiddlewares: [middleware1, middleware2, middleware3]
+jobAttemptMiddlewares: [middleware1, middleware2, middleware3];
 
 // Execution order:
 // middleware1 before → middleware2 before → middleware3 before

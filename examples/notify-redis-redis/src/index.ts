@@ -1,4 +1,4 @@
-import { createRedisNotifyAdapter, RedisNotifyProvider } from "@queuert/redis";
+import { type RedisNotifyProvider, createRedisNotifyAdapter } from "@queuert/redis";
 import { RedisContainer } from "@testcontainers/redis";
 import {
   createConsoleLog,

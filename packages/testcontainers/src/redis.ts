@@ -1,5 +1,5 @@
-import { RedisContainer, StartedRedisContainer } from "@testcontainers/redis";
-import { beforeAll, TestAPI } from "vitest";
+import { RedisContainer, type StartedRedisContainer } from "@testcontainers/redis";
+import { type TestAPI, beforeAll } from "vitest";
 import { withContainerLock } from "./with-container-lock.js";
 
 const CONTAINER_NAME = "queuert-redis-test";

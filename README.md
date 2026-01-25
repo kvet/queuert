@@ -428,9 +428,7 @@ type Definitions = {
   "process-payment": {
     entry: true;
     input: { orderId: string };
-    output:
-      | { success: true; transactionId: string }
-      | { success: false; error: string };
+    output: { success: true; transactionId: string } | { success: false; error: string };
   };
 };
 ```
@@ -474,10 +472,7 @@ const worker = await createQueuertInProcessWorker({
 
         if (response.status === 429) {
           // Rate limited — retry after the specified delay
-          const retryAfter = parseInt(
-            response.headers.get("Retry-After") || "60",
-            10,
-          );
+          const retryAfter = parseInt(response.headers.get("Retry-After") || "60", 10);
           rescheduleJob({ afterMs: retryAfter * 1000 });
         }
 

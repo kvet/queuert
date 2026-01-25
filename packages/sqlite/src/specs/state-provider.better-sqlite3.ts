@@ -1,6 +1,6 @@
 import type Database from "better-sqlite3";
 import { createAsyncLock } from "queuert/internal";
-import { SqliteStateProvider } from "../state-provider/state-provider.sqlite.js";
+import { type SqliteStateProvider } from "../state-provider/state-provider.sqlite.js";
 
 export type SqliteContext = { db: Database.Database };
 

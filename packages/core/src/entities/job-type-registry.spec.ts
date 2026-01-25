@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { JobTypeValidationError } from "../queuert-helper.js";
+import { JobTypeValidationError } from "../errors.js";
 import {
+  type JobTypeRegistryConfig,
   createJobTypeRegistry,
   createNoopJobTypeRegistry,
-  JobTypeRegistryConfig,
 } from "./job-type-registry.js";
 
 describe("createJobTypeRegistry", () => {

@@ -1,5 +1,5 @@
-import { NotifyAdapter } from "../notify-adapter/notify-adapter.js";
-import { StateAdapter, StateJob } from "../state-adapter/state-adapter.js";
+import { type NotifyAdapter } from "../notify-adapter/notify-adapter.js";
+import { type StateAdapter, type StateJob } from "../state-adapter/state-adapter.js";
 
 type LogLevel = "info" | "warn" | "error";
 type LogEntry<
@@ -7,6 +7,7 @@ type LogEntry<
   TLevel extends LogLevel,
   TMessage extends string,
   TData extends Record<string, unknown>,
+  // oxlint-disable-next-line no-unnecessary-type-constraint
   TError extends unknown = never,
 > = {
   type: TType;

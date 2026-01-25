@@ -34,18 +34,18 @@ npm install @queuert/nats
 ## Quick Start
 
 ```typescript
-import { createQueuertClient, createConsoleLog, defineJobTypes } from 'queuert';
-import { createPgStateAdapter } from '@queuert/postgres';
-import { createNatsNotifyAdapter } from '@queuert/nats';
-import { connect } from 'nats';
+import { createQueuertClient, createConsoleLog, defineJobTypes } from "queuert";
+import { createPgStateAdapter } from "@queuert/postgres";
+import { createNatsNotifyAdapter } from "@queuert/nats";
+import { connect } from "nats";
 
 const jobTypes = defineJobTypes<{
-  'send-email': { entry: true; input: { to: string }; output: { sent: true } };
+  "send-email": { entry: true; input: { to: string }; output: { sent: true } };
 }>();
 
 const stateAdapter = await createPgStateAdapter({ stateProvider: myPgProvider });
 
-const nc = await connect({ servers: 'localhost:4222' });
+const nc = await connect({ servers: "localhost:4222" });
 
 const notifyAdapter = await createNatsNotifyAdapter({
   nc,
@@ -65,9 +65,9 @@ const client = await createQueuertClient({
 
 ```typescript
 const notifyAdapter = await createNatsNotifyAdapter({
-  nc: natsConnection,           // NATS connection
-  kv: jetStreamKvBucket,        // Optional JetStream KV bucket for hint optimization
-  subjectPrefix: 'queuert',     // Subject prefix (default: "queuert")
+  nc: natsConnection, // NATS connection
+  kv: jetStreamKvBucket, // Optional JetStream KV bucket for hint optimization
+  subjectPrefix: "queuert", // Subject prefix (default: "queuert")
 });
 ```
 

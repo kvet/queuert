@@ -1,11 +1,11 @@
 import {
+  createConsoleLog,
   createQueuertClient,
   createQueuertInProcessWorker,
-  createConsoleLog,
   defineJobTypes,
 } from "queuert";
 import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
-import { observabilityAdapter, flushMetrics, shutdownMetrics } from "./observability.js";
+import { flushMetrics, observabilityAdapter, shutdownMetrics } from "./observability.js";
 
 // 1. Define job types
 const jobTypeRegistry = defineJobTypes<{

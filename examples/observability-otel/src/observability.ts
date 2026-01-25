@@ -1,8 +1,8 @@
 import { metrics } from "@opentelemetry/api";
 import {
+  ConsoleMetricExporter,
   MeterProvider,
   PeriodicExportingMetricReader,
-  ConsoleMetricExporter,
 } from "@opentelemetry/sdk-metrics";
 import { createOtelObservabilityAdapter } from "@queuert/otel";
 

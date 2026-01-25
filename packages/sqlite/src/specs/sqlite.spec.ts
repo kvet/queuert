@@ -1,4 +1,4 @@
-import { UUID } from "crypto";
+import { type UUID } from "node:crypto";
 import { createQueuertClient, createQueuertInProcessWorker, defineJobTypes } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 import { withWorkers } from "queuert/testing";

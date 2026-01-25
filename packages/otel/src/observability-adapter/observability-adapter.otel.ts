@@ -1,5 +1,5 @@
 import { type Meter, metrics } from "@opentelemetry/api";
-import type { ObservabilityAdapter } from "queuert";
+import { type ObservabilityAdapter } from "queuert";
 
 /**
  * Creates an OpenTelemetry-based ObservabilityAdapter.

@@ -1,9 +1,9 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import {
+  type JobAttemptMiddleware,
   createQueuertClient,
   createQueuertInProcessWorker,
   defineJobTypes,
-  type JobAttemptMiddleware,
 } from "queuert";
 import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
 import winston from "winston";

@@ -1,5 +1,5 @@
 import { Pool } from "pg";
-import type { NotifyAdapter } from "queuert";
+import { type NotifyAdapter } from "queuert";
 import { createFlakyBatchGenerator } from "queuert/testing";
 import { type TestAPI } from "vitest";
 import { createPgNotifyAdapter } from "../notify-adapter/notify-adapter.pg.js";

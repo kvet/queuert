@@ -8,9 +8,13 @@
  * 2. Deferred Start with Early Completion: Scheduled timeout with early action option
  */
 
-import { createPgStateAdapter, PgStateProvider } from "@queuert/postgres";
+import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
-import postgres, { PendingQuery, Row, TransactionSql as _TransactionSql } from "postgres";
+import postgres, {
+  type PendingQuery,
+  type Row,
+  type TransactionSql as _TransactionSql,
+} from "postgres";
 import { createQueuertClient, createQueuertInProcessWorker, defineJobTypes } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 

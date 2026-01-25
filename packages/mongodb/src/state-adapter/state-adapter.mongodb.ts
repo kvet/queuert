@@ -1,13 +1,13 @@
-import { Collection, type Document, type WithId } from "mongodb";
+import { type Collection, type Document, type WithId } from "mongodb";
 import {
-  BaseTxContext,
+  type BaseTxContext,
   type DeduplicationOptions,
   type RetryConfig,
   type StateAdapter,
   type StateJob,
 } from "queuert";
 import { wrapStateAdapterWithRetry } from "queuert/internal";
-import { MongoStateProvider } from "../state-provider/state-provider.mongodb.js";
+import { type MongoStateProvider } from "../state-provider/state-provider.mongodb.js";
 import { isTransientMongoError } from "./errors.js";
 
 type JobStatus = "blocked" | "pending" | "running" | "completed";
@@ -40,7 +40,7 @@ type DbJob = {
 
   updatedAt: Date;
 
-  blockers: Array<{ blockedByChainId: string; index: number }>;
+  blockers: { blockedByChainId: string; index: number }[];
 };
 
 const mapDbJobToStateJob = (dbJob: WithId<Document> | DbJob): StateJob => {

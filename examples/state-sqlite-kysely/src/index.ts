@@ -1,6 +1,10 @@
-import { createAsyncLock, createSqliteStateAdapter, SqliteStateProvider } from "@queuert/sqlite";
+import {
+  type SqliteStateProvider,
+  createAsyncLock,
+  createSqliteStateAdapter,
+} from "@queuert/sqlite";
 import BetterSqlite3 from "better-sqlite3";
-import { CompiledQuery, Generated, Kysely, sql, SqliteDialect } from "kysely";
+import { CompiledQuery, type Generated, Kysely, SqliteDialect, sql } from "kysely";
 import {
   createConsoleLog,
   createQueuertClient,
@@ -16,9 +20,9 @@ const sqliteDb = new BetterSqlite3(":memory:");
 sqliteDb.pragma("foreign_keys = ON");
 
 // 3. Define Kysely database schema
-interface Database {
+type Database = {
   users: { id: Generated<number>; name: string; email: string };
-}
+};
 
 // 4. Create Kysely database connection
 const db = new Kysely<Database>({

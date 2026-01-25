@@ -1,11 +1,11 @@
-import { TestAPI } from "vitest";
+import { type TestAPI } from "vitest";
 import {
+  type StateAdapter,
   createQueuertClient,
   createQueuertInProcessWorker,
   defineJobTypes,
-  StateAdapter,
 } from "../index.js";
-import { TestSuiteContext } from "./spec-context.spec-helper.js";
+import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const stateResilienceTestSuite = ({
   it,

@@ -1,6 +1,9 @@
 import { type TestAPI } from "vitest";
-import { createInProcessStateAdapter, InProcessStateAdapter } from "./state-adapter.in-process.js";
-import { StateAdapter } from "./state-adapter.js";
+import {
+  type InProcessStateAdapter,
+  createInProcessStateAdapter,
+} from "./state-adapter.in-process.js";
+import { type StateAdapter } from "./state-adapter.js";
 
 export const extendWithStateInProcess = <T>(
   api: TestAPI<T>,

@@ -1,4 +1,4 @@
-import { extendWithRedis, TESTCONTAINER_RESOURCE_TYPES } from "@queuert/testcontainers";
+import { TESTCONTAINER_RESOURCE_TYPES, extendWithRedis } from "@queuert/testcontainers";
 import {
   extendWithCommon,
   extendWithResourceLeakDetection,

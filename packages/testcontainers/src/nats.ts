@@ -1,5 +1,9 @@
-import { NatsConnectionOptions, NatsContainer, StartedNatsContainer } from "@testcontainers/nats";
-import { TestAPI } from "vitest";
+import {
+  type NatsConnectionOptions,
+  NatsContainer,
+  type StartedNatsContainer,
+} from "@testcontainers/nats";
+import { type TestAPI } from "vitest";
 import { withContainerLock } from "./with-container-lock.js";
 
 const CONTAINER_NAME = "queuert-nats-test";
@@ -9,20 +13,18 @@ export type { NatsConnectionOptions };
 let containerPromise: Promise<StartedNatsContainer> | null = null;
 
 const getContainer = async (): Promise<StartedNatsContainer> => {
-  if (!containerPromise) {
-    containerPromise = withContainerLock({
-      containerName: CONTAINER_NAME,
-      start: async () =>
-        new NatsContainer("nats:2.10")
-          .withName(CONTAINER_NAME)
-          .withLabels({
-            label: CONTAINER_NAME,
-          })
-          .withArg("-js")
-          .withReuse()
-          .start(),
-    });
-  }
+  containerPromise ??= withContainerLock({
+    containerName: CONTAINER_NAME,
+    start: async () =>
+      new NatsContainer("nats:2.10")
+        .withName(CONTAINER_NAME)
+        .withLabels({
+          label: CONTAINER_NAME,
+        })
+        .withArg("-js")
+        .withReuse()
+        .start(),
+  });
   return containerPromise;
 };
 

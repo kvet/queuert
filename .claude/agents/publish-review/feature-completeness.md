@@ -136,43 +136,51 @@ Provide your findings in this format:
 ## Feature Completeness Findings
 
 ### Critical Issues (Publish Blockers)
+
 [Features that are documented but broken, critical TODOs]
 
 ### Warnings (Should Fix)
+
 [Incomplete examples, unexplained skipped tests]
 
 ### Suggestions (Nice to Have)
+
 [Polish, additional examples, more tests]
 
 ### TODO.md Status
-| Item | Category | Status | Publish Impact |
-|------|----------|--------|----------------|
-| Add files property | Short-term | Open | Warning |
-| ... | ... | ... | ... |
+
+| Item               | Category   | Status | Publish Impact |
+| ------------------ | ---------- | ------ | -------------- |
+| Add files property | Short-term | Open   | Warning        |
+| ...                | ...        | ...    | ...            |
 
 ### Test Health
+
 | Test File | Skipped | TODOs | Notes |
-|-----------|---------|-------|-------|
-| ... | 0 | 1 | ... |
+| --------- | ------- | ----- | ----- |
+| ...       | 0       | 1     | ...   |
 
 ### Example Status
-| Example | Has README | Runs | Complete | Notes |
-|---------|------------|------|----------|-------|
-| runtime-validation-zod | Yes | Yes | Yes | - |
-| runtime-validation-valibot | Yes | ? | Stub | Needs completion |
-| ... | ... | ... | ... | ... |
+
+| Example                    | Has README | Runs | Complete | Notes            |
+| -------------------------- | ---------- | ---- | -------- | ---------------- |
+| runtime-validation-zod     | Yes        | Yes  | Yes      | -                |
+| runtime-validation-valibot | Yes        | ?    | Stub     | Needs completion |
+| ...                        | ...        | ...  | ...      | ...              |
 
 ### Package Readiness
-| Package | files field | exports | peer deps | Ready? |
-|---------|-------------|---------|-----------|--------|
-| queuert | ? | Yes | N/A | Mostly |
-| @queuert/postgres | ? | Yes | Yes | Mostly |
-| ... | ... | ... | ... | ... |
+
+| Package           | files field | exports | peer deps | Ready? |
+| ----------------- | ----------- | ------- | --------- | ------ |
+| queuert           | ?           | Yes     | N/A       | Mostly |
+| @queuert/postgres | ?           | Yes     | Yes       | Mostly |
+| ...               | ...         | ...     | ...       | ...    |
 
 ### Code TODOs/FIXMEs
+
 | File | Line | Comment | Impact |
-|------|------|---------|--------|
-| ... | ... | ... | ... |
+| ---- | ---- | ------- | ------ |
+| ...  | ...  | ...     | ...    |
 ```
 
 For each finding, include:

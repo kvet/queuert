@@ -1,4 +1,4 @@
-import type { Log } from "./log.js";
+import { type Log } from "./log.js";
 
 export const createConsoleLog = (): Log => {
   return (entry) => {

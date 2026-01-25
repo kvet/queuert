@@ -1,6 +1,7 @@
-import { extendWithPostgres, TESTCONTAINER_RESOURCE_TYPES } from "@queuert/testcontainers";
+import { TESTCONTAINER_RESOURCE_TYPES, extendWithPostgres } from "@queuert/testcontainers";
 import {
   blockerChainsTestSuite,
+  chainsTestSuite,
   extendWithCommon,
   extendWithResourceLeakDetection,
   notifyResilienceTestSuite,
@@ -8,11 +9,10 @@ import {
   processTestSuite,
   reaperTestSuite,
   schedulingTestSuite,
-  chainsTestSuite,
   stateResilienceTestSuite,
   waitChainCompletionTestSuite,
-  workerlessCompletionTestSuite,
   workerTestSuite,
+  workerlessCompletionTestSuite,
 } from "queuert/testing";
 import { describe, it } from "vitest";
 import { extendWithNotifyPostgres } from "./notify-adapter.pg.spec-helper.js";

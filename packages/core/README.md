@@ -11,9 +11,9 @@ Queuert is a **type-safe job queue library** that stores jobs in your database (
 fetch(url).then(process).then(format);
 
 // Queuert chains work the same way, but persist across restarts
-startJobChain({ typeName: 'fetch', input: { url } })
-  // .continueWith('process')
-  // .continueWith('format')
+startJobChain({ typeName: "fetch", input: { url } });
+// .continueWith('process')
+// .continueWith('format')
 ```
 
 Key features:
@@ -44,12 +44,17 @@ Optional adapters:
 ## Quick Start
 
 ```typescript
-import { createQueuertClient, createQueuertInProcessWorker, defineJobTypes, createConsoleLog } from 'queuert';
-import { createSqliteStateAdapter } from '@queuert/sqlite';
+import {
+  createQueuertClient,
+  createQueuertInProcessWorker,
+  defineJobTypes,
+  createConsoleLog,
+} from "queuert";
+import { createSqliteStateAdapter } from "@queuert/sqlite";
 
 // Define your job types with full type safety
 const jobTypes = defineJobTypes<{
-  'send-email': {
+  "send-email": {
     entry: true;
     input: { to: string; subject: string };
     output: { sent: true };
@@ -69,9 +74,9 @@ const worker = await createQueuertInProcessWorker({
   stateAdapter,
   jobTypeRegistry: jobTypes,
   log: createConsoleLog(),
-  workerId: 'worker-1',
+  workerId: "worker-1",
   jobTypeProcessors: {
-    'send-email': {
+    "send-email": {
       process: async ({ job, complete }) => {
         await sendEmail(job.input.to, job.input.subject);
         return complete(() => ({ sent: true }));
@@ -87,9 +92,9 @@ await worker.start();
 await client.withNotify(async () =>
   db.transaction(async (tx) =>
     client.startJobChain({
-      tx,  // Transaction context - matches your stateProvider's TTxContext
-      typeName: 'send-email',
-      input: { to: 'user@example.com', subject: 'Hello!' },
+      tx, // Transaction context - matches your stateProvider's TTxContext
+      typeName: "send-email",
+      input: { to: "user@example.com", subject: "Hello!" },
     }),
   ),
 );
@@ -102,22 +107,22 @@ const worker = await createQueuertInProcessWorker({
   stateAdapter,
   jobTypeRegistry: jobTypes,
   log: createConsoleLog(),
-  workerId: 'worker-1',              // Unique worker identifier (optional)
+  workerId: "worker-1", // Unique worker identifier (optional)
   jobTypeProcessing: {
-    pollIntervalMs: 60_000,          // How often to poll for new jobs (default: 60s)
-    nextJobDelayMs: 0,               // Delay between processing jobs
+    pollIntervalMs: 60_000, // How often to poll for new jobs (default: 60s)
+    nextJobDelayMs: 0, // Delay between processing jobs
 
     // Retry configuration for failed job attempts
     defaultRetryConfig: {
-      initialDelayMs: 10_000,        // Initial retry delay (default: 10s)
-      multiplier: 2.0,               // Exponential backoff multiplier
-      maxDelayMs: 300_000,           // Maximum retry delay (default: 5min)
+      initialDelayMs: 10_000, // Initial retry delay (default: 10s)
+      multiplier: 2.0, // Exponential backoff multiplier
+      maxDelayMs: 300_000, // Maximum retry delay (default: 5min)
     },
 
     // Lease configuration for job ownership
     defaultLeaseConfig: {
-      leaseMs: 60_000,               // How long a worker holds a job (default: 60s)
-      renewIntervalMs: 30_000,       // How often to renew the lease (default: 30s)
+      leaseMs: 60_000, // How long a worker holds a job (default: 60s)
+      renewIntervalMs: 30_000, // How often to renew the lease (default: 30s)
     },
 
     // Middlewares that wrap each job attempt (e.g., for contextual logging)

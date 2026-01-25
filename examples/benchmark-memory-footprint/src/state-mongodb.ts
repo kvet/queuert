@@ -2,7 +2,7 @@
  * MongoDB State Adapter Memory Measurement
  */
 
-import { createMongoStateAdapter, MongoStateProvider } from "@queuert/mongodb";
+import { type MongoStateProvider, createMongoStateAdapter } from "@queuert/mongodb";
 import { MongoDBContainer } from "@testcontainers/mongodb";
 import { MongoClient } from "mongodb";
 import { createQueuertClient, createQueuertInProcessWorker } from "queuert";

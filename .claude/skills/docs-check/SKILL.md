@@ -90,30 +90,37 @@ Provide a structured report categorizing findings by urgency.
 # Documentation Sync Check
 
 ## Summary
+
 [Brief overview of changes and documentation status]
 
 ## Changes Analyzed
+
 - [List of changed files grouped by area]
 
 ## Documentation Updates Required
 
 ### Must Update
+
 [Documentation that is definitely out of sync - factually incorrect, missing new features, wrong API signatures]
 
 ### Should Review
+
 [Documentation that may need updating - behavioral changes, new edge cases, terminology]
 
 ### Already Up to Date
+
 [Documentation that was checked and appears current]
 
 ## Specific Recommendations
 
 ### [doc-file-path]
+
 - **Issue**: [What's wrong or missing]
 - **Code Reference**: [Which code change necessitates this]
 - **Suggested Action**: [What to update]
 
 ## No Documentation Impact
+
 [Changes that don't require documentation updates and why]
 ```
 

@@ -1,6 +1,6 @@
-import { ObservabilityHelper } from "../observability-adapter/observability-helper.js";
-import { JobTypeValidationError } from "../queuert-helper.js";
-import { JobTypeRegistry } from "./job-type-registry.js";
+import { JobTypeValidationError } from "../errors.js";
+import { type ObservabilityHelper } from "../observability-adapter/observability-helper.js";
+import { type JobTypeRegistry } from "./job-type-registry.js";
 
 export const wrapJobTypeRegistryWithLogging = <TJobTypeDefinitions>({
   registry,

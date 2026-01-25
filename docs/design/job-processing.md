@@ -91,7 +91,7 @@ This means simple process functions default to staged mode:
 process: async ({ job, complete }) => {
   // Transaction already closed, lease renewal running
   return complete(() => output);
-}
+};
 ```
 
 ## Timeouts
@@ -114,7 +114,7 @@ process: async ({ signal, job, complete }) => {
   await fetch(url, { signal: combined });
 
   return complete(() => output);
-}
+};
 ```
 
 ### Hard Timeouts

@@ -34,11 +34,11 @@ npm install @queuert/sqlite
 ## Quick Start
 
 ```typescript
-import { createQueuertClient, createConsoleLog, defineJobTypes } from 'queuert';
-import { createSqliteStateAdapter } from '@queuert/sqlite';
+import { createQueuertClient, createConsoleLog, defineJobTypes } from "queuert";
+import { createSqliteStateAdapter } from "@queuert/sqlite";
 
 const jobTypes = defineJobTypes<{
-  'send-email': { entry: true; input: { to: string }; output: { sent: true } };
+  "send-email": { entry: true; input: { to: string }; output: { sent: true } };
 }>();
 
 const stateAdapter = await createSqliteStateAdapter({
@@ -88,7 +88,7 @@ You need to implement a state provider that bridges your SQLite client with this
 SQLite requires serialized write access. If your application performs writes outside of Queuert (e.g., in your state provider), use `createAsyncLock` to coordinate access:
 
 ```typescript
-import { createAsyncLock } from '@queuert/sqlite';
+import { createAsyncLock } from "@queuert/sqlite";
 
 const lock = createAsyncLock();
 

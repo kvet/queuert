@@ -61,8 +61,8 @@ JavaScript developers already understand Promise chains intuitively:
 ```javascript
 // This is one chain, not three separate things
 fetchUser(id)
-  .then(user => fetchOrders(user.id))
-  .then(orders => processOrders(orders));
+  .then((user) => fetchOrders(user.id))
+  .then((orders) => processOrders(orders));
 ```
 
 The chain:
@@ -177,7 +177,7 @@ return complete(({ continueWith }) =>
   continueWith({
     typeName: "distribute-image",
     input: { imageId, processedUrl },
-  })
+  }),
 );
 
 // Wait for completion (like await)

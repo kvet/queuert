@@ -1,10 +1,10 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import pino from "pino";
 import {
+  type JobAttemptMiddleware,
   createQueuertClient,
   createQueuertInProcessWorker,
   defineJobTypes,
-  type JobAttemptMiddleware,
 } from "queuert";
 import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
 import { createPinoLog } from "./log.js";

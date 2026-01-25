@@ -1,7 +1,7 @@
-import { PostgreSqlContainer, StartedPostgreSqlContainer } from "@testcontainers/postgresql";
-import { createHash } from "crypto";
+import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
+import { createHash } from "node:crypto";
 import { Client } from "pg";
-import { beforeAll, TestAPI } from "vitest";
+import { type TestAPI, beforeAll } from "vitest";
 import { withContainerLock } from "./with-container-lock.js";
 
 const CONTAINER_NAME = "queuert-postgres-test";

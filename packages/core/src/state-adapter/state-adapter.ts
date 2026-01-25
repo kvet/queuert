@@ -1,5 +1,8 @@
-import { DeduplicationOptions, DeduplicationStrategy } from "../entities/deduplication.js";
-import { ScheduleOptions } from "../entities/schedule.js";
+import {
+  type DeduplicationOptions,
+  type DeduplicationStrategy,
+} from "../entities/deduplication.js";
+import { type ScheduleOptions } from "../entities/schedule.js";
 
 export type { DeduplicationOptions, DeduplicationStrategy, ScheduleOptions };
 

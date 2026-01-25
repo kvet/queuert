@@ -102,23 +102,28 @@ Provide your findings in this format:
 ## Documentation Coherence Findings
 
 ### Critical Issues
+
 [Issues that must be fixed - contradictions, lies, broken things]
 
 ### Warnings
+
 [Issues that should be fixed - inconsistencies, gaps, unclear content]
 
 ### Suggestions
+
 [Nice-to-have improvements - style, polish, additions]
 
 ### Terminology Matrix
+
 | Term | README.md | Design Docs | Package READMEs | Notes |
-|------|-----------|-------------|-----------------|-------|
-| ... | ... | ... | ... | ... |
+| ---- | --------- | ----------- | --------------- | ----- |
+| ...  | ...       | ...         | ...             | ...   |
 
 ### Feature Coverage
+
 | Feature | README | Design Doc | Package README | Notes |
-|---------|--------|------------|----------------|-------|
-| ... | ... | ... | ... | ... |
+| ------- | ------ | ---------- | -------------- | ----- |
+| ...     | ...    | ...        | ...            | ...   |
 ```
 
 For each finding, include:

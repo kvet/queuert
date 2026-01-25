@@ -1,7 +1,7 @@
-import { MongoDBContainer, StartedMongoDBContainer } from "@testcontainers/mongodb";
-import { createHash } from "crypto";
+import { MongoDBContainer, type StartedMongoDBContainer } from "@testcontainers/mongodb";
+import { createHash } from "node:crypto";
 import { MongoClient } from "mongodb";
-import { beforeAll, TestAPI } from "vitest";
+import { type TestAPI, beforeAll } from "vitest";
 import { withContainerLock } from "./with-container-lock.js";
 
 const CONTAINER_NAME = "queuert-mongodb-test";

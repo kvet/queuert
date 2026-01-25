@@ -166,41 +166,48 @@ Provide your findings in this format:
 ## API Consistency Findings
 
 ### Critical Issues
+
 [Breaking inconsistencies that confuse users]
 
 ### Warnings
+
 [Inconsistencies that should be standardized]
 
 ### Suggestions
+
 [Polish, additional consistency improvements]
 
 ### Configuration Option Comparison
-| Option | Postgres | SQLite | MongoDB | Redis | NATS | Standard? |
-|--------|----------|--------|---------|-------|------|-----------|
-| idGenerator | Yes | Yes | Yes | N/A | N/A | Yes |
-| prefix | schema | tablePrefix | N/A | channelPrefix | subjectPrefix | No |
-| ... | ... | ... | ... | ... | ... | ... |
+
+| Option      | Postgres | SQLite      | MongoDB | Redis         | NATS          | Standard? |
+| ----------- | -------- | ----------- | ------- | ------------- | ------------- | --------- |
+| idGenerator | Yes      | Yes         | Yes     | N/A           | N/A           | Yes       |
+| prefix      | schema   | tablePrefix | N/A     | channelPrefix | subjectPrefix | No        |
+| ...         | ...      | ...         | ...     | ...           | ...           | ...       |
 
 ### Factory Pattern Comparison
-| Factory | Async | Options Object | Returns | Notes |
-|---------|-------|----------------|---------|-------|
-| createPgStateAdapter | Yes | Yes | StateAdapter | OK |
-| createSqliteStateAdapter | Yes | Yes | StateAdapter | OK |
-| ... | ... | ... | ... | ... |
+
+| Factory                  | Async | Options Object | Returns      | Notes |
+| ------------------------ | ----- | -------------- | ------------ | ----- |
+| createPgStateAdapter     | Yes   | Yes            | StateAdapter | OK    |
+| createSqliteStateAdapter | Yes   | Yes            | StateAdapter | OK    |
+| ...                      | ...   | ...            | ...          | ...   |
 
 ### Testing Export Comparison
-| Package | Export Path | Helpers | Pattern |
-|---------|-------------|---------|---------|
-| core | ./testing | extendWithStateInProcess | Standard |
-| postgres | ./testing | extendWithStatePostgres | Standard |
-| nats | ./testing | extendWithNatsNotify | Different! |
-| ... | ... | ... | ... |
+
+| Package  | Export Path | Helpers                  | Pattern    |
+| -------- | ----------- | ------------------------ | ---------- |
+| core     | ./testing   | extendWithStateInProcess | Standard   |
+| postgres | ./testing   | extendWithStatePostgres  | Standard   |
+| nats     | ./testing   | extendWithNatsNotify     | Different! |
+| ...      | ...         | ...                      | ...        |
 
 ### Recommended Standardizations
-| Area | Current | Recommended | Packages Affected |
-|------|---------|-------------|-------------------|
-| Prefix option | channelPrefix/subjectPrefix | channelPrefix | nats |
-| ... | ... | ... | ... |
+
+| Area          | Current                     | Recommended   | Packages Affected |
+| ------------- | --------------------------- | ------------- | ----------------- |
+| Prefix option | channelPrefix/subjectPrefix | channelPrefix | nats              |
+| ...           | ...                         | ...           | ...               |
 ```
 
 For each finding, include:

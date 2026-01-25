@@ -79,30 +79,38 @@ Provide a structured report with:
 # Code Review: [brief description of changes]
 
 ## Summary
+
 [2-3 sentence overview of what the changes do and overall assessment]
 
 ## Critical Issues
+
 [Issues that would cause bugs, security vulnerabilities, or data loss]
 
 ## Concerns
+
 [Design issues, edge cases, potential problems]
 
 ## Suggestions
+
 [Improvements, style, minor issues]
 
 ## Alternative Approaches
 
 ### Alternative 1: [Name]
+
 **Approach:** [Description]
 **Trade-offs:**
+
 - Pro: ...
 - Con: ...
-**When to prefer:** [Conditions where this is better]
+  **When to prefer:** [Conditions where this is better]
 
 ### Alternative 2: [Name]
+
 ...
 
 ## Questions
+
 [Clarifying questions for the author about intent or requirements]
 ```
 

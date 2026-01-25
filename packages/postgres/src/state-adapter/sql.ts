@@ -1,8 +1,8 @@
 import {
   type MigrationStatement,
   type NamedParameter,
-  sql,
   type TypedSql,
+  sql,
 } from "@queuert/typed-sql";
 import { type DeduplicationStrategy } from "queuert";
 

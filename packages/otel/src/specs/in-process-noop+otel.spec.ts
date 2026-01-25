@@ -1,5 +1,6 @@
 import {
   blockerChainsTestSuite,
+  chainsTestSuite,
   deduplicationTestSuite,
   deletionTestSuite,
   extendWithCommon,
@@ -8,10 +9,9 @@ import {
   processTestSuite,
   reaperTestSuite,
   schedulingTestSuite,
-  chainsTestSuite,
   waitChainCompletionTestSuite,
-  workerlessCompletionTestSuite,
   workerTestSuite,
+  workerlessCompletionTestSuite,
 } from "queuert/testing";
 import { describe, it } from "vitest";
 import { extendWithObservabilityOtel } from "./observability-adapter.otel.spec-helper.js";

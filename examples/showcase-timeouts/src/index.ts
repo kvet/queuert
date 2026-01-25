@@ -8,9 +8,13 @@
  * 2. Hard Timeout: Using leaseConfig for automatic job reclamation
  */
 
-import { createPgStateAdapter, PgStateProvider } from "@queuert/postgres";
+import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
-import postgres, { TransactionSql as _TransactionSql, PendingQuery, Row } from "postgres";
+import postgres, {
+  type PendingQuery,
+  type Row,
+  type TransactionSql as _TransactionSql,
+} from "postgres";
 import { createQueuertClient, createQueuertInProcessWorker, defineJobTypes } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 

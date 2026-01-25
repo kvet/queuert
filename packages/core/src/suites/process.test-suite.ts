@@ -1,7 +1,7 @@
-import { expectTypeOf, TestAPI, vi } from "vitest";
+import { type TestAPI, expectTypeOf, vi } from "vitest";
 import { sleep } from "../helpers/sleep.js";
 import { createQueuertClient, createQueuertInProcessWorker, defineJobTypes } from "../index.js";
-import { TestSuiteContext } from "./spec-context.spec-helper.js";
+import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
   const completionOptions = {

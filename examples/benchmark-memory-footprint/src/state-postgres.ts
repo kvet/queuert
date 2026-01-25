@@ -4,7 +4,7 @@
 
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import postgres from "postgres";
-import { createPgStateAdapter, PgStateProvider } from "@queuert/postgres";
+import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 import { createQueuertClient, createQueuertInProcessWorker } from "queuert";
 import {

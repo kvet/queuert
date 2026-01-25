@@ -1,5 +1,5 @@
-import type { KV, NatsConnection } from "nats";
-import type { NotifyAdapter } from "queuert";
+import { type KV, type NatsConnection } from "nats";
+import { type NotifyAdapter } from "queuert";
 
 type SharedListenerState =
   | { status: "idle" }

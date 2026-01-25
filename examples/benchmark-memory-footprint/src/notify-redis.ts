@@ -4,7 +4,7 @@
 
 import { RedisContainer } from "@testcontainers/redis";
 import { createClient } from "redis";
-import { createRedisNotifyAdapter, RedisNotifyProvider } from "@queuert/redis";
+import { type RedisNotifyProvider, createRedisNotifyAdapter } from "@queuert/redis";
 import { createInProcessStateAdapter } from "queuert/internal";
 import { createQueuertClient, createQueuertInProcessWorker } from "queuert";
 import {

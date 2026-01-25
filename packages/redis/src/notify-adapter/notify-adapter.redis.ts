@@ -1,5 +1,5 @@
-import type { NotifyAdapter } from "queuert";
-import type { RedisNotifyProvider } from "../notify-provider/notify-provider.redis.js";
+import { type NotifyAdapter } from "queuert";
+import { type RedisNotifyProvider } from "../notify-provider/notify-provider.redis.js";
 import { DECR_IF_POSITIVE_SCRIPT, SET_AND_PUBLISH_SCRIPT } from "./lua.js";
 
 export type CreateRedisNotifyAdapterOptions = {
