@@ -39,6 +39,7 @@ export const createPgPoolNotifyProvider = ({ pool }: { pool: Pool }): PgNotifyPr
         await client.query(`UNLISTEN "${channel}"`);
         // Release listen client when no more handlers
         if (handlers.size === 0 && listenClient) {
+          listenClient.removeAllListeners("notification");
           listenClient.release();
           listenClient = null;
         }

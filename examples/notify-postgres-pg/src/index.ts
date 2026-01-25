@@ -52,6 +52,7 @@ const notifyProvider: PgNotifyProvider = {
       handlers.delete(channel);
       await client.query(`UNLISTEN "${channel}"`);
       if (handlers.size === 0 && listenClient) {
+        listenClient.removeAllListeners("notification");
         listenClient.release();
         listenClient = null;
       }
