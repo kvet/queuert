@@ -106,11 +106,11 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     typeNames: string[];
   }) => Promise<number | null>;
 
-  /** Acquires a pending job for processing. */
+  /** Acquires a pending job for processing. Returns the job and whether more jobs are waiting. */
   acquireJob: (params: {
     txContext?: TTxContext;
     typeNames: string[];
-  }) => Promise<StateJob | undefined>;
+  }) => Promise<{ job: StateJob | undefined; hasMore: boolean }>;
 
   /** Renews the lease on a running job. */
   renewJobLease: (params: {

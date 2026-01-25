@@ -28,7 +28,6 @@ import {
 import { type TypedAbortController, type TypedAbortSignal } from "../helpers/abort.js";
 import { type BackoffConfig } from "../helpers/backoff.js";
 import { createSignal } from "../helpers/signal.js";
-import { type NotifyAdapter } from "../notify-adapter/notify-adapter.js";
 import { type ProcessHelper, type StartBlockersFn } from "../queuert-helper.js";
 import {
   type BaseTxContext,
@@ -236,7 +235,6 @@ export const runJobProcess = async ({
   retryConfig,
   leaseConfig,
   workerId,
-  notifyAdapter,
   typeNames,
   jobAttemptMiddlewares,
 }: {
@@ -247,7 +245,6 @@ export const runJobProcess = async ({
   retryConfig: BackoffConfig;
   leaseConfig: LeaseConfig;
   workerId: string;
-  notifyAdapter: NotifyAdapter;
   typeNames: readonly string[];
   jobAttemptMiddlewares?: JobAttemptMiddleware<
     StateAdapter<BaseTxContext, any>,
@@ -368,11 +365,14 @@ export const runJobProcess = async ({
           if (config.mode === "staged") {
             await leaseManager.start();
             try {
-              disposeOwnershipListener = await notifyAdapter.listenJobOwnershipLost(job.id, () => {
-                if (!abortController.signal.aborted) {
-                  void runInGuardedTransaction(async () => Promise.resolve()).catch(() => {});
-                }
-              });
+              disposeOwnershipListener = await helper.notifyAdapter.listenJobOwnershipLost(
+                job.id,
+                () => {
+                  if (!abortController.signal.aborted) {
+                    void runInGuardedTransaction(async () => Promise.resolve()).catch(() => {});
+                  }
+                },
+              );
             } catch {}
           }
 

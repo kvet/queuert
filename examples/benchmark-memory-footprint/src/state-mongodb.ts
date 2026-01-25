@@ -41,6 +41,7 @@ diffMemory(beforeConnection, afterConnection);
 type DbContext = { session: ReturnType<MongoClient["startSession"]> };
 const stateProvider: MongoStateProvider<DbContext> = {
   getCollection: () => db.collection("jobs"),
+  getSession: (txContext) => txContext?.session,
   runInTransaction: async (fn) => {
     const session = mongoClient.startSession();
     try {

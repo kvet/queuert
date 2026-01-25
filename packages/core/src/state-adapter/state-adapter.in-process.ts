@@ -259,20 +259,16 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
 
     acquireJob: async ({ typeNames }) => {
       const now = new Date();
-      let candidateJob: StateJob | undefined;
+      const eligibleJobs = Array.from(store.jobs.values())
+        .filter(
+          (job) =>
+            typeNames.includes(job.typeName) && job.status === "pending" && job.scheduledAt <= now,
+        )
+        .sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime());
 
-      for (const job of store.jobs.values()) {
-        if (!typeNames.includes(job.typeName)) continue;
-        if (job.status !== "pending") continue;
-        if (job.scheduledAt > now) continue;
-
-        if (!candidateJob || job.scheduledAt < candidateJob.scheduledAt) {
-          candidateJob = job;
-        }
-      }
-
+      const candidateJob = eligibleJobs[0];
       if (!candidateJob) {
-        return undefined;
+        return { job: undefined, hasMore: false };
       }
 
       const updatedJob: StateJob = {
@@ -283,7 +279,7 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       };
       store.jobs.set(candidateJob.id, updatedJob);
 
-      return updatedJob;
+      return { job: updatedJob, hasMore: eligibleJobs.length > 1 };
     },
 
     renewJobLease: async ({ jobId, workerId, leaseDurationMs }) => {

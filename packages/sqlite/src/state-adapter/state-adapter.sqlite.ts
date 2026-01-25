@@ -372,13 +372,16 @@ export const createSqliteStateAdapter = async <
       return result ? result.available_in_ms : null;
     },
     acquireJob: async ({ txContext, typeNames }) => {
-      const [job] = await executeTypedSql({
+      const typeNamesJson = JSON.stringify(typeNames);
+      const [result] = await executeTypedSql({
         txContext,
         sql: acquireJobSql,
-        params: [JSON.stringify(typeNames)],
+        params: [typeNamesJson, typeNamesJson],
       });
 
-      return job ? mapDbJobToStateJob(job) : undefined;
+      return result
+        ? { job: mapDbJobToStateJob(result), hasMore: result.has_more === 1 }
+        : { job: undefined, hasMore: false };
     },
     renewJobLease: async ({ txContext, jobId, workerId, leaseDurationMs }) => {
       const [job] = await executeTypedSql({

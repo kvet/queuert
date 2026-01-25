@@ -17,7 +17,6 @@
 - MonogoDB ready:
   - MongoDB: Use native ObjectId instead of app-side UUID generation
   - MongoDB: Move collection configuration from provider to adapter - Provider should only handle context/transactions, collection name is an adapter concern (like schema/tablePrefix in PostgreSQL/SQLite)
-  - Different mongo client libraries - e.g. Mongoose
   - Prisma MongoDB support - via generic StateProvider interface
 - Sqlite ready:
   - Better concurrency handling - WAL mode, busy timeout, retries

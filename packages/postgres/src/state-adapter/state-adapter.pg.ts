@@ -215,9 +215,15 @@ export const createPgStateAdapter = async <
       return result ? result.available_in_ms : null;
     },
     acquireJob: async ({ txContext, typeNames }) => {
-      const [job] = await executeTypedSql({ txContext, sql: acquireJobSql, params: [typeNames] });
+      const [result] = await executeTypedSql({
+        txContext,
+        sql: acquireJobSql,
+        params: [typeNames],
+      });
 
-      return job ? mapDbJobToStateJob(job) : undefined;
+      return result
+        ? { job: mapDbJobToStateJob(result), hasMore: result.has_more }
+        : { job: undefined, hasMore: false };
     },
     renewJobLease: async ({ txContext, jobId, workerId, leaseDurationMs }) => {
       const [job] = await executeTypedSql({

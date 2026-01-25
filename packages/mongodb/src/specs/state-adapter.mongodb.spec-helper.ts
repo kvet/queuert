@@ -57,13 +57,14 @@ const createFlakyCollection = (
       const value = target[prop as keyof Collection];
       if (typeof value === "function") {
         // Wrap async methods that interact with the database
+        // Note: 'find' is excluded because it returns a cursor synchronously,
+        // and wrapping it as async breaks the .find().toArray() chaining pattern
         if (
           [
             "findOne",
             "findOneAndUpdate",
             "findOneAndDelete",
             "findOneAndReplace",
-            "find",
             "insertOne",
             "insertMany",
             "updateOne",
@@ -71,6 +72,7 @@ const createFlakyCollection = (
             "deleteOne",
             "deleteMany",
             "createIndex",
+            "countDocuments",
           ].includes(prop as string)
         ) {
           return createFlakyMethod(value.bind(target) as (...args: unknown[]) => Promise<unknown>);
@@ -172,8 +174,8 @@ export const extendWithStateMongodb = <
         const originalGetCollection = stateProvider.getCollection.bind(stateProvider);
         const flakyStateProvider: typeof stateProvider = {
           ...stateProvider,
-          getCollection: (txContext) => {
-            const collection = originalGetCollection(txContext);
+          getCollection: () => {
+            const collection = originalGetCollection();
             return createFlakyCollection(
               collection,
               shouldError,

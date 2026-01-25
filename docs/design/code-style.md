@@ -123,6 +123,9 @@ state-sqlite-sqlite3        # sqlite3
 state-sqlite-prisma         # Prisma
 state-sqlite-drizzle        # Drizzle ORM
 state-sqlite-kysely         # Kysely
+
+state-mongodb-mongodb       # mongodb native driver
+state-mongodb-mongoose      # Mongoose ODM
 ```
 
 Each implements a state provider (`PgStateProvider` or `SqliteStateProvider`) with `runInTransaction` and `executeSql` methods specific to that client library.

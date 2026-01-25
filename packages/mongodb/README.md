@@ -66,7 +66,23 @@ const stateAdapter = await createMongoStateAdapter({
 
 ## State Provider
 
-You need to implement a state provider that bridges your MongoDB client with this adapter. The provider handles transaction management and collection operations. See the [examples](https://github.com/kvet/queuert/tree/main/examples) for complete implementations.
+You need to implement a state provider that bridges your MongoDB client with this adapter:
+
+```typescript
+import { type ClientSession, type Collection } from "mongodb";
+
+interface MongoStateProvider<TTxContext> {
+  runInTransaction: <T>(fn: (txContext: TTxContext) => Promise<T>) => Promise<T>;
+  getCollection: () => Collection;
+  getSession: (txContext: TTxContext | undefined) => ClientSession | undefined;
+}
+```
+
+- `runInTransaction`: Executes a function within a MongoDB transaction
+- `getCollection`: Returns the jobs collection (without session binding)
+- `getSession`: Extracts the native `ClientSession` from your transaction context
+
+See the [examples](https://github.com/kvet/queuert/tree/main/examples) for complete implementations with native MongoDB driver and Mongoose.
 
 ## Exports
 

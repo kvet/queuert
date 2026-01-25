@@ -11,11 +11,20 @@ export const wrapStateAdapterWithRetry = <TTxContext extends BaseTxContext, TJob
   isRetryableError: (error: unknown) => boolean;
 }): StateAdapter<TTxContext, TJobId> => {
   const wrap = <T extends (...args: never[]) => Promise<unknown>>(fn: T): T =>
-    (async (...args) => withRetry(async () => fn(...args), retryConfig, { isRetryableError })) as T;
+    (async (...args: unknown[]) => {
+      const params = args[0] as { txContext?: TTxContext } | undefined;
+      if (params?.txContext !== undefined) {
+        return fn(...(args as Parameters<T>));
+      }
+      return withRetry(async () => fn(...(args as Parameters<T>)), retryConfig, {
+        isRetryableError,
+      });
+    }) as unknown as T;
 
   return {
-    // Infrastructure methods - pass through without wrapping
-    runInTransaction: stateAdapter.runInTransaction,
+    // Wrap runInTransaction with retry - retries the entire transaction on transient errors
+    runInTransaction: async (fn) =>
+      withRetry(async () => stateAdapter.runInTransaction(fn), retryConfig, { isRetryableError }),
 
     // Operation methods - wrap with retry
     getJobChainById: wrap(stateAdapter.getJobChainById),

@@ -496,9 +496,14 @@ RETURNING *
   true,
 );
 
+export type DbJobWithHasMore = DbJob & { has_more: number };
+
 export const acquireJobSql: TypedSql<
-  readonly [NamedParameter<"type_names_json", string>],
-  [DbJob | undefined]
+  readonly [
+    NamedParameter<"type_names_json_1", string>,
+    NamedParameter<"type_names_json_2", string>,
+  ],
+  [DbJobWithHasMore | undefined]
 > = sql(
   /* sql */ `
 UPDATE {{table_prefix}}job
@@ -513,7 +518,15 @@ WHERE id = (
   ORDER BY scheduled_at ASC
   LIMIT 1
 )
-RETURNING *
+RETURNING *,
+  EXISTS(
+    SELECT 1
+    FROM {{table_prefix}}job
+    WHERE type_name IN (SELECT value FROM json_each(?))
+      AND status = 'pending'
+      AND scheduled_at <= datetime('now', 'subsec')
+    LIMIT 1
+  ) AS has_more
 `,
   true,
 );

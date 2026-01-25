@@ -488,9 +488,11 @@ RETURNING *
   true,
 );
 
+export type DbJobWithHasMore = DbJob & { has_more: boolean };
+
 export const acquireJobSql: TypedSql<
   readonly [NamedParameter<"type_names", string[]>],
-  [DbJob | undefined]
+  [DbJobWithHasMore | undefined]
 > = sql(
   /* sql */ `
 WITH acquired_job AS (
@@ -507,7 +509,14 @@ UPDATE {{schema}}.job
 SET status = 'running',
     attempt = attempt + 1
 WHERE id = (SELECT id FROM acquired_job)
-RETURNING *
+RETURNING *,
+  EXISTS(
+    SELECT 1 FROM {{schema}}.job
+    WHERE type_name IN (SELECT unnest($1::text[]))
+      AND status = 'pending'
+      AND scheduled_at <= now()
+    LIMIT 1
+  ) AS has_more
 `,
   true,
 );

@@ -144,9 +144,9 @@ const stop = await worker.start();
 
 Each worker runs a sequential loop:
 
-1. Run reaper (reclaim expired leases for registered job types)
-2. Wait for next job (hybrid polling + notification)
-3. While jobs available: process one job, then delay `nextJobDelayMs`
+1. While jobs available: process one job, then delay `nextJobDelayMs`
+2. Run reaper (reclaim expired leases for registered job types)
+3. Wait for next job (hybrid polling + notification)
 4. Return to step 1
 
 ### Shutdown

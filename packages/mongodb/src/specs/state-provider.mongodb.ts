@@ -20,6 +20,7 @@ export const createMongoProvider = ({
     getCollection: () => {
       return collection;
     },
+    getSession: (txContext) => txContext?.session,
     runInTransaction: async (fn) => {
       const session = client.startSession();
       try {

@@ -1,0 +1,27 @@
+{
+  "name": "example-state-mongodb-mongodb",
+  "version": "0.0.1",
+  "private": true,
+  "description": "An example demonstrating the MongoDB state adapter with native MongoDB driver.",
+  "license": "MIT",
+  "author": "kvet",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kvet/queuert.git"
+  },
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "typecheck": "tsgo --noEmit"
+  },
+  "devDependencies": {
+    "@queuert/mongodb": "workspace:*",
+    "@queuert/tsconfig": "workspace:*",
+    "@testcontainers/mongodb": "^10.18.0",
+    "@types/node": "^24.10.4",
+    "mongodb": "^6.16.0",
+    "queuert": "workspace:*",
+    "testcontainers": "^11.10.0",
+    "tsx": "^4.21.0"
+  }
+}

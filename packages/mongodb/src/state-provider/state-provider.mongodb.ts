@@ -1,4 +1,4 @@
-import { type Collection } from "mongodb";
+import { type ClientSession, type Collection } from "mongodb";
 import { type BaseTxContext } from "queuert";
 
 /**
@@ -20,8 +20,13 @@ export type MongoStateProvider<TTxContext extends BaseTxContext> = {
 
   /**
    * Gets the MongoDB collection for job storage.
-   * When txContext is provided, uses that transaction session for the operation.
-   * When txContext is omitted, returns a collection without session binding.
    */
-  getCollection: (txContext?: TTxContext) => Collection;
+  getCollection: () => Collection;
+
+  /**
+   * Extracts the native MongoDB ClientSession from the transaction context.
+   * This allows different MongoDB clients (native driver, Mongoose, etc.)
+   * to use their own session types while the adapter uses the native type internally.
+   */
+  getSession: (txContext: TTxContext | undefined) => ClientSession | undefined;
 };
