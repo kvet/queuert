@@ -11,6 +11,9 @@ importers:
       '@changesets/cli':
         specifier: ^2.29.8
         version: 2.29.8(@types/node@25.0.3)
+      '@typescript/native-preview':
+        specifier: ^7.0.0-dev.20260124.1
+        version: 7.0.0-dev.20260124.1
       oxfmt:
         specifier: ^0.26.0
         version: 0.26.0
@@ -20,6 +23,9 @@ importers:
       oxlint-tsgolint:
         specifier: ^0.11.1
         version: 0.11.1
+      tsdown:
+        specifier: ^0.20.1
+        version: 0.20.1(@typescript/native-preview@7.0.0-dev.20260124.1)(typescript@5.9.3)
       vitest:
         specifier: ^4.0.18
         version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.0.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
@@ -93,9 +99,6 @@ importers:
       tsx:
         specifier: ^4.0.0
         version: 4.21.0
-      typescript:
-        specifier: ^5.7.0
-        version: 5.9.3
 
   examples/log-pino:
     dependencies:
@@ -118,9 +121,6 @@ importers:
       tsx:
         specifier: ^4.0.0
         version: 4.21.0
-      typescript:
-        specifier: ^5.7.0
-        version: 5.9.3
 
   examples/log-winston:
     dependencies:
@@ -140,9 +140,6 @@ importers:
       tsx:
         specifier: ^4.0.0
         version: 4.21.0
-      typescript:
-        specifier: ^5.7.0
-        version: 5.9.3
 
   examples/notify-postgres-pg:
     devDependencies:
@@ -173,9 +170,6 @@ importers:
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
 
   examples/notify-postgres-postgres-js:
     devDependencies:
@@ -203,9 +197,6 @@ importers:
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
 
   examples/notify-redis-ioredis:
     devDependencies:
@@ -233,9 +224,6 @@ importers:
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
 
   examples/notify-redis-redis:
     devDependencies:
@@ -263,9 +251,6 @@ importers:
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
 
   examples/observability-otel:
     dependencies:
@@ -291,9 +276,6 @@ importers:
       tsx:
         specifier: ^4.0.0
         version: 4.21.0
-      typescript:
-        specifier: ^5.7.0
-        version: 5.9.3
 
   examples/showcase-blockers:
     dependencies:
@@ -319,9 +301,6 @@ importers:
       tsx:
         specifier: ^4.0.0
         version: 4.21.0
-      typescript:
-        specifier: ^5.7.0
-        version: 5.9.3
 
   examples/showcase-chain-patterns:
     dependencies:
@@ -347,9 +326,6 @@ importers:
       tsx:
         specifier: ^4.0.0
         version: 4.21.0
-      typescript:
-        specifier: ^5.7.0
-        version: 5.9.3
 
   examples/showcase-error-handling:
     dependencies:
@@ -375,9 +351,6 @@ importers:
       tsx:
         specifier: ^4.0.0
         version: 4.21.0
-      typescript:
-        specifier: ^5.7.0
-        version: 5.9.3
 
   examples/showcase-processing-modes:
     dependencies:
@@ -403,9 +376,6 @@ importers:
       tsx:
         specifier: ^4.0.0
         version: 4.21.0
-      typescript:
-        specifier: ^5.7.0
-        version: 5.9.3
 
   examples/showcase-scheduling:
     dependencies:
@@ -431,9 +401,6 @@ importers:
       tsx:
         specifier: ^4.0.0
         version: 4.21.0
-      typescript:
-        specifier: ^5.7.0
-        version: 5.9.3
 
   examples/showcase-timeouts:
     dependencies:
@@ -459,9 +426,6 @@ importers:
       tsx:
         specifier: ^4.0.0
         version: 4.21.0
-      typescript:
-        specifier: ^5.7.0
-        version: 5.9.3
 
   examples/showcase-workerless:
     dependencies:
@@ -487,9 +451,6 @@ importers:
       tsx:
         specifier: ^4.0.0
         version: 4.21.0
-      typescript:
-        specifier: ^5.7.0
-        version: 5.9.3
 
   examples/state-postgres-drizzle:
     devDependencies:
@@ -523,9 +484,6 @@ importers:
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
 
   examples/state-postgres-kysely:
     devDependencies:
@@ -559,9 +517,6 @@ importers:
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
 
   examples/state-postgres-pg:
     devDependencies:
@@ -592,9 +547,6 @@ importers:
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
 
   examples/state-postgres-postgres-js:
     devDependencies:
@@ -622,9 +574,6 @@ importers:
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
 
   examples/state-postgres-prisma:
     devDependencies:
@@ -655,9 +604,6 @@ importers:
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
 
   examples/state-sqlite-better-sqlite3:
     devDependencies:
@@ -682,9 +628,6 @@ importers:
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
 
   examples/state-sqlite-drizzle:
     devDependencies:
@@ -712,9 +655,6 @@ importers:
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
 
   examples/state-sqlite-kysely:
     devDependencies:
@@ -742,9 +682,6 @@ importers:
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
 
   examples/state-sqlite-prisma:
     devDependencies:
@@ -769,9 +706,6 @@ importers:
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
 
   examples/state-sqlite-sqlite3:
     devDependencies:
@@ -793,9 +727,6 @@ importers:
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
 
   examples/validation-typebox:
     dependencies:
@@ -815,12 +746,6 @@ importers:
       tsx:
         specifier: ^4.0.0
         version: 4.21.0
-      typescript:
-        specifier: ^5.7.0
-        version: 5.9.3
-      vitest:
-        specifier: ^4.0.18
-        version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@22.19.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
 
   examples/validation-valibot:
     dependencies:
@@ -840,12 +765,6 @@ importers:
       tsx:
         specifier: ^4.0.0
         version: 4.21.0
-      typescript:
-        specifier: ^5.7.0
-        version: 5.9.3
-      vitest:
-        specifier: ^4.0.18
-        version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@22.19.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
 
   examples/validation-zod:
     dependencies:
@@ -865,12 +784,6 @@ importers:
       tsx:
         specifier: ^4.0.0
         version: 4.21.0
-      typescript:
-        specifier: ^5.7.0
-        version: 5.9.3
-      vitest:
-        specifier: ^4.0.18
-        version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@22.19.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/core:
     devDependencies:
@@ -880,15 +793,6 @@ importers:
       '@types/node':
         specifier: ^24.10.4
         version: 24.10.4
-      tsdown:
-        specifier: ^0.20.1
-        version: 0.20.1(typescript@5.9.3)
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-      vitest:
-        specifier: ^4.0.18
-        version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@24.10.4)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/mongodb:
     devDependencies:
@@ -907,15 +811,6 @@ importers:
       queuert:
         specifier: workspace:*
         version: link:../core
-      tsdown:
-        specifier: ^0.20.1
-        version: 0.20.1(typescript@5.9.3)
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-      vitest:
-        specifier: ^4.0.18
-        version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@24.10.4)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/nats:
     devDependencies:
@@ -934,15 +829,6 @@ importers:
       queuert:
         specifier: workspace:*
         version: link:../core
-      tsdown:
-        specifier: ^0.20.1
-        version: 0.20.1(typescript@5.9.3)
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-      vitest:
-        specifier: ^4.0.18
-        version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@24.10.4)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/otel:
     devDependencies:
@@ -961,15 +847,6 @@ importers:
       queuert:
         specifier: workspace:*
         version: link:../core
-      tsdown:
-        specifier: ^0.20.1
-        version: 0.20.1(typescript@5.9.3)
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-      vitest:
-        specifier: ^4.0.18
-        version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@24.10.4)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/postgres:
     devDependencies:
@@ -994,15 +871,6 @@ importers:
       queuert:
         specifier: workspace:*
         version: link:../core
-      tsdown:
-        specifier: ^0.20.1
-        version: 0.20.1(typescript@5.9.3)
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-      vitest:
-        specifier: ^4.0.18
-        version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@24.10.4)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/redis:
     devDependencies:
@@ -1021,15 +889,6 @@ importers:
       redis:
         specifier: ^5.0.0
         version: 5.10.0
-      tsdown:
-        specifier: ^0.20.1
-        version: 0.20.1(typescript@5.9.3)
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-      vitest:
-        specifier: ^4.0.18
-        version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@24.10.4)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/sqlite:
     devDependencies:
@@ -1051,15 +910,6 @@ importers:
       queuert:
         specifier: workspace:*
         version: link:../core
-      tsdown:
-        specifier: ^0.20.1
-        version: 0.20.1(typescript@5.9.3)
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-      vitest:
-        specifier: ^4.0.18
-        version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@24.10.4)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/testcontainers:
     dependencies:
@@ -1090,9 +940,6 @@ importers:
       testcontainers:
         specifier: ^11.10.0
         version: 11.10.0
-      vitest:
-        specifier: ^4.0.18
-        version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@24.10.4)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
     devDependencies:
       '@queuert/tsconfig':
         specifier: workspace:*
@@ -1109,9 +956,6 @@ importers:
       '@types/proper-lockfile':
         specifier: ^4.1.4
         version: 4.1.4
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
 
   packages/tsconfig: {}
 
@@ -1120,9 +964,6 @@ importers:
       '@queuert/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
 
 packages:
 
@@ -2017,6 +1858,45 @@ packages:
 
   '@types/whatwg-url@11.0.5':
     resolution: {integrity: sha512-coYR071JRaHa+xoEvvYqvnIHaVqaYrLPbsufM9BF63HkwI5Lgmy2QR8Q5K/lYDYo5AK82wOvSOS0UsLTpTG7uQ==}
+
+  '@typescript/native-preview-darwin-arm64@7.0.0-dev.20260124.1':
+    resolution: {integrity: sha512-hFA0vQyyrmTwRLfZnC03QtCCwg/6kyM5qfOjEoIqKlAi7TllP4eLFSJz38X9fh/3Geh0krkZHeIh6h6QP0Jjfw==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@typescript/native-preview-darwin-x64@7.0.0-dev.20260124.1':
+    resolution: {integrity: sha512-WvhTJ0YucAQpTQwy54tj8c8rzsPFXJeXAk04vYQSBBq7gv3k8CoLuVzghAYG2zGzAFEHA9FW/rT9NACqNJ8Iww==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@typescript/native-preview-linux-arm64@7.0.0-dev.20260124.1':
+    resolution: {integrity: sha512-YjhWXiQdCOMbWhZgOy4eYs5l6i6lKxtI8rsmzLiGyM7sgD7Uzq8hh9z1DCSpGwvDR7Bky9sjkjGHJ2r+KGaU2Q==}
+    cpu: [arm64]
+    os: [linux]
+
+  '@typescript/native-preview-linux-arm@7.0.0-dev.20260124.1':
+    resolution: {integrity: sha512-fJGwwQYldfeSO/rzXJMgRR+YhfBdGZgQN+n3vBX5/lCUWS1dtXI/8yWpBs/mc0UtYm0w2oY912eG4Xd0kJMElw==}
+    cpu: [arm]
+    os: [linux]
+
+  '@typescript/native-preview-linux-x64@7.0.0-dev.20260124.1':
+    resolution: {integrity: sha512-ReEuzIqgwydFCsRUmlPERfgt38m7Z+Lyw3MddOCT6mJFArZ4J+XxOFlPL3PLI1pSXJHeHc3oTSQGToODLR1bnw==}
+    cpu: [x64]
+    os: [linux]
+
+  '@typescript/native-preview-win32-arm64@7.0.0-dev.20260124.1':
+    resolution: {integrity: sha512-4jwjoKlsapGj0wFTxI/d9TLBK+kVHwn+qSdPIcuE2t8OsjpEXSvjvjHMX64ysyf6VGVKd9m/qJs8708qo4RYmg==}
+    cpu: [arm64]
+    os: [win32]
+
+  '@typescript/native-preview-win32-x64@7.0.0-dev.20260124.1':
+    resolution: {integrity: sha512-dtUucoRDMi0bUbM2GkSF3qMbNRwE+K9udc6lTUj6+akXLqatuXm7PHVcqjrdXCyarc3CSNJE5Uq6GDHWzjDxyw==}
+    cpu: [x64]
+    os: [win32]
+
+  '@typescript/native-preview@7.0.0-dev.20260124.1':
+    resolution: {integrity: sha512-VRIKr9caNPE8zZqQKyPaRB+3HZQVy5AECW2B8GMRqp2LQvE5eDKXsilXAcLc0LaaHDwXIKxMlvIVC1sWkJOYhw==}
+    hasBin: true
 
   '@vitest/expect@4.0.18':
     resolution: {integrity: sha512-8sCWUyckXXYvx4opfzVY03EOiYVxyNrHS5QxX3DAIi5dpJAAkyJezHCP77VMX4HKA2LDT/Jpfo8i2r5BE3GnQQ==}
@@ -4780,6 +4660,37 @@ snapshots:
     dependencies:
       '@types/webidl-conversions': 7.0.3
 
+  '@typescript/native-preview-darwin-arm64@7.0.0-dev.20260124.1':
+    optional: true
+
+  '@typescript/native-preview-darwin-x64@7.0.0-dev.20260124.1':
+    optional: true
+
+  '@typescript/native-preview-linux-arm64@7.0.0-dev.20260124.1':
+    optional: true
+
+  '@typescript/native-preview-linux-arm@7.0.0-dev.20260124.1':
+    optional: true
+
+  '@typescript/native-preview-linux-x64@7.0.0-dev.20260124.1':
+    optional: true
+
+  '@typescript/native-preview-win32-arm64@7.0.0-dev.20260124.1':
+    optional: true
+
+  '@typescript/native-preview-win32-x64@7.0.0-dev.20260124.1':
+    optional: true
+
+  '@typescript/native-preview@7.0.0-dev.20260124.1':
+    optionalDependencies:
+      '@typescript/native-preview-darwin-arm64': 7.0.0-dev.20260124.1
+      '@typescript/native-preview-darwin-x64': 7.0.0-dev.20260124.1
+      '@typescript/native-preview-linux-arm': 7.0.0-dev.20260124.1
+      '@typescript/native-preview-linux-arm64': 7.0.0-dev.20260124.1
+      '@typescript/native-preview-linux-x64': 7.0.0-dev.20260124.1
+      '@typescript/native-preview-win32-arm64': 7.0.0-dev.20260124.1
+      '@typescript/native-preview-win32-x64': 7.0.0-dev.20260124.1
+
   '@vitest/expect@4.0.18':
     dependencies:
       '@standard-schema/spec': 1.1.0
@@ -4788,22 +4699,6 @@ snapshots:
       '@vitest/utils': 4.0.18
       chai: 6.2.2
       tinyrainbow: 3.0.3
-
-  '@vitest/mocker@4.0.18(vite@7.3.0(@types/node@22.19.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2))':
-    dependencies:
-      '@vitest/spy': 4.0.18
-      estree-walker: 3.0.3
-      magic-string: 0.30.21
-    optionalDependencies:
-      vite: 7.3.0(@types/node@22.19.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
-
-  '@vitest/mocker@4.0.18(vite@7.3.0(@types/node@24.10.4)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2))':
-    dependencies:
-      '@vitest/spy': 4.0.18
-      estree-walker: 3.0.3
-      magic-string: 0.30.21
-    optionalDependencies:
-      vite: 7.3.0(@types/node@24.10.4)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
 
   '@vitest/mocker@4.0.18(vite@7.3.0(@types/node@25.0.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2))':
     dependencies:
@@ -6196,7 +6091,7 @@ snapshots:
       glob: 7.2.3
     optional: true
 
-  rolldown-plugin-dts@0.21.6(rolldown@1.0.0-rc.1)(typescript@5.9.3):
+  rolldown-plugin-dts@0.21.6(@typescript/native-preview@7.0.0-dev.20260124.1)(rolldown@1.0.0-rc.1)(typescript@5.9.3):
     dependencies:
       '@babel/generator': 8.0.0-beta.4
       '@babel/parser': 8.0.0-beta.4
@@ -6208,6 +6103,7 @@ snapshots:
       obug: 2.1.1
       rolldown: 1.0.0-rc.1
     optionalDependencies:
+      '@typescript/native-preview': 7.0.0-dev.20260124.1
       typescript: 5.9.3
     transitivePeerDependencies:
       - oxc-resolver
@@ -6575,7 +6471,7 @@ snapshots:
 
   triple-beam@1.4.1: {}
 
-  tsdown@0.20.1(typescript@5.9.3):
+  tsdown@0.20.1(@typescript/native-preview@7.0.0-dev.20260124.1)(typescript@5.9.3):
     dependencies:
       ansis: 4.2.0
       cac: 6.7.14
@@ -6586,7 +6482,7 @@ snapshots:
       obug: 2.1.1
       picomatch: 4.0.3
       rolldown: 1.0.0-rc.1
-      rolldown-plugin-dts: 0.21.6(rolldown@1.0.0-rc.1)(typescript@5.9.3)
+      rolldown-plugin-dts: 0.21.6(@typescript/native-preview@7.0.0-dev.20260124.1)(rolldown@1.0.0-rc.1)(typescript@5.9.3)
       semver: 7.7.3
       tinyexec: 1.0.2
       tinyglobby: 0.2.15
@@ -6620,7 +6516,8 @@ snapshots:
 
   tweetnacl@1.0.3: {}
 
-  typescript@5.9.3: {}
+  typescript@5.9.3:
+    optional: true
 
   unconfig-core@7.4.2:
     dependencies:
@@ -6663,36 +6560,6 @@ snapshots:
     optionalDependencies:
       typescript: 5.9.3
 
-  vite@7.3.0(@types/node@22.19.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2):
-    dependencies:
-      esbuild: 0.27.2
-      fdir: 6.5.0(picomatch@4.0.3)
-      picomatch: 4.0.3
-      postcss: 8.5.6
-      rollup: 4.54.0
-      tinyglobby: 0.2.15
-    optionalDependencies:
-      '@types/node': 22.19.3
-      fsevents: 2.3.3
-      jiti: 2.6.1
-      tsx: 4.21.0
-      yaml: 2.8.2
-
-  vite@7.3.0(@types/node@24.10.4)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2):
-    dependencies:
-      esbuild: 0.27.2
-      fdir: 6.5.0(picomatch@4.0.3)
-      picomatch: 4.0.3
-      postcss: 8.5.6
-      rollup: 4.54.0
-      tinyglobby: 0.2.15
-    optionalDependencies:
-      '@types/node': 24.10.4
-      fsevents: 2.3.3
-      jiti: 2.6.1
-      tsx: 4.21.0
-      yaml: 2.8.2
-
   vite@7.3.0(@types/node@25.0.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2):
     dependencies:
       esbuild: 0.27.2
@@ -6707,82 +6574,6 @@ snapshots:
       jiti: 2.6.1
       tsx: 4.21.0
       yaml: 2.8.2
-
-  vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@22.19.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2):
-    dependencies:
-      '@vitest/expect': 4.0.18
-      '@vitest/mocker': 4.0.18(vite@7.3.0(@types/node@22.19.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2))
-      '@vitest/pretty-format': 4.0.18
-      '@vitest/runner': 4.0.18
-      '@vitest/snapshot': 4.0.18
-      '@vitest/spy': 4.0.18
-      '@vitest/utils': 4.0.18
-      es-module-lexer: 1.7.0
-      expect-type: 1.3.0
-      magic-string: 0.30.21
-      obug: 2.1.1
-      pathe: 2.0.3
-      picomatch: 4.0.3
-      std-env: 3.10.0
-      tinybench: 2.9.0
-      tinyexec: 1.0.2
-      tinyglobby: 0.2.15
-      tinyrainbow: 3.0.3
-      vite: 7.3.0(@types/node@22.19.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
-      why-is-node-running: 2.3.0
-    optionalDependencies:
-      '@opentelemetry/api': 1.9.0
-      '@types/node': 22.19.3
-    transitivePeerDependencies:
-      - jiti
-      - less
-      - lightningcss
-      - msw
-      - sass
-      - sass-embedded
-      - stylus
-      - sugarss
-      - terser
-      - tsx
-      - yaml
-
-  vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@24.10.4)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2):
-    dependencies:
-      '@vitest/expect': 4.0.18
-      '@vitest/mocker': 4.0.18(vite@7.3.0(@types/node@24.10.4)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2))
-      '@vitest/pretty-format': 4.0.18
-      '@vitest/runner': 4.0.18
-      '@vitest/snapshot': 4.0.18
-      '@vitest/spy': 4.0.18
-      '@vitest/utils': 4.0.18
-      es-module-lexer: 1.7.0
-      expect-type: 1.3.0
-      magic-string: 0.30.21
-      obug: 2.1.1
-      pathe: 2.0.3
-      picomatch: 4.0.3
-      std-env: 3.10.0
-      tinybench: 2.9.0
-      tinyexec: 1.0.2
-      tinyglobby: 0.2.15
-      tinyrainbow: 3.0.3
-      vite: 7.3.0(@types/node@24.10.4)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
-      why-is-node-running: 2.3.0
-    optionalDependencies:
-      '@opentelemetry/api': 1.9.0
-      '@types/node': 24.10.4
-    transitivePeerDependencies:
-      - jiti
-      - less
-      - lightningcss
-      - msw
-      - sass
-      - sass-embedded
-      - stylus
-      - sugarss
-      - terser
-      - tsx
-      - yaml
 
   vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.0.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2):
     dependencies:

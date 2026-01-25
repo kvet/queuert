@@ -42,7 +42,7 @@
   "scripts": {
     "prepublishOnly": "pnpm build",
     "build": "tsdown",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsgo --noEmit",
     "test": "vitest --run"
   },
   "devDependencies": {
@@ -50,10 +50,7 @@
     "@opentelemetry/sdk-metrics": "^1.30.0",
     "@queuert/tsconfig": "workspace:*",
     "@types/node": "^24.10.4",
-    "queuert": "workspace:*",
-    "tsdown": "^0.20.1",
-    "typescript": "^5.9.3",
-    "vitest": "^4.0.18"
+    "queuert": "workspace:*"
   },
   "peerDependencies": {
     "@opentelemetry/api": "^1.0.0",

@@ -42,7 +42,7 @@
   "scripts": {
     "prepublishOnly": "pnpm build",
     "build": "tsdown",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsgo --noEmit",
     "test": "vitest --run"
   },
   "devDependencies": {
@@ -52,10 +52,7 @@
     "@types/node": "^24.10.4",
     "@types/pg": "^8.16.0",
     "pg": "^8.16.3",
-    "queuert": "workspace:*",
-    "tsdown": "^0.20.1",
-    "typescript": "^5.9.3",
-    "vitest": "^4.0.18"
+    "queuert": "workspace:*"
   },
   "peerDependencies": {
     "queuert": "workspace:*"

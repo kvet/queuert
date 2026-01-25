@@ -12,7 +12,7 @@
   "type": "module",
   "scripts": {
     "start": "tsx src/index.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsgo --noEmit"
   },
   "devDependencies": {
     "@queuert/redis": "workspace:*",
@@ -22,7 +22,6 @@
     "queuert": "workspace:*",
     "redis": "^5.0.0",
     "testcontainers": "^11.10.0",
-    "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "tsx": "^4.21.0"
   }
 }

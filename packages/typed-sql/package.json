@@ -24,10 +24,9 @@
     }
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsgo --noEmit"
   },
   "devDependencies": {
-    "@queuert/tsconfig": "workspace:*",
-    "typescript": "^5.9.3"
+    "@queuert/tsconfig": "workspace:*"
   }
 }

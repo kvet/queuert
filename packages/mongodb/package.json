@@ -38,7 +38,7 @@
   "scripts": {
     "prepublishOnly": "pnpm build",
     "build": "tsdown",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsgo --noEmit",
     "test": "vitest --run"
   },
   "devDependencies": {
@@ -46,10 +46,7 @@
     "@queuert/tsconfig": "workspace:*",
     "@types/node": "^24.10.4",
     "mongodb": "^6.12.0",
-    "queuert": "workspace:*",
-    "tsdown": "^0.20.1",
-    "typescript": "^5.9.3",
-    "vitest": "^4.0.18"
+    "queuert": "workspace:*"
   },
   "peerDependencies": {
     "mongodb": "^6.0.0",

@@ -13,7 +13,7 @@
   "scripts": {
     "start": "tsx src/index.ts",
     "prisma:generate": "prisma generate",
-    "typecheck": "prisma generate && tsc --noEmit"
+    "typecheck": "prisma generate && tsgo --noEmit"
   },
   "devDependencies": {
     "@prisma/client": "^6.10.1",
@@ -22,7 +22,6 @@
     "@types/node": "^24.10.4",
     "prisma": "^6.10.1",
     "queuert": "workspace:*",
-    "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "tsx": "^4.21.0"
   }
 }

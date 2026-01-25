@@ -12,7 +12,7 @@
   "type": "module",
   "scripts": {
     "start": "tsx src/index.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsgo --noEmit"
   },
   "devDependencies": {
     "@queuert/sqlite": "workspace:*",
@@ -21,7 +21,6 @@
     "@types/node": "^24.10.4",
     "better-sqlite3": "^11.8.1",
     "queuert": "workspace:*",
-    "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "tsx": "^4.21.0"
   }
 }

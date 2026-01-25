@@ -11,7 +11,7 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
     "@testcontainers/mongodb": "^11.10.0",
@@ -22,15 +22,13 @@
     "mongodb": "^6.12.0",
     "pg": "^8.16.3",
     "proper-lockfile": "^4.1.2",
-    "testcontainers": "^11.10.0",
-    "vitest": "^4.0.18"
+    "testcontainers": "^11.10.0"
   },
   "devDependencies": {
     "@queuert/tsconfig": "workspace:*",
     "@types/dockerode": "^3.3.38",
     "@types/node": "^24.10.4",
     "@types/pg": "^8.16.0",
-    "@types/proper-lockfile": "^4.1.4",
-    "typescript": "^5.9.3"
+    "@types/proper-lockfile": "^4.1.4"
   }
 }

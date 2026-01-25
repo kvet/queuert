@@ -29,5 +29,6 @@
   "[md]": {
     "editor.defaultFormatter": "oxc.oxc-vscode"
   },
-  "vitest.disableWorkspaceWarning": true
+  "vitest.disableWorkspaceWarning": true,
+  "typescript.experimental.useTsgo": true
 }

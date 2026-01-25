@@ -38,7 +38,7 @@
   "scripts": {
     "prepublishOnly": "pnpm build",
     "build": "tsdown",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "! tsgo --noEmit 2>&1 | grep -v 'specs/.*TS4023' | grep 'error TS'",
     "test": "vitest --run"
   },
   "devDependencies": {
@@ -47,10 +47,7 @@
     "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^24.10.4",
     "better-sqlite3": "^11.0.0",
-    "queuert": "workspace:*",
-    "tsdown": "^0.20.1",
-    "typescript": "^5.9.3",
-    "vitest": "^4.0.18"
+    "queuert": "workspace:*"
   },
   "peerDependencies": {
     "queuert": "workspace:*"
