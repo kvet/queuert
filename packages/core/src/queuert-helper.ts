@@ -384,14 +384,6 @@ export const queuertHelper = ({
       },
       cb: () => Promise<T>,
     ) => Promise<T>,
-    getJobBlockers: async ({
-      jobId,
-      txContext,
-    }: {
-      jobId: string;
-      txContext: BaseTxContext;
-    }): Promise<[StateJob, StateJob | undefined][]> =>
-      stateAdapter.getJobBlockers({ txContext, jobId }),
     startJobChain: async <TChainTypeName extends string, TInput, TOutput>({
       typeName,
       input,
@@ -545,24 +537,6 @@ export const queuertHelper = ({
       }
 
       return fetchedJob;
-    },
-    renewJobLease: async ({
-      txContext,
-      job,
-      leaseMs,
-      workerId,
-    }: {
-      txContext: BaseTxContext;
-      job: StateJob;
-      leaseMs: number;
-      workerId: string;
-    }): Promise<StateJob> => {
-      return stateAdapter.renewJobLease({
-        txContext,
-        jobId: job.id,
-        workerId,
-        leaseDurationMs: leaseMs,
-      });
     },
     getNextJobAvailableInMs: async ({
       typeNames,
@@ -830,7 +804,8 @@ export const queuertHelper = ({
     },
   };
 };
-export type ProcessHelper = ReturnType<typeof queuertHelper>;
+
+export type QueuertHelper = ReturnType<typeof queuertHelper>;
 
 export type JobChainCompleteOptions<
   TStateAdapter extends StateAdapter<any, any>,

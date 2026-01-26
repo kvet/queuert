@@ -28,7 +28,7 @@ import {
 import { type TypedAbortController, type TypedAbortSignal } from "../helpers/abort.js";
 import { type BackoffConfig } from "../helpers/backoff.js";
 import { createSignal } from "../helpers/signal.js";
-import { type ProcessHelper, type StartBlockersFn } from "../queuert-helper.js";
+import { type QueuertHelper, type StartBlockersFn } from "../queuert-helper.js";
 import {
   type BaseTxContext,
   type GetStateAdapterJobId,
@@ -238,7 +238,7 @@ export const runJobProcess = async ({
   typeNames,
   jobAttemptMiddlewares,
 }: {
-  helper: ProcessHelper;
+  helper: QueuertHelper;
   process: JobProcessFn<StateAdapter<BaseTxContext, any>, BaseJobTypeDefinitions, string>;
   txContext: BaseTxContext;
   job: StateJob;
@@ -299,11 +299,11 @@ export const runJobProcess = async ({
     commitLease: async (leaseMs: number) => {
       try {
         await runInGuardedTransaction(async (txContext) => {
-          await helper.renewJobLease({
+          await helper.stateAdapter.renewJobLease({
             txContext,
-            job,
-            leaseMs,
+            jobId: job.id,
             workerId,
+            leaseDurationMs: leaseMs,
           });
         });
         helper.observabilityHelper.jobAttemptLeaseRenewed(job, { workerId });
@@ -331,7 +331,7 @@ export const runJobProcess = async ({
     helper.observabilityHelper.jobAttemptStarted(job, { workerId });
     try {
       const attemptStartTime = Date.now();
-      const blockerPairs = await helper.getJobBlockers({ jobId: job.id, txContext });
+      const blockerPairs = await helper.stateAdapter.getJobBlockers({ txContext, jobId: job.id });
       const runningJob = {
         ...mapStateJobToJob(job),
         blockers: blockerPairs.map(mapStateJobPairToJobChain) as CompletedJobChain<
@@ -353,11 +353,11 @@ export const runJobProcess = async ({
 
           const callbackOutput = await prepareCallback?.({ ...txContext });
 
-          await helper.renewJobLease({
+          await helper.stateAdapter.renewJobLease({
             txContext,
-            job,
-            leaseMs: leaseConfig.leaseMs,
+            jobId: job.id,
             workerId,
+            leaseDurationMs: leaseConfig.leaseMs,
           });
           firstLeaseCommitted.signalOnce();
           await claimTransactionClosed.onSignal;

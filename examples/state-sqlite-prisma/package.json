@@ -12,7 +12,7 @@
   "type": "module",
   "scripts": {
     "start": "tsx src/index.ts",
-    "prisma:generate": "prisma generate",
+    "postinstall": "prisma generate",
     "typecheck": "prisma generate && tsgo --noEmit"
   },
   "devDependencies": {

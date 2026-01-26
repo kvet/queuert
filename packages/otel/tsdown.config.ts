@@ -7,5 +7,13 @@ export default defineConfig({
   exports: {
     devExports: true,
   },
-  external: ["@opentelemetry/api"],
+  // TODO: rework later
+  external: [
+    "@opentelemetry/api",
+    "@opentelemetry/sdk-metrics",
+    "@opentelemetry/core",
+    "@opentelemetry/semantic-conventions",
+    "@opentelemetry/resources",
+    "vitest",
+  ],
 });

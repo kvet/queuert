@@ -7,7 +7,7 @@ import { withRetry } from "./internal.js";
 import { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 import { type Log } from "./observability-adapter/log.js";
 import { type ObservabilityAdapter } from "./observability-adapter/observability-adapter.js";
-import { type ProcessHelper, queuertHelper } from "./queuert-helper.js";
+import { type QueuertHelper, queuertHelper } from "./queuert-helper.js";
 import { type StateAdapter } from "./state-adapter/state-adapter.js";
 import {
   type JobAttemptMiddleware,
@@ -60,7 +60,7 @@ const waitForNextJob = async ({
   pollIntervalMs,
   signal,
 }: {
-  helper: ProcessHelper;
+  helper: QueuertHelper;
   typeNames: string[];
   pollIntervalMs: number;
   signal: AbortSignal;
@@ -99,7 +99,7 @@ const performJob = async ({
   workerId,
   jobAttemptMiddlewares,
 }: {
-  helper: ProcessHelper;
+  helper: QueuertHelper;
   typeNames: string[];
   jobTypeProcessors: InProcessWorkerJobTypeProcessors<any, any>;
   defaultRetryConfig: BackoffConfig;
