@@ -20,6 +20,9 @@ const otelIt = extendWithObservabilityOtel(
   extendWithNotifyInProcess(extendWithCommon(extendWithStateInProcess(it))),
 );
 
+// NOTE: hack for vitest plugin
+it("index");
+
 describe("Process", () => {
   processTestSuite({ it: otelIt });
 });

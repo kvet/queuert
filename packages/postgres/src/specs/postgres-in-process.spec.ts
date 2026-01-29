@@ -24,6 +24,9 @@ const postgresInProcessIt = extendWithResourceLeakDetection(
   { additionalAllowedTypes: TESTCONTAINER_RESOURCE_TYPES },
 );
 
+// NOTE: hack for vitest plugin
+it("index");
+
 describe("Process", () => {
   processTestSuite({ it: postgresInProcessIt });
 });

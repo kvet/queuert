@@ -19,6 +19,9 @@ const sqliteNoopIt = extendWithResourceLeakDetection(
   extendWithNotifyNoop(extendWithCommon(extendWithStateSqlite(it))),
 );
 
+// NOTE: hack for vitest plugin
+it("index");
+
 describe("Process", () => {
   processTestSuite({ it: sqliteNoopIt });
 });

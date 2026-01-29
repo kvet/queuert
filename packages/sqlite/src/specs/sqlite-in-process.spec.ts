@@ -20,6 +20,9 @@ const sqliteInProcessIt = extendWithResourceLeakDetection(
   extendWithNotifyInProcess(extendWithCommon(extendWithStateSqlite(it))),
 );
 
+// NOTE: hack for vitest plugin
+it("index");
+
 describe("Process", () => {
   processTestSuite({ it: sqliteInProcessIt });
 });

@@ -42,6 +42,9 @@ const mongodbInProcessIt = extendWithResourceLeakDetection(
   { additionalAllowedTypes: TESTCONTAINER_RESOURCE_TYPES },
 );
 
+// NOTE: hack for vitest plugin
+baseIt("index");
+
 describe("Process", () => {
   processTestSuite({ it: mongodbInProcessIt });
 });

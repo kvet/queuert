@@ -20,6 +20,9 @@ const inProcessNoopIt = extendWithResourceLeakDetection(
   extendWithNotifyNoop(extendWithCommon(extendWithStateInProcess(it))),
 );
 
+// NOTE: hack for vitest plugin
+it("index");
+
 describe("Process", () => {
   processTestSuite({ it: inProcessNoopIt });
 });

@@ -12,6 +12,9 @@ const inProcessNatsIt = extendWithNotifyNats(
   extendWithNats(extendWithCommon(extendWithStateInProcess(it)), import.meta.url),
 );
 
+// NOTE: hack for vitest plugin
+it("index");
+
 describe("Notify", () => {
   notifyTestSuite({ it: inProcessNatsIt });
 });
