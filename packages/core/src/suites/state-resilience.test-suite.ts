@@ -44,7 +44,6 @@ export const stateResilienceTestSuite = ({
       jobTypeRegistry,
       jobTypeProcessing: {
         pollIntervalMs: 1_000_000, // should be processed in a single loop invocations
-        nextJobDelayMs: 0,
         defaultLeaseConfig: {
           leaseMs: 10,
           renewIntervalMs: 5,

@@ -1,7 +1,7 @@
 import { type NatsConnectionOptions } from "@queuert/testcontainers";
 import { connect } from "nats";
 import { type NotifyAdapter } from "queuert";
-import { createFlakyBatchGenerator } from "queuert/testing";
+import { type TestSuiteContext, createFlakyBatchGenerator } from "queuert/testing";
 import { type TestAPI } from "vitest";
 import { createNatsNotifyAdapter } from "../notify-adapter/notify-adapter.nats.js";
 
@@ -11,7 +11,7 @@ export const extendWithNotifyNats = <
   },
 >(
   api: TestAPI<T>,
-): TestAPI<T & { notifyAdapter: NotifyAdapter; flakyNotifyAdapter: NotifyAdapter }> => {
+): TestAPI<T & Pick<TestSuiteContext, "notifyAdapter"> & { flakyNotifyAdapter: NotifyAdapter }> => {
   return api.extend<{
     notifyAdapter: NotifyAdapter;
     flakyNotifyAdapter: NotifyAdapter;

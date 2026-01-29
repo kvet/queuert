@@ -110,7 +110,6 @@ const worker = await createQueuertInProcessWorker({
   workerId: "worker-1", // Unique worker identifier (optional)
   jobTypeProcessing: {
     pollIntervalMs: 60_000, // How often to poll for new jobs (default: 60s)
-    nextJobDelayMs: 0, // Delay between processing jobs
 
     // Retry configuration for failed job attempts
     defaultRetryConfig: {

@@ -3,7 +3,6 @@ import inspector from "node:inspector";
 import { type MockedFunction, type TestAPI, vi } from "vitest";
 import { type Log, type NotifyAdapter, createConsoleLog } from "../index.js";
 import { createInProcessNotifyAdapter } from "../notify-adapter/notify-adapter.in-process.js";
-import { createNoopNotifyAdapter } from "../notify-adapter/notify-adapter.noop.js";
 import {
   type MockObservabilityAdapter,
   createMockObservabilityAdapter,
@@ -12,7 +11,7 @@ import { type StateAdapter } from "../state-adapter/state-adapter.js";
 
 export type TestSuiteContext = {
   stateAdapter: StateAdapter<{ $test: true }, string>;
-  notifyAdapter: NotifyAdapter;
+  notifyAdapter: NotifyAdapter | undefined;
   runInTransaction: <T>(cb: (txContext: { $test: true }) => Promise<T>) => Promise<T>;
   withWorkers: <T>(workers: (() => Promise<void>)[], cb: () => Promise<T>) => Promise<T>;
   log: MockedFunction<Log>;
@@ -288,7 +287,7 @@ export const extendWithNotifyNoop = <T extends {}>(
   it.extend<Pick<TestSuiteContext, "notifyAdapter">>({
     notifyAdapter: [
       async ({}, use) => {
-        await use(createNoopNotifyAdapter());
+        await use(undefined);
       },
       { scope: "test" },
     ],

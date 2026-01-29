@@ -20,19 +20,55 @@ const pool = new Pool({ connectionString, max: 10 });
 // 3. Create the notify provider using pg
 // Uses a dedicated connection for LISTEN and the pool for NOTIFY
 let listenClient: PoolClient | null = null;
+let connectingPromise: Promise<PoolClient> | null = null;
+let closed = false;
+
 const handlers = new Map<string, (message: string) => void>();
 
-const ensureListenClient = async (): Promise<PoolClient> => {
-  if (!listenClient) {
-    listenClient = await pool.connect();
-    listenClient.on("notification", (msg: { channel: string; payload?: string }) => {
-      const handler = handlers.get(msg.channel);
-      if (handler) {
-        handler(msg.payload ?? "");
-      }
-    });
+const releaseListenClient = (): void => {
+  if (listenClient) {
+    listenClient.removeAllListeners("notification");
+    listenClient.release();
+    listenClient = null;
   }
-  return listenClient;
+};
+
+const ensureListenClient = async (): Promise<PoolClient> => {
+  if (closed) {
+    throw new Error("Provider is closed");
+  }
+
+  if (listenClient) {
+    return listenClient;
+  }
+
+  if (connectingPromise) {
+    return connectingPromise;
+  }
+
+  connectingPromise = pool.connect().then((client) => {
+    connectingPromise = null;
+
+    if (closed) {
+      client.release();
+      throw new Error("Provider is closed");
+    }
+
+    listenClient = client;
+    listenClient.on("notification", (msg: { channel: string; payload?: string }) => {
+      handlers.get(msg.channel)?.(msg.payload ?? "");
+    });
+
+    return listenClient;
+  });
+
+  return connectingPromise;
+};
+
+const closeProvider = (): void => {
+  closed = true;
+  releaseListenClient();
+  handlers.clear();
 };
 
 const notifyProvider: PgNotifyProvider = {
@@ -50,11 +86,12 @@ const notifyProvider: PgNotifyProvider = {
     await client.query(`LISTEN "${channel}"`);
     return async () => {
       handlers.delete(channel);
-      await client.query(`UNLISTEN "${channel}"`);
-      if (handlers.size === 0 && listenClient) {
-        listenClient.removeAllListeners("notification");
-        listenClient.release();
-        listenClient = null;
+      try {
+        await client.query(`UNLISTEN "${channel}"`);
+      } finally {
+        if (handlers.size === 0) {
+          releaseListenClient();
+        }
       }
     };
   },
@@ -132,6 +169,7 @@ console.log(`Report ready! ID: ${result.output.reportId}, Rows: ${result.output.
 
 // 10. Cleanup
 await stopWorker();
+closeProvider();
 await pool.end();
 await pgContainer.stop();
 console.log("Done!");

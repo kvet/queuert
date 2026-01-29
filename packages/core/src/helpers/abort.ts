@@ -1,6 +1,6 @@
-export type TypedAbortSignal<T> = {
+export type TypedAbortSignal<T> = Omit<AbortSignal, "reason"> & {
   readonly reason: T | undefined;
-} & AbortSignal;
+};
 
 export type TypedAbortController<T> = {
   readonly signal: TypedAbortSignal<T>;

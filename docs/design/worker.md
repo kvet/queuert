@@ -2,272 +2,221 @@
 
 ## Overview
 
-This document describes the worker and reaper design in Queuert, including job acquisition, lease management, retry logic, and graceful shutdown.
+This document describes the worker design in Queuert: how workers coordinate job processing, manage concurrency, and handle failures.
 
-## Client-Worker Separation
+A **worker** runs a main loop that coordinates job processing across multiple **slots**. Each slot processes one job at a time; the worker manages concurrency and scaling.
 
-### Overview
-
-Queuert provides two independent constructions for job queue management:
-
-- `createQueuertClient()` - Job chain management (creating, retrieving, completing chains)
-- `createQueuertInProcessWorker()` - Job processing (executing job handlers)
-
-These can be used together in the same process or deployed separately for different scaling patterns.
-
-### QueuertClient
-
-The client handles job chain lifecycle operations without processing jobs:
-
-```typescript
-import { createQueuertClient } from "queuert";
-
-const client = await createQueuertClient({
-  stateAdapter,
-  notifyAdapter, // optional
-  observabilityAdapter, // optional
-  jobTypeRegistry,
-  log,
-});
-
-// Available methods:
-// - startJobChain() - Create job chain
-// - getJobChain() - Retrieve job chain
-// - deleteJobChains() - Delete job chains
-// - completeJobChain() - Complete job chain externally
-// - waitForJobChainCompletion() - Poll for completion
-// - withNotify() - Batch notifications
-```
-
-### QueuertInProcessWorker
-
-The worker is configured declaratively and started as a simple lifecycle method:
+## Quick Start
 
 ```typescript
 import { createQueuertInProcessWorker } from "queuert";
 
 const worker = await createQueuertInProcessWorker({
-  // Adapters (same as client)
   stateAdapter,
-  notifyAdapter,     // optional
-  observabilityAdapter, // optional
+  notifyAdapter, // optional
   jobTypeRegistry,
   log,
 
-  // Worker identity
-  workerId: 'worker-1',  // optional, defaults to random UUID
-
-  // Processing configuration (optional)
-  jobTypeProcessing: {
-    pollIntervalMs: 60_000,
-    nextJobDelayMs: 0,
-    defaultRetryConfig: { ... },
-    defaultLeaseConfig: { ... },
-    jobAttemptMiddlewares: [...],
-  },
-
-  // Job handlers (required)
   jobTypeProcessors: {
     myJob: {
-      process: async ({ job, complete }) => { ... },
-      leaseConfig: { ... },  // optional per-type override
-      retryConfig: { ... },  // optional per-type override
+      process: async ({ job, complete }) => {
+        // Process the job
+        return complete({ result: "done" });
+      },
     },
   },
 });
 
 const stop = await worker.start();
+
+// Later: graceful shutdown
+await stop();
 ```
 
-### Why "InProcess"?
+## Concurrency Model
 
-The "InProcess" suffix indicates that this worker runs in the same Node.js process as the calling code. This design is:
-
-- **Ideal for I/O-bound workloads**: Network calls, database queries, and external API interactions benefit from Node.js's event loop without blocking
-- **Simple to deploy**: No inter-process communication overhead
-- **Easy to debug**: Stack traces and logging remain in a single process
-
-Future worker types may include subprocess workers for CPU-bound tasks that would otherwise block the event loop.
-
-### Shared Adapters
-
-Both client and worker accept the same adapter parameters. Create adapters once and pass to both:
+Workers process jobs in parallel using slots. Configure concurrency via the `concurrency` option:
 
 ```typescript
-const client = await createQueuertClient({
-  stateAdapter,
-  notifyAdapter,
-  log,
-  jobTypeRegistry,
+concurrency: {
+  maxSlots: 10,
+}
+```
+
+Default: single slot (`maxSlots: 1`).
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                         Worker                              │
+│                                                             │
+│  Main Loop                                                  │
+│  ┌───────────────────────────────────────────────────────┐ │
+│  │ 1. Reap expired lease                                 │ │
+│  │ 2. Fill available slots                               │ │
+│  │ 3. Wait for notification, timeout, or slot completion │ │
+│  └───────────────────────────────────────────────────────┘ │
+│                           │                                 │
+│           ┌───────────────┼───────────────┐                │
+│           ▼               ▼               ▼                │
+│     ┌──────────┐    ┌──────────┐    ┌──────────┐          │
+│     │  Slot 0  │    │  Slot 1  │    │  Slot 2  │  ...     │
+│     │ acquire  │    │ acquire  │    │ acquire  │          │
+│     │ process  │    │ process  │    │ process  │          │
+│     └──────────┘    └──────────┘    └──────────┘          │
+│           │               │               │                 │
+│           └───────────────┴───────────────┘                │
+│                           ▼                                 │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │            Shared State Adapter                      │   │
+│  │         (FOR UPDATE SKIP LOCKED)                     │   │
+│  └─────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**How it works:**
+
+1. Main loop spawns slots up to `maxSlots`
+2. Each slot acquires a job and processes it independently
+3. When a slot completes, main loop spawns a replacement
+4. Slots compete for jobs via database-level locking
+
+### Slot Lifecycle
+
+Each slot is self-contained:
+
+```typescript
+async function runSlot() {
+  const job = await acquire(); // Get next pending job
+  if (!job) return; // No work, slot exits
+
+  await processJob(job); // Execute handler
+  // Slot completes, main loop spawns replacement
+}
+```
+
+Slots notify the main loop on completion, allowing immediate replacement if work is available.
+
+### Horizontal Scaling
+
+For scaling across multiple machines or processes, deploy separate workers:
+
+```typescript
+// Process A
+const worker = await createQueuertInProcessWorker({
+  ...config,
+  workerId: 'machine-a',
+  concurrency: { maxSlots: 10 },
+  jobTypeProcessors: { ... },
 });
 
+// Process B (separate Node.js process)
 const worker = await createQueuertInProcessWorker({
-  stateAdapter,
-  notifyAdapter,
-  log,
-  jobTypeRegistry,
+  ...config,
+  workerId: 'machine-b',
+  concurrency: { maxSlots: 10 },
   jobTypeProcessors: { ... },
 });
 ```
 
-This ensures consistent configuration and allows client and worker to share database connections and notification channels efficiently.
+Workers compete for jobs via database-level locking (`FOR UPDATE SKIP LOCKED` in PostgreSQL).
 
 ## Worker Lifecycle
 
-### Creation and Configuration
+### Creation
 
-Workers are configured declaratively at creation time:
+Workers are created with `createQueuertInProcessWorker()`:
 
 ```typescript
 const worker = await createQueuertInProcessWorker({
+  // Required
   stateAdapter,
-  notifyAdapter,
-  log,
   jobTypeRegistry,
-  workerId: 'worker-1',           // default: random UUID
-  jobTypeProcessing: {
-    pollIntervalMs: 60_000,       // default: 60s
-    nextJobDelayMs: 0,            // delay between jobs
-    defaultRetryConfig: { ... },
-    defaultLeaseConfig: { ... },
-  },
-  jobTypeProcessors: {
-    step1: { process: ... },
-    step2: { process: ... },
-  },
-});
+  log,
+  jobTypeProcessors: { ... },
 
-const stop = await worker.start();
+  // Optional
+  notifyAdapter,
+  observabilityAdapter,
+  workerId: 'worker-1',  // default: random UUID
+  concurrency: { ... },
+  jobTypeProcessing: { ... },
+});
 ```
 
-### Worker Loop
+The "InProcess" suffix indicates this worker runs in the same Node.js process as the calling code—ideal for I/O-bound workloads.
 
-Each worker runs a sequential loop:
+### Main Loop
 
-1. While jobs available: process one job, then delay `nextJobDelayMs`
-2. Run reaper (reclaim expired leases for registered job types)
-3. Wait for next job (hybrid polling + notification)
-4. Return to step 1
+The worker runs a single coordinating loop:
+
+1. **Reap**: Reclaim one expired lease (if any)
+2. **Fill**: Spawn slots up to `maxSlots`
+3. **Wait**: Listen for notification, poll timeout, or slot completion
+4. **Repeat**
+
+```typescript
+while (!stopped) {
+  await reapExpiredLease();
+
+  while (activeSlots < maxSlots) {
+    spawnSlot();
+  }
+
+  await Promise.race([waitForNotification(), slotCompleted.wait(), sleep(pollIntervalMs)]);
+}
+```
 
 ### Shutdown
 
 Calling `stop()` triggers graceful shutdown:
 
 1. Signal abort controller
-2. Wait for current job to complete (or abandon via lease expiry)
-3. Emit `workerStopping` and `workerStopped` observability events
+2. Stop spawning new slots
+3. Wait for all in-flight jobs to complete (or abandon via lease expiry)
+4. Emit `workerStopping` and `workerStopped` observability events
 
-## Concurrency Model
+## Worker Identity
 
-**Single job per worker**: Each worker processes one job at a time. This is intentional:
+Each worker has a unique identity stored in `leasedBy` (e.g., `'worker-1'`).
 
-1. **Simplicity**: No complex coordination or resource management
-2. **Predictability**: Job processing is sequential and debuggable
-3. **Safety**: No race conditions within a worker
+**Abort signal routing:**
 
-For parallelism, run multiple workers:
-
-```typescript
-const worker1 = await createQueuertInProcessWorker({
-  ...sharedConfig,
-  workerId: 'w1',
-  jobTypeProcessors: { ... },
-});
-const worker2 = await createQueuertInProcessWorker({
-  ...sharedConfig,
-  workerId: 'w2',
-  jobTypeProcessors: { ... },
-});
-
-await Promise.all([worker1.start(), worker2.start()]);
-```
-
-Workers compete for jobs via database-level locking (`FOR UPDATE SKIP LOCKED` in PostgreSQL).
-
-## Job Acquisition
-
-When a worker looks for work:
-
-1. Query for earliest `pending` job matching registered type names
-2. Filter by scheduled time (`scheduled_for <= now()`)
-3. Atomically transition to `running` and increment `attempt`
-4. Return job or `undefined` if none available
-
-PostgreSQL uses `FOR UPDATE SKIP LOCKED` to allow concurrent workers without blocking.
-
-## Lease Management
-
-### Why Leases?
-
-Leases provide distributed mutual exclusion with automatic recovery:
-
-- **Ownership**: Only one worker processes a job at a time
-- **Recovery**: If a worker dies, lease expires and job becomes available
-- **Detection**: Workers detect when they've lost ownership
-
-### Lease Flow
-
-1. **Acquire job**: Job marked `running` (no lease yet)
-2. **First prepare**: Sets `leasedBy: workerId` and `leasedUntil: now() + leaseMs`
-3. **Staged processing**: Background loop renews lease every `renewIntervalMs`
-4. **Complete**: Clears lease, marks job `completed`
-
-### Configuration
+The worker tracks active jobs internally:
 
 ```typescript
-const defaultLeaseConfig = {
-  leaseMs: 60_000, // How long before lease expires
-  renewIntervalMs: 30_000, // How often to renew
-};
+const activeJobs = new Map<string, AbortController>();
+
+// On ownership lost notification:
+function onOwnershipLost(jobId: string) {
+  activeJobs.get(jobId)?.abort("taken_by_another_worker");
+}
 ```
 
-Rule of thumb: `renewIntervalMs` should be less than half of `leaseMs` to handle network delays.
+No per-slot identity is needed—the worker routes abort signals by job ID.
 
-### Ownership Loss Detection
+## Reaper
 
-During staged processing, workers detect ownership loss via:
+The reaper reclaims jobs with expired leases, making them available for retry.
 
-1. **Lease renewal failure**: Another worker took the job
-2. **Notification channel**: Reaper or workerless completion notifies `jobOwnershipLost`
-3. **Guard checks**: Each database operation verifies job still belongs to this worker
+At the start of each main loop iteration:
 
-When detected, the abort signal fires with a typed reason.
+1. Find oldest `running` job where `leasedUntil < now()` and type matches registered types
+2. Transition job: `running` → `pending`, clear `leasedBy` and `leasedUntil`
+3. Emit `jobReaped` observability event
+4. Notify via `jobScheduled` (workers wake up) and `jobOwnershipLost` (original worker aborts)
 
-## Abort Signal
+**Design decisions:**
 
-Process functions receive a typed abort signal:
-
-```typescript
-process: async ({ signal, job, complete }) => {
-  // signal: TypedAbortSignal<JobAbortReason>
-
-  if (signal.aborted) {
-    console.log("Aborted:", signal.reason);
-    // "taken_by_another_worker" | "error" | "not_found" | "already_completed"
-  }
-};
-```
-
-Abort triggers:
-
-- `taken_by_another_worker`: Lease renewal found another worker owns the job
-- `already_completed`: Job was completed externally (workerless completion)
-- `not_found`: Job was deleted during processing
-- `error`: Infrastructure error during lease operations
+- **Integrated with main loop**: Runs once per iteration, no separate process needed.
+- **One job per iteration**: Reaps at most one job to avoid blocking slot spawning.
+- **Type-scoped**: Only reaps job types the worker is registered to handle.
+- **Concurrent-safe**: Database locking prevents conflicts between workers.
 
 ## Retry and Backoff
 
-### Configuration
-
-```typescript
-const retryConfig = {
-  initialDelayMs: 10_000, // First retry delay
-  maxDelayMs: 300_000, // Maximum delay (5 minutes)
-  multiplier: 2.0, // Exponential backoff
-};
-```
-
-### Backoff Calculation
+When a job handler throws, the worker reschedules it with exponential backoff:
 
 ```
 delay = min(initialDelayMs * multiplier^(attempt-1), maxDelayMs)
@@ -275,38 +224,11 @@ delay = min(initialDelayMs * multiplier^(attempt-1), maxDelayMs)
 
 Example with defaults: 10s → 20s → 40s → 80s → 160s → 300s → 300s...
 
-### Error Handling
+See [Job Processing](job-processing.md) for details on error handling and abort signals.
 
-When a job handler throws:
+## Extensibility
 
-1. **`RescheduleJobError`**: Uses the schedule from the error (explicit reschedule)
-2. **Other errors**: Calculates backoff delay based on attempt count
-3. **Takeover/completion errors**: Swallowed (job already handled elsewhere)
-
-Job transitions to `pending` with `scheduled_for` set to the delay time.
-
-## Reaper
-
-The reaper reclaims jobs with expired leases, making them available for retry.
-
-### How It Works
-
-At the start of each worker loop iteration:
-
-1. Find oldest `running` job where `leasedUntil < now()` and type matches registered types
-2. Transition job: `running` → `pending`, clear `leasedBy` and `leasedUntil`
-3. Emit `jobReaped` observability event
-4. Notify via `jobScheduled` (workers wake up) and `jobOwnershipLost` (original worker aborts)
-
-### Design Decisions
-
-**Integrated with workers**: Each worker runs reaper logic for its registered types. No separate reaper process needed.
-
-**One job per iteration**: Reaps at most one job per loop to avoid long reaper runs blocking job processing.
-
-**Type-scoped**: Workers only reap job types they're registered to handle, enabling specialized workers.
-
-## Multi-Type Workers
+### Multi-Type Workers
 
 A single worker can handle multiple job types:
 
@@ -319,11 +241,9 @@ const worker = await createQueuertInProcessWorker({
     "type-b": { process: processB },
   },
 });
-
-await worker.start();
 ```
 
-The worker polls all registered types together and processes whichever is available first.
+Slots poll all registered types together and process whichever is available first.
 
 Per-type configuration overrides worker defaults:
 
@@ -337,71 +257,49 @@ jobTypeProcessors: {
 }
 ```
 
-## Notification Integration
+### Job Attempt Middlewares
 
-Workers use a hybrid polling + notification approach:
-
-1. **Primary**: Listen for `jobScheduled` notifications on registered types
-2. **Fallback**: Poll at `pollIntervalMs` intervals
-
-When notified, workers immediately check for available jobs. This reduces latency from seconds (polling) to milliseconds (notification).
-
-The notification layer is optional—workers function correctly with polling alone.
-
-## Job Attempt Middlewares
-
-Workers support middlewares that wrap each job attempt, enabling cross-cutting concerns like contextual logging, tracing, or metrics.
-
-### Configuration
+Workers support middlewares that wrap each job attempt:
 
 ```typescript
-const worker = await createQueuertInProcessWorker({
-  ...adapters,
-  workerId: 'worker-1',
-  jobTypeProcessing: {
-    jobAttemptMiddlewares: [
-      async ({ job, workerId }, next) => {
-        console.log('Before job processing');
-        const result = await next();
-        console.log('After job processing');
-        return result;
-      },
-    ],
-  },
-  jobTypeProcessors: { ... },
-});
-
-await worker.start();
+jobTypeProcessing: {
+  jobAttemptMiddlewares: [
+    async ({ job, workerId }, next) => {
+      console.log('Before job processing');
+      const result = await next();
+      console.log('After job processing');
+      return result;
+    },
+  ],
+}
 ```
 
-### Middleware Signature
+**Middleware signature:**
 
 ```typescript
 type JobAttemptMiddleware<TStateAdapter, TJobTypeDefinitions> = <T>(
   context: {
-    job: RunningJob<...>;  // The job being processed
-    workerId: string;      // The worker processing the job
+    job: RunningJob<...>;
+    workerId: string;
   },
-  next: () => Promise<T>,  // Call to continue to next middleware or job processing
+  next: () => Promise<T>,
 ) => Promise<T>;
 ```
 
-### Middleware Composition
-
-Middlewares execute in order, wrapping the job processing:
+**Composition order:**
 
 ```typescript
 jobAttemptMiddlewares: [middleware1, middleware2, middleware3];
 
-// Execution order:
+// Execution:
 // middleware1 before → middleware2 before → middleware3 before
 // → job processing →
 // middleware3 after → middleware2 after → middleware1 after
 ```
 
-### Use Cases
+**Use cases:**
 
-**Contextual Logging with AsyncLocalStorage:**
+Contextual logging with AsyncLocalStorage:
 
 ```typescript
 const jobContextStore = new AsyncLocalStorage<JobContext>();
@@ -412,33 +310,67 @@ const contextMiddleware: JobAttemptMiddleware<...> = async ({ job, workerId }, n
     next,
   );
 };
-
-// Now any logger can access job context via jobContextStore.getStore()
 ```
 
-**OpenTelemetry Tracing:**
+See `examples/log-pino` and `examples/log-winston` for complete implementations.
+
+## Configuration Reference
+
+### Worker Options
 
 ```typescript
-const tracingMiddleware: JobAttemptMiddleware<...> = async ({ job }, next) => {
-  return tracer.startActiveSpan(`job:${job.typeName}`, async (span) => {
-    try {
-      return await next();
-    } finally {
-      span.end();
-    }
-  });
-};
+const worker = await createQueuertInProcessWorker({
+  // Adapters
+  stateAdapter,              // Required: job persistence
+  notifyAdapter,             // Optional: push notifications
+  observabilityAdapter,      // Optional: metrics/tracing
+  jobTypeRegistry,           // Required: type definitions
+  log,                       // Required: logger
+
+  // Identity
+  workerId: 'worker-1',      // Default: random UUID
+
+  // Concurrency (optional)
+  concurrency: { maxSlots: 1 },  // default
+
+  // Processing
+  jobTypeProcessing: {
+    pollIntervalMs: 60_000,
+    defaultRetryConfig: { ... },
+    defaultLeaseConfig: { ... },
+    jobAttemptMiddlewares: [...],
+  },
+
+  // Handlers
+  jobTypeProcessors: {
+    jobTypeName: {
+      process: async ({ signal, job, prepare, complete }) => { ... },
+      leaseConfig: { ... },   // Per-type override
+      retryConfig: { ... },   // Per-type override
+    },
+  },
+});
 ```
 
-See the `examples/log-pino` and `examples/log-winston` examples for complete contextual logging implementations.
+### Concurrency Options
+
+```typescript
+concurrency: {
+  maxSlots: 10,
+}
+```
 
 ## Summary
 
 The worker design emphasizes:
 
-1. **Simplicity**: One job per worker, sequential processing
-2. **Reliability**: Leases ensure recovery from worker failures
-3. **Flexibility**: Per-type configuration, multi-type workers
-4. **Observability**: All state transitions emit structured events
-5. **Graceful degradation**: Works without notification layer
-6. **Extensibility**: Middlewares enable cross-cutting concerns
+1. **Simplicity**: Single main loop coordinating parallel slots
+2. **Efficiency**: Slots are self-contained, main loop just manages concurrency
+3. **Reliability**: Integrated reaper ensures recovery from failures
+4. **Flexibility**: Per-type configuration, multi-type workers
+5. **Extensibility**: Middlewares enable cross-cutting concerns
+
+See also:
+
+- [Job Processing](job-processing.md) - prepare/complete pattern, abort signals, timeouts
+- [Adapters](adapters.md) - notification optimization, state provider design

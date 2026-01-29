@@ -456,8 +456,8 @@ export const queuertHelper = ({
     }): Promise<void> => {
       if (
         error instanceof JobTakenByAnotherWorkerError ||
-        error instanceof JobNotFoundError ||
-        error instanceof JobAlreadyCompletedError
+        error instanceof JobAlreadyCompletedError ||
+        error instanceof JobNotFoundError
       ) {
         return;
       }
@@ -559,7 +559,7 @@ export const queuertHelper = ({
     }: {
       typeNames: string[];
       workerId: string;
-    }): Promise<void> => {
+    }): Promise<boolean> => {
       const job = await stateAdapter.removeExpiredJobLease({ typeNames });
       if (job) {
         observabilityHelper.jobReaped(job, { workerId });
@@ -571,6 +571,7 @@ export const queuertHelper = ({
           await notifyAdapter.notifyJobOwnershipLost(job.id);
         } catch {}
       }
+      return !!job;
     },
     deleteJobChains: async ({
       rootChainIds,

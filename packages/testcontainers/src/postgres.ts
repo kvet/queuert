@@ -46,7 +46,7 @@ export const extendWithPostgres = <T>(
 
         await client.connect();
 
-        await client.query(`DROP DATABASE IF EXISTS "${normalizedReuseId}";`);
+        await client.query(`DROP DATABASE IF EXISTS "${normalizedReuseId}" WITH (FORCE);`);
         await client.query(
           `CREATE DATABASE "${normalizedReuseId}" WITH OWNER "${container.getUsername()}" TEMPLATE template0`,
         );

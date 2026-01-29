@@ -20,6 +20,7 @@
   - Prisma MongoDB support - via generic StateProvider interface
 - Sqlite ready:
   - Better concurrency handling - WAL mode, busy timeout, retries
+  - Separate read/write connection pools (single writer, multiple readers)
 - test against bun and it's built-in sqlite, postgres clients
 
 # Long term

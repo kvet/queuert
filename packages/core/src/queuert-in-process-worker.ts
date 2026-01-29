@@ -2,27 +2,32 @@ import { randomUUID } from "node:crypto";
 import { type JobTypeRegistry } from "./entities/job-type-registry.js";
 import { type BaseJobTypeDefinitions } from "./entities/job-type.js";
 import { type BackoffConfig } from "./helpers/backoff.js";
-import { raceWithSleep, sleep } from "./helpers/sleep.js";
+import { raceWithSleep } from "./helpers/sleep.js";
 import { withRetry } from "./internal.js";
 import { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 import { type Log } from "./observability-adapter/log.js";
 import { type ObservabilityAdapter } from "./observability-adapter/observability-adapter.js";
 import { type QueuertHelper, queuertHelper } from "./queuert-helper.js";
-import { type StateAdapter } from "./state-adapter/state-adapter.js";
+import { type StateAdapter, type StateJob } from "./state-adapter/state-adapter.js";
 import {
   type JobAttemptMiddleware,
   type JobProcessFn,
   type LeaseConfig,
   runJobProcess,
 } from "./worker/job-process.js";
-import { JobAlreadyCompletedError, JobTakenByAnotherWorkerError } from "./errors.js";
+import {
+  JobAlreadyCompletedError,
+  JobNotFoundError,
+  JobTakenByAnotherWorkerError,
+} from "./errors.js";
+import { type ParallelExecutor, createParallelExecutor } from "./helpers/parallel-executor.js";
+import { createSignal } from "./helpers/signal.js";
 
 export type InProcessWorkerProcessingConfig<
   TStateAdapter extends StateAdapter<any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
 > = {
   pollIntervalMs?: number;
-  nextJobDelayMs?: number;
   defaultRetryConfig?: BackoffConfig;
   defaultLeaseConfig?: LeaseConfig;
   workerLoopRetryConfig?: BackoffConfig;
@@ -58,20 +63,24 @@ const waitForNextJob = async ({
   helper,
   typeNames,
   pollIntervalMs,
+  executor,
   signal,
 }: {
   helper: QueuertHelper;
   typeNames: string[];
   pollIntervalMs: number;
+  executor: ParallelExecutor<any>;
   signal: AbortSignal;
 }): Promise<void> => {
   const { promise: notified, resolve: onNotification } = Promise.withResolvers<void>();
-  let dispose: () => Promise<void> = async () => {};
+  let disposeNotified: () => Promise<void> = async () => {};
   try {
-    dispose = await helper.notifyAdapter.listenJobScheduled(typeNames, () => {
+    disposeNotified = await helper.notifyAdapter.listenJobScheduled(typeNames, () => {
       onNotification();
     });
   } catch {}
+  const { promise: slotAvailable, resolve: onSlotAvailable } = Promise.withResolvers<void>();
+  const disposeSlotAvailable = executor.onIdleSlot(onSlotAvailable);
   try {
     const pullDelayMs = await helper.getNextJobAvailableInMs({
       typeNames,
@@ -81,12 +90,13 @@ const waitForNextJob = async ({
     if (signal.aborted) {
       return;
     }
-    await raceWithSleep(notified, pullDelayMs, {
+    await raceWithSleep(Promise.race([slotAvailable, notified]), pullDelayMs, {
       jitterMs: pullDelayMs / 10,
       signal,
     });
   } finally {
-    await dispose();
+    await disposeNotified();
+    disposeSlotAvailable();
   }
 };
 
@@ -106,54 +116,69 @@ const performJob = async ({
   defaultLeaseConfig: LeaseConfig;
   workerId: string;
   jobAttemptMiddlewares: JobAttemptMiddleware<any, any>[] | undefined;
-}): Promise<boolean> => {
-  try {
-    const [hasMore, continueProcessing] = await helper.stateAdapter.runInTransaction(
-      async (txContext): Promise<[boolean, (() => Promise<void>) | undefined]> => {
-        const { job, hasMore } = await helper.stateAdapter.acquireJob({
-          txContext,
-          typeNames,
-        });
-        if (!job) {
-          return [false, undefined];
+}): Promise<{ job: StateJob | null; hasMore: boolean; execute?: () => Promise<void> }> => {
+  const signal = createSignal<{ job: StateJob | null; hasMore: boolean }>();
+
+  const grabJobPromise = helper.stateAdapter.runInTransaction(
+    async (txContext): Promise<() => Promise<void>> => {
+      const { job, hasMore } = await helper.stateAdapter.acquireJob({
+        txContext,
+        typeNames,
+      });
+
+      if (!job) {
+        return async () => {};
+      }
+
+      const jobType = jobTypeProcessors[job.typeName];
+      if (!jobType) {
+        throw new Error(`No process function registered for job type "${job.typeName}"`);
+      }
+
+      signal.signalOnce({ job, hasMore });
+
+      const run = await runJobProcess({
+        helper,
+        process: jobType.process as any,
+        txContext,
+        job,
+        retryConfig: jobType.retryConfig ?? defaultRetryConfig,
+        leaseConfig: jobType.leaseConfig ?? defaultLeaseConfig,
+        workerId,
+        jobAttemptMiddlewares: jobAttemptMiddlewares as any[],
+        typeNames,
+      });
+
+      return async () => {
+        try {
+          await run();
+        } catch (error) {
+          if (
+            error instanceof JobTakenByAnotherWorkerError ||
+            error instanceof JobAlreadyCompletedError ||
+            error instanceof JobNotFoundError
+          ) {
+            return;
+          } else {
+            throw error;
+          }
         }
+      };
+    },
+  );
 
-        const jobType = jobTypeProcessors[job.typeName];
-        if (!jobType) {
-          throw new Error(`No process function registered for job type "${job.typeName}"`);
-        }
+  const winner = await Promise.race([signal.onSignal, grabJobPromise]);
 
-        return [
-          hasMore,
-          await runJobProcess({
-            helper,
-            process: jobType.process as any,
-            txContext,
-            job,
-            retryConfig: jobType.retryConfig ?? defaultRetryConfig,
-            leaseConfig: jobType.leaseConfig ?? defaultLeaseConfig,
-            workerId,
-            typeNames,
-            jobAttemptMiddlewares: jobAttemptMiddlewares as any[],
-          }),
-        ];
-      },
-    );
-
-    await continueProcessing?.();
-
-    return hasMore;
-  } catch (error) {
-    if (
-      error instanceof JobTakenByAnotherWorkerError ||
-      error instanceof JobAlreadyCompletedError
-    ) {
-      return true;
-    } else {
-      helper.observabilityHelper.workerError({ workerId }, error);
-      throw error;
-    }
+  if (typeof winner === "object" && "job" in winner && "hasMore" in winner) {
+    return {
+      ...winner,
+      execute: async () => (await grabJobPromise)(),
+    };
   }
+  return {
+    job: null,
+    hasMore: false,
+  };
 };
 
 export const createQueuertInProcessWorker = async <
@@ -187,7 +212,6 @@ export const createQueuertInProcessWorker = async <
   const typeNames = Array.from(Object.keys(jobTypeProcessors));
 
   const pollIntervalMs = jobTypeProcessing?.pollIntervalMs ?? 60_000;
-  const nextJobDelayMs = jobTypeProcessing?.nextJobDelayMs ?? 0;
   const defaultRetryConfig = jobTypeProcessing?.defaultRetryConfig ?? {
     initialDelayMs: 10_000,
     multiplier: 2.0,
@@ -217,12 +241,13 @@ export const createQueuertInProcessWorker = async <
       helper.observabilityHelper.jobTypeIdleChange(1, workerId, typeNames);
 
       const stopController = new AbortController();
+      const executor = createParallelExecutor(1);
 
       const runWorkerLoop = async () => {
         while (true) {
           try {
-            while (true) {
-              const hasMore = await performJob({
+            while (executor.idleSlots() > 0) {
+              const { hasMore, execute } = await performJob({
                 helper,
                 typeNames,
                 jobTypeProcessors,
@@ -231,28 +256,45 @@ export const createQueuertInProcessWorker = async <
                 workerId,
                 jobAttemptMiddlewares,
               });
+
+              if (execute) {
+                void executor.add(async () => {
+                  try {
+                    await execute();
+                  } catch (error) {
+                    helper.observabilityHelper.workerError({ workerId }, error);
+                  }
+                });
+              }
               if (!hasMore) {
                 break;
               }
+            }
 
-              await sleep(nextJobDelayMs, {
-                jitterMs: nextJobDelayMs / 10,
-                signal: stopController.signal,
+            if (stopController.signal.aborted) {
+              return;
+            }
+
+            if (executor.idleSlots() > 0) {
+              const reaped = await helper.removeExpiredJobLease({
+                typeNames,
+                workerId,
               });
+
               if (stopController.signal.aborted) {
                 return;
               }
-            }
 
-            await helper.removeExpiredJobLease({
-              typeNames,
-              workerId,
-            });
+              if (reaped) {
+                continue;
+              }
+            }
 
             await waitForNextJob({
               helper,
               typeNames,
               pollIntervalMs,
+              executor,
               signal: stopController.signal,
             });
             if (stopController.signal.aborted) {
@@ -273,6 +315,7 @@ export const createQueuertInProcessWorker = async <
         helper.observabilityHelper.workerStopping({ workerId });
         stopController.abort();
         await runWorkerLoopPromise;
+        await executor.drain();
         helper.observabilityHelper.jobTypeIdleChange(-1, workerId, typeNames);
         helper.observabilityHelper.workerStopped({ workerId });
       };

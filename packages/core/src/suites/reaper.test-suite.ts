@@ -1,5 +1,5 @@
 import { type TestAPI } from "vitest";
-import { JobAlreadyCompletedError } from "../errors.js";
+import { JobAlreadyCompletedError, JobTakenByAnotherWorkerError } from "../errors.js";
 import { sleep } from "../helpers/sleep.js";
 import {
   type LeaseConfig,
@@ -201,8 +201,10 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
               jobStarted.resolve();
               await sleep(leaseConfig.renewIntervalMs * 2);
-              await expect(async () => complete(async () => null)).rejects.toThrow(
-                JobAlreadyCompletedError,
+              await expect(async () => complete(async () => null)).rejects.toSatisfy(
+                (error) =>
+                  error instanceof
+                  (notifyAdapter ? JobTakenByAnotherWorkerError : JobAlreadyCompletedError),
               );
               jobCompleted.resolve();
             }
@@ -235,8 +237,10 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
               jobStarted.resolve();
               await sleep(leaseConfig.renewIntervalMs * 2);
-              await expect(async () => complete(async () => null)).rejects.toThrow(
-                JobAlreadyCompletedError,
+              await expect(async () => complete(async () => null)).rejects.toSatisfy(
+                (error) =>
+                  error instanceof
+                  (notifyAdapter ? JobTakenByAnotherWorkerError : JobAlreadyCompletedError),
               );
               jobCompleted.resolve();
             }
