@@ -1,4 +1,6 @@
+export { extendWithMariadb } from "./mariadb.js";
 export { extendWithMongodb } from "./mongodb.js";
+export { extendWithMysql } from "./mysql.js";
 export { extendWithNats, type NatsConnectionOptions } from "./nats.js";
 export { extendWithPostgres } from "./postgres.js";
 export { extendWithRedis } from "./redis.js";
