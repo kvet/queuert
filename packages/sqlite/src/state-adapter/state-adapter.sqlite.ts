@@ -418,11 +418,11 @@ export const createSqliteStateAdapter = async <
 
       return mapDbJobToStateJob(job);
     },
-    removeExpiredJobLease: async ({ txContext, typeNames }) => {
+    removeExpiredJobLease: async ({ txContext, typeNames, ignoredJobIds }) => {
       const [job] = await executeTypedSql({
         txContext,
         sql: removeExpiredJobLeaseSql,
-        params: [JSON.stringify(typeNames)],
+        params: [JSON.stringify(typeNames), JSON.stringify(ignoredJobIds ?? [])],
       });
       return job ? mapDbJobToStateJob(job) : undefined;
     },

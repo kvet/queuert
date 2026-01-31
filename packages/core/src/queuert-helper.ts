@@ -556,11 +556,13 @@ export const queuertHelper = ({
     removeExpiredJobLease: async ({
       typeNames,
       workerId,
+      ignoredJobIds,
     }: {
       typeNames: string[];
       workerId: string;
+      ignoredJobIds?: string[];
     }): Promise<boolean> => {
-      const job = await stateAdapter.removeExpiredJobLease({ typeNames });
+      const job = await stateAdapter.removeExpiredJobLease({ typeNames, ignoredJobIds });
       if (job) {
         observabilityHelper.jobReaped(job, { workerId });
 

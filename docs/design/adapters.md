@@ -127,6 +127,30 @@ interface PgNotifyProvider {
 
 The provider maintains a dedicated connection for subscriptions and acquires/releases connections for publish operations automatically.
 
+### Reaper Support
+
+The `removeExpiredJobLease` method supports an `ignoredJobIds` parameter to prevent race conditions in concurrent workers:
+
+```typescript
+removeExpiredJobLease: (params: {
+  txContext?: TTxContext;
+  typeNames: string[];
+  ignoredJobIds?: TJobId[]; // Jobs to skip when reaping
+}) => Promise<StateJob | undefined>;
+```
+
+**Why `ignoredJobIds` exists:**
+
+When a worker runs with multiple concurrent slots (`concurrency.maxSlots > 1`), there's a potential race condition:
+
+1. Worker acquires job A in slot 1 with a lease
+2. Job A's lease expires before renewal (e.g., slow processing, GC pause)
+3. Worker's reaper runs and sees job A has an expired lease
+4. Without `ignoredJobIds`, the reaper would transition job A back to `pending`
+5. Now job A is being processed AND marked as pending—a corrupted state
+
+The `ignoredJobIds` parameter allows the worker to exclude jobs it's currently processing from reaping. Custom adapter implementations must filter out these job IDs when selecting expired leases.
+
 ### Internal Type Design
 
 `StateJob` is a non-generic type with `string` for all ID fields:

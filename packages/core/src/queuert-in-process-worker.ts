@@ -116,7 +116,9 @@ const performJob = async ({
   defaultLeaseConfig: LeaseConfig;
   workerId: string;
   jobAttemptMiddlewares: JobAttemptMiddleware<any, any>[] | undefined;
-}): Promise<{ job: StateJob | null; hasMore: boolean; execute?: () => Promise<void> }> => {
+}): Promise<
+  { job: null; hasMore: false } | { job: StateJob; hasMore: boolean; execute: () => Promise<void> }
+> => {
   const signal = createSignal<{ job: StateJob | null; hasMore: boolean }>();
 
   const grabJobPromise = helper.stateAdapter.runInTransaction(
@@ -169,9 +171,10 @@ const performJob = async ({
 
   const winner = await Promise.race([signal.onSignal, grabJobPromise]);
 
-  if (typeof winner === "object" && "job" in winner && "hasMore" in winner) {
+  if (typeof winner === "object" && "job" in winner && "hasMore" in winner && winner.job) {
     return {
-      ...winner,
+      job: winner.job,
+      hasMore: winner.hasMore,
       execute: async () => (await grabJobPromise)(),
     };
   }
@@ -191,6 +194,7 @@ export const createQueuertInProcessWorker = async <
   jobTypeRegistry,
   log,
   workerId = randomUUID(),
+  concurrency,
   jobTypeProcessing,
   jobTypeProcessors,
 }: {
@@ -200,6 +204,9 @@ export const createQueuertInProcessWorker = async <
   jobTypeRegistry: TJobTypeRegistry;
   log: Log;
   workerId?: string;
+  concurrency?: {
+    maxSlots: number;
+  };
   jobTypeProcessing?: InProcessWorkerProcessingConfig<
     TStateAdapter,
     TJobTypeRegistry["$definitions"]
@@ -241,13 +248,14 @@ export const createQueuertInProcessWorker = async <
       helper.observabilityHelper.jobTypeIdleChange(1, workerId, typeNames);
 
       const stopController = new AbortController();
-      const executor = createParallelExecutor(1);
+      const executor = createParallelExecutor(concurrency?.maxSlots ?? 1);
+      const jobIdsInProgress = new Set<string>();
 
       const runWorkerLoop = async () => {
         while (true) {
           try {
             while (executor.idleSlots() > 0) {
-              const { hasMore, execute } = await performJob({
+              const result = await performJob({
                 helper,
                 typeNames,
                 jobTypeProcessors,
@@ -257,16 +265,19 @@ export const createQueuertInProcessWorker = async <
                 jobAttemptMiddlewares,
               });
 
-              if (execute) {
+              if (result.job) {
+                jobIdsInProgress.add(result.job.id);
                 void executor.add(async () => {
                   try {
-                    await execute();
+                    await result.execute();
                   } catch (error) {
                     helper.observabilityHelper.workerError({ workerId }, error);
+                  } finally {
+                    jobIdsInProgress.delete(result.job.id);
                   }
                 });
               }
-              if (!hasMore) {
+              if (!result.hasMore) {
                 break;
               }
             }
@@ -279,6 +290,7 @@ export const createQueuertInProcessWorker = async <
               const reaped = await helper.removeExpiredJobLease({
                 typeNames,
                 workerId,
+                ignoredJobIds: Array.from(jobIdsInProgress),
               });
 
               if (stopController.signal.aborted) {

@@ -341,14 +341,16 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       return updatedJob;
     },
 
-    removeExpiredJobLease: async ({ typeNames }) => {
+    removeExpiredJobLease: async ({ typeNames, ignoredJobIds }) => {
       const now = new Date();
       let candidateJob: StateJob | undefined;
+      const ignoredSet = ignoredJobIds ? new Set(ignoredJobIds) : undefined;
 
       for (const job of store.jobs.values()) {
         if (!typeNames.includes(job.typeName)) continue;
         if (job.status !== "running") continue;
         if (!job.leasedUntil || job.leasedUntil > now) continue;
+        if (ignoredSet?.has(job.id)) continue;
 
         if (!candidateJob || job.leasedUntil < candidateJob.leasedUntil!) {
           candidateJob = job;

@@ -523,7 +523,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       log,
       jobTypeRegistry,
       jobTypeProcessing: {
-        defaultLeaseConfig: { leaseMs: 1, renewIntervalMs: 100 },
+        defaultLeaseConfig: { leaseMs: 10, renewIntervalMs: 100 },
       },
       jobTypeProcessors: {
         test: {

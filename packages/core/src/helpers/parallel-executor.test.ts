@@ -80,6 +80,50 @@ describe("createParallelExecutor", () => {
     expect(called).toBe(true);
   });
 
+  test("onIdleSlot fires on every task completion", async () => {
+    const executor = createParallelExecutor(3);
+    let callCount = 0;
+
+    executor.onIdleSlot(() => {
+      callCount++;
+    });
+
+    const { promise: p1, resolve: r1 } = Promise.withResolvers<void>();
+    const { promise: p2, resolve: r2 } = Promise.withResolvers<void>();
+
+    const task1 = executor.add(async () => p1);
+    const task2 = executor.add(async () => p2);
+
+    expect(executor.idleSlots()).toBe(1);
+
+    r1();
+    await task1;
+    expect(callCount).toBe(1);
+
+    r2();
+    await task2;
+    expect(callCount).toBe(2);
+  });
+
+  test("onIdleSlot fires even when idle slots already exist", async () => {
+    const executor = createParallelExecutor(3);
+    let callCount = 0;
+
+    executor.onIdleSlot(() => {
+      callCount++;
+    });
+
+    const { promise, resolve: resolveTask } = Promise.withResolvers<void>();
+    const task = executor.add(async () => promise);
+
+    expect(executor.idleSlots()).toBe(2);
+
+    resolveTask();
+    await task;
+
+    expect(callCount).toBe(1);
+  });
+
   test("onIdleSlot dispose removes listener", async () => {
     const executor = createParallelExecutor(1);
     let called = false;
@@ -112,50 +156,6 @@ describe("createParallelExecutor", () => {
   test("exposes maxSlots property", () => {
     const executor = createParallelExecutor(5);
     expect(executor.maxSlots).toBe(5);
-  });
-
-  test("onIdleSlot does not fire when already has idle slots", async () => {
-    const executor = createParallelExecutor(3);
-    let callCount = 0;
-
-    executor.onIdleSlot(() => {
-      callCount++;
-    });
-
-    const { promise, resolve: resolveTask } = Promise.withResolvers<void>();
-    const task = executor.add(async () => promise);
-
-    expect(executor.idleSlots()).toBe(2);
-
-    resolveTask();
-    await task;
-
-    expect(callCount).toBe(0);
-  });
-
-  test("onIdleSlot only fires when transitioning from full capacity", async () => {
-    const executor = createParallelExecutor(2);
-    let callCount = 0;
-
-    const { promise: p1, resolve: r1 } = Promise.withResolvers<void>();
-    const { promise: p2, resolve: r2 } = Promise.withResolvers<void>();
-
-    const task1 = executor.add(async () => p1);
-    const task2 = executor.add(async () => p2);
-
-    expect(executor.idleSlots()).toBe(0);
-
-    executor.onIdleSlot(() => {
-      callCount++;
-    });
-
-    r1();
-    await task1;
-    expect(callCount).toBe(1);
-
-    r2();
-    await task2;
-    expect(callCount).toBe(1);
   });
 
   test("drain resolves immediately when no active tasks", async () => {

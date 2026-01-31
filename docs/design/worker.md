@@ -213,6 +213,7 @@ At the start of each main loop iteration:
 - **One job per iteration**: Reaps at most one job to avoid blocking slot spawning.
 - **Type-scoped**: Only reaps job types the worker is registered to handle.
 - **Concurrent-safe**: Database locking prevents conflicts between workers.
+- **Self-aware**: When running with multiple slots, the reaper excludes jobs currently being processed by the same worker (via `ignoredJobIds`). This prevents a race condition where a worker could reap its own in-progress job if the lease expires before renewal.
 
 ## Retry and Backoff
 

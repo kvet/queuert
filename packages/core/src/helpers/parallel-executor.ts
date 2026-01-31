@@ -29,9 +29,8 @@ export const createParallelExecutor = <T extends (...args: any[]) => Promise<any
       try {
         return await fn();
       } finally {
-        const wasAtCapacity = activeSlots === maxSlots;
         activeSlots--;
-        if (wasAtCapacity && idleSlotListener) {
+        if (idleSlotListener) {
           idleSlotListener();
         }
         if (activeSlots === 0 && drainListener) {

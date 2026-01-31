@@ -1,5 +1,6 @@
 # Short term
 
+- Reevaluate test lease times (currently 10ms) - balance between fast tests and avoiding timing-related flakiness
 - Rename worker config for less verbosity:
   - `jobTypeRegistry` → `registry`
   - `jobTypeProcessors` → `processors`

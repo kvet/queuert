@@ -548,7 +548,10 @@ LIMIT 1
 );
 
 export const removeExpiredJobLeaseSql: TypedSql<
-  readonly [NamedParameter<"type_names_json", string>],
+  readonly [
+    NamedParameter<"type_names_json", string>,
+    NamedParameter<"ignored_job_ids_json", string>,
+  ],
   [DbJob | undefined]
 > = sql(
   /* sql */ `
@@ -563,6 +566,7 @@ WHERE id = (
     AND leased_until < datetime('now', 'subsec')
     AND status = 'running'
     AND type_name IN (SELECT value FROM json_each(?))
+    AND id NOT IN (SELECT value FROM json_each(?))
   ORDER BY leased_until ASC
   LIMIT 1
 )

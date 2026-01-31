@@ -449,7 +449,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
               throw new Error();
             },
-            leaseConfig: { leaseMs: 1, renewIntervalMs: 1000 },
+            leaseConfig: { leaseMs: 10, renewIntervalMs: 1000 },
           },
         },
       });

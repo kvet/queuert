@@ -461,7 +461,7 @@ export const createMongoStateAdapter = async <
       return mapDbJobToStateJob(job!);
     },
 
-    removeExpiredJobLease: async ({ txContext, typeNames }) => {
+    removeExpiredJobLease: async ({ txContext, typeNames, ignoredJobIds }) => {
       const collection = getCollection();
 
       const job = await collection.findOneAndUpdate(
@@ -469,6 +469,7 @@ export const createMongoStateAdapter = async <
           typeName: { $in: typeNames },
           status: "running",
           leasedUntil: { $lt: new Date(), $ne: null },
+          ...(ignoredJobIds && ignoredJobIds.length > 0 ? { _id: { $nin: ignoredJobIds } } : {}),
         },
         [
           {

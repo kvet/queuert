@@ -538,7 +538,7 @@ FOR UPDATE SKIP LOCKED
 );
 
 export const removeExpiredJobLeaseSql: TypedSql<
-  readonly [NamedParameter<"type_names", string[]>],
+  readonly [NamedParameter<"type_names", string[]>, NamedParameter<"ignored_job_ids", string[]>],
   [DbJob | undefined]
 > = sql(
   /* sql */ `
@@ -549,6 +549,7 @@ WITH job_to_unlock AS (
     AND leased_until < now()
     AND status = 'running'
     AND type_name IN (SELECT unnest($1::text[]))
+    AND id != ALL($2::{{id_type}}[])
   ORDER BY leased_until ASC
   LIMIT 1
   FOR UPDATE SKIP LOCKED

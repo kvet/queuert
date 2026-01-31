@@ -140,6 +140,7 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
   removeExpiredJobLease: (params: {
     txContext?: TTxContext;
     typeNames: string[];
+    ignoredJobIds?: TJobId[];
   }) => Promise<StateJob | undefined>;
 
   /** Gets external blockers that depend on the given root chains. */

@@ -252,11 +252,11 @@ export const createPgStateAdapter = async <
 
       return mapDbJobToStateJob(job);
     },
-    removeExpiredJobLease: async ({ txContext, typeNames }) => {
+    removeExpiredJobLease: async ({ txContext, typeNames, ignoredJobIds }) => {
       const [job] = await executeTypedSql({
         txContext,
         sql: removeExpiredJobLeaseSql,
-        params: [typeNames],
+        params: [typeNames, ignoredJobIds ?? []],
       });
       return job ? mapDbJobToStateJob(job) : undefined;
     },
