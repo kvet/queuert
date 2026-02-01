@@ -9,7 +9,7 @@
  */
 
 import { Type } from "@sinclair/typebox";
-import { createQueuertClient, createQueuertInProcessWorker } from "queuert";
+import { createClient, createInProcessWorker } from "queuert";
 import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
 import { createTypeBoxJobTypeRegistry } from "./typebox-adapter.js";
 
@@ -75,14 +75,14 @@ const registry = createTypeBoxJobTypeRegistry({
 const stateAdapter = createInProcessStateAdapter();
 const notifyAdapter = createInProcessNotifyAdapter();
 
-const qrtClient = await createQueuertClient({
+const qrtClient = await createClient({
   stateAdapter,
   notifyAdapter,
   registry,
 });
 
 // 3. Create and start qrtWorker with job type processors
-const qrtWorker = await createQueuertInProcessWorker({
+const qrtWorker = await createInProcessWorker({
   stateAdapter,
   notifyAdapter,
   registry,

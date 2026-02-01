@@ -35,7 +35,7 @@ npm install @queuert/otel
 ## Quick Start
 
 ```typescript
-import { createQueuertClient, createConsoleLog, defineJobTypes } from "queuert";
+import { createClient, createConsoleLog, defineJobTypes } from "queuert";
 import { createPgStateAdapter } from "@queuert/postgres";
 import { createOtelObservabilityAdapter } from "@queuert/otel";
 import { metrics } from "@opentelemetry/api";
@@ -53,7 +53,7 @@ const observabilityAdapter = await createOtelObservabilityAdapter({
   meter: metrics.getMeter("my-app"),
 });
 
-const client = await createQueuertClient({
+const client = await createClient({
   stateAdapter,
   observabilityAdapter,
   registry: jobTypes,

@@ -9,7 +9,7 @@
  */
 
 import * as v from "valibot";
-import { createQueuertClient, createQueuertInProcessWorker } from "queuert";
+import { createClient, createInProcessWorker } from "queuert";
 import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
 import { createValibotJobTypeRegistry } from "./valibot-adapter.js";
 
@@ -72,14 +72,14 @@ const registry = createValibotJobTypeRegistry({
 const stateAdapter = createInProcessStateAdapter();
 const notifyAdapter = createInProcessNotifyAdapter();
 
-const qrtClient = await createQueuertClient({
+const qrtClient = await createClient({
   stateAdapter,
   notifyAdapter,
   registry,
 });
 
 // 3. Create and start qrtWorker with job type processors
-const qrtWorker = await createQueuertInProcessWorker({
+const qrtWorker = await createInProcessWorker({
   stateAdapter,
   notifyAdapter,
   registry,

@@ -28,7 +28,7 @@ import {
   JobAlreadyCompletedError,
   JobNotFoundError,
   JobTakenByAnotherWorkerError,
-  WaitForJobChainCompletionTimeoutError,
+  WaitChainTimeoutError,
 } from "./errors.js";
 import { type BackoffConfig, calculateBackoffMs } from "./helpers/backoff.js";
 import { raceWithSleep } from "./helpers/sleep.js";
@@ -78,7 +78,7 @@ const jobContextStorage = new AsyncLocalStorage<{
   originId: string;
 }>();
 
-export const queuertHelper = ({
+export const helper = ({
   stateAdapter: stateAdapterOption,
   notifyAdapter: notifyAdapterOption,
   observabilityAdapter: observabilityAdapterOption,
@@ -795,7 +795,7 @@ export const queuertHelper = ({
           if (combinedSignal.aborted) break;
         }
 
-        throw new WaitForJobChainCompletionTimeoutError(
+        throw new WaitChainTimeoutError(
           signal?.aborted
             ? `Wait for job chain ${id} was aborted`
             : `Timeout waiting for job chain ${id} to complete after ${timeoutMs}ms`,
@@ -808,7 +808,7 @@ export const queuertHelper = ({
   };
 };
 
-export type QueuertHelper = ReturnType<typeof queuertHelper>;
+export type Helper = ReturnType<typeof helper>;
 
 export type JobChainCompleteOptions<
   TStateAdapter extends StateAdapter<any, any>,

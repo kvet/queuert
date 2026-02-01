@@ -41,7 +41,7 @@ npm install @queuert/mongodb
 ## Quick Start
 
 ```typescript
-import { createQueuertClient, createConsoleLog, defineJobTypes } from "queuert";
+import { createClient, createConsoleLog, defineJobTypes } from "queuert";
 import { createMongoStateAdapter } from "@queuert/mongodb";
 
 const jobTypes = defineJobTypes<{
@@ -52,7 +52,7 @@ const stateAdapter = await createMongoStateAdapter({
   stateProvider: myMongoStateProvider, // You provide this - see below
 });
 
-const client = await createQueuertClient({
+const client = await createClient({
   stateAdapter,
   registry: jobTypes,
   log: createConsoleLog(),

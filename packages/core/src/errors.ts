@@ -37,13 +37,13 @@ export class JobAlreadyCompletedError extends Error {
   }
 }
 
-export class WaitForJobChainCompletionTimeoutError extends Error {
+export class WaitChainTimeoutError extends Error {
   readonly chainId: string | undefined;
   readonly timeoutMs: number | undefined;
 
   constructor(message: string, options?: { cause?: unknown }) {
     super(message, options);
-    this.name = "WaitForJobChainCompletionTimeoutError";
+    this.name = "WaitChainTimeoutError";
     const causeObj = options?.cause as { chainId?: string; timeoutMs?: number } | undefined;
     this.chainId = causeObj?.chainId;
     this.timeoutMs = causeObj?.timeoutMs;

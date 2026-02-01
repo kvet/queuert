@@ -1,9 +1,4 @@
-import {
-  createConsoleLog,
-  createQueuertClient,
-  createQueuertInProcessWorker,
-  defineJobTypes,
-} from "queuert";
+import { createClient, createConsoleLog, createInProcessWorker, defineJobTypes } from "queuert";
 import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
 import { flushMetrics, observabilityAdapter, shutdownMetrics } from "./observability.js";
 
@@ -18,7 +13,7 @@ const stateAdapter = createInProcessStateAdapter();
 const notifyAdapter = createInProcessNotifyAdapter();
 const log = createConsoleLog();
 
-const qrtClient = await createQueuertClient({
+const qrtClient = await createClient({
   stateAdapter,
   notifyAdapter,
   log,
@@ -26,7 +21,7 @@ const qrtClient = await createQueuertClient({
   registry,
 });
 // 3. Create and start qrtWorker
-const qrtWorker = await createQueuertInProcessWorker({
+const qrtWorker = await createInProcessWorker({
   stateAdapter,
   notifyAdapter,
   log,

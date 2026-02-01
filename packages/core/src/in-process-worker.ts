@@ -7,7 +7,7 @@ import { withRetry } from "./internal.js";
 import { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 import { type Log } from "./observability-adapter/log.js";
 import { type ObservabilityAdapter } from "./observability-adapter/observability-adapter.js";
-import { type QueuertHelper, queuertHelper } from "./queuert-helper.js";
+import { type Helper, helper } from "./helper.js";
 import { type StateAdapter, type StateJob } from "./state-adapter/state-adapter.js";
 import {
   type AttemptHandlerFn,
@@ -61,7 +61,7 @@ export type InProcessWorkerProcessors<
   >;
 };
 
-export type QueuertInProcessWorker = {
+export type InProcessWorker = {
   start: () => Promise<() => Promise<void>>;
 };
 
@@ -72,7 +72,7 @@ const waitForNextJob = async ({
   executor,
   signal,
 }: {
-  helper: QueuertHelper;
+  helper: Helper;
   typeNames: string[];
   pollIntervalMs: number;
   executor: ParallelExecutor<any>;
@@ -117,7 +117,7 @@ const performJob = async ({
   workerId,
   attemptMiddlewares,
 }: {
-  helper: QueuertHelper;
+  helper: Helper;
   typeNames: string[];
   processors: InProcessWorkerProcessors<any, any>;
   defaultRetryConfig: BackoffConfig;
@@ -192,7 +192,7 @@ const performJob = async ({
   };
 };
 
-export const createQueuertInProcessWorker = async <
+export const createInProcessWorker = async <
   TJobTypeRegistry extends JobTypeRegistry<any>,
   TStateAdapter extends StateAdapter<any, any>,
 >({
@@ -217,7 +217,7 @@ export const createQueuertInProcessWorker = async <
   retryConfig?: BackoffConfig;
   processDefaults?: InProcessWorkerProcessDefaults<TStateAdapter, TJobTypeRegistry["$definitions"]>;
   processors: InProcessWorkerProcessors<TStateAdapter, TJobTypeRegistry["$definitions"]>;
-}): Promise<QueuertInProcessWorker> => {
+}): Promise<InProcessWorker> => {
   const typeNames = Array.from(Object.keys(processors));
 
   const pollIntervalMs = processDefaults?.pollIntervalMs ?? 60_000;
@@ -239,15 +239,15 @@ export const createQueuertInProcessWorker = async <
 
   return {
     start: async () => {
-      const helper = queuertHelper({
+      const h = helper({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         registry,
         log,
       });
-      helper.observabilityHelper.workerStarted({ workerId, jobTypeNames: typeNames });
-      helper.observabilityHelper.jobTypeIdleChange(1, workerId, typeNames);
+      h.observabilityHelper.workerStarted({ workerId, jobTypeNames: typeNames });
+      h.observabilityHelper.jobTypeIdleChange(1, workerId, typeNames);
 
       const stopController = new AbortController();
       const executor = createParallelExecutor(concurrency ?? 1);
@@ -258,7 +258,7 @@ export const createQueuertInProcessWorker = async <
           try {
             while (executor.idleSlots() > 0) {
               const result = await performJob({
-                helper,
+                helper: h,
                 typeNames,
                 processors,
                 defaultRetryConfig,
@@ -273,7 +273,7 @@ export const createQueuertInProcessWorker = async <
                   try {
                     await result.execute();
                   } catch (error) {
-                    helper.observabilityHelper.workerError({ workerId }, error);
+                    h.observabilityHelper.workerError({ workerId }, error);
                   } finally {
                     jobIdsInProgress.delete(result.job.id);
                   }
@@ -289,7 +289,7 @@ export const createQueuertInProcessWorker = async <
             }
 
             if (executor.idleSlots() > 0) {
-              const reaped = await helper.removeExpiredJobLease({
+              const reaped = await h.removeExpiredJobLease({
                 typeNames,
                 workerId,
                 ignoredJobIds: Array.from(jobIdsInProgress),
@@ -305,7 +305,7 @@ export const createQueuertInProcessWorker = async <
             }
 
             await waitForNextJob({
-              helper,
+              helper: h,
               typeNames,
               pollIntervalMs,
               executor,
@@ -315,7 +315,7 @@ export const createQueuertInProcessWorker = async <
               return;
             }
           } catch (error) {
-            helper.observabilityHelper.workerError({ workerId }, error);
+            h.observabilityHelper.workerError({ workerId }, error);
             throw error;
           }
         }
@@ -326,12 +326,12 @@ export const createQueuertInProcessWorker = async <
       }).catch(() => {});
 
       return async () => {
-        helper.observabilityHelper.workerStopping({ workerId });
+        h.observabilityHelper.workerStopping({ workerId });
         stopController.abort();
         await runWorkerLoopPromise;
         await executor.drain();
-        helper.observabilityHelper.jobTypeIdleChange(-1, workerId, typeNames);
-        helper.observabilityHelper.workerStopped({ workerId });
+        h.observabilityHelper.jobTypeIdleChange(-1, workerId, typeNames);
+        h.observabilityHelper.workerStopped({ workerId });
       };
     },
   };

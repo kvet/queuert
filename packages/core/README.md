@@ -49,7 +49,7 @@ Optional adapters:
 ## Quick Start
 
 ```typescript
-import { createQueuertClient, createQueuertInProcessWorker, defineJobTypes } from "queuert";
+import { createClient, createInProcessWorker, defineJobTypes } from "queuert";
 import { createSqliteStateAdapter } from "@queuert/sqlite";
 
 // Define your job types with full type safety
@@ -63,13 +63,13 @@ const jobTypes = defineJobTypes<{
 
 // Create client and adapters
 const stateAdapter = await createSqliteStateAdapter({ stateProvider: myProvider });
-const client = await createQueuertClient({
+const client = await createClient({
   stateAdapter,
   registry: jobTypes,
 });
 
 // Create a worker
-const worker = await createQueuertInProcessWorker({
+const worker = await createInProcessWorker({
   stateAdapter,
   registry: jobTypes,
   workerId: "worker-1",
@@ -101,7 +101,7 @@ await client.withNotify(async () =>
 ## Worker Configuration
 
 ```typescript
-const worker = await createQueuertInProcessWorker({
+const worker = await createInProcessWorker({
   stateAdapter,
   registry: jobTypes,
   workerId: "worker-1", // Unique worker identifier (optional)
@@ -142,7 +142,7 @@ await worker.start();
 Per-job-type configuration:
 
 ```typescript
-const worker = await createQueuertInProcessWorker({
+const worker = await createInProcessWorker({
   stateAdapter,
   registry: jobTypes,
   processors: {
@@ -162,12 +162,12 @@ await worker.start();
 By default, Queuert operates silently with no logging. For visibility into job processing, you can enable logging:
 
 ```typescript
-import { createConsoleLog, createQueuertClient, createQueuertInProcessWorker } from "queuert";
+import { createConsoleLog, createClient, createInProcessWorker } from "queuert";
 
 const log = createConsoleLog();
 
-const client = await createQueuertClient({ stateAdapter, registry, log });
-const worker = await createQueuertInProcessWorker({ stateAdapter, registry, log, processors });
+const client = await createClient({ stateAdapter, registry, log });
+const worker = await createInProcessWorker({ stateAdapter, registry, log, processors });
 ```
 
 For production, integrate with your logging library (Pino, Winston, etc.) by implementing a custom `Log` function. See the `log-console`, `log-pino`, and `log-winston` examples.
@@ -178,8 +178,8 @@ For production, integrate with your logging library (Pino, Winston, etc.) by imp
 
 **Factories:**
 
-- `createQueuertClient` - Create a Queuert client for job chain management
-- `createQueuertInProcessWorker` - Create an in-process worker for job processing
+- `createClient` - Create a Queuert client for job chain management
+- `createInProcessWorker` - Create an in-process worker for job processing
 - `createConsoleLog` - Simple console logger for development
 - `defineJobTypes` - Define job types with compile-time type safety
 - `createJobTypeRegistry` - Create a registry with runtime validation
@@ -215,7 +215,7 @@ For production, integrate with your logging library (Pino, Winston, etc.) by imp
 - `JobTakenByAnotherWorkerError` - Another worker took the job
 - `JobTypeValidationError` - Runtime validation failed (with `code` and `details`)
 - `JobTypeValidationErrorCode` - Error code type for `JobTypeValidationError`
-- `WaitForJobChainCompletionTimeoutError` - Timeout waiting for chain
+- `WaitChainTimeoutError` - Timeout waiting for chain
 - `RescheduleJobError` - Thrown by `rescheduleJob()` helper
 
 **Helpers:**
@@ -226,8 +226,8 @@ For production, integrate with your logging library (Pino, Winston, etc.) by imp
 
 These types are exported for advanced use cases like building custom adapters:
 
-- `QueuertClient` - Client instance type
-- `QueuertInProcessWorker` - Worker instance type
+- `Client` - Client instance type
+- `InProcessWorker` - Worker instance type
 - `JobTypeReference` - Type for nominal/structural job type references
 - `JobTypeRegistryConfig` - Configuration type for `createJobTypeRegistry`
 - `BaseJobTypeDefinition`, `BaseJobTypeDefinitions`, `DefineJobTypes` - Base definition types

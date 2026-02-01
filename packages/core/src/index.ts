@@ -19,7 +19,7 @@ export {
   JobNotFoundError,
   JobTakenByAnotherWorkerError,
   JobTypeValidationError,
-  WaitForJobChainCompletionTimeoutError,
+  WaitChainTimeoutError,
   type JobTypeValidationErrorCode,
 } from "./errors.js";
 export { type TypedAbortSignal } from "./helpers/abort.js";
@@ -29,14 +29,14 @@ export { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 export { createConsoleLog } from "./observability-adapter/log.console.js";
 export { type Log } from "./observability-adapter/log.js";
 export { type ObservabilityAdapter } from "./observability-adapter/observability-adapter.js";
-export { createQueuertClient, type QueuertClient } from "./queuert-client.js";
+export { createClient, type Client } from "./client.js";
 export {
-  createQueuertInProcessWorker,
+  createInProcessWorker,
   type InProcessWorkerProcessDefaults,
   type InProcessWorkerProcessor,
   type InProcessWorkerProcessors,
-  type QueuertInProcessWorker,
-} from "./queuert-in-process-worker.js";
+  type InProcessWorker,
+} from "./in-process-worker.js";
 export {
   type BaseTxContext,
   type DeduplicationOptions,

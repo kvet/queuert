@@ -24,8 +24,8 @@ Factories that perform I/O should be async. Pure factories should be sync.
 
 **Expected patterns:**
 
-- `createQueuertClient` - async (creates client, may do I/O)
-- `createQueuertInProcessWorker` - async (creates worker, may do I/O)
+- `createClient` - async (creates client, may do I/O)
+- `createInProcessWorker` - async (creates worker, may do I/O)
 - `createPgStateAdapter` - async (may connect to DB)
 - `createSqliteStateAdapter` - async (may open file)
 - `createRedisNotifyAdapter` - async (may connect)
@@ -134,8 +134,8 @@ Provide your findings in this format:
 
 | Factory                        | Sync/Async | Expected | Notes  |
 | ------------------------------ | ---------- | -------- | ------ |
-| createQueuertClient            | async      | async    | OK     |
-| createQueuertInProcessWorker   | async      | async    | OK     |
+| createClient                   | async      | async    | OK     |
+| createInProcessWorker          | async      | async    | OK     |
 | createOtelObservabilityAdapter | sync       | ?        | Review |
 | ...                            | ...        | ...      | ...    |
 

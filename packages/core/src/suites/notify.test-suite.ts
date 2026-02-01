@@ -1,6 +1,6 @@
 import { type TestAPI } from "vitest";
 import { sleep } from "../helpers/sleep.js";
-import { createQueuertClient, createQueuertInProcessWorker, defineJobTypes } from "../index.js";
+import { createClient, createInProcessWorker, defineJobTypes } from "../index.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -21,14 +21,14 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       };
     }>();
 
-    const client = await createQueuertClient({
+    const client = await createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       registry,
     });
-    const worker = await createQueuertInProcessWorker({
+    const worker = await createInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -81,7 +81,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       };
     }>();
 
-    const client = await createQueuertClient({
+    const client = await createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -90,7 +90,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     const createWorker = async () =>
-      createQueuertInProcessWorker({
+      createInProcessWorker({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -160,14 +160,14 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       };
     }>();
 
-    const client = await createQueuertClient({
+    const client = await createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       registry,
     });
-    const worker1 = await createQueuertInProcessWorker({
+    const worker1 = await createInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -183,7 +183,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         },
       },
     });
-    const worker2 = await createQueuertInProcessWorker({
+    const worker2 = await createInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -250,14 +250,14 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       };
     }>();
 
-    const client = await createQueuertClient({
+    const client = await createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       registry,
     });
-    const worker1 = await createQueuertInProcessWorker({
+    const worker1 = await createInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -278,7 +278,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         },
       },
     });
-    const worker2 = await createQueuertInProcessWorker({
+    const worker2 = await createInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -334,7 +334,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       };
     }>();
 
-    const client = await createQueuertClient({
+    const client = await createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -345,7 +345,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const jobStarted = Promise.withResolvers<void>();
     const jobCompleted = Promise.withResolvers<void>();
 
-    const worker = await createQueuertInProcessWorker({
+    const worker = await createInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -417,7 +417,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       };
     }>();
 
-    const client = await createQueuertClient({
+    const client = await createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -429,7 +429,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const jobCompleted = Promise.withResolvers<void>();
 
     const createWorker = async () =>
-      createQueuertInProcessWorker({
+      createInProcessWorker({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,

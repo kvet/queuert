@@ -1,10 +1,5 @@
 import { type TestAPI } from "vitest";
-import {
-  createQueuertClient,
-  createQueuertInProcessWorker,
-  defineJobTypes,
-  rescheduleJob,
-} from "../index.js";
+import { createClient, createInProcessWorker, defineJobTypes, rescheduleJob } from "../index.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -25,14 +20,14 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       };
     }>();
 
-    const client = await createQueuertClient({
+    const client = await createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       registry,
     });
-    const worker = await createQueuertInProcessWorker({
+    const worker = await createInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -92,14 +87,14 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       };
     }>();
 
-    const client = await createQueuertClient({
+    const client = await createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       registry,
     });
-    const worker = await createQueuertInProcessWorker({
+    const worker = await createInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -163,7 +158,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       };
     }>();
 
-    const client = await createQueuertClient({
+    const client = await createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -173,7 +168,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
 
     const firstCompleted = Promise.withResolvers<void>();
 
-    const worker = await createQueuertInProcessWorker({
+    const worker = await createInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -253,7 +248,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       };
     }>();
 
-    const client = await createQueuertClient({
+    const client = await createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -263,7 +258,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
 
     const firstCompleted = Promise.withResolvers<void>();
 
-    const worker = await createQueuertInProcessWorker({
+    const worker = await createInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -339,7 +334,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       };
     }>();
 
-    const client = await createQueuertClient({
+    const client = await createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -350,7 +345,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     let attemptCount = 0;
     const firstAttemptDone = Promise.withResolvers<void>();
 
-    const worker = await createQueuertInProcessWorker({
+    const worker = await createInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -418,7 +413,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       };
     }>();
 
-    const client = await createQueuertClient({
+    const client = await createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -429,7 +424,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     let attemptCount = 0;
     const firstAttemptDone = Promise.withResolvers<void>();
 
-    const worker = await createQueuertInProcessWorker({
+    const worker = await createInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,

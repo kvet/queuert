@@ -1,6 +1,6 @@
 import { type TestAPI } from "vitest";
 import { sleep } from "../helpers/sleep.js";
-import { createQueuertClient, defineJobTypes } from "../index.js";
+import { createClient, defineJobTypes } from "../index.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -20,7 +20,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       };
     }>();
 
-    const client = await createQueuertClient({
+    const client = await createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -103,7 +103,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       };
     }>();
 
-    const client = await createQueuertClient({
+    const client = await createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -211,7 +211,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       };
     }>();
 
-    const client = await createQueuertClient({
+    const client = await createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,

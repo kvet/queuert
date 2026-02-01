@@ -1,8 +1,8 @@
 import { type TestAPI, expectTypeOf } from "vitest";
 import {
   type CompletedJobChain,
-  createQueuertClient,
-  createQueuertInProcessWorker,
+  createClient,
+  createInProcessWorker,
   defineJobTypes,
 } from "../index.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
@@ -41,7 +41,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       };
     }>();
 
-    const client = await createQueuertClient({
+    const client = await createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -50,7 +50,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
     const originIds: string[] = [];
 
-    const worker = await createQueuertInProcessWorker({
+    const worker = await createInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -245,14 +245,14 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       };
     }>();
 
-    const client = await createQueuertClient({
+    const client = await createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       registry,
     });
-    const worker = await createQueuertInProcessWorker({
+    const worker = await createInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -354,14 +354,14 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       };
     }>();
 
-    const client = await createQueuertClient({
+    const client = await createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       registry,
     });
-    const worker = await createQueuertInProcessWorker({
+    const worker = await createInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -430,14 +430,14 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       };
     }>();
 
-    const client = await createQueuertClient({
+    const client = await createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       registry,
     });
-    const worker = await createQueuertInProcessWorker({
+    const worker = await createInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -516,14 +516,14 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       shared: { input: { data: number }; output: { done: true } };
     }>();
 
-    const client = await createQueuertClient({
+    const client = await createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       registry,
     });
-    const worker = await createQueuertInProcessWorker({
+    const worker = await createInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -605,7 +605,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       };
     }>();
 
-    const client = await createQueuertClient({
+    const client = await createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -616,7 +616,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     let independentChainRootChainId: string | null = null;
     let independentChainOriginId: string | null = null;
 
-    const worker = await createQueuertInProcessWorker({
+    const worker = await createInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,

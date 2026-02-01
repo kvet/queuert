@@ -6,7 +6,7 @@
 - ObservabilityAdapter: tracing spans
 - test against multiple versions of node on CI
 - extract state and notify adapter test suites to efficiently test multiple configurations (prefixes etc)
-- rename createQueuertClient to createClient and createQueuertInProcessWorker to createInProcessWorker. review all other names for similar verbosity
+- add notify-nats-\* example for @queuert/nats package
 
 # Medium term
 

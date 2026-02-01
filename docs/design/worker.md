@@ -9,9 +9,9 @@ A **worker** runs a main loop that coordinates job processing across multiple **
 ## Quick Start
 
 ```typescript
-import { createQueuertInProcessWorker } from "queuert";
+import { createInProcessWorker } from "queuert";
 
-const worker = await createQueuertInProcessWorker({
+const worker = await createInProcessWorker({
   stateAdapter,
   notifyAdapter, // optional
   registry,
@@ -102,7 +102,7 @@ For scaling across multiple machines or processes, deploy separate workers:
 
 ```typescript
 // Process A
-const worker = await createQueuertInProcessWorker({
+const worker = await createInProcessWorker({
   ...config,
   workerId: 'machine-a',
   concurrency: 10,
@@ -110,7 +110,7 @@ const worker = await createQueuertInProcessWorker({
 });
 
 // Process B (separate Node.js process)
-const worker = await createQueuertInProcessWorker({
+const worker = await createInProcessWorker({
   ...config,
   workerId: 'machine-b',
   concurrency: 10,
@@ -124,10 +124,10 @@ Workers compete for jobs via database-level locking (`FOR UPDATE SKIP LOCKED` in
 
 ### Creation
 
-Workers are created with `createQueuertInProcessWorker()`:
+Workers are created with `createInProcessWorker()`:
 
 ```typescript
-const worker = await createQueuertInProcessWorker({
+const worker = await createInProcessWorker({
   // Required
   stateAdapter,
   registry,
@@ -233,7 +233,7 @@ See [Job Processing](job-processing.md) for details on error handling and abort 
 A single worker can handle multiple job types:
 
 ```typescript
-const worker = await createQueuertInProcessWorker({
+const worker = await createInProcessWorker({
   ...adapters,
   workerId: "multi-worker",
   processors: {
@@ -326,13 +326,13 @@ See `examples/log-pino` and `examples/log-winston` for complete implementations.
 ### Worker Options
 
 ```typescript
-const worker = await createQueuertInProcessWorker({
+const worker = await createInProcessWorker({
   // Adapters
   stateAdapter,              // Required: job persistence
   notifyAdapter,             // Optional: push notifications
   observabilityAdapter,      // Optional: metrics/tracing
   registry,                  // Required: type definitions
-  log,                       // Required: logger
+  log,                       // Optional: logger (default: silent)
 
   // Identity
   workerId: 'worker-1',      // Default: random UUID

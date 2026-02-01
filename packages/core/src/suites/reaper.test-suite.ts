@@ -1,12 +1,7 @@
 import { type TestAPI } from "vitest";
 import { JobAlreadyCompletedError, JobTakenByAnotherWorkerError } from "../errors.js";
 import { sleep } from "../helpers/sleep.js";
-import {
-  type LeaseConfig,
-  createQueuertClient,
-  createQueuertInProcessWorker,
-  defineJobTypes,
-} from "../index.js";
+import { type LeaseConfig, createClient, createInProcessWorker, defineJobTypes } from "../index.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -32,7 +27,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       };
     }>();
 
-    const client = await createQueuertClient({
+    const client = await createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -45,7 +40,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const jobCompleted = Promise.withResolvers<void>();
     const leaseConfig = { leaseMs: 10, renewIntervalMs: 100 } satisfies LeaseConfig;
 
-    const worker1 = await createQueuertInProcessWorker({
+    const worker1 = await createInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -79,7 +74,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       },
     });
 
-    const worker2 = await createQueuertInProcessWorker({
+    const worker2 = await createInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -169,7 +164,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       };
     }>();
 
-    const client = await createQueuertClient({
+    const client = await createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -182,7 +177,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const jobCompleted = Promise.withResolvers<void>();
     const leaseConfig = { leaseMs: 10, renewIntervalMs: 100 } satisfies LeaseConfig;
 
-    const worker1 = await createQueuertInProcessWorker({
+    const worker1 = await createInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -219,7 +214,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       },
     });
 
-    const worker2 = await createQueuertInProcessWorker({
+    const worker2 = await createInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -312,7 +307,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       };
     }>();
 
-    const client = await createQueuertClient({
+    const client = await createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -325,7 +320,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const processedJobs: number[] = [];
     const leaseConfig = { leaseMs: 10, renewIntervalMs: 1000 } satisfies LeaseConfig;
 
-    const worker = await createQueuertInProcessWorker({
+    const worker = await createInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,

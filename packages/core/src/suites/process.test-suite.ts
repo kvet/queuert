@@ -1,6 +1,6 @@
 import { type TestAPI, expectTypeOf, vi } from "vitest";
 import { sleep } from "../helpers/sleep.js";
-import { createQueuertClient, createQueuertInProcessWorker, defineJobTypes } from "../index.js";
+import { createClient, createInProcessWorker, defineJobTypes } from "../index.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -29,14 +29,14 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       };
     }>();
 
-    const client = await createQueuertClient({
+    const client = await createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       registry,
     });
-    const worker = await createQueuertInProcessWorker({
+    const worker = await createInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -227,14 +227,14 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       };
     }>();
 
-    const client = await createQueuertClient({
+    const client = await createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       registry,
     });
-    const worker = await createQueuertInProcessWorker({
+    const worker = await createInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -386,14 +386,14 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       };
     }>();
 
-    const client = await createQueuertClient({
+    const client = await createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       registry,
     });
-    const worker = await createQueuertInProcessWorker({
+    const worker = await createInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -512,14 +512,14 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       };
     }>();
 
-    const client = await createQueuertClient({
+    const client = await createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       registry,
     });
-    const worker = await createQueuertInProcessWorker({
+    const worker = await createInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -583,7 +583,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       };
     }>();
 
-    const client = await createQueuertClient({
+    const client = await createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -592,7 +592,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     });
 
     const createWorker = async () =>
-      createQueuertInProcessWorker({
+      createInProcessWorker({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -644,14 +644,14 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
 
     const attempts: number[] = [];
 
-    const client = await createQueuertClient({
+    const client = await createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       registry,
     });
-    const worker = await createQueuertInProcessWorker({
+    const worker = await createInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -732,14 +732,14 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
 
     const errors: string[] = [];
 
-    const client = await createQueuertClient({
+    const client = await createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       registry,
     });
-    const worker = await createQueuertInProcessWorker({
+    const worker = await createInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -859,14 +859,14 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
 
     const errors: { phase: ErrorPhase; error: string }[] = [];
 
-    const client = await createQueuertClient({
+    const client = await createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       registry,
     });
-    const worker = await createQueuertInProcessWorker({
+    const worker = await createInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -1005,14 +1005,14 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
 
     let attempts = 0;
 
-    const client = await createQueuertClient({
+    const client = await createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       registry,
     });
-    const worker = await createQueuertInProcessWorker({
+    const worker = await createInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,

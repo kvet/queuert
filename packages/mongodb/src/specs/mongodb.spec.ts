@@ -1,6 +1,6 @@
 import { extendWithMongodb } from "@queuert/testcontainers";
 import { MongoClient } from "mongodb";
-import { createQueuertClient, createQueuertInProcessWorker, defineJobTypes } from "queuert";
+import { createClient, createInProcessWorker, defineJobTypes } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 import { withWorkers } from "queuert/testing";
 import { it as baseIt, expectTypeOf, vi } from "vitest";
@@ -40,13 +40,13 @@ it("should infer types correctly with custom ID", async ({ mongoConnectionString
     };
   }>();
 
-  const client = await createQueuertClient({
+  const client = await createClient({
     stateAdapter,
     notifyAdapter,
     log,
     registry,
   });
-  const worker = await createQueuertInProcessWorker({
+  const worker = await createInProcessWorker({
     stateAdapter,
     notifyAdapter,
     log,

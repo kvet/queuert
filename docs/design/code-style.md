@@ -14,6 +14,56 @@ This document describes code style conventions, testing patterns, and project or
 - **Nullable conventions**: Use `undefined` for "not found/not present" and `null` for "explicitly set to no value". For example, `getJobById` returns `undefined` when job doesn't exist, while `job.completedAt` is `null` before completion.
 - **Async factory functions**: Factory functions that perform I/O (database setup, network connections) should be async. Pure configuration factories like `createConsoleLog` or `createJobTypeRegistry` should be sync. Note: `createOtelObservabilityAdapter` is async for future-proofing even though current OTEL instrument creation is synchronous.
 
+## Naming Conventions
+
+### Avoid Redundant Package Prefixes
+
+Public exports should not include the package name as a prefix. Since imports already provide namespace context, repeating it is redundant:
+
+```typescript
+// Good - context from import is sufficient
+import { createClient, createInProcessWorker, Client } from "queuert";
+
+// Bad - redundant prefix
+import { createQueuertClient, createQueuertInProcessWorker, QueuertClient } from "queuert";
+```
+
+### Concise Error Names
+
+Error class names should be descriptive but not excessively long. Prefer shorter names that still clearly convey the error:
+
+```typescript
+// Good
+WaitChainTimeoutError;
+
+// Bad - unnecessarily verbose
+WaitForJobChainCompletionTimeoutError;
+```
+
+### Core Package Exports
+
+The core `queuert` package exports these primary factory functions and types:
+
+| Export                  | Description                                           |
+| ----------------------- | ----------------------------------------------------- |
+| `createClient`          | Creates a client for starting and managing job chains |
+| `Client`                | Type for the client instance                          |
+| `createInProcessWorker` | Creates an in-process worker for processing jobs      |
+| `InProcessWorker`       | Type for the worker instance                          |
+
+### Adapter Package Exports
+
+Adapter packages use their domain-specific prefixes (not "Queuert"):
+
+| Package             | Factory Function                 | Type                 |
+| ------------------- | -------------------------------- | -------------------- |
+| `@queuert/postgres` | `createPgStateAdapter`           | `PgStateAdapter`     |
+| `@queuert/sqlite`   | `createSqliteStateAdapter`       | `SqliteStateAdapter` |
+| `@queuert/mongodb`  | `createMongoStateAdapter`        | `MongoStateAdapter`  |
+| `@queuert/redis`    | `createRedisNotifyAdapter`       | -                    |
+| `@queuert/nats`     | `createNatsNotifyAdapter`        | -                    |
+| `@queuert/otel`     | `createOtelObservabilityAdapter` | -                    |
+
 ## Testing Patterns
 
 ### General Guidelines

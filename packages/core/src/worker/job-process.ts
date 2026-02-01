@@ -28,7 +28,7 @@ import {
 import { type TypedAbortController, type TypedAbortSignal } from "../helpers/abort.js";
 import { type BackoffConfig } from "../helpers/backoff.js";
 import { createSignal } from "../helpers/signal.js";
-import { type QueuertHelper, type StartBlockersFn } from "../queuert-helper.js";
+import { type Helper, type StartBlockersFn } from "../helper.js";
 import {
   type BaseTxContext,
   type GetStateAdapterJobId,
@@ -238,7 +238,7 @@ export const runJobProcess = async ({
   typeNames,
   attemptMiddlewares,
 }: {
-  helper: QueuertHelper;
+  helper: Helper;
   attemptHandler: AttemptHandlerFn<
     StateAdapter<BaseTxContext, any>,
     BaseJobTypeDefinitions,

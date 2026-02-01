@@ -1,6 +1,6 @@
 import { extendWithNats } from "@queuert/testcontainers";
 import { connect } from "nats";
-import { createQueuertClient, createQueuertInProcessWorker, defineJobTypes } from "queuert";
+import { createClient, createInProcessWorker, defineJobTypes } from "queuert";
 import { createInProcessStateAdapter } from "queuert/internal";
 import { withWorkers } from "queuert/testing";
 import { it as baseIt, vi } from "vitest";
@@ -31,13 +31,13 @@ it("should work end-to-end with NATS notify adapter", async ({ natsConnectionOpt
     };
   }>();
 
-  const client = await createQueuertClient({
+  const client = await createClient({
     stateAdapter,
     notifyAdapter,
     log,
     registry,
   });
-  const worker = await createQueuertInProcessWorker({
+  const worker = await createInProcessWorker({
     stateAdapter,
     notifyAdapter,
     log,
@@ -87,13 +87,13 @@ it("should work end-to-end without JetStream KV", async ({ natsConnectionOptions
     };
   }>();
 
-  const client = await createQueuertClient({
+  const client = await createClient({
     stateAdapter,
     notifyAdapter,
     log,
     registry,
   });
-  const worker = await createQueuertInProcessWorker({
+  const worker = await createInProcessWorker({
     stateAdapter,
     notifyAdapter,
     log,

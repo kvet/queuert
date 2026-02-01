@@ -6,7 +6,7 @@ import { NatsContainer } from "@testcontainers/nats";
 import { connect } from "nats";
 import { createNatsNotifyAdapter } from "@queuert/nats";
 import { createInProcessStateAdapter } from "queuert/internal";
-import { createQueuertClient, createQueuertInProcessWorker } from "queuert";
+import { createClient, createInProcessWorker } from "queuert";
 import {
   diffMemory,
   measureBaseline,
@@ -41,13 +41,13 @@ console.log("\nAfter creating NatsNotifyAdapter:");
 diffMemory(beforeAdapter, afterAdapter);
 
 const [beforeSetup, afterSetup, { qrtClient, stopWorker }] = await measureMemory(async () => {
-  const qrtClient = await createQueuertClient({
+  const qrtClient = await createClient({
     stateAdapter,
     notifyAdapter,
     registry,
   });
 
-  const qrtWorker = await createQueuertInProcessWorker({
+  const qrtWorker = await createInProcessWorker({
     stateAdapter,
     notifyAdapter,
     registry,

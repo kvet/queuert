@@ -1,8 +1,8 @@
 import { type RedisNotifyProvider, createRedisNotifyAdapter } from "@queuert/redis";
 import { RedisContainer } from "@testcontainers/redis";
-import { createQueuertClient, createQueuertInProcessWorker, defineJobTypes } from "queuert";
+import { createClient, createInProcessWorker, defineJobTypes } from "queuert";
 import { createInProcessStateAdapter } from "queuert/internal";
-import { createClient } from "redis";
+import { createClient as createRedisClient } from "redis";
 
 // 1. Start Redis using testcontainers
 console.log("Starting Redis...");
@@ -10,13 +10,13 @@ const redisContainer = await new RedisContainer("redis:7").withExposedPorts(6379
 const redisUrl = redisContainer.getConnectionUrl();
 
 // 2. Create Redis connections
-const redis = createClient({ url: redisUrl });
+const redis = createRedisClient({ url: redisUrl });
 redis.on("error", (err) => {
   console.error("Redis Client Error", err);
 });
 await redis.connect();
 
-const redisSubscription = createClient({ url: redisUrl });
+const redisSubscription = createRedisClient({ url: redisUrl });
 redisSubscription.on("error", (err) => {
   console.error("Redis Subscription Error", err);
 });
@@ -52,13 +52,13 @@ const stateAdapter = createInProcessStateAdapter();
 const notifyAdapter = await createRedisNotifyAdapter({ provider: notifyProvider });
 
 // 6. Create client and worker
-const qrtClient = await createQueuertClient({
+const qrtClient = await createClient({
   stateAdapter,
   notifyAdapter,
   registry,
 });
 
-const qrtWorker = await createQueuertInProcessWorker({
+const qrtWorker = await createInProcessWorker({
   stateAdapter,
   notifyAdapter,
   registry,

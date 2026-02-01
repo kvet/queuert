@@ -1,9 +1,5 @@
 import { type TestAPI } from "vitest";
-import {
-  WaitForJobChainCompletionTimeoutError,
-  createQueuertClient,
-  defineJobTypes,
-} from "../index.js";
+import { WaitChainTimeoutError, createClient, defineJobTypes } from "../index.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -25,7 +21,7 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
       };
     }>();
 
-    const client = await createQueuertClient({
+    const client = await createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -78,7 +74,7 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
       };
     }>();
 
-    const client = await createQueuertClient({
+    const client = await createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -99,7 +95,7 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
         signal: fastSignal,
         timeoutMs: 5000,
       }),
-    ).rejects.toThrow(WaitForJobChainCompletionTimeoutError);
+    ).rejects.toThrow(WaitChainTimeoutError);
     expect(fastSignal.aborted).toBe(true);
     expect(slowSignal.aborted).toBe(false);
   });
@@ -120,7 +116,7 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
       };
     }>();
 
-    const client = await createQueuertClient({
+    const client = await createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -138,7 +134,7 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
       client.waitForJobChainCompletion(jobChain, {
         timeoutMs: 1,
       }),
-    ).rejects.toThrow(WaitForJobChainCompletionTimeoutError);
+    ).rejects.toThrow(WaitChainTimeoutError);
   });
 
   it("throws error when chain does not exist", async ({
@@ -156,7 +152,7 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
       };
     }>();
 
-    const client = await createQueuertClient({
+    const client = await createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,

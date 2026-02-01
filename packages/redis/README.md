@@ -36,7 +36,7 @@ npm install @queuert/redis
 ## Quick Start
 
 ```typescript
-import { createQueuertClient, createConsoleLog, defineJobTypes } from "queuert";
+import { createClient, createConsoleLog, defineJobTypes } from "queuert";
 import { createPgStateAdapter } from "@queuert/postgres";
 import { createRedisNotifyAdapter } from "@queuert/redis";
 import { createClient } from "redis";
@@ -70,7 +70,7 @@ const notifyAdapter = await createRedisNotifyAdapter({
   },
 });
 
-const client = await createQueuertClient({
+const client = await createClient({
   stateAdapter,
   notifyAdapter,
   registry: jobTypes,

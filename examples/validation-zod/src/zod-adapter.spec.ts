@@ -1,4 +1,4 @@
-import { JobTypeValidationError, createQueuertClient, createQueuertInProcessWorker } from "queuert";
+import { JobTypeValidationError, createClient, createInProcessWorker } from "queuert";
 import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -322,13 +322,13 @@ describe("integration", () => {
     const notifyAdapter = createInProcessNotifyAdapter();
     const log = () => {};
 
-    const qrtClient = await createQueuertClient({
+    const qrtClient = await createClient({
       stateAdapter,
       notifyAdapter,
       log,
       registry,
     });
-    const qrtWorker = await createQueuertInProcessWorker({
+    const qrtWorker = await createInProcessWorker({
       stateAdapter,
       notifyAdapter,
       log,
@@ -387,7 +387,7 @@ describe("integration", () => {
     const notifyAdapter = createInProcessNotifyAdapter();
     const log = () => {};
 
-    const qrtClient = await createQueuertClient({
+    const qrtClient = await createClient({
       stateAdapter,
       notifyAdapter,
       log,
@@ -419,7 +419,7 @@ describe("integration", () => {
     const notifyAdapter = createInProcessNotifyAdapter();
     const log = () => {};
 
-    const qrtClient = await createQueuertClient({
+    const qrtClient = await createClient({
       stateAdapter,
       notifyAdapter,
       log,
@@ -461,7 +461,7 @@ describe("integration", () => {
     const notifyAdapter = createInProcessNotifyAdapter();
     const log = () => {};
 
-    const qrtClient = await createQueuertClient({
+    const qrtClient = await createClient({
       stateAdapter,
       notifyAdapter,
       log,
@@ -506,13 +506,13 @@ describe("integration", () => {
     const notifyAdapter = createInProcessNotifyAdapter();
     const log = () => {};
 
-    const qrtClient = await createQueuertClient({
+    const qrtClient = await createClient({
       stateAdapter,
       notifyAdapter,
       log,
       registry,
     });
-    const qrtWorker = await createQueuertInProcessWorker({
+    const qrtWorker = await createInProcessWorker({
       stateAdapter,
       notifyAdapter,
       log,

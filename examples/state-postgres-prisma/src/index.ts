@@ -2,7 +2,7 @@ import { type PrismaClient as PrismaClientType } from "@prisma/client";
 import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import { execSync } from "node:child_process";
-import { createQueuertClient, createQueuertInProcessWorker, defineJobTypes } from "queuert";
+import { createClient, createInProcessWorker, defineJobTypes } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 
 // 1. Start PostgreSQL using testcontainers
@@ -79,14 +79,14 @@ await stateAdapter.migrateToLatest();
 
 const notifyAdapter = createInProcessNotifyAdapter();
 
-const qrtClient = await createQueuertClient({
+const qrtClient = await createClient({
   stateAdapter,
   notifyAdapter,
   registry,
 });
 
 // 6. Create and start qrtWorker
-const qrtWorker = await createQueuertInProcessWorker({
+const qrtWorker = await createInProcessWorker({
   stateAdapter,
   notifyAdapter,
   registry,

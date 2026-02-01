@@ -1,7 +1,7 @@
 import { type RedisNotifyProvider, createRedisNotifyAdapter } from "@queuert/redis";
 import { RedisContainer } from "@testcontainers/redis";
 import { Redis } from "ioredis";
-import { createQueuertClient, createQueuertInProcessWorker, defineJobTypes } from "queuert";
+import { createClient, createInProcessWorker, defineJobTypes } from "queuert";
 import { createInProcessStateAdapter } from "queuert/internal";
 
 // 1. Start Redis using testcontainers
@@ -62,13 +62,13 @@ const stateAdapter = createInProcessStateAdapter();
 const notifyAdapter = await createRedisNotifyAdapter({ provider: notifyProvider });
 
 // 6. Create client and worker
-const qrtClient = await createQueuertClient({
+const qrtClient = await createClient({
   stateAdapter,
   notifyAdapter,
   registry,
 });
 
-const qrtWorker = await createQueuertInProcessWorker({
+const qrtWorker = await createInProcessWorker({
   stateAdapter,
   notifyAdapter,
   registry,

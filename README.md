@@ -43,10 +43,9 @@ const jobTypes = defineJobTypes<{
   };
 }>();
 
-const client = await createQueuertClient({
+const client = await createClient({
   stateAdapter,
   registry: jobTypes,
-  log: createConsoleLog(),
 });
 
 await client.withNotify(async () =>
@@ -70,7 +69,7 @@ We scheduled the job inside a database transaction. This ensures that if the tra
 Later, a background worker picks up the job and sends the email:
 
 ```ts
-const worker = await createQueuertInProcessWorker({
+const worker = await createInProcessWorker({
   stateAdapter,
   registry: jobTypes,
   log: createConsoleLog(),
@@ -189,7 +188,7 @@ Deploy multiple worker processes sharing the same database for horizontal scalin
 
 ```ts
 // Process A (e.g., machine-1)
-const worker = await createQueuertInProcessWorker({
+const worker = await createInProcessWorker({
   stateAdapter,
   notifyAdapter,
   registry,
@@ -199,7 +198,7 @@ const worker = await createQueuertInProcessWorker({
 });
 
 // Process B (e.g., machine-2)
-const worker = await createQueuertInProcessWorker({
+const worker = await createInProcessWorker({
   stateAdapter,
   notifyAdapter,
   registry,
@@ -432,7 +431,7 @@ await queuert.startJobChain({
 });
 
 // Access completed blockers in worker
-const worker = await createQueuertInProcessWorker({
+const worker = await createInProcessWorker({
   stateAdapter,
   registry: jobTypes,
   log: createConsoleLog(),
@@ -495,7 +494,7 @@ When a job throws an error, it's automatically rescheduled with exponential back
 ```ts
 import { rescheduleJob } from "queuert";
 
-const worker = await createQueuertInProcessWorker({
+const worker = await createInProcessWorker({
   stateAdapter,
   registry: jobTypes,
   log: createConsoleLog(),
@@ -694,7 +693,7 @@ const chain = await queuert.startJobChain({
 });
 
 // The worker handles the timeout case (auto-reject) and processes approved requests
-const worker = await createQueuertInProcessWorker({
+const worker = await createInProcessWorker({
   stateAdapter,
   registry: jobTypes,
   log: createConsoleLog(),
@@ -764,7 +763,7 @@ See complete adapter examples: [Zod](./examples/validation-zod), [Valibot](./exa
 For cooperative timeouts, combine `AbortSignal.timeout()` with the provided `signal`:
 
 ```ts
-const worker = await createQueuertInProcessWorker({
+const worker = await createInProcessWorker({
   stateAdapter,
   registry: jobTypes,
   log: createConsoleLog(),
@@ -790,7 +789,7 @@ await worker.start();
 For hard timeouts, configure `leaseConfig` in the job type processor — if a job doesn't complete or renew its lease in time, the reaper reclaims it for retry:
 
 ```ts
-const worker = await createQueuertInProcessWorker({
+const worker = await createInProcessWorker({
   stateAdapter,
   registry: jobTypes,
   log: createConsoleLog(),
@@ -813,7 +812,7 @@ Queuert provides an OpenTelemetry adapter for metrics collection. Configure your
 import { createOtelObservabilityAdapter } from "@queuert/otel";
 import { metrics } from "@opentelemetry/api";
 
-const client = await createQueuertClient({
+const client = await createClient({
   stateAdapter,
   registry: jobTypes,
   observabilityAdapter: createOtelObservabilityAdapter({

@@ -1,8 +1,8 @@
 import { type TestAPI } from "vitest";
 import {
   type StateAdapter,
-  createQueuertClient,
-  createQueuertInProcessWorker,
+  createClient,
+  createInProcessWorker,
   defineJobTypes,
 } from "../index.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
@@ -31,14 +31,14 @@ export const stateResilienceTestSuite = ({
       };
     }>();
 
-    const client = await createQueuertClient({
+    const client = await createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       registry,
     });
-    const flakyWorker = await createQueuertInProcessWorker({
+    const flakyWorker = await createInProcessWorker({
       stateAdapter: flakyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -114,14 +114,14 @@ export const stateResilienceTestSuite = ({
         };
       }>();
 
-      const client = await createQueuertClient({
+      const client = await createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         registry,
       });
-      const flakyWorker = await createQueuertInProcessWorker({
+      const flakyWorker = await createInProcessWorker({
         stateAdapter: flakyStateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -198,7 +198,7 @@ export const stateResilienceTestSuite = ({
         };
       }>();
 
-      const client = await createQueuertClient({
+      const client = await createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -230,7 +230,7 @@ export const stateResilienceTestSuite = ({
           },
         },
       } as const;
-      const flakyWorker1 = await createQueuertInProcessWorker({
+      const flakyWorker1 = await createInProcessWorker({
         ...workerConfig,
         processors: {
           test: {
@@ -241,7 +241,7 @@ export const stateResilienceTestSuite = ({
           },
         },
       });
-      const flakyWorker2 = await createQueuertInProcessWorker({
+      const flakyWorker2 = await createInProcessWorker({
         ...workerConfig,
         processors: {
           test: {

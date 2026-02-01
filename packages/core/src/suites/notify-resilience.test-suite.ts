@@ -1,8 +1,8 @@
 import { type TestAPI } from "vitest";
 import {
   type NotifyAdapter,
-  createQueuertClient,
-  createQueuertInProcessWorker,
+  createClient,
+  createInProcessWorker,
   defineJobTypes,
 } from "../index.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
@@ -28,14 +28,14 @@ export const notifyResilienceTestSuite = ({
       };
     }>();
 
-    const client = await createQueuertClient({
+    const client = await createClient({
       stateAdapter,
       notifyAdapter: flakyNotifyAdapter,
       observabilityAdapter,
       log,
       registry,
     });
-    const worker = await createQueuertInProcessWorker({
+    const worker = await createInProcessWorker({
       stateAdapter,
       notifyAdapter: flakyNotifyAdapter,
       observabilityAdapter,

@@ -1,7 +1,7 @@
 import { type PgNotifyProvider, createPgNotifyAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import postgres from "postgres";
-import { createQueuertClient, createQueuertInProcessWorker, defineJobTypes } from "queuert";
+import { createClient, createInProcessWorker, defineJobTypes } from "queuert";
 import { createInProcessStateAdapter } from "queuert/internal";
 
 // 1. Start PostgreSQL using testcontainers
@@ -47,13 +47,13 @@ const stateAdapter = createInProcessStateAdapter();
 const notifyAdapter = await createPgNotifyAdapter({ provider: notifyProvider });
 
 // 6. Create client and worker
-const qrtClient = await createQueuertClient({
+const qrtClient = await createClient({
   stateAdapter,
   notifyAdapter,
   registry,
 });
 
-const qrtWorker = await createQueuertInProcessWorker({
+const qrtWorker = await createInProcessWorker({
   stateAdapter,
   notifyAdapter,
   registry,

@@ -180,7 +180,7 @@ const chain = await queuert.startJobChain({
 });
 
 // Worker handles timeout case (auto-reject)
-const worker = await createQueuertInProcessWorker({
+const worker = await createInProcessWorker({
   stateAdapter,
   registry: jobTypes,
   log: createConsoleLog(),

@@ -10,8 +10,8 @@ Public-facing adapter factories that may perform I/O are async for consistency:
 
 ```typescript
 // Public adapters - async (may perform I/O)
-createQueuertClient → Promise<QueuertClient>
-createQueuertInProcessWorker → Promise<QueuertInProcessWorker>
+createClient → Promise<Client>
+createInProcessWorker → Promise<InProcessWorker>
 createPgStateAdapter → Promise<StateAdapter>
 createSqliteStateAdapter → Promise<StateAdapter>
 createMongoStateAdapter → Promise<StateAdapter>

@@ -5,7 +5,7 @@ import {
 } from "@queuert/sqlite";
 import BetterSqlite3 from "better-sqlite3";
 import { CompiledQuery, type Generated, Kysely, SqliteDialect, sql } from "kysely";
-import { createQueuertClient, createQueuertInProcessWorker, defineJobTypes } from "queuert";
+import { createClient, createInProcessWorker, defineJobTypes } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 
 // 1. Create in-memory SQLite database
@@ -71,14 +71,14 @@ await stateAdapter.migrateToLatest();
 
 const notifyAdapter = createInProcessNotifyAdapter();
 
-const qrtClient = await createQueuertClient({
+const qrtClient = await createClient({
   stateAdapter,
   notifyAdapter,
   registry,
 });
 
 // 8. Create qrtWorker with job type processors
-const qrtWorker = await createQueuertInProcessWorker({
+const qrtWorker = await createInProcessWorker({
   stateAdapter,
   notifyAdapter,
   registry,

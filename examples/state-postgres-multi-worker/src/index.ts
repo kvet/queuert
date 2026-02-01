@@ -8,7 +8,7 @@ import {
 } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import { Pool, type PoolClient } from "pg";
-import { createQueuertClient, defineJobTypes } from "queuert";
+import { createClient, defineJobTypes } from "queuert";
 
 // ============================================================================
 // Multi-Worker Order Processing Example (with Child Processes)
@@ -157,7 +157,7 @@ const closeNotify = (): void => {
 
 const notifyAdapter = await createPgNotifyAdapter({ provider: notifyProvider });
 
-const qrtClient = await createQueuertClient({
+const qrtClient = await createClient({
   stateAdapter,
   notifyAdapter,
   registry,

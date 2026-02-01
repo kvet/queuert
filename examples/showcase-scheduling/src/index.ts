@@ -16,7 +16,7 @@ import postgres, {
   type Row,
   type TransactionSql as _TransactionSql,
 } from "postgres";
-import { createQueuertClient, createQueuertInProcessWorker, defineJobTypes } from "queuert";
+import { createClient, createInProcessWorker, defineJobTypes } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 
 type TransactionSql = _TransactionSql & {
@@ -129,13 +129,13 @@ await sql`
   )
 `;
 
-const client = await createQueuertClient({
+const client = await createClient({
   stateAdapter,
   notifyAdapter,
   registry: jobTypes,
 });
 
-const worker = await createQueuertInProcessWorker({
+const worker = await createInProcessWorker({
   stateAdapter,
   notifyAdapter,
   registry: jobTypes,

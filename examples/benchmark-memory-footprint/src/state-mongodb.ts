@@ -5,7 +5,7 @@
 import { type MongoStateProvider, createMongoStateAdapter } from "@queuert/mongodb";
 import { MongoDBContainer } from "@testcontainers/mongodb";
 import { MongoClient } from "mongodb";
-import { createQueuertClient, createQueuertInProcessWorker } from "queuert";
+import { createClient, createInProcessWorker } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 import {
   diffMemory,
@@ -65,13 +65,13 @@ console.log("\nAfter creating MongoStateAdapter (with migrations):");
 diffMemory(beforeAdapter, afterAdapter);
 
 const [beforeSetup, afterSetup, { qrtClient, stopWorker }] = await measureMemory(async () => {
-  const qrtClient = await createQueuertClient({
+  const qrtClient = await createClient({
     stateAdapter,
     notifyAdapter,
     registry,
   });
 
-  const qrtWorker = await createQueuertInProcessWorker({
+  const qrtWorker = await createInProcessWorker({
     stateAdapter,
     notifyAdapter,
     registry,

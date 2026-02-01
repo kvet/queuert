@@ -5,7 +5,7 @@
 import { metrics } from "@opentelemetry/api";
 import { MeterProvider, PeriodicExportingMetricReader } from "@opentelemetry/sdk-metrics";
 import { createOtelObservabilityAdapter } from "@queuert/otel";
-import { createQueuertClient, createQueuertInProcessWorker } from "queuert";
+import { createClient, createInProcessWorker } from "queuert";
 import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
 import {
   diffMemory,
@@ -54,14 +54,14 @@ const stateAdapter = createInProcessStateAdapter();
 const notifyAdapter = createInProcessNotifyAdapter();
 
 const [beforeSetup, afterSetup, { qrtClient, stopWorker }] = await measureMemory(async () => {
-  const qrtClient = await createQueuertClient({
+  const qrtClient = await createClient({
     stateAdapter,
     notifyAdapter,
     observabilityAdapter,
     registry,
   });
 
-  const qrtWorker = await createQueuertInProcessWorker({
+  const qrtWorker = await createInProcessWorker({
     stateAdapter,
     notifyAdapter,
     observabilityAdapter,

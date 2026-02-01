@@ -6,7 +6,7 @@ import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import postgres from "postgres";
 import { type PgNotifyProvider, createPgNotifyAdapter } from "@queuert/postgres";
 import { createInProcessStateAdapter } from "queuert/internal";
-import { createQueuertClient, createQueuertInProcessWorker } from "queuert";
+import { createClient, createInProcessWorker } from "queuert";
 import {
   diffMemory,
   measureBaseline,
@@ -59,13 +59,13 @@ console.log("\nAfter creating PgNotifyAdapter:");
 diffMemory(beforeAdapter, afterAdapter);
 
 const [beforeSetup, afterSetup, { qrtClient, stopWorker }] = await measureMemory(async () => {
-  const qrtClient = await createQueuertClient({
+  const qrtClient = await createClient({
     stateAdapter,
     notifyAdapter,
     registry,
   });
 
-  const qrtWorker = await createQueuertInProcessWorker({
+  const qrtWorker = await createInProcessWorker({
     stateAdapter,
     notifyAdapter,
     registry,

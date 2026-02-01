@@ -102,7 +102,7 @@ defineJobTypes<{
 }>();
 
 // Start trigger, which creates process-item blockers and continues to aggregate
-const worker = await createQueuertInProcessWorker({
+const worker = await createInProcessWorker({
   stateAdapter,
   registry: jobTypes,
   log: createConsoleLog(),

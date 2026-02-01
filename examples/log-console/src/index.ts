@@ -1,9 +1,4 @@
-import {
-  createConsoleLog,
-  createQueuertClient,
-  createQueuertInProcessWorker,
-  defineJobTypes,
-} from "queuert";
+import { createClient, createConsoleLog, createInProcessWorker, defineJobTypes } from "queuert";
 import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
 
 // 1. Define job types
@@ -25,7 +20,7 @@ const stateAdapter = createInProcessStateAdapter();
 const notifyAdapter = createInProcessNotifyAdapter();
 const log = createConsoleLog();
 
-const qrtClient = await createQueuertClient({
+const qrtClient = await createClient({
   stateAdapter,
   notifyAdapter,
   log,
@@ -33,7 +28,7 @@ const qrtClient = await createQueuertClient({
 });
 
 // 3. Create and start worker
-const qrtWorker = await createQueuertInProcessWorker({
+const qrtWorker = await createInProcessWorker({
   stateAdapter,
   notifyAdapter,
   log,

@@ -2,8 +2,8 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import pino from "pino";
 import {
   type JobAttemptMiddleware,
-  createQueuertClient,
-  createQueuertInProcessWorker,
+  createClient,
+  createInProcessWorker,
   defineJobTypes,
 } from "queuert";
 import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
@@ -61,7 +61,7 @@ const stateAdapter = createInProcessStateAdapter();
 const notifyAdapter = createInProcessNotifyAdapter();
 const log = createPinoLog(logger);
 
-const qrtClient = await createQueuertClient({
+const qrtClient = await createClient({
   stateAdapter,
   notifyAdapter,
   log,
@@ -86,7 +86,7 @@ const contextualLoggingMiddleware: JobAttemptMiddleware<
 };
 
 // 6. Create and start qrtWorker with the middleware
-const qrtWorker = await createQueuertInProcessWorker({
+const qrtWorker = await createInProcessWorker({
   stateAdapter,
   notifyAdapter,
   log,

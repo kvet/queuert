@@ -3,7 +3,7 @@ import {
   createAsyncLock,
   createSqliteStateAdapter,
 } from "@queuert/sqlite";
-import { createQueuertClient, createQueuertInProcessWorker, defineJobTypes } from "queuert";
+import { createClient, createInProcessWorker, defineJobTypes } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 import sqlite3 from "sqlite3";
 
@@ -98,14 +98,14 @@ await stateAdapter.migrateToLatest();
 
 const notifyAdapter = createInProcessNotifyAdapter();
 
-const qrtClient = await createQueuertClient({
+const qrtClient = await createClient({
   stateAdapter,
   notifyAdapter,
   registry,
 });
 
 // 7. Create and start qrtWorker
-const qrtWorker = await createQueuertInProcessWorker({
+const qrtWorker = await createInProcessWorker({
   stateAdapter,
   notifyAdapter,
   registry,

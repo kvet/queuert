@@ -3,10 +3,10 @@
  */
 
 import { RedisContainer } from "@testcontainers/redis";
-import { createClient } from "redis";
+import { createClient as createRedisClient } from "redis";
 import { type RedisNotifyProvider, createRedisNotifyAdapter } from "@queuert/redis";
 import { createInProcessStateAdapter } from "queuert/internal";
-import { createQueuertClient, createQueuertInProcessWorker } from "queuert";
+import { createClient, createInProcessWorker } from "queuert";
 import {
   diffMemory,
   measureBaseline,
@@ -31,8 +31,8 @@ const redisUrl = redisContainer.getConnectionUrl();
 
 const [beforeConnection, afterConnection, { redis, redisSubscription }] = await measureMemory(
   async () => {
-    const redis = createClient({ url: redisUrl });
-    const redisSubscription = createClient({ url: redisUrl });
+    const redis = createRedisClient({ url: redisUrl });
+    const redisSubscription = createRedisClient({ url: redisUrl });
     await redis.connect();
     await redisSubscription.connect();
     return { redis, redisSubscription };
@@ -64,13 +64,13 @@ console.log("\nAfter creating RedisNotifyAdapter:");
 diffMemory(beforeAdapter, afterAdapter);
 
 const [beforeSetup, afterSetup, { qrtClient, stopWorker }] = await measureMemory(async () => {
-  const qrtClient = await createQueuertClient({
+  const qrtClient = await createClient({
     stateAdapter,
     notifyAdapter,
     registry,
   });
 
-  const qrtWorker = await createQueuertInProcessWorker({
+  const qrtWorker = await createInProcessWorker({
     stateAdapter,
     notifyAdapter,
     registry,

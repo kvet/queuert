@@ -13,8 +13,8 @@ import {
   type CompleteJobChainResult,
   type JobChainCompleteOptions,
   type StartBlockersFn,
-  queuertHelper,
-} from "./queuert-helper.js";
+  helper,
+} from "./helper.js";
 import {
   type DeduplicationOptions,
   type GetStateAdapterJobId,
@@ -24,7 +24,7 @@ import {
 
 import { type CompletedJobChain } from "./entities/job-chain.js";
 
-export type QueuertClient<
+export type Client<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TStateAdapter extends StateAdapter<any, any>,
 > = {
@@ -103,7 +103,7 @@ export type QueuertClient<
   >;
 };
 
-export const createQueuertClient = async <
+export const createClient = async <
   TJobTypeRegistry extends JobTypeRegistry<any>,
   TStateAdapter extends StateAdapter<any, any>,
 >({
@@ -118,8 +118,8 @@ export const createQueuertClient = async <
   observabilityAdapter?: ObservabilityAdapter;
   registry: TJobTypeRegistry;
   log?: Log;
-}): Promise<QueuertClient<TJobTypeRegistry["$definitions"], TStateAdapter>> => {
-  const helper = queuertHelper({
+}): Promise<Client<TJobTypeRegistry["$definitions"], TStateAdapter>> => {
+  const h = helper({
     stateAdapter,
     notifyAdapter,
     observabilityAdapter,
@@ -136,37 +136,34 @@ export const createQueuertClient = async <
       startBlockers,
       ...txContext
     }) =>
-      helper.startJobChain({
+      h.startJobChain({
         typeName,
         input,
         txContext,
         deduplication,
         schedule,
         startBlockers,
-      })) as QueuertClient<TJobTypeRegistry["$definitions"], TStateAdapter>["startJobChain"],
+      })) as Client<TJobTypeRegistry["$definitions"], TStateAdapter>["startJobChain"],
     getJobChain: (async ({ id, typeName, ...txContext }) =>
-      helper.getJobChain({ id, typeName, txContext })) as QueuertClient<
+      h.getJobChain({ id, typeName, txContext })) as Client<
       TJobTypeRegistry["$definitions"],
       TStateAdapter
     >["getJobChain"],
     deleteJobChains: async ({ rootChainIds, ...txContext }) =>
-      helper.deleteJobChains({ rootChainIds, txContext }),
+      h.deleteJobChains({ rootChainIds, txContext }),
     completeJobChain: (async ({ id, typeName, complete, ...txContext }) =>
-      helper.completeJobChain({ id, typeName, txContext, complete })) as QueuertClient<
+      h.completeJobChain({ id, typeName, txContext, complete })) as Client<
       TJobTypeRegistry["$definitions"],
       TStateAdapter
     >["completeJobChain"],
     waitForJobChainCompletion: (async (jobChain, options) =>
-      helper.waitForJobChainCompletion({
+      h.waitForJobChainCompletion({
         id: jobChain.id,
         typeName: jobChain.typeName,
         timeoutMs: options.timeoutMs,
         pollIntervalMs: options.pollIntervalMs,
         signal: options.signal,
-      })) as QueuertClient<
-      TJobTypeRegistry["$definitions"],
-      TStateAdapter
-    >["waitForJobChainCompletion"],
-    withNotify: async (cb, ...args) => helper.withNotifyContext(async () => cb(...args)),
+      })) as Client<TJobTypeRegistry["$definitions"], TStateAdapter>["waitForJobChainCompletion"],
+    withNotify: async (cb, ...args) => h.withNotifyContext(async () => cb(...args)),
   };
 };
