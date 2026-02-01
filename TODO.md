@@ -6,7 +6,6 @@
 - ObservabilityAdapter: tracing spans
 - test against multiple versions of node on CI
 - extract state and notify adapter test suites to efficiently test multiple configurations (prefixes etc)
-- add notify-nats-\* example for @queuert/nats package
 
 # Medium term
 

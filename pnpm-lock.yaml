@@ -157,6 +157,33 @@ importers:
         specifier: ^4.0.0
         version: 4.21.0
 
+  examples/notify-nats-nats:
+    devDependencies:
+      '@queuert/nats':
+        specifier: workspace:*
+        version: link:../../packages/nats
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
+      '@testcontainers/nats':
+        specifier: ^11.10.0
+        version: 11.11.0
+      '@types/node':
+        specifier: ^24.10.4
+        version: 24.10.4
+      nats:
+        specifier: ^2.28.0
+        version: 2.29.3
+      queuert:
+        specifier: workspace:*
+        version: link:../../packages/core
+      testcontainers:
+        specifier: ^11.10.0
+        version: 11.11.0
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
+
   examples/notify-postgres-pg:
     devDependencies:
       '@queuert/postgres':

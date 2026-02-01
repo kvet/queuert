@@ -1,0 +1,27 @@
+{
+  "name": "example-notify-nats-nats",
+  "version": "0.0.1",
+  "private": true,
+  "description": "An example demonstrating the NATS notify adapter.",
+  "license": "MIT",
+  "author": "kvet",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kvet/queuert.git"
+  },
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "typecheck": "tsgo --noEmit"
+  },
+  "devDependencies": {
+    "@queuert/nats": "workspace:*",
+    "@queuert/tsconfig": "workspace:*",
+    "@testcontainers/nats": "^11.10.0",
+    "@types/node": "^24.10.4",
+    "nats": "^2.28.0",
+    "queuert": "workspace:*",
+    "testcontainers": "^11.10.0",
+    "tsx": "^4.21.0"
+  }
+}
