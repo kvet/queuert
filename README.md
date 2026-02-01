@@ -723,7 +723,7 @@ For production APIs accepting external input, you can add runtime validation usi
 
 Both `defineJobTypes` (compile-time only) and `createJobTypeRegistry` (runtime validation) provide the same compile-time type safety. Runtime validation adds protection against invalid external data.
 
-See complete adapter examples: [Zod](./examples/validation-zod), [Valibot](./examples/validation-valibot), [TypeBox](./examples/validation-typebox).
+See complete adapter examples: [Zod](./examples/validation-zod), [Valibot](./examples/validation-valibot), [TypeBox](./examples/validation-typebox), [ArkType](./examples/validation-arktype).
 
 ## Timeouts
 

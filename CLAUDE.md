@@ -10,7 +10,7 @@ High-level design decisions are documented in [docs/design/](docs/design/):
 
 - [Job Chain Model](docs/design/job-chain-model.md) - Unified job/chain model, Promise analogy, terminology
 - [Job Type References](docs/design/job-type-references.md) - Nominal/structural references, continueWith, blockers
-- [Runtime Job Validation](docs/design/runtime-job-validation.md) - JobTypeRegistry, schema adapters (Zod, Valibot)
+- [Runtime Job Validation](docs/design/runtime-job-validation.md) - JobTypeRegistry, schema adapters (Zod, Valibot, TypeBox, ArkType)
 - [Job Processing](docs/design/job-processing.md) - Prepare/complete pattern, timeouts, workerless completion
 - [Deduplication](docs/design/deduplication.md) - Chain-level deduplication, continuation restriction
 - [Adapters](docs/design/adapters.md) - Factory patterns, dual-context design, notification optimization
