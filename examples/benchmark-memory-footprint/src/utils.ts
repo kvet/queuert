@@ -99,7 +99,7 @@ export async function measureBaseline(): Promise<MemorySnapshot> {
 // Shared job configuration
 // ============================================================================
 
-export const jobTypeRegistry = defineJobTypes<{
+export const registry = defineJobTypes<{
   "test-job": {
     entry: true;
     input: { message: string };

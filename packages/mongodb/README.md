@@ -48,7 +48,7 @@ const stateAdapter = await createMongoStateAdapter({
 
 const client = await createQueuertClient({
   stateAdapter,
-  jobTypeRegistry: jobTypes,
+  registry: jobTypes,
   log: createConsoleLog(),
 });
 ```

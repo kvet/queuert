@@ -13,7 +13,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     runInTransaction,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypes<{
+    const registry = defineJobTypes<{
       test: {
         entry: true;
         input: { value: number };
@@ -26,18 +26,18 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
     const worker = await createQueuertInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
-      concurrency: { maxSlots: 1 },
-      jobTypeProcessors: {
+      registry,
+      concurrency: 1,
+      processors: {
         test: {
-          process: async ({ job, complete }) => {
+          attemptHandler: async ({ job, complete }) => {
             await sleep(50);
             return complete(async () => ({ result: job.input.value }));
           },
@@ -73,7 +73,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     runInTransaction,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypes<{
+    const registry = defineJobTypes<{
       test: {
         entry: true;
         input: { value: number };
@@ -86,7 +86,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
 
     const createWorker = async () =>
@@ -95,11 +95,11 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         notifyAdapter,
         observabilityAdapter,
         log,
-        jobTypeRegistry,
-        concurrency: { maxSlots: 1 },
-        jobTypeProcessors: {
+        registry,
+        concurrency: 1,
+        processors: {
           test: {
-            process: async ({ job, complete }) => {
+            attemptHandler: async ({ job, complete }) => {
               await sleep(50);
               return complete(async () => ({ result: job.input.value }));
             },
@@ -146,7 +146,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     runInTransaction,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypes<{
+    const registry = defineJobTypes<{
       blocker: {
         entry: true;
         input: null;
@@ -165,18 +165,18 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
     const worker1 = await createQueuertInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
-      concurrency: { maxSlots: 1 },
-      jobTypeProcessors: {
+      registry,
+      concurrency: 1,
+      processors: {
         blocker: {
-          process: async ({ complete }) => {
+          attemptHandler: async ({ complete }) => {
             await sleep(25);
             return complete(async () => ({ allowed: true }));
           },
@@ -188,11 +188,11 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
-      concurrency: { maxSlots: 1 },
-      jobTypeProcessors: {
+      registry,
+      concurrency: 1,
+      processors: {
         main: {
-          process: async ({ complete }) => {
+          attemptHandler: async ({ complete }) => {
             await sleep(25);
             return complete(async () => ({ done: true }));
           },
@@ -238,7 +238,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     runInTransaction,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypes<{
+    const registry = defineJobTypes<{
       step1: {
         entry: true;
         input: null;
@@ -255,18 +255,18 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
     const worker1 = await createQueuertInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
-      concurrency: { maxSlots: 1 },
-      jobTypeProcessors: {
+      registry,
+      concurrency: 1,
+      processors: {
         step1: {
-          process: async ({ complete }) => {
+          attemptHandler: async ({ complete }) => {
             await sleep(25);
             return complete(async ({ continueWith }) =>
               continueWith({
@@ -283,11 +283,11 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
-      concurrency: { maxSlots: 1 },
-      jobTypeProcessors: {
+      registry,
+      concurrency: 1,
+      processors: {
         step2: {
-          process: async ({ complete }) => {
+          attemptHandler: async ({ complete }) => {
             await sleep(25);
             return complete(async () => ({ finished: true }));
           },
@@ -326,7 +326,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     runInTransaction,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypes<{
+    const registry = defineJobTypes<{
       test: {
         entry: true;
         input: null;
@@ -339,7 +339,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
 
     const jobStarted = Promise.withResolvers<void>();
@@ -350,12 +350,12 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
       workerId: "worker",
-      concurrency: { maxSlots: 1 },
-      jobTypeProcessors: {
+      concurrency: 1,
+      processors: {
         test: {
-          process: async ({ signal, prepare }) => {
+          attemptHandler: async ({ signal, prepare }) => {
             await prepare({ mode: "staged" });
             jobStarted.resolve();
 
@@ -409,7 +409,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     runInTransaction,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypes<{
+    const registry = defineJobTypes<{
       test: {
         entry: true;
         input: null;
@@ -422,7 +422,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
 
     const jobStarted = Promise.withResolvers<void>();
@@ -434,11 +434,11 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         notifyAdapter,
         observabilityAdapter,
         log,
-        jobTypeRegistry,
-        concurrency: { maxSlots: 1 },
-        jobTypeProcessors: {
+        registry,
+        concurrency: 1,
+        processors: {
           test: {
-            process: async ({ signal, job, prepare, complete }) => {
+            attemptHandler: async ({ signal, job, prepare, complete }) => {
               await prepare({ mode: "staged" });
 
               if (job.attempt > 1) {

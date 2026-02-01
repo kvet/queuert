@@ -1,7 +1,9 @@
 import { sleep } from "../helpers/sleep.js";
 
 export type LeaseConfig = {
+  /** How long a worker holds a job before it can be reclaimed */
   leaseMs: number;
+  /** How often to renew the lease */
   renewIntervalMs: number;
 };
 

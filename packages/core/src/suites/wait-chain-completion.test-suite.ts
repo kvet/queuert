@@ -17,7 +17,7 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypes<{
+    const registry = defineJobTypes<{
       test: {
         entry: true;
         input: null;
@@ -30,7 +30,7 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
 
     const jobChain = await client.withNotify(async () =>
@@ -70,7 +70,7 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypes<{
+    const registry = defineJobTypes<{
       test: {
         entry: true;
         input: null;
@@ -83,7 +83,7 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
 
     const jobChain = await client.withNotify(async () =>
@@ -112,7 +112,7 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypes<{
+    const registry = defineJobTypes<{
       test: {
         entry: true;
         input: null;
@@ -125,7 +125,7 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
 
     const jobChain = await client.withNotify(async () =>
@@ -148,7 +148,7 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypes<{
+    const registry = defineJobTypes<{
       test: {
         entry: true;
         input: null;
@@ -161,7 +161,7 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
 
     const nonExistentId = crypto.randomUUID();

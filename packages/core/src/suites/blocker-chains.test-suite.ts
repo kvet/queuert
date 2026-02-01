@@ -24,7 +24,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expectLogs,
     expectMetrics,
   }) => {
-    const jobTypeRegistry = defineJobTypes<{
+    const registry = defineJobTypes<{
       blocker: {
         entry: true;
         input: { value: number };
@@ -44,7 +44,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
     let mainChainId: string;
     let blockerChainId: string;
@@ -55,11 +55,11 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
-      concurrency: { maxSlots: 1 },
-      jobTypeProcessors: {
+      registry,
+      concurrency: 1,
+      processors: {
         blocker: {
-          process: async ({ job, complete }) => {
+          attemptHandler: async ({ job, complete }) => {
             expect(job.chainId).toEqual(blockerChainId);
             expect(job.rootChainId).toEqual(mainChainId);
             expect(job.originId).toEqual(originId);
@@ -76,7 +76,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           },
         },
         main: {
-          process: async ({
+          attemptHandler: async ({
             job: {
               blockers: [blocker],
               id,
@@ -250,7 +250,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypes<{
+    const registry = defineJobTypes<{
       blocker: {
         entry: true;
         input: { value: number };
@@ -269,25 +269,25 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
     const worker = await createQueuertInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
-      concurrency: { maxSlots: 1 },
-      jobTypeProcessors: {
+      registry,
+      concurrency: 1,
+      processors: {
         blocker: {
-          process: async ({ job, complete }) => {
+          attemptHandler: async ({ job, complete }) => {
             expect(job.originId).toBeNull();
 
             return complete(async () => ({ result: job.input.value }));
           },
         },
         main: {
-          process: async ({
+          attemptHandler: async ({
             job: {
               blockers: [blocker],
             },
@@ -352,7 +352,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypes<{
+    const registry = defineJobTypes<{
       inner: {
         entry: true;
         input: null;
@@ -370,7 +370,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
     const childJobChains: JobChain<string, "inner", null, null>[] = [];
 
@@ -379,11 +379,11 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
-      concurrency: { maxSlots: 1 },
-      jobTypeProcessors: {
+      registry,
+      concurrency: 1,
+      processors: {
         inner: {
-          process: async ({ job, complete }) => {
+          attemptHandler: async ({ job, complete }) => {
             return complete(async () => {
               // Independent chains should NOT inherit originId from parent
               expect(job.originId).toBeNull();
@@ -394,7 +394,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           },
         },
         outer: {
-          process: async ({ job, prepare, complete }) => {
+          attemptHandler: async ({ job, prepare, complete }) => {
             expect(job.originId).toBeNull();
 
             await prepare({ mode: "staged" }, async (txContext) => {
@@ -471,7 +471,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypes<{
+    const registry = defineJobTypes<{
       test: {
         entry: true;
         input: { value: number };
@@ -488,21 +488,21 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
     const worker1 = await createQueuertInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
-      concurrency: { maxSlots: 1 },
-      jobTypeProcessing: {
+      registry,
+      concurrency: 1,
+      processDefaults: {
         pollIntervalMs: 100,
       },
-      jobTypeProcessors: {
+      processors: {
         test: {
-          process: async ({ job, prepare, complete }) => {
+          attemptHandler: async ({ job, prepare, complete }) => {
             await prepare({ mode: "atomic" });
             return complete(async ({ continueWith }) =>
               continueWith({
@@ -519,14 +519,14 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
-      concurrency: { maxSlots: 1 },
-      jobTypeProcessing: {
+      registry,
+      concurrency: 1,
+      processDefaults: {
         pollIntervalMs: 100,
       },
-      jobTypeProcessors: {
+      processors: {
         finish: {
-          process: async ({ job, prepare, complete }) => {
+          attemptHandler: async ({ job, prepare, complete }) => {
             await prepare({ mode: "atomic" });
             return complete(async () => ({
               result: job.input.valueNext + 1,
@@ -562,7 +562,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypes<{
+    const registry = defineJobTypes<{
       blocker: {
         entry: true;
         input: { value: number };
@@ -581,23 +581,23 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
     const worker = await createQueuertInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
-      concurrency: { maxSlots: 1 },
-      jobTypeProcessors: {
+      registry,
+      concurrency: 1,
+      processors: {
         blocker: {
-          process: async ({ job, complete }) => {
+          attemptHandler: async ({ job, complete }) => {
             return complete(async () => ({ result: job.input.value }));
           },
         },
         main: {
-          process: async ({ job, complete }) => {
+          attemptHandler: async ({ job, complete }) => {
             return complete(async () => ({
               finalResult: job.blockers.map((blocker) => blocker.output.result),
             }));
@@ -647,7 +647,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypes<{
+    const registry = defineJobTypes<{
       blocker: {
         entry: true;
         input: { value: number };
@@ -670,7 +670,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
     let blockerRootChainId: string;
     let blockerOriginId: string | null;
@@ -681,11 +681,11 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
-      concurrency: { maxSlots: 1 },
-      jobTypeProcessors: {
+      registry,
+      concurrency: 1,
+      processors: {
         blocker: {
-          process: async ({ job, prepare, complete }) => {
+          attemptHandler: async ({ job, prepare, complete }) => {
             blockerRootChainId = job.rootChainId;
             blockerOriginId = job.originId;
             await prepare({ mode: "atomic" });
@@ -693,7 +693,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           },
         },
         first: {
-          process: async ({ job, prepare, complete }) => {
+          attemptHandler: async ({ job, prepare, complete }) => {
             await prepare({ mode: "atomic" });
             return complete(async ({ continueWith, ...txContext }) => {
               const continuedJob = await continueWith({
@@ -713,7 +713,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           },
         },
         second: {
-          process: async ({
+          attemptHandler: async ({
             job: {
               blockers: [blocker],
             },

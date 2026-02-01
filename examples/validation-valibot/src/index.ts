@@ -14,7 +14,7 @@ import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queue
 import { createValibotJobTypeRegistry } from "./valibot-adapter.js";
 
 // 1. Define job types with Valibot schemas
-const jobTypeRegistry = createValibotJobTypeRegistry({
+const registry = createValibotJobTypeRegistry({
   // Entry point with nominal continuation validation
   "fetch-data": {
     entry: true,
@@ -77,7 +77,7 @@ const qrtClient = await createQueuertClient({
   stateAdapter,
   notifyAdapter,
   log,
-  jobTypeRegistry,
+  registry,
 });
 
 // 3. Create and start qrtWorker with job type processors
@@ -85,10 +85,10 @@ const qrtWorker = await createQueuertInProcessWorker({
   stateAdapter,
   notifyAdapter,
   log,
-  jobTypeRegistry,
-  jobTypeProcessors: {
+  registry,
+  processors: {
     "fetch-data": {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         console.log(`Fetching data from ${job.input.url}`);
         const data = { items: [1, 2, 3], source: job.input.url };
 
@@ -101,7 +101,7 @@ const qrtWorker = await createQueuertInProcessWorker({
       },
     },
     "process-data": {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         console.log("Processing data:", job.input.data);
         const data = job.input.data as { items: number[] };
 
@@ -112,7 +112,7 @@ const qrtWorker = await createQueuertInProcessWorker({
       },
     },
     "batch-process": {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         console.log(`Processing batch ${job.input.batchId}`);
         console.log("Blockers completed:", job.blockers.length);
 
@@ -122,7 +122,7 @@ const qrtWorker = await createQueuertInProcessWorker({
       },
     },
     auth: {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         console.log(`Authenticating with token: ${job.input.token.substring(0, 8)}...`);
         return complete(async () => ({
           userId: `user-${job.input.token.substring(0, 4)}`,

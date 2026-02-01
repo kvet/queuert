@@ -68,7 +68,7 @@ const notifyAdapter = await createRedisNotifyAdapter({
 const client = await createQueuertClient({
   stateAdapter,
   notifyAdapter,
-  jobTypeRegistry: jobTypes,
+  registry: jobTypes,
   log: createConsoleLog(),
 });
 ```

@@ -114,18 +114,18 @@ await sql`INSERT INTO products (name, price, stock) VALUES ('Widget Pro', 99.99,
 const client = await createQueuertClient({
   stateAdapter,
   notifyAdapter,
-  jobTypeRegistry: jobTypes,
+  registry: jobTypes,
   log: () => {},
 });
 
 const worker = await createQueuertInProcessWorker({
   stateAdapter,
   notifyAdapter,
-  jobTypeRegistry: jobTypes,
+  registry: jobTypes,
   log: () => {},
-  jobTypeProcessors: {
+  processors: {
     "reserve-inventory": {
-      process: async ({ job, prepare, complete }) => {
+      attemptHandler: async ({ job, prepare, complete }) => {
         console.log(`\n[reserve-inventory] ATOMIC mode`);
 
         const order = await prepare({ mode: "atomic" }, async ({ sql: txSql }) => {
@@ -156,7 +156,7 @@ const worker = await createQueuertInProcessWorker({
     },
 
     "charge-payment": {
-      process: async ({ job, prepare, complete }) => {
+      attemptHandler: async ({ job, prepare, complete }) => {
         console.log(`\n[charge-payment] STAGED mode`);
 
         const orderId = await prepare({ mode: "staged" }, async ({ sql: txSql }) => {
@@ -186,7 +186,7 @@ const worker = await createQueuertInProcessWorker({
     },
 
     "send-confirmation": {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         console.log(`\n[send-confirmation] AUTO-SETUP mode`);
         console.log(`  Sending confirmation for order ${job.input.orderId}...`);
 

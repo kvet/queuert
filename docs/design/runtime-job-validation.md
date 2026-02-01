@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes the runtime validation system for job types. While `defineJobTypes` provides compile-time type safety, `createJobTypeRegistry` enables runtime validation using schema validation libraries like Zod, Valibot, or ArkType.
+This document describes the runtime validation system for job types. While `defineJobTypes` provides compile-time type safety, `createJobTypeRegistry` enables runtime validation using schema validation libraries like Zod, Valibot, TypeBox, or others.
 
 ## JobTypeRegistry Interface
 
@@ -126,7 +126,7 @@ const registry = createZodJobTypeRegistry({
 
 ### Other Libraries
 
-The same pattern applies to Valibot, ArkType, or any validation library:
+The same pattern applies to Valibot or any validation library:
 
 ```typescript
 // Valibot adapter
@@ -145,24 +145,6 @@ const createValibotJobTypeRegistry = <T extends Record<string, ValibotJobTypeSch
     },
     parseInput: (typeName, input) => v.parse(getSchema(typeName).input, input),
     parseOutput: (typeName, output) => v.parse(getSchema(typeName).output, output),
-    // ... other methods
-  });
-};
-
-// ArkType adapter
-const createArkJobTypeRegistry = <T extends Record<string, ArkJobTypeSchema>>(schemas: T) => {
-  const getSchema = (typeName: string) => {
-    const schema = schemas[typeName];
-    if (!schema) throw new Error(`Unknown job type: ${typeName}`);
-    return schema;
-  };
-
-  return createJobTypeRegistry<InferArkJobTypes<T>>({
-    validateEntry: (typeName) => {
-      if (!getSchema(typeName).entry) throw new Error("Not an entry point");
-    },
-    parseInput: (typeName, input) => getSchema(typeName).input.assert(input),
-    parseOutput: (typeName, output) => getSchema(typeName).output.assert(output),
     // ... other methods
   });
 };

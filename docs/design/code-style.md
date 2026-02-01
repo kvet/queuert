@@ -11,6 +11,8 @@ This document describes code style conventions, testing patterns, and project or
 - **Merge similar functionality**: Look for patterns and consolidate before adding new code
 - **Search before implementing**: Check for similar existing implementations before adding new features
 - **Typed error classes**: Use specific error types for public-facing errors (`JobNotFoundError`, `JobAlreadyCompletedError`, etc.) to enable proper error handling by consumers. Internal assertion errors can remain as generic `Error`.
+- **Nullable conventions**: Use `undefined` for "not found/not present" and `null` for "explicitly set to no value". For example, `getJobById` returns `undefined` when job doesn't exist, while `job.completedAt` is `null` before completion.
+- **Async factory functions**: Factory functions that perform I/O (database setup, network connections) should be async. Pure configuration factories like `createConsoleLog` or `createJobTypeRegistry` should be sync. Note: `createOtelObservabilityAdapter` is async for future-proofing even though current OTEL instrument creation is synchronous.
 
 ## Testing Patterns
 
@@ -148,6 +150,28 @@ Redis examples implement a `RedisNotifyProvider` with `publish`, `subscribe`, an
 This follows the principle of using each technology's native terminology rather than forcing artificial consistency.
 
 **Provider types**: Postgres and Redis export provider types (`PgNotifyProvider`, `RedisNotifyProvider`) because users implement these interfaces with their chosen client library. NATS does not export a provider type because it accepts the `NatsConnection` directly from the `nats` package — no adapter layer is needed since there's only one NATS client implementation in the Node.js ecosystem.
+
+### State Adapter Conventions
+
+State adapters have configuration differences that reflect database capabilities:
+
+| Option       | PostgreSQL             | SQLite                | MongoDB               | Rationale                                                   |
+| ------------ | ---------------------- | --------------------- | --------------------- | ----------------------------------------------------------- |
+| Namespace    | `schema`               | `tablePrefix`         | N/A                   | PostgreSQL uses schemas; SQLite prefixes table names        |
+| ID default   | `idDefault` (SQL expr) | N/A                   | N/A                   | PostgreSQL can use SQL expressions like `gen_random_uuid()` |
+| ID generator | N/A                    | `idGenerator` (JS fn) | `idGenerator` (JS fn) | SQLite/MongoDB need app-side ID generation                  |
+
+These differences are intentional — each adapter uses the most natural approach for its database.
+
+### In-Process Adapters
+
+The in-process adapters (`createInProcessStateAdapter`, `createInProcessNotifyAdapter`) are exported from `queuert/internal`, not the main entry point. They're intended for:
+
+- Testing (used in test suites and examples)
+- Single-purpose examples (state examples use in-process notify, notify examples use in-process state)
+- Development/prototyping
+
+Production deployments should use the database-backed adapters from their respective packages.
 
 ### Code Style for Examples
 

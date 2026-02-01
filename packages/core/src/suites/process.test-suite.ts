@@ -21,7 +21,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     expectHistograms,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypes<{
+    const registry = defineJobTypes<{
       test: {
         entry: true;
         input: { test: boolean };
@@ -34,19 +34,19 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
     const worker = await createQueuertInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
       workerId: "worker",
-      concurrency: { maxSlots: 1 },
-      jobTypeProcessors: {
+      concurrency: 1,
+      processors: {
         test: {
-          process: async ({ job, prepare, complete }) => {
+          attemptHandler: async ({ job, prepare, complete }) => {
             expectTypeOf(job.typeName).toEqualTypeOf<"test">();
             expectTypeOf(job.input).toEqualTypeOf<{ test: boolean }>();
             expectTypeOf(job.status).toEqualTypeOf<"running">();
@@ -194,7 +194,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypes<{
+    const registry = defineJobTypes<{
       "atomic-complete": {
         entry: true;
         input: { value: number };
@@ -232,47 +232,47 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
     const worker = await createQueuertInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
-      concurrency: { maxSlots: 1 },
-      jobTypeProcessors: {
+      registry,
+      concurrency: 1,
+      processors: {
         "atomic-complete": {
-          process: async ({ job, complete }) => {
+          attemptHandler: async ({ job, complete }) => {
             return complete(async () => ({ result: job.input.value * 2 }));
           },
         },
         "staged-complete": {
-          process: async ({ job, complete }) => {
+          attemptHandler: async ({ job, complete }) => {
             await sleep(1);
             return complete(async () => ({ result: job.input.value * 3 }));
           },
         },
         "staged-with-callback": {
-          process: async ({ job, prepare, complete }) => {
+          attemptHandler: async ({ job, prepare, complete }) => {
             const multiplier = await prepare({ mode: "staged" }, () => 4);
             return complete(async () => ({ result: job.input.value * multiplier }));
           },
         },
         "staged-without-callback": {
-          process: async ({ job, prepare, complete }) => {
+          attemptHandler: async ({ job, prepare, complete }) => {
             await prepare({ mode: "staged" });
             return complete(async () => ({ result: job.input.value * 5 }));
           },
         },
         "atomic-with-callback": {
-          process: async ({ job, prepare, complete }) => {
+          attemptHandler: async ({ job, prepare, complete }) => {
             const multiplier = await prepare({ mode: "atomic" }, () => 6);
             return complete(async () => ({ result: job.input.value * multiplier }));
           },
         },
         "atomic-without-callback": {
-          process: async ({ job, prepare, complete }) => {
+          attemptHandler: async ({ job, prepare, complete }) => {
             await prepare({ mode: "atomic" });
             return complete(async () => ({ result: job.input.value * 7 }));
           },
@@ -359,7 +359,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypes<{
+    const registry = defineJobTypes<{
       "test-prepare-twice": {
         entry: true;
         input: null;
@@ -391,18 +391,18 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
     const worker = await createQueuertInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
-      concurrency: { maxSlots: 1 },
-      jobTypeProcessors: {
+      registry,
+      concurrency: 1,
+      processors: {
         "test-prepare-twice": {
-          process: async ({ prepare, complete }) => {
+          attemptHandler: async ({ prepare, complete }) => {
             await prepare({ mode: "atomic" });
             await expect(prepare({ mode: "atomic" })).rejects.toThrow(
               "Prepare can only be called once",
@@ -411,7 +411,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
           },
         },
         "test-complete-twice": {
-          process: async ({ prepare, complete }) => {
+          attemptHandler: async ({ prepare, complete }) => {
             await prepare({ mode: "atomic" });
             const result = complete(async () => null);
             await expect(complete(async () => null)).rejects.toThrow(
@@ -421,7 +421,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
           },
         },
         "test-prepare-after-auto-setup": {
-          process: async (options) => {
+          attemptHandler: async (options) => {
             // Don't access prepare synchronously - auto-setup will run
             // Use 50ms to ensure auto-setup completes before we continue
             await sleep(50);
@@ -431,7 +431,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
           },
         },
         "test-continueWith-twice": {
-          process: async ({ prepare, complete }) => {
+          attemptHandler: async ({ prepare, complete }) => {
             await prepare({ mode: "atomic" });
             return complete(async ({ continueWith }) => {
               const continuation1 = await continueWith({
@@ -449,7 +449,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
           },
         },
         "test-next": {
-          process: async ({ job, prepare, complete }) => {
+          attemptHandler: async ({ job, prepare, complete }) => {
             await prepare({ mode: "atomic" });
             return complete(async () => ({ result: job.input.value }));
           },
@@ -504,7 +504,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypes<{
+    const registry = defineJobTypes<{
       test: {
         entry: true;
         input: null;
@@ -517,21 +517,21 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
     const worker = await createQueuertInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
-      concurrency: { maxSlots: 1 },
-      jobTypeProcessing: {
-        defaultLeaseConfig: { leaseMs: 10, renewIntervalMs: 100 },
+      registry,
+      concurrency: 1,
+      processDefaults: {
+        leaseConfig: { leaseMs: 10, renewIntervalMs: 100 },
       },
-      jobTypeProcessors: {
+      processors: {
         test: {
-          process: async ({ complete }) => {
+          attemptHandler: async ({ complete }) => {
             await sleep(100);
 
             return complete(async () => null);
@@ -575,7 +575,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       return complete(() => ({ success: true }));
     });
 
-    const jobTypeRegistry = defineJobTypes<{
+    const registry = defineJobTypes<{
       test: {
         entry: true;
         input: { test: boolean };
@@ -588,7 +588,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
 
     const createWorker = async () =>
@@ -597,11 +597,11 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
         notifyAdapter,
         observabilityAdapter,
         log,
-        jobTypeRegistry,
-        concurrency: { maxSlots: 1 },
-        jobTypeProcessors: {
+        registry,
+        concurrency: 1,
+        processors: {
           test: {
-            process: processFn,
+            attemptHandler: processFn,
           },
         },
       });
@@ -634,7 +634,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypes<{
+    const registry = defineJobTypes<{
       test: {
         entry: true;
         input: null;
@@ -649,25 +649,25 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
     const worker = await createQueuertInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
-      concurrency: { maxSlots: 1 },
-      jobTypeProcessing: {
-        defaultRetryConfig: {
+      registry,
+      concurrency: 1,
+      processDefaults: {
+        retryConfig: {
           initialDelayMs: 1,
           multiplier: 1,
           maxDelayMs: 1,
         },
       },
-      jobTypeProcessors: {
+      processors: {
         test: {
-          process: async ({ job, prepare, complete }) => {
+          attemptHandler: async ({ job, prepare, complete }) => {
             attempts.push(job.attempt);
 
             expectTypeOf(job.attempt).toEqualTypeOf<number>();
@@ -722,7 +722,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     expectMetrics,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypes<{
+    const registry = defineJobTypes<{
       test: {
         entry: true;
         input: null;
@@ -737,25 +737,25 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
     const worker = await createQueuertInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
-      concurrency: { maxSlots: 1 },
-      jobTypeProcessing: {
-        defaultRetryConfig: {
+      registry,
+      concurrency: 1,
+      processDefaults: {
+        retryConfig: {
           initialDelayMs: 10,
           multiplier: 2.0,
           maxDelayMs: 100,
         },
       },
-      jobTypeProcessors: {
+      processors: {
         test: {
-          process: async ({ job, complete }) => {
+          attemptHandler: async ({ job, complete }) => {
             if (job.lastAttemptError) {
               errors.push(job.lastAttemptError);
             }
@@ -849,7 +849,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
   }) => {
     type ErrorPhase = "prepare" | "process" | "complete";
 
-    const jobTypeRegistry = defineJobTypes<{
+    const registry = defineJobTypes<{
       test: {
         entry: true;
         input: { phase: ErrorPhase };
@@ -864,25 +864,25 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
     const worker = await createQueuertInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
-      concurrency: { maxSlots: 1 },
-      jobTypeProcessing: {
-        defaultRetryConfig: {
+      registry,
+      concurrency: 1,
+      processDefaults: {
+        retryConfig: {
           initialDelayMs: 1,
           multiplier: 1,
           maxDelayMs: 1,
         },
       },
-      jobTypeProcessors: {
+      processors: {
         test: {
-          process: async ({ job, prepare, complete }) => {
+          attemptHandler: async ({ job, prepare, complete }) => {
             if (job.lastAttemptError) {
               errors.push({
                 phase: job.input.phase,
@@ -995,7 +995,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypes<{
+    const registry = defineJobTypes<{
       test: {
         entry: true;
         input: null;
@@ -1010,23 +1010,23 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
     const worker = await createQueuertInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
-      concurrency: { maxSlots: 1 },
-      jobTypeProcessors: {
+      registry,
+      concurrency: 1,
+      processors: {
         test: {
           retryConfig: {
             initialDelayMs: 1,
             multiplier: 1,
             maxDelayMs: 1,
           },
-          process: async ({ job, complete }) => {
+          attemptHandler: async ({ job, complete }) => {
             attempts++;
             const result = await complete(async () => ({ result: "completed" }));
             if (job.attempt === 1) {

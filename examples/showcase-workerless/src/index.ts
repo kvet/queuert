@@ -98,32 +98,32 @@ const notifyAdapter = createInProcessNotifyAdapter();
 const client = await createQueuertClient({
   stateAdapter,
   notifyAdapter,
-  jobTypeRegistry: jobTypes,
+  registry: jobTypes,
   log: () => {},
 });
 
 const worker = await createQueuertInProcessWorker({
   stateAdapter,
   notifyAdapter,
-  jobTypeRegistry: jobTypes,
+  registry: jobTypes,
   log: () => {},
-  jobTypeProcessors: {
+  processors: {
     "await-approval": {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         console.log(`[await-approval] Timeout reached for ${job.input.requestId} - auto-rejecting`);
         return complete(async () => ({ rejected: true, reason: "timeout" }));
       },
     },
 
     "process-approved": {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         console.log(`[process-approved] Processing approved request ${job.input.requestId}`);
         return complete(async () => ({ processed: true, completedAt: new Date().toISOString() }));
       },
     },
 
     "pending-action": {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         console.log(`[pending-action] Action ${job.input.actionId} expired`);
         return complete(async () => ({ expired: true }));
       },

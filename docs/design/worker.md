@@ -14,12 +14,12 @@ import { createQueuertInProcessWorker } from "queuert";
 const worker = await createQueuertInProcessWorker({
   stateAdapter,
   notifyAdapter, // optional
-  jobTypeRegistry,
+  registry,
   log,
 
-  jobTypeProcessors: {
+  processors: {
     myJob: {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         // Process the job
         return complete(async () => ({ result: "done" }));
       },
@@ -38,12 +38,10 @@ await stop();
 Workers process jobs in parallel using slots. Configure concurrency via the `concurrency` option:
 
 ```typescript
-concurrency: {
-  maxSlots: 10,
-}
+concurrency: 10;
 ```
 
-Default: single slot (`maxSlots: 1`).
+Default: single slot (`concurrency: 1`).
 
 ### Architecture
 
@@ -77,7 +75,7 @@ Default: single slot (`maxSlots: 1`).
 
 **How it works:**
 
-1. Main loop spawns slots up to `maxSlots`
+1. Main loop spawns slots up to `concurrency`
 2. Each slot acquires a job and processes it independently
 3. When a slot completes, main loop spawns a replacement
 4. Slots compete for jobs via database-level locking
@@ -107,16 +105,16 @@ For scaling across multiple machines or processes, deploy separate workers:
 const worker = await createQueuertInProcessWorker({
   ...config,
   workerId: 'machine-a',
-  concurrency: { maxSlots: 10 },
-  jobTypeProcessors: { ... },
+  concurrency: 10,
+  processors: { ... },
 });
 
 // Process B (separate Node.js process)
 const worker = await createQueuertInProcessWorker({
   ...config,
   workerId: 'machine-b',
-  concurrency: { maxSlots: 10 },
-  jobTypeProcessors: { ... },
+  concurrency: 10,
+  processors: { ... },
 });
 ```
 
@@ -132,16 +130,17 @@ Workers are created with `createQueuertInProcessWorker()`:
 const worker = await createQueuertInProcessWorker({
   // Required
   stateAdapter,
-  jobTypeRegistry,
+  registry,
   log,
-  jobTypeProcessors: { ... },
+  processors: { ... },
 
   // Optional
   notifyAdapter,
   observabilityAdapter,
   workerId: 'worker-1',  // default: random UUID
-  concurrency: { ... },
-  jobTypeProcessing: { ... },
+  concurrency: 1,        // default
+  processDefaults: { ... },
+  retryConfig: { ... },  // worker-level retry for infrastructure errors
 });
 ```
 
@@ -152,7 +151,7 @@ The "InProcess" suffix indicates this worker runs in the same Node.js process as
 The worker runs a single coordinating loop:
 
 1. **Reap**: Reclaim one expired lease (if any)
-2. **Fill**: Spawn slots up to `maxSlots`
+2. **Fill**: Spawn slots up to `concurrency`
 3. **Wait**: Listen for notification, poll timeout, or slot completion
 4. **Repeat**
 
@@ -160,7 +159,7 @@ The worker runs a single coordinating loop:
 while (!stopped) {
   await reapExpiredLease();
 
-  while (activeSlots < maxSlots) {
+  while (activeSlots < concurrency) {
     spawnSlot();
   }
 
@@ -237,9 +236,9 @@ A single worker can handle multiple job types:
 const worker = await createQueuertInProcessWorker({
   ...adapters,
   workerId: "multi-worker",
-  jobTypeProcessors: {
-    "type-a": { process: processA },
-    "type-b": { process: processB },
+  processors: {
+    "type-a": { attemptHandler: processA },
+    "type-b": { attemptHandler: processB },
   },
 });
 ```
@@ -249,22 +248,22 @@ Slots poll all registered types together and process whichever is available firs
 Per-type configuration overrides worker defaults:
 
 ```typescript
-jobTypeProcessors: {
+processors: {
   'long-running': {
     leaseConfig: { leaseMs: 300_000, renewIntervalMs: 60_000 },
     retryConfig: { initialDelayMs: 30_000, maxDelayMs: 600_000 },
-    process: ...
+    attemptHandler: ...
   },
 }
 ```
 
-### Job Attempt Middlewares
+### Attempt Middlewares
 
 Workers support middlewares that wrap each job attempt:
 
 ```typescript
-jobTypeProcessing: {
-  jobAttemptMiddlewares: [
+processDefaults: {
+  attemptMiddlewares: [
     async ({ job, workerId }, next) => {
       console.log('Before job processing');
       const result = await next();
@@ -290,11 +289,11 @@ type JobAttemptMiddleware<TStateAdapter, TJobTypeDefinitions> = <T>(
 **Composition order:**
 
 ```typescript
-jobAttemptMiddlewares: [middleware1, middleware2, middleware3];
+attemptMiddlewares: [middleware1, middleware2, middleware3];
 
 // Execution:
 // middleware1 before → middleware2 before → middleware3 before
-// → job processing →
+// → attempt handler →
 // middleware3 after → middleware2 after → middleware1 after
 ```
 
@@ -315,6 +314,13 @@ const contextMiddleware: JobAttemptMiddleware<...> = async ({ job, workerId }, n
 
 See `examples/log-pino` and `examples/log-winston` for complete implementations.
 
+## Terminology
+
+- **Processors**: Define how to handle each job type. Each processor contains an attempt handler and optional retry/lease config.
+- **Attempt Handler**: The function that processes a job attempt. Receives the job, abort signal, and prepare/complete utilities.
+- **Attempts**: Each execution try of a job. Failures trigger retries, creating new attempts with exponential backoff.
+- **Attempt Middlewares**: Functions that wrap each attempt handler execution, enabling cross-cutting concerns like logging.
+
 ## Configuration Reference
 
 ### Worker Options
@@ -325,27 +331,30 @@ const worker = await createQueuertInProcessWorker({
   stateAdapter,              // Required: job persistence
   notifyAdapter,             // Optional: push notifications
   observabilityAdapter,      // Optional: metrics/tracing
-  jobTypeRegistry,           // Required: type definitions
+  registry,                  // Required: type definitions
   log,                       // Required: logger
 
   // Identity
   workerId: 'worker-1',      // Default: random UUID
 
   // Concurrency (optional)
-  concurrency: { maxSlots: 1 },  // default
+  concurrency: 1,            // Default: single slot
 
-  // Processing
-  jobTypeProcessing: {
+  // Worker-level retry (infrastructure errors)
+  retryConfig: { ... },
+
+  // Processing defaults
+  processDefaults: {
     pollIntervalMs: 60_000,
-    defaultRetryConfig: { ... },
-    defaultLeaseConfig: { ... },
-    jobAttemptMiddlewares: [...],
+    retryConfig: { ... },      // Default job retry config
+    leaseConfig: { ... },      // Default lease config
+    attemptMiddlewares: [...],
   },
 
   // Handlers
-  jobTypeProcessors: {
+  processors: {
     jobTypeName: {
-      process: async ({ signal, job, prepare, complete }) => { ... },
+      attemptHandler: async ({ signal, job, prepare, complete }) => { ... },
       leaseConfig: { ... },   // Per-type override
       retryConfig: { ... },   // Per-type override
     },
@@ -356,9 +365,7 @@ const worker = await createQueuertInProcessWorker({
 ### Concurrency Options
 
 ```typescript
-concurrency: {
-  maxSlots: 10,
-}
+concurrency: 10; // Number of parallel slots
 ```
 
 ## Summary

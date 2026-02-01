@@ -19,7 +19,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     expectLogs,
     expectMetrics,
   }) => {
-    const jobTypeRegistry = defineJobTypes<{
+    const registry = defineJobTypes<{
       test: {
         entry: true;
         input: { value: number };
@@ -32,7 +32,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
 
     const jobChain = await client.withNotify(async () =>
@@ -88,7 +88,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypes<{
+    const registry = defineJobTypes<{
       "awaiting-approval": {
         entry: true;
         input: { requestId: string };
@@ -105,7 +105,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
 
     const jobChain = await client.withNotify(async () =>
@@ -155,7 +155,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypes<{
+    const registry = defineJobTypes<{
       "awaiting-approval": {
         entry: true;
         input: { requestId: string };
@@ -172,18 +172,18 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
     const worker = await createQueuertInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
-      concurrency: { maxSlots: 1 },
-      jobTypeProcessors: {
+      registry,
+      concurrency: 1,
+      processors: {
         "process-approved": {
-          process: async ({ prepare, complete }) => {
+          attemptHandler: async ({ prepare, complete }) => {
             await prepare({ mode: "atomic" });
             return complete(async () => ({ done: true }));
           },
@@ -243,7 +243,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypes<{
+    const registry = defineJobTypes<{
       test: {
         entry: true;
         input: null;
@@ -256,7 +256,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
 
     const jobChain = await client.withNotify(async () =>
@@ -306,7 +306,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypes<{
+    const registry = defineJobTypes<{
       test: {
         entry: true;
         input: { value: number };
@@ -319,7 +319,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
 
     const jobChain = await client.withNotify(async () =>
@@ -368,7 +368,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     const jobCompleted = Promise.withResolvers<void>();
     const processCompleted = Promise.withResolvers<void>();
 
-    const jobTypeRegistry = defineJobTypes<{
+    const registry = defineJobTypes<{
       test: {
         entry: true;
         input: null;
@@ -381,19 +381,19 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
     const worker = await createQueuertInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
       workerId: "worker",
-      concurrency: { maxSlots: 1 },
-      jobTypeProcessors: {
+      concurrency: 1,
+      processors: {
         test: {
-          process: async ({ signal, complete }) => {
+          attemptHandler: async ({ signal, complete }) => {
             jobStarted.resolve();
 
             await jobCompleted.promise;
@@ -453,7 +453,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypes<{
+    const registry = defineJobTypes<{
       entryA: { entry: true; input: null; continueWith: { typeName: "shared" } };
       entryB: { entry: true; input: null; continueWith: { typeName: "shared" } };
       shared: { input: null; output: { done: boolean } };
@@ -464,7 +464,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
 
     const jobChain = await client.withNotify(async () =>

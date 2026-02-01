@@ -194,7 +194,7 @@ export type PrepareFn<TStateAdapter extends StateAdapter<BaseTxContext, any>> = 
   ): Promise<Awaited<T>>;
 };
 
-export type JobProcessFn<
+export type AttemptHandlerFn<
   TStateAdapter extends StateAdapter<BaseTxContext, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions & string,
@@ -229,24 +229,28 @@ export type JobProcessFn<
 
 export const runJobProcess = async ({
   helper,
-  process,
+  attemptHandler,
   txContext,
   job,
   retryConfig,
   leaseConfig,
   workerId,
   typeNames,
-  jobAttemptMiddlewares,
+  attemptMiddlewares,
 }: {
   helper: QueuertHelper;
-  process: JobProcessFn<StateAdapter<BaseTxContext, any>, BaseJobTypeDefinitions, string>;
+  attemptHandler: AttemptHandlerFn<
+    StateAdapter<BaseTxContext, any>,
+    BaseJobTypeDefinitions,
+    string
+  >;
   txContext: BaseTxContext;
   job: StateJob;
   retryConfig: BackoffConfig;
   leaseConfig: LeaseConfig;
   workerId: string;
   typeNames: readonly string[];
-  jobAttemptMiddlewares?: JobAttemptMiddleware<
+  attemptMiddlewares?: JobAttemptMiddleware<
     StateAdapter<BaseTxContext, any>,
     BaseJobTypeDefinitions
   >[];
@@ -463,7 +467,7 @@ export const runJobProcess = async ({
 
     let autoSetupDone = false;
     try {
-      const processPromise = process({
+      const attemptPromise = attemptHandler({
         signal: abortController.signal,
         job: runningJob,
         get prepare() {
@@ -477,14 +481,14 @@ export const runJobProcess = async ({
         },
         complete,
       });
-      processPromise.catch(() => {});
+      attemptPromise.catch(() => {});
 
       if (!prepareAccessed && !prepareCalled) {
         await prepare({ mode: "staged" });
         autoSetupDone = true;
       }
 
-      await processPromise;
+      await attemptPromise;
     } catch (error) {
       const runInTx = completeSucceeded
         ? helper.stateAdapter.runInTransaction.bind(helper)
@@ -508,7 +512,7 @@ export const runJobProcess = async ({
     helper.observabilityHelper.jobTypeProcessingChange(1, job, workerId);
     helper.observabilityHelper.jobTypeIdleChange(-1, workerId, typeNames);
     try {
-      await (jobAttemptMiddlewares ?? []).reduceRight(
+      await (attemptMiddlewares ?? []).reduceRight(
         (next, mw) => async () => mw({ job: runningJob, workerId }, next),
         async () => helper.withNotifyContext(runJobAttempt),
       )();

@@ -121,18 +121,18 @@ const notifyAdapter = createInProcessNotifyAdapter();
 const client = await createQueuertClient({
   stateAdapter,
   notifyAdapter,
-  jobTypeRegistry: jobTypes,
+  registry: jobTypes,
   log: () => {},
 });
 
 const worker = await createQueuertInProcessWorker({
   stateAdapter,
   notifyAdapter,
-  jobTypeRegistry: jobTypes,
+  registry: jobTypes,
   log: () => {},
-  jobTypeProcessors: {
+  processors: {
     "process-payment": {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         console.log(
           `[process-payment] Processing $${job.input.amount} for order ${job.input.orderId}`,
         );
@@ -148,7 +148,7 @@ const worker = await createQueuertInProcessWorker({
     },
 
     "charge-card": {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         console.log(`[charge-card] Charging $${job.input.amount} for order ${job.input.orderId}`);
         const chargeId = `ch_${Date.now()}`;
         console.log(`  Charge successful: ${chargeId}`);
@@ -163,7 +163,7 @@ const worker = await createQueuertInProcessWorker({
     },
 
     "ship-order": {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         console.log(`[ship-order] Shipping order ${job.input.orderId}`);
 
         if (shipmentShouldFail) {
@@ -182,7 +182,7 @@ const worker = await createQueuertInProcessWorker({
     },
 
     "refund-charge": {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         console.log(`[refund-charge] Refunding ${job.input.chargeId} (${job.input.reason})`);
         const refundId = `rf_${Date.now()}`;
         console.log(`  Refund successful: ${refundId}`);
@@ -191,7 +191,7 @@ const worker = await createQueuertInProcessWorker({
     },
 
     "call-rate-limited-api": {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         console.log(`[call-rate-limited-api] Attempt ${job.attempt} to ${job.input.endpoint}`);
 
         if (apiRateLimited && job.attempt < 3) {

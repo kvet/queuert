@@ -137,18 +137,18 @@ await sql`
 const client = await createQueuertClient({
   stateAdapter,
   notifyAdapter,
-  jobTypeRegistry: jobTypes,
+  registry: jobTypes,
   log: () => {},
 });
 
 const worker = await createQueuertInProcessWorker({
   stateAdapter,
   notifyAdapter,
-  jobTypeRegistry: jobTypes,
+  registry: jobTypes,
   log: () => {},
-  jobTypeProcessors: {
+  processors: {
     "create-subscription": {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         console.log(`\n[create-subscription] Creating subscription for user ${job.input.userId}`);
 
         return complete(async ({ sql: txSql, continueWith }) => {
@@ -168,7 +168,7 @@ const worker = await createQueuertInProcessWorker({
     },
 
     "activate-trial": {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         console.log(`\n[activate-trial] Activating ${job.input.trialDays}-day trial`);
 
         return complete(async ({ sql: txSql, continueWith }) => {
@@ -189,7 +189,7 @@ const worker = await createQueuertInProcessWorker({
     },
 
     "trial-decision": {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         console.log(
           `\n[trial-decision] Evaluating trial for subscription #${job.input.subscriptionId}`,
         );
@@ -214,7 +214,7 @@ const worker = await createQueuertInProcessWorker({
     },
 
     "expire-trial": {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         console.log(`\n[expire-trial] Trial expired for subscription #${job.input.subscriptionId}`);
 
         return complete(async ({ sql: txSql }) => {
@@ -232,7 +232,7 @@ const worker = await createQueuertInProcessWorker({
     },
 
     "convert-to-paid": {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         console.log(
           `\n[convert-to-paid] Converting subscription #${job.input.subscriptionId} to paid`,
         );
@@ -254,7 +254,7 @@ const worker = await createQueuertInProcessWorker({
     },
 
     "charge-billing": {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         console.log(`\n[charge-billing] Processing cycle ${job.input.cycle}`);
 
         await new Promise((r) => setTimeout(r, 100));
@@ -293,7 +293,7 @@ const worker = await createQueuertInProcessWorker({
     },
 
     "cancel-subscription": {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         console.log(`\n[cancel-subscription] Cancelling subscription #${job.input.subscriptionId}`);
         console.log(`  Reason: ${job.input.reason}`);
 

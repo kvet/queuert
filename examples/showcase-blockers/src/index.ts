@@ -102,18 +102,18 @@ const notifyAdapter = createInProcessNotifyAdapter();
 const client = await createQueuertClient({
   stateAdapter,
   notifyAdapter,
-  jobTypeRegistry: jobTypes,
+  registry: jobTypes,
   log: () => {},
 });
 
 const worker = await createQueuertInProcessWorker({
   stateAdapter,
   notifyAdapter,
-  jobTypeRegistry: jobTypes,
+  registry: jobTypes,
   log: () => {},
-  jobTypeProcessors: {
+  processors: {
     "fetch-source": {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         console.log(`[fetch-source] Fetching ${job.input.sourceId}...`);
         await new Promise((r) => setTimeout(r, 100));
         return complete(async () => ({
@@ -124,7 +124,7 @@ const worker = await createQueuertInProcessWorker({
     },
 
     "aggregate-data": {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         console.log(`[aggregate-data] Aggregating ${job.blockers.length} sources`);
 
         for (const blocker of job.blockers) {
@@ -140,21 +140,21 @@ const worker = await createQueuertInProcessWorker({
     },
 
     "validate-user": {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         console.log(`[validate-user] Validating ${job.input.userId}`);
         return complete(async () => ({ userId: job.input.userId, role: "admin" }));
       },
     },
 
     "load-config": {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         console.log(`[load-config] Loading ${job.input.configKey}`);
         return complete(async () => ({ configKey: job.input.configKey, value: "production" }));
       },
     },
 
     "perform-action": {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         const [userBlocker, configBlocker] = job.blockers;
         console.log(
           `[perform-action] User: ${userBlocker.output.role}, Config: ${configBlocker.output.value}`,

@@ -44,7 +44,7 @@ const notifyProvider: RedisNotifyProvider = {
 };
 
 // 4. Define job types
-const jobTypeRegistry = defineJobTypes<{
+const registry = defineJobTypes<{
   generate_report: {
     entry: true;
     input: { reportType: string; dateRange: { from: string; to: string } };
@@ -62,17 +62,17 @@ const qrtClient = await createQueuertClient({
   stateAdapter,
   notifyAdapter,
   log,
-  jobTypeRegistry,
+  registry,
 });
 
 const qrtWorker = await createQueuertInProcessWorker({
   stateAdapter,
   notifyAdapter,
   log,
-  jobTypeRegistry,
-  jobTypeProcessors: {
+  registry,
+  processors: {
     generate_report: {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         console.log(`Generating ${job.input.reportType} report...`);
         // Simulate report generation work
         await new Promise((resolve) => setTimeout(resolve, 500));

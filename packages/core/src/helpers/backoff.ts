@@ -1,6 +1,9 @@
 export type BackoffConfig = {
+  /** Initial delay in milliseconds before first retry */
   initialDelayMs: number;
+  /** Maximum delay in milliseconds between retries */
   maxDelayMs: number;
+  /** Exponential backoff multiplier */
   multiplier?: number;
 };
 

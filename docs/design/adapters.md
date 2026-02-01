@@ -182,7 +182,7 @@ removeExpiredJobLease: (params: {
 
 **Why `ignoredJobIds` exists:**
 
-When a worker runs with multiple concurrent slots (`concurrency.maxSlots > 1`), there's a potential race condition:
+When a worker runs with multiple concurrent slots (`concurrency > 1`), there's a potential race condition:
 
 1. Worker acquires job A in slot 1 with a lease
 2. Job A's lease expires before renewal (e.g., slow processing, GC pause)

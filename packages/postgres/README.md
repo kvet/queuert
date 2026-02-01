@@ -56,7 +56,7 @@ const notifyAdapter = await createPgNotifyAdapter({
 const client = await createQueuertClient({
   stateAdapter,
   notifyAdapter,
-  jobTypeRegistry: jobTypes,
+  registry: jobTypes,
   log: createConsoleLog(),
 });
 ```
@@ -81,6 +81,7 @@ const stateAdapter = await createPgStateAdapter({
 ```typescript
 const notifyAdapter = await createPgNotifyAdapter({
   notifyProvider: myPgNotifyProvider,
+  channelPrefix: "queuert", // Channel prefix (default: "queuert")
 });
 ```
 

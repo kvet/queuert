@@ -51,7 +51,7 @@ const observabilityAdapter = await createOtelObservabilityAdapter({
 const client = await createQueuertClient({
   stateAdapter,
   observabilityAdapter,
-  jobTypeRegistry: jobTypes,
+  registry: jobTypes,
   log: createConsoleLog(),
 });
 ```

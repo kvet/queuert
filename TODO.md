@@ -3,14 +3,6 @@
 - Rework logging to "commit" only once transaction is successful
 - Ensure that worker uses optimal number of state provider operations
 - Reevaluate test lease times (currently 10ms) - balance between fast tests and avoiding timing-related flakiness
-- Rename worker config for less verbosity:
-  - `jobTypeRegistry` → `registry`
-  - `jobTypeProcessors` → `processors`
-  - `process` → `execute` (avoids "processors.xxx.process" redundancy)
-  - `jobTypeProcessing` → `defaults`
-  - `defaultRetryConfig` → `retryConfig` (inside defaults)
-  - `defaultLeaseConfig` → `leaseConfig` (inside defaults)
-  - `concurrency: { maxSlots }` → `concurrency: number` (flatten)
 - ObservabilityAdapter: tracing spans
 - test against multiple versions of node on CI
 - add migration table to skip already applied migrations
@@ -20,6 +12,9 @@
 - extract state and notify adapter test suites to efficiently test multiple configurations (prefixes etc)
 - rename createQueuertClient to createClient and createQueuertInProcessWorker to createInProcessWorker. review all other names for similar verbosity
 - add a proper example/test with multiple workers sharing the same database
+- npm badge for each package README
+- Add ArkType validation example (`validation-arktype`)
+- Consider making `log` parameter optional with no-op default for quick starts
 
 # Medium term
 

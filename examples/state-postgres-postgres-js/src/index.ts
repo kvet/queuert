@@ -30,7 +30,7 @@ await sql`
 `;
 
 // 3. Define job types
-const jobTypeRegistry = defineJobTypes<{
+const registry = defineJobTypes<{
   send_welcome_email: {
     entry: true;
     input: { userId: number; email: string; name: string };
@@ -83,17 +83,17 @@ const qrtClient = await createQueuertClient({
   stateAdapter,
   notifyAdapter,
   log,
-  jobTypeRegistry,
+  registry,
 });
 // 6. Create and start qrtWorker
 const qrtWorker = await createQueuertInProcessWorker({
   stateAdapter,
   notifyAdapter,
   log,
-  jobTypeRegistry,
-  jobTypeProcessors: {
+  registry,
+  processors: {
     send_welcome_email: {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         // Simulate sending email (in real app, call email service here)
         console.log(`Sending welcome email to ${job.input.email} for ${job.input.name}`);
 

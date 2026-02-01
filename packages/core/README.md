@@ -65,19 +65,19 @@ const jobTypes = defineJobTypes<{
 const stateAdapter = await createSqliteStateAdapter({ stateProvider: myProvider });
 const client = await createQueuertClient({
   stateAdapter,
-  jobTypeRegistry: jobTypes,
+  registry: jobTypes,
   log: createConsoleLog(),
 });
 
 // Create a worker
 const worker = await createQueuertInProcessWorker({
   stateAdapter,
-  jobTypeRegistry: jobTypes,
+  registry: jobTypes,
   log: createConsoleLog(),
   workerId: "worker-1",
-  jobTypeProcessors: {
+  processors: {
     "send-email": {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         await sendEmail(job.input.to, job.input.subject);
         return complete(() => ({ sent: true }));
       },
@@ -105,30 +105,28 @@ await client.withNotify(async () =>
 ```typescript
 const worker = await createQueuertInProcessWorker({
   stateAdapter,
-  jobTypeRegistry: jobTypes,
+  registry: jobTypes,
   log: createConsoleLog(),
   workerId: "worker-1", // Unique worker identifier (optional)
-  concurrency: {
-    maxSlots: 10, // Number of jobs to process in parallel (default: 1)
-  },
-  jobTypeProcessing: {
+  concurrency: 10, // Number of jobs to process in parallel (default: 1)
+  processDefaults: {
     pollIntervalMs: 60_000, // How often to poll for new jobs (default: 60s)
 
     // Retry configuration for failed job attempts
-    defaultRetryConfig: {
+    retryConfig: {
       initialDelayMs: 10_000, // Initial retry delay (default: 10s)
       multiplier: 2.0, // Exponential backoff multiplier
       maxDelayMs: 300_000, // Maximum retry delay (default: 5min)
     },
 
     // Lease configuration for job ownership
-    defaultLeaseConfig: {
+    leaseConfig: {
       leaseMs: 60_000, // How long a worker holds a job (default: 60s)
       renewIntervalMs: 30_000, // How often to renew the lease (default: 30s)
     },
 
     // Middlewares that wrap each job attempt (e.g., for contextual logging)
-    jobAttemptMiddlewares: [
+    attemptMiddlewares: [
       async ({ job, workerId }, next) => {
         // Setup context before job processing
         return await next();
@@ -136,7 +134,7 @@ const worker = await createQueuertInProcessWorker({
       },
     ],
   },
-  jobTypeProcessors: {
+  processors: {
     // ... job type processors
   },
 });
@@ -149,13 +147,13 @@ Per-job-type configuration:
 ```typescript
 const worker = await createQueuertInProcessWorker({
   stateAdapter,
-  jobTypeRegistry: jobTypes,
+  registry: jobTypes,
   log: createConsoleLog(),
-  jobTypeProcessors: {
+  processors: {
     'long-running-job': {
       retryConfig: { initialDelayMs: 30_000, multiplier: 2.0, maxDelayMs: 600_000 },
       leaseConfig: { leaseMs: 300_000, renewIntervalMs: 60_000 },
-      process: async ({ job, complete }) => { ... },
+      attemptHandler: async ({ job, complete }) => { ... },
     },
   },
 });
@@ -211,6 +209,22 @@ await worker.start();
 **Helpers:**
 
 - `rescheduleJob` - Reschedule a job from within a process function
+
+**Types (Advanced):**
+
+These types are exported for advanced use cases like building custom adapters:
+
+- `QueuertClient` - Client instance type
+- `QueuertInProcessWorker` - Worker instance type
+- `JobTypeReference` - Type for nominal/structural job type references
+- `JobTypeRegistryConfig` - Configuration type for `createJobTypeRegistry`
+- `BaseJobTypeDefinition`, `BaseJobTypeDefinitions`, `DefineJobTypes` - Base definition types
+- `ValidatedJobTypeDefinitions` - Compile-time validation phantom type
+- `BaseTxContext` - Transaction context base type
+- `GetStateAdapterJobId` - Type helper to extract job ID type from state adapter
+- `StateJob` - Internal state job representation
+- `InProcessWorkerProcessDefaults`, `InProcessWorkerProcessor`, `InProcessWorkerProcessors` - Worker configuration types
+- `AttemptHandlerFn` - Attempt handler function type
 
 ## Documentation
 

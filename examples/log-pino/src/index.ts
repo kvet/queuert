@@ -10,7 +10,7 @@ import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queue
 import { createPinoLog } from "./log.js";
 
 // ============================================================
-// Contextual Logging Setup with jobAttemptMiddlewares
+// Contextual Logging Setup with attemptMiddlewares
 // ============================================================
 
 // 1. Create AsyncLocalStorage to hold job context during processing
@@ -43,7 +43,7 @@ const logger = pino({
 });
 
 // 3. Define job types
-const jobTypeRegistry = defineJobTypes<{
+const registry = defineJobTypes<{
   greet: {
     entry: true;
     input: { name: string };
@@ -65,12 +65,12 @@ const qrtClient = await createQueuertClient({
   stateAdapter,
   notifyAdapter,
   log,
-  jobTypeRegistry,
+  registry,
 });
 // 5. Create middleware that sets job context for the duration of job processing
 const contextualLoggingMiddleware: JobAttemptMiddleware<
   typeof stateAdapter,
-  (typeof jobTypeRegistry)["$definitions"]
+  (typeof registry)["$definitions"]
 > = async ({ job, workerId }, next) => {
   // Run the job processing within the AsyncLocalStorage context
   return jobContextStore.run(
@@ -90,14 +90,14 @@ const qrtWorker = await createQueuertInProcessWorker({
   stateAdapter,
   notifyAdapter,
   log,
-  jobTypeRegistry,
+  registry,
   workerId: "worker-1",
-  jobTypeProcessing: {
-    jobAttemptMiddlewares: [contextualLoggingMiddleware],
+  processDefaults: {
+    attemptMiddlewares: [contextualLoggingMiddleware],
   },
-  jobTypeProcessors: {
+  processors: {
     greet: {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         // This log automatically includes job context thanks to pino mixin!
         logger.info("Starting to process greeting");
 
@@ -108,7 +108,7 @@ const qrtWorker = await createQueuertInProcessWorker({
       },
     },
     "might-fail": {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         // Job context is automatically included in all logs
         logger.info("Processing might-fail job");
 

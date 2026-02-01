@@ -132,18 +132,18 @@ await sql`
 const client = await createQueuertClient({
   stateAdapter,
   notifyAdapter,
-  jobTypeRegistry: jobTypes,
+  registry: jobTypes,
   log: () => {},
 });
 
 const worker = await createQueuertInProcessWorker({
   stateAdapter,
   notifyAdapter,
-  jobTypeRegistry: jobTypes,
+  registry: jobTypes,
   log: () => {},
-  jobTypeProcessors: {
+  processors: {
     "daily-digest": {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         console.log(
           `\n[daily-digest] Sending digest #${job.input.iteration} to user ${job.input.userId}`,
         );
@@ -176,7 +176,7 @@ const worker = await createQueuertInProcessWorker({
     },
 
     "health-check": {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         console.log(`\n[health-check] Check #${job.input.checkNumber} for ${job.input.serviceId}`);
 
         const status = serviceRunning ? "healthy" : "stopped";
@@ -212,7 +212,7 @@ const worker = await createQueuertInProcessWorker({
     },
 
     "sync-data": {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         console.log(`\n[sync-data] Syncing data from ${job.input.sourceId}`);
 
         await new Promise((r) => setTimeout(r, 100));

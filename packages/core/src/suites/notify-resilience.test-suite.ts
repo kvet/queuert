@@ -20,7 +20,7 @@ export const notifyResilienceTestSuite = ({
     observabilityAdapter,
     log,
   }) => {
-    const jobTypeRegistry = defineJobTypes<{
+    const registry = defineJobTypes<{
       test: {
         entry: true;
         input: { value: number; atomic: boolean };
@@ -33,35 +33,35 @@ export const notifyResilienceTestSuite = ({
       notifyAdapter: flakyNotifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
     const worker = await createQueuertInProcessWorker({
       stateAdapter,
       notifyAdapter: flakyNotifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
-      concurrency: { maxSlots: 1 },
-      jobTypeProcessing: {
+      registry,
+      concurrency: 1,
+      retryConfig: {
+        initialDelayMs: 1,
+        multiplier: 1,
+        maxDelayMs: 1,
+      },
+      processDefaults: {
         pollIntervalMs: 1_000_000, // should be processed in a single loop invocations
-        defaultLeaseConfig: {
+        leaseConfig: {
           leaseMs: 10,
           renewIntervalMs: 5,
         },
-        defaultRetryConfig: {
-          initialDelayMs: 1,
-          multiplier: 1,
-          maxDelayMs: 1,
-        },
-        workerLoopRetryConfig: {
+        retryConfig: {
           initialDelayMs: 1,
           multiplier: 1,
           maxDelayMs: 1,
         },
       },
-      jobTypeProcessors: {
+      processors: {
         test: {
-          process: async ({ job, prepare, complete }) => {
+          attemptHandler: async ({ job, prepare, complete }) => {
             await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
             return complete(async () => ({ result: job.input.value * 2 }));
           },

@@ -104,11 +104,11 @@ defineJobTypes<{
 // Start trigger, which creates process-item blockers and continues to aggregate
 const worker = await createQueuertInProcessWorker({
   stateAdapter,
-  jobTypeRegistry: jobTypes,
+  registry: jobTypes,
   log: createConsoleLog(),
-  jobTypeProcessors: {
+  processors: {
     trigger: {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         return complete(async ({ continueWith }) => {
           return continueWith({
             typeName: "aggregate",

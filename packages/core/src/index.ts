@@ -32,9 +32,9 @@ export { type ObservabilityAdapter } from "./observability-adapter/observability
 export { createQueuertClient, type QueuertClient } from "./queuert-client.js";
 export {
   createQueuertInProcessWorker,
-  type InProcessWorkerJobTypeProcessor,
-  type InProcessWorkerJobTypeProcessors,
-  type InProcessWorkerProcessingConfig,
+  type InProcessWorkerProcessDefaults,
+  type InProcessWorkerProcessor,
+  type InProcessWorkerProcessors,
   type QueuertInProcessWorker,
 } from "./queuert-in-process-worker.js";
 export {
@@ -48,6 +48,7 @@ export {
 export {
   rescheduleJob,
   RescheduleJobError,
+  type AttemptHandlerFn,
   type JobAbortReason,
   type JobAttemptMiddleware,
   type LeaseConfig,

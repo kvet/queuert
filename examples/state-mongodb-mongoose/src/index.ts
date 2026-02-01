@@ -27,7 +27,7 @@ const userSchema = new Schema({
 const User = mongoose.model("User", userSchema);
 
 // 4. Define job types
-const jobTypeRegistry = defineJobTypes<{
+const registry = defineJobTypes<{
   send_welcome_email: {
     entry: true;
     input: { odUserId: string; email: string; name: string };
@@ -67,7 +67,7 @@ const qrtClient = await createQueuertClient({
   stateAdapter,
   notifyAdapter,
   log,
-  jobTypeRegistry,
+  registry,
 });
 
 // 7. Create and start qrtWorker
@@ -75,10 +75,10 @@ const qrtWorker = await createQueuertInProcessWorker({
   stateAdapter,
   notifyAdapter,
   log,
-  jobTypeRegistry,
-  jobTypeProcessors: {
+  registry,
+  processors: {
     send_welcome_email: {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         console.log(`Sending welcome email to ${job.input.email} for ${job.input.name}`);
 
         return complete(async () => ({

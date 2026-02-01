@@ -9,11 +9,11 @@ import { createQueuertClient, createQueuertInProcessWorker } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 import {
   diffMemory,
-  jobTypeRegistry,
   measureBaseline,
   measureMemory,
   printHeader,
   printSummary,
+  registry,
 } from "./utils.js";
 
 printHeader("MONGODB STATE ADAPTER");
@@ -69,17 +69,17 @@ const [beforeSetup, afterSetup, { qrtClient, stopWorker }] = await measureMemory
     stateAdapter,
     notifyAdapter,
     log: () => {},
-    jobTypeRegistry,
+    registry,
   });
 
   const qrtWorker = await createQueuertInProcessWorker({
     stateAdapter,
     notifyAdapter,
     log: () => {},
-    jobTypeRegistry,
-    jobTypeProcessors: {
+    registry,
+    processors: {
       "test-job": {
-        process: async ({ complete }) => complete(async () => ({ processed: true })),
+        attemptHandler: async ({ complete }) => complete(async () => ({ processed: true })),
       },
     },
   });

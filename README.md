@@ -41,7 +41,7 @@ const jobTypes = defineJobTypes<{
 
 const client = await createQueuertClient({
   stateAdapter,
-  jobTypeRegistry: jobTypes,
+  registry: jobTypes,
   log: createConsoleLog(),
 });
 
@@ -68,11 +68,11 @@ Later, a background worker picks up the job and sends the email:
 ```ts
 const worker = await createQueuertInProcessWorker({
   stateAdapter,
-  jobTypeRegistry: jobTypes,
+  registry: jobTypes,
   log: createConsoleLog(),
-  jobTypeProcessors: {
+  processors: {
     "send-welcome-email": {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         await sendEmail({
           to: job.input.email,
           subject: "Welcome!",
@@ -144,7 +144,7 @@ A chain of linked jobs where each job can `continueWith` to the next - just like
 
 ### Job Type
 
-Defines a named job type with its input/output types and process function. Job types are registered with workers via the `jobTypeProcessors` configuration. The process function receives the job and context for completing or continuing the chain.
+Defines a named job type with its input/output types and attempt handler function. Job types are registered with workers via the `processors` configuration. The attempt handler receives the job and context for completing or continuing the chain.
 
 ### State Adapter
 
@@ -189,7 +189,7 @@ Prepare and complete run in ONE transaction. Use when reads and writes must be a
 
 ```ts
 'reserve-inventory': {
-  process: async ({ job, prepare, complete }) => {
+  attemptHandler: async ({ job, prepare, complete }) => {
     const item = await prepare({ mode: "atomic" }, async ({ sql }) => {
       const [row] = await sql`SELECT stock FROM items WHERE id = ${job.input.id}`;
       if (row.stock < 1) throw new Error("Out of stock");
@@ -211,7 +211,7 @@ Prepare and complete run in SEPARATE transactions. Use for external API calls or
 
 ```ts
 'charge-payment': {
-  process: async ({ job, prepare, complete }) => {
+  attemptHandler: async ({ job, prepare, complete }) => {
     // Phase 1: Prepare (transaction)
     const order = await prepare({ mode: "staged" }, async ({ sql }) => {
       const [row] = await sql`SELECT * FROM orders WHERE id = ${job.input.id}`;
@@ -263,7 +263,7 @@ type Definitions = {
 
 // In processor
 'create-subscription': {
-  process: async ({ job, complete }) => {
+  attemptHandler: async ({ job, complete }) => {
     return complete(async ({ sql, continueWith }) => {
       const [sub] = await sql`INSERT INTO subscriptions ... RETURNING id`;
       return continueWith({
@@ -287,7 +287,7 @@ Jobs conditionally continue to different types: `trial-decision → convert-to-p
 
 // In processor - choose path based on condition
 'trial-decision': {
-  process: async ({ job, complete }) => {
+  attemptHandler: async ({ job, complete }) => {
     const shouldConvert = userWantsToConvert;
     return complete(async ({ continueWith }) => {
       return continueWith({
@@ -314,7 +314,7 @@ type Definitions = {
 
 // In processor - loop or terminate with output
 'charge-billing': {
-  process: async ({ job, complete }) => {
+  attemptHandler: async ({ job, complete }) => {
     await chargePayment(job.input.subscriptionId);
     return complete(async ({ continueWith }) => {
       if (job.input.cycle < MAX_CYCLES) {
@@ -348,7 +348,7 @@ type Definitions = {
 
 // In processor - jump to cancel when max cycles reached
 'charge-billing': {
-  process: async ({ job, complete }) => {
+  attemptHandler: async ({ job, complete }) => {
     return complete(async ({ continueWith }) => {
       if (job.input.cycle >= MAX_CYCLES) {
         return continueWith({
@@ -400,11 +400,11 @@ await queuert.startJobChain({
 // Access completed blockers in worker
 const worker = await createQueuertInProcessWorker({
   stateAdapter,
-  jobTypeRegistry: jobTypes,
+  registry: jobTypes,
   log: createConsoleLog(),
-  jobTypeProcessors: {
+  processors: {
     "process-all": {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         const results = job.blockers.map((b) => b.output.data);
         return complete(() => ({ results }));
       },
@@ -463,11 +463,11 @@ import { rescheduleJob } from "queuert";
 
 const worker = await createQueuertInProcessWorker({
   stateAdapter,
-  jobTypeRegistry: jobTypes,
+  registry: jobTypes,
   log: createConsoleLog(),
-  jobTypeProcessors: {
+  processors: {
     "call-external-api": {
-      process: async ({ job, prepare, complete }) => {
+      attemptHandler: async ({ job, prepare, complete }) => {
         const response = await fetch(job.input.url);
 
         if (response.status === 429) {
@@ -554,7 +554,7 @@ type Definitions = {
 
 // In processor — loop with scheduled delay
 'daily-digest': {
-  process: async ({ job, complete }) => {
+  attemptHandler: async ({ job, complete }) => {
     await sendDigestEmail(job.input.userId);
 
     return complete(async ({ continueWith }) => {
@@ -662,14 +662,14 @@ const chain = await queuert.startJobChain({
 // The worker handles the timeout case (auto-reject) and processes approved requests
 const worker = await createQueuertInProcessWorker({
   stateAdapter,
-  jobTypeRegistry: jobTypes,
+  registry: jobTypes,
   log: createConsoleLog(),
-  jobTypeProcessors: {
+  processors: {
     "await-approval": {
-      process: async ({ complete }) => complete(() => ({ rejected: true })),
+      attemptHandler: async ({ complete }) => complete(() => ({ rejected: true })),
     },
     "process-request": {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         await doSomethingWith(job.input.requestId);
         return complete(() => ({ processed: true }));
       },
@@ -732,11 +732,11 @@ For cooperative timeouts, combine `AbortSignal.timeout()` with the provided `sig
 ```ts
 const worker = await createQueuertInProcessWorker({
   stateAdapter,
-  jobTypeRegistry: jobTypes,
+  registry: jobTypes,
   log: createConsoleLog(),
-  jobTypeProcessors: {
+  processors: {
     "fetch-data": {
-      process: async ({ signal, job, complete }) => {
+      attemptHandler: async ({ signal, job, complete }) => {
         const timeout = AbortSignal.timeout(30_000); // 30 seconds
         const combined = AbortSignal.any([signal, timeout]);
 
@@ -758,12 +758,12 @@ For hard timeouts, configure `leaseConfig` in the job type processor — if a jo
 ```ts
 const worker = await createQueuertInProcessWorker({
   stateAdapter,
-  jobTypeRegistry: jobTypes,
+  registry: jobTypes,
   log: createConsoleLog(),
-  jobTypeProcessors: {
+  processors: {
     'long-running-job': {
       leaseConfig: { leaseMs: 300_000, renewIntervalMs: 60_000 }, // 5 min lease
-      process: async ({ job, complete }) => { ... },
+      attemptHandler: async ({ job, complete }) => { ... },
     },
   },
 });
@@ -781,7 +781,7 @@ import { metrics } from "@opentelemetry/api";
 
 const client = await createQueuertClient({
   stateAdapter,
-  jobTypeRegistry: jobTypes,
+  registry: jobTypes,
   observabilityAdapter: createOtelObservabilityAdapter({
     meter: metrics.getMeter("my-app"),
     metricPrefix: "queuert",

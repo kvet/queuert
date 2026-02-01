@@ -82,13 +82,13 @@ export const queuertHelper = ({
   stateAdapter: stateAdapterOption,
   notifyAdapter: notifyAdapterOption,
   observabilityAdapter: observabilityAdapterOption,
-  jobTypeRegistry,
+  registry: registryOption,
   log,
 }: {
   stateAdapter: StateAdapter<BaseTxContext, any>;
   notifyAdapter?: NotifyAdapter;
   observabilityAdapter?: ObservabilityAdapter;
-  jobTypeRegistry: JobTypeRegistry;
+  registry: JobTypeRegistry;
   log: Log;
 }) => {
   const observabilityAdapter = observabilityAdapterOption ?? createNoopObservabilityAdapter();
@@ -104,7 +104,7 @@ export const queuertHelper = ({
       })
     : createNoopNotifyAdapter();
   const registry = wrapJobTypeRegistryWithLogging({
-    registry: jobTypeRegistry,
+    registry: registryOption,
     observabilityHelper,
   });
 

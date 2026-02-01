@@ -91,18 +91,18 @@ const notifyAdapter = createInProcessNotifyAdapter();
 const client = await createQueuertClient({
   stateAdapter,
   notifyAdapter,
-  jobTypeRegistry: jobTypes,
+  registry: jobTypes,
   log: () => {},
 });
 
 const worker = await createQueuertInProcessWorker({
   stateAdapter,
   notifyAdapter,
-  jobTypeRegistry: jobTypes,
+  registry: jobTypes,
   log: () => {},
-  jobTypeProcessors: {
+  processors: {
     "fetch-with-timeout": {
-      process: async ({ signal, job, complete }) => {
+      attemptHandler: async ({ signal, job, complete }) => {
         console.log(
           `[fetch-with-timeout] Fetching ${job.input.url} (timeout: ${job.input.timeoutMs}ms)`,
         );
@@ -127,7 +127,7 @@ const worker = await createQueuertInProcessWorker({
     "long-running-job": {
       // Configure shorter lease for demo (normally you'd use longer values)
       leaseConfig: { leaseMs: 500, renewIntervalMs: 200 },
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         const attempt = job.attempt;
         console.log(
           `[long-running-job] Task ${job.input.taskId}, attempt ${attempt}, duration ${job.input.durationMs}ms`,

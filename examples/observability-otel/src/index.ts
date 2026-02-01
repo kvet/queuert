@@ -8,7 +8,7 @@ import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queue
 import { flushMetrics, observabilityAdapter, shutdownMetrics } from "./observability.js";
 
 // 1. Define job types
-const jobTypeRegistry = defineJobTypes<{
+const registry = defineJobTypes<{
   greet: { entry: true; input: { name: string }; output: { greeting: string } };
   "might-fail": { entry: true; input: { shouldFail: boolean }; output: { success: true } };
 }>();
@@ -23,7 +23,7 @@ const qrtClient = await createQueuertClient({
   notifyAdapter,
   log,
   observabilityAdapter,
-  jobTypeRegistry,
+  registry,
 });
 // 3. Create and start qrtWorker
 const qrtWorker = await createQueuertInProcessWorker({
@@ -31,18 +31,18 @@ const qrtWorker = await createQueuertInProcessWorker({
   notifyAdapter,
   log,
   observabilityAdapter,
-  jobTypeRegistry,
+  registry,
   workerId: "worker-1",
-  jobTypeProcessors: {
+  processors: {
     greet: {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         return complete(async () => ({
           greeting: `Hello, ${job.input.name}!`,
         }));
       },
     },
     "might-fail": {
-      process: async ({ job, complete }) => {
+      attemptHandler: async ({ job, complete }) => {
         if (job.input.shouldFail && job.attempt < 2) {
           // Throw an error on first attempt to demonstrate metrics
           throw new Error("Simulated failure for demonstration");

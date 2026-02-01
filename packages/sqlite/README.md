@@ -47,7 +47,7 @@ const stateAdapter = await createSqliteStateAdapter({
 
 const client = await createQueuertClient({
   stateAdapter,
-  jobTypeRegistry: jobTypes,
+  registry: jobTypes,
   log: createConsoleLog(),
 });
 ```

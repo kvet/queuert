@@ -10,8 +10,8 @@ import { type ObservabilityAdapter } from "./observability-adapter/observability
 import { type QueuertHelper, queuertHelper } from "./queuert-helper.js";
 import { type StateAdapter, type StateJob } from "./state-adapter/state-adapter.js";
 import {
+  type AttemptHandlerFn,
   type JobAttemptMiddleware,
-  type JobProcessFn,
   type LeaseConfig,
   runJobProcess,
 } from "./worker/job-process.js";
@@ -23,32 +23,38 @@ import {
 import { type ParallelExecutor, createParallelExecutor } from "./helpers/parallel-executor.js";
 import { createSignal } from "./helpers/signal.js";
 
-export type InProcessWorkerProcessingConfig<
+export type InProcessWorkerProcessDefaults<
   TStateAdapter extends StateAdapter<any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
 > = {
+  /** How often to poll for new jobs in milliseconds */
   pollIntervalMs?: number;
-  defaultRetryConfig?: BackoffConfig;
-  defaultLeaseConfig?: LeaseConfig;
-  workerLoopRetryConfig?: BackoffConfig;
-  jobAttemptMiddlewares?: JobAttemptMiddleware<TStateAdapter, TJobTypeDefinitions>[];
+  /** Retry configuration for failed job attempts */
+  retryConfig?: BackoffConfig;
+  /** Lease configuration for job ownership */
+  leaseConfig?: LeaseConfig;
+  /** Middlewares that wrap each job attempt */
+  attemptMiddlewares?: JobAttemptMiddleware<TStateAdapter, TJobTypeDefinitions>[];
 };
 
-export type InProcessWorkerJobTypeProcessor<
+export type InProcessWorkerProcessor<
   TStateAdapter extends StateAdapter<any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions & string,
 > = {
-  process: JobProcessFn<TStateAdapter, TJobTypeDefinitions, TJobTypeName>;
+  /** Handler function called for each job attempt */
+  attemptHandler: AttemptHandlerFn<TStateAdapter, TJobTypeDefinitions, TJobTypeName>;
+  /** Per-job-type retry configuration (overrides processDefaults) */
   retryConfig?: BackoffConfig;
+  /** Per-job-type lease configuration (overrides processDefaults) */
   leaseConfig?: LeaseConfig;
 };
 
-export type InProcessWorkerJobTypeProcessors<
+export type InProcessWorkerProcessors<
   TStateAdapter extends StateAdapter<any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
 > = {
-  [K in keyof TJobTypeDefinitions & string]?: InProcessWorkerJobTypeProcessor<
+  [K in keyof TJobTypeDefinitions & string]?: InProcessWorkerProcessor<
     TStateAdapter,
     TJobTypeDefinitions,
     K
@@ -105,19 +111,19 @@ const waitForNextJob = async ({
 const performJob = async ({
   helper,
   typeNames,
-  jobTypeProcessors,
+  processors,
   defaultRetryConfig,
   defaultLeaseConfig,
   workerId,
-  jobAttemptMiddlewares,
+  attemptMiddlewares,
 }: {
   helper: QueuertHelper;
   typeNames: string[];
-  jobTypeProcessors: InProcessWorkerJobTypeProcessors<any, any>;
+  processors: InProcessWorkerProcessors<any, any>;
   defaultRetryConfig: BackoffConfig;
   defaultLeaseConfig: LeaseConfig;
   workerId: string;
-  jobAttemptMiddlewares: JobAttemptMiddleware<any, any>[] | undefined;
+  attemptMiddlewares: JobAttemptMiddleware<any, any>[] | undefined;
 }): Promise<
   { job: null; hasMore: false } | { job: StateJob; hasMore: boolean; execute: () => Promise<void> }
 > => {
@@ -134,22 +140,22 @@ const performJob = async ({
         return async () => {};
       }
 
-      const jobType = jobTypeProcessors[job.typeName];
-      if (!jobType) {
-        throw new Error(`No process function registered for job type "${job.typeName}"`);
+      const processor = processors[job.typeName];
+      if (!processor) {
+        throw new Error(`No attempt handler registered for job type "${job.typeName}"`);
       }
 
       signal.signalOnce({ job, hasMore });
 
       const run = await runJobProcess({
         helper,
-        process: jobType.process as any,
+        attemptHandler: processor.attemptHandler as any,
         txContext,
         job,
-        retryConfig: jobType.retryConfig ?? defaultRetryConfig,
-        leaseConfig: jobType.leaseConfig ?? defaultLeaseConfig,
+        retryConfig: processor.retryConfig ?? defaultRetryConfig,
+        leaseConfig: processor.leaseConfig ?? defaultLeaseConfig,
         workerId,
-        jobAttemptMiddlewares: jobAttemptMiddlewares as any[],
+        attemptMiddlewares: attemptMiddlewares as any[],
         typeNames,
       });
 
@@ -193,49 +199,43 @@ export const createQueuertInProcessWorker = async <
   stateAdapter,
   notifyAdapter,
   observabilityAdapter,
-  jobTypeRegistry,
+  registry,
   log,
   workerId = randomUUID(),
   concurrency,
-  jobTypeProcessing,
-  jobTypeProcessors,
+  retryConfig,
+  processDefaults,
+  processors,
 }: {
   stateAdapter: TStateAdapter;
   notifyAdapter?: NotifyAdapter;
   observabilityAdapter?: ObservabilityAdapter;
-  jobTypeRegistry: TJobTypeRegistry;
+  registry: TJobTypeRegistry;
   log: Log;
   workerId?: string;
-  concurrency?: {
-    maxSlots: number;
-  };
-  jobTypeProcessing?: InProcessWorkerProcessingConfig<
-    TStateAdapter,
-    TJobTypeRegistry["$definitions"]
-  >;
-  jobTypeProcessors: InProcessWorkerJobTypeProcessors<
-    TStateAdapter,
-    TJobTypeRegistry["$definitions"]
-  >;
+  concurrency?: number;
+  retryConfig?: BackoffConfig;
+  processDefaults?: InProcessWorkerProcessDefaults<TStateAdapter, TJobTypeRegistry["$definitions"]>;
+  processors: InProcessWorkerProcessors<TStateAdapter, TJobTypeRegistry["$definitions"]>;
 }): Promise<QueuertInProcessWorker> => {
-  const typeNames = Array.from(Object.keys(jobTypeProcessors));
+  const typeNames = Array.from(Object.keys(processors));
 
-  const pollIntervalMs = jobTypeProcessing?.pollIntervalMs ?? 60_000;
-  const defaultRetryConfig = jobTypeProcessing?.defaultRetryConfig ?? {
+  const pollIntervalMs = processDefaults?.pollIntervalMs ?? 60_000;
+  const defaultRetryConfig = processDefaults?.retryConfig ?? {
     initialDelayMs: 10_000,
     multiplier: 2.0,
     maxDelayMs: 300_000,
   };
-  const defaultLeaseConfig = jobTypeProcessing?.defaultLeaseConfig ?? {
+  const defaultLeaseConfig = processDefaults?.leaseConfig ?? {
     leaseMs: 60_000,
     renewIntervalMs: 30_000,
   };
-  const workerLoopRetryConfig = jobTypeProcessing?.workerLoopRetryConfig ?? {
+  const workerRetryConfig = retryConfig ?? {
     initialDelayMs: 10_000,
     multiplier: 2.0,
     maxDelayMs: 300_000,
   };
-  const jobAttemptMiddlewares = jobTypeProcessing?.jobAttemptMiddlewares;
+  const attemptMiddlewares = processDefaults?.attemptMiddlewares;
 
   return {
     start: async () => {
@@ -243,14 +243,14 @@ export const createQueuertInProcessWorker = async <
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
-        jobTypeRegistry,
+        registry,
         log,
       });
       helper.observabilityHelper.workerStarted({ workerId, jobTypeNames: typeNames });
       helper.observabilityHelper.jobTypeIdleChange(1, workerId, typeNames);
 
       const stopController = new AbortController();
-      const executor = createParallelExecutor(concurrency?.maxSlots ?? 1);
+      const executor = createParallelExecutor(concurrency ?? 1);
       const jobIdsInProgress = new Set<string>();
 
       const runWorkerLoop = async () => {
@@ -260,11 +260,11 @@ export const createQueuertInProcessWorker = async <
               const result = await performJob({
                 helper,
                 typeNames,
-                jobTypeProcessors,
+                processors,
                 defaultRetryConfig,
                 defaultLeaseConfig,
                 workerId,
-                jobAttemptMiddlewares,
+                attemptMiddlewares,
               });
 
               if (result.job) {
@@ -321,7 +321,7 @@ export const createQueuertInProcessWorker = async <
         }
       };
 
-      const runWorkerLoopPromise = withRetry(async () => runWorkerLoop(), workerLoopRetryConfig, {
+      const runWorkerLoopPromise = withRetry(async () => runWorkerLoop(), workerRetryConfig, {
         signal: stopController.signal,
       }).catch(() => {});
 

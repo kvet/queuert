@@ -23,7 +23,7 @@ it("should work end-to-end with NATS notify adapter", async ({ natsConnectionOpt
   const stateAdapter = createInProcessStateAdapter();
 
   const log = vi.fn();
-  const jobTypeRegistry = defineJobTypes<{
+  const registry = defineJobTypes<{
     test: {
       entry: true;
       input: { message: string };
@@ -35,16 +35,16 @@ it("should work end-to-end with NATS notify adapter", async ({ natsConnectionOpt
     stateAdapter,
     notifyAdapter,
     log,
-    jobTypeRegistry,
+    registry,
   });
   const worker = await createQueuertInProcessWorker({
     stateAdapter,
     notifyAdapter,
     log,
-    jobTypeRegistry,
-    jobTypeProcessors: {
+    registry,
+    processors: {
       test: {
-        process: async ({ complete }) => {
+        attemptHandler: async ({ complete }) => {
           return complete(async () => ({ processed: true }));
         },
       },
@@ -79,7 +79,7 @@ it("should work end-to-end without JetStream KV", async ({ natsConnectionOptions
   const stateAdapter = createInProcessStateAdapter();
 
   const log = vi.fn();
-  const jobTypeRegistry = defineJobTypes<{
+  const registry = defineJobTypes<{
     test: {
       entry: true;
       input: { value: number };
@@ -91,16 +91,16 @@ it("should work end-to-end without JetStream KV", async ({ natsConnectionOptions
     stateAdapter,
     notifyAdapter,
     log,
-    jobTypeRegistry,
+    registry,
   });
   const worker = await createQueuertInProcessWorker({
     stateAdapter,
     notifyAdapter,
     log,
-    jobTypeRegistry,
-    jobTypeProcessors: {
+    registry,
+    processors: {
       test: {
-        process: async ({ job, complete }) => {
+        attemptHandler: async ({ job, complete }) => {
           return complete(async () => ({ doubled: job.input.value * 2 }));
         },
       },

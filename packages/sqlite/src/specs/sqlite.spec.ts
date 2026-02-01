@@ -22,7 +22,7 @@ it("should infer types correctly with custom ID", async ({ db }) => {
 
   const notifyAdapter = createInProcessNotifyAdapter();
   const log = vi.fn();
-  const jobTypeRegistry = defineJobTypes<{
+  const registry = defineJobTypes<{
     test: {
       entry: true;
       input: { foo: string };
@@ -34,16 +34,16 @@ it("should infer types correctly with custom ID", async ({ db }) => {
     stateAdapter,
     notifyAdapter,
     log,
-    jobTypeRegistry,
+    registry,
   });
   const worker = await createQueuertInProcessWorker({
     stateAdapter,
     notifyAdapter,
     log,
-    jobTypeRegistry,
-    jobTypeProcessors: {
+    registry,
+    processors: {
       test: {
-        process: async ({ job, complete }) => {
+        attemptHandler: async ({ job, complete }) => {
           expectTypeOf(job.id).toEqualTypeOf<`job.${UUID}`>();
 
           return complete(async () => ({ bar: 42 }));

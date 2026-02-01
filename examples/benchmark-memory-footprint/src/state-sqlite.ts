@@ -12,11 +12,11 @@ import { createInProcessNotifyAdapter } from "queuert/internal";
 import { createQueuertClient, createQueuertInProcessWorker } from "queuert";
 import {
   diffMemory,
-  jobTypeRegistry,
   measureBaseline,
   measureMemory,
   printHeader,
   printSummary,
+  registry,
 } from "./utils.js";
 
 printHeader("SQLITE STATE ADAPTER");
@@ -89,17 +89,17 @@ const [beforeSetup, afterSetup, { qrtClient, stopWorker }] = await measureMemory
     stateAdapter,
     notifyAdapter,
     log: () => {},
-    jobTypeRegistry,
+    registry,
   });
 
   const qrtWorker = await createQueuertInProcessWorker({
     stateAdapter,
     notifyAdapter,
     log: () => {},
-    jobTypeRegistry,
-    jobTypeProcessors: {
+    registry,
+    processors: {
       "test-job": {
-        process: async ({ complete }) => complete(async () => ({ processed: true })),
+        attemptHandler: async ({ complete }) => complete(async () => ({ processed: true })),
       },
     },
   });

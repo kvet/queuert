@@ -56,7 +56,7 @@ const notifyAdapter = await createNatsNotifyAdapter({
 const client = await createQueuertClient({
   stateAdapter,
   notifyAdapter,
-  jobTypeRegistry: jobTypes,
+  registry: jobTypes,
   log: createConsoleLog(),
 });
 ```
@@ -82,6 +82,9 @@ const notifyAdapter = await createNatsNotifyAdapter({
 ### Main (`.`)
 
 - `createNatsNotifyAdapter` - Factory to create NATS notify adapter
+- `NatsNotifyAdapter` - Type for the NATS notify adapter
+
+Unlike Redis and PostgreSQL, no provider type is exported because NATS accepts the `NatsConnection` directly from the `nats` package. There's only one NATS client in the Node.js ecosystem, so no adapter layer is needed.
 
 ### Testing (`./testing`)
 

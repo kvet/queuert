@@ -41,12 +41,12 @@ This ensures that job outputs and continuations are also created atomically with
 
 ## Prepare/Complete Pattern
 
-Job process functions split processing into distinct phases to support both atomic (single-transaction) and staged (long-running) operations.
+Attempt handlers split processing into distinct phases to support both atomic (single-transaction) and staged (long-running) operations.
 
-### Process Function Signature
+### Attempt Handler Signature
 
 ```typescript
-process: async ({ signal, job, prepare, complete }) => { ... }
+attemptHandler: async ({ signal, job, prepare, complete }) => { ... }
 ```
 
 - `signal`: AbortSignal that fires when job is taken by another worker, job is not found, or job is completed externally (reason: `"taken_by_another_worker"`, `"error"`, `"not_found"`, or `"already_completed"`)
@@ -87,10 +87,10 @@ If you don't call `prepare`, auto-setup runs based on when you call `complete`:
 - If `complete` is called before `prepare`, auto-setup runs in atomic mode (no lease renewal between prepare and complete)
 - Accessing `prepare` after auto-setup throws: "Prepare cannot be accessed after auto-setup"
 
-This means simple process functions default to staged mode:
+This means simple attempt handlers default to staged mode:
 
 ```typescript
-process: async ({ job, complete }) => {
+attemptHandler: async ({ job, complete }) => {
   // Transaction already closed, lease renewal running
   return complete(() => output);
 };
@@ -105,10 +105,10 @@ Queuert does not provide built-in soft timeout functionality. This is intentiona
 
 ### Cooperative Timeouts
 
-Users implement cooperative timeouts in their process functions:
+Users implement cooperative timeouts in their attempt handlers:
 
 ```typescript
-process: async ({ signal, job, complete }) => {
+attemptHandler: async ({ signal, job, complete }) => {
   const timeout = AbortSignal.timeout(30_000);
   const combined = AbortSignal.any([signal, timeout]);
 
@@ -182,11 +182,11 @@ const chain = await queuert.startJobChain({
 // Worker handles timeout case (auto-reject)
 const worker = await createQueuertInProcessWorker({
   stateAdapter,
-  jobTypeRegistry: jobTypes,
+  registry: jobTypes,
   log: createConsoleLog(),
-  jobTypeProcessors: {
+  processors: {
     'await-approval': {
-      process: async ({ complete }) => complete(() => ({ rejected: true })),
+      attemptHandler: async ({ complete }) => complete(() => ({ rejected: true })),
     },
   },
 });

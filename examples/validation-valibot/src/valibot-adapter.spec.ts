@@ -7,69 +7,69 @@ import { createValibotJobTypeRegistry } from "./valibot-adapter.js";
 describe("createValibotJobTypeRegistry", () => {
   describe("validateEntry", () => {
     it("passes for entry types", () => {
-      const jobTypeRegistry = createValibotJobTypeRegistry({
+      const registry = createValibotJobTypeRegistry({
         main: { entry: true, input: v.object({ id: v.string() }) },
       });
 
       expect(() => {
-        jobTypeRegistry.validateEntry("main");
+        registry.validateEntry("main");
       }).not.toThrow();
     });
 
     it("throws for non-entry types", () => {
-      const jobTypeRegistry = createValibotJobTypeRegistry({
+      const registry = createValibotJobTypeRegistry({
         internal: { input: v.object({ id: v.string() }) },
       });
 
       expect(() => {
-        jobTypeRegistry.validateEntry("internal");
+        registry.validateEntry("internal");
       }).toThrow(JobTypeValidationError);
     });
 
     it("throws for unknown types", () => {
-      const jobTypeRegistry = createValibotJobTypeRegistry({
+      const registry = createValibotJobTypeRegistry({
         main: { entry: true, input: v.object({ id: v.string() }) },
       });
 
       expect(() => {
-        jobTypeRegistry.validateEntry("unknown");
+        registry.validateEntry("unknown");
       }).toThrow(JobTypeValidationError);
     });
   });
 
   describe("parseInput", () => {
     it("returns parsed input for valid data", () => {
-      const jobTypeRegistry = createValibotJobTypeRegistry({
+      const registry = createValibotJobTypeRegistry({
         main: { entry: true, input: v.object({ id: v.string(), count: v.number() }) },
       });
 
-      const result = jobTypeRegistry.parseInput("main", { id: "abc", count: 42 });
+      const result = registry.parseInput("main", { id: "abc", count: 42 });
       expect(result).toEqual({ id: "abc", count: 42 });
     });
 
     it("throws for invalid input", () => {
-      const jobTypeRegistry = createValibotJobTypeRegistry({
+      const registry = createValibotJobTypeRegistry({
         main: { entry: true, input: v.object({ id: v.string() }) },
       });
 
       expect(() => {
-        jobTypeRegistry.parseInput("main", { id: 123 });
+        registry.parseInput("main", { id: 123 });
       }).toThrow(JobTypeValidationError);
     });
 
     it("coerces types when schema allows", () => {
-      const jobTypeRegistry = createValibotJobTypeRegistry({
+      const registry = createValibotJobTypeRegistry({
         main: { entry: true, input: v.object({ count: v.pipe(v.unknown(), v.transform(Number)) }) },
       });
 
-      const result = jobTypeRegistry.parseInput("main", { count: "42" });
+      const result = registry.parseInput("main", { count: "42" });
       expect(result).toEqual({ count: 42 });
     });
   });
 
   describe("parseOutput", () => {
     it("returns parsed output for valid data", () => {
-      const jobTypeRegistry = createValibotJobTypeRegistry({
+      const registry = createValibotJobTypeRegistry({
         main: {
           entry: true,
           input: v.object({ id: v.string() }),
@@ -77,12 +77,12 @@ describe("createValibotJobTypeRegistry", () => {
         },
       });
 
-      const result = jobTypeRegistry.parseOutput("main", { success: true });
+      const result = registry.parseOutput("main", { success: true });
       expect(result).toEqual({ success: true });
     });
 
     it("throws for invalid output", () => {
-      const jobTypeRegistry = createValibotJobTypeRegistry({
+      const registry = createValibotJobTypeRegistry({
         main: {
           entry: true,
           input: v.object({ id: v.string() }),
@@ -91,17 +91,17 @@ describe("createValibotJobTypeRegistry", () => {
       });
 
       expect(() => {
-        jobTypeRegistry.parseOutput("main", { success: "yes" });
+        registry.parseOutput("main", { success: "yes" });
       }).toThrow(JobTypeValidationError);
     });
 
     it("throws when output schema is not defined", () => {
-      const jobTypeRegistry = createValibotJobTypeRegistry({
+      const registry = createValibotJobTypeRegistry({
         main: { entry: true, input: v.object({ id: v.string() }) },
       });
 
       expect(() => {
-        jobTypeRegistry.parseOutput("main", { success: true });
+        registry.parseOutput("main", { success: true });
       }).toThrow(JobTypeValidationError);
     });
   });
@@ -109,7 +109,7 @@ describe("createValibotJobTypeRegistry", () => {
   describe("validateContinueWith", () => {
     describe("nominal validation", () => {
       it("passes for valid type name", () => {
-        const jobTypeRegistry = createValibotJobTypeRegistry({
+        const registry = createValibotJobTypeRegistry({
           step1: {
             entry: true,
             input: v.object({ id: v.string() }),
@@ -122,7 +122,7 @@ describe("createValibotJobTypeRegistry", () => {
         });
 
         expect(() => {
-          jobTypeRegistry.validateContinueWith("step1", {
+          registry.validateContinueWith("step1", {
             typeName: "step2",
             input: { data: "test" },
           });
@@ -130,7 +130,7 @@ describe("createValibotJobTypeRegistry", () => {
       });
 
       it("throws for invalid type name", () => {
-        const jobTypeRegistry = createValibotJobTypeRegistry({
+        const registry = createValibotJobTypeRegistry({
           step1: {
             entry: true,
             input: v.object({ id: v.string() }),
@@ -140,14 +140,14 @@ describe("createValibotJobTypeRegistry", () => {
         });
 
         expect(() => {
-          jobTypeRegistry.validateContinueWith("step1", { typeName: "step3", input: {} });
+          registry.validateContinueWith("step1", { typeName: "step3", input: {} });
         }).toThrow(JobTypeValidationError);
       });
     });
 
     describe("structural validation", () => {
       it("passes for matching input shape", () => {
-        const jobTypeRegistry = createValibotJobTypeRegistry({
+        const registry = createValibotJobTypeRegistry({
           router: {
             entry: true,
             input: v.object({ route: v.string() }),
@@ -160,7 +160,7 @@ describe("createValibotJobTypeRegistry", () => {
         });
 
         expect(() => {
-          jobTypeRegistry.validateContinueWith("router", {
+          registry.validateContinueWith("router", {
             typeName: "handler",
             input: { payload: "test-data" },
           });
@@ -168,7 +168,7 @@ describe("createValibotJobTypeRegistry", () => {
       });
 
       it("throws for non-matching input shape", () => {
-        const jobTypeRegistry = createValibotJobTypeRegistry({
+        const registry = createValibotJobTypeRegistry({
           router: {
             entry: true,
             input: v.object({ route: v.string() }),
@@ -178,7 +178,7 @@ describe("createValibotJobTypeRegistry", () => {
         });
 
         expect(() => {
-          jobTypeRegistry.validateContinueWith("router", {
+          registry.validateContinueWith("router", {
             typeName: "handler",
             input: { wrongField: "test" },
           });
@@ -187,7 +187,7 @@ describe("createValibotJobTypeRegistry", () => {
     });
 
     it("throws when continueWith is not defined", () => {
-      const jobTypeRegistry = createValibotJobTypeRegistry({
+      const registry = createValibotJobTypeRegistry({
         terminal: {
           entry: true,
           input: v.object({ id: v.string() }),
@@ -196,7 +196,7 @@ describe("createValibotJobTypeRegistry", () => {
       });
 
       expect(() => {
-        jobTypeRegistry.validateContinueWith("terminal", { typeName: "next", input: {} });
+        registry.validateContinueWith("terminal", { typeName: "next", input: {} });
       }).toThrow(JobTypeValidationError);
     });
   });
@@ -204,7 +204,7 @@ describe("createValibotJobTypeRegistry", () => {
   describe("validateBlockers", () => {
     describe("nominal validation", () => {
       it("passes for valid blocker type names", () => {
-        const jobTypeRegistry = createValibotJobTypeRegistry({
+        const registry = createValibotJobTypeRegistry({
           main: {
             entry: true,
             input: v.object({ id: v.string() }),
@@ -219,12 +219,12 @@ describe("createValibotJobTypeRegistry", () => {
         });
 
         expect(() => {
-          jobTypeRegistry.validateBlockers("main", [{ typeName: "auth", input: { token: "abc" } }]);
+          registry.validateBlockers("main", [{ typeName: "auth", input: { token: "abc" } }]);
         }).not.toThrow();
       });
 
       it("throws for invalid blocker type name", () => {
-        const jobTypeRegistry = createValibotJobTypeRegistry({
+        const registry = createValibotJobTypeRegistry({
           main: {
             entry: true,
             input: v.object({ id: v.string() }),
@@ -234,14 +234,14 @@ describe("createValibotJobTypeRegistry", () => {
         });
 
         expect(() => {
-          jobTypeRegistry.validateBlockers("main", [{ typeName: "wrong", input: {} }]);
+          registry.validateBlockers("main", [{ typeName: "wrong", input: {} }]);
         }).toThrow(JobTypeValidationError);
       });
     });
 
     describe("structural validation", () => {
       it("passes for matching blocker input shapes", () => {
-        const jobTypeRegistry = createValibotJobTypeRegistry({
+        const registry = createValibotJobTypeRegistry({
           main: {
             entry: true,
             input: v.object({ id: v.string() }),
@@ -262,7 +262,7 @@ describe("createValibotJobTypeRegistry", () => {
 
         // Both auth types have { token: string } in input, so both are valid
         expect(() => {
-          jobTypeRegistry.validateBlockers("main", [
+          registry.validateBlockers("main", [
             { typeName: "auth", input: { token: "abc" } },
             { typeName: "authOther", input: { token: "xyz", extra: "data" } },
           ]);
@@ -270,7 +270,7 @@ describe("createValibotJobTypeRegistry", () => {
       });
 
       it("throws for non-matching blocker input shape", () => {
-        const jobTypeRegistry = createValibotJobTypeRegistry({
+        const registry = createValibotJobTypeRegistry({
           main: {
             entry: true,
             input: v.object({ id: v.string() }),
@@ -283,15 +283,13 @@ describe("createValibotJobTypeRegistry", () => {
         });
 
         expect(() => {
-          jobTypeRegistry.validateBlockers("main", [
-            { typeName: "config", input: { key: "setting" } },
-          ]);
+          registry.validateBlockers("main", [{ typeName: "config", input: { key: "setting" } }]);
         }).toThrow(JobTypeValidationError);
       });
     });
 
     it("throws when blockers is not defined", () => {
-      const jobTypeRegistry = createValibotJobTypeRegistry({
+      const registry = createValibotJobTypeRegistry({
         main: {
           entry: true,
           input: v.object({ id: v.string() }),
@@ -300,7 +298,7 @@ describe("createValibotJobTypeRegistry", () => {
       });
 
       expect(() => {
-        jobTypeRegistry.validateBlockers("main", [{ typeName: "auth", input: {} }]);
+        registry.validateBlockers("main", [{ typeName: "auth", input: {} }]);
       }).toThrow(JobTypeValidationError);
     });
   });
@@ -308,7 +306,7 @@ describe("createValibotJobTypeRegistry", () => {
 
 describe("integration", () => {
   it("runs a chain with continuation and validates at runtime", async () => {
-    const jobTypeRegistry = createValibotJobTypeRegistry({
+    const registry = createValibotJobTypeRegistry({
       "fetch-data": {
         entry: true,
         input: v.object({ url: v.pipe(v.string(), v.url()) }),
@@ -328,16 +326,16 @@ describe("integration", () => {
       stateAdapter,
       notifyAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
     const qrtWorker = await createQueuertInProcessWorker({
       stateAdapter,
       notifyAdapter,
       log,
-      jobTypeRegistry,
-      jobTypeProcessors: {
+      registry,
+      processors: {
         "fetch-data": {
-          process: async ({ complete }) => {
+          attemptHandler: async ({ complete }) => {
             return complete(async ({ continueWith }) =>
               continueWith({
                 typeName: "process-data",
@@ -347,7 +345,7 @@ describe("integration", () => {
           },
         },
         "process-data": {
-          process: async ({ job, complete }) => {
+          attemptHandler: async ({ job, complete }) => {
             const data = job.input.data as { items: number[] };
             return complete(async () => ({
               processed: true,
@@ -377,7 +375,7 @@ describe("integration", () => {
   });
 
   it("rejects invalid input at chain start", async () => {
-    const jobTypeRegistry = createValibotJobTypeRegistry({
+    const registry = createValibotJobTypeRegistry({
       main: {
         entry: true,
         input: v.object({ url: v.pipe(v.string(), v.url()) }),
@@ -393,7 +391,7 @@ describe("integration", () => {
       stateAdapter,
       notifyAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
 
     await expect(
@@ -410,7 +408,7 @@ describe("integration", () => {
   });
 
   it("rejects non-entry type at chain start", async () => {
-    const jobTypeRegistry = createValibotJobTypeRegistry({
+    const registry = createValibotJobTypeRegistry({
       internal: {
         input: v.object({ data: v.string() }),
         output: v.object({ done: v.boolean() }),
@@ -425,7 +423,7 @@ describe("integration", () => {
       stateAdapter,
       notifyAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
 
     await expect(
@@ -444,7 +442,7 @@ describe("integration", () => {
   });
 
   it("rejects when required blockers are not provided", async () => {
-    const jobTypeRegistry = createValibotJobTypeRegistry({
+    const registry = createValibotJobTypeRegistry({
       main: {
         entry: true,
         input: v.object({ id: v.string() }),
@@ -470,7 +468,7 @@ describe("integration", () => {
       stateAdapter,
       notifyAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
 
     // Starting without startBlockers should fail validation
@@ -493,7 +491,7 @@ describe("integration", () => {
   });
 
   it("runs a chain with structural blocker validation", async () => {
-    const jobTypeRegistry = createValibotJobTypeRegistry({
+    const registry = createValibotJobTypeRegistry({
       main: {
         entry: true,
         input: v.object({ id: v.string() }),
@@ -515,21 +513,21 @@ describe("integration", () => {
       stateAdapter,
       notifyAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
     const qrtWorker = await createQueuertInProcessWorker({
       stateAdapter,
       notifyAdapter,
       log,
-      jobTypeRegistry,
-      jobTypeProcessors: {
+      registry,
+      processors: {
         main: {
-          process: async ({ complete }) => {
+          attemptHandler: async ({ complete }) => {
             return complete(async () => ({ success: true }));
           },
         },
         auth: {
-          process: async ({ job, complete }) => {
+          attemptHandler: async ({ job, complete }) => {
             return complete(async () => ({ userId: `user-${job.input.token}` }));
           },
         },

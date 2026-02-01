@@ -17,7 +17,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypes<{
+    const registry = defineJobTypes<{
       test: {
         entry: true;
         input: { value: number };
@@ -30,20 +30,20 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
     const worker = await createQueuertInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
       workerId: "worker",
-      concurrency: { maxSlots: 1 },
-      jobTypeProcessing: { pollIntervalMs: 50 },
-      jobTypeProcessors: {
+      concurrency: 1,
+      processDefaults: { pollIntervalMs: 50 },
+      processors: {
         test: {
-          process: async ({ job, complete }) => {
+          attemptHandler: async ({ job, complete }) => {
             return complete(async () => ({ result: job.input.value * 2 }));
           },
         },
@@ -84,7 +84,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypes<{
+    const registry = defineJobTypes<{
       test: {
         entry: true;
         input: { value: number };
@@ -97,20 +97,20 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
     const worker = await createQueuertInProcessWorker({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
       workerId: "worker",
-      concurrency: { maxSlots: 1 },
-      jobTypeProcessing: { pollIntervalMs: 50 },
-      jobTypeProcessors: {
+      concurrency: 1,
+      processDefaults: { pollIntervalMs: 50 },
+      processors: {
         test: {
-          process: async ({ job, complete }) => {
+          attemptHandler: async ({ job, complete }) => {
             return complete(async () => ({ result: job.input.value * 2 }));
           },
         },
@@ -151,7 +151,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypes<{
+    const registry = defineJobTypes<{
       first: {
         entry: true;
         input: { value: number };
@@ -168,7 +168,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
 
     const firstCompleted = Promise.withResolvers<void>();
@@ -178,13 +178,13 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
       workerId: "worker",
-      concurrency: { maxSlots: 1 },
-      jobTypeProcessing: { pollIntervalMs: 50 },
-      jobTypeProcessors: {
+      concurrency: 1,
+      processDefaults: { pollIntervalMs: 50 },
+      processors: {
         first: {
-          process: async ({ complete }) => {
+          attemptHandler: async ({ complete }) => {
             try {
               return await complete(async ({ continueWith }) =>
                 continueWith({
@@ -199,7 +199,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
           },
         },
         second: {
-          process: async ({ complete }) => {
+          attemptHandler: async ({ complete }) => {
             return complete(async () => ({ result: "done" }));
           },
         },
@@ -241,7 +241,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypes<{
+    const registry = defineJobTypes<{
       first: {
         entry: true;
         input: { value: number };
@@ -258,7 +258,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
 
     const firstCompleted = Promise.withResolvers<void>();
@@ -268,13 +268,13 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
       workerId: "worker",
-      concurrency: { maxSlots: 1 },
-      jobTypeProcessing: { pollIntervalMs: 50 },
-      jobTypeProcessors: {
+      concurrency: 1,
+      processDefaults: { pollIntervalMs: 50 },
+      processors: {
         first: {
-          process: async ({ complete }) => {
+          attemptHandler: async ({ complete }) => {
             try {
               return await complete(async ({ continueWith }) =>
                 continueWith({
@@ -289,7 +289,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
           },
         },
         second: {
-          process: async ({ complete }) => {
+          attemptHandler: async ({ complete }) => {
             return complete(async () => ({ result: "done" }));
           },
         },
@@ -331,7 +331,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypes<{
+    const registry = defineJobTypes<{
       test: {
         entry: true;
         input: { value: number };
@@ -344,7 +344,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
 
     let attemptCount = 0;
@@ -355,13 +355,13 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
       workerId: "worker",
-      concurrency: { maxSlots: 1 },
-      jobTypeProcessing: { pollIntervalMs: 50 },
-      jobTypeProcessors: {
+      concurrency: 1,
+      processDefaults: { pollIntervalMs: 50 },
+      processors: {
         test: {
-          process: async ({ job, complete }) => {
+          attemptHandler: async ({ job, complete }) => {
             attemptCount++;
             if (attemptCount === 1) {
               firstAttemptDone.resolve();
@@ -410,7 +410,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypes<{
+    const registry = defineJobTypes<{
       test: {
         entry: true;
         input: { value: number };
@@ -423,7 +423,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
     });
 
     let attemptCount = 0;
@@ -434,13 +434,13 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      registry,
       workerId: "worker",
-      concurrency: { maxSlots: 1 },
-      jobTypeProcessing: { pollIntervalMs: 50 },
-      jobTypeProcessors: {
+      concurrency: 1,
+      processDefaults: { pollIntervalMs: 50 },
+      processors: {
         test: {
-          process: async ({ job, complete }) => {
+          attemptHandler: async ({ job, complete }) => {
             attemptCount++;
             if (attemptCount === 1) {
               firstAttemptDone.resolve();
