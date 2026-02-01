@@ -588,6 +588,36 @@ importers:
         specifier: ^4.21.0
         version: 4.21.0
 
+  examples/state-postgres-multi-worker:
+    devDependencies:
+      '@queuert/postgres':
+        specifier: workspace:*
+        version: link:../../packages/postgres
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
+      '@testcontainers/postgresql':
+        specifier: ^11.10.0
+        version: 11.10.0
+      '@types/node':
+        specifier: ^24.10.4
+        version: 24.10.4
+      '@types/pg':
+        specifier: ^8.16.0
+        version: 8.16.0
+      pg:
+        specifier: ^8.16.3
+        version: 8.16.3
+      queuert:
+        specifier: workspace:*
+        version: link:../../packages/core
+      testcontainers:
+        specifier: ^11.10.0
+        version: 11.11.0
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
+
   examples/state-postgres-pg:
     devDependencies:
       '@queuert/postgres':

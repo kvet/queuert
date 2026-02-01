@@ -11,7 +11,6 @@
   - when running migrations, check if the migration set was already applied, if so skip it
 - extract state and notify adapter test suites to efficiently test multiple configurations (prefixes etc)
 - rename createQueuertClient to createClient and createQueuertInProcessWorker to createInProcessWorker. review all other names for similar verbosity
-- add a proper example/test with multiple workers sharing the same database
 
 # Medium term
 
