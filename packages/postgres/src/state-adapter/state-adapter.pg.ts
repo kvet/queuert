@@ -163,7 +163,7 @@ export const createPgStateAdapter = async <
           rootChainId,
           originId,
           deduplication?.key ?? null,
-          deduplication ? (deduplication.strategy ?? "completed") : null,
+          deduplication ? (deduplication.scope ?? "incomplete") : null,
           deduplication?.windowMs ?? null,
           schedule?.at ?? null,
           schedule?.afterMs ?? null,

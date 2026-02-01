@@ -1,7 +1,7 @@
-export type DeduplicationStrategy = "completed" | "all";
+export type DeduplicationScope = "incomplete" | "any";
 
 export type DeduplicationOptions = {
   key: string;
-  strategy?: DeduplicationStrategy;
+  scope?: DeduplicationScope;
   windowMs?: number;
 };

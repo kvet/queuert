@@ -53,13 +53,13 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
 
     let bestMatch: StateJob | undefined;
     const now = Date.now();
-    const strategy = deduplication.strategy ?? "completed";
+    const scope = deduplication.scope ?? "incomplete";
 
     for (const job of store.jobs.values()) {
       if (job.deduplicationKey !== deduplication.key) continue;
       if (job.id !== job.chainId) continue; // Only first jobs in chain
 
-      if (strategy === "completed" && job.status === "completed") continue;
+      if (scope === "incomplete" && job.status === "completed") continue;
 
       if (deduplication.windowMs !== undefined) {
         const windowStart = now - deduplication.windowMs;

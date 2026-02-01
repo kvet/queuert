@@ -596,12 +596,12 @@ chain2.deduplicated; // true — returned existing chain
 chain2.id === chain1.id; // true
 ```
 
-### Deduplication Strategies
+### Deduplication Modes
 
-The `strategy` option controls when deduplication applies:
+The `scope` option controls what jobs to check for duplicates:
 
-- **`completed`** (default) — Only dedup against non-completed chains (allows new chain after previous completes)
-- **`all`** — Dedup against any existing chain with this key
+- **`incomplete`** (default) — Only dedup against incomplete chains (allows new chain after previous completes)
+- **`any`** — Dedup against any existing chain with this key
 
 ```ts
 // Only one active health check at a time, but can start new after completion
@@ -610,7 +610,7 @@ await client.startJobChain({
   input: { serviceId: "api-server" },
   deduplication: {
     key: "health:api-server",
-    strategy: "completed",
+    scope: "incomplete",
   },
 });
 ```
@@ -626,7 +626,7 @@ await client.startJobChain({
   input: { sourceId: "db-primary" },
   deduplication: {
     key: "sync:db-primary",
-    strategy: "all",
+    scope: "any",
     windowMs: 60 * 60 * 1000, // 1 hour
   },
 });

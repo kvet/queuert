@@ -4,7 +4,7 @@ import {
   type TypedSql,
   sql,
 } from "@queuert/typed-sql";
-import { type DeduplicationStrategy } from "queuert";
+import { type DeduplicationScope } from "queuert";
 
 export type DbJob = {
   id: string;
@@ -218,7 +218,7 @@ export const createJobSql: TypedSql<
     NamedParameter<"root_chain_id", string | undefined>,
     NamedParameter<"origin_id", string | undefined>,
     NamedParameter<"deduplication_key", string | null | undefined>,
-    NamedParameter<"deduplication_strategy", DeduplicationStrategy | null | undefined>,
+    NamedParameter<"deduplication_scope", DeduplicationScope | null | undefined>,
     NamedParameter<"deduplication_window_ms", number | null | undefined>,
     NamedParameter<"scheduled_at", Date | null>,
     NamedParameter<"schedule_after_ms", number | null>,
@@ -243,8 +243,8 @@ existing_deduplicated AS (
     AND j.id = j.chain_id
     AND (
       $8::text IS NULL
-      OR ($8::text = 'completed' AND j.status != 'completed')
-      OR ($8::text = 'all')
+      OR ($8::text = 'incomplete' AND j.status != 'completed')
+      OR ($8::text = 'any')
     )
     AND (
       $9::bigint IS NULL

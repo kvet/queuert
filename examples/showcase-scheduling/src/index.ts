@@ -279,7 +279,7 @@ const healthChain1 = await client.withNotify(async () =>
       input: { serviceId: "api-server", checkNumber: 1 },
       deduplication: {
         key: "health:api-server",
-        strategy: "completed", // Only one active instance at a time
+        scope: "incomplete", // Only one active instance at a time
       },
     });
   }),
@@ -297,7 +297,7 @@ const healthChain2 = await client.withNotify(async () =>
       input: { serviceId: "api-server", checkNumber: 1 },
       deduplication: {
         key: "health:api-server",
-        strategy: "completed",
+        scope: "incomplete",
       },
     });
   }),
@@ -333,7 +333,7 @@ const sync1 = await client.withNotify(async () =>
       input: { sourceId: "db-primary" },
       deduplication: {
         key: "sync:db-primary",
-        strategy: "all",
+        scope: "any",
         windowMs: SYNC_WINDOW_MS,
       },
     });
@@ -354,7 +354,7 @@ const sync2 = await client.withNotify(async () =>
       input: { sourceId: "db-primary" },
       deduplication: {
         key: "sync:db-primary",
-        strategy: "all",
+        scope: "any",
         windowMs: SYNC_WINDOW_MS,
       },
     });
@@ -377,7 +377,7 @@ const sync3 = await client.withNotify(async () =>
       input: { sourceId: "db-primary" },
       deduplication: {
         key: "sync:db-primary",
-        strategy: "all",
+        scope: "any",
         windowMs: SYNC_WINDOW_MS,
       },
     });

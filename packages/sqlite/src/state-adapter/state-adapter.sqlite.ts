@@ -235,7 +235,7 @@ export const createSqliteStateAdapter = async <
       const newId = idGenerator();
       const inputJson = input !== undefined ? JSON.stringify(input) : null;
       const deduplicationKey = deduplication?.key ?? null;
-      const deduplicationStrategy = deduplication ? (deduplication.strategy ?? "completed") : null;
+      const deduplicationScope = deduplication ? (deduplication.scope ?? "incomplete") : null;
       const deduplicationWindowMs = deduplication?.windowMs ?? null;
 
       const chainIdOrNull = chainId ?? null;
@@ -254,9 +254,9 @@ export const createSqliteStateAdapter = async <
           originIdOrNull,
           deduplicationKey,
           deduplicationKey,
-          deduplicationStrategy,
-          deduplicationStrategy,
-          deduplicationStrategy,
+          deduplicationScope,
+          deduplicationScope,
+          deduplicationScope,
           deduplicationWindowMs,
           deduplicationWindowMs,
         ],

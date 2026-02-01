@@ -1,10 +1,7 @@
-import {
-  type DeduplicationOptions,
-  type DeduplicationStrategy,
-} from "../entities/deduplication.js";
+import { type DeduplicationOptions, type DeduplicationScope } from "../entities/deduplication.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
 
-export type { DeduplicationOptions, DeduplicationStrategy, ScheduleOptions };
+export type { DeduplicationOptions, DeduplicationScope, ScheduleOptions };
 
 export type StateJob = {
   id: string;

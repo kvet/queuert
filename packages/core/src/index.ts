@@ -40,7 +40,7 @@ export {
 export {
   type BaseTxContext,
   type DeduplicationOptions,
-  type DeduplicationStrategy,
+  type DeduplicationScope,
   type GetStateAdapterJobId,
   type StateAdapter,
   type StateJob,

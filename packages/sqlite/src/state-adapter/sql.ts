@@ -4,7 +4,7 @@ import {
   type TypedSql,
   sql,
 } from "@queuert/typed-sql";
-import { type DeduplicationStrategy } from "queuert";
+import { type DeduplicationScope } from "queuert";
 
 export const jobColumns = [
   "id",
@@ -213,9 +213,9 @@ export const findExistingJobSql: TypedSql<
     NamedParameter<"origin_id_2", string | null>,
     NamedParameter<"deduplication_key_1", string | null>,
     NamedParameter<"deduplication_key_2", string | null>,
-    NamedParameter<"deduplication_strategy_1", DeduplicationStrategy | null>,
-    NamedParameter<"deduplication_strategy_2", DeduplicationStrategy | null>,
-    NamedParameter<"deduplication_strategy_3", DeduplicationStrategy | null>,
+    NamedParameter<"deduplication_scope_1", DeduplicationScope | null>,
+    NamedParameter<"deduplication_scope_2", DeduplicationScope | null>,
+    NamedParameter<"deduplication_scope_3", DeduplicationScope | null>,
     NamedParameter<"deduplication_window_ms_1", number | null>,
     NamedParameter<"deduplication_window_ms_2", number | null>,
   ],
@@ -233,8 +233,8 @@ WHERE (
     AND id = chain_id
     AND (
       ? IS NULL
-      OR (? = 'completed' AND status != 'completed')
-      OR (? = 'all')
+      OR (? = 'incomplete' AND status != 'completed')
+      OR (? = 'any')
     )
     AND (
       ? IS NULL

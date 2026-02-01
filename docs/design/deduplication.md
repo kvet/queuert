@@ -14,7 +14,7 @@ await queuert.startJobChain({
   input: { userId: 123 },
   deduplication: {
     key: "user-123",
-    strategy: "completed",
+    scope: "incomplete",
     windowMs: 60000,
   },
 });
@@ -23,9 +23,9 @@ await queuert.startJobChain({
 ### Options
 
 - `key`: Unique identifier for deduplication matching. Chains with the same key are considered duplicates.
-- `strategy`:
-  - `'completed'` (default): Deduplicates against non-completed jobs only. A new chain can be created once the previous one completes.
-  - `'all'`: Deduplicates against all jobs including completed ones. Prevents any duplicate within the time window.
+- `scope`:
+  - `'incomplete'` (default): Deduplicates against incomplete jobs only. A new chain can be created once the previous one completes.
+  - `'any'`: Deduplicates against any jobs including completed ones. Prevents any duplicate within the time window.
 - `windowMs`: Optional time window in milliseconds. `undefined` means no time limit (deduplicate against all matching chains).
 
 ### Behavior
@@ -46,7 +46,7 @@ When a duplicate is detected:
 await queuert.startJobChain({
   typeName: "process-order",
   input: { orderId: req.params.id },
-  deduplication: { key: `order-${req.params.id}`, strategy: "completed" },
+  deduplication: { key: `order-${req.params.id}`, scope: "incomplete" },
 });
 ```
 
@@ -57,7 +57,7 @@ await queuert.startJobChain({
 await queuert.startJobChain({
   typeName: "sync-user-data",
   input: { userId },
-  deduplication: { key: `sync-${userId}`, strategy: "all", windowMs: 60 * 60 * 1000 },
+  deduplication: { key: `sync-${userId}`, scope: "any", windowMs: 60 * 60 * 1000 },
 });
 ```
 

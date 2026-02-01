@@ -36,6 +36,48 @@ createInProcessNotifyAdapter → NotifyAdapter
 
 ## StateAdapter Design
 
+### Atomic Operations Principle
+
+All StateAdapter methods must complete in a **single database round-trip**. This is a core design principle:
+
+- **O(1) round trips**: Each method—regardless of how many jobs it affects—executes exactly one database operation
+- **O(n) is incorrect**: If an adapter implementation requires multiple round trips proportional to input size, the implementation is wrong
+- **Batch operations**: Methods accepting arrays (e.g., `createJobs`, `markJobsAsCompleted`) must use batch SQL (multi-row INSERT, UPDATE with IN clause, CTEs) rather than loops
+
+This principle ensures predictable performance and proper atomicity. Examples of correct patterns:
+
+```sql
+-- Correct: Single INSERT with multiple VALUES
+INSERT INTO jobs (id, type_name, input) VALUES
+  ($1, $2, $3),
+  ($4, $5, $6),
+  ($7, $8, $9);
+
+-- Correct: Single UPDATE with array parameter
+UPDATE jobs SET status = 'completed' WHERE id = ANY($1);
+
+-- Correct: CTE for complex multi-step operations
+WITH updated AS (
+  UPDATE jobs SET status = 'in_progress' WHERE ...
+  RETURNING *
+)
+INSERT INTO job_history SELECT * FROM updated;
+```
+
+Anti-patterns to avoid:
+
+```typescript
+// WRONG: O(n) round trips
+for (const job of jobs) {
+  await db.query("INSERT INTO jobs VALUES ($1, $2)", [job.id, job.input]);
+}
+
+// WRONG: Sequential updates
+for (const jobId of jobIds) {
+  await db.query("UPDATE jobs SET status = $1 WHERE id = $2", ["completed", jobId]);
+}
+```
+
 ### Context Architecture
 
 The `StateAdapter` type accepts two generic parameters:
@@ -240,8 +282,9 @@ When no `observabilityAdapter` is provided, a noop implementation is used automa
 
 Queuert's adapter design emphasizes:
 
-1. **Consistent async factories**: Public adapters are always async
-2. **Optional txContext**: StateProvider operations support optional txContext for non-transactional operations
-3. **Internal connection management**: NotifyProvider manages connections internally with no txContext parameters
-4. **Broadcast with optimization**: NotifyAdapter uses hints to prevent thundering herd
-5. **Two-layer observability**: Low-level primitives for adapters, high-level objects for internal use
+1. **Atomic O(1) operations**: Every adapter method completes in a single database round-trip regardless of input size
+2. **Consistent async factories**: Public adapters are always async
+3. **Optional txContext**: StateProvider operations support optional txContext for non-transactional operations
+4. **Internal connection management**: NotifyProvider manages connections internally with no txContext parameters
+5. **Broadcast with optimization**: NotifyAdapter uses hints to prevent thundering herd
+6. **Two-layer observability**: Low-level primitives for adapters, high-level objects for internal use

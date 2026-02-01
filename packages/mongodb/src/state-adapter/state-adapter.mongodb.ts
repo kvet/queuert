@@ -618,7 +618,8 @@ const buildDeduplicationQuery = (
       $expr: { $eq: ["$_id", "$chainId"] },
     };
 
-    if (deduplication.strategy === "completed") {
+    const scope = deduplication.scope ?? "incomplete";
+    if (scope === "incomplete") {
       dedupCondition.status = { $ne: "completed" };
     }
 

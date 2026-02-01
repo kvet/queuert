@@ -87,7 +87,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expect("output" in fetched2! && fetched2.output).toEqual({ result: 1 });
   });
 
-  it("deduplication strategies: 'all' vs 'completed'", async ({
+  it("deduplication scopes: 'any' vs 'incomplete'", async ({
     stateAdapter,
     notifyAdapter,
     runInTransaction,
@@ -111,14 +111,14 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       jobTypeRegistry,
     });
 
-    // Test 'all' strategy - deduplicates against completed jobs
+    // Test 'any' scope - deduplicates against completed jobs
     const allChain1 = await client.withNotify(async () =>
       runInTransaction(async (txContext) =>
         client.startJobChain({
           ...txContext,
           typeName: "test",
           input: { value: 1 },
-          deduplication: { key: "all-key", strategy: "all" },
+          deduplication: { key: "all-key", scope: "any" },
         }),
       ),
     );
@@ -139,7 +139,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           ...txContext,
           typeName: "test",
           input: { value: 2 },
-          deduplication: { key: "all-key", strategy: "all" },
+          deduplication: { key: "all-key", scope: "any" },
         }),
       ),
     );
@@ -147,14 +147,14 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expect(allChain2.deduplicated).toBe(true);
     expect(allChain2.id).toBe(allChain1.id);
 
-    // Test 'completed' strategy - does NOT deduplicate against completed jobs
+    // Test 'incomplete' scope - does NOT deduplicate against completed jobs
     const completedChain1 = await client.withNotify(async () =>
       runInTransaction(async (txContext) =>
         client.startJobChain({
           ...txContext,
           typeName: "test",
           input: { value: 3 },
-          deduplication: { key: "completed-key", strategy: "completed" },
+          deduplication: { key: "completed-key", scope: "incomplete" },
         }),
       ),
     );
@@ -175,7 +175,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           ...txContext,
           typeName: "test",
           input: { value: 4 },
-          deduplication: { key: "completed-key", strategy: "completed" },
+          deduplication: { key: "completed-key", scope: "incomplete" },
         }),
       ),
     );
@@ -219,14 +219,14 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       jobTypeRegistry,
     });
 
-    // Test 'all' strategy with windowMs
+    // Test 'any' scope with windowMs
     const allChain1 = await client.withNotify(async () =>
       runInTransaction(async (txContext) =>
         client.startJobChain({
           ...txContext,
           typeName: "test",
           input: { value: 1 },
-          deduplication: { key: "all-key", strategy: "all", windowMs: 50 },
+          deduplication: { key: "all-key", scope: "any", windowMs: 50 },
         }),
       ),
     );
@@ -241,7 +241,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           ...txContext,
           typeName: "test",
           input: { value: 2 },
-          deduplication: { key: "all-key", strategy: "all", windowMs: 50 },
+          deduplication: { key: "all-key", scope: "any", windowMs: 50 },
         }),
       ),
     );
@@ -249,14 +249,14 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expect(allChain2.deduplicated).toBe(false);
     expect(allChain2.id).not.toBe(allChain1.id);
 
-    // Test 'completed' strategy with windowMs
+    // Test 'incomplete' scope with windowMs
     const completedChain1 = await client.withNotify(async () =>
       runInTransaction(async (txContext) =>
         client.startJobChain({
           ...txContext,
           typeName: "test",
           input: { value: 3 },
-          deduplication: { key: "completed-key", strategy: "completed", windowMs: 50 },
+          deduplication: { key: "completed-key", scope: "incomplete", windowMs: 50 },
         }),
       ),
     );
@@ -279,7 +279,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           ...txContext,
           typeName: "test",
           input: { value: 4 },
-          deduplication: { key: "completed-key", strategy: "completed", windowMs: 50 },
+          deduplication: { key: "completed-key", scope: "incomplete", windowMs: 50 },
         }),
       ),
     );

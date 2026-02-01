@@ -6,8 +6,11 @@
 - Rename worker config for less verbosity:
   - `jobTypeRegistry` → `registry`
   - `jobTypeProcessors` → `processors`
-  - `process` → `execute`
-- Rename deduplication strategy `'completed'` → `'incomplete'` for clarity (describes what to deduplicate against, not when deduplication stops)
+  - `process` → `execute` (avoids "processors.xxx.process" redundancy)
+  - `jobTypeProcessing` → `defaults`
+  - `defaultRetryConfig` → `retryConfig` (inside defaults)
+  - `defaultLeaseConfig` → `leaseConfig` (inside defaults)
+  - `concurrency: { maxSlots }` → `concurrency: number` (flatten)
 - ObservabilityAdapter: tracing spans
 - test against multiple versions of node on CI
 - add migration table to skip already applied migrations
@@ -17,6 +20,7 @@
 
 # Medium term
 
+- MySQL/MariaDB adapter - Popular databases; defer until users request
 - MonogoDB ready:
   - MongoDB: Use native ObjectId instead of app-side UUID generation
   - MongoDB: Move collection configuration from provider to adapter - Provider should only handle context/transactions, collection name is an adapter concern (like schema/tablePrefix in PostgreSQL/SQLite)
@@ -30,12 +34,11 @@
   - Separate read/write connection pools (single writer, multiple readers)
   - get rid of skipConcurrencyTests flag in resilience tests
   - usage of db without pool is incorrect
+- Revisit Prisma examples
 - test against bun and it's built-in sqlite, postgres clients
 
 # Long term
 
-- Revisit Prisma SQLite example - poor fit for raw SQL (BigInt returns, no :memory:, runtime db push)
 - Hard timeout (worker threads) - True isolation with `terminate()`; enables memory limits and untrusted code sandboxing
 - Singletons/concurrency limit
 - Partitioning (PG) - Scaling concern; defer until users hit limits
-- MySQL/MariaDB adapter - Popular databases; defer until users request

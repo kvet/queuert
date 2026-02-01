@@ -194,7 +194,7 @@ await worker.start();
 **Configuration:**
 
 - `ScheduleOptions` - Deferred job scheduling (`{ at: Date }` or `{ afterMs: number }`)
-- `DeduplicationOptions`, `DeduplicationStrategy` - Chain deduplication
+- `DeduplicationOptions`, `DeduplicationScope` - Chain deduplication
 - `LeaseConfig`, `RetryConfig`, `BackoffConfig` - Worker configuration
 - `TypedAbortSignal`, `JobAbortReason` - Typed abort signal for process functions
 - `JobAttemptMiddleware` - Middleware type for wrapping job attempt processing
