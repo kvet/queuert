@@ -4,12 +4,7 @@ import { type ExtractTablesWithRelations, sql } from "drizzle-orm";
 import { type NodePgQueryResultHKT, drizzle } from "drizzle-orm/node-postgres";
 import { type PgTransaction, pgTable, serial, text } from "drizzle-orm/pg-core";
 import { Pool } from "pg";
-import {
-  createConsoleLog,
-  createQueuertClient,
-  createQueuertInProcessWorker,
-  defineJobTypes,
-} from "queuert";
+import { createQueuertClient, createQueuertInProcessWorker, defineJobTypes } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 
 // 1. Start PostgreSQL using testcontainers
@@ -78,18 +73,15 @@ const stateAdapter = await createPgStateAdapter({
 await stateAdapter.migrateToLatest();
 
 const notifyAdapter = createInProcessNotifyAdapter();
-const log = createConsoleLog();
 
 const qrtClient = await createQueuertClient({
   stateAdapter,
   notifyAdapter,
-  log,
   registry,
 });
 const qrtWorker = await createQueuertInProcessWorker({
   stateAdapter,
   notifyAdapter,
-  log,
   registry,
   processors: {
     send_welcome_email: {

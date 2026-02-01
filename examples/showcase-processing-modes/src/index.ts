@@ -115,14 +115,12 @@ const client = await createQueuertClient({
   stateAdapter,
   notifyAdapter,
   registry: jobTypes,
-  log: () => {},
 });
 
 const worker = await createQueuertInProcessWorker({
   stateAdapter,
   notifyAdapter,
   registry: jobTypes,
-  log: () => {},
   processors: {
     "reserve-inventory": {
       attemptHandler: async ({ job, prepare, complete }) => {

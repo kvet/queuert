@@ -1,12 +1,7 @@
 import { type MongoStateProvider, createMongoStateAdapter } from "@queuert/mongodb";
 import { MongoDBContainer } from "@testcontainers/mongodb";
 import mongoose, { Schema } from "mongoose";
-import {
-  createConsoleLog,
-  createQueuertClient,
-  createQueuertInProcessWorker,
-  defineJobTypes,
-} from "queuert";
+import { createQueuertClient, createQueuertInProcessWorker, defineJobTypes } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 
 // 1. Start MongoDB using testcontainers
@@ -61,12 +56,10 @@ const stateAdapter = await createMongoStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 
 const notifyAdapter = createInProcessNotifyAdapter();
-const log = createConsoleLog();
 
 const qrtClient = await createQueuertClient({
   stateAdapter,
   notifyAdapter,
-  log,
   registry,
 });
 
@@ -74,7 +67,6 @@ const qrtClient = await createQueuertClient({
 const qrtWorker = await createQueuertInProcessWorker({
   stateAdapter,
   notifyAdapter,
-  log,
   registry,
   processors: {
     send_welcome_email: {

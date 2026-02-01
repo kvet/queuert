@@ -89,7 +89,7 @@ export const queuertHelper = ({
   notifyAdapter?: NotifyAdapter;
   observabilityAdapter?: ObservabilityAdapter;
   registry: JobTypeRegistry;
-  log: Log;
+  log?: Log;
 }) => {
   const observabilityAdapter = observabilityAdapterOption ?? createNoopObservabilityAdapter();
   const observabilityHelper = createObservabilityHelper({ log, adapter: observabilityAdapter });

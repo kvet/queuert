@@ -113,11 +113,13 @@ export type ObservabilityHelper = {
   jobTypeProcessingChange: (delta: number, job: StateJob, workerId: string) => void;
 };
 
+const noopLog: Log = () => {};
+
 export const createObservabilityHelper = ({
-  log,
+  log = noopLog,
   adapter,
 }: {
-  log: Log;
+  log?: Log;
   adapter: ObservabilityAdapter;
 }): ObservabilityHelper => ({
   // worker

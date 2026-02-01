@@ -100,6 +100,22 @@ importers:
         specifier: ^4.0.0
         version: 4.21.0
 
+  examples/log-console:
+    dependencies:
+      queuert:
+        specifier: workspace:*
+        version: link:../../packages/core
+    devDependencies:
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.3
+      tsx:
+        specifier: ^4.0.0
+        version: 4.21.0
+
   examples/log-pino:
     dependencies:
       pino:

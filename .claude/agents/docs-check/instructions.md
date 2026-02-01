@@ -17,16 +17,16 @@ This project has multiple documentation layers:
 
 High-level architectural documentation:
 
-| Document                    | Covers                                                           |
-| --------------------------- | ---------------------------------------------------------------- |
-| `job-chain-model.md`        | Unified job/chain model, Promise analogy, terminology            |
-| `job-type-references.md`    | Nominal/structural references, continueWith, blockers            |
-| `runtime-job-validation.md` | JobTypeRegistry, schema adapters (Zod, Valibot, TypeBox)         |
-| `job-processing.md`         | Prepare/complete pattern, timeouts, workerless completion        |
-| `deduplication.md`          | Chain-level deduplication, continuation restriction              |
-| `adapters.md`               | Factory patterns, dual-context design, notification optimization |
-| `code-style.md`             | Code conventions, testing patterns, project organization         |
-| `worker.md`                 | Worker lifecycle, leasing, reaper, retry logic                   |
+| Document                    | Covers                                                            |
+| --------------------------- | ----------------------------------------------------------------- |
+| `job-chain-model.md`        | Unified job/chain model, Promise analogy, terminology             |
+| `job-type-references.md`    | Nominal/structural references, continueWith, blockers             |
+| `runtime-job-validation.md` | JobTypeRegistry, schema adapters (Zod, Valibot, TypeBox, ArkType) |
+| `job-processing.md`         | Prepare/complete pattern, timeouts, workerless completion         |
+| `deduplication.md`          | Chain-level deduplication, continuation restriction               |
+| `adapters.md`               | Factory patterns, dual-context design, notification optimization  |
+| `code-style.md`             | Code conventions, testing patterns, project organization          |
+| `worker.md`                 | Worker lifecycle, leasing, reaper, retry logic                    |
 
 ### Package READMEs
 

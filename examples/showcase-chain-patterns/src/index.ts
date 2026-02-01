@@ -138,14 +138,12 @@ const client = await createQueuertClient({
   stateAdapter,
   notifyAdapter,
   registry: jobTypes,
-  log: () => {},
 });
 
 const worker = await createQueuertInProcessWorker({
   stateAdapter,
   notifyAdapter,
   registry: jobTypes,
-  log: () => {},
   processors: {
     "create-subscription": {
       attemptHandler: async ({ job, complete }) => {

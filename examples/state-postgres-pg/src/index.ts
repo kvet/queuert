@@ -1,12 +1,7 @@
 import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import { Pool, type PoolClient } from "pg";
-import {
-  createConsoleLog,
-  createQueuertClient,
-  createQueuertInProcessWorker,
-  defineJobTypes,
-} from "queuert";
+import { createQueuertClient, createQueuertInProcessWorker, defineJobTypes } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 
 // 1. Start PostgreSQL using testcontainers
@@ -76,12 +71,10 @@ const stateAdapter = await createPgStateAdapter({
 await stateAdapter.migrateToLatest();
 
 const notifyAdapter = createInProcessNotifyAdapter();
-const log = createConsoleLog();
 
 const qrtClient = await createQueuertClient({
   stateAdapter,
   notifyAdapter,
-  log,
   registry,
 });
 
@@ -89,7 +82,6 @@ const qrtClient = await createQueuertClient({
 const qrtWorker = await createQueuertInProcessWorker({
   stateAdapter,
   notifyAdapter,
-  log,
   registry,
   processors: {
     send_welcome_email: {

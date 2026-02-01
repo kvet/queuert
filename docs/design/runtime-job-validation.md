@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes the runtime validation system for job types. While `defineJobTypes` provides compile-time type safety, `createJobTypeRegistry` enables runtime validation using schema validation libraries like Zod, Valibot, TypeBox, or others.
+This document describes the runtime validation system for job types. While `defineJobTypes` provides compile-time type safety, `createJobTypeRegistry` enables runtime validation using schema validation libraries like Zod, Valibot, TypeBox, ArkType, or others.
 
 ## JobTypeRegistry Interface
 

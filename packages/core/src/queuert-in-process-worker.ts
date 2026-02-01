@@ -211,7 +211,7 @@ export const createQueuertInProcessWorker = async <
   notifyAdapter?: NotifyAdapter;
   observabilityAdapter?: ObservabilityAdapter;
   registry: TJobTypeRegistry;
-  log: Log;
+  log?: Log;
   workerId?: string;
   concurrency?: number;
   retryConfig?: BackoffConfig;

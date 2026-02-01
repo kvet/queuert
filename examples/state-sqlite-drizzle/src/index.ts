@@ -7,12 +7,7 @@ import Database from "better-sqlite3";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
-import {
-  createConsoleLog,
-  createQueuertClient,
-  createQueuertInProcessWorker,
-  defineJobTypes,
-} from "queuert";
+import { createQueuertClient, createQueuertInProcessWorker, defineJobTypes } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 
 // 1. Create in-memory SQLite database
@@ -97,19 +92,16 @@ const stateAdapter = await createSqliteStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 
 const notifyAdapter = createInProcessNotifyAdapter();
-const log = createConsoleLog();
 
 const qrtClient = await createQueuertClient({
   stateAdapter,
   notifyAdapter,
-  log,
   registry,
 });
 
 const qrtWorker = await createQueuertInProcessWorker({
   stateAdapter,
   notifyAdapter,
-  log,
   registry,
   processors: {
     send_welcome_email: {

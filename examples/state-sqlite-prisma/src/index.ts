@@ -7,12 +7,7 @@ import {
   createAsyncLock,
   createSqliteStateAdapter,
 } from "@queuert/sqlite";
-import {
-  createConsoleLog,
-  createQueuertClient,
-  createQueuertInProcessWorker,
-  defineJobTypes,
-} from "queuert";
+import { createQueuertClient, createQueuertInProcessWorker, defineJobTypes } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 
 // 1. Create temp directory and set DATABASE_URL
@@ -103,12 +98,10 @@ const stateAdapter = await createSqliteStateAdapter({
 await stateAdapter.migrateToLatest();
 
 const notifyAdapter = createInProcessNotifyAdapter();
-const log = createConsoleLog();
 
 const qrtClient = await createQueuertClient({
   stateAdapter,
   notifyAdapter,
-  log,
   registry,
 });
 
@@ -116,7 +109,6 @@ const qrtClient = await createQueuertClient({
 const qrtWorker = await createQueuertInProcessWorker({
   stateAdapter,
   notifyAdapter,
-  log,
   registry,
   processors: {
     send_welcome_email: {

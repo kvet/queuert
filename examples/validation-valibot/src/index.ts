@@ -9,7 +9,7 @@
  */
 
 import * as v from "valibot";
-import { createConsoleLog, createQueuertClient, createQueuertInProcessWorker } from "queuert";
+import { createQueuertClient, createQueuertInProcessWorker } from "queuert";
 import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
 import { createValibotJobTypeRegistry } from "./valibot-adapter.js";
 
@@ -71,12 +71,10 @@ const registry = createValibotJobTypeRegistry({
 // 2. Create queuert client and worker with the registry
 const stateAdapter = createInProcessStateAdapter();
 const notifyAdapter = createInProcessNotifyAdapter();
-const log = createConsoleLog();
 
 const qrtClient = await createQueuertClient({
   stateAdapter,
   notifyAdapter,
-  log,
   registry,
 });
 
@@ -84,7 +82,6 @@ const qrtClient = await createQueuertClient({
 const qrtWorker = await createQueuertInProcessWorker({
   stateAdapter,
   notifyAdapter,
-  log,
   registry,
   processors: {
     "fetch-data": {

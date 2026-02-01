@@ -63,14 +63,12 @@ const [beforeSetup, afterSetup, { qrtClient, stopWorker }] = await measureMemory
   const qrtClient = await createQueuertClient({
     stateAdapter,
     notifyAdapter,
-    log: () => {},
     registry,
   });
 
   const qrtWorker = await createQueuertInProcessWorker({
     stateAdapter,
     notifyAdapter,
-    log: () => {},
     registry,
     processors: {
       "test-job": {

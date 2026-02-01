@@ -58,7 +58,6 @@ const [beforeSetup, afterSetup, { qrtClient, stopWorker }] = await measureMemory
     stateAdapter,
     notifyAdapter,
     observabilityAdapter,
-    log: () => {},
     registry,
   });
 
@@ -66,7 +65,6 @@ const [beforeSetup, afterSetup, { qrtClient, stopWorker }] = await measureMemory
     stateAdapter,
     notifyAdapter,
     observabilityAdapter,
-    log: () => {},
     registry,
     processors: {
       "test-job": {

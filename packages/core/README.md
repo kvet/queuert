@@ -49,12 +49,7 @@ Optional adapters:
 ## Quick Start
 
 ```typescript
-import {
-  createQueuertClient,
-  createQueuertInProcessWorker,
-  defineJobTypes,
-  createConsoleLog,
-} from "queuert";
+import { createQueuertClient, createQueuertInProcessWorker, defineJobTypes } from "queuert";
 import { createSqliteStateAdapter } from "@queuert/sqlite";
 
 // Define your job types with full type safety
@@ -71,14 +66,12 @@ const stateAdapter = await createSqliteStateAdapter({ stateProvider: myProvider 
 const client = await createQueuertClient({
   stateAdapter,
   registry: jobTypes,
-  log: createConsoleLog(),
 });
 
 // Create a worker
 const worker = await createQueuertInProcessWorker({
   stateAdapter,
   registry: jobTypes,
-  log: createConsoleLog(),
   workerId: "worker-1",
   processors: {
     "send-email": {
@@ -111,7 +104,6 @@ await client.withNotify(async () =>
 const worker = await createQueuertInProcessWorker({
   stateAdapter,
   registry: jobTypes,
-  log: createConsoleLog(),
   workerId: "worker-1", // Unique worker identifier (optional)
   concurrency: 10, // Number of jobs to process in parallel (default: 1)
   processDefaults: {
@@ -153,7 +145,6 @@ Per-job-type configuration:
 const worker = await createQueuertInProcessWorker({
   stateAdapter,
   registry: jobTypes,
-  log: createConsoleLog(),
   processors: {
     'long-running-job': {
       retryConfig: { initialDelayMs: 30_000, multiplier: 2.0, maxDelayMs: 600_000 },
@@ -165,6 +156,21 @@ const worker = await createQueuertInProcessWorker({
 
 await worker.start();
 ```
+
+## Logging
+
+By default, Queuert operates silently with no logging. For visibility into job processing, you can enable logging:
+
+```typescript
+import { createConsoleLog, createQueuertClient, createQueuertInProcessWorker } from "queuert";
+
+const log = createConsoleLog();
+
+const client = await createQueuertClient({ stateAdapter, registry, log });
+const worker = await createQueuertInProcessWorker({ stateAdapter, registry, log, processors });
+```
+
+For production, integrate with your logging library (Pino, Winston, etc.) by implementing a custom `Log` function. See the `log-console`, `log-pino`, and `log-winston` examples.
 
 ## Exports
 
@@ -208,6 +214,7 @@ await worker.start();
 - `JobAlreadyCompletedError` - Job was already completed
 - `JobTakenByAnotherWorkerError` - Another worker took the job
 - `JobTypeValidationError` - Runtime validation failed (with `code` and `details`)
+- `JobTypeValidationErrorCode` - Error code type for `JobTypeValidationError`
 - `WaitForJobChainCompletionTimeoutError` - Timeout waiting for chain
 - `RescheduleJobError` - Thrown by `rescheduleJob()` helper
 

@@ -117,7 +117,7 @@ export const createQueuertClient = async <
   notifyAdapter?: NotifyAdapter;
   observabilityAdapter?: ObservabilityAdapter;
   registry: TJobTypeRegistry;
-  log: Log;
+  log?: Log;
 }): Promise<QueuertClient<TJobTypeRegistry["$definitions"], TStateAdapter>> => {
   const helper = queuertHelper({
     stateAdapter,

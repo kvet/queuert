@@ -103,14 +103,12 @@ const client = await createQueuertClient({
   stateAdapter,
   notifyAdapter,
   registry: jobTypes,
-  log: () => {},
 });
 
 const worker = await createQueuertInProcessWorker({
   stateAdapter,
   notifyAdapter,
   registry: jobTypes,
-  log: () => {},
   processors: {
     "fetch-source": {
       attemptHandler: async ({ job, complete }) => {
