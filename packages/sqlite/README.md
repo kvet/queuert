@@ -78,6 +78,7 @@ You need to implement a state provider that bridges your SQLite client with this
 - `SqliteStateProvider` - Type for the state provider interface (you implement this)
 - `sqliteLiteral` - SQL literal escaping utility for ORM compatibility
 - `createAsyncLock` - Re-exported from `queuert/internal`
+- `MigrationResult` - Return type from `stateAdapter.migrateToLatest()` containing `applied`, `skipped`, and `unrecognized` migration names
 
 ### Testing (`./testing`)
 

@@ -37,43 +37,11 @@ export const sql = <
 
 export type MigrationStatement = {
   sql: TypedSql<[], void>;
-  noTransaction?: boolean;
 };
 
-export type MigrationGroup = {
-  noTransaction: boolean;
+export type Migration = {
+  name: string;
   statements: MigrationStatement[];
-};
-
-export const groupMigrationStatements = (statements: MigrationStatement[]): MigrationGroup[] => {
-  const groups: MigrationGroup[] = [];
-  let currentGroup: MigrationStatement[] = [];
-  let currentNoTransaction = false;
-
-  for (const stmt of statements) {
-    const stmtNoTransaction = stmt.noTransaction ?? false;
-
-    if (stmtNoTransaction) {
-      if (currentGroup.length > 0) {
-        groups.push({ noTransaction: currentNoTransaction, statements: currentGroup });
-        currentGroup = [];
-      }
-      groups.push({ noTransaction: true, statements: [stmt] });
-    } else {
-      if (currentNoTransaction && currentGroup.length > 0) {
-        groups.push({ noTransaction: currentNoTransaction, statements: currentGroup });
-        currentGroup = [];
-      }
-      currentNoTransaction = false;
-      currentGroup.push(stmt);
-    }
-  }
-
-  if (currentGroup.length > 0) {
-    groups.push({ noTransaction: currentNoTransaction, statements: currentGroup });
-  }
-
-  return groups;
 };
 
 export const createTemplateApplier = (
@@ -116,5 +84,43 @@ export const createTemplateApplier = (
       cache.set(typedSql, cached);
     }
     return cached as TypedSql<TParams, TResult>;
+  };
+};
+
+export type MigrationResult = {
+  skipped: string[];
+  applied: string[];
+  unrecognized: string[];
+};
+
+export const executeMigrations = async <TTxContext>({
+  migrations,
+  getAppliedMigrationNames,
+  executeMigrationStatements,
+  recordMigration,
+}: {
+  migrations: Migration[];
+  getAppliedMigrationNames: (txContext: TTxContext) => Promise<string[]>;
+  executeMigrationStatements: (txContext: TTxContext, migration: Migration) => Promise<void>;
+  recordMigration: (txContext: TTxContext, name: string) => Promise<void>;
+}): Promise<(txContext: TTxContext) => Promise<MigrationResult>> => {
+  const migrationNames = new Set(migrations.map((m) => m.name));
+
+  return async (txContext: TTxContext): Promise<MigrationResult> => {
+    const previouslyApplied = await getAppliedMigrationNames(txContext);
+    const previouslyAppliedSet = new Set(previouslyApplied);
+
+    const skipped = previouslyApplied.filter((name) => migrationNames.has(name));
+    const unrecognized = previouslyApplied.filter((name) => !migrationNames.has(name));
+    const pending = migrations.filter((m) => !previouslyAppliedSet.has(m.name));
+    const applied: string[] = [];
+
+    for (const migration of pending) {
+      await executeMigrationStatements(txContext, migration);
+      await recordMigration(txContext, migration.name);
+      applied.push(migration.name);
+    }
+
+    return { skipped, applied, unrecognized };
   };
 };

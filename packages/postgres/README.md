@@ -100,6 +100,7 @@ You need to implement a state provider that bridges your PostgreSQL client (raw 
 - `createPgNotifyAdapter` - Factory to create PostgreSQL notify adapter
 - `PgNotifyProvider` - Type for the notify provider interface (you implement this)
 - `pgLiteral` - SQL literal escaping utility for ORM compatibility (e.g., Prisma's `$queryRawUnsafe`)
+- `MigrationResult` - Return type from `stateAdapter.migrateToLatest()` containing `applied`, `skipped`, and `unrecognized` migration names
 
 ### Testing (`./testing`)
 

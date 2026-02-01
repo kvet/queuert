@@ -1,9 +1,10 @@
 import {
+  type MigrationResult,
   type NamedParameter,
   type TypedSql,
   type UnwrapNamedParameters,
   createTemplateApplier,
-  groupMigrationStatements,
+  executeMigrations,
 } from "@queuert/typed-sql";
 import { type UUID } from "node:crypto";
 import { type BaseTxContext, type RetryConfig, type StateAdapter, type StateJob } from "queuert";
@@ -16,7 +17,9 @@ import {
   addJobBlockersSql,
   completeJobSql,
   createJobSql,
+  createMigrationTableSql,
   deleteJobsByRootChainIdsSql,
+  getAppliedMigrationsSql,
   getCurrentJobForUpdateSql,
   getExternalBlockersSql,
   getJobBlockersSql,
@@ -24,7 +27,8 @@ import {
   getJobChainByIdSql,
   getJobForUpdateSql,
   getNextJobAvailableInMsSql,
-  migrationStatements,
+  migrations,
+  recordMigrationSql,
   removeExpiredJobLeaseSql,
   renewJobLeaseSql,
   rescheduleJobSql,
@@ -87,7 +91,7 @@ export const createPgStateAdapter = async <
   $idType?: TIdType;
 }): Promise<
   StateAdapter<TTxContext, TIdType> & {
-    migrateToLatest: () => Promise<void>;
+    migrateToLatest: () => Promise<MigrationResult>;
   }
 > => {
   const applyTemplate = createTemplateApplier({ schema, id_type: idType, id_default: idDefault });
@@ -304,24 +308,37 @@ export const createPgStateAdapter = async <
       isRetryableError: isTransientError,
     }),
     migrateToLatest: async () => {
-      const groups = groupMigrationStatements(migrationStatements);
-
-      for (const group of groups) {
-        if (group.noTransaction) {
+      const runMigrations = await executeMigrations<TTxContext>({
+        migrations,
+        getAppliedMigrationNames: async (txContext) => {
           await stateProvider.executeSql({
-            sql: applyTemplate(group.statements[0].sql).sql,
+            txContext,
+            sql: applyTemplate(createMigrationTableSql).sql,
           });
-        } else {
-          await stateProvider.runInTransaction(async (txContext) => {
-            for (const stmt of group.statements) {
-              await stateProvider.executeSql({
-                txContext,
-                sql: applyTemplate(stmt.sql).sql,
-              });
-            }
+          const applied = (await stateProvider.executeSql({
+            txContext,
+            sql: applyTemplate(getAppliedMigrationsSql).sql,
+          })) as { name: string }[];
+          return applied.map((m) => m.name);
+        },
+        executeMigrationStatements: async (txContext, migration) => {
+          for (const stmt of migration.statements) {
+            await stateProvider.executeSql({
+              txContext,
+              sql: applyTemplate(stmt.sql).sql,
+            });
+          }
+        },
+        recordMigration: async (txContext, name) => {
+          await stateProvider.executeSql({
+            txContext,
+            sql: applyTemplate(recordMigrationSql).sql,
+            params: [name],
           });
-        }
-      }
+        },
+      });
+
+      return stateProvider.runInTransaction(runMigrations);
     },
   };
 };

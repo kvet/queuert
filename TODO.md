@@ -17,11 +17,15 @@
   - it should have a name, applied_at
   - each migration set should have a unique name starting from YYYYMMDDHHMMSS_name (e.g. 20240612120000_add_users_table)
   - when running migrations, check if the migration set was already applied, if so skip it
+- extract state and notify adapter test suites to efficiently test multiple configurations (prefixes etc)
+- rename createQueuertClient to createClient and createQueuertInProcessWorker to createInProcessWorker. review all other names for similar verbosity
+- add a proper example/test with multiple workers sharing the same database
 
 # Medium term
 
 - MySQL/MariaDB adapter - Popular databases; defer until users request
 - MonogoDB ready:
+  - MongoDB: Add migration version tracking (store applied migrations in metadata collection, run incremental index changes)
   - MongoDB: Use native ObjectId instead of app-side UUID generation
   - MongoDB: Move collection configuration from provider to adapter - Provider should only handle context/transactions, collection name is an adapter concern (like schema/tablePrefix in PostgreSQL/SQLite)
   - Prisma MongoDB support - via generic StateProvider interface
