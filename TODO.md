@@ -6,6 +6,9 @@
 - ObservabilityAdapter: tracing spans
 - test against multiple versions of node on CI
 - extract state and notify adapter test suites to efficiently test multiple configurations (prefixes etc)
+  - check table names for sql adapters
+  - support all methods for state adapter test suite
+  - notify adapter
 
 # Medium term
 

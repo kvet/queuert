@@ -8,6 +8,10 @@ export { processTestSuite } from "./suites/process.test-suite.js";
 export { reaperTestSuite } from "./suites/reaper.test-suite.js";
 export { schedulingTestSuite } from "./suites/scheduling.test-suite.js";
 export { chainsTestSuite } from "./suites/chains.test-suite.js";
+export {
+  stateAdapterConformanceTestSuite,
+  type StateAdapterConformanceContext,
+} from "./suites/state-adapter-conformance.test-suite.js";
 export { stateResilienceTestSuite } from "./suites/state-resilience.test-suite.js";
 export { waitChainCompletionTestSuite } from "./suites/wait-chain-completion.test-suite.js";
 export { workerTestSuite } from "./suites/worker.test-suite.js";

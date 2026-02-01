@@ -58,7 +58,7 @@ describe("PostgreSQL migrations", () => {
       await stateAdapter.migrateToLatest();
 
       await pool.query(
-        "INSERT INTO queuert.queuert_migration (name) VALUES ('20991231235959_future_migration')",
+        "INSERT INTO queuert.migration (name) VALUES ('20991231235959_future_migration')",
       );
 
       const result = await stateAdapter.migrateToLatest();

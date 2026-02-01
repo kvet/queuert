@@ -193,7 +193,7 @@ export type DbMigration = {
 
 export const createMigrationTableSql: TypedSql<[], void> = sql(
   /* sql */ `
-CREATE TABLE IF NOT EXISTS {{schema}}.queuert_migration (
+CREATE TABLE IF NOT EXISTS {{schema}}.migration (
   name TEXT PRIMARY KEY,
   applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
 )`,
@@ -201,12 +201,12 @@ CREATE TABLE IF NOT EXISTS {{schema}}.queuert_migration (
 );
 
 export const getAppliedMigrationsSql: TypedSql<[], DbMigration[]> = sql(
-  /* sql */ `SELECT name, applied_at FROM {{schema}}.queuert_migration ORDER BY name`,
+  /* sql */ `SELECT name, applied_at FROM {{schema}}.migration ORDER BY name`,
   true,
 );
 
 export const recordMigrationSql: TypedSql<readonly [NamedParameter<"name", string>], void> = sql(
-  /* sql */ `INSERT INTO {{schema}}.queuert_migration (name) VALUES ($1) ON CONFLICT (name) DO NOTHING`,
+  /* sql */ `INSERT INTO {{schema}}.migration (name) VALUES ($1) ON CONFLICT (name) DO NOTHING`,
   false,
 );
 
