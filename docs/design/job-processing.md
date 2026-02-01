@@ -105,19 +105,7 @@ Queuert does not provide built-in soft timeout functionality. This is intentiona
 
 ### Cooperative Timeouts
 
-Users implement cooperative timeouts in their attempt handlers:
-
-```typescript
-attemptHandler: async ({ signal, job, complete }) => {
-  const timeout = AbortSignal.timeout(30_000);
-  const combined = AbortSignal.any([signal, timeout]);
-
-  // Use combined signal for cancellable operations
-  await fetch(url, { signal: combined });
-
-  return complete(() => output);
-};
-```
+Users implement cooperative timeouts by combining `AbortSignal.timeout()` with the existing `signal` parameter using `AbortSignal.any()`.
 
 ### Hard Timeouts
 
@@ -129,85 +117,16 @@ For hard timeouts (forceful termination), the lease mechanism already handles th
 
 ## Workerless Completion
 
-Jobs can be completed without a worker using `completeJobChain` (sets `completedBy: null`). This enables:
+Jobs can be completed without a worker using `completeJobChain` (sets `completedBy: null`). This enables approval workflows, webhook-triggered completions, and patterns where jobs wait for external events.
 
-- Approval workflows
-- Webhook-triggered completions
-- Patterns where jobs wait for external events
-
-### Usage
-
-```typescript
-await queuert.completeJobChain({
-  client,
-  typeName: "awaiting-approval",
-  id: jobChain.id,
-  complete: async ({ job, complete }) => {
-    // Inspect current job state
-    if (job.status === "blocked") {
-      // Can complete blockers first if needed
-    }
-
-    // Complete with output (completes the job)
-    await complete(job, async () => ({ approved: true }));
-
-    // Or continue to next job in chain
-    await complete(job, async ({ continueWith }) =>
-      continueWith({ typeName: "process-approved", input: { ... } })
-    );
-  },
-});
-```
-
-### Key Behaviors
+**Key behaviors:**
 
 - Must be called within a transaction (uses `FOR UPDATE` lock on current job)
-- `complete` callback receives current job, can call inner `complete` multiple times for multi-step chains
 - Partial completion supported: complete one job and leave the next pending
 - Can complete blocked jobs (user's responsibility to handle/compensate blockers)
 - Running workers detect completion by others via `JobAlreadyCompletedError` and abort signal with reason `"already_completed"`
 
-### Pattern: Deferred Start with Early Completion
-
-Deferred start pairs well with workerless completion - schedule a job to auto-reject after a timeout, but allow early completion based on user action:
-
-```typescript
-// Start a job that auto-rejects in 2 hours if not handled
-const chain = await queuert.startJobChain({
-  typeName: 'await-approval',
-  input: { requestId: '123' },
-  schedule: { afterMs: 2 * 60 * 60 * 1000 }, // 2 hours
-});
-
-// Worker handles timeout case (auto-reject)
-const worker = await createInProcessWorker({
-  stateAdapter,
-  registry: jobTypes,
-  log: createConsoleLog(),
-  processors: {
-    'await-approval': {
-      attemptHandler: async ({ complete }) => complete(() => ({ rejected: true })),
-    },
-  },
-});
-
-await worker.start();
-
-// Job can be completed early without a worker
-await queuert.completeJobChain({
-  id: chain.id,
-  typeName: 'await-approval',
-  complete: async ({ job, complete }) => {
-    if (userApproved) {
-      await complete(job, ({ continueWith }) =>
-        continueWith({ typeName: 'process-request', input: { ... } })
-      );
-    } else {
-      await complete(job, () => ({ rejected: true }));
-    }
-  },
-});
-```
+Deferred start pairs well with workerless completion—schedule a job to auto-reject after a timeout, but allow early completion based on user action.
 
 ## Summary
 

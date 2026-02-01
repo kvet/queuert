@@ -6,33 +6,6 @@ This document describes the worker design in Queuert: how workers coordinate job
 
 A **worker** runs a main loop that coordinates job processing across multiple **slots**. Each slot processes one job at a time; the worker manages concurrency and scaling.
 
-## Quick Start
-
-```typescript
-import { createInProcessWorker } from "queuert";
-
-const worker = await createInProcessWorker({
-  stateAdapter,
-  notifyAdapter, // optional
-  registry,
-  log,
-
-  processors: {
-    myJob: {
-      attemptHandler: async ({ job, complete }) => {
-        // Process the job
-        return complete(async () => ({ result: "done" }));
-      },
-    },
-  },
-});
-
-const stop = await worker.start();
-
-// Later: graceful shutdown
-await stop();
-```
-
 ## Concurrency Model
 
 Workers process jobs in parallel using slots. Configure concurrency via the `concurrency` option:
@@ -78,73 +51,9 @@ Default: single slot (`concurrency: 1`).
 1. Main loop spawns slots up to `concurrency`
 2. Each slot acquires a job and processes it independently
 3. When a slot completes, main loop spawns a replacement
-4. Slots compete for jobs via database-level locking
-
-### Slot Lifecycle
-
-Each slot is self-contained:
-
-```typescript
-async function runSlot() {
-  const job = await acquire(); // Get next pending job
-  if (!job) return; // No work, slot exits
-
-  await processJob(job); // Execute handler
-  // Slot completes, main loop spawns replacement
-}
-```
-
-Slots notify the main loop on completion, allowing immediate replacement if work is available.
-
-### Horizontal Scaling
-
-For scaling across multiple machines or processes, deploy separate workers:
-
-```typescript
-// Process A
-const worker = await createInProcessWorker({
-  ...config,
-  workerId: 'machine-a',
-  concurrency: 10,
-  processors: { ... },
-});
-
-// Process B (separate Node.js process)
-const worker = await createInProcessWorker({
-  ...config,
-  workerId: 'machine-b',
-  concurrency: 10,
-  processors: { ... },
-});
-```
-
-Workers compete for jobs via database-level locking (`FOR UPDATE SKIP LOCKED` in PostgreSQL).
+4. Slots compete for jobs via database-level locking (`FOR UPDATE SKIP LOCKED` in PostgreSQL)
 
 ## Worker Lifecycle
-
-### Creation
-
-Workers are created with `createInProcessWorker()`:
-
-```typescript
-const worker = await createInProcessWorker({
-  // Required
-  stateAdapter,
-  registry,
-  log,
-  processors: { ... },
-
-  // Optional
-  notifyAdapter,
-  observabilityAdapter,
-  workerId: 'worker-1',  // default: random UUID
-  concurrency: 1,        // default
-  processDefaults: { ... },
-  retryConfig: { ... },  // worker-level retry for infrastructure errors
-});
-```
-
-The "InProcess" suffix indicates this worker runs in the same Node.js process as the calling code—ideal for I/O-bound workloads.
 
 ### Main Loop
 
@@ -154,18 +63,6 @@ The worker runs a single coordinating loop:
 2. **Fill**: Spawn slots up to `concurrency`
 3. **Wait**: Listen for notification, poll timeout, or slot completion
 4. **Repeat**
-
-```typescript
-while (!stopped) {
-  await reapExpiredLease();
-
-  while (activeSlots < concurrency) {
-    spawnSlot();
-  }
-
-  await Promise.race([waitForNotification(), slotCompleted.wait(), sleep(pollIntervalMs)]);
-}
-```
 
 ### Shutdown
 
@@ -178,22 +75,7 @@ Calling `stop()` triggers graceful shutdown:
 
 ## Worker Identity
 
-Each worker has a unique identity stored in `leasedBy` (e.g., `'worker-1'`).
-
-**Abort signal routing:**
-
-The worker tracks active jobs internally:
-
-```typescript
-const activeJobs = new Map<string, AbortController>();
-
-// On ownership lost notification:
-function onOwnershipLost(jobId: string) {
-  activeJobs.get(jobId)?.abort("taken_by_another_worker");
-}
-```
-
-No per-slot identity is needed—the worker routes abort signals by job ID.
+Each worker has a unique identity stored in `leasedBy`. The worker tracks active jobs internally and routes abort signals by job ID—no per-slot identity is needed.
 
 ## Reaper
 
@@ -230,143 +112,11 @@ See [Job Processing](job-processing.md) for details on error handling and abort 
 
 ### Multi-Type Workers
 
-A single worker can handle multiple job types:
-
-```typescript
-const worker = await createInProcessWorker({
-  ...adapters,
-  workerId: "multi-worker",
-  processors: {
-    "type-a": { attemptHandler: processA },
-    "type-b": { attemptHandler: processB },
-  },
-});
-```
-
-Slots poll all registered types together and process whichever is available first.
-
-Per-type configuration overrides worker defaults:
-
-```typescript
-processors: {
-  'long-running': {
-    leaseConfig: { leaseMs: 300_000, renewIntervalMs: 60_000 },
-    retryConfig: { initialDelayMs: 30_000, maxDelayMs: 600_000 },
-    attemptHandler: ...
-  },
-}
-```
+A single worker can handle multiple job types. Slots poll all registered types and process whichever is available first. Per-type configuration (lease, retry) overrides worker defaults.
 
 ### Attempt Middlewares
 
-Workers support middlewares that wrap each job attempt:
-
-```typescript
-processDefaults: {
-  attemptMiddlewares: [
-    async ({ job, workerId }, next) => {
-      console.log('Before job processing');
-      const result = await next();
-      console.log('After job processing');
-      return result;
-    },
-  ],
-}
-```
-
-**Middleware signature:**
-
-```typescript
-type JobAttemptMiddleware<TStateAdapter, TJobTypeDefinitions> = <T>(
-  context: {
-    job: RunningJob<...>;
-    workerId: string;
-  },
-  next: () => Promise<T>,
-) => Promise<T>;
-```
-
-**Composition order:**
-
-```typescript
-attemptMiddlewares: [middleware1, middleware2, middleware3];
-
-// Execution:
-// middleware1 before → middleware2 before → middleware3 before
-// → attempt handler →
-// middleware3 after → middleware2 after → middleware1 after
-```
-
-**Use cases:**
-
-Contextual logging with AsyncLocalStorage:
-
-```typescript
-const jobContextStore = new AsyncLocalStorage<JobContext>();
-
-const contextMiddleware: JobAttemptMiddleware<...> = async ({ job, workerId }, next) => {
-  return jobContextStore.run(
-    { jobId: job.id, typeName: job.typeName, workerId },
-    next,
-  );
-};
-```
-
-See `examples/log-pino` and `examples/log-winston` for complete implementations.
-
-## Terminology
-
-- **Processors**: Define how to handle each job type. Each processor contains an attempt handler and optional retry/lease config.
-- **Attempt Handler**: The function that processes a job attempt. Receives the job, abort signal, and prepare/complete utilities.
-- **Attempts**: Each execution try of a job. Failures trigger retries, creating new attempts with exponential backoff.
-- **Attempt Middlewares**: Functions that wrap each attempt handler execution, enabling cross-cutting concerns like logging.
-
-## Configuration Reference
-
-### Worker Options
-
-```typescript
-const worker = await createInProcessWorker({
-  // Adapters
-  stateAdapter,              // Required: job persistence
-  notifyAdapter,             // Optional: push notifications
-  observabilityAdapter,      // Optional: metrics/tracing
-  registry,                  // Required: type definitions
-  log,                       // Optional: logger (default: silent)
-
-  // Identity
-  workerId: 'worker-1',      // Default: random UUID
-
-  // Concurrency (optional)
-  concurrency: 1,            // Default: single slot
-
-  // Worker-level retry (infrastructure errors)
-  retryConfig: { ... },
-
-  // Processing defaults
-  processDefaults: {
-    pollIntervalMs: 60_000,
-    retryConfig: { ... },      // Default job retry config
-    leaseConfig: { ... },      // Default lease config
-    attemptMiddlewares: [...],
-  },
-
-  // Handlers
-  processors: {
-    jobTypeName: {
-      attemptHandler: async ({ signal, job, prepare, complete }) => { ... },
-      leaseConfig: { ... },   // Per-type override
-      retryConfig: { ... },   // Per-type override
-    },
-  },
-});
-```
-
-### Concurrency Options
-
-```typescript
-concurrency: 10; // Number of parallel slots
-```
+Workers support middlewares that wrap each job attempt, enabling cross-cutting concerns like contextual logging with `AsyncLocalStorage`. Middlewares compose in order: first middleware's "before" runs first, last middleware's "after" runs first.
 
 ## Summary
 

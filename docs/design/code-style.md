@@ -64,6 +64,26 @@ Adapter packages use their domain-specific prefixes (not "Queuert"):
 | `@queuert/nats`     | `createNatsNotifyAdapter`        | -                    |
 | `@queuert/otel`     | `createOtelObservabilityAdapter` | -                    |
 
+## Design Documentation
+
+Design docs in `docs/design/` capture architectural decisions and API contracts, not implementation code.
+
+**Content guidelines:**
+
+- **Design decisions**: Explain why the architecture works this way
+- **API contracts**: Show interfaces, type definitions, and public APIs
+- **Usage examples**: Demonstrate how users interact with the system
+- **Avoid implementation details**: Don't include internal code that shows how things are built
+
+**Unimplemented features:**
+
+For features that are designed but not yet implemented, create a separate `{feature}.implementation.md` file alongside the main design doc:
+
+- `observability-tracing.md` - Design decisions and API contracts
+- `observability-tracing.implementation.md` - Implementation details for future development
+
+Once a feature is implemented, the `.implementation.md` file should be removed—the actual code becomes the source of truth for implementation details.
+
 ## Testing Patterns
 
 ### General Guidelines

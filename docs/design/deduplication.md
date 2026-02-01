@@ -36,31 +36,6 @@ When a duplicate is detected:
 - The returned chain has `deduplicated: true` to indicate it was not newly created
 - The input from the new request is ignored; the existing chain's input is used
 
-### Use Cases
-
-**Idempotent API endpoints:**
-
-```typescript
-// POST /orders/:id/process
-// Multiple requests for same order return same job chain
-await queuert.startJobChain({
-  typeName: "process-order",
-  input: { orderId: req.params.id },
-  deduplication: { key: `order-${req.params.id}`, scope: "incomplete" },
-});
-```
-
-**Rate limiting background work:**
-
-```typescript
-// Only allow one sync per user per hour
-await queuert.startJobChain({
-  typeName: "sync-user-data",
-  input: { userId },
-  deduplication: { key: `sync-${userId}`, scope: "any", windowMs: 60 * 60 * 1000 },
-});
-```
-
 ## Continuation Restriction
 
 Within a `complete` callback, `continueWith` can only be called once. Calling it multiple times throws an error:
@@ -77,57 +52,7 @@ This restriction ensures:
 2. **Predictable execution**: The next job in the chain is unambiguous
 3. **Simple status tracking**: Chain completion is determined by following the single continuation path
 
-### Pattern for Multiple Follow-up Jobs
-
-If you need to trigger multiple follow-up jobs, use blockers instead. Note that deduplication isn't needed here since all jobs are created within a single transaction:
-
-```typescript
-defineJobTypes<{
-  trigger: {
-    entry: true;
-    input: { ids: string[] };
-    continueWith: { typeName: "aggregate" };
-  };
-  "process-item": {
-    entry: true;
-    input: { id: string };
-    output: { result: number };
-  };
-  aggregate: {
-    entry: true;
-    input: { count: number };
-    output: { total: number };
-    blockers: [...{ typeName: "process-item" }[]];
-  };
-}>();
-
-// Start trigger, which creates process-item blockers and continues to aggregate
-const worker = await createInProcessWorker({
-  stateAdapter,
-  registry: jobTypes,
-  log: createConsoleLog(),
-  processors: {
-    trigger: {
-      attemptHandler: async ({ job, complete }) => {
-        return complete(async ({ continueWith }) => {
-          return continueWith({
-            typeName: "aggregate",
-            input: { count: job.input.ids.length },
-            startBlockers: async () =>
-              Promise.all(
-                job.input.ids.map((id) =>
-                  queuert.startJobChain({ typeName: "process-item", input: { id } }),
-                ),
-              ),
-          });
-        });
-      },
-    },
-  },
-});
-
-await worker.start();
-```
+For multiple parallel follow-up jobs, use the blocker pattern instead of multiple continuations.
 
 ## Summary
 

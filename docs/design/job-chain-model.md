@@ -33,7 +33,7 @@ The chain completes when its final job completes without continuing.
 
 ## The Promise Analogy
 
-The design directly mirrors JavaScript Promises:
+The design mirrors JavaScript Promises:
 
 ```javascript
 // JavaScript: A Promise chain IS the first promise
@@ -47,32 +47,7 @@ const chain = startJobChain(...)   // chain.id === firstJob.id
   .continueWith(formatStep);       // continuation
 ```
 
-Key parallel:
-
-- A Promise chain doesn't have a separate "chain ID"—the original promise IS the chain's identity
-- A Job Chain doesn't have a separate entity—the first job IS the chain's identity
-
-This is the fundamental insight: **the first job IS the chain**.
-
-### Why Promises?
-
-JavaScript developers already understand Promise chains intuitively:
-
-```javascript
-// This is one chain, not three separate things
-fetchUser(id)
-  .then((user) => fetchOrders(user.id))
-  .then((orders) => processOrders(orders));
-```
-
-The chain:
-
-- Has identity (the first promise)
-- Has continuations (`.then()` callbacks)
-- Completes when the last `.then()` resolves
-- Can branch, loop, or terminate early
-
-Job Chains work identically, but persist across process restarts and distribute across workers.
+The fundamental insight: **the first job IS the chain**. Job Chains work like Promises but persist across process restarts and distribute across workers.
 
 ## Identity Model
 
@@ -160,29 +135,6 @@ Chains can depend on other chains to complete before starting:
 ```
 
 Blockers are declared at the type level and provided via `startBlockers` callback. The main job starts as `blocked` and transitions to `pending` when all blockers complete.
-
-## API Design
-
-The API mirrors the Promise mental model:
-
-```typescript
-// Start a chain (like creating a Promise)
-const chain = await queuert.startJobChain({
-  typeName: "process-image",
-  input: { imageId: "123" },
-});
-
-// Continue in a worker (like .then())
-return complete(({ continueWith }) =>
-  continueWith({
-    typeName: "distribute-image",
-    input: { imageId, processedUrl },
-  }),
-);
-
-// Wait for completion (like await)
-await queuert.waitForJobChainCompletion(chain.id);
-```
 
 ## Consistent Terminology
 

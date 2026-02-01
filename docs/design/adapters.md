@@ -44,39 +44,7 @@ All StateAdapter methods must complete in a **single database round-trip**. This
 - **O(n) is incorrect**: If an adapter implementation requires multiple round trips proportional to input size, the implementation is wrong
 - **Batch operations**: Methods accepting arrays (e.g., `createJobs`, `markJobsAsCompleted`) must use batch SQL (multi-row INSERT, UPDATE with IN clause, CTEs) rather than loops
 
-This principle ensures predictable performance and proper atomicity. Examples of correct patterns:
-
-```sql
--- Correct: Single INSERT with multiple VALUES
-INSERT INTO jobs (id, type_name, input) VALUES
-  ($1, $2, $3),
-  ($4, $5, $6),
-  ($7, $8, $9);
-
--- Correct: Single UPDATE with array parameter
-UPDATE jobs SET status = 'completed' WHERE id = ANY($1);
-
--- Correct: CTE for complex multi-step operations
-WITH updated AS (
-  UPDATE jobs SET status = 'in_progress' WHERE ...
-  RETURNING *
-)
-INSERT INTO job_history SELECT * FROM updated;
-```
-
-Anti-patterns to avoid:
-
-```typescript
-// WRONG: O(n) round trips
-for (const job of jobs) {
-  await db.query("INSERT INTO jobs VALUES ($1, $2)", [job.id, job.input]);
-}
-
-// WRONG: Sequential updates
-for (const jobId of jobIds) {
-  await db.query("UPDATE jobs SET status = $1 WHERE id = $2", ["completed", jobId]);
-}
-```
+This principle ensures predictable performance and proper atomicity. Use batch SQL (multi-row INSERT, UPDATE with IN/ANY clause, CTEs) rather than loops.
 
 ### Context Architecture
 
@@ -113,44 +81,10 @@ interface PgStateProvider<TTxContext> {
 
 All `StateAdapter` operation methods accept an optional `txContext` parameter:
 
-- **With txContext**: Uses the provided transaction connection. The txContext must come from a `runInTransaction` callback.
-- **Without txContext**: The adapter acquires its own connection from the pool, executes the operation, and releases it.
+- **With txContext**: Uses the provided transaction connection (must come from a `runInTransaction` callback)
+- **Without txContext**: Acquires its own connection from the pool, executes, and releases
 
-This design enables:
-
-1. **Transactional operations**: Multiple operations within a single transaction
-
-   ```typescript
-   await stateAdapter.runInTransaction(async (txContext) => {
-     const job = await stateAdapter.getJobById({ txContext, jobId });
-     await stateAdapter.completeJob({ txContext, jobId, output, workerId });
-   });
-   ```
-
-2. **Non-transactional operations**: Standalone operations that manage their own connection
-
-   ```typescript
-   // No transaction needed for simple reads
-   const job = await stateAdapter.getJobById({ jobId });
-   ```
-
-3. **DDL operations**: Migrations like `CREATE INDEX CONCURRENTLY` that cannot run inside transactions
-   ```typescript
-   // executeSql without txContext for DDL
-   await stateProvider.executeSql({ sql: "CREATE INDEX CONCURRENTLY ..." });
-   ```
-
-Provider implementations can validate that contexts passed to `executeSql` are valid transaction contexts:
-
-```typescript
-// Example: Kysely provider validation
-executeSql: async ({ txContext, sql, params }) => {
-  if (txContext && !txContext.db.isTransaction) {
-    throw new Error("Provided context is not in a transaction");
-  }
-  // ...
-};
-```
+This enables transactional operations, standalone operations, and DDL operations (like `CREATE INDEX CONCURRENTLY`) that cannot run inside transactions.
 
 ### NotifyProvider Interface
 
@@ -170,27 +104,7 @@ The provider maintains a dedicated connection for subscriptions and acquires/rel
 
 ### Reaper Support
 
-The `removeExpiredJobLease` method supports an `ignoredJobIds` parameter to prevent race conditions in concurrent workers:
-
-```typescript
-removeExpiredJobLease: (params: {
-  txContext?: TTxContext;
-  typeNames: string[];
-  ignoredJobIds?: TJobId[]; // Jobs to skip when reaping
-}) => Promise<StateJob | undefined>;
-```
-
-**Why `ignoredJobIds` exists:**
-
-When a worker runs with multiple concurrent slots (`concurrency > 1`), there's a potential race condition:
-
-1. Worker acquires job A in slot 1 with a lease
-2. Job A's lease expires before renewal (e.g., slow processing, GC pause)
-3. Worker's reaper runs and sees job A has an expired lease
-4. Without `ignoredJobIds`, the reaper would transition job A back to `pending`
-5. Now job A is being processed AND marked as pending—a corrupted state
-
-The `ignoredJobIds` parameter allows the worker to exclude jobs it's currently processing from reaping. Custom adapter implementations must filter out these job IDs when selecting expired leases.
+The `removeExpiredJobLease` method supports an `ignoredJobIds` parameter to prevent race conditions when a worker runs with multiple concurrent slots (`concurrency > 1`). Without it, a worker could reap its own in-progress job if the lease expires before renewal, causing corrupted state. Custom adapter implementations must filter out these job IDs when selecting expired leases.
 
 ### Internal Type Design
 
@@ -235,48 +149,11 @@ Implementation varies by adapter:
 
 ### Callback Pattern
 
-All `listen*` methods accept a callback and return a dispose function:
-
-```typescript
-const dispose = await notifyAdapter.listenJobScheduled(typeNames, (typeName) => {
-  // Called when notification arrives
-});
-
-try {
-  // ... do work ...
-} finally {
-  await dispose();
-}
-```
-
-Key behaviors:
-
-- Async setup: Subscription is active when promise resolves
-- Callback is called synchronously when notification arrives (no race condition)
-- Dispose function cleans up the subscription
+All `listen*` methods accept a callback and return a dispose function. Subscription is active when the promise resolves, and the callback is called synchronously when notifications arrive (no race condition).
 
 ## ObservabilityAdapter Design
 
-### Primitive Data Interface
-
-The `ObservabilityAdapter` accepts primitive data types (not domain objects):
-
-```typescript
-interface ObservabilityAdapter {
-  jobCreated(data: JobBasicData): void;
-  jobAttemptStarted(data: JobProcessingData): void;
-  // ... primitive data types
-}
-```
-
-### Rationale
-
-1. **Decoupling**: Adapter implementations don't need to understand domain objects
-2. **Stability**: Primitive data types change less often than domain objects
-
-### Noop Default
-
-When no `observabilityAdapter` is provided, a noop implementation is used automatically. This makes observability opt-in without cluttering application code with null checks.
+The `ObservabilityAdapter` accepts primitive data types (not domain objects) for decoupling and stability. When no adapter is provided, a noop implementation is used automatically, making observability opt-in.
 
 ## Summary
 

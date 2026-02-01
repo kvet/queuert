@@ -6,6 +6,8 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ## Design Documentation
 
+**Before modifying core library behavior, read the relevant design doc.** These documents capture architectural decisions that must be preserved:
+
 High-level design decisions are documented in [docs/design/](docs/design/):
 
 - [Job Chain Model](docs/design/job-chain-model.md) - Unified job/chain model, Promise analogy, terminology
@@ -16,6 +18,8 @@ High-level design decisions are documented in [docs/design/](docs/design/):
 - [Adapters](docs/design/adapters.md) - Factory patterns, dual-context design, notification optimization
 - [Code Style](docs/design/code-style.md) - Code conventions, testing patterns, project organization, examples structure
 - [Worker](docs/design/worker.md) - Worker lifecycle, leasing, reaper, retry logic
+- [Tracing](docs/design/observability-tracing.md) - OpenTelemetry spans, chain/job/attempt hierarchy, blocker links
+- [Metrics](docs/design/observability-metrics.md) - OpenTelemetry counters, histograms, gauges for queue monitoring
 
 ## Packages
 
@@ -32,6 +36,7 @@ See each package's README.md for exports, configuration, and usage.
 
 ## Session Requirements
 
+- **Consult design docs before changes**: When modifying adapters, job processing, workers, or other core systems, read the corresponding design doc first to understand existing decisions
 - No obvious comments
 - Run `pnpm fmt` before running checks to fix formatting issues
 - Run `pnpm check` to run all checks together (or separately: `pnpm lint`, `pnpm typecheck`, `pnpm test`)
