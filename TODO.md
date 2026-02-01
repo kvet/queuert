@@ -24,6 +24,7 @@
   - withTransaction can retry on transient transaction errors
   - run with standalone + replica set mode on testcontainers
   - support notifications (change streams) for job activation with MongoDB
+- PostgreSQL: Support `tablePrefix` configuration option for table names
 - Sqlite ready:
   - Better concurrency handling - WAL mode, busy timeout, retries
   - Separate read/write connection pools (single writer, multiple readers)
