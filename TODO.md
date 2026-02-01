@@ -4,6 +4,11 @@
 - Ensure that worker uses optimal number of state provider operations
 - Reevaluate test lease times (currently 10ms) - balance between fast tests and avoiding timing-related flakiness
 - ObservabilityAdapter: tracing spans
+  - Add trace context columns to state adapters (chainTraceContext, jobTraceContext)
+  - Extend ObservabilityAdapter interface with tracing methods and types
+  - Implement OTEL tracing in @queuert/otel
+  - Integrate tracing in core (startJobChain, worker processing, continueWith)
+  - Add observability-tracing example
 - test against multiple versions of node on CI
 - extract state and notify adapter test suites to efficiently test multiple configurations (prefixes etc)
   - check table names for sql adapters
