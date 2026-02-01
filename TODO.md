@@ -12,7 +12,6 @@
 - extract state and notify adapter test suites to efficiently test multiple configurations (prefixes etc)
 - rename createQueuertClient to createClient and createQueuertInProcessWorker to createInProcessWorker. review all other names for similar verbosity
 - add a proper example/test with multiple workers sharing the same database
-- npm badge for each package README
 - Consider making `log` parameter optional with no-op default for quick starts
 
 # Medium term

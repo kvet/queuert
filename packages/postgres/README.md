@@ -1,5 +1,10 @@
 # @queuert/postgres
 
+[![npm version](https://img.shields.io/npm/v/@queuert/postgres.svg)](https://www.npmjs.com/package/@queuert/postgres)
+[![license](https://img.shields.io/github/license/kvet/queuert.svg)](https://github.com/kvet/queuert/blob/main/LICENSE)
+[![stars](https://img.shields.io/github/stars/kvet/queuert.svg)](https://github.com/kvet/queuert)
+[![last commit](https://img.shields.io/github/last-commit/kvet/queuert.svg)](https://github.com/kvet/queuert/commits)
+
 PostgreSQL state adapter and notify adapter for [Queuert](https://github.com/kvet/queuert) - a TypeScript library for database-backed job queues.
 
 ## What does this do?
