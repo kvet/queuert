@@ -5,10 +5,6 @@
 - Reevaluate test lease times (currently 10ms) - balance between fast tests and avoiding timing-related flakiness
 - ObservabilityAdapter: tracing spans
 - test against multiple versions of node on CI
-- add migration table to skip already applied migrations
-  - it should have a name, applied_at
-  - each migration set should have a unique name starting from YYYYMMDDHHMMSS_name (e.g. 20240612120000_add_users_table)
-  - when running migrations, check if the migration set was already applied, if so skip it
 - extract state and notify adapter test suites to efficiently test multiple configurations (prefixes etc)
 - rename createQueuertClient to createClient and createQueuertInProcessWorker to createInProcessWorker. review all other names for similar verbosity
 
