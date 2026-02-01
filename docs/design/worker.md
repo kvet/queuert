@@ -21,7 +21,7 @@ const worker = await createQueuertInProcessWorker({
     myJob: {
       process: async ({ job, complete }) => {
         // Process the job
-        return complete({ result: "done" });
+        return complete(async () => ({ result: "done" }));
       },
     },
   },

@@ -44,6 +44,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       observabilityAdapter,
       log,
       jobTypeRegistry,
+      concurrency: { maxSlots: 1 },
       jobTypeProcessors: {
         test: {
           process: async ({ job, complete }) => {
@@ -119,6 +120,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       observabilityAdapter,
       log,
       jobTypeRegistry,
+      concurrency: { maxSlots: 1 },
       jobTypeProcessors: {
         email: {
           process: async ({ complete }) => {
@@ -226,6 +228,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       observabilityAdapter,
       log,
       jobTypeRegistry,
+      concurrency: { maxSlots: 1 },
       jobTypeProcessing: {
         pollIntervalMs: 100,
       },
@@ -285,6 +288,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       observabilityAdapter,
       log,
       jobTypeRegistry,
+      concurrency: { maxSlots: 1 },
       jobTypeProcessors: {
         test: {
           process: async ({ job, complete }) => {
@@ -323,7 +327,78 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     expect(processedJobs).toEqual([0, 1, 2, 3, 4]);
   });
 
-  it("processes jobs in order distributed across workers", async ({
+  it("processes jobs in order with multiple slots", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const processedJobs: number[] = [];
+
+    const jobTypeRegistry = defineJobTypes<{
+      test: {
+        entry: true;
+        input: { jobNumber: number };
+        output: { success: boolean };
+      };
+    }>();
+
+    const client = await createQueuertClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+    });
+    const worker = await createQueuertInProcessWorker({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+      concurrency: { maxSlots: 5 },
+      jobTypeProcessors: {
+        test: {
+          process: async ({ job, complete }) => {
+            processedJobs.push(job.input.jobNumber);
+            await sleep(10);
+
+            return complete(async () => ({ success: true }));
+          },
+        },
+      },
+    });
+
+    const jobChains: JobChain<string, "test", { jobNumber: number }, { success: boolean }>[] = [];
+    for (let i = 0; i < 5; i++) {
+      jobChains.push(
+        await client.withNotify(async () =>
+          runInTransaction(async (txContext) =>
+            client.startJobChain({
+              ...txContext,
+              typeName: "test",
+              input: { jobNumber: i },
+            }),
+          ),
+        ),
+      );
+    }
+
+    await withWorkers([await worker.start()], async () => {
+      await Promise.all(
+        jobChains.map(async (jobChain) =>
+          client.waitForJobChainCompletion(jobChain, completionOptions),
+        ),
+      );
+    });
+
+    expect(processedJobs).toEqual([0, 1, 2, 3, 4]);
+  });
+
+  it("processes jobs in order with multiple workers", async ({
     stateAdapter,
     notifyAdapter,
     runInTransaction,
@@ -372,6 +447,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       log,
       jobTypeRegistry,
       workerId: "w1",
+      concurrency: { maxSlots: 1 },
       jobTypeProcessors: {
         test: {
           process: async ({ job, complete }) => {
@@ -391,6 +467,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       log,
       jobTypeRegistry,
       workerId: "w2",
+      concurrency: { maxSlots: 1 },
       jobTypeProcessors: {
         test: {
           process: async ({ job, complete }) => {
@@ -447,6 +524,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       observabilityAdapter,
       log,
       jobTypeRegistry,
+      concurrency: { maxSlots: 1 },
       jobTypeProcessing: {
         jobAttemptMiddlewares: [
           async (ctx, next) => {

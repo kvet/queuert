@@ -94,6 +94,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       observabilityAdapter,
       log,
       jobTypeRegistry,
+      concurrency: { maxSlots: 1 },
       jobTypeProcessors: {
         test: {
           process: async ({ signal }) => {
@@ -174,6 +175,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       observabilityAdapter,
       log,
       jobTypeRegistry,
+      concurrency: { maxSlots: 1 },
       jobTypeProcessors: {
         blocker: {
           process: async ({ job, complete }) => {
@@ -356,6 +358,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       observabilityAdapter,
       log,
       jobTypeRegistry,
+      concurrency: { maxSlots: 1 },
       jobTypeProcessors: {
         test: {
           process: async ({ complete }) => {

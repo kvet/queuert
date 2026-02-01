@@ -108,6 +108,9 @@ const worker = await createQueuertInProcessWorker({
   jobTypeRegistry: jobTypes,
   log: createConsoleLog(),
   workerId: "worker-1", // Unique worker identifier (optional)
+  concurrency: {
+    maxSlots: 10, // Number of jobs to process in parallel (default: 1)
+  },
   jobTypeProcessing: {
     pollIntervalMs: 60_000, // How often to poll for new jobs (default: 60s)
 
@@ -172,6 +175,10 @@ await worker.start();
 - `defineJobTypes` - Define job types with compile-time type safety
 - `createJobTypeRegistry` - Create a registry with runtime validation
 
+**Types:**
+
+- `Log` - Logger interface for custom logging implementations
+
 **Adapter interfaces:**
 
 - `StateAdapter` - Database operations for job persistence
@@ -204,20 +211,6 @@ await worker.start();
 **Helpers:**
 
 - `rescheduleJob` - Reschedule a job from within a process function
-
-### Testing (`./testing`)
-
-Test suites and context helpers for adapter packages:
-
-- Test suites: `processTestSuite`, `chainsTestSuite`, `blockerChainsTestSuite`, `deduplicationTestSuite`, `deletionTestSuite`, `notifyTestSuite`, `reaperTestSuite`, `schedulingTestSuite`, `workerTestSuite`, etc.
-- Context helpers: `extendWithCommon`, `extendWithStateInProcess`, `extendWithNotifyInProcess`, `extendWithNotifyNoop`
-
-### Internal (`./internal`)
-
-Internal utilities for adapter packages only (not for application use):
-
-- Utilities: `withRetry`, `createAsyncLock`, `wrapStateAdapterWithRetry`
-- In-process adapters: `createInProcessStateAdapter`, `createInProcessNotifyAdapter`
 
 ## Documentation
 

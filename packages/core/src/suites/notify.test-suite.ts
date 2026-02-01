@@ -34,6 +34,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       observabilityAdapter,
       log,
       jobTypeRegistry,
+      concurrency: { maxSlots: 1 },
       jobTypeProcessors: {
         test: {
           process: async ({ job, complete }) => {
@@ -95,6 +96,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         observabilityAdapter,
         log,
         jobTypeRegistry,
+        concurrency: { maxSlots: 1 },
         jobTypeProcessors: {
           test: {
             process: async ({ job, complete }) => {
@@ -171,6 +173,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       observabilityAdapter,
       log,
       jobTypeRegistry,
+      concurrency: { maxSlots: 1 },
       jobTypeProcessors: {
         blocker: {
           process: async ({ complete }) => {
@@ -186,6 +189,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       observabilityAdapter,
       log,
       jobTypeRegistry,
+      concurrency: { maxSlots: 1 },
       jobTypeProcessors: {
         main: {
           process: async ({ complete }) => {
@@ -259,6 +263,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       observabilityAdapter,
       log,
       jobTypeRegistry,
+      concurrency: { maxSlots: 1 },
       jobTypeProcessors: {
         step1: {
           process: async ({ complete }) => {
@@ -279,6 +284,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       observabilityAdapter,
       log,
       jobTypeRegistry,
+      concurrency: { maxSlots: 1 },
       jobTypeProcessors: {
         step2: {
           process: async ({ complete }) => {
@@ -346,6 +352,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       log,
       jobTypeRegistry,
       workerId: "worker",
+      concurrency: { maxSlots: 1 },
       jobTypeProcessors: {
         test: {
           process: async ({ signal, prepare }) => {
@@ -428,6 +435,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         observabilityAdapter,
         log,
         jobTypeRegistry,
+        concurrency: { maxSlots: 1 },
         jobTypeProcessors: {
           test: {
             process: async ({ signal, job, prepare, complete }) => {

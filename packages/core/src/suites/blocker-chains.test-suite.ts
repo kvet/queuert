@@ -56,6 +56,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
       jobTypeRegistry,
+      concurrency: { maxSlots: 1 },
       jobTypeProcessors: {
         blocker: {
           process: async ({ job, complete }) => {
@@ -276,6 +277,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
       jobTypeRegistry,
+      concurrency: { maxSlots: 1 },
       jobTypeProcessors: {
         blocker: {
           process: async ({ job, complete }) => {
@@ -378,6 +380,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
       jobTypeRegistry,
+      concurrency: { maxSlots: 1 },
       jobTypeProcessors: {
         inner: {
           process: async ({ job, complete }) => {
@@ -493,6 +496,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
       jobTypeRegistry,
+      concurrency: { maxSlots: 1 },
       jobTypeProcessing: {
         pollIntervalMs: 100,
       },
@@ -516,6 +520,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
       jobTypeRegistry,
+      concurrency: { maxSlots: 1 },
       jobTypeProcessing: {
         pollIntervalMs: 100,
       },
@@ -584,6 +589,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
       jobTypeRegistry,
+      concurrency: { maxSlots: 1 },
       jobTypeProcessors: {
         blocker: {
           process: async ({ job, complete }) => {
@@ -676,6 +682,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
       jobTypeRegistry,
+      concurrency: { maxSlots: 1 },
       jobTypeProcessors: {
         blocker: {
           process: async ({ job, prepare, complete }) => {

@@ -58,11 +58,6 @@ describe("MyFeature", () => {
 - `packages/redis/src/specs/` - Running with Redis notify adapter
 - `packages/nats/src/specs/` - Running with NATS notify adapter
 
-**Context helpers**:
-
-- State adapter helpers: `extendWithStateInProcess`, `extendWithStatePostgres`, `extendWithStateSqlite`, `extendWithStateMongodb`
-- Notify adapter helpers: `extendWithNotifyInProcess`, `extendWithNotifyNoop`, `extendWithNotifyRedis`, `extendWithNotifyNats`, `extendWithNotifyPostgres`
-
 ## Type Organization
 
 Source files are organized by domain:
@@ -143,16 +138,16 @@ notify-postgres-postgres-js  # postgres-js
 
 Redis examples implement a `RedisNotifyProvider` with `publish`, `subscribe`, and `eval` methods. PostgreSQL examples implement a `PgNotifyProvider` with `publish` and `subscribe` methods using PostgreSQL's LISTEN/NOTIFY.
 
-### In-Process Adapters
+### Notify Adapter Conventions
 
-The `queuert/internal` export provides adapters for isolating examples:
+**Prefix naming**: Each notify adapter uses domain-appropriate terminology for its prefix option:
 
-```typescript
-import { createInProcessNotifyAdapter } from "queuert/internal"; // For state examples
-import { createInProcessStateAdapter } from "queuert/internal"; // For notify examples
-```
+- Postgres/Redis: `channelPrefix` (pub/sub channels)
+- NATS: `subjectPrefix` (NATS uses "subjects" as its messaging primitive)
 
-These adapters are synchronous factories (no `await` needed) and work without external dependencies.
+This follows the principle of using each technology's native terminology rather than forcing artificial consistency.
+
+**Provider types**: Postgres and Redis export provider types (`PgNotifyProvider`, `RedisNotifyProvider`) because users implement these interfaces with their chosen client library. NATS does not export a provider type because it accepts the `NatsConnection` directly from the `nats` package — no adapter layer is needed since there's only one NATS client implementation in the Node.js ecosystem.
 
 ### Code Style for Examples
 

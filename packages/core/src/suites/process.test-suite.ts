@@ -43,6 +43,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       log,
       jobTypeRegistry,
       workerId: "worker",
+      concurrency: { maxSlots: 1 },
       jobTypeProcessors: {
         test: {
           process: async ({ job, prepare, complete }) => {
@@ -239,6 +240,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       observabilityAdapter,
       log,
       jobTypeRegistry,
+      concurrency: { maxSlots: 1 },
       jobTypeProcessors: {
         "atomic-complete": {
           process: async ({ job, complete }) => {
@@ -397,6 +399,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       observabilityAdapter,
       log,
       jobTypeRegistry,
+      concurrency: { maxSlots: 1 },
       jobTypeProcessors: {
         "test-prepare-twice": {
           process: async ({ prepare, complete }) => {
@@ -522,6 +525,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       observabilityAdapter,
       log,
       jobTypeRegistry,
+      concurrency: { maxSlots: 1 },
       jobTypeProcessing: {
         defaultLeaseConfig: { leaseMs: 10, renewIntervalMs: 100 },
       },
@@ -594,6 +598,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
         observabilityAdapter,
         log,
         jobTypeRegistry,
+        concurrency: { maxSlots: 1 },
         jobTypeProcessors: {
           test: {
             process: processFn,
@@ -652,6 +657,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       observabilityAdapter,
       log,
       jobTypeRegistry,
+      concurrency: { maxSlots: 1 },
       jobTypeProcessing: {
         defaultRetryConfig: {
           initialDelayMs: 1,
@@ -739,6 +745,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       observabilityAdapter,
       log,
       jobTypeRegistry,
+      concurrency: { maxSlots: 1 },
       jobTypeProcessing: {
         defaultRetryConfig: {
           initialDelayMs: 10,
@@ -865,6 +872,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       observabilityAdapter,
       log,
       jobTypeRegistry,
+      concurrency: { maxSlots: 1 },
       jobTypeProcessing: {
         defaultRetryConfig: {
           initialDelayMs: 1,
@@ -1010,6 +1018,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       observabilityAdapter,
       log,
       jobTypeRegistry,
+      concurrency: { maxSlots: 1 },
       jobTypeProcessors: {
         test: {
           retryConfig: {

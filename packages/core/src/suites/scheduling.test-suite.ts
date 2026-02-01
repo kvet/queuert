@@ -39,6 +39,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       log,
       jobTypeRegistry,
       workerId: "worker",
+      concurrency: { maxSlots: 1 },
       jobTypeProcessing: { pollIntervalMs: 50 },
       jobTypeProcessors: {
         test: {
@@ -105,6 +106,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       log,
       jobTypeRegistry,
       workerId: "worker",
+      concurrency: { maxSlots: 1 },
       jobTypeProcessing: { pollIntervalMs: 50 },
       jobTypeProcessors: {
         test: {
@@ -178,6 +180,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       log,
       jobTypeRegistry,
       workerId: "worker",
+      concurrency: { maxSlots: 1 },
       jobTypeProcessing: { pollIntervalMs: 50 },
       jobTypeProcessors: {
         first: {
@@ -267,6 +270,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       log,
       jobTypeRegistry,
       workerId: "worker",
+      concurrency: { maxSlots: 1 },
       jobTypeProcessing: { pollIntervalMs: 50 },
       jobTypeProcessors: {
         first: {
@@ -353,6 +357,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       log,
       jobTypeRegistry,
       workerId: "worker",
+      concurrency: { maxSlots: 1 },
       jobTypeProcessing: { pollIntervalMs: 50 },
       jobTypeProcessors: {
         test: {
@@ -431,6 +436,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       log,
       jobTypeRegistry,
       workerId: "worker",
+      concurrency: { maxSlots: 1 },
       jobTypeProcessing: { pollIntervalMs: 50 },
       jobTypeProcessors: {
         test: {

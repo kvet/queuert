@@ -14,8 +14,9 @@ await db.transaction(async (tx) => {
   const image = await tx.images.create({ ... });
 
   // Job creation in the same transaction
+  // The transaction context (here `tx`) is passed directly - property name matches your StateProvider
   await queuert.startJobChain({
-    client: tx,
+    tx,
     typeName: "process-image",
     input: { imageId: image.id },
   });
@@ -60,7 +61,7 @@ const result = await prepare({ mode }, callback?)
 ```
 
 - `mode`: `"atomic"` runs entirely in one transaction; `"staged"` allows long-running work between prepare and complete with lease renewal
-- Optional callback receives `{ client }` for database operations during prepare
+- Optional callback receives the transaction context you defined in your `StateProvider` (e.g., `{ sql }` for postgres.js, `{ db }` for Drizzle, etc.)
 - Returns callback result directly (or void if no callback)
 
 ### Processing Phase (Staged Mode Only)
@@ -70,9 +71,10 @@ Between prepare and complete, perform long-running work. The worker automaticall
 ### Complete Phase
 
 ```typescript
-return complete(({ client, continueWith }) => { ... })
+return complete(({ sql, continueWith }) => { ... })
 ```
 
+- Callback receives your transaction context (e.g., `sql`) plus `continueWith`
 - Commits state changes in a transaction
 - `continueWith` continues to the next job in the chain
 - Return value becomes the job output

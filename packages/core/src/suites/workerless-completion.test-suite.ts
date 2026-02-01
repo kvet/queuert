@@ -180,6 +180,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       observabilityAdapter,
       log,
       jobTypeRegistry,
+      concurrency: { maxSlots: 1 },
       jobTypeProcessors: {
         "process-approved": {
           process: async ({ prepare, complete }) => {
@@ -389,6 +390,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       log,
       jobTypeRegistry,
       workerId: "worker",
+      concurrency: { maxSlots: 1 },
       jobTypeProcessors: {
         test: {
           process: async ({ signal, complete }) => {

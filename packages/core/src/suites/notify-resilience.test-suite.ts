@@ -41,6 +41,7 @@ export const notifyResilienceTestSuite = ({
       observabilityAdapter,
       log,
       jobTypeRegistry,
+      concurrency: { maxSlots: 1 },
       jobTypeProcessing: {
         pollIntervalMs: 1_000_000, // should be processed in a single loop invocations
         defaultLeaseConfig: {

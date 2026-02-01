@@ -27,5 +27,5 @@ This example demonstrates how to use TypeBox for runtime validation of job types
 pnpm install
 
 # Run the example
-pnpm --filter @queuert/runtime-validation-typebox start
+pnpm --filter example-validation-typebox start
 ```

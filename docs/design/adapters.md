@@ -26,7 +26,6 @@ In-process and internal-only factories remain sync since they have no I/O:
 // Internal adapters - sync (no I/O)
 createInProcessStateAdapter → StateAdapter
 createInProcessNotifyAdapter → NotifyAdapter
-createNoopNotifyAdapter → NotifyAdapter
 ```
 
 ### Rationale
@@ -165,14 +164,7 @@ interface StateJob {
 }
 ```
 
-The `StateAdapter` methods accept `TJobId` for input parameters but return plain `StateJob`. This simplifies internal code while allowing adapters to expose typed IDs to consumers via type helpers:
-
-```typescript
-type GetStateAdapterTxContext<TStateAdapter> = // extracts TTxContext
-type GetStateAdapterJobId<TStateAdapter> = // extracts TJobId
-```
-
-These helpers are useful when building generic code that works with any state adapter.
+The `StateAdapter` methods accept `TJobId` for input parameters but return plain `StateJob`. This simplifies internal code while allowing adapters to expose typed IDs to consumers via type helpers like `GetStateAdapterJobId<TStateAdapter>`.
 
 ## NotifyAdapter Design
 

@@ -27,5 +27,5 @@ This example demonstrates how to use Valibot for runtime validation of job types
 pnpm install
 
 # Run the example
-pnpm --filter @queuert/runtime-validation-valibot start
+pnpm --filter example-validation-valibot start
 ```

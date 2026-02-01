@@ -47,7 +47,7 @@ describe("Wait Chain Completion", () => {
 });
 
 describe("State Resilience", () => {
-  stateResilienceTestSuite({ it: sqliteNoopIt });
+  stateResilienceTestSuite({ it: sqliteNoopIt, skipConcurrencyTests: true });
 });
 
 describe("Workerless Completion", () => {

@@ -56,6 +56,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       observabilityAdapter,
       log,
       jobTypeRegistry,
+      concurrency: { maxSlots: 1 },
       jobTypeProcessors: {
         linear: {
           process: async ({ job, complete }) => {
@@ -257,6 +258,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       observabilityAdapter,
       log,
       jobTypeRegistry,
+      concurrency: { maxSlots: 1 },
       jobTypeProcessors: {
         main: {
           process: async ({ job, prepare, complete }) => {
@@ -365,6 +367,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       observabilityAdapter,
       log,
       jobTypeRegistry,
+      concurrency: { maxSlots: 1 },
       jobTypeProcessors: {
         loop: {
           process: async ({ job, prepare, complete }) => {
@@ -440,6 +443,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       observabilityAdapter,
       log,
       jobTypeRegistry,
+      concurrency: { maxSlots: 1 },
       jobTypeProcessors: {
         start: {
           process: async ({ job, prepare, complete }) => {
@@ -525,6 +529,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       observabilityAdapter,
       log,
       jobTypeRegistry,
+      concurrency: { maxSlots: 1 },
       jobTypeProcessors: {
         entryA: {
           process: async ({ job, complete }) => {
@@ -617,6 +622,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       observabilityAdapter,
       log,
       jobTypeRegistry,
+      concurrency: { maxSlots: 1 },
       jobTypeProcessors: {
         parent: {
           process: async ({ job, complete }) => {

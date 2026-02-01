@@ -122,9 +122,9 @@ Examples should compile and use current API.
 
 **Specific examples to verify:**
 
-- `runtime-validation-zod/` - complete Zod adapter
-- `runtime-validation-valibot/` - check if stub or complete
-- `runtime-validation-typebox/` - check if stub or complete
+- `validation-zod/` - complete Zod adapter
+- `validation-valibot/` - check if stub or complete
+- `validation-typebox/` - check if stub or complete
 - Database examples - do they use current API?
 
 ### 5. Export Verification

@@ -75,9 +75,11 @@ const waitForNextJob = async ({
   const { promise: notified, resolve: onNotification } = Promise.withResolvers<void>();
   let disposeNotified: () => Promise<void> = async () => {};
   try {
-    disposeNotified = await helper.notifyAdapter.listenJobScheduled(typeNames, () => {
-      onNotification();
-    });
+    if (executor.idleSlots() > 0) {
+      disposeNotified = await helper.notifyAdapter.listenJobScheduled(typeNames, () => {
+        onNotification();
+      });
+    }
   } catch {}
   const { promise: slotAvailable, resolve: onSlotAvailable } = Promise.withResolvers<void>();
   const disposeSlotAvailable = executor.onIdleSlot(onSlotAvailable);

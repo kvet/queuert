@@ -52,6 +52,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       log,
       jobTypeRegistry,
       workerId: "w1",
+      concurrency: { maxSlots: 1 },
       jobTypeProcessing: {
         defaultLeaseConfig: leaseConfig,
         pollIntervalMs: leaseConfig.leaseMs,
@@ -85,6 +86,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       log,
       jobTypeRegistry,
       workerId: "w2",
+      concurrency: { maxSlots: 1 },
       jobTypeProcessing: {
         defaultLeaseConfig: leaseConfig,
         pollIntervalMs: leaseConfig.leaseMs,
@@ -187,6 +189,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       log,
       jobTypeRegistry,
       workerId: "w1",
+      concurrency: { maxSlots: 1 },
       jobTypeProcessing: {
         defaultLeaseConfig: leaseConfig,
         pollIntervalMs: leaseConfig.leaseMs,
@@ -223,6 +226,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       log,
       jobTypeRegistry,
       workerId: "w2",
+      concurrency: { maxSlots: 1 },
       jobTypeProcessing: {
         defaultLeaseConfig: leaseConfig,
         pollIntervalMs: leaseConfig.leaseMs,

@@ -27,5 +27,5 @@ This example demonstrates how to use Zod for runtime validation of job types.
 pnpm install
 
 # Run the example
-pnpm --filter @queuert/runtime-validation-zod start
+pnpm --filter example-validation-zod start
 ```
