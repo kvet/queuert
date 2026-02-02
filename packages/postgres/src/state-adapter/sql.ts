@@ -29,8 +29,6 @@ export type DbJob = {
   deduplication_key: string | null;
 
   trace_context: unknown;
-
-  updated_at: string;
 };
 
 export type DbJobWithIncompleteBlockers = DbJob & {
@@ -89,10 +87,7 @@ CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job (
   deduplication_key             text,
 
   -- tracing
-  trace_context                 jsonb,
-
-  -- metadata
-  updated_at                    timestamptz NOT NULL DEFAULT now()
+  trace_context                 jsonb
 )`,
           false,
         ),
@@ -106,35 +101,6 @@ CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job_blocker (
   index                         integer NOT NULL,
   PRIMARY KEY (job_id, blocked_by_chain_id)
 )`,
-          false,
-        ),
-      },
-      {
-        sql: sql(
-          /* sql */ `
-CREATE OR REPLACE FUNCTION {{schema}}.{{table_prefix}}update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-   NEW.updated_at = now();
-   RETURN NEW;
-END;
-$$ LANGUAGE plpgsql`,
-          false,
-        ),
-      },
-      {
-        sql: sql(
-          /* sql */ `DROP TRIGGER IF EXISTS {{table_prefix}}update_job_updated_at ON {{schema}}.{{table_prefix}}job`,
-          false,
-        ),
-      },
-      {
-        sql: sql(
-          /* sql */ `
-CREATE TRIGGER {{table_prefix}}update_job_updated_at
-BEFORE UPDATE ON {{schema}}.{{table_prefix}}job
-FOR EACH ROW
-EXECUTE PROCEDURE {{schema}}.{{table_prefix}}update_updated_at_column()`,
           false,
         ),
       },

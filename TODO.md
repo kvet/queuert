@@ -9,10 +9,10 @@
   - Integrate tracing in core (startJobChain, worker processing, continueWith)
   - Add observability-tracing example
 - test against multiple versions of node on CI
-- Remove `updatedAt` from StateJob - not used for any logic, specific timestamps (lastAttemptAt, completedAt) are more useful, simplifies MongoDB adapter
 - extract state and notify adapter test suites to efficiently test multiple configurations (prefixes etc)
   - support all methods for state adapter test suite
   - notify adapter
+- update lease in one operation (currently two: getForUpdate + update)
 
 # Medium term
 
@@ -30,6 +30,7 @@
   - withTransaction can retry on transient transaction errors
   - run with standalone + replica set mode on testcontainers
   - support notifications (change streams) for job activation with MongoDB
+  - try to use single operations where possible (findOneAndUpdate, updateMany)
 - Revisit Prisma examples
 - test against bun and it's built-in sqlite, postgres clients
 

@@ -10,7 +10,6 @@ export type Job<TJobId, TJobTypeName, TChainTypeName, TInput, TBlockerChains ext
   input: TInput;
   createdAt: Date;
   scheduledAt: Date;
-  updatedAt: Date;
   attempt: number;
   lastAttemptAt: Date | null;
   lastAttemptError: string | null;

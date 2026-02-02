@@ -22,7 +22,6 @@ export const jobColumns = [
   "leased_until",
   "deduplication_key",
   "trace_context",
-  "updated_at",
 ] as const;
 
 export const jobColumnsSelect = (alias: string): string =>
@@ -58,8 +57,6 @@ export type DbJob = {
   deduplication_key: string | null;
 
   trace_context: string | null;
-
-  updated_at: string;
 };
 
 export type DbJobChainRow = DbJob & {
@@ -106,10 +103,7 @@ CREATE TABLE IF NOT EXISTS {{table_prefix}}job (
   deduplication_key             TEXT,
 
   -- tracing
-  trace_context                 TEXT,
-
-  -- metadata
-  updated_at                    TEXT NOT NULL DEFAULT (datetime('now', 'subsec'))
+  trace_context                 TEXT
 )`,
           false,
         ),
@@ -175,18 +169,6 @@ WHERE status = 'running' AND leased_until IS NOT NULL`,
           /* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_blocker_chain_idx
 ON {{table_prefix}}job_blocker (blocked_by_chain_id)`,
-          false,
-        ),
-      },
-      {
-        sql: sql(
-          /* sql */ `
-CREATE TRIGGER IF NOT EXISTS {{table_prefix}}update_job_updated_at
-AFTER UPDATE ON {{table_prefix}}job
-FOR EACH ROW
-BEGIN
-  UPDATE {{table_prefix}}job SET updated_at = datetime('now', 'subsec') WHERE id = NEW.id;
-END`,
           false,
         ),
       },

@@ -40,8 +40,6 @@ type DbJob = {
 
   traceContext: unknown;
 
-  updatedAt: Date;
-
   blockers: { blockedByChainId: string; index: number }[];
 };
 
@@ -74,8 +72,6 @@ const mapDbJobToStateJob = (dbJob: WithId<Document> | DbJob): StateJob => {
     deduplicationKey: job.deduplicationKey,
 
     traceContext: job.traceContext,
-
-    updatedAt: job.updatedAt,
   };
 };
 
@@ -201,8 +197,6 @@ export const createMongoStateAdapter = async <
 
               traceContext: null,
 
-              updatedAt: "$$NOW",
-
               blockers: [],
             },
           },
@@ -242,7 +236,7 @@ export const createMongoStateAdapter = async <
       if (incompleteBlockerChainIds.length > 0) {
         const updatedJob = await collection.findOneAndUpdate(
           { _id: jobId, status: "pending" },
-          { $set: { status: "blocked", updatedAt: new Date() } },
+          { $set: { status: "blocked" } },
           { returnDocument: "after", session: getSession(txContext) },
         );
 
@@ -288,7 +282,7 @@ export const createMongoStateAdapter = async <
         if (allBlockersCompleted) {
           const updatedJob = await collection.findOneAndUpdate(
             { _id: dbJob._id, status: "blocked" },
-            [{ $set: { status: "pending", scheduledAt: "$$NOW", updatedAt: "$$NOW" } }],
+            [{ $set: { status: "pending", scheduledAt: "$$NOW" } }],
             { returnDocument: "after", session: getSession(txContext) },
           );
 
@@ -367,7 +361,6 @@ export const createMongoStateAdapter = async <
           {
             $set: {
               status: "running",
-              updatedAt: "$$NOW",
               attempt: { $add: ["$attempt", 1] },
             },
           },
@@ -407,7 +400,6 @@ export const createMongoStateAdapter = async <
               leasedBy: { $literal: workerId },
               leasedUntil: { $add: ["$$NOW", leaseDurationMs] },
               status: "running",
-              updatedAt: "$$NOW",
             },
           },
         ],
@@ -433,7 +425,6 @@ export const createMongoStateAdapter = async <
               leasedBy: null,
               leasedUntil: null,
               status: "pending",
-              updatedAt: "$$NOW",
             },
           },
         ],
@@ -457,7 +448,6 @@ export const createMongoStateAdapter = async <
               output: { $literal: output ?? null },
               leasedBy: null,
               leasedUntil: null,
-              updatedAt: "$$NOW",
             },
           },
         ],
@@ -483,7 +473,6 @@ export const createMongoStateAdapter = async <
               leasedBy: null,
               leasedUntil: null,
               status: "pending",
-              updatedAt: "$$NOW",
             },
           },
         ],

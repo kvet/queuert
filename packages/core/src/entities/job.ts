@@ -16,7 +16,6 @@ export const mapStateJobToJob = (
     input: stateJob.input,
     createdAt: stateJob.createdAt,
     scheduledAt: stateJob.scheduledAt,
-    updatedAt: stateJob.updatedAt,
     attempt: stateJob.attempt,
     lastAttemptAt: stateJob.lastAttemptAt,
     lastAttemptError: stateJob.lastAttemptError,

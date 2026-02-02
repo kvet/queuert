@@ -80,8 +80,6 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
     deduplicationKey: dbJob.deduplication_key,
 
     traceContext: parseJson(dbJob.trace_context),
-
-    updatedAt: new Date(dbJob.updated_at + "Z"),
   };
 };
 
@@ -107,7 +105,6 @@ const parseDbJobChainRow = (row: DbJobChainRow): { rootJob: DbJob; lastChainJob:
     leased_until: row.leased_until,
     deduplication_key: row.deduplication_key,
     trace_context: row.trace_context,
-    updated_at: row.updated_at,
   };
 
   const lastChainJob: DbJob | null = row.lc_id
@@ -132,7 +129,6 @@ const parseDbJobChainRow = (row: DbJobChainRow): { rootJob: DbJob; lastChainJob:
         leased_until: row.lc_leased_until,
         deduplication_key: row.lc_deduplication_key,
         trace_context: row.lc_trace_context,
-        updated_at: row.lc_updated_at!,
       }
     : null;
 

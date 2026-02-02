@@ -63,8 +63,6 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
     deduplicationKey: dbJob.deduplication_key,
 
     traceContext: dbJob.trace_context,
-
-    updatedAt: new Date(dbJob.updated_at),
   };
 };
 

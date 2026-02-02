@@ -152,7 +152,6 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
         leasedUntil: null,
         deduplicationKey: deduplication?.key ?? null,
         traceContext: null,
-        updatedAt: now,
       };
 
       store.jobs.set(id, job);
@@ -178,7 +177,7 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       }
 
       if (incompleteBlockerChainIds.length > 0 && job.status === "pending") {
-        const updatedJob: StateJob = { ...job, status: "blocked", updatedAt: new Date() };
+        const updatedJob: StateJob = { ...job, status: "blocked" };
         store.jobs.set(jobId, updatedJob);
         return { job: updatedJob, incompleteBlockerChainIds };
       }
@@ -210,7 +209,6 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
             ...job,
             status: "pending",
             scheduledAt: now,
-            updatedAt: now,
           };
           store.jobs.set(jobId, updatedJob);
           scheduledJobs.push(updatedJob);
@@ -276,7 +274,6 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
         ...candidateJob,
         status: "running",
         attempt: candidateJob.attempt + 1,
-        updatedAt: now,
       };
       store.jobs.set(candidateJob.id, updatedJob);
 
@@ -293,7 +290,6 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
         leasedBy: workerId,
         leasedUntil: new Date(now.getTime() + leaseDurationMs),
         status: "running",
-        updatedAt: now,
       };
 
       store.jobs.set(jobId, updatedJob);
@@ -315,7 +311,6 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
         leasedBy: null,
         leasedUntil: null,
         status: "pending",
-        updatedAt: now,
       };
 
       store.jobs.set(jobId, updatedJob);
@@ -335,7 +330,6 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
         output,
         leasedBy: null,
         leasedUntil: null,
-        updatedAt: now,
       };
 
       store.jobs.set(jobId, updatedJob);
@@ -367,7 +361,6 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
         leasedBy: null,
         leasedUntil: null,
         status: "pending",
-        updatedAt: now,
       };
       store.jobs.set(candidateJob.id, updatedJob);
 

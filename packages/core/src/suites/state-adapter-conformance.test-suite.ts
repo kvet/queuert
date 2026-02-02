@@ -168,7 +168,6 @@ export const stateAdapterConformanceTestSuite = ({
 
     expect(job.createdAt).toBeInstanceOf(Date);
     expect(job.scheduledAt).toBeInstanceOf(Date);
-    expect(job.updatedAt).toBeInstanceOf(Date);
 
     const timeDiff = Math.abs(Date.now() - job.createdAt.getTime());
     expect(timeDiff).toBeLessThan(5000);
