@@ -16,6 +16,11 @@
 
 # Medium term
 
+- Sqlite ready:
+  - Better concurrency handling - WAL mode, busy timeout, retries
+  - Separate read/write connection pools (single writer, multiple readers)
+  - get rid of skipConcurrencyTests flag in resilience tests
+  - usage of db without pool is incorrect
 - MySQL/MariaDB adapter - Popular databases; defer until users request
 - MonogoDB ready:
   - MongoDB: Add migration version tracking (store applied migrations in metadata collection, run incremental index changes)
@@ -25,11 +30,6 @@
   - withTransaction can retry on transient transaction errors
   - run with standalone + replica set mode on testcontainers
   - support notifications (change streams) for job activation with MongoDB
-- Sqlite ready:
-  - Better concurrency handling - WAL mode, busy timeout, retries
-  - Separate read/write connection pools (single writer, multiple readers)
-  - get rid of skipConcurrencyTests flag in resilience tests
-  - usage of db without pool is incorrect
 - Revisit Prisma examples
 - test against bun and it's built-in sqlite, postgres clients
 
