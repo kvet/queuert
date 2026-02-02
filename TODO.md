@@ -11,7 +11,6 @@
   - Add observability-tracing example
 - test against multiple versions of node on CI
 - extract state and notify adapter test suites to efficiently test multiple configurations (prefixes etc)
-  - check table names for sql adapters
   - support all methods for state adapter test suite
   - notify adapter
 
@@ -26,7 +25,6 @@
   - withTransaction can retry on transient transaction errors
   - run with standalone + replica set mode on testcontainers
   - support notifications (change streams) for job activation with MongoDB
-- PostgreSQL: Support `tablePrefix` configuration option for table names
 - Sqlite ready:
   - Better concurrency handling - WAL mode, busy timeout, retries
   - Separate read/write connection pools (single writer, multiple readers)

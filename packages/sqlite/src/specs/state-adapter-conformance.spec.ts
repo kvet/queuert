@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import { type StateAdapter } from "queuert";
 import { stateAdapterConformanceTestSuite } from "queuert/testing";
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
 import { createBetterSqlite3Provider } from "./state-provider.better-sqlite3.js";
 
@@ -44,6 +44,16 @@ describe("SQLite State Adapter Conformance - Default Config", () => {
     ],
   });
 
+  conformanceIt("creates tables with correct prefix", ({ db, stateAdapter: _ }) => {
+    const tables = db
+      .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE ?`)
+      .all(`${tablePrefix}%`) as { name: string }[];
+    const tableNames = tables.map((t) => t.name);
+    expect(tableNames).toContain(`${tablePrefix}job`);
+    expect(tableNames).toContain(`${tablePrefix}job_blocker`);
+    expect(tableNames).toContain(`${tablePrefix}migration`);
+  });
+
   stateAdapterConformanceTestSuite({ it: conformanceIt as any });
 });
 
@@ -80,6 +90,16 @@ describe("SQLite State Adapter Conformance - Custom Table Prefix", () => {
       async ({}, use) => use((id: string) => UUID_PATTERN.test(id)),
       { scope: "test" },
     ],
+  });
+
+  conformanceIt("creates tables with correct prefix", ({ db, stateAdapter: _ }) => {
+    const tables = db
+      .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE ?`)
+      .all(`${tablePrefix}%`) as { name: string }[];
+    const tableNames = tables.map((t) => t.name);
+    expect(tableNames).toContain(`${tablePrefix}job`);
+    expect(tableNames).toContain(`${tablePrefix}job_blocker`);
+    expect(tableNames).toContain(`${tablePrefix}migration`);
   });
 
   stateAdapterConformanceTestSuite({ it: conformanceIt as any });
@@ -122,6 +142,16 @@ describe("SQLite State Adapter Conformance - Custom ID Generator", () => {
     ],
   });
 
+  conformanceIt("creates tables with correct prefix", ({ db, stateAdapter: _ }) => {
+    const tables = db
+      .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE ?`)
+      .all(`${tablePrefix}%`) as { name: string }[];
+    const tableNames = tables.map((t) => t.name);
+    expect(tableNames).toContain(`${tablePrefix}job`);
+    expect(tableNames).toContain(`${tablePrefix}job_blocker`);
+    expect(tableNames).toContain(`${tablePrefix}migration`);
+  });
+
   stateAdapterConformanceTestSuite({ it: conformanceIt as any });
 });
 
@@ -160,6 +190,16 @@ describe("SQLite State Adapter Conformance - All Custom Options", () => {
       async ({}, use) => use((id: string) => id.startsWith("job-")),
       { scope: "test" },
     ],
+  });
+
+  conformanceIt("creates tables with correct prefix", ({ db, stateAdapter: _ }) => {
+    const tables = db
+      .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE ?`)
+      .all(`${tablePrefix}%`) as { name: string }[];
+    const tableNames = tables.map((t) => t.name);
+    expect(tableNames).toContain(`${tablePrefix}job`);
+    expect(tableNames).toContain(`${tablePrefix}job_blocker`);
+    expect(tableNames).toContain(`${tablePrefix}migration`);
   });
 
   stateAdapterConformanceTestSuite({ it: conformanceIt as any });

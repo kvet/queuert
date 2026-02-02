@@ -79,6 +79,7 @@ export const createPgStateAdapter = async <
   },
   isTransientError = isTransientPgError,
   schema = "queuert",
+  tablePrefix = "",
   idType = "uuid",
   idDefault = "gen_random_uuid()",
 }: {
@@ -86,6 +87,7 @@ export const createPgStateAdapter = async <
   connectionRetryConfig?: RetryConfig;
   isTransientError?: (error: unknown) => boolean;
   schema?: string;
+  tablePrefix?: string;
   idType?: string;
   idDefault?: string;
   $idType?: TIdType;
@@ -94,7 +96,12 @@ export const createPgStateAdapter = async <
     migrateToLatest: () => Promise<MigrationResult>;
   }
 > => {
-  const applyTemplate = createTemplateApplier({ schema, id_type: idType, id_default: idDefault });
+  const applyTemplate = createTemplateApplier({
+    schema,
+    table_prefix: tablePrefix,
+    id_type: idType,
+    id_default: idDefault,
+  });
 
   const executeTypedSql = async <
     TParams extends
