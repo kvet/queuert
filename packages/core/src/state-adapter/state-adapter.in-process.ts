@@ -151,6 +151,7 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
         leasedBy: null,
         leasedUntil: null,
         deduplicationKey: deduplication?.key ?? null,
+        traceContext: null,
         updatedAt: now,
       };
 

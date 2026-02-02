@@ -28,6 +28,8 @@ export type DbJob = {
 
   deduplication_key: string | null;
 
+  trace_context: unknown;
+
   updated_at: string;
 };
 
@@ -85,6 +87,9 @@ CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job (
 
   -- deduplication
   deduplication_key             text,
+
+  -- tracing
+  trace_context                 jsonb,
 
   -- metadata
   updated_at                    timestamptz NOT NULL DEFAULT now()

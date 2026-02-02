@@ -38,6 +38,8 @@ type DbJob = {
 
   deduplicationKey: string | null;
 
+  traceContext: unknown;
+
   updatedAt: Date;
 
   blockers: { blockedByChainId: string; index: number }[];
@@ -70,6 +72,8 @@ const mapDbJobToStateJob = (dbJob: WithId<Document> | DbJob): StateJob => {
     leasedUntil: job.leasedUntil,
 
     deduplicationKey: job.deduplicationKey,
+
+    traceContext: job.traceContext,
 
     updatedAt: job.updatedAt,
   };
@@ -194,6 +198,8 @@ export const createMongoStateAdapter = async <
               leasedUntil: null,
 
               deduplicationKey: { $literal: deduplication?.key ?? null },
+
+              traceContext: null,
 
               updatedAt: "$$NOW",
 

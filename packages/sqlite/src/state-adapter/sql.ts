@@ -21,6 +21,7 @@ export const jobColumns = [
   "leased_by",
   "leased_until",
   "deduplication_key",
+  "trace_context",
   "updated_at",
 ] as const;
 
@@ -55,6 +56,8 @@ export type DbJob = {
   leased_until: string | null;
 
   deduplication_key: string | null;
+
+  trace_context: string | null;
 
   updated_at: string;
 };
@@ -101,6 +104,9 @@ CREATE TABLE IF NOT EXISTS {{table_prefix}}job (
 
   -- deduplication
   deduplication_key             TEXT,
+
+  -- tracing
+  trace_context                 TEXT,
 
   -- metadata
   updated_at                    TEXT NOT NULL DEFAULT (datetime('now', 'subsec'))

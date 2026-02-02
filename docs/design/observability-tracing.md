@@ -71,42 +71,37 @@ type StateJob = {
   // ... existing fields
 
   /**
-   * W3C traceparent format: "00-{traceId}-{spanId}-{flags}"
-   * Context of the PRODUCER chain span.
-   * Same value for all jobs in the same chain.
+   * W3C traceparent contexts for PRODUCER spans.
+   * - chain: Context of the chain PRODUCER span (same for all jobs in chain)
+   * - job: Context of this job's PRODUCER span (unique per job)
    */
-  chainTraceContext: string | null;
-
-  /**
-   * W3C traceparent format: "00-{traceId}-{spanId}-{flags}"
-   * Context of this job's PRODUCER span.
-   * Used by attempts to create child CONSUMER spans.
-   */
-  jobTraceContext: string | null;
+  traceContext: {
+    chain: string; // W3C traceparent format: "00-{traceId}-{spanId}-{flags}"
+    job: string;
+  } | null;
 };
 ```
 
 ### Context Propagation
 
 ```
-startJobChain:
-  1. Create PRODUCER chain span → store in chainTraceContext
-  2. Create PRODUCER job span (child of chain) → store in jobTraceContext
-  3. Both contexts saved with job
+startJobChain (chainId === jobId):
+  1. createProducerSpans() creates both chain and job PRODUCER spans
+  2. Returns { chain, job } stored in traceContext
 
-continueWith:
-  1. Inherit chainTraceContext from current job
-  2. Create new PRODUCER job span (child of chain) → store in new job's jobTraceContext
-  3. Link new job span to origin attempt span
+continueWith (chainId !== jobId):
+  1. createProducerSpans() inherits chain context, creates only job span
+  2. Returns { chain: inherited, job: new } stored in traceContext
+  3. Links new job span to origin attempt span
 
 Worker processes job:
-  1. Read jobTraceContext from job
+  1. Read traceContext.job from job
   2. Create CONSUMER attempt span (child of job)
   3. Create INTERNAL prepare/complete spans (children of attempt)
 
 Chain completes:
   1. Create CONSUMER chain span (child of final attempt)
-  2. Link to PRODUCER chain span
+  2. Link to PRODUCER chain span via traceContext.chain
 ```
 
 ## Blocker Relationships
@@ -177,68 +172,48 @@ type ObservabilityAdapter = {
   // ... existing metrics methods ...
 
   /**
-   * Creates PRODUCER chain span (ends immediately).
-   * Called on startJobChain.
-   * Returns W3C traceparent string to store in chainTraceContext.
+   * Creates PRODUCER spans for chain and job.
+   * - If chainId === jobId: creates both chain and job spans (chain start)
+   * - If chainId !== jobId: uses inherited chainTraceContext, creates only job span (continuation)
+   * Returns { chain, job } trace contexts to store in traceContext field.
    */
-  createChainProducerSpan: (data: ChainSpanData) => string | undefined;
-
-  /**
-   * Creates PRODUCER job span as child of chain (ends immediately).
-   * Called on startJobChain and continueWith.
-   * Returns W3C traceparent string to store in jobTraceContext.
-   */
-  createJobProducerSpan: (data: JobSpanData) => string | undefined;
+  createProducerSpans: (data: JobSpanData) => { chain: string; job: string } | undefined;
 
   /**
    * Starts CONSUMER attempt span as child of job.
    * Called when worker begins processing.
    * Returns handle to manage attempt lifecycle.
    */
-  startAttemptConsumerSpan: (data: AttemptSpanData) => AttemptSpanHandle | undefined;
+  startAttemptConsumerSpan: (data: JobAttemptSpanData) => AttemptSpanHandle | undefined;
 };
 ```
 
 ### Span Data Types
 
 ```typescript
-type ChainSpanData = {
-  // Parent context (for nested/blocker chains where rootChainId !== null)
-  rootChainTraceContext?: string;
-
-  // Identity
-  chainId: string;
-  chainTypeName: string;
-  rootChainId: string | null;
-
-  // Content
-  input: unknown;
-};
-
 type JobSpanData = {
-  // Parent context
-  chainTraceContext: string;
-
   // Identity
   chainId: string;
   chainTypeName: string;
   rootChainId: string | null;
   jobId: string;
   jobTypeName: string;
+  originId: string | null;
 
-  // Content
-  input: unknown;
+  // For chain start (chainId === jobId): link to root chain
+  rootChainTraceContext?: string;
 
-  // Blockers (IDs for attributes, trace contexts for links)
-  blockerChainIds?: string[];
+  // For continuation (chainId !== jobId): inherited chain context
+  chainTraceContext?: string;
+
+  // Blockers (trace contexts for links)
   blockerChainTraceContexts?: string[];
 
-  // Continuation link
-  originId: string | null;
+  // Continuation link to origin attempt
   originAttemptTraceContext?: string;
 };
 
-type AttemptSpanData = {
+type JobAttemptSpanData = {
   // Parent context
   jobTraceContext: string;
 

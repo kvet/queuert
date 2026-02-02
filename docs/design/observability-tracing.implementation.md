@@ -23,49 +23,53 @@ export const createOtelObservabilityAdapter = async ({
   return {
     // ... existing metrics methods ...
 
-    createChainProducerSpan(data) {
+    createProducerSpans(data) {
       if (!tracer) return undefined;
 
-      // Link to root chain for nested/blocker chains
-      const links = data.rootChainTraceContext
-        ? [{ context: deserializeSpanContext(data.rootChainTraceContext) }]
-        : [];
+      const isChainStart = data.chainId === data.jobId;
+      let chainTraceContext: string;
 
-      const span = tracer.startSpan(`chain ${data.chainTypeName}`, {
-        kind: SpanKind.PRODUCER,
-        links,
-        attributes: {
-          "messaging.operation.name": "publish",
-          "messaging.destination.name": data.chainTypeName,
-          "queuert.chain.id": data.chainId,
-          "queuert.chain.type": data.chainTypeName,
-          "queuert.chain.root_id": data.rootChainId,
-        },
-      });
-      const traceparent = serializeSpanContext(span.spanContext());
-      span.end();
-      return traceparent;
-    },
+      if (isChainStart) {
+        // Create chain PRODUCER span
+        const chainLinks = data.rootChainTraceContext
+          ? [{ context: deserializeSpanContext(data.rootChainTraceContext) }]
+          : [];
 
-    createJobProducerSpan(data) {
-      if (!tracer) return undefined;
+        const chainSpan = tracer.startSpan(`chain ${data.chainTypeName}`, {
+          kind: SpanKind.PRODUCER,
+          links: chainLinks,
+          attributes: {
+            "messaging.operation.name": "publish",
+            "messaging.destination.name": data.chainTypeName,
+            "queuert.chain.id": data.chainId,
+            "queuert.chain.type": data.chainTypeName,
+            "queuert.chain.root_id": data.rootChainId,
+          },
+        });
+        chainTraceContext = serializeSpanContext(chainSpan.spanContext());
+        chainSpan.end();
+      } else {
+        // Continuation: inherit chain context
+        chainTraceContext = data.chainTraceContext!;
+      }
 
-      const parentCtx = deserializeSpanContext(data.chainTraceContext);
+      // Create job PRODUCER span as child of chain
+      const parentCtx = deserializeSpanContext(chainTraceContext);
       const ctx = trace.setSpanContext(context.active(), parentCtx);
 
-      const links = [];
+      const jobLinks = [];
       if (data.originAttemptTraceContext) {
-        links.push({ context: deserializeSpanContext(data.originAttemptTraceContext) });
+        jobLinks.push({ context: deserializeSpanContext(data.originAttemptTraceContext) });
       }
       for (const blockerCtx of data.blockerChainTraceContexts ?? []) {
-        links.push({ context: deserializeSpanContext(blockerCtx) });
+        jobLinks.push({ context: deserializeSpanContext(blockerCtx) });
       }
 
-      const span = tracer.startSpan(
+      const jobSpan = tracer.startSpan(
         `job ${data.jobTypeName}`,
         {
           kind: SpanKind.PRODUCER,
-          links,
+          links: jobLinks,
           attributes: {
             "messaging.operation.name": "publish",
             "messaging.destination.name": data.jobTypeName,
@@ -81,9 +85,10 @@ export const createOtelObservabilityAdapter = async ({
         },
         ctx,
       );
-      const traceparent = serializeSpanContext(span.spanContext());
-      span.end();
-      return traceparent;
+      const jobTraceContext = serializeSpanContext(jobSpan.spanContext());
+      jobSpan.end();
+
+      return { chain: chainTraceContext, job: jobTraceContext };
     },
 
     startAttemptConsumerSpan(data) {
@@ -213,35 +218,25 @@ const deserializeSpanContext = (traceparent: string): SpanContext => {
 ### startJobChain
 
 ```typescript
-// Create chain and job spans
-const chainTraceContext = observabilityAdapter.createChainProducerSpan({
-  chainId: job.id,
-  chainTypeName,
-  rootChainId,
-  input,
-});
-
+// Create chain and job spans (chainId === jobId triggers both)
 const blockerChainTraceContexts = blockers
-  .map((b) => b.chainTraceContext)
+  .map((b) => b.traceContext?.chain)
   .filter((ctx): ctx is string => ctx != null);
 
-const jobTraceContext = observabilityAdapter.createJobProducerSpan({
-  chainTraceContext: chainTraceContext!,
+const traceContext = observabilityAdapter.createProducerSpans({
   chainId: job.id,
   chainTypeName,
   rootChainId,
   jobId: job.id,
   jobTypeName,
   originId: null,
-  input,
   blockerChainTraceContexts,
 });
 
-// Store contexts in job
+// Store context in job
 await stateAdapter.createJob({
   ...job,
-  chainTraceContext,
-  jobTraceContext,
+  traceContext,
 });
 ```
 
@@ -250,7 +245,7 @@ await stateAdapter.createJob({
 ```typescript
 // Start attempt span
 const attemptHandle = observabilityAdapter.startAttemptConsumerSpan({
-  jobTraceContext: job.jobTraceContext!,
+  jobTraceContext: job.traceContext!.job,
   chainId: job.chainId,
   chainTypeName: job.chainTypeName,
   jobId: job.id,
@@ -280,7 +275,7 @@ attemptHandle?.end({
   status: "completed",
   chainCompleted: !continued
     ? {
-        chainTraceContext: job.chainTraceContext!,
+        chainTraceContext: job.traceContext!.chain,
         chainId: job.chainId,
         chainTypeName: job.chainTypeName,
         output,
@@ -295,24 +290,22 @@ attemptHandle?.end({
 // Get origin attempt context for linking
 const originAttemptTraceContext = attemptHandle?.getTraceContext();
 
-// Create continuation job span
-const jobTraceContext = observabilityAdapter.createJobProducerSpan({
-  chainTraceContext: currentJob.chainTraceContext!,
+// Create continuation job span (chainId !== jobId inherits chain context)
+const traceContext = observabilityAdapter.createProducerSpans({
   chainId: currentJob.chainId,
   chainTypeName: currentJob.chainTypeName,
   rootChainId: currentJob.rootChainId,
   jobId: newJobId,
   jobTypeName: continuationTypeName,
   originId: currentJob.id,
-  input: continuationInput,
+  chainTraceContext: currentJob.traceContext!.chain, // Inherited
   originAttemptTraceContext,
 });
 
-// Create continuation job with inherited chain context
+// Create continuation job
 await stateAdapter.createJob({
   ...continuationJob,
-  chainTraceContext: currentJob.chainTraceContext, // Same chain
-  jobTraceContext, // New job span
+  traceContext,
 });
 ```
 
@@ -326,15 +319,14 @@ const adapter = await createOtelObservabilityAdapter({
   // No tracer - metrics only
 });
 
-adapter.createChainProducerSpan(data); // Returns undefined
-adapter.createJobProducerSpan(data); // Returns undefined
+adapter.createProducerSpans(data); // Returns undefined
 adapter.startAttemptConsumerSpan(data); // Returns undefined
 ```
 
 Integration code uses optional chaining to handle this gracefully:
 
 ```typescript
-const chainTraceContext = adapter.createChainProducerSpan(data);
+const traceContext = adapter.createProducerSpans(data);
 const attemptHandle = adapter.startAttemptConsumerSpan(data);
 attemptHandle?.startPrepare()?.end();
 ```

@@ -29,6 +29,8 @@ export type StateJob = {
 
   deduplicationKey: string | null;
 
+  traceContext: unknown;
+
   updatedAt: Date;
 };
 
