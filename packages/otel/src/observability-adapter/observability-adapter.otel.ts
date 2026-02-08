@@ -55,71 +55,69 @@ const isValidOtelTraceContext = (ctx: unknown): ctx is OtelTraceContext => {
  */
 export const createOtelObservabilityAdapter = async ({
   meter,
-  metricPrefix,
   tracer,
 }: {
   meter?: Meter;
-  metricPrefix?: string;
   tracer?: Tracer;
 } = {}): Promise<ObservabilityAdapter> => {
-  const m = (name: string): string => (metricPrefix ? `${metricPrefix}.${name}` : name);
-
   // worker
-  const workerStartedCounter = meter?.createCounter(m("worker.started"));
-  const workerErrorCounter = meter?.createCounter(m("worker.error"));
-  const workerStoppingCounter = meter?.createCounter(m("worker.stopping"));
-  const workerStoppedCounter = meter?.createCounter(m("worker.stopped"));
+  const workerStartedCounter = meter?.createCounter("queuert.worker.started");
+  const workerErrorCounter = meter?.createCounter("queuert.worker.error");
+  const workerStoppingCounter = meter?.createCounter("queuert.worker.stopping");
+  const workerStoppedCounter = meter?.createCounter("queuert.worker.stopped");
 
   // job
-  const jobCreatedCounter = meter?.createCounter(m("job.created"));
-  const jobAttemptStartedCounter = meter?.createCounter(m("job.attempt.started"));
+  const jobCreatedCounter = meter?.createCounter("queuert.job.created");
+  const jobAttemptStartedCounter = meter?.createCounter("queuert.job.attempt.started");
   const jobAttemptTakenByAnotherWorkerCounter = meter?.createCounter(
-    m("job.attempt.taken_by_another_worker"),
+    "queuert.job.attempt.taken_by_another_worker",
   );
-  const jobAttemptLeaseExpiredCounter = meter?.createCounter(m("job.attempt.lease_expired"));
-  const jobAttemptLeaseRenewedCounter = meter?.createCounter(m("job.attempt.lease_renewed"));
-  const jobAttemptFailedCounter = meter?.createCounter(m("job.attempt.failed"));
-  const jobAttemptCompletedCounter = meter?.createCounter(m("job.attempt.completed"));
+  const jobAttemptLeaseExpiredCounter = meter?.createCounter("queuert.job.attempt.lease_expired");
+  const jobAttemptLeaseRenewedCounter = meter?.createCounter("queuert.job.attempt.lease_renewed");
+  const jobAttemptFailedCounter = meter?.createCounter("queuert.job.attempt.failed");
+  const jobAttemptCompletedCounter = meter?.createCounter("queuert.job.attempt.completed");
   const jobAttemptAlreadyCompletedCounter = meter?.createCounter(
-    m("job.attempt.already_completed"),
+    "queuert.job.attempt.already_completed",
   );
-  const jobCompletedCounter = meter?.createCounter(m("job.completed"));
-  const jobReapedCounter = meter?.createCounter(m("job.reaped"));
+  const jobCompletedCounter = meter?.createCounter("queuert.job.completed");
+  const jobReapedCounter = meter?.createCounter("queuert.job.reaped");
 
   // job chain
-  const jobChainCreatedCounter = meter?.createCounter(m("job_chain.created"));
-  const jobChainCompletedCounter = meter?.createCounter(m("job_chain.completed"));
+  const jobChainCreatedCounter = meter?.createCounter("queuert.job_chain.created");
+  const jobChainCompletedCounter = meter?.createCounter("queuert.job_chain.completed");
 
   // blockers
-  const jobBlockedCounter = meter?.createCounter(m("job.blocked"));
-  const jobUnblockedCounter = meter?.createCounter(m("job.unblocked"));
+  const jobBlockedCounter = meter?.createCounter("queuert.job.blocked");
+  const jobUnblockedCounter = meter?.createCounter("queuert.job.unblocked");
 
   // notify adapter
-  const notifyContextAbsenceCounter = meter?.createCounter(m("notify_adapter.context_absence"));
-  const notifyAdapterErrorCounter = meter?.createCounter(m("notify_adapter.error"));
+  const notifyContextAbsenceCounter = meter?.createCounter(
+    "queuert.notify_adapter.context_absence",
+  );
+  const notifyAdapterErrorCounter = meter?.createCounter("queuert.notify_adapter.error");
 
   // state adapter
-  const stateAdapterErrorCounter = meter?.createCounter(m("state_adapter.error"));
+  const stateAdapterErrorCounter = meter?.createCounter("queuert.state_adapter.error");
 
   // histograms
-  const jobChainDurationHistogram = meter?.createHistogram(m("job_chain.duration"), {
+  const jobChainDurationHistogram = meter?.createHistogram("queuert.job_chain.duration", {
     unit: "s",
     description: "Duration of job chain from creation to completion",
   });
-  const jobDurationHistogram = meter?.createHistogram(m("job.duration"), {
+  const jobDurationHistogram = meter?.createHistogram("queuert.job.duration", {
     unit: "s",
     description: "Duration of job from creation to completion",
   });
-  const jobAttemptDurationHistogram = meter?.createHistogram(m("job.attempt.duration"), {
+  const jobAttemptDurationHistogram = meter?.createHistogram("queuert.job.attempt.duration", {
     unit: "s",
     description: "Duration of job attempt processing",
   });
 
   // gauges (UpDownCounters)
-  const jobTypeIdleGauge = meter?.createUpDownCounter(m("job_type.idle"), {
+  const jobTypeIdleGauge = meter?.createUpDownCounter("queuert.job_type.idle", {
     description: "Workers idle for this job type",
   });
-  const jobTypeProcessingGauge = meter?.createUpDownCounter(m("job_type.processing"), {
+  const jobTypeProcessingGauge = meter?.createUpDownCounter("queuert.job_type.processing", {
     description: "Jobs of this type currently being processed",
   });
 
@@ -244,8 +242,6 @@ export const createOtelObservabilityAdapter = async ({
           kind: SpanKind.PRODUCER,
           links: blockerLinks,
           attributes: {
-            "messaging.operation.name": "publish",
-            "messaging.destination.name": data.chainTypeName,
             "queuert.chain.type": data.chainTypeName,
           },
         });
@@ -274,8 +270,6 @@ export const createOtelObservabilityAdapter = async ({
           kind: SpanKind.PRODUCER,
           links: jobLinks,
           attributes: {
-            "messaging.operation.name": "publish",
-            "messaging.destination.name": data.jobTypeName,
             "queuert.chain.type": data.chainTypeName,
             "queuert.job.type": data.jobTypeName,
           },
@@ -354,9 +348,6 @@ export const createOtelObservabilityAdapter = async ({
         {
           kind: SpanKind.CONSUMER,
           attributes: {
-            "messaging.operation.name": "process",
-            "messaging.destination.name": data.jobTypeName,
-            "messaging.consumer.group.name": data.workerId,
             "queuert.chain.id": data.chainId,
             "queuert.chain.type": data.chainTypeName,
             "queuert.job.id": data.jobId,
@@ -429,8 +420,6 @@ export const createOtelObservabilityAdapter = async ({
                     kind: SpanKind.CONSUMER,
                     links: [{ context: chainProducerCtx }],
                     attributes: {
-                      "messaging.operation.name": "process",
-                      "messaging.destination.name": data.chainTypeName,
                       "queuert.chain.id": data.chainId,
                       "queuert.chain.type": data.chainTypeName,
                     },

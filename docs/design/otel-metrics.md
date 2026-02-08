@@ -13,10 +13,8 @@ Queuert uses three [OpenTelemetry metric instruments](https://opentelemetry.io/d
 All metrics follow the pattern:
 
 ```
-{prefix}.{component}.{operation}[.{suboperation}]
+queuert.{component}.{operation}[.{suboperation}]
 ```
-
-**Default prefix**: `queuert`
 
 **Components**:
 
@@ -31,78 +29,78 @@ All metrics follow the pattern:
 
 ### Worker Lifecycle
 
-| Metric            | Description                  | Attributes |
-| ----------------- | ---------------------------- | ---------- |
-| `worker.started`  | Worker initialized and ready | `workerId` |
-| `worker.error`    | Worker encountered an error  | `workerId` |
-| `worker.stopping` | Worker shutdown initiated    | `workerId` |
-| `worker.stopped`  | Worker stopped successfully  | `workerId` |
+| Metric                    | Description                  | Attributes |
+| ------------------------- | ---------------------------- | ---------- |
+| `queuert.worker.started`  | Worker initialized and ready | `workerId` |
+| `queuert.worker.error`    | Worker encountered an error  | `workerId` |
+| `queuert.worker.stopping` | Worker shutdown initiated    | `workerId` |
+| `queuert.worker.stopped`  | Worker stopped successfully  | `workerId` |
 
 ### Job Events
 
-| Metric                                | Description                     | Attributes                                           |
-| ------------------------------------- | ------------------------------- | ---------------------------------------------------- |
-| `job.created`                         | New job created                 | `typeName`, `chainTypeName`                          |
-| `job.attempt.started`                 | Worker began processing attempt | `typeName`, `chainTypeName`, `workerId`              |
-| `job.attempt.completed`               | Attempt completed successfully  | `typeName`, `chainTypeName`, `workerId`              |
-| `job.attempt.failed`                  | Attempt failed (may retry)      | `typeName`, `chainTypeName`, `workerId`              |
-| `job.attempt.lease_renewed`           | Worker renewed job lease        | `typeName`, `chainTypeName`, `workerId`              |
-| `job.attempt.lease_expired`           | Worker's lease expired          | `typeName`, `chainTypeName`, `workerId`              |
-| `job.attempt.taken_by_another_worker` | Lease conflict detected         | `typeName`, `chainTypeName`, `workerId`              |
-| `job.attempt.already_completed`       | Job completed by another worker | `typeName`, `chainTypeName`, `workerId`              |
-| `job.completed`                       | Job fully completed             | `typeName`, `chainTypeName`, `workerId`, `continued` |
-| `job.reaped`                          | Expired lease cleaned by reaper | `typeName`, `chainTypeName`, `workerId`              |
+| Metric                                        | Description                     | Attributes                                           |
+| --------------------------------------------- | ------------------------------- | ---------------------------------------------------- |
+| `queuert.job.created`                         | New job created                 | `typeName`, `chainTypeName`                          |
+| `queuert.job.attempt.started`                 | Worker began processing attempt | `typeName`, `chainTypeName`, `workerId`              |
+| `queuert.job.attempt.completed`               | Attempt completed successfully  | `typeName`, `chainTypeName`, `workerId`              |
+| `queuert.job.attempt.failed`                  | Attempt failed (may retry)      | `typeName`, `chainTypeName`, `workerId`              |
+| `queuert.job.attempt.lease_renewed`           | Worker renewed job lease        | `typeName`, `chainTypeName`, `workerId`              |
+| `queuert.job.attempt.lease_expired`           | Worker's lease expired          | `typeName`, `chainTypeName`, `workerId`              |
+| `queuert.job.attempt.taken_by_another_worker` | Lease conflict detected         | `typeName`, `chainTypeName`, `workerId`              |
+| `queuert.job.attempt.already_completed`       | Job completed by another worker | `typeName`, `chainTypeName`, `workerId`              |
+| `queuert.job.completed`                       | Job fully completed             | `typeName`, `chainTypeName`, `workerId`, `continued` |
+| `queuert.job.reaped`                          | Expired lease cleaned by reaper | `typeName`, `chainTypeName`, `workerId`              |
 
 ### Chain Events
 
-| Metric                | Description                | Attributes      |
-| --------------------- | -------------------------- | --------------- |
-| `job_chain.created`   | New chain started          | `chainTypeName` |
-| `job_chain.completed` | Chain completed end-to-end | `chainTypeName` |
+| Metric                        | Description                | Attributes      |
+| ----------------------------- | -------------------------- | --------------- |
+| `queuert.job_chain.created`   | New chain started          | `chainTypeName` |
+| `queuert.job_chain.completed` | Chain completed end-to-end | `chainTypeName` |
 
 ### Blocker Events
 
-| Metric          | Description                        | Attributes                  |
-| --------------- | ---------------------------------- | --------------------------- |
-| `job.blocked`   | Job blocked by incomplete chains   | `typeName`, `chainTypeName` |
-| `job.unblocked` | Job unblocked (blockers completed) | `typeName`, `chainTypeName` |
+| Metric                  | Description                        | Attributes                  |
+| ----------------------- | ---------------------------------- | --------------------------- |
+| `queuert.job.blocked`   | Job blocked by incomplete chains   | `typeName`, `chainTypeName` |
+| `queuert.job.unblocked` | Job unblocked (blockers completed) | `typeName`, `chainTypeName` |
 
 ### Adapter Health
 
-| Metric                           | Description                                | Attributes                  |
-| -------------------------------- | ------------------------------------------ | --------------------------- |
-| `state_adapter.error`            | State adapter operation failed             | `operation`                 |
-| `notify_adapter.error`           | Notify adapter operation failed            | `operation`                 |
-| `notify_adapter.context_absence` | Missing notify context during job creation | `typeName`, `chainTypeName` |
+| Metric                                   | Description                                | Attributes                  |
+| ---------------------------------------- | ------------------------------------------ | --------------------------- |
+| `queuert.state_adapter.error`            | State adapter operation failed             | `operation`                 |
+| `queuert.notify_adapter.error`           | Notify adapter operation failed            | `operation`                 |
+| `queuert.notify_adapter.context_absence` | Missing notify context during job creation | `typeName`, `chainTypeName` |
 
 ## Histograms
 
 Histograms track duration distributions. The `ObservabilityAdapter` interface accepts milliseconds; the `@queuert/otel` adapter converts to seconds per [OTEL Messaging Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/messaging/messaging-metrics/):
 
-| Metric                 | Interface | OTEL Unit | Description                        | Attributes                              |
-| ---------------------- | --------- | --------- | ---------------------------------- | --------------------------------------- |
-| `job_chain.duration`   | ms        | s         | Chain creation to completion       | `chainTypeName`                         |
-| `job.duration`         | ms        | s         | Job creation to completion         | `typeName`, `chainTypeName`             |
-| `job.attempt.duration` | ms        | s         | Individual attempt processing time | `typeName`, `chainTypeName`, `workerId` |
+| Metric                         | Interface | OTEL Unit | Description                        | Attributes                              |
+| ------------------------------ | --------- | --------- | ---------------------------------- | --------------------------------------- |
+| `queuert.job_chain.duration`   | ms        | s         | Chain creation to completion       | `chainTypeName`                         |
+| `queuert.job.duration`         | ms        | s         | Job creation to completion         | `typeName`, `chainTypeName`             |
+| `queuert.job.attempt.duration` | ms        | s         | Individual attempt processing time | `typeName`, `chainTypeName`, `workerId` |
 
 ### Duration Hierarchy
 
 ```
-job_chain.duration
-├── job.duration (first job)
-│   ├── job.attempt.duration (attempt 1)
-│   └── job.attempt.duration (attempt 2, retry)
-├── job.duration (continuation)
-│   └── job.attempt.duration
+queuert.job_chain.duration
+├── queuert.job.duration (first job)
+│   ├── queuert.job.attempt.duration (attempt 1)
+│   └── queuert.job.attempt.duration (attempt 2, retry)
+├── queuert.job.duration (continuation)
+│   └── queuert.job.attempt.duration
 └── (wait time between jobs)
 ```
 
 ## Gauges (UpDownCounter)
 
-| Metric                | Description                         | Attributes             |
-| --------------------- | ----------------------------------- | ---------------------- |
-| `job_type.idle`       | Workers currently idle for job type | `typeName`, `workerId` |
-| `job_type.processing` | Jobs currently being processed      | `typeName`, `workerId` |
+| Metric                        | Description                         | Attributes             |
+| ----------------------------- | ----------------------------------- | ---------------------- |
+| `queuert.job_type.idle`       | Workers currently idle for job type | `typeName`, `workerId` |
+| `queuert.job_type.processing` | Jobs currently being processed      | `typeName`, `workerId` |
 
 See also:
 

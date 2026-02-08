@@ -44,7 +44,6 @@ diffMemory(beforeOtel, afterOtelSetup);
 const [beforeAdapter, afterAdapter, observabilityAdapter] = await measureMemory(async () =>
   createOtelObservabilityAdapter({
     meter: metrics.getMeter("queuert-perf"),
-    metricPrefix: "queuert",
   }),
 );
 console.log("\nAfter creating OtelObservabilityAdapter:");

@@ -6,7 +6,7 @@ This document describes Queuert's OpenTelemetry tracing implementation. For the 
 
 ## Span Hierarchy
 
-Queuert uses a four-level span hierarchy following OpenTelemetry messaging semantic conventions:
+Queuert uses a four-level span hierarchy:
 
 ```
 PRODUCER: chain              ← Chain published (ends immediately)
@@ -29,7 +29,7 @@ PRODUCER: chain              ← Chain published (ends immediately)
 │       └── CONSUMER: chain  ← Chain consumed (created on attempt success)
 ```
 
-Span kinds follow [OpenTelemetry messaging semantic conventions](https://opentelemetry.io/docs/specs/semconv/messaging/messaging-spans/). The chain has both a PRODUCER (creation) and CONSUMER (completion) span for symmetry.
+Span kinds use OpenTelemetry's PRODUCER/CONSUMER/INTERNAL semantics. The chain has both a PRODUCER (creation) and CONSUMER (completion) span for symmetry.
 
 | Span              | Kind     | Created                             | Ended                   | Duration         |
 | ----------------- | -------- | ----------------------------------- | ----------------------- | ---------------- |
@@ -165,21 +165,17 @@ The origin link shows the causal flow: "step-two was created by step-one's compl
 
 ### Chain Spans
 
-| Attribute                    | Type     | Description                                      |
-| ---------------------------- | -------- | ------------------------------------------------ |
-| `messaging.operation.name`   | string   | `"publish"` (producer) or `"process"` (consumer) |
-| `messaging.destination.name` | string   | Chain type name                                  |
-| `queuert.chain.id`           | string   | Chain ID                                         |
-| `queuert.chain.type`         | string   | Chain type name                                  |
-| `queuert.chain.root_id`      | string?  | Root chain ID (null for top-level chains)        |
-| `queuert.chain.deduplicated` | boolean? | `true` if existing chain was returned            |
+| Attribute                    | Type     | Description                               |
+| ---------------------------- | -------- | ----------------------------------------- |
+| `queuert.chain.id`           | string   | Chain ID                                  |
+| `queuert.chain.type`         | string   | Chain type name                           |
+| `queuert.chain.root_id`      | string?  | Root chain ID (null for top-level chains) |
+| `queuert.chain.deduplicated` | boolean? | `true` if existing chain was returned     |
 
 ### Job Spans
 
 | Attribute                       | Type      | Description                           |
 | ------------------------------- | --------- | ------------------------------------- |
-| `messaging.operation.name`      | string    | `"publish"`                           |
-| `messaging.destination.name`    | string    | Job type name                         |
 | `queuert.chain.id`              | string    | Chain ID                              |
 | `queuert.chain.type`            | string    | Chain type name                       |
 | `queuert.chain.deduplicated`    | boolean?  | `true` if existing chain was returned |
@@ -192,9 +188,6 @@ The origin link shows the causal flow: "step-two was created by step-one's compl
 
 | Attribute                         | Type    | Description                           |
 | --------------------------------- | ------- | ------------------------------------- |
-| `messaging.operation.name`        | string  | `"process"`                           |
-| `messaging.destination.name`      | string  | Job type name                         |
-| `messaging.consumer.group.name`   | string  | Worker ID                             |
 | `queuert.chain.id`                | string  | Chain ID                              |
 | `queuert.chain.type`              | string  | Chain type name                       |
 | `queuert.job.id`                  | string  | Job ID                                |

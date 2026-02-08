@@ -817,7 +817,6 @@ const client = await createClient({
   registry: jobTypes,
   observabilityAdapter: createOtelObservabilityAdapter({
     meter: metrics.getMeter("my-app"),
-    metricPrefix: "queuert",
   }),
   log: createConsoleLog(),
 });

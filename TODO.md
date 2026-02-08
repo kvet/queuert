@@ -1,6 +1,7 @@
 # Short term
 
-- [TASK,MEDIUM] Rework telemetry to emit only after transaction commits
+- [TASK,MEDIUM] Ensure spans work with workerless completion
+- [TASK,MEDIUM] Rework observability to emit only after transaction commits
   - Problem: spans/logs/metrics emitted inside transactions become misleading if transaction rolls back
   - Affected areas:
     - `startJobChain` / `createStateJob` - span ended and logs emitted before caller's transaction commits
@@ -12,8 +13,6 @@
   - See: transactional outbox pattern for reliable side effects
 - [TASK,COMPLEX] Ensure that worker uses optimal number of state provider operations
 - [TASK,MEDIUM] OTEL blocker spans
-- [REF] Review metrics against OTEL Messaging Semantic Conventions (https://opentelemetry.io/docs/specs/semconv/messaging/messaging-metrics/)
-  - Consider adding standard `messaging.*` metrics alongside domain-specific `queuert.*` metrics
 - [TASK,MEDIUM] test against multiple versions of node on CI
 - [EPIC] extract state and notify adapter test suites to efficiently test multiple configurations (prefixes etc)
   - [TASK,MEDIUM] support all methods for state adapter test suite
