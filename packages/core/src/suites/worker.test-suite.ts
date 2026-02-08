@@ -1,4 +1,4 @@
-import { type TestAPI, vi } from "vitest";
+import { type TestAPI } from "vitest";
 import { sleep } from "../helpers/sleep.js";
 import { type JobChain, createClient, createInProcessWorker, defineJobTypes } from "../index.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";

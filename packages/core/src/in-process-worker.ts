@@ -90,10 +90,13 @@ const waitForNextJob = async ({
   const { promise: slotAvailable, resolve: onSlotAvailable } = Promise.withResolvers<void>();
   const disposeSlotAvailable = executor.onIdleSlot(onSlotAvailable);
   try {
-    const pullDelayMs = await helper.getNextJobAvailableInMs({
+    const nextJobAvailableInMs = await helper.stateAdapter.getNextJobAvailableInMs({
       typeNames,
-      pollIntervalMs,
     });
+    const pullDelayMs =
+      nextJobAvailableInMs !== null
+        ? Math.min(Math.max(0, nextJobAvailableInMs), pollIntervalMs)
+        : pollIntervalMs;
 
     if (signal.aborted) {
       return;

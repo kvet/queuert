@@ -579,21 +579,6 @@ export const helper = ({
 
       return fetchedJob;
     },
-    getNextJobAvailableInMs: async ({
-      typeNames,
-      pollIntervalMs,
-    }: {
-      typeNames: string[];
-      pollIntervalMs: number;
-    }): Promise<number> => {
-      const nextJobAvailableInMs = await stateAdapter.getNextJobAvailableInMs({
-        typeNames,
-      });
-
-      return nextJobAvailableInMs !== null
-        ? Math.min(Math.max(0, nextJobAvailableInMs), pollIntervalMs)
-        : pollIntervalMs;
-    },
     removeExpiredJobLease: async ({
       typeNames,
       workerId,
