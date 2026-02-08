@@ -375,16 +375,16 @@ export const runJobProcess = async ({
         prepareSpan?.end();
       }
 
-      await helper.stateAdapter.renewJobLease({
-        txContext,
-        jobId: job.id,
-        workerId,
-        leaseDurationMs: leaseConfig.leaseMs,
-      });
-      firstLeaseCommitted.signalOnce();
-      await claimTransactionClosed.onSignal;
-
       if (config.mode === "staged") {
+        await helper.stateAdapter.renewJobLease({
+          txContext,
+          jobId: job.id,
+          workerId,
+          leaseDurationMs: leaseConfig.leaseMs,
+        });
+        firstLeaseCommitted.signalOnce();
+        await claimTransactionClosed.onSignal;
+
         await leaseManager.start();
         try {
           disposeOwnershipListener = await helper.notifyAdapter.listenJobOwnershipLost(
@@ -418,9 +418,8 @@ export const runJobProcess = async ({
         } & BaseTxContext,
       ) => unknown,
     ) => {
-      if (!prepareCalled) {
-        // Auto-setup in atomic mode if complete is called before prepare
-        await prepare({ mode: "atomic" });
+      if (autoPreparePromise) {
+        await autoPreparePromise;
       }
       if (completeCalled) {
         throw new Error("Complete can only be called once");
@@ -500,6 +499,7 @@ export const runJobProcess = async ({
     }) as CompleteFn<StateAdapter<BaseTxContext, any>, BaseJobTypeDefinitions, string>;
 
     let autoSetupDone = false;
+    let autoPreparePromise: Promise<void> | null = null;
     try {
       const attemptPromise = attemptHandler({
         signal: abortController.signal,
@@ -518,7 +518,8 @@ export const runJobProcess = async ({
       attemptPromise.catch(() => {});
 
       if (!prepareAccessed && !prepareCalled) {
-        await prepare({ mode: "staged" });
+        autoPreparePromise = prepare({ mode: "staged" });
+        await autoPreparePromise;
         autoSetupDone = true;
       }
 

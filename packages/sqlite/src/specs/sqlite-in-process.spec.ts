@@ -5,6 +5,7 @@ import {
   extendWithNotifyInProcess,
   extendWithResourceLeakDetection,
   notifyTestSuite,
+  processModesTestSuite,
   processTestSuite,
   reaperTestSuite,
   schedulingTestSuite,
@@ -22,6 +23,10 @@ const sqliteInProcessIt = extendWithResourceLeakDetection(
 
 // NOTE: hack for vitest plugin
 it("index");
+
+describe("Process Modes", () => {
+  processModesTestSuite({ it: sqliteInProcessIt });
+});
 
 describe("Process", () => {
   processTestSuite({ it: sqliteInProcessIt });

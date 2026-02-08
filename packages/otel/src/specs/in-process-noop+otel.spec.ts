@@ -6,6 +6,7 @@ import {
   extendWithCommon,
   extendWithNotifyInProcess,
   extendWithStateInProcess,
+  processModesTestSuite,
   processTestSuite,
   reaperTestSuite,
   schedulingTestSuite,
@@ -22,6 +23,10 @@ const otelIt = extendWithObservabilityOtel(
 
 // NOTE: hack for vitest plugin
 it("index");
+
+describe("Process Modes", () => {
+  processModesTestSuite({ it: otelIt });
+});
 
 describe("Process", () => {
   processTestSuite({ it: otelIt });

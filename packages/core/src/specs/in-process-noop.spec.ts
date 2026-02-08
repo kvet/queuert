@@ -3,6 +3,7 @@ import { extendWithStateInProcess } from "../state-adapter/state-adapter.in-proc
 import { blockerChainsTestSuite } from "../suites/blocker-chains.test-suite.js";
 import { deduplicationTestSuite } from "../suites/deduplication.test-suite.js";
 import { deletionTestSuite } from "../suites/deletion.test-suite.js";
+import { processModesTestSuite } from "../suites/process-modes.test-suite.js";
 import { processTestSuite } from "../suites/process.test-suite.js";
 import { reaperTestSuite } from "../suites/reaper.test-suite.js";
 import { schedulingTestSuite } from "../suites/scheduling.test-suite.js";
@@ -22,6 +23,10 @@ const inProcessNoopIt = extendWithResourceLeakDetection(
 
 // NOTE: hack for vitest plugin
 it("index");
+
+describe("Process Modes", () => {
+  processModesTestSuite({ it: inProcessNoopIt });
+});
 
 describe("Process", () => {
   processTestSuite({ it: inProcessNoopIt });

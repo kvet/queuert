@@ -10,6 +10,73 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     timeoutMs: 5000,
   };
 
+  it("allows to extend job lease after lease expiration if wasn't grabbed by another worker", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const registry = defineJobTypes<{
+      test: {
+        entry: true;
+        input: null;
+        output: null;
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+    const worker = await createInProcessWorker({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+      concurrency: 1,
+      processDefaults: {
+        leaseConfig: { leaseMs: 10, renewIntervalMs: 100 },
+      },
+      processors: {
+        test: {
+          attemptHandler: async ({ complete }) => {
+            await sleep(100);
+
+            return complete(async () => null);
+          },
+        },
+      },
+    });
+
+    const jobChain = await client.withNotify(async () =>
+      runInTransaction(async (txContext) =>
+        client.startJobChain({
+          ...txContext,
+          typeName: "test",
+          input: null,
+        }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.waitForJobChainCompletion(jobChain, completionOptions);
+    });
+
+    expect(log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        level: "warn",
+        message: expect.stringContaining("expired"),
+      }),
+    );
+  });
+
   it("reaps abandoned jobs on lease renewal", async ({
     stateAdapter,
     notifyAdapter,

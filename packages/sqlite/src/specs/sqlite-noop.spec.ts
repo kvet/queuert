@@ -4,6 +4,7 @@ import {
   extendWithCommon,
   extendWithNotifyNoop,
   extendWithResourceLeakDetection,
+  processModesTestSuite,
   processTestSuite,
   reaperTestSuite,
   schedulingTestSuite,
@@ -21,6 +22,10 @@ const sqliteNoopIt = extendWithResourceLeakDetection(
 
 // NOTE: hack for vitest plugin
 it("index");
+
+describe("Process Modes", () => {
+  processModesTestSuite({ it: sqliteNoopIt });
+});
 
 describe("Process", () => {
   processTestSuite({ it: sqliteNoopIt });

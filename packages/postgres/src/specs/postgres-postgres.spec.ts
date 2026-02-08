@@ -6,6 +6,7 @@ import {
   extendWithResourceLeakDetection,
   notifyResilienceTestSuite,
   notifyTestSuite,
+  processModesTestSuite,
   processTestSuite,
   reaperTestSuite,
   schedulingTestSuite,
@@ -27,6 +28,10 @@ const postgresPostgresIt = extendWithResourceLeakDetection(
 
 // NOTE: hack for vitest plugin
 it("index");
+
+describe("Process Modes", () => {
+  processModesTestSuite({ it: postgresPostgresIt });
+});
 
 describe("Process", () => {
   processTestSuite({ it: postgresPostgresIt });

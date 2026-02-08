@@ -4,6 +4,7 @@ export { deduplicationTestSuite } from "./suites/deduplication.test-suite.js";
 export { deletionTestSuite } from "./suites/deletion.test-suite.js";
 export { notifyResilienceTestSuite } from "./suites/notify-resilience.test-suite.js";
 export { notifyTestSuite } from "./suites/notify.test-suite.js";
+export { processModesTestSuite } from "./suites/process-modes.test-suite.js";
 export { processTestSuite } from "./suites/process.test-suite.js";
 export { reaperTestSuite } from "./suites/reaper.test-suite.js";
 export { schedulingTestSuite } from "./suites/scheduling.test-suite.js";
@@ -32,8 +33,12 @@ export {
   createSeededRandom,
 } from "./suites/flaky-test-helper.spec-helper.js";
 
-// State Adapter Test Helper
 export { extendWithStateInProcess } from "./state-adapter/state-adapter.in-process.spec-helper.js";
+export {
+  createSpyStateAdapter,
+  type SpyCall,
+  type SpyStateAdapter,
+} from "./state-adapter/state-adapter.spy.spec-helper.js";
 
 // Worker Test Helper
 export { withWorkers } from "./helpers/with-workers.js";

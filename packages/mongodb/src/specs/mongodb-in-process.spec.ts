@@ -6,6 +6,7 @@ import {
   extendWithNotifyInProcess,
   extendWithResourceLeakDetection,
   notifyTestSuite,
+  processModesTestSuite,
   processTestSuite,
   reaperTestSuite,
   schedulingTestSuite,
@@ -44,6 +45,10 @@ const mongodbInProcessIt = extendWithResourceLeakDetection(
 
 // NOTE: hack for vitest plugin
 baseIt("index");
+
+describe("Process Modes", () => {
+  processModesTestSuite({ it: mongodbInProcessIt });
+});
 
 describe("Process", () => {
   processTestSuite({ it: mongodbInProcessIt });

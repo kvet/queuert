@@ -7,6 +7,7 @@ import {
   extendWithCommon,
   extendWithNotifyNoop,
   extendWithResourceLeakDetection,
+  processModesTestSuite,
   processTestSuite,
   reaperTestSuite,
   schedulingTestSuite,
@@ -27,6 +28,10 @@ const postgresNoopIt = extendWithResourceLeakDetection(
 
 // NOTE: hack for vitest plugin
 it("index");
+
+describe("Process Modes", () => {
+  processModesTestSuite({ it: postgresNoopIt });
+});
 
 describe("Process", () => {
   processTestSuite({ it: postgresNoopIt });

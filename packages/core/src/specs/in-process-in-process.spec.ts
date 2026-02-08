@@ -2,6 +2,7 @@ import { describe, it } from "vitest";
 import { extendWithStateInProcess } from "../state-adapter/state-adapter.in-process.spec-helper.js";
 import { blockerChainsTestSuite } from "../suites/blocker-chains.test-suite.js";
 import { notifyTestSuite } from "../suites/notify.test-suite.js";
+import { processModesTestSuite } from "../suites/process-modes.test-suite.js";
 import { processTestSuite } from "../suites/process.test-suite.js";
 import { reaperTestSuite } from "../suites/reaper.test-suite.js";
 import { schedulingTestSuite } from "../suites/scheduling.test-suite.js";
@@ -21,6 +22,10 @@ const inProcessInProcessIt = extendWithResourceLeakDetection(
 
 // NOTE: hack for vitest plugin
 it("index");
+
+describe("Process Modes", () => {
+  processModesTestSuite({ it: inProcessInProcessIt });
+});
 
 describe("Process", () => {
   processTestSuite({ it: inProcessInProcessIt });

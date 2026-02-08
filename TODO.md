@@ -12,6 +12,12 @@
     - Span event pattern: end span for timing, add `transaction.committed` event after commit
   - See: transactional outbox pattern for reliable side effects
 - [TASK,COMPLEX] Ensure that worker uses optimal number of state provider operations
+- [TASK,COMPLEX] Consolidate state adapter operations into atomic combined methods
+  - `acquireJob` should include `getJobBlockers` (avoid separate call after acquire)
+  - `completeJob` should include `scheduleBlockedJobs` and return the completed job (avoid separate `getJobById` after complete)
+  - Atomic mode should not need `renewJobLease` (prepare+complete in same transaction)
+  - Staged mode should not need `getJobForUpdate` before complete (job already held by worker)
+  - See: `process-modes.test-suite.ts` TODOs for per-mode call traces
 - [TASK,MEDIUM] OTEL blocker spans
 - [TASK,MEDIUM] test against multiple versions of node on CI
 - [EPIC] extract state and notify adapter test suites to efficiently test multiple configurations (prefixes etc)
