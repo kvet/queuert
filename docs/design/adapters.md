@@ -153,7 +153,13 @@ All `listen*` methods accept a callback and return a dispose function. Subscript
 
 ## ObservabilityAdapter Design
 
-The `ObservabilityAdapter` accepts primitive data types (not domain objects) for decoupling and stability. When no adapter is provided, a noop implementation is used automatically, making observability opt-in.
+The `ObservabilityAdapter` provides two observability mechanisms:
+
+1. **Metrics**: Methods accept primitive data types (not domain objects) for decoupling and stability. Counters, histograms, and gauges track worker lifecycle, job events, and durations.
+
+2. **Tracing**: `startJobSpan` and `startAttemptSpan` methods return handles for managing span lifecycle. Spans follow OpenTelemetry messaging conventions with PRODUCER spans for job creation and CONSUMER spans for processing.
+
+When no adapter is provided, a noop implementation is used automatically, making observability opt-in. See [ObservabilityAdapter Design](observability-adapter.md) for the full interface, [OTEL Tracing](otel-tracing.md) for span hierarchy, and [OTEL Metrics](otel-metrics.md) for available metrics.
 
 ## Summary
 

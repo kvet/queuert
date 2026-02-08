@@ -9,7 +9,7 @@ Core package for [Queuert](https://github.com/kvet/queuert) - a TypeScript libra
 
 ## What is Queuert?
 
-Queuert is a **type-safe job queue library** that stores jobs in your database (PostgreSQL, SQLite, or MongoDB). It brings the familiar Promise chain pattern to distributed job processing:
+Queuert is a **type-safe job queue library** that stores jobs in your database. It brings the familiar Promise chain pattern to distributed job processing:
 
 ```typescript
 // Just like Promise chains...
@@ -44,7 +44,7 @@ Optional adapters:
 
 - [`@queuert/redis`](https://github.com/kvet/queuert/tree/main/packages/redis) - Redis notify adapter (recommended for production)
 - [`@queuert/nats`](https://github.com/kvet/queuert/tree/main/packages/nats) - NATS notify adapter _(experimental)_
-- [`@queuert/otel`](https://github.com/kvet/queuert/tree/main/packages/otel) - OpenTelemetry metrics
+- [`@queuert/otel`](https://github.com/kvet/queuert/tree/main/packages/otel) - OpenTelemetry observability (metrics and tracing)
 
 ## Quick Start
 
@@ -82,8 +82,6 @@ const worker = await createInProcessWorker({
     },
   },
 });
-
-await worker.start();
 
 // Start a job chain (within your database transaction)
 // Use your database client's transaction mechanism and pass the context
@@ -135,8 +133,6 @@ const worker = await createInProcessWorker({
     // ... job type processors
   },
 });
-
-await worker.start();
 ```
 
 Per-job-type configuration:
@@ -153,8 +149,6 @@ const worker = await createInProcessWorker({
     },
   },
 });
-
-await worker.start();
 ```
 
 ## Logging
@@ -192,7 +186,7 @@ For production, integrate with your logging library (Pino, Winston, etc.) by imp
 
 - `StateAdapter` - Database operations for job persistence
 - `NotifyAdapter` - Pub/sub notifications for job scheduling
-- `ObservabilityAdapter` - Metrics and observability
+- `ObservabilityAdapter` - Metrics and distributed tracing
 
 **Job types:**
 

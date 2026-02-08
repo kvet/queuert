@@ -5,7 +5,13 @@ import { type JobTypeValidationError } from "../errors.js";
 import { type NotifyAdapter } from "../notify-adapter/notify-adapter.js";
 import { type StateAdapter, type StateJob } from "../state-adapter/state-adapter.js";
 import { type JobBasicData, type JobChainData, type JobProcessingData, type Log } from "./log.js";
-import { type ObservabilityAdapter } from "./observability-adapter.js";
+import {
+  type JobAttemptSpanHandle,
+  type JobAttemptSpanInputData,
+  type JobSpanHandle,
+  type JobSpanInputData,
+  type ObservabilityAdapter,
+} from "./observability-adapter.js";
 
 // Mapper functions
 
@@ -111,6 +117,9 @@ export type ObservabilityHelper = {
   // gauges
   jobTypeIdleChange: (delta: number, workerId: string, typeNames: readonly string[]) => void;
   jobTypeProcessingChange: (delta: number, job: StateJob, workerId: string) => void;
+  // tracing
+  startJobSpan: (data: JobSpanInputData) => JobSpanHandle | undefined;
+  startAttemptSpan: (data: JobAttemptSpanInputData) => JobAttemptSpanHandle | undefined;
 };
 
 const noopLog: Log = () => {};
@@ -473,5 +482,21 @@ export const createObservabilityHelper = ({
       typeName: job.typeName,
       workerId,
     });
+  },
+
+  // tracing
+  startJobSpan: (data) => {
+    try {
+      return adapter.startJobSpan(data);
+    } catch {
+      return undefined;
+    }
+  },
+  startAttemptSpan: (data) => {
+    try {
+      return adapter.startAttemptSpan(data);
+    } catch {
+      return undefined;
+    }
   },
 });

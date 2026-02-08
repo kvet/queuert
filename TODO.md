@@ -1,41 +1,54 @@
 # Short term
 
-- Rework logging to "commit" only once transaction is successful
-- Ensure that worker uses optimal number of state provider operations
-- Reevaluate test lease times (currently 10ms) - balance between fast tests and avoiding timing-related flakiness
-- ObservabilityAdapter: tracing spans
-  - Extend ObservabilityAdapter interface with tracing methods and types
-  - Implement OTEL tracing in @queuert/otel
-  - Integrate tracing in core (startJobChain, worker processing, continueWith)
-  - Add observability-tracing example
-- test against multiple versions of node on CI
-- extract state and notify adapter test suites to efficiently test multiple configurations (prefixes etc)
-  - support all methods for state adapter test suite
-  - notify adapter
-- update lease in one operation (currently two: getForUpdate + update)
+- [TASK,MEDIUM] Rework telemetry to emit only after transaction commits
+  - Problem: spans/logs/metrics emitted inside transactions become misleading if transaction rolls back
+  - Affected areas:
+    - `startJobChain` / `createStateJob` - span ended and logs emitted before caller's transaction commits
+    - `complete()` in job-process.ts - `jobAttemptCompleted` called inside transaction
+  - Potential approaches:
+    - Buffer pattern (like `withNotifyContext` already does for notifications)
+    - Transaction afterCommit hooks (requires state adapter support)
+    - Span event pattern: end span for timing, add `transaction.committed` event after commit
+  - See: transactional outbox pattern for reliable side effects
+- [TASK,COMPLEX] Ensure that worker uses optimal number of state provider operations
+- [TASK,MEDIUM] OTEL blocker spans
+- [REF] Review metrics against OTEL Messaging Semantic Conventions (https://opentelemetry.io/docs/specs/semconv/messaging/messaging-metrics/)
+  - Consider adding standard `messaging.*` metrics alongside domain-specific `queuert.*` metrics
+- [TASK,MEDIUM] test against multiple versions of node on CI
+- [EPIC] extract state and notify adapter test suites to efficiently test multiple configurations (prefixes etc)
+  - [TASK,MEDIUM] support all methods for state adapter test suite
+  - [TASK,MEDIUM] notify adapter
+- [TASK,MEDIUM] update lease in one operation (currently two: getForUpdate + update)
+- [TASK,EASY] Run postgres against multiple versions
+- [TASK,EASY] Run redis against multiple versions
 
 # Medium term
 
-- Sqlite ready:
-  - Better concurrency handling - WAL mode, busy timeout, retries
-  - Separate read/write connection pools (single writer, multiple readers)
-  - get rid of skipConcurrencyTests flag in resilience tests
-  - usage of db without pool is incorrect
-- MySQL/MariaDB adapter - Popular databases; defer until users request
-- MonogoDB ready:
-  - MongoDB: Add migration version tracking (store applied migrations in metadata collection, run incremental index changes)
-  - MongoDB: Use native ObjectId instead of app-side UUID generation
-  - MongoDB: Move collection configuration from provider to adapter - Provider should only handle context/transactions, collection name is an adapter concern (like schema/tablePrefix in PostgreSQL/SQLite)
-  - Prisma MongoDB support - via generic StateProvider interface
-  - withTransaction can retry on transient transaction errors
-  - run with standalone + replica set mode on testcontainers
-  - support notifications (change streams) for job activation with MongoDB
-  - try to use single operations where possible (findOneAndUpdate, updateMany)
-- Revisit Prisma examples
-- test against bun and it's built-in sqlite, postgres clients
+- [TASK,COMPLEX] Optimized batched lease renewal
+- [EPIC] Dashboard
+- [EPIC] Sqlite ready:
+  - [REF] Better concurrency handling - WAL mode, busy timeout, retries
+  - [REF] Separate read/write connection pools (single writer, multiple readers)
+  - [TASK,EASY] get rid of skipConcurrencyTests flag in resilience tests
+  - [REF] usage of db without pool is incorrect
+  - [TASK,EASY] Run against multiple versions
+- [EPIC] MySQL/MariaDB adapter
+- [EPIC] MonogoDB ready:
+  - [REF] MongoDB: Add migration version tracking (store applied migrations in metadata collection, run incremental index changes)
+  - [TASK,COMPLEX] MongoDB: Use native ObjectId instead of app-side UUID generation
+  - [REF] MongoDB: Move collection configuration from provider to adapter - Provider should only handle context/transactions, collection name is an adapter concern (like schema/tablePrefix in PostgreSQL/SQLite)
+  - [REF] Prisma MongoDB support - via generic StateProvider interface
+  - [REF] withTransaction can retry on transient transaction errors
+  - [REF] run with standalone + replica set mode on testcontainers
+  - [REF] support notifications (change streams) for job activation with MongoDB
+  - [TASK,EASY] try to use single operations where possible (findOneAndUpdate, updateMany)
+  - [TASK,EASY] Run against multiple versions
+- [REF] Revisit Prisma examples
+- [TASK,?] test against bun and it's built-in sqlite, postgres clients
 
 # Long term
 
-- Hard timeout (worker threads) - True isolation with `terminate()`; enables memory limits and untrusted code sandboxing
-- Singletons/concurrency limit
-- Partitioning (PG) - Scaling concern; defer until users hit limits
+- [TASK,EASY] Add OpenTelemetry logs support to @queuert/otel adapter (OTEL logs API is experimental)
+- [EPIC] Hard timeout (worker threads) - True isolation with `terminate()`; enables memory limits and untrusted code sandboxing
+- [EPIC] Singletons/concurrency limit
+- [EPIC] Partitioning (PG) - Scaling concern; defer until users hit limits

@@ -1,5 +1,51 @@
-import { type Meter, metrics } from "@opentelemetry/api";
+import {
+  type Meter,
+  type Span,
+  type SpanContext,
+  SpanKind,
+  SpanStatusCode,
+  type Tracer,
+  context,
+  trace,
+} from "@opentelemetry/api";
 import { type ObservabilityAdapter } from "queuert";
+
+type OtelTraceContext = {
+  chain: string;
+  job: string;
+  attempt?: string;
+};
+
+const serializeSpanContext = (ctx: SpanContext): string =>
+  `00-${ctx.traceId}-${ctx.spanId}-0${ctx.traceFlags}`;
+
+const deserializeSpanContext = (traceparent: string): SpanContext => {
+  const [, traceId, spanId, flags] = traceparent.split("-");
+  return {
+    traceId: traceId,
+    spanId: spanId,
+    traceFlags: parseInt(flags, 16),
+    isRemote: true,
+  };
+};
+
+// W3C traceparent format: 00-{traceId(32hex)}-{spanId(16hex)}-{flags(2hex)}
+const TRACEPARENT_REGEX = /^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/;
+
+const isValidTraceparent = (value: unknown): value is string =>
+  typeof value === "string" && TRACEPARENT_REGEX.test(value);
+
+const toException = (error: unknown): Error | string =>
+  error instanceof Error ? error : String(error);
+
+const isValidOtelTraceContext = (ctx: unknown): ctx is OtelTraceContext => {
+  if (ctx === null || ctx === undefined || typeof ctx !== "object") return false;
+  const obj = ctx as Record<string, unknown>;
+  if (!isValidTraceparent(obj.chain)) return false;
+  if (!isValidTraceparent(obj.job)) return false;
+  if (obj.attempt !== undefined && !isValidTraceparent(obj.attempt)) return false;
+  return true;
+};
 
 /**
  * Creates an OpenTelemetry-based ObservabilityAdapter.
@@ -8,122 +54,120 @@ import { type ObservabilityAdapter } from "queuert";
  * before using this adapter.
  */
 export const createOtelObservabilityAdapter = async ({
-  meter = metrics.getMeter("queuert"),
-  metricPrefix = "queuert",
+  meter,
+  metricPrefix,
+  tracer,
 }: {
   meter?: Meter;
   metricPrefix?: string;
+  tracer?: Tracer;
 } = {}): Promise<ObservabilityAdapter> => {
+  const m = (name: string): string => (metricPrefix ? `${metricPrefix}.${name}` : name);
+
   // worker
-  const workerStartedCounter = meter.createCounter(`${metricPrefix}.worker.started`);
-  const workerErrorCounter = meter.createCounter(`${metricPrefix}.worker.error`);
-  const workerStoppingCounter = meter.createCounter(`${metricPrefix}.worker.stopping`);
-  const workerStoppedCounter = meter.createCounter(`${metricPrefix}.worker.stopped`);
+  const workerStartedCounter = meter?.createCounter(m("worker.started"));
+  const workerErrorCounter = meter?.createCounter(m("worker.error"));
+  const workerStoppingCounter = meter?.createCounter(m("worker.stopping"));
+  const workerStoppedCounter = meter?.createCounter(m("worker.stopped"));
 
   // job
-  const jobCreatedCounter = meter.createCounter(`${metricPrefix}.job.created`);
-  const jobAttemptStartedCounter = meter.createCounter(`${metricPrefix}.job.attempt.started`);
-  const jobAttemptTakenByAnotherWorkerCounter = meter.createCounter(
-    `${metricPrefix}.job.attempt.taken_by_another_worker`,
+  const jobCreatedCounter = meter?.createCounter(m("job.created"));
+  const jobAttemptStartedCounter = meter?.createCounter(m("job.attempt.started"));
+  const jobAttemptTakenByAnotherWorkerCounter = meter?.createCounter(
+    m("job.attempt.taken_by_another_worker"),
   );
-  const jobAttemptLeaseExpiredCounter = meter.createCounter(
-    `${metricPrefix}.job.attempt.lease_expired`,
+  const jobAttemptLeaseExpiredCounter = meter?.createCounter(m("job.attempt.lease_expired"));
+  const jobAttemptLeaseRenewedCounter = meter?.createCounter(m("job.attempt.lease_renewed"));
+  const jobAttemptFailedCounter = meter?.createCounter(m("job.attempt.failed"));
+  const jobAttemptCompletedCounter = meter?.createCounter(m("job.attempt.completed"));
+  const jobAttemptAlreadyCompletedCounter = meter?.createCounter(
+    m("job.attempt.already_completed"),
   );
-  const jobAttemptLeaseRenewedCounter = meter.createCounter(
-    `${metricPrefix}.job.attempt.lease_renewed`,
-  );
-  const jobAttemptFailedCounter = meter.createCounter(`${metricPrefix}.job.attempt.failed`);
-  const jobAttemptCompletedCounter = meter.createCounter(`${metricPrefix}.job.attempt.completed`);
-  const jobAttemptAlreadyCompletedCounter = meter.createCounter(
-    `${metricPrefix}.job.attempt.already_completed`,
-  );
-  const jobCompletedCounter = meter.createCounter(`${metricPrefix}.job.completed`);
-  const jobReapedCounter = meter.createCounter(`${metricPrefix}.job.reaped`);
+  const jobCompletedCounter = meter?.createCounter(m("job.completed"));
+  const jobReapedCounter = meter?.createCounter(m("job.reaped"));
 
   // job chain
-  const jobChainCreatedCounter = meter.createCounter(`${metricPrefix}.job_chain.created`);
-  const jobChainCompletedCounter = meter.createCounter(`${metricPrefix}.job_chain.completed`);
+  const jobChainCreatedCounter = meter?.createCounter(m("job_chain.created"));
+  const jobChainCompletedCounter = meter?.createCounter(m("job_chain.completed"));
 
   // blockers
-  const jobBlockedCounter = meter.createCounter(`${metricPrefix}.job.blocked`);
-  const jobUnblockedCounter = meter.createCounter(`${metricPrefix}.job.unblocked`);
+  const jobBlockedCounter = meter?.createCounter(m("job.blocked"));
+  const jobUnblockedCounter = meter?.createCounter(m("job.unblocked"));
 
   // notify adapter
-  const notifyContextAbsenceCounter = meter.createCounter(
-    `${metricPrefix}.notify_adapter.context_absence`,
-  );
-  const notifyAdapterErrorCounter = meter.createCounter(`${metricPrefix}.notify_adapter.error`);
+  const notifyContextAbsenceCounter = meter?.createCounter(m("notify_adapter.context_absence"));
+  const notifyAdapterErrorCounter = meter?.createCounter(m("notify_adapter.error"));
 
   // state adapter
-  const stateAdapterErrorCounter = meter.createCounter(`${metricPrefix}.state_adapter.error`);
+  const stateAdapterErrorCounter = meter?.createCounter(m("state_adapter.error"));
 
   // histograms
-  const jobChainDurationHistogram = meter.createHistogram(`${metricPrefix}.job_chain.duration`, {
-    unit: "ms",
+  const jobChainDurationHistogram = meter?.createHistogram(m("job_chain.duration"), {
+    unit: "s",
     description: "Duration of job chain from creation to completion",
   });
-  const jobDurationHistogram = meter.createHistogram(`${metricPrefix}.job.duration`, {
-    unit: "ms",
+  const jobDurationHistogram = meter?.createHistogram(m("job.duration"), {
+    unit: "s",
     description: "Duration of job from creation to completion",
   });
-  const jobAttemptDurationHistogram = meter.createHistogram(
-    `${metricPrefix}.job.attempt.duration`,
-    { unit: "ms", description: "Duration of job attempt processing" },
-  );
+  const jobAttemptDurationHistogram = meter?.createHistogram(m("job.attempt.duration"), {
+    unit: "s",
+    description: "Duration of job attempt processing",
+  });
 
   // gauges (UpDownCounters)
-  const jobTypeIdleGauge = meter.createUpDownCounter(`${metricPrefix}.job_type.idle`, {
+  const jobTypeIdleGauge = meter?.createUpDownCounter(m("job_type.idle"), {
     description: "Workers idle for this job type",
   });
-  const jobTypeProcessingGauge = meter.createUpDownCounter(`${metricPrefix}.job_type.processing`, {
+  const jobTypeProcessingGauge = meter?.createUpDownCounter(m("job_type.processing"), {
     description: "Jobs of this type currently being processed",
   });
 
   return {
     // worker
     workerStarted: ({ workerId }) => {
-      workerStartedCounter.add(1, { workerId });
+      workerStartedCounter?.add(1, { workerId });
     },
     workerError: ({ workerId }) => {
-      workerErrorCounter.add(1, { workerId });
+      workerErrorCounter?.add(1, { workerId });
     },
     workerStopping: ({ workerId }) => {
-      workerStoppingCounter.add(1, { workerId });
+      workerStoppingCounter?.add(1, { workerId });
     },
     workerStopped: ({ workerId }) => {
-      workerStoppedCounter.add(1, { workerId });
+      workerStoppedCounter?.add(1, { workerId });
     },
 
     // job
     jobCreated: ({ typeName, chainTypeName }) => {
-      jobCreatedCounter.add(1, { typeName, chainTypeName });
+      jobCreatedCounter?.add(1, { typeName, chainTypeName });
     },
     jobAttemptStarted: ({ typeName, chainTypeName, workerId }) => {
-      jobAttemptStartedCounter.add(1, { typeName, chainTypeName, workerId });
+      jobAttemptStartedCounter?.add(1, { typeName, chainTypeName, workerId });
     },
     jobAttemptTakenByAnotherWorker: ({ typeName, chainTypeName, workerId }) => {
-      jobAttemptTakenByAnotherWorkerCounter.add(1, { typeName, chainTypeName, workerId });
+      jobAttemptTakenByAnotherWorkerCounter?.add(1, { typeName, chainTypeName, workerId });
     },
     jobAttemptAlreadyCompleted: ({ typeName, chainTypeName, workerId }) => {
-      jobAttemptAlreadyCompletedCounter.add(1, { typeName, chainTypeName, workerId });
+      jobAttemptAlreadyCompletedCounter?.add(1, { typeName, chainTypeName, workerId });
     },
     jobAttemptLeaseExpired: ({ typeName, chainTypeName, workerId }) => {
-      jobAttemptLeaseExpiredCounter.add(1, { typeName, chainTypeName, workerId });
+      jobAttemptLeaseExpiredCounter?.add(1, { typeName, chainTypeName, workerId });
     },
     jobAttemptLeaseRenewed: ({ typeName, chainTypeName, workerId }) => {
-      jobAttemptLeaseRenewedCounter.add(1, { typeName, chainTypeName, workerId });
+      jobAttemptLeaseRenewedCounter?.add(1, { typeName, chainTypeName, workerId });
     },
     jobReaped: ({ typeName, chainTypeName, workerId }) => {
-      jobReapedCounter.add(1, { typeName, chainTypeName, workerId });
+      jobReapedCounter?.add(1, { typeName, chainTypeName, workerId });
     },
     jobAttemptFailed: ({ typeName, chainTypeName, workerId }) => {
-      jobAttemptFailedCounter.add(1, { typeName, chainTypeName, workerId });
+      jobAttemptFailedCounter?.add(1, { typeName, chainTypeName, workerId });
     },
     jobAttemptCompleted: ({ typeName, chainTypeName, workerId }) => {
-      jobAttemptCompletedCounter.add(1, { typeName, chainTypeName, workerId });
+      jobAttemptCompletedCounter?.add(1, { typeName, chainTypeName, workerId });
     },
     jobCompleted: ({ typeName, chainTypeName, workerId, continuedWith }) => {
-      jobCompletedCounter.add(1, {
+      jobCompletedCounter?.add(1, {
         typeName,
         chainTypeName,
         workerId: workerId ?? "null",
@@ -133,50 +177,273 @@ export const createOtelObservabilityAdapter = async ({
 
     // job chain
     jobChainCreated: ({ typeName }) => {
-      jobChainCreatedCounter.add(1, { chainTypeName: typeName });
+      jobChainCreatedCounter?.add(1, { chainTypeName: typeName });
     },
     jobChainCompleted: ({ typeName }) => {
-      jobChainCompletedCounter.add(1, { chainTypeName: typeName });
+      jobChainCompletedCounter?.add(1, { chainTypeName: typeName });
     },
 
     // blockers
     jobBlocked: ({ typeName, chainTypeName }) => {
-      jobBlockedCounter.add(1, { typeName, chainTypeName });
+      jobBlockedCounter?.add(1, { typeName, chainTypeName });
     },
     jobUnblocked: ({ typeName, chainTypeName }) => {
-      jobUnblockedCounter.add(1, { typeName, chainTypeName });
+      jobUnblockedCounter?.add(1, { typeName, chainTypeName });
     },
 
     // notify adapter
     notifyContextAbsence: ({ typeName, chainTypeName }) => {
-      notifyContextAbsenceCounter.add(1, { typeName, chainTypeName });
+      notifyContextAbsenceCounter?.add(1, { typeName, chainTypeName });
     },
     notifyAdapterError: ({ operation }) => {
-      notifyAdapterErrorCounter.add(1, { operation });
+      notifyAdapterErrorCounter?.add(1, { operation });
     },
 
     // state adapter
     stateAdapterError: ({ operation }) => {
-      stateAdapterErrorCounter.add(1, { operation });
+      stateAdapterErrorCounter?.add(1, { operation });
     },
 
     // histograms
     jobChainDuration: ({ typeName, durationMs }) => {
-      jobChainDurationHistogram.record(durationMs, { chainTypeName: typeName });
+      jobChainDurationHistogram?.record(durationMs / 1000, { chainTypeName: typeName });
     },
     jobDuration: ({ typeName, chainTypeName, durationMs }) => {
-      jobDurationHistogram.record(durationMs, { typeName, chainTypeName });
+      jobDurationHistogram?.record(durationMs / 1000, { typeName, chainTypeName });
     },
     jobAttemptDuration: ({ typeName, chainTypeName, workerId, durationMs }) => {
-      jobAttemptDurationHistogram.record(durationMs, { typeName, chainTypeName, workerId });
+      jobAttemptDurationHistogram?.record(durationMs / 1000, { typeName, chainTypeName, workerId });
     },
 
     // gauges
     jobTypeIdleChange: ({ delta, typeName, workerId }) => {
-      jobTypeIdleGauge.add(delta, { typeName, workerId });
+      jobTypeIdleGauge?.add(delta, { typeName, workerId });
     },
     jobTypeProcessingChange: ({ delta, typeName, workerId }) => {
-      jobTypeProcessingGauge.add(delta, { typeName, workerId });
+      jobTypeProcessingGauge?.add(delta, { typeName, workerId });
+    },
+
+    // tracing
+    startJobSpan(data) {
+      if (!tracer) return undefined;
+
+      let chainSpan: Span | null = null;
+      let chainSpanContext: SpanContext;
+      let chainTraceContext: string;
+
+      // Build links for blocker chains: link to the job being blocked
+      const blockerLinks: { context: SpanContext }[] = [];
+      if (isValidOtelTraceContext(data.rootChainTraceContext)) {
+        blockerLinks.push({ context: deserializeSpanContext(data.rootChainTraceContext.job) });
+      }
+
+      if (data.isChainStart) {
+        // Create chain PRODUCER span (kept open until end() to set chain ID)
+        // For blocker chains, link to the job that will be blocked by this chain
+        chainSpan = tracer.startSpan(`chain ${data.chainTypeName}`, {
+          kind: SpanKind.PRODUCER,
+          links: blockerLinks,
+          attributes: {
+            "messaging.operation.name": "publish",
+            "messaging.destination.name": data.chainTypeName,
+            "queuert.chain.type": data.chainTypeName,
+          },
+        });
+        chainSpanContext = chainSpan.spanContext();
+        chainTraceContext = serializeSpanContext(chainSpanContext);
+      } else {
+        // Continuation: inherit chain context from origin
+        // Validate origin trace context format (may be from a different adapter)
+        if (!isValidOtelTraceContext(data.originTraceContext)) return undefined;
+        chainTraceContext = data.originTraceContext.chain;
+        chainSpanContext = deserializeSpanContext(chainTraceContext);
+      }
+
+      // Create job PRODUCER span as child of chain
+      const chainCtx = trace.setSpanContext(context.active(), chainSpanContext);
+
+      // Build links: origin job (for continuations) or blocked job (for blocker chains)
+      const jobLinks: { context: SpanContext }[] = [...blockerLinks];
+      if (isValidOtelTraceContext(data.originTraceContext)) {
+        jobLinks.push({ context: deserializeSpanContext(data.originTraceContext.job) });
+      }
+
+      const jobSpan = tracer.startSpan(
+        `job ${data.jobTypeName}`,
+        {
+          kind: SpanKind.PRODUCER,
+          links: jobLinks,
+          attributes: {
+            "messaging.operation.name": "publish",
+            "messaging.destination.name": data.jobTypeName,
+            "queuert.chain.type": data.chainTypeName,
+            "queuert.job.type": data.jobTypeName,
+          },
+        },
+        chainCtx,
+      );
+      const jobTraceContext = serializeSpanContext(jobSpan.spanContext());
+
+      return {
+        getTraceContext: () =>
+          ({ chain: chainTraceContext, job: jobTraceContext }) as OtelTraceContext,
+        end(result) {
+          if (result.status === "created") {
+            // Set chain ID on both chain span (if new chain) and job span
+            if (chainSpan) {
+              chainSpan.setAttribute("queuert.chain.id", result.chainId);
+              if (result.rootChainId) {
+                chainSpan.setAttribute("queuert.chain.root_id", result.rootChainId);
+              }
+            }
+            jobSpan.setAttribute("queuert.chain.id", result.chainId);
+            jobSpan.setAttribute("queuert.job.id", result.jobId);
+            if (result.rootChainId) {
+              jobSpan.setAttribute("queuert.chain.root_id", result.rootChainId);
+            }
+            if (result.originId) {
+              jobSpan.setAttribute("queuert.job.origin_id", result.originId);
+            }
+          } else if (result.status === "deduplicated") {
+            // Deduplication: span status stays UNSET (not an error), add attribute
+            if (chainSpan) {
+              chainSpan.setAttribute("queuert.chain.id", result.chainId);
+              chainSpan.setAttribute("queuert.chain.deduplicated", true);
+              if (result.rootChainId) {
+                chainSpan.setAttribute("queuert.chain.root_id", result.rootChainId);
+              }
+            }
+            jobSpan.setAttribute("queuert.chain.id", result.chainId);
+            jobSpan.setAttribute("queuert.job.id", result.jobId);
+            jobSpan.setAttribute("queuert.chain.deduplicated", true);
+            if (result.rootChainId) {
+              jobSpan.setAttribute("queuert.chain.root_id", result.rootChainId);
+            }
+            // Link to existing chain's trace if available
+            if (isValidOtelTraceContext(result.existingTraceContext)) {
+              jobSpan.addLink({
+                context: deserializeSpanContext(result.existingTraceContext.chain),
+              });
+            }
+          } else {
+            if (chainSpan) {
+              chainSpan.recordException(toException(result.error));
+              chainSpan.setStatus({ code: SpanStatusCode.ERROR });
+            }
+            jobSpan.recordException(toException(result.error));
+            jobSpan.setStatus({ code: SpanStatusCode.ERROR });
+          }
+          chainSpan?.end();
+          jobSpan.end();
+        },
+      };
+    },
+
+    startAttemptSpan(data) {
+      if (!tracer) return undefined;
+
+      // Validate trace context format (may be from a different adapter)
+      if (!isValidOtelTraceContext(data.traceContext)) return undefined;
+
+      const tc = data.traceContext;
+      const parentCtx = deserializeSpanContext(tc.job);
+      const ctx = trace.setSpanContext(context.active(), parentCtx);
+
+      const attemptSpan = tracer.startSpan(
+        `job-attempt ${data.jobTypeName}`,
+        {
+          kind: SpanKind.CONSUMER,
+          attributes: {
+            "messaging.operation.name": "process",
+            "messaging.destination.name": data.jobTypeName,
+            "messaging.consumer.group.name": data.workerId,
+            "queuert.chain.id": data.chainId,
+            "queuert.chain.type": data.chainTypeName,
+            "queuert.job.id": data.jobId,
+            "queuert.job.type": data.jobTypeName,
+            "queuert.job.attempt": data.attempt,
+            "queuert.worker.id": data.workerId,
+          },
+        },
+        ctx,
+      );
+
+      const attemptCtx = trace.setSpan(context.active(), attemptSpan);
+      const attemptTraceContext = serializeSpanContext(attemptSpan.spanContext());
+
+      return {
+        getTraceContext: () => ({ ...tc, attempt: attemptTraceContext }) as OtelTraceContext,
+
+        startPrepare() {
+          const span = tracer.startSpan("prepare", { kind: SpanKind.INTERNAL }, attemptCtx);
+          return {
+            end: () => {
+              span.end();
+            },
+          };
+        },
+
+        startComplete() {
+          const span = tracer.startSpan("complete", { kind: SpanKind.INTERNAL }, attemptCtx);
+          return {
+            end: () => {
+              span.end();
+            },
+          };
+        },
+
+        end(result) {
+          if (result.status === "failed") {
+            attemptSpan.recordException(toException(result.error));
+            attemptSpan.setStatus({ code: SpanStatusCode.ERROR });
+            attemptSpan.setAttribute("queuert.attempt.result", "failed");
+            if (result.rescheduledAt) {
+              attemptSpan.setAttribute(
+                "queuert.rescheduled_at",
+                result.rescheduledAt.toISOString(),
+              );
+            }
+            if (result.rescheduledAfterMs !== undefined) {
+              attemptSpan.setAttribute("queuert.rescheduled_after_ms", result.rescheduledAfterMs);
+            }
+          } else {
+            attemptSpan.setStatus({ code: SpanStatusCode.OK });
+            attemptSpan.setAttribute("queuert.attempt.result", "completed");
+
+            if (result.continued) {
+              attemptSpan.setAttribute("queuert.continued_with.job_id", result.continued.jobId);
+              attemptSpan.setAttribute(
+                "queuert.continued_with.job_type",
+                result.continued.jobTypeName,
+              );
+            }
+
+            // Create CONSUMER chain span if chain completed
+            if (result.chainCompleted) {
+              // tc is already validated at the start of startAttemptSpan
+              const chainProducerCtx = deserializeSpanContext(tc.chain);
+              tracer
+                .startSpan(
+                  `chain ${data.chainTypeName}`,
+                  {
+                    kind: SpanKind.CONSUMER,
+                    links: [{ context: chainProducerCtx }],
+                    attributes: {
+                      "messaging.operation.name": "process",
+                      "messaging.destination.name": data.chainTypeName,
+                      "queuert.chain.id": data.chainId,
+                      "queuert.chain.type": data.chainTypeName,
+                    },
+                  },
+                  attemptCtx,
+                )
+                .end();
+            }
+          }
+
+          attemptSpan.end();
+        },
+      };
     },
   };
 };

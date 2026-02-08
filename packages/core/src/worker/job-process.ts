@@ -343,8 +343,18 @@ export const runJobProcess = async ({
     >[],
   } as RunningJob<JobOf<any, any, any, any>>;
   const runJobAttempt = async () => {
-    helper.observabilityHelper.jobAttemptStarted(job, { workerId });
     const attemptStartTime = Date.now();
+
+    helper.observabilityHelper.jobAttemptStarted(job, { workerId });
+    const attemptSpanHandle = helper.observabilityHelper.startAttemptSpan({
+      chainId: job.chainId,
+      chainTypeName: job.chainTypeName,
+      jobId: job.id,
+      jobTypeName: job.typeName,
+      attempt: job.attempt,
+      workerId,
+      traceContext: job.traceContext,
+    });
 
     let prepareAccessed = false;
     let prepareCalled = false;
@@ -357,7 +367,13 @@ export const runJobProcess = async ({
       }
       prepareCalled = true;
 
-      const callbackOutput = await prepareCallback?.({ ...txContext });
+      const prepareSpan = attemptSpanHandle?.startPrepare();
+      let callbackOutput: T | undefined;
+      try {
+        callbackOutput = await prepareCallback?.({ ...txContext });
+      } finally {
+        prepareSpan?.end();
+      }
 
       await helper.stateAdapter.renewJobLease({
         txContext,
@@ -412,6 +428,7 @@ export const runJobProcess = async ({
       completeCalled = true;
       await disposeOwnershipListener?.();
       await leaseManager.stop();
+      const completeSpan = attemptSpanHandle?.startComplete();
       const result = await runInGuardedTransaction(async (txContext) => {
         let continuedJob: Job<any, any, any, any, any[]> | null = null;
         const output = await completeCallback({
@@ -425,6 +442,7 @@ export const runJobProcess = async ({
                 chainTypeName: job.chainTypeName,
                 rootChainId: job.rootChainId,
                 originId: job.id,
+                originTraceContext: attemptSpanHandle?.getTraceContext() ?? job.traceContext,
               },
               async () =>
                 helper.continueWith({
@@ -450,19 +468,35 @@ export const runJobProcess = async ({
             ? { job, txContext, workerId, type: "continueWith", continuedJob }
             : { job, txContext, workerId, type: "completeChain", output },
         );
-        return (
-          continuedJob ?? {
-            ...mapStateJobToJob(completedStateJob),
-            blockers: runningJob.blockers,
-          }
-        );
+        const jobResult = continuedJob ?? {
+          ...mapStateJobToJob(completedStateJob),
+          blockers: runningJob.blockers,
+        };
+        const continued = continuedJob
+          ? {
+              jobId: (continuedJob as Job<any, any, any, any, any[]>).id,
+              jobTypeName: (continuedJob as Job<any, any, any, any, any[]>).typeName,
+            }
+          : undefined;
+        const chainCompleted = !continuedJob ? { output } : undefined;
+        return {
+          result: jobResult,
+          continued,
+          chainCompleted,
+        };
       });
+      completeSpan?.end();
       completeSucceeded = true;
       helper.observabilityHelper.jobAttemptDuration(job, {
         durationMs: Date.now() - attemptStartTime,
         workerId,
       });
-      return result;
+      attemptSpanHandle?.end({
+        status: "completed",
+        continued: result.continued,
+        chainCompleted: result.chainCompleted,
+      });
+      return result.result;
     }) as CompleteFn<StateAdapter<BaseTxContext, any>, BaseJobTypeDefinitions, string>;
 
     let autoSetupDone = false;
@@ -493,7 +527,7 @@ export const runJobProcess = async ({
       const runInTx = completeSucceeded
         ? helper.stateAdapter.runInTransaction.bind(helper)
         : runInGuardedTransaction;
-      await runInTx(async (txContext) =>
+      const errorResult = await runInTx(async (txContext) =>
         helper.handleJobHandlerError({
           job,
           error,
@@ -502,6 +536,13 @@ export const runJobProcess = async ({
           workerId,
         }),
       );
+
+      attemptSpanHandle?.end({
+        status: "failed",
+        error,
+        rescheduledAt: errorResult.schedule?.at,
+        rescheduledAfterMs: errorResult.schedule?.afterMs,
+      });
     } finally {
       await disposeOwnershipListener?.();
       await leaseManager.stop();

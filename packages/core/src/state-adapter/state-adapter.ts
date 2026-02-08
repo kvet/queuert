@@ -76,6 +76,7 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     originId: TJobId | undefined;
     deduplication?: DeduplicationOptions;
     schedule?: ScheduleOptions;
+    traceContext?: unknown;
   }) => Promise<{ job: StateJob; deduplicated: boolean }>;
 
   /** Adds blocker dependencies to a job. */

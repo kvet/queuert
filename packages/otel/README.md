@@ -5,24 +5,7 @@
 [![stars](https://img.shields.io/github/stars/kvet/queuert.svg)](https://github.com/kvet/queuert)
 [![last commit](https://img.shields.io/github/last-commit/kvet/queuert.svg)](https://github.com/kvet/queuert/commits)
 
-OpenTelemetry observability adapter for [Queuert](https://github.com/kvet/queuert) - a TypeScript library for database-backed job queues.
-
-## What does this do?
-
-[Queuert](https://github.com/kvet/queuert) supports pluggable observability. This adapter emits **OpenTelemetry metrics** for monitoring your job queues.
-
-The observability adapter tracks:
-
-- **Worker lifecycle** - Started, stopped, errors
-- **Job metrics** - Created, completed, failed, retried
-- **Chain metrics** - Chain creation and completion with duration histograms
-- **Adapter health** - State adapter and notify adapter errors
-
-## When to use this
-
-- **Production monitoring** - Track queue health, throughput, and latency
-- **Alerting** - Set up alerts on job failures, queue depth, or worker errors
-- **Existing OTEL infrastructure** - Integrates with Prometheus, Grafana, Datadog, etc.
+OpenTelemetry observability adapter for [Queuert](https://github.com/kvet/queuert) - a TypeScript library for database-backed job queues. Provides **distributed tracing** and **metrics** (worker lifecycle, job events, chain completion, adapter health) for monitoring your job queues via Prometheus, Grafana, Datadog, or any OTEL-compatible backend.
 
 ## Installation
 
@@ -38,7 +21,7 @@ npm install @queuert/otel
 import { createClient, createConsoleLog, defineJobTypes } from "queuert";
 import { createPgStateAdapter } from "@queuert/postgres";
 import { createOtelObservabilityAdapter } from "@queuert/otel";
-import { metrics } from "@opentelemetry/api";
+import { metrics, trace } from "@opentelemetry/api";
 
 // Configure your OTEL SDK first (Prometheus, OTLP, etc.)
 // See: https://opentelemetry.io/docs/languages/js/getting-started/
@@ -50,7 +33,9 @@ const jobTypes = defineJobTypes<{
 const stateAdapter = await createPgStateAdapter({ stateProvider: myPgProvider });
 
 const observabilityAdapter = await createOtelObservabilityAdapter({
-  meter: metrics.getMeter("my-app"),
+  meter: metrics.getMeter("my-app"), // Optional - metrics disabled if omitted
+  tracer: trace.getTracer("my-app"), // Optional - tracing disabled if omitted
+  metricPrefix: "queuert", // Optional - no prefix if omitted
 });
 
 const client = await createClient({
@@ -61,34 +46,23 @@ const client = await createClient({
 });
 ```
 
-## Configuration
+## Metrics
 
-```typescript
-const observabilityAdapter = await createOtelObservabilityAdapter({
-  meter: metrics.getMeter("my-app"), // OTEL Meter instance (default: metrics.getMeter("queuert"))
-  metricPrefix: "queuert", // Prefix for all metric names (default: "queuert")
-});
-```
+When a `meter` is provided, the adapter emits counters, histograms, and gauges for worker lifecycle, job events, chain completion, and adapter health.
 
-## Metrics Emitted
+See [OTEL Metrics](https://github.com/kvet/queuert/blob/main/docs/design/otel-metrics.md) for the full list of metrics and attributes.
 
-### Counters
+## Traces
 
-- **Worker:** `{prefix}.worker.started`, `{prefix}.worker.error`, `{prefix}.worker.stopping`, `{prefix}.worker.stopped`
-- **Job:** `{prefix}.job.created`, `{prefix}.job.attempt.started`, `{prefix}.job.attempt.taken_by_another_worker`, `{prefix}.job.attempt.already_completed`, `{prefix}.job.attempt.lease_expired`, `{prefix}.job.attempt.lease_renewed`, `{prefix}.job.attempt.failed`, `{prefix}.job.attempt.completed`, `{prefix}.job.completed`, `{prefix}.job.reaped`, `{prefix}.job.blocked`, `{prefix}.job.unblocked`
-- **Job Chain:** `{prefix}.job_chain.created`, `{prefix}.job_chain.completed`
-- **Adapters:** `{prefix}.notify_adapter.context_absence`, `{prefix}.notify_adapter.error`, `{prefix}.state_adapter.error`
+When a `tracer` is provided, the adapter creates spans following OpenTelemetry messaging conventions:
 
-### Histograms
+- **PRODUCER spans** - Chain and job creation (end immediately)
+- **CONSUMER spans** - Job attempt processing and chain completion
+- **INTERNAL spans** - Prepare and complete phases within attempts
 
-- `{prefix}.job_chain.duration` - Duration from chain creation to completion (ms)
-- `{prefix}.job.duration` - Duration from job creation to completion (ms)
-- `{prefix}.job.attempt.duration` - Duration of attempt processing (ms)
+Spans include links for continuations, retries, and blocker relationships.
 
-### Gauges (UpDownCounters)
-
-- `{prefix}.job_type.idle` - Workers idle for this job type (attributes: `typeName`, `workerId`)
-- `{prefix}.job_type.processing` - Jobs of this type currently being processed (attributes: `typeName`, `workerId`)
+See [OTEL Tracing](https://github.com/kvet/queuert/blob/main/docs/design/otel-tracing.md) for the full span hierarchy and attributes.
 
 ## Exports
 

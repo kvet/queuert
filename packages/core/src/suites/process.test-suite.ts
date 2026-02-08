@@ -19,6 +19,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     expectLogs,
     expectMetrics,
     expectHistograms,
+    expectSpans,
     expect,
   }) => {
     const registry = defineJobTypes<{
@@ -182,6 +183,15 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       { method: "jobDuration", args: { typeName: "test" } },
       { method: "jobChainDuration", args: { typeName: "test" } },
       { method: "jobAttemptDuration", args: { typeName: "test", workerId: "worker" } },
+    ]);
+
+    await expectSpans([
+      { name: "chain test", kind: "PRODUCER" },
+      { name: "job test", kind: "PRODUCER", parentName: "chain test" },
+      { name: "prepare", kind: "INTERNAL", parentName: "job-attempt test" },
+      { name: "complete", kind: "INTERNAL", parentName: "job-attempt test" },
+      { name: "chain test", kind: "CONSUMER", parentName: "job-attempt test", links: 1 },
+      { name: "job-attempt test", kind: "CONSUMER", parentName: "job test" },
     ]);
   });
 
@@ -720,6 +730,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     log,
     expectLogs,
     expectMetrics,
+    expectSpans,
     expect,
   }) => {
     const registry = defineJobTypes<{
@@ -834,6 +845,24 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       { method: "jobChainCompleted" },
       { method: "workerStopping" },
       { method: "workerStopped" },
+    ]);
+
+    await expectSpans([
+      // Job creation
+      { name: "chain test", kind: "PRODUCER" },
+      { name: "job test", kind: "PRODUCER", parentName: "chain test" },
+      // Attempts 1-3: auto-setup prepare runs, then handler throws
+      { name: "prepare", kind: "INTERNAL", parentName: "job-attempt test" },
+      { name: "job-attempt test", kind: "CONSUMER", parentName: "job test", status: "ERROR" },
+      { name: "prepare", kind: "INTERNAL", parentName: "job-attempt test" },
+      { name: "job-attempt test", kind: "CONSUMER", parentName: "job test", status: "ERROR" },
+      { name: "prepare", kind: "INTERNAL", parentName: "job-attempt test" },
+      { name: "job-attempt test", kind: "CONSUMER", parentName: "job test", status: "ERROR" },
+      // Attempt 4: prepare + complete + chain completion
+      { name: "prepare", kind: "INTERNAL", parentName: "job-attempt test" },
+      { name: "complete", kind: "INTERNAL", parentName: "job-attempt test" },
+      { name: "chain test", kind: "CONSUMER", parentName: "job-attempt test", links: 1 },
+      { name: "job-attempt test", kind: "CONSUMER", parentName: "job test", status: "OK" },
     ]);
   });
 

@@ -18,6 +18,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expect,
     expectLogs,
     expectMetrics,
+    expectSpans,
   }) => {
     const registry = defineJobTypes<{
       blocker: {
@@ -233,6 +234,30 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       { method: "jobChainCompleted", args: { typeName: "main" } },
       { method: "workerStopping" },
       { method: "workerStopped" },
+    ]);
+
+    await expectSpans([
+      // Blocker chain creation (links to main job being blocked)
+      { name: "chain blocker", kind: "PRODUCER", links: 1 },
+      { name: "job blocker", kind: "PRODUCER", parentName: "chain blocker", links: 1 },
+      // Main chain creation
+      { name: "chain main", kind: "PRODUCER" },
+      { name: "job main", kind: "PRODUCER", parentName: "chain main" },
+      // Processing blocker job 1: continueWith creates blocker job 2
+      { name: "prepare", kind: "INTERNAL", parentName: "job-attempt blocker" },
+      { name: "job blocker", kind: "PRODUCER", parentName: "chain blocker", links: 1 },
+      { name: "complete", kind: "INTERNAL", parentName: "job-attempt blocker" },
+      { name: "job-attempt blocker", kind: "CONSUMER", parentName: "job blocker" },
+      // Processing blocker job 2: chain completes
+      { name: "prepare", kind: "INTERNAL", parentName: "job-attempt blocker" },
+      { name: "complete", kind: "INTERNAL", parentName: "job-attempt blocker" },
+      { name: "chain blocker", kind: "CONSUMER", parentName: "job-attempt blocker", links: 1 },
+      { name: "job-attempt blocker", kind: "CONSUMER", parentName: "job blocker" },
+      // Processing main job: unblocked, completes
+      { name: "prepare", kind: "INTERNAL", parentName: "job-attempt main" },
+      { name: "complete", kind: "INTERNAL", parentName: "job-attempt main" },
+      { name: "chain main", kind: "CONSUMER", parentName: "job-attempt main", links: 1 },
+      { name: "job-attempt main", kind: "CONSUMER", parentName: "job main" },
     ]);
   });
 

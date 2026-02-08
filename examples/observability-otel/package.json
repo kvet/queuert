@@ -5,11 +5,18 @@
   "type": "module",
   "scripts": {
     "start": "tsx src/index.ts",
+    "tui": "otel-tui",
     "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/exporter-metrics-otlp-http": "^0.57.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.57.0",
+    "@opentelemetry/resources": "^1.30.0",
     "@opentelemetry/sdk-metrics": "^1.30.0",
+    "@opentelemetry/sdk-trace-base": "^1.30.0",
+    "@opentelemetry/sdk-trace-node": "^1.30.0",
+    "@opentelemetry/semantic-conventions": "^1.28.0",
     "@queuert/otel": "workspace:*",
     "queuert": "workspace:*"
   },

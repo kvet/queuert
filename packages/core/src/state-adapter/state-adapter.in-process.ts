@@ -113,6 +113,7 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       originId,
       deduplication,
       schedule,
+      traceContext,
     }) => {
       const existingContinuation = findExistingContinuation(chainId, originId);
       if (existingContinuation) {
@@ -151,7 +152,7 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
         leasedBy: null,
         leasedUntil: null,
         deduplicationKey: deduplication?.key ?? null,
-        traceContext: null,
+        traceContext: traceContext ?? null,
       };
 
       store.jobs.set(id, job);

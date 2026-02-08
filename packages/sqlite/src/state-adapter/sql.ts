@@ -258,15 +258,17 @@ export const insertJobSql: TypedSql<
     NamedParameter<"scheduled_at", string | null>,
     NamedParameter<"schedule_after_ms_check", number | null>,
     NamedParameter<"schedule_after_ms", number | null>,
+    NamedParameter<"trace_context", string | null>,
   ],
   [DbJob & { deduplicated: number }]
 > = sql(
   /* sql */ `
-INSERT INTO {{table_prefix}}job (id, type_name, chain_id, chain_type_name, input, root_chain_id, origin_id, deduplication_key, scheduled_at)
+INSERT INTO {{table_prefix}}job (id, type_name, chain_id, chain_type_name, input, root_chain_id, origin_id, deduplication_key, scheduled_at, trace_context)
 VALUES (?, ?, COALESCE(?, ?), ?, ?, COALESCE(?, ?), ?, ?,
   COALESCE(?,
     CASE WHEN ? IS NOT NULL THEN datetime('now', 'subsec', '+' || (? / 1000.0) || ' seconds') ELSE NULL END,
-    datetime('now', 'subsec')))
+    datetime('now', 'subsec')),
+  ?)
 RETURNING *, 0 AS deduplicated
 `,
   true,

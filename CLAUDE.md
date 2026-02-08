@@ -18,8 +18,9 @@ High-level design decisions are documented in [docs/design/](docs/design/):
 - [Adapters](docs/design/adapters.md) - Factory patterns, dual-context design, notification optimization
 - [Code Style](docs/design/code-style.md) - Code conventions, testing patterns, project organization, examples structure
 - [Worker](docs/design/worker.md) - Worker lifecycle, leasing, reaper, retry logic
-- [Tracing](docs/design/observability-tracing.md) - OpenTelemetry spans, chain/job/attempt hierarchy, blocker links
-- [Metrics](docs/design/observability-metrics.md) - OpenTelemetry counters, histograms, gauges for queue monitoring
+- [Observability Adapter](docs/design/observability-adapter.md) - ObservabilityAdapter interface, metrics and tracing methods
+- [OTEL Tracing](docs/design/otel-tracing.md) - OpenTelemetry spans, chain/job/attempt hierarchy, blocker links
+- [OTEL Metrics](docs/design/otel-metrics.md) - OpenTelemetry counters, histograms, gauges for queue monitoring
 
 ## Packages
 

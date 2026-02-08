@@ -23,6 +23,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     expectLogs,
     expectMetrics,
     expectHistograms,
+    expectSpans,
     expect,
   }) => {
     const registry = defineJobTypes<{
@@ -217,6 +218,36 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       { method: "jobDuration", args: { typeName: "linear_next_next" } },
       { method: "jobChainDuration", args: { typeName: "linear" } },
       { method: "jobAttemptDuration", args: { typeName: "linear_next_next" } },
+    ]);
+
+    await expectSpans([
+      // Chain creation
+      { name: "chain linear", kind: "PRODUCER" },
+      { name: "job linear", kind: "PRODUCER", parentName: "chain linear" },
+      // Processing linear: auto-setup prepare, then complete with continueWith
+      { name: "prepare", kind: "INTERNAL", parentName: "job-attempt linear" },
+      { name: "job linear_next", kind: "PRODUCER", parentName: "chain linear", links: 1 },
+      { name: "complete", kind: "INTERNAL", parentName: "job-attempt linear" },
+      { name: "job-attempt linear", kind: "CONSUMER", parentName: "job linear" },
+      // Processing linear_next: auto-setup prepare, then complete with continueWith
+      { name: "prepare", kind: "INTERNAL", parentName: "job-attempt linear_next" },
+      { name: "job linear_next_next", kind: "PRODUCER", parentName: "chain linear", links: 1 },
+      { name: "complete", kind: "INTERNAL", parentName: "job-attempt linear_next" },
+      { name: "job-attempt linear_next", kind: "CONSUMER", parentName: "job linear_next" },
+      // Processing linear_next_next: auto-setup prepare, complete, chain completes
+      { name: "prepare", kind: "INTERNAL", parentName: "job-attempt linear_next_next" },
+      { name: "complete", kind: "INTERNAL", parentName: "job-attempt linear_next_next" },
+      {
+        name: "chain linear",
+        kind: "CONSUMER",
+        parentName: "job-attempt linear_next_next",
+        links: 1,
+      },
+      {
+        name: "job-attempt linear_next_next",
+        kind: "CONSUMER",
+        parentName: "job linear_next_next",
+      },
     ]);
   });
 

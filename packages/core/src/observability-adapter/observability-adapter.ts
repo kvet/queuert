@@ -2,12 +2,74 @@ import { type NotifyAdapter } from "../notify-adapter/notify-adapter.js";
 import { type StateAdapter } from "../state-adapter/state-adapter.js";
 import { type JobBasicData, type JobChainData, type JobProcessingData } from "./log.js";
 
-/**
- * Low-level adapter interface for observability metrics.
- *
- * Accepts primitive data types (not domain objects).
- * Use with ObservabilityHelper for domain-object-friendly interface.
- */
+export type JobSpanInputData = {
+  chainTypeName: string;
+  jobTypeName: string;
+  isChainStart: boolean;
+
+  /** For continuation jobs: trace context of the origin job */
+  originTraceContext?: unknown;
+  /** For blocker chains: trace context of the job that will be blocked by this chain */
+  rootChainTraceContext?: unknown;
+};
+
+export type JobSpanResult =
+  | {
+      status: "created";
+      jobId: string;
+      chainId: string;
+      rootChainId: string | null;
+      originId: string | null;
+    }
+  | {
+      status: "deduplicated";
+      jobId: string;
+      chainId: string;
+      rootChainId: string | null;
+      existingTraceContext?: unknown;
+    }
+  | {
+      status: "error";
+      error: unknown;
+    };
+export type JobSpanHandle = {
+  getTraceContext: () => unknown;
+  end: (result: JobSpanResult) => void;
+};
+export type JobAttemptSpanInputData = {
+  traceContext: unknown;
+  chainId: string;
+  chainTypeName: string;
+  jobId: string;
+  jobTypeName: string;
+  attempt: number;
+  workerId: string;
+};
+
+export type JobAttemptSpanResult =
+  | {
+      status: "completed";
+      continued?: { jobId: string; jobTypeName: string };
+      chainCompleted?: { output: unknown };
+    }
+  | {
+      status: "failed";
+      error: unknown;
+      rescheduledAt?: Date;
+      rescheduledAfterMs?: number;
+    };
+
+export type SpanHandle = {
+  end: () => void;
+};
+
+export type JobAttemptSpanHandle = {
+  getTraceContext: () => unknown;
+  startPrepare: () => SpanHandle;
+  startComplete: () => SpanHandle;
+  end: (result: JobAttemptSpanResult) => void;
+};
+
 export type ObservabilityAdapter = {
   // worker
   workerStarted: (data: { workerId: string; jobTypeNames: string[] }) => void;
@@ -86,4 +148,8 @@ export type ObservabilityAdapter = {
   // gauges (UpDownCounters)
   jobTypeIdleChange: (data: { delta: number; typeName: string; workerId: string }) => void;
   jobTypeProcessingChange: (data: { delta: number; typeName: string; workerId: string }) => void;
+
+  // tracing
+  startJobSpan: (data: JobSpanInputData) => JobSpanHandle | undefined;
+  startAttemptSpan: (data: JobAttemptSpanInputData) => JobAttemptSpanHandle | undefined;
 };

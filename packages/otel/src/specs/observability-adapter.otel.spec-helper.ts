@@ -1,4 +1,5 @@
 // oxlint-disable no-empty-pattern
+import { SpanKind, SpanStatusCode } from "@opentelemetry/api";
 import {
   AggregationTemporality,
   DataPointType,
@@ -6,40 +7,66 @@ import {
   MeterProvider,
   PeriodicExportingMetricReader,
 } from "@opentelemetry/sdk-metrics";
+import {
+  BasicTracerProvider,
+  InMemorySpanExporter,
+  SimpleSpanProcessor,
+} from "@opentelemetry/sdk-trace-base";
 import { type ObservabilityAdapter } from "queuert";
 import { type TestAPI } from "vitest";
 import { createOtelObservabilityAdapter } from "../observability-adapter/observability-adapter.otel.js";
 
 // Map method names to OTEL metric names
 const methodToMetricName: Record<string, string> = {
-  workerStarted: "queuert.worker.started",
-  workerError: "queuert.worker.error",
-  workerStopping: "queuert.worker.stopping",
-  workerStopped: "queuert.worker.stopped",
-  jobCreated: "queuert.job.created",
-  jobAttemptStarted: "queuert.job.attempt.started",
-  jobAttemptTakenByAnotherWorker: "queuert.job.attempt.taken_by_another_worker",
-  jobAttemptAlreadyCompleted: "queuert.job.attempt.already_completed",
-  jobAttemptLeaseExpired: "queuert.job.attempt.lease_expired",
-  jobAttemptLeaseRenewed: "queuert.job.attempt.lease_renewed",
-  jobAttemptFailed: "queuert.job.attempt.failed",
-  jobAttemptCompleted: "queuert.job.attempt.completed",
-  jobCompleted: "queuert.job.completed",
-  jobReaped: "queuert.job.reaped",
-  jobChainCreated: "queuert.job_chain.created",
-  jobChainCompleted: "queuert.job_chain.completed",
-  jobBlocked: "queuert.job.blocked",
-  jobUnblocked: "queuert.job.unblocked",
-  notifyContextAbsence: "queuert.notify_adapter.context_absence",
-  notifyAdapterError: "queuert.notify_adapter.error",
-  stateAdapterError: "queuert.state_adapter.error",
+  workerStarted: "worker.started",
+  workerError: "worker.error",
+  workerStopping: "worker.stopping",
+  workerStopped: "worker.stopped",
+  jobCreated: "job.created",
+  jobAttemptStarted: "job.attempt.started",
+  jobAttemptTakenByAnotherWorker: "job.attempt.taken_by_another_worker",
+  jobAttemptAlreadyCompleted: "job.attempt.already_completed",
+  jobAttemptLeaseExpired: "job.attempt.lease_expired",
+  jobAttemptLeaseRenewed: "job.attempt.lease_renewed",
+  jobAttemptFailed: "job.attempt.failed",
+  jobAttemptCompleted: "job.attempt.completed",
+  jobCompleted: "job.completed",
+  jobReaped: "job.reaped",
+  jobChainCreated: "job_chain.created",
+  jobChainCompleted: "job_chain.completed",
+  jobBlocked: "job.blocked",
+  jobUnblocked: "job.unblocked",
+  notifyContextAbsence: "notify_adapter.context_absence",
+  notifyAdapterError: "notify_adapter.error",
+  stateAdapterError: "state_adapter.error",
   // histograms
-  jobChainDuration: "queuert.job_chain.duration",
-  jobDuration: "queuert.job.duration",
-  jobAttemptDuration: "queuert.job.attempt.duration",
+  jobChainDuration: "job_chain.duration",
+  jobDuration: "job.duration",
+  jobAttemptDuration: "job.attempt.duration",
   // gauges
-  jobTypeIdleChange: "queuert.job_type.idle",
-  jobTypeProcessingChange: "queuert.job_type.processing",
+  jobTypeIdleChange: "job_type.idle",
+  jobTypeProcessingChange: "job_type.processing",
+};
+
+const spanKindMap: Record<string, SpanKind> = {
+  PRODUCER: SpanKind.PRODUCER,
+  CONSUMER: SpanKind.CONSUMER,
+  INTERNAL: SpanKind.INTERNAL,
+};
+
+const spanStatusMap: Record<string, SpanStatusCode> = {
+  UNSET: SpanStatusCode.UNSET,
+  OK: SpanStatusCode.OK,
+  ERROR: SpanStatusCode.ERROR,
+};
+
+type ExpectedSpan = {
+  name: string;
+  kind?: "PRODUCER" | "CONSUMER" | "INTERNAL";
+  attributes?: Record<string, unknown>;
+  status?: "UNSET" | "OK" | "ERROR";
+  parentName?: string;
+  links?: number;
 };
 
 export const extendWithObservabilityOtel = <T extends {}>(
@@ -57,6 +84,7 @@ export const extendWithObservabilityOtel = <T extends {}>(
       jobTypeIdleChange?: { delta: number; typeName?: string; workerId?: string }[];
       jobTypeProcessingChange?: { delta: number; typeName?: string; workerId?: string }[];
     }) => Promise<void>;
+    expectSpans: (expected: ExpectedSpan[]) => Promise<void>;
   }
 > => {
   return api.extend<{
@@ -71,9 +99,12 @@ export const extendWithObservabilityOtel = <T extends {}>(
       jobTypeIdleChange?: { delta: number; typeName?: string; workerId?: string }[];
       jobTypeProcessingChange?: { delta: number; typeName?: string; workerId?: string }[];
     }) => Promise<void>;
+    expectSpans: (expected: ExpectedSpan[]) => Promise<void>;
     _otelExporter: InMemoryMetricExporter;
     _otelReader: PeriodicExportingMetricReader;
     _otelProvider: MeterProvider;
+    _otelTraceExporter: InMemorySpanExporter;
+    _otelTracerProvider: BasicTracerProvider;
   }>({
     _otelExporter: [
       async ({}, use) => use(new InMemoryMetricExporter(AggregationTemporality.CUMULATIVE)),
@@ -94,10 +125,24 @@ export const extendWithObservabilityOtel = <T extends {}>(
       },
       { scope: "test" },
     ],
+    _otelTraceExporter: [async ({}, use) => use(new InMemorySpanExporter()), { scope: "test" }],
+    _otelTracerProvider: [
+      async ({ _otelTraceExporter }, use) => {
+        const provider = new BasicTracerProvider({
+          spanProcessors: [new SimpleSpanProcessor(_otelTraceExporter)],
+        });
+        await use(provider);
+        await provider.shutdown();
+      },
+      { scope: "test" },
+    ],
     observabilityAdapter: [
-      async ({ _otelProvider }, use) => {
+      async ({ _otelProvider, _otelTracerProvider }, use) => {
         await use(
-          await createOtelObservabilityAdapter({ meter: _otelProvider.getMeter("queuert-test") }),
+          await createOtelObservabilityAdapter({
+            meter: _otelProvider.getMeter("queuert-test"),
+            tracer: _otelTracerProvider.getTracer("queuert-test"),
+          }),
         );
       },
       { scope: "test" },
@@ -217,6 +262,43 @@ export const extendWithObservabilityOtel = <T extends {}>(
           // Verify cumulative values match
           expect(Object.fromEntries(actualCumulative)).toEqual(
             Object.fromEntries(cumulativeExpected),
+          );
+        });
+      },
+      { scope: "test" },
+    ],
+    expectSpans: [
+      async ({ _otelTraceExporter, expect }, use) => {
+        await use(async (expected) => {
+          const spans = _otelTraceExporter.getFinishedSpans();
+
+          // Build spanId -> name map for parent lookups
+          const spanIdToName = new Map<string, string>();
+          for (const span of spans) {
+            spanIdToName.set(span.spanContext().spanId, span.name);
+          }
+
+          const actual = spans.map((span) => ({
+            name: span.name,
+            kind: span.kind,
+            attributes: span.attributes,
+            status: span.status.code,
+            parentName: span.parentSpanId
+              ? (spanIdToName.get(span.parentSpanId) ?? null)
+              : undefined,
+            links: span.links.length,
+          }));
+
+          expect(actual).toEqual(
+            expected.map((entry) => {
+              const matcher: Record<string, unknown> = { name: entry.name };
+              if (entry.kind !== undefined) matcher.kind = spanKindMap[entry.kind];
+              if (entry.attributes) matcher.attributes = expect.objectContaining(entry.attributes);
+              if (entry.status !== undefined) matcher.status = spanStatusMap[entry.status];
+              if (entry.parentName !== undefined) matcher.parentName = entry.parentName;
+              if (entry.links !== undefined) matcher.links = entry.links;
+              return expect.objectContaining(matcher);
+            }),
           );
         });
       },

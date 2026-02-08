@@ -138,6 +138,7 @@ export const createMongoStateAdapter = async <
       originId,
       deduplication,
       schedule,
+      traceContext,
     }) => {
       const collection = getCollection();
       const newId = idGenerator();
@@ -195,7 +196,7 @@ export const createMongoStateAdapter = async <
 
               deduplicationKey: { $literal: deduplication?.key ?? null },
 
-              traceContext: null,
+              traceContext: { $literal: traceContext ?? null },
 
               blockers: [],
             },

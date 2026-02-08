@@ -61,5 +61,9 @@ export const createMockObservabilityAdapter = (): MockObservabilityAdapter => {
     // gauges
     jobTypeIdleChange: mock("jobTypeIdleChange"),
     jobTypeProcessingChange: mock("jobTypeProcessingChange"),
+
+    // tracing
+    startJobSpan: () => undefined,
+    startAttemptSpan: () => undefined,
   };
 };

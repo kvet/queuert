@@ -10,6 +10,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     runInTransaction,
     observabilityAdapter,
     log,
+    expectSpans,
     expect,
   }) => {
     const registry = defineJobTypes<{
@@ -85,6 +86,19 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       client.getJobChain({ ...txContext, ...chain2 }),
     );
     expect("output" in fetched2! && fetched2.output).toEqual({ result: 1 });
+
+    await expectSpans([
+      // Chain 1: created normally
+      { name: "chain test", kind: "PRODUCER" },
+      { name: "job test", kind: "PRODUCER", parentName: "chain test" },
+      // Chain 2: deduplicated (same key) — status UNSET, not ERROR
+      { name: "chain test", kind: "PRODUCER", attributes: { "queuert.chain.deduplicated": true } },
+      { name: "job test", kind: "PRODUCER", attributes: { "queuert.chain.deduplicated": true } },
+      // Chain 3: created normally (different key)
+      { name: "chain test", kind: "PRODUCER" },
+      { name: "job test", kind: "PRODUCER", parentName: "chain test" },
+      // Note: completeJobChain (workerless completion) does not create attempt spans
+    ]);
   });
 
   it("deduplication scopes: 'any' vs 'incomplete'", async ({

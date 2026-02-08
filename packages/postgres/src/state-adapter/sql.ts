@@ -197,6 +197,7 @@ export const createJobSql: TypedSql<
     NamedParameter<"deduplication_window_ms", number | null | undefined>,
     NamedParameter<"scheduled_at", Date | null>,
     NamedParameter<"schedule_after_ms", number | null>,
+    NamedParameter<"trace_context", unknown>,
   ],
   [DbJob & { deduplicated: boolean }]
 > = sql(
@@ -230,9 +231,10 @@ existing_deduplicated AS (
 ),
 new_id AS (SELECT {{id_default}} AS id),
 inserted_job AS (
-  INSERT INTO {{schema}}.{{table_prefix}}job (id, type_name, chain_id, chain_type_name, input, root_chain_id, origin_id, deduplication_key, scheduled_at)
+  INSERT INTO {{schema}}.{{table_prefix}}job (id, type_name, chain_id, chain_type_name, input, root_chain_id, origin_id, deduplication_key, scheduled_at, trace_context)
   SELECT id, $1, COALESCE($2, id), $3, $4, COALESCE($5, id), $6, $7,
-    COALESCE($10::timestamptz, now() + ($11::bigint || ' milliseconds')::interval, now())
+    COALESCE($10::timestamptz, now() + ($11::bigint || ' milliseconds')::interval, now()),
+    $12
   FROM new_id
   WHERE NOT EXISTS (SELECT 1 FROM existing_continuation)
     AND NOT EXISTS (SELECT 1 FROM existing_deduplicated)

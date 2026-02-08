@@ -31,6 +31,16 @@ export type TestSuiteContext = {
     jobTypeIdleChange?: { delta: number; typeName?: string; workerId?: string }[];
     jobTypeProcessingChange?: { delta: number; typeName?: string; workerId?: string }[];
   }) => Promise<void>;
+  expectSpans: (
+    expected: {
+      name: string;
+      kind?: "PRODUCER" | "CONSUMER" | "INTERNAL";
+      attributes?: Record<string, unknown>;
+      status?: "UNSET" | "OK" | "ERROR";
+      parentName?: string;
+      links?: number;
+    }[],
+  ) => Promise<void>;
 };
 
 export const extendWithCommon = <
@@ -51,6 +61,7 @@ export const extendWithCommon = <
       | "expectMetrics"
       | "expectHistograms"
       | "expectGauges"
+      | "expectSpans"
     >
 > =>
   it.extend<
@@ -64,6 +75,7 @@ export const extendWithCommon = <
       | "expectMetrics"
       | "expectHistograms"
       | "expectGauges"
+      | "expectSpans"
     >
   >({
     runInTransaction: [
@@ -264,6 +276,12 @@ export const extendWithCommon = <
             }
           },
         );
+      },
+      { scope: "test" },
+    ],
+    expectSpans: [
+      async ({}, use) => {
+        await use(async () => {});
       },
       { scope: "test" },
     ],

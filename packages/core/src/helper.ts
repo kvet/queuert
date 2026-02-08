@@ -76,6 +76,7 @@ const jobContextStorage = new AsyncLocalStorage<{
   chainTypeName: string;
   rootChainId: string;
   originId: string;
+  originTraceContext: unknown;
 }>();
 
 export const helper = ({
@@ -132,21 +133,46 @@ export const helper = ({
     const parsedInput = registry.parseInput(typeName, input);
 
     const jobContext = jobContextStorage.getStore();
-    const createJobResult = await stateAdapter.createJob({
-      txContext,
-      typeName,
-      chainTypeName: isChain ? typeName : jobContext!.chainTypeName,
-      input: parsedInput,
-      originId: jobContext?.originId,
-      chainId: isChain ? undefined : jobContext!.chainId,
-      rootChainId: isChain ? jobContext?.rootChainId : jobContext!.rootChainId,
-      deduplication,
-      schedule,
+    const chainTypeName = isChain ? typeName : jobContext!.chainTypeName;
+
+    const spanHandle = observabilityHelper.startJobSpan({
+      chainTypeName,
+      jobTypeName: typeName,
+      isChainStart: isChain,
+      originTraceContext: isChain ? undefined : jobContext?.originTraceContext,
+      rootChainTraceContext: isChain ? jobContext?.originTraceContext : undefined,
     });
+
+    let createJobResult: { job: StateJob; deduplicated: boolean };
+    try {
+      createJobResult = await stateAdapter.createJob({
+        txContext,
+        typeName,
+        chainTypeName,
+        input: parsedInput,
+        originId: jobContext?.originId,
+        chainId: isChain ? undefined : jobContext!.chainId,
+        rootChainId: isChain ? jobContext?.rootChainId : jobContext!.rootChainId,
+        deduplication,
+        schedule,
+        traceContext: spanHandle?.getTraceContext(),
+      });
+    } catch (error) {
+      spanHandle?.end({ status: "error", error });
+      throw error;
+    }
+
     let job = createJobResult.job;
     const deduplicated = createJobResult.deduplicated;
 
     if (deduplicated) {
+      spanHandle?.end({
+        status: "deduplicated",
+        chainId: job.chainId,
+        jobId: job.id,
+        rootChainId: job.rootChainId !== job.chainId ? job.rootChainId : null,
+        existingTraceContext: job.traceContext,
+      });
       return { job, deduplicated };
     }
 
@@ -159,6 +185,7 @@ export const helper = ({
           chainTypeName: job.chainTypeName,
           rootChainId: job.rootChainId,
           originId: job.id,
+          originTraceContext: spanHandle?.getTraceContext(),
         },
         async () => startBlockers({ job: mapStateJobToJob(job) as any }),
       );
@@ -177,6 +204,14 @@ export const helper = ({
 
     const blockerRefs = blockerChains.map((b) => ({ typeName: b.typeName, input: b.input }));
     registry.validateBlockers(typeName, blockerRefs);
+
+    spanHandle?.end({
+      status: "created",
+      chainId: job.chainId,
+      jobId: job.id,
+      rootChainId: job.rootChainId !== job.chainId ? job.rootChainId : null,
+      originId: job.originId ?? null,
+    });
 
     if (isChain) {
       observabilityHelper.jobChainCreated(job, { input });
@@ -256,10 +291,11 @@ export const helper = ({
 
   const withJobContext = async <T>(
     context: {
-      originId: string;
       chainId: string;
-      rootChainId: string;
       chainTypeName: string;
+      rootChainId: string;
+      originId: string;
+      originTraceContext: unknown;
     },
     cb: () => Promise<T>,
   ): Promise<T> => {
@@ -381,6 +417,7 @@ export const helper = ({
         chainTypeName: string;
         rootChainId: string;
         originId: string;
+        originTraceContext: unknown;
       },
       cb: () => Promise<T>,
     ) => Promise<T>,
@@ -453,13 +490,15 @@ export const helper = ({
       txContext: BaseTxContext;
       retryConfig: BackoffConfig;
       workerId: string;
-    }): Promise<void> => {
+    }): Promise<{
+      schedule?: ScheduleOptions;
+    }> => {
       if (
         error instanceof JobTakenByAnotherWorkerError ||
         error instanceof JobAlreadyCompletedError ||
         error instanceof JobNotFoundError
       ) {
-        return;
+        return {};
       }
 
       const isRescheduled = error instanceof RescheduleJobError;
@@ -476,6 +515,8 @@ export const helper = ({
         schedule,
         error: errorString,
       });
+
+      return { schedule };
     },
     finishJob: finishJob as (
       options: {
@@ -689,10 +730,11 @@ export const helper = ({
 
             return withJobContext(
               {
-                originId: job.id,
                 chainId: job.chainId,
                 rootChainId: job.rootChainId,
                 chainTypeName: job.chainTypeName,
+                originId: job.id,
+                originTraceContext: job.traceContext,
               },
               async () =>
                 continueWith({

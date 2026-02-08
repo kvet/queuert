@@ -235,6 +235,7 @@ export const createSqliteStateAdapter = async <
       originId,
       deduplication,
       schedule,
+      traceContext,
     }) => {
       const newId = idGenerator();
       const inputJson = input !== undefined ? JSON.stringify(input) : null;
@@ -247,6 +248,7 @@ export const createSqliteStateAdapter = async <
       const rootChainIdOrNull = rootChainId ?? null;
       const scheduledAtIso = schedule?.at?.toISOString().replace("T", " ").replace("Z", "") ?? null;
       const scheduleAfterMsOrNull = schedule?.afterMs ?? null;
+      const traceContextJson = traceContext !== undefined ? JSON.stringify(traceContext) : null;
 
       const [existing] = await executeTypedSql({
         txContext,
@@ -287,6 +289,7 @@ export const createSqliteStateAdapter = async <
           scheduledAtIso,
           scheduleAfterMsOrNull,
           scheduleAfterMsOrNull,
+          traceContextJson,
         ],
       });
 

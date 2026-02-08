@@ -42,4 +42,8 @@ export const createNoopObservabilityAdapter = (): ObservabilityAdapter => ({
   // gauges
   jobTypeIdleChange: () => {},
   jobTypeProcessingChange: () => {},
+
+  // tracing
+  startJobSpan: () => undefined,
+  startAttemptSpan: () => undefined,
 });

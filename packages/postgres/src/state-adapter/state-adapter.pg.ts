@@ -162,6 +162,7 @@ export const createPgStateAdapter = async <
       originId,
       deduplication,
       schedule,
+      traceContext,
     }) => {
       const [result] = await executeTypedSql({
         txContext,
@@ -178,6 +179,7 @@ export const createPgStateAdapter = async <
           deduplication?.windowMs ?? null,
           schedule?.at ?? null,
           schedule?.afterMs ?? null,
+          traceContext ?? null,
         ],
       });
 
