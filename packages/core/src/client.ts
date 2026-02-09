@@ -98,85 +98,6 @@ export type CompleteJobChainResult<
         >
       >;
 
-export type Client<
-  TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TStateAdapter extends StateAdapter<any, any>,
-> = {
-  startJobChain: <
-    TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
-  >(
-    options: {
-      typeName: TChainTypeName;
-      input: TJobTypeDefinitions[TChainTypeName]["input"];
-      deduplication?: DeduplicationOptions;
-      schedule?: ScheduleOptions;
-    } & (HasBlockers<TJobTypeDefinitions, TChainTypeName> extends true
-      ? {
-          startBlockers: StartBlockersFn<
-            GetStateAdapterJobId<TStateAdapter>,
-            TJobTypeDefinitions,
-            TChainTypeName
-          >;
-        }
-      : { startBlockers?: never }) &
-      GetStateAdapterTxContext<TStateAdapter>,
-  ) => Promise<
-    JobChainOf<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TChainTypeName> & {
-      deduplicated: boolean;
-    }
-  >;
-  getJobChain: <TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string>(
-    options: {
-      typeName: TChainTypeName;
-      id: GetStateAdapterJobId<TStateAdapter>;
-    } & GetStateAdapterTxContext<TStateAdapter>,
-  ) => Promise<JobChainOf<
-    GetStateAdapterJobId<TStateAdapter>,
-    TJobTypeDefinitions,
-    TChainTypeName
-  > | null>;
-  deleteJobChains: (
-    options: {
-      rootChainIds: GetStateAdapterJobId<TStateAdapter>[];
-    } & GetStateAdapterTxContext<TStateAdapter>,
-  ) => Promise<void>;
-  completeJobChain: <
-    TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
-    TCompleteReturn,
-  >(
-    options: {
-      typeName: TChainTypeName;
-      id: GetStateAdapterJobId<TStateAdapter>;
-      complete: JobChainCompleteOptions<
-        TStateAdapter,
-        TJobTypeDefinitions,
-        TChainTypeName,
-        TCompleteReturn
-      >;
-    } & GetStateAdapterTxContext<TStateAdapter>,
-  ) => Promise<
-    CompleteJobChainResult<TStateAdapter, TJobTypeDefinitions, TChainTypeName, TCompleteReturn>
-  >;
-  withNotify: <T>(cb: () => Promise<T>) => Promise<T>;
-  waitForJobChainCompletion: <
-    TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
-  >(
-    jobChain: {
-      typeName: TChainTypeName;
-      id: GetStateAdapterJobId<TStateAdapter>;
-    },
-    options: {
-      timeoutMs: number;
-      pollIntervalMs?: number;
-      signal?: AbortSignal;
-    },
-  ) => Promise<
-    CompletedJobChain<
-      JobChainOf<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TChainTypeName>
-    >
-  >;
-};
-
 export const createClient = async <
   TJobTypeRegistry extends JobTypeRegistry<any>,
   TStateAdapter extends StateAdapter<any, any>,
@@ -192,7 +113,10 @@ export const createClient = async <
   observabilityAdapter?: ObservabilityAdapter;
   registry: TJobTypeRegistry;
   log?: Log;
-}): Promise<Client<TJobTypeRegistry["$definitions"], TStateAdapter>> => {
+}) => {
+  type TJobTypeDefinitions = TJobTypeRegistry["$definitions"];
+  type TJobId = GetStateAdapterJobId<TStateAdapter>;
+
   const { stateAdapter, notifyAdapter } = setupHelpers({
     stateAdapter: stateAdapterOption,
     notifyAdapter: notifyAdapterOption,
@@ -211,34 +135,64 @@ export const createClient = async <
   });
 
   return {
-    startJobChain: (async ({
-      input,
-      typeName,
-      deduplication,
-      schedule,
-      startBlockers,
-      ...txContext
-    }) =>
-      h.startJobChain({
+    startJobChain: async <
+      TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
+    >(
+      options: {
+        typeName: TChainTypeName;
+        input: TJobTypeDefinitions[TChainTypeName]["input"];
+        deduplication?: DeduplicationOptions;
+        schedule?: ScheduleOptions;
+      } & (HasBlockers<TJobTypeDefinitions, TChainTypeName> extends true
+        ? {
+            startBlockers: StartBlockersFn<TJobId, TJobTypeDefinitions, TChainTypeName>;
+          }
+        : { startBlockers?: never }) &
+        GetStateAdapterTxContext<TStateAdapter>,
+    ): Promise<
+      JobChainOf<TJobId, TJobTypeDefinitions, TChainTypeName> & {
+        deduplicated: boolean;
+      }
+    > => {
+      const { input, typeName, deduplication, schedule, startBlockers, ...txContext } = options;
+      return (await h.startJobChain({
         typeName,
         input,
         txContext,
         deduplication,
         schedule,
         startBlockers,
-      })) as Client<TJobTypeRegistry["$definitions"], TStateAdapter>["startJobChain"],
+      })) as JobChainOf<TJobId, TJobTypeDefinitions, TChainTypeName> & { deduplicated: boolean };
+    },
     // TODO: should it handle typeName that is not correct for the given id?
-    getJobChain: (async ({ id, typeName: _, ...txContext }) => {
+    getJobChain: async <
+      TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
+    >(
+      options: {
+        typeName: TChainTypeName;
+        id: TJobId;
+      } & GetStateAdapterTxContext<TStateAdapter>,
+    ): Promise<JobChainOf<TJobId, TJobTypeDefinitions, TChainTypeName> | null> => {
+      const { id, typeName: _, ...txContext } = options;
       const jobChain = await stateAdapter.getJobChainById({
         txContext,
         jobId: id,
       });
 
-      return jobChain ? mapStateJobPairToJobChain(jobChain) : null;
-    }) as Client<TJobTypeRegistry["$definitions"], TStateAdapter>["getJobChain"],
-    deleteJobChains: (async ({ rootChainIds, ...txContext }) => {
+      return (jobChain ? mapStateJobPairToJobChain(jobChain) : null) as JobChainOf<
+        TJobId,
+        TJobTypeDefinitions,
+        TChainTypeName
+      > | null;
+    },
+    deleteJobChains: async (
+      options: {
+        rootChainIds: TJobId[];
+      } & GetStateAdapterTxContext<TStateAdapter>,
+    ): Promise<void> => {
+      const { rootChainIds, ...txContext } = options;
       const chainJobs = await Promise.all(
-        rootChainIds.map(async (chainId: GetStateAdapterJobId<TStateAdapter>) =>
+        rootChainIds.map(async (chainId: TJobId) =>
           stateAdapter.getJobById({
             txContext,
             jobId: chainId,
@@ -282,8 +236,25 @@ export const createClient = async <
         txContext,
         rootChainIds,
       });
-    }) as Client<TJobTypeRegistry["$definitions"], TStateAdapter>["deleteJobChains"],
-    completeJobChain: (async ({ id, typeName: _, complete: completeCallback, ...txContext }) => {
+    },
+    completeJobChain: async <
+      TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
+      TCompleteReturn,
+    >(
+      options: {
+        typeName: TChainTypeName;
+        id: TJobId;
+        complete: JobChainCompleteOptions<
+          TStateAdapter,
+          TJobTypeDefinitions,
+          TChainTypeName,
+          TCompleteReturn
+        >;
+      } & GetStateAdapterTxContext<TStateAdapter>,
+    ): Promise<
+      CompleteJobChainResult<TStateAdapter, TJobTypeDefinitions, TChainTypeName, TCompleteReturn>
+    > => {
+      const { id, typeName: _, complete: completeCallback, ...txContext } = options;
       const currentJob = await stateAdapter.getCurrentJobForUpdate({
         txContext,
         chainId: id,
@@ -369,17 +340,41 @@ export const createClient = async <
         throw new JobNotFoundError(`Job chain with id ${id} not found after complete`);
       }
 
-      return mapStateJobPairToJobChain(updatedChain);
-    }) as Client<TJobTypeRegistry["$definitions"], TStateAdapter>["completeJobChain"],
+      return mapStateJobPairToJobChain(updatedChain) as CompleteJobChainResult<
+        TStateAdapter,
+        TJobTypeDefinitions,
+        TChainTypeName,
+        TCompleteReturn
+      >;
+    },
+    withNotify: async <T>(cb: () => Promise<T>): Promise<T> =>
+      h.withNotifyContext(async () => cb()),
     // TODO: should it handle typeName that is not correct for the given id?
-    waitForJobChainCompletion: (async ({ id }, { timeoutMs, pollIntervalMs = 15_000, signal }) => {
+    waitForJobChainCompletion: async <
+      TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
+    >(
+      jobChain: {
+        typeName: TChainTypeName;
+        id: TJobId;
+      },
+      options: {
+        timeoutMs: number;
+        pollIntervalMs?: number;
+        signal?: AbortSignal;
+      },
+    ): Promise<CompletedJobChain<JobChainOf<TJobId, TJobTypeDefinitions, TChainTypeName>>> => {
+      const { id } = jobChain;
+      const { timeoutMs, pollIntervalMs = 15_000, signal } = options;
+
       const checkChain = async () => {
         const chain = await stateAdapter.getJobChainById({ jobId: id });
         if (!chain) {
           throw new JobNotFoundError(`Job chain with id ${id} not found`);
         }
         const jobChain = mapStateJobPairToJobChain(chain);
-        return jobChain.status === "completed" ? jobChain : null;
+        return jobChain.status === "completed"
+          ? (jobChain as CompletedJobChain<JobChainOf<TJobId, TJobTypeDefinitions, TChainTypeName>>)
+          : null;
       };
 
       const completedChain = await checkChain();
@@ -425,7 +420,11 @@ export const createClient = async <
       } finally {
         await dispose();
       }
-    }) as Client<TJobTypeRegistry["$definitions"], TStateAdapter>["waitForJobChainCompletion"],
-    withNotify: async (cb, ...args) => h.withNotifyContext(async () => cb(...args)),
+    },
   };
 };
+
+export type Client<
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TStateAdapter extends StateAdapter<any, any>,
+> = Awaited<ReturnType<typeof createClient<JobTypeRegistry<TJobTypeDefinitions>, TStateAdapter>>>;

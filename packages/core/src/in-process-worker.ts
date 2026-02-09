@@ -62,10 +62,6 @@ export type InProcessWorkerProcessors<
   >;
 };
 
-export type InProcessWorker = {
-  start: () => Promise<() => Promise<void>>;
-};
-
 const waitForNextJob = async ({
   stateAdapter,
   notifyAdapter,
@@ -225,7 +221,7 @@ export const createInProcessWorker = async <
   retryConfig?: BackoffConfig;
   processDefaults?: InProcessWorkerProcessDefaults<TStateAdapter, TJobTypeRegistry["$definitions"]>;
   processors: InProcessWorkerProcessors<TStateAdapter, TJobTypeRegistry["$definitions"]>;
-}): Promise<InProcessWorker> => {
+}) => {
   const typeNames = Array.from(Object.keys(processors));
 
   const pollIntervalMs = processDefaults?.pollIntervalMs ?? 60_000;
@@ -246,7 +242,7 @@ export const createInProcessWorker = async <
   const attemptMiddlewares = processDefaults?.attemptMiddlewares;
 
   return {
-    start: async () => {
+    start: async (): Promise<() => Promise<void>> => {
       const { stateAdapter, notifyAdapter, observabilityHelper } = setupHelpers({
         stateAdapter: stateAdapterOption,
         notifyAdapter: notifyAdapterOption,
@@ -362,3 +358,5 @@ export const createInProcessWorker = async <
     },
   };
 };
+
+export type InProcessWorker = ReturnType<typeof createInProcessWorker>;

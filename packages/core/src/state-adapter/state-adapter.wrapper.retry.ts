@@ -11,12 +11,12 @@ export const wrapStateAdapterWithRetry = <TTxContext extends BaseTxContext, TJob
   isRetryableError: (error: unknown) => boolean;
 }): StateAdapter<TTxContext, TJobId> => {
   const wrap = <T extends (...args: never[]) => Promise<unknown>>(fn: T): T =>
-    (async (...args: unknown[]) => {
+    (async (...args: Parameters<T>) => {
       const params = args[0] as { txContext?: TTxContext } | undefined;
       if (params?.txContext !== undefined) {
-        return fn(...(args as Parameters<T>));
+        return fn(...args);
       }
-      return withRetry(async () => fn(...(args as Parameters<T>)), retryConfig, {
+      return withRetry(async () => fn(...args), retryConfig, {
         isRetryableError,
       });
     }) as unknown as T;
