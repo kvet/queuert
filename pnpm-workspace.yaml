@@ -1,4 +1,5 @@
 packages:
   - "examples/*"
+  - "packages-internal/*"
   - "packages/*"
 dangerouslyAllowAllBuilds: true
