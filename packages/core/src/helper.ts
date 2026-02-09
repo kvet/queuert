@@ -1,20 +1,9 @@
-import { AsyncLocalStorage } from "node:async_hooks";
-import { type UUID } from "node:crypto";
-import {
-  type CompletedJobChain,
-  type JobChain,
-  mapStateJobPairToJobChain,
-} from "./entities/job-chain.js";
+import { type JobChain, mapStateJobPairToJobChain } from "./entities/job-chain.js";
 import { type JobTypeRegistry } from "./entities/job-type-registry.js";
-import { wrapJobTypeRegistryWithLogging } from "./entities/job-type-registry.wrapper.logging.js";
 import {
   type BaseJobTypeDefinitions,
   type BlockerChains,
-  type ChainJobTypes,
-  type ChainJobs,
-  type ContinuationJobs,
   type EntryJobTypeDefinitions,
-  type JobChainOf,
   type JobOf,
 } from "./entities/job-type.js";
 import {
@@ -28,29 +17,26 @@ import {
   JobAlreadyCompletedError,
   JobNotFoundError,
   JobTakenByAnotherWorkerError,
-  WaitChainTimeoutError,
 } from "./errors.js";
 import { type BackoffConfig, calculateBackoffMs } from "./helpers/backoff.js";
-import { raceWithSleep } from "./helpers/sleep.js";
+import { jobContextStorage, withJobContext } from "./helpers/job-context.js";
+import {
+  notifyChainCompletion,
+  notifyJobScheduled,
+  withNotifyContext,
+} from "./helpers/notify-context.js";
 import { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
-import { createNoopNotifyAdapter } from "./notify-adapter/notify-adapter.noop.js";
-import { wrapNotifyAdapterWithLogging } from "./notify-adapter/notify-adapter.wrapper.logging.js";
 import { type Log } from "./observability-adapter/log.js";
 import { type ObservabilityAdapter } from "./observability-adapter/observability-adapter.js";
-import { createNoopObservabilityAdapter } from "./observability-adapter/observability-adapter.noop.js";
-import {
-  type ObservabilityHelper,
-  createObservabilityHelper,
-} from "./observability-adapter/observability-helper.js";
+import { type ObservabilityHelper } from "./observability-adapter/observability-helper.js";
 import {
   type BaseTxContext,
   type DeduplicationOptions,
-  type GetStateAdapterJobId,
   type StateAdapter,
   type StateJob,
 } from "./state-adapter/state-adapter.js";
-import { wrapStateAdapterWithLogging } from "./state-adapter/state-adapter.wrapper.logging.js";
-import { type CompleteCallbackOptions, RescheduleJobError } from "./worker/job-process.js";
+import { RescheduleJobError } from "./worker/job-process.js";
+import { setupHelpers } from "./setup-helpers.js";
 
 export type StartBlockersFn<
   TJobId,
@@ -63,21 +49,6 @@ export type StartBlockersFn<
     JobWithoutBlockers<JobOf<TJobId, TJobTypeDefinitions, TJobTypeName, TChainTypeName>>
   >;
 }) => Promise<BlockerChains<TJobId, TJobTypeDefinitions, TJobTypeName>>;
-
-const notifyCompletionStorage = new AsyncLocalStorage<{
-  storeId: UUID;
-  jobTypeCounts: Map<string, number>;
-  chainIds: Set<string>;
-  jobOwnershipLostIds: Set<string>;
-}>();
-const jobContextStorage = new AsyncLocalStorage<{
-  storeId: UUID;
-  chainId: string;
-  chainTypeName: string;
-  rootChainId: string;
-  originId: string;
-  originTraceContext: unknown;
-}>();
 
 export const helper = ({
   stateAdapter: stateAdapterOption,
@@ -92,21 +63,12 @@ export const helper = ({
   registry: JobTypeRegistry;
   log?: Log;
 }) => {
-  const observabilityAdapter = observabilityAdapterOption ?? createNoopObservabilityAdapter();
-  const observabilityHelper = createObservabilityHelper({ log, adapter: observabilityAdapter });
-  const stateAdapter = wrapStateAdapterWithLogging({
+  const { stateAdapter, notifyAdapter, observabilityHelper, registry } = setupHelpers({
     stateAdapter: stateAdapterOption,
-    observabilityHelper,
-  });
-  const notifyAdapter = notifyAdapterOption
-    ? wrapNotifyAdapterWithLogging({
-        notifyAdapter: notifyAdapterOption,
-        observabilityHelper,
-      })
-    : createNoopNotifyAdapter();
-  const registry = wrapJobTypeRegistryWithLogging({
+    notifyAdapter: notifyAdapterOption,
+    observabilityAdapter: observabilityAdapterOption,
     registry: registryOption,
-    observabilityHelper,
+    log,
   });
 
   const createStateJob = async ({
@@ -225,87 +187,9 @@ export const helper = ({
       observabilityHelper.jobBlocked(job, { blockedByChains: incompleteBlockerChains });
     }
 
-    notifyJobScheduled(job);
+    notifyJobScheduled(job, notifyAdapterOption, observabilityHelper);
 
     return { job, deduplicated };
-  };
-
-  const notifyJobScheduled = (job: StateJob): void => {
-    const store = notifyCompletionStorage.getStore();
-    if (store) {
-      store.jobTypeCounts.set(job.typeName, (store.jobTypeCounts.get(job.typeName) ?? 0) + 1);
-    } else if (notifyAdapterOption) {
-      observabilityHelper.notifyContextAbsence(job);
-    }
-  };
-
-  const notifyChainCompletion = (job: StateJob): void => {
-    const store = notifyCompletionStorage.getStore();
-    if (store) {
-      store.chainIds.add(job.chainId);
-    }
-  };
-
-  const notifyJobOwnershipLost = (jobId: string): void => {
-    const store = notifyCompletionStorage.getStore();
-    if (store) {
-      store.jobOwnershipLostIds.add(jobId);
-    }
-  };
-
-  const withNotifyContext = async <T>(cb: () => Promise<T>): Promise<T> => {
-    if (notifyCompletionStorage.getStore()) {
-      return cb();
-    }
-
-    const store = {
-      storeId: crypto.randomUUID(),
-      jobTypeCounts: new Map<string, number>(),
-      chainIds: new Set<string>(),
-      jobOwnershipLostIds: new Set<string>(),
-    };
-    return notifyCompletionStorage.run(store, async () => {
-      const result = await cb();
-
-      await Promise.all([
-        ...Array.from(store.jobTypeCounts.entries()).map(async ([typeName, count]) => {
-          try {
-            await notifyAdapter.notifyJobScheduled(typeName, count);
-          } catch {}
-        }),
-        ...Array.from(store.chainIds).map(async (chainId) => {
-          try {
-            await notifyAdapter.notifyJobChainCompleted(chainId);
-          } catch {}
-        }),
-        ...Array.from(store.jobOwnershipLostIds).map(async (jobId) => {
-          try {
-            await notifyAdapter.notifyJobOwnershipLost(jobId);
-          } catch {}
-        }),
-      ]);
-
-      return result;
-    });
-  };
-
-  const withJobContext = async <T>(
-    context: {
-      chainId: string;
-      chainTypeName: string;
-      rootChainId: string;
-      originId: string;
-      originTraceContext: unknown;
-    },
-    cb: () => Promise<T>,
-  ): Promise<T> => {
-    return jobContextStorage.run(
-      {
-        storeId: crypto.randomUUID(),
-        ...context,
-      },
-      cb,
-    );
   };
 
   const continueWith = async <TJobTypeName extends string, TInput>({
@@ -392,7 +276,7 @@ export const helper = ({
 
       if (unblockedJobs.length > 0) {
         unblockedJobs.forEach((unblockedJob) => {
-          notifyJobScheduled(unblockedJob);
+          notifyJobScheduled(unblockedJob, notifyAdapterOption, observabilityHelper);
           observabilityHelper.jobUnblocked(unblockedJob, {
             unblockedByChain: jobChainStartJob,
           });
@@ -410,7 +294,8 @@ export const helper = ({
     notifyAdapter: notifyAdapter as NotifyAdapter,
     // oxlint-disable-next-line no-unnecessary-type-assertion -- needed for --isolatedDeclarations
     observabilityHelper: observabilityHelper as ObservabilityHelper,
-    withNotifyContext: withNotifyContext as <T>(cb: () => Promise<T>) => Promise<T>,
+    withNotifyContext: (async <T>(cb: () => Promise<T>) =>
+      withNotifyContext(notifyAdapter, cb)) as <T>(cb: () => Promise<T>) => Promise<T>,
     withJobContext: withJobContext as <T>(
       context: {
         chainId: string;
@@ -447,21 +332,6 @@ export const helper = ({
       });
 
       return { ...mapStateJobPairToJobChain([job, undefined]), deduplicated };
-    },
-    getJobChain: async <TChainTypeName extends string, TInput, TOutput>({
-      id,
-      txContext,
-    }: {
-      id: string;
-      typeName: TChainTypeName;
-      txContext: any;
-    }): Promise<JobChain<string, TChainTypeName, TInput, TOutput> | null> => {
-      const jobChain = await stateAdapter.getJobChainById({
-        txContext,
-        jobId: id,
-      });
-
-      return jobChain ? mapStateJobPairToJobChain(jobChain) : null;
     },
     continueWith: continueWith as <TJobTypeName extends string, TInput>({
       typeName,
@@ -579,322 +449,7 @@ export const helper = ({
 
       return fetchedJob;
     },
-    removeExpiredJobLease: async ({
-      typeNames,
-      workerId,
-      ignoredJobIds,
-    }: {
-      typeNames: string[];
-      workerId: string;
-      ignoredJobIds?: string[];
-    }): Promise<boolean> => {
-      const job = await stateAdapter.removeExpiredJobLease({ typeNames, ignoredJobIds });
-      if (job) {
-        observabilityHelper.jobReaped(job, { workerId });
-
-        try {
-          await notifyAdapter.notifyJobScheduled(job.typeName, 1);
-        } catch {}
-        try {
-          await notifyAdapter.notifyJobOwnershipLost(job.id);
-        } catch {}
-      }
-      return !!job;
-    },
-    deleteJobChains: async ({
-      rootChainIds,
-      txContext,
-    }: {
-      rootChainIds: string[];
-      txContext: BaseTxContext;
-    }): Promise<void> => {
-      const chainJobs = await Promise.all(
-        rootChainIds.map(async (chainId) =>
-          stateAdapter.getJobById({
-            txContext,
-            jobId: chainId,
-          }),
-        ),
-      );
-
-      for (let i = 0; i < rootChainIds.length; i++) {
-        const chainJob = chainJobs[i];
-        const chainId = rootChainIds[i];
-
-        if (!chainJob) {
-          throw new JobNotFoundError(`Job chain with id ${chainId} not found`);
-        }
-
-        if (chainJob.rootChainId !== chainJob.id) {
-          throw new Error(
-            `Cannot delete job chain ${chainId}: must delete from the root chain (rootChainId: ${chainJob.rootChainId})`,
-          );
-        }
-      }
-
-      const externalBlockers = await stateAdapter.getExternalBlockers({
-        txContext,
-        rootChainIds,
-      });
-
-      if (externalBlockers.length > 0) {
-        const uniqueBlockedRootIds = [
-          ...new Set(externalBlockers.map((b) => b.blockedRootChainId)),
-        ];
-        throw new Error(
-          `Cannot delete job chains: external job chains depend on them. ` +
-            `Include the following root chains in the deletion: ${uniqueBlockedRootIds.join(", ")}`,
-        );
-      }
-
-      await stateAdapter.deleteJobsByRootChainIds({
-        txContext,
-        rootChainIds,
-      });
-    },
-    completeJobChain: async <TChainTypeName extends string, TInput, TOutput>({
-      id,
-      txContext,
-      complete: completeCallback,
-    }: {
-      id: string;
-      typeName: TChainTypeName;
-      txContext: BaseTxContext;
-      complete: (options: {
-        job: StateJob;
-        complete: (
-          job: StateJob,
-          completeCallback: (
-            options: {
-              continueWith: (options: {
-                typeName: string;
-                input: unknown;
-                startBlockers?: StartBlockersFn<string, BaseJobTypeDefinitions, string>;
-              }) => Promise<unknown>;
-            } & BaseTxContext,
-          ) => unknown,
-        ) => Promise<unknown>;
-      }) => Promise<void>;
-    }): Promise<JobChain<string, TChainTypeName, TInput, TOutput>> => {
-      const currentJob = await stateAdapter.getCurrentJobForUpdate({
-        txContext,
-        chainId: id,
-      });
-
-      if (!currentJob) {
-        throw new JobNotFoundError(`Job chain with id ${id} not found`);
-      }
-
-      const complete = async (
-        job: StateJob,
-        jobCompleteCallback: (
-          options: {
-            continueWith: (options: {
-              typeName: string;
-              input: unknown;
-              schedule?: ScheduleOptions;
-              startBlockers?: StartBlockersFn<string, BaseJobTypeDefinitions, string>;
-            }) => Promise<unknown>;
-          } & BaseTxContext,
-        ) => unknown,
-      ): Promise<unknown> => {
-        if (job.status === "completed") {
-          throw new JobAlreadyCompletedError(
-            `Cannot complete job ${job.id}: job is already completed`,
-            { cause: { jobId: job.id } },
-          );
-        }
-
-        let continuedJob: Job<any, any, any, any, any[]> | null = null;
-
-        const output = await jobCompleteCallback({
-          continueWith: async ({ typeName, input, schedule, startBlockers }) => {
-            if (continuedJob) {
-              throw new Error("continueWith can only be called once");
-            }
-
-            return withJobContext(
-              {
-                chainId: job.chainId,
-                rootChainId: job.rootChainId,
-                chainTypeName: job.chainTypeName,
-                originId: job.id,
-                originTraceContext: job.traceContext,
-              },
-              async () =>
-                continueWith({
-                  typeName,
-                  input,
-                  txContext,
-                  schedule,
-                  startBlockers: startBlockers as any,
-                  fromTypeName: job.typeName,
-                }),
-            );
-          },
-          ...txContext,
-        });
-
-        const wasRunning = job.status === "running";
-
-        await finishJob(
-          continuedJob
-            ? { job, txContext, workerId: null, type: "continueWith", continuedJob }
-            : { job, txContext, workerId: null, type: "completeChain", output },
-        );
-
-        if (wasRunning) {
-          notifyJobOwnershipLost(job.id);
-        }
-
-        return continuedJob ?? output;
-      };
-
-      await completeCallback({ job: currentJob, complete });
-
-      const updatedChain = await stateAdapter.getJobChainById({
-        txContext,
-        jobId: id,
-      });
-
-      if (!updatedChain) {
-        throw new JobNotFoundError(`Job chain with id ${id} not found after complete`);
-      }
-
-      return mapStateJobPairToJobChain(updatedChain);
-    },
-    waitForJobChainCompletion: async <TChainTypeName extends string, TInput, TOutput>({
-      id,
-      timeoutMs,
-      pollIntervalMs = 15_000,
-      signal,
-    }: {
-      id: string;
-      typeName: TChainTypeName;
-      timeoutMs: number;
-      pollIntervalMs?: number;
-      signal?: AbortSignal;
-    }): Promise<CompletedJobChain<JobChain<string, TChainTypeName, TInput, TOutput>>> => {
-      const checkChain = async (): Promise<CompletedJobChain<
-        JobChain<string, TChainTypeName, TInput, TOutput>
-      > | null> => {
-        const chain = await stateAdapter.getJobChainById({ jobId: id });
-        if (!chain) {
-          throw new JobNotFoundError(`Job chain with id ${id} not found`);
-        }
-        const jobChain = mapStateJobPairToJobChain(chain);
-        return jobChain.status === "completed"
-          ? (jobChain as CompletedJobChain<JobChain<string, TChainTypeName, TInput, TOutput>>)
-          : null;
-      };
-
-      const completedChain = await checkChain();
-      if (completedChain) {
-        return completedChain;
-      }
-
-      const timeoutSignal = AbortSignal.timeout(timeoutMs);
-      const combinedSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
-
-      let resolveNotification: (() => void) | null = null;
-      let notificationPromise!: Promise<void>;
-      const resetNotificationPromise = (): void => {
-        const { promise, resolve } = Promise.withResolvers<void>();
-        notificationPromise = promise;
-        resolveNotification = resolve;
-      };
-      resetNotificationPromise();
-
-      let dispose: () => Promise<void> = async () => {};
-      try {
-        dispose = await notifyAdapter.listenJobChainCompleted(id, () => {
-          resolveNotification?.();
-        });
-      } catch {}
-      try {
-        while (!combinedSignal.aborted) {
-          await raceWithSleep(notificationPromise, pollIntervalMs, { signal: combinedSignal });
-          resetNotificationPromise();
-
-          const chain = await checkChain();
-          if (chain) return chain;
-
-          if (combinedSignal.aborted) break;
-        }
-
-        throw new WaitChainTimeoutError(
-          signal?.aborted
-            ? `Wait for job chain ${id} was aborted`
-            : `Timeout waiting for job chain ${id} to complete after ${timeoutMs}ms`,
-          { cause: { chainId: id, timeoutMs } },
-        );
-      } finally {
-        await dispose();
-      }
-    },
   };
 };
 
 export type Helper = ReturnType<typeof helper>;
-
-export type JobChainCompleteOptions<
-  TStateAdapter extends StateAdapter<any, any>,
-  TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
-  TCompleteReturn,
-> = (options: {
-  job: ChainJobs<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TChainTypeName>;
-  complete: <
-    TJobTypeName extends ChainJobTypes<TJobTypeDefinitions, TChainTypeName> & string,
-    TReturn extends
-      | TJobTypeDefinitions[TJobTypeName]["output"]
-      | ContinuationJobs<
-          GetStateAdapterJobId<TStateAdapter>,
-          TJobTypeDefinitions,
-          TJobTypeName,
-          TChainTypeName
-        >
-      | Promise<TJobTypeDefinitions[TJobTypeName]["output"]>
-      | Promise<
-          ContinuationJobs<
-            GetStateAdapterJobId<TStateAdapter>,
-            TJobTypeDefinitions,
-            TJobTypeName,
-            TChainTypeName
-          >
-        >,
-  >(
-    job: JobOf<
-      GetStateAdapterJobId<TStateAdapter>,
-      TJobTypeDefinitions,
-      TJobTypeName,
-      TChainTypeName
-    >,
-    completeCallback: (
-      completeOptions: CompleteCallbackOptions<
-        TStateAdapter,
-        TJobTypeDefinitions,
-        TJobTypeName,
-        TChainTypeName
-      >,
-    ) => TReturn,
-  ) => Promise<Awaited<TReturn>>;
-}) => Promise<TCompleteReturn>;
-
-export type CompleteJobChainResult<
-  TStateAdapter extends StateAdapter<any, any>,
-  TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TChainTypeName extends keyof TJobTypeDefinitions & string,
-  TCompleteReturn,
-> = [TCompleteReturn] extends [void]
-  ? JobChainOf<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TChainTypeName>
-  : TCompleteReturn extends Job<any, any, any, any, any[]>
-    ? JobChainOf<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TChainTypeName>
-    : CompletedJobChain<
-        JobChain<
-          GetStateAdapterJobId<TStateAdapter>,
-          TChainTypeName,
-          TJobTypeDefinitions[TChainTypeName]["input"],
-          TCompleteReturn
-        >
-      >;

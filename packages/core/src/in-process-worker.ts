@@ -22,6 +22,7 @@ import {
 } from "./errors.js";
 import { type ParallelExecutor, createParallelExecutor } from "./helpers/parallel-executor.js";
 import { createSignal } from "./helpers/signal.js";
+import { setupHelpers } from "./setup-helpers.js";
 
 export type InProcessWorkerProcessDefaults<
   TStateAdapter extends StateAdapter<any, any>,
@@ -66,13 +67,15 @@ export type InProcessWorker = {
 };
 
 const waitForNextJob = async ({
-  helper,
+  stateAdapter,
+  notifyAdapter,
   typeNames,
   pollIntervalMs,
   executor,
   signal,
 }: {
-  helper: Helper;
+  stateAdapter: StateAdapter<any, any>;
+  notifyAdapter: NotifyAdapter;
   typeNames: string[];
   pollIntervalMs: number;
   executor: ParallelExecutor<any>;
@@ -82,7 +85,7 @@ const waitForNextJob = async ({
   let disposeNotified: () => Promise<void> = async () => {};
   try {
     if (executor.idleSlots() > 0) {
-      disposeNotified = await helper.notifyAdapter.listenJobScheduled(typeNames, () => {
+      disposeNotified = await notifyAdapter.listenJobScheduled(typeNames, () => {
         onNotification();
       });
     }
@@ -90,7 +93,7 @@ const waitForNextJob = async ({
   const { promise: slotAvailable, resolve: onSlotAvailable } = Promise.withResolvers<void>();
   const disposeSlotAvailable = executor.onIdleSlot(onSlotAvailable);
   try {
-    const nextJobAvailableInMs = await helper.stateAdapter.getNextJobAvailableInMs({
+    const nextJobAvailableInMs = await stateAdapter.getNextJobAvailableInMs({
       typeNames,
     });
     const pullDelayMs =
@@ -113,6 +116,7 @@ const waitForNextJob = async ({
 
 const performJob = async ({
   helper,
+  stateAdapter,
   typeNames,
   processors,
   defaultRetryConfig,
@@ -120,7 +124,8 @@ const performJob = async ({
   workerId,
   attemptMiddlewares,
 }: {
-  helper: Helper;
+  helper: Helper; // TODO: remove
+  stateAdapter: StateAdapter<any, any>;
   typeNames: string[];
   processors: InProcessWorkerProcessors<any, any>;
   defaultRetryConfig: BackoffConfig;
@@ -132,9 +137,9 @@ const performJob = async ({
 > => {
   const signal = createSignal<{ job: StateJob | null; hasMore: boolean }>();
 
-  const grabJobPromise = helper.stateAdapter.runInTransaction(
+  const grabJobPromise = stateAdapter.runInTransaction(
     async (txContext): Promise<() => Promise<void>> => {
-      const { job, hasMore } = await helper.stateAdapter.acquireJob({
+      const { job, hasMore } = await stateAdapter.acquireJob({
         txContext,
         typeNames,
       });
@@ -199,10 +204,10 @@ export const createInProcessWorker = async <
   TJobTypeRegistry extends JobTypeRegistry<any>,
   TStateAdapter extends StateAdapter<any, any>,
 >({
-  stateAdapter,
-  notifyAdapter,
-  observabilityAdapter,
-  registry,
+  stateAdapter: stateAdapterOption,
+  notifyAdapter: notifyAdapterOption,
+  observabilityAdapter: observabilityAdapterOption,
+  registry: registryOption,
   log,
   workerId = randomUUID(),
   concurrency,
@@ -242,15 +247,16 @@ export const createInProcessWorker = async <
 
   return {
     start: async () => {
-      const h = helper({
-        stateAdapter,
-        notifyAdapter,
-        observabilityAdapter,
-        registry,
+      const { stateAdapter, notifyAdapter, observabilityHelper } = setupHelpers({
+        stateAdapter: stateAdapterOption,
+        notifyAdapter: notifyAdapterOption,
+        observabilityAdapter: observabilityAdapterOption,
+        registry: registryOption,
         log,
       });
-      h.observabilityHelper.workerStarted({ workerId, jobTypeNames: typeNames });
-      h.observabilityHelper.jobTypeIdleChange(1, workerId, typeNames);
+
+      observabilityHelper.workerStarted({ workerId, jobTypeNames: typeNames });
+      observabilityHelper.jobTypeIdleChange(1, workerId, typeNames);
 
       const stopController = new AbortController();
       const executor = createParallelExecutor(concurrency ?? 1);
@@ -261,7 +267,14 @@ export const createInProcessWorker = async <
           try {
             while (executor.idleSlots() > 0) {
               const result = await performJob({
-                helper: h,
+                helper: helper({
+                  stateAdapter: stateAdapterOption,
+                  notifyAdapter: notifyAdapterOption,
+                  observabilityAdapter: observabilityAdapterOption,
+                  registry: registryOption,
+                  log,
+                }),
+                stateAdapter,
                 typeNames,
                 processors,
                 defaultRetryConfig,
@@ -276,7 +289,7 @@ export const createInProcessWorker = async <
                   try {
                     await result.execute();
                   } catch (error) {
-                    h.observabilityHelper.workerError({ workerId }, error);
+                    observabilityHelper.workerError({ workerId }, error);
                   } finally {
                     jobIdsInProgress.delete(result.job.id);
                   }
@@ -292,11 +305,20 @@ export const createInProcessWorker = async <
             }
 
             if (executor.idleSlots() > 0) {
-              const reaped = await h.removeExpiredJobLease({
+              const reaped = await stateAdapter.removeExpiredJobLease({
                 typeNames,
-                workerId,
                 ignoredJobIds: Array.from(jobIdsInProgress),
               });
+              if (reaped) {
+                observabilityHelper.jobReaped(reaped, { workerId });
+
+                try {
+                  await notifyAdapter.notifyJobScheduled(reaped.typeName, 1);
+                } catch {}
+                try {
+                  await notifyAdapter.notifyJobOwnershipLost(reaped.id);
+                } catch {}
+              }
 
               if (stopController.signal.aborted) {
                 return;
@@ -308,7 +330,8 @@ export const createInProcessWorker = async <
             }
 
             await waitForNextJob({
-              helper: h,
+              stateAdapter,
+              notifyAdapter,
               typeNames,
               pollIntervalMs,
               executor,
@@ -318,7 +341,7 @@ export const createInProcessWorker = async <
               return;
             }
           } catch (error) {
-            h.observabilityHelper.workerError({ workerId }, error);
+            observabilityHelper.workerError({ workerId }, error);
             throw error;
           }
         }
@@ -329,12 +352,12 @@ export const createInProcessWorker = async <
       }).catch(() => {});
 
       return async () => {
-        h.observabilityHelper.workerStopping({ workerId });
+        observabilityHelper.workerStopping({ workerId });
         stopController.abort();
         await runWorkerLoopPromise;
         await executor.drain();
-        h.observabilityHelper.jobTypeIdleChange(-1, workerId, typeNames);
-        h.observabilityHelper.workerStopped({ workerId });
+        observabilityHelper.jobTypeIdleChange(-1, workerId, typeNames);
+        observabilityHelper.workerStopped({ workerId });
       };
     },
   };

@@ -1,5 +1,6 @@
 # Short term
 
+- [TASK,MEDIUM] Get rid of `startBlockers` method - just provide blockers when creating jobs
 - [TASK,MEDIUM] Ensure spans work with workerless completion
 - [TASK,MEDIUM] Rework observability to emit only after transaction commits
   - Problem: spans/logs/metrics emitted inside transactions become misleading if transaction rolls back
