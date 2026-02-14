@@ -1,5 +1,6 @@
 # Short term
 
+- [TASK,SMALL] Notify resilience tests in core
 - [TASK,COMPLEX] Get rid of `startBlockers` method - just provide blockers when creating jobs
 - [TASK,MEDIUM] Ensure spans work with workerless completion
 - [TASK,MEDIUM] Rework observability to emit only after transaction commits

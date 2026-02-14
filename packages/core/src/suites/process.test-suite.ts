@@ -534,7 +534,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     });
   });
 
-  it("reschedules job when error thrown after complete callback finishes", async ({
+  it("reschedules job when error thrown after complete callback finishes in atomic mode", async ({
     stateAdapter,
     notifyAdapter,
     runInTransaction,
@@ -574,8 +574,79 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
             multiplier: 1,
             maxDelayMs: 1,
           },
-          attemptHandler: async ({ job, complete }) => {
+          attemptHandler: async ({ job, prepare, complete }) => {
             attempts++;
+            await prepare({ mode: "atomic" });
+            const result = await complete(async () => ({ result: "completed" }));
+            if (job.attempt === 1) {
+              throw new Error("Error after complete");
+            }
+            return result;
+          },
+        },
+      },
+    });
+
+    const jobChain = await client.withNotify(async () =>
+      runInTransaction(async (txContext) =>
+        client.startJobChain({
+          ...txContext,
+          typeName: "test",
+          input: null,
+        }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.waitForJobChainCompletion(jobChain, completionOptions);
+    });
+
+    expect(attempts).toBe(2);
+  });
+
+  it("reschedules job when error thrown after complete callback finishes in staged mode", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const registry = defineJobTypes<{
+      test: {
+        entry: true;
+        input: null;
+        output: { result: string };
+      };
+    }>();
+
+    let attempts = 0;
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+    const worker = await createInProcessWorker({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+      concurrency: 1,
+      processors: {
+        test: {
+          retryConfig: {
+            initialDelayMs: 1,
+            multiplier: 1,
+            maxDelayMs: 1,
+          },
+          attemptHandler: async ({ job, prepare, complete }) => {
+            attempts++;
+            await prepare({ mode: "staged" });
             const result = await complete(async () => ({ result: "completed" }));
             if (job.attempt === 1) {
               throw new Error("Error after complete");

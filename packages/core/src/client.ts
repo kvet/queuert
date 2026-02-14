@@ -237,6 +237,7 @@ export const createClient = async <
         rootChainIds,
       });
     },
+    // TODO: validation
     completeJobChain: async <
       TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
       TCompleteReturn,

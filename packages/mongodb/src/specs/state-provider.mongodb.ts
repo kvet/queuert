@@ -24,7 +24,13 @@ export const createMongoProvider = ({
     runInTransaction: async (fn) => {
       const session = client.startSession();
       try {
-        return await session.withTransaction(async () => fn({ session }));
+        session.startTransaction();
+        const result = await fn({ session });
+        await session.commitTransaction();
+        return result;
+      } catch (error) {
+        await session.abortTransaction();
+        throw error;
       } finally {
         await session.endSession();
       }

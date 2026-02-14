@@ -1,28 +1,30 @@
 import { randomUUID } from "node:crypto";
 import { type JobTypeRegistry } from "./entities/job-type-registry.js";
 import { type BaseJobTypeDefinitions } from "./entities/job-type.js";
+import { type Helper, helper } from "./helper.js";
 import { type BackoffConfig } from "./helpers/backoff.js";
+import { type ParallelExecutor, createParallelExecutor } from "./helpers/parallel-executor.js";
 import { raceWithSleep } from "./helpers/sleep.js";
+import {
+  type TransactionContext,
+  createTransactionContext,
+} from "./helpers/transaction-context.js";
 import { withRetry } from "./internal.js";
 import { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 import { type Log } from "./observability-adapter/log.js";
 import { type ObservabilityAdapter } from "./observability-adapter/observability-adapter.js";
-import { type Helper, helper } from "./helper.js";
-import { type StateAdapter, type StateJob } from "./state-adapter/state-adapter.js";
+import { setupHelpers } from "./setup-helpers.js";
+import {
+  type BaseTxContext,
+  type StateAdapter,
+  type StateJob,
+} from "./state-adapter/state-adapter.js";
 import {
   type AttemptHandlerFn,
   type JobAttemptMiddleware,
   type LeaseConfig,
   runJobProcess,
 } from "./worker/job-process.js";
-import {
-  JobAlreadyCompletedError,
-  JobNotFoundError,
-  JobTakenByAnotherWorkerError,
-} from "./errors.js";
-import { type ParallelExecutor, createParallelExecutor } from "./helpers/parallel-executor.js";
-import { createSignal } from "./helpers/signal.js";
-import { setupHelpers } from "./setup-helpers.js";
 
 export type InProcessWorkerProcessDefaults<
   TStateAdapter extends StateAdapter<any, any>,
@@ -131,68 +133,54 @@ const performJob = async ({
 }): Promise<
   { job: null; hasMore: false } | { job: StateJob; hasMore: boolean; execute: () => Promise<void> }
 > => {
-  const signal = createSignal<{ job: StateJob | null; hasMore: boolean }>();
+  const prepareTransactionContext = await createTransactionContext(stateAdapter.runInTransaction);
 
-  const grabJobPromise = stateAdapter.runInTransaction(
-    async (txContext): Promise<() => Promise<void>> => {
-      const { job, hasMore } = await stateAdapter.acquireJob({
+  let job: StateJob | undefined;
+  let hasMore: boolean;
+  try {
+    ({ job, hasMore } = await prepareTransactionContext.run(async (txContext) =>
+      stateAdapter.acquireJob({
         txContext,
         typeNames,
-      });
-
-      if (!job) {
-        return async () => {};
-      }
-
-      const processor = processors[job.typeName];
-      if (!processor) {
-        throw new Error(`No attempt handler registered for job type "${job.typeName}"`);
-      }
-
-      signal.signalOnce({ job, hasMore });
-
-      const run = await runJobProcess({
-        helper,
-        attemptHandler: processor.attemptHandler as any,
-        txContext,
-        job,
-        retryConfig: processor.retryConfig ?? defaultRetryConfig,
-        leaseConfig: processor.leaseConfig ?? defaultLeaseConfig,
-        workerId,
-        attemptMiddlewares: attemptMiddlewares as any[],
-        typeNames,
-      });
-
-      return async () => {
-        try {
-          await run();
-        } catch (error) {
-          if (
-            error instanceof JobTakenByAnotherWorkerError ||
-            error instanceof JobAlreadyCompletedError ||
-            error instanceof JobNotFoundError
-          ) {
-            return;
-          } else {
-            throw error;
-          }
-        }
-      };
-    },
-  );
-
-  const winner = await Promise.race([signal.onSignal, grabJobPromise]);
-
-  if (typeof winner === "object" && "job" in winner && "hasMore" in winner && winner.job) {
-    return {
-      job: winner.job,
-      hasMore: winner.hasMore,
-      execute: async () => (await grabJobPromise)(),
-    };
+      }),
+    ));
+  } catch (error) {
+    await prepareTransactionContext.reject(error);
+    throw error;
   }
+
+  if (!job) {
+    await prepareTransactionContext.resolve();
+    return { job: null, hasMore: false };
+  }
+
+  const processor = processors[job.typeName];
+  if (!processor) {
+    const error = new Error(`No attempt handler registered for job type "${job.typeName}"`);
+    await prepareTransactionContext.reject(error);
+    throw error;
+  }
+
   return {
-    job: null,
-    hasMore: false,
+    job,
+    hasMore,
+    execute: async () => {
+      try {
+        await runJobProcess({
+          helper,
+          attemptHandler: processor.attemptHandler as any,
+          job,
+          prepareTransactionContext: prepareTransactionContext as TransactionContext<BaseTxContext>,
+          retryConfig: processor.retryConfig ?? defaultRetryConfig,
+          leaseConfig: processor.leaseConfig ?? defaultLeaseConfig,
+          workerId,
+          attemptMiddlewares: attemptMiddlewares as any[],
+        });
+      } catch (error) {
+        await prepareTransactionContext.reject(error);
+        throw error;
+      }
+    },
   };
 };
 
@@ -252,7 +240,7 @@ export const createInProcessWorker = async <
       });
 
       observabilityHelper.workerStarted({ workerId, jobTypeNames: typeNames });
-      observabilityHelper.jobTypeIdleChange(1, workerId, typeNames);
+      observabilityHelper.jobTypeIdleChange(concurrency ?? 1, workerId, typeNames);
 
       const stopController = new AbortController();
       const executor = createParallelExecutor(concurrency ?? 1);
@@ -282,12 +270,16 @@ export const createInProcessWorker = async <
               if (result.job) {
                 jobIdsInProgress.add(result.job.id);
                 void executor.add(async () => {
+                  observabilityHelper.jobTypeProcessingChange(1, result.job, workerId);
+                  observabilityHelper.jobTypeIdleChange(-1, workerId, typeNames);
                   try {
                     await result.execute();
                   } catch (error) {
                     observabilityHelper.workerError({ workerId }, error);
                   } finally {
                     jobIdsInProgress.delete(result.job.id);
+                    observabilityHelper.jobTypeIdleChange(1, workerId, typeNames);
+                    observabilityHelper.jobTypeProcessingChange(-1, result.job, workerId);
                   }
                 });
               }
@@ -352,7 +344,7 @@ export const createInProcessWorker = async <
         stopController.abort();
         await runWorkerLoopPromise;
         await executor.drain();
-        observabilityHelper.jobTypeIdleChange(-1, workerId, typeNames);
+        observabilityHelper.jobTypeIdleChange(-(concurrency ?? 1), workerId, typeNames);
         observabilityHelper.workerStopped({ workerId });
       };
     },

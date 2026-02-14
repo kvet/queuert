@@ -3,9 +3,8 @@ import {
   blockerChainsTestSuite,
   chainsTestSuite,
   extendWithCommon,
-  extendWithNotifyInProcess,
+  extendWithNotifyNoop,
   extendWithResourceLeakDetection,
-  notifyTestSuite,
   processModesTestSuite,
   processTestSuite,
   reaperTestSuite,
@@ -18,8 +17,8 @@ import {
 import { describe, it } from "vitest";
 import { extendWithStateMongodb } from "./state-adapter.mongodb.spec-helper.js";
 
-const mongodbInProcessIt = extendWithResourceLeakDetection(
-  extendWithNotifyInProcess(
+const mongodbNoopIt = extendWithResourceLeakDetection(
+  extendWithNotifyNoop(
     extendWithCommon(extendWithStateMongodb(extendWithMongodb(it, import.meta.url))),
   ),
   { additionalAllowedTypes: TESTCONTAINER_RESOURCE_TYPES },
@@ -29,45 +28,41 @@ const mongodbInProcessIt = extendWithResourceLeakDetection(
 it("index");
 
 describe("Process Modes", () => {
-  processModesTestSuite({ it: mongodbInProcessIt });
+  processModesTestSuite({ it: mongodbNoopIt });
 });
 
 describe("Process", () => {
-  processTestSuite({ it: mongodbInProcessIt });
+  processTestSuite({ it: mongodbNoopIt });
 });
 
 describe("Worker", () => {
-  workerTestSuite({ it: mongodbInProcessIt });
+  workerTestSuite({ it: mongodbNoopIt });
 });
 
 describe("Reaper", () => {
-  reaperTestSuite({ it: mongodbInProcessIt });
+  reaperTestSuite({ it: mongodbNoopIt });
 });
 
 describe("Chains", () => {
-  chainsTestSuite({ it: mongodbInProcessIt });
+  chainsTestSuite({ it: mongodbNoopIt });
 });
 
 describe("Blocker Chains", () => {
-  blockerChainsTestSuite({ it: mongodbInProcessIt });
+  blockerChainsTestSuite({ it: mongodbNoopIt });
 });
 
 describe("Wait Chain Completion", () => {
-  waitChainCompletionTestSuite({ it: mongodbInProcessIt });
+  waitChainCompletionTestSuite({ it: mongodbNoopIt });
 });
 
 describe("State Resilience", () => {
-  stateResilienceTestSuite({ it: mongodbInProcessIt });
+  stateResilienceTestSuite({ it: mongodbNoopIt });
 });
 
 describe("Workerless Completion", () => {
-  workerlessCompletionTestSuite({ it: mongodbInProcessIt });
+  workerlessCompletionTestSuite({ it: mongodbNoopIt });
 });
 
 describe("Scheduling", () => {
-  schedulingTestSuite({ it: mongodbInProcessIt });
-});
-
-describe("Notify", () => {
-  notifyTestSuite({ it: mongodbInProcessIt });
+  schedulingTestSuite({ it: mongodbNoopIt });
 });

@@ -15,6 +15,7 @@ import {
 import { waitChainCompletionTestSuite } from "../suites/wait-chain-completion.test-suite.js";
 import { workerTestSuite } from "../suites/worker.test-suite.js";
 import { workerlessCompletionTestSuite } from "../suites/workerless-completion.test-suite.js";
+import { stateResilienceTestSuite } from "../testing.js";
 
 const inProcessInProcessIt = extendWithResourceLeakDetection(
   extendWithNotifyInProcess(extendWithCommon(extendWithStateInProcess(it))),
@@ -49,6 +50,10 @@ describe("Blocker Chains", () => {
 
 describe("Wait Chain Completion", () => {
   waitChainCompletionTestSuite({ it: inProcessInProcessIt });
+});
+
+describe("State Resilience", () => {
+  stateResilienceTestSuite({ it: inProcessInProcessIt, skipConcurrencyTests: true });
 });
 
 describe("Workerless Completion", () => {

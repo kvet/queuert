@@ -25,10 +25,13 @@ import {
   JobNotFoundError,
   JobTakenByAnotherWorkerError,
 } from "../errors.js";
+import { type Helper, type StartBlockersFn } from "../helper.js";
 import { type TypedAbortController, type TypedAbortSignal } from "../helpers/abort.js";
 import { type BackoffConfig } from "../helpers/backoff.js";
-import { createSignal } from "../helpers/signal.js";
-import { type Helper, type StartBlockersFn } from "../helper.js";
+import {
+  type TransactionContext,
+  createTransactionContext,
+} from "../helpers/transaction-context.js";
 import {
   type BaseTxContext,
   type GetStateAdapterJobId,
@@ -230,12 +233,11 @@ export type AttemptHandlerFn<
 export const runJobProcess = async ({
   helper,
   attemptHandler,
-  txContext,
+  prepareTransactionContext,
   job,
   retryConfig,
   leaseConfig,
   workerId,
-  typeNames,
   attemptMiddlewares,
 }: {
   helper: Helper;
@@ -244,22 +246,55 @@ export const runJobProcess = async ({
     BaseJobTypeDefinitions,
     string
   >;
-  txContext: BaseTxContext;
+  prepareTransactionContext: TransactionContext<BaseTxContext>;
   job: StateJob;
   retryConfig: BackoffConfig;
   leaseConfig: LeaseConfig;
   workerId: string;
-  typeNames: readonly string[];
   attemptMiddlewares?: JobAttemptMiddleware<
     StateAdapter<BaseTxContext, any>,
     BaseJobTypeDefinitions
   >[];
-}): Promise<() => Promise<void>> => {
-  const firstLeaseCommitted = createSignal();
-  const claimTransactionClosed = createSignal();
+}): Promise<void> => {
+  let completeTransactionContext: TransactionContext<BaseTxContext> | null = null;
 
   const abortController = new AbortController() as TypedAbortController<JobAbortReason>;
+  const refetchJobForUpdate = async (txContext: BaseTxContext) => {
+    if (abortController.signal.aborted && abortController.signal.reason) {
+      if (abortController.signal.reason === "already_completed") {
+        throw new JobAlreadyCompletedError("Job already completed (signal aborted)");
+      }
+      if (abortController.signal.reason === "not_found") {
+        throw new JobNotFoundError("Job not found (signal aborted)");
+      }
+      if (abortController.signal.reason === "taken_by_another_worker") {
+        throw new JobTakenByAnotherWorkerError("Job taken by another worker (signal aborted)");
+      }
+      throw new Error(`Job processing aborted: ${abortController.signal.reason}`);
+    }
 
+    await helper
+      .refetchJobForUpdate({
+        txContext,
+        job,
+        allowEmptyWorker: prepareTransactionContext.status === "pending", // TODO!!!: remove?
+        workerId,
+      })
+      .catch((error: unknown) => {
+        if (!abortController.signal.aborted) {
+          if (error instanceof JobNotFoundError) {
+            abortController.abort("not_found");
+          }
+          if (error instanceof JobAlreadyCompletedError) {
+            abortController.abort("already_completed");
+          }
+          if (error instanceof JobTakenByAnotherWorkerError) {
+            abortController.abort("taken_by_another_worker");
+          }
+        }
+        throw error;
+      });
+  };
   const runInGuardedTransaction = async <T>(
     cb: (txContext: BaseTxContext) => Promise<T>,
   ): Promise<T> => {
@@ -276,37 +311,18 @@ export const runJobProcess = async ({
       throw new Error(`Job processing aborted: ${abortController.signal.reason}`);
     }
 
-    if (!firstLeaseCommitted.signalled) {
-      return cb(txContext);
+    if (prepareTransactionContext.status === "pending") {
+      return prepareTransactionContext.run(async (txContext) => cb(txContext));
+    }
+    if (completeTransactionContext && completeTransactionContext.status === "pending") {
+      return completeTransactionContext.run(async (txContext) => cb(txContext));
     }
 
     return helper.stateAdapter.runInTransaction(async (txContext) => {
-      await helper
-        .refetchJobForUpdate({
-          txContext,
-          job,
-          allowEmptyWorker: !firstLeaseCommitted.signalled,
-          workerId,
-        })
-        .catch((error: unknown) => {
-          if (!abortController.signal.aborted) {
-            if (error instanceof JobNotFoundError) {
-              abortController.abort("not_found");
-            }
-            if (error instanceof JobAlreadyCompletedError) {
-              abortController.abort("already_completed");
-            }
-            if (error instanceof JobTakenByAnotherWorkerError) {
-              abortController.abort("taken_by_another_worker");
-            }
-          }
-          throw error;
-        });
-
+      await refetchJobForUpdate(txContext);
       return cb(txContext);
     });
   };
-
   const leaseManager = createLeaseManager({
     commitLease: async (leaseMs: number) => {
       try {
@@ -335,13 +351,24 @@ export const runJobProcess = async ({
   });
   let disposeOwnershipListener: (() => Promise<void>) | null = null;
 
-  const blockerPairs = await helper.stateAdapter.getJobBlockers({ txContext, jobId: job.id });
+  const blockerPairs = await prepareTransactionContext.run(async (txContext) =>
+    helper.stateAdapter.getJobBlockers({ txContext, jobId: job.id }),
+  );
+  await prepareTransactionContext.run(async (txContext) =>
+    helper.stateAdapter.renewJobLease({
+      txContext,
+      jobId: job.id,
+      workerId,
+      leaseDurationMs: leaseConfig.leaseMs,
+    }),
+  );
   const runningJob = {
     ...mapStateJobToJob(job),
     blockers: blockerPairs.map(mapStateJobPairToJobChain) as CompletedJobChain<
       JobChain<any, any, any, any>
     >[],
   } as RunningJob<JobOf<any, any, any, any>>;
+
   const runJobAttempt = async () => {
     const attemptStartTime = Date.now();
 
@@ -370,20 +397,15 @@ export const runJobProcess = async ({
       const prepareSpan = attemptSpanHandle?.startPrepare();
       let callbackOutput: T | undefined;
       try {
-        callbackOutput = await prepareCallback?.({ ...txContext });
+        callbackOutput = await prepareTransactionContext.run(async (txContext) =>
+          prepareCallback?.({ ...txContext }),
+        );
       } finally {
         prepareSpan?.end();
       }
 
       if (config.mode === "staged") {
-        await helper.stateAdapter.renewJobLease({
-          txContext,
-          jobId: job.id,
-          workerId,
-          leaseDurationMs: leaseConfig.leaseMs,
-        });
-        firstLeaseCommitted.signalOnce();
-        await claimTransactionClosed.onSignal;
+        await prepareTransactionContext.resolve();
 
         await leaseManager.start();
         try {
@@ -402,8 +424,6 @@ export const runJobProcess = async ({
     }) as PrepareFn<StateAdapter<BaseTxContext, any>>;
 
     let completeCalled = false;
-    let completeSucceeded = false;
-    // oxlint-disable-next-line no-unsafe-type-assertion
     const complete = (async (
       completeCallback: (
         options: {
@@ -428,6 +448,14 @@ export const runJobProcess = async ({
       await disposeOwnershipListener?.();
       await leaseManager.stop();
       const completeSpan = attemptSpanHandle?.startComplete();
+      if (prepareTransactionContext.status !== "pending") {
+        completeTransactionContext = await createTransactionContext(
+          helper.stateAdapter.runInTransaction,
+        );
+        await completeTransactionContext.run(async (txContext) => {
+          await refetchJobForUpdate(txContext);
+        });
+      }
       const result = await runInGuardedTransaction(async (txContext) => {
         let continuedJob: Job<any, any, any, any, any[]> | null = null;
         const output = await completeCallback({
@@ -485,7 +513,6 @@ export const runJobProcess = async ({
         };
       });
       completeSpan?.end();
-      completeSucceeded = true;
       helper.observabilityHelper.jobAttemptDuration(job, {
         durationMs: Date.now() - attemptStartTime,
         workerId,
@@ -524,50 +551,38 @@ export const runJobProcess = async ({
       }
 
       await attemptPromise;
+      await prepareTransactionContext.resolve();
+      await completeTransactionContext?.resolve();
     } catch (error) {
-      const runInTx = completeSucceeded
-        ? helper.stateAdapter.runInTransaction.bind(helper)
-        : runInGuardedTransaction;
-      const errorResult = await runInTx(async (txContext) =>
-        helper.handleJobHandlerError({
-          job,
-          error,
-          txContext,
-          retryConfig,
-          workerId,
-        }),
-      );
+      try {
+        const errorResult = await runInGuardedTransaction(async (txContext) =>
+          helper.handleJobHandlerError({
+            job,
+            error,
+            txContext,
+            retryConfig,
+            workerId,
+          }),
+        );
 
-      attemptSpanHandle?.end({
-        status: "failed",
-        error,
-        rescheduledAt: errorResult.schedule?.at,
-        rescheduledAfterMs: errorResult.schedule?.afterMs,
-      });
-    } finally {
+        attemptSpanHandle?.end({
+          status: "failed",
+          error,
+          rescheduledAt: errorResult.schedule?.at,
+          rescheduledAfterMs: errorResult.schedule?.afterMs,
+        });
+      } catch {
+        attemptSpanHandle?.end({ status: "failed", error });
+      }
+      await prepareTransactionContext.resolve();
+      await completeTransactionContext?.resolve();
       await disposeOwnershipListener?.();
       await leaseManager.stop();
     }
   };
 
-  const jobAttemptPromise = (async () => {
-    helper.observabilityHelper.jobTypeProcessingChange(1, job, workerId);
-    helper.observabilityHelper.jobTypeIdleChange(-1, workerId, typeNames);
-    try {
-      await (attemptMiddlewares ?? []).reduceRight(
-        (next, mw) => async () => mw({ job: runningJob, workerId }, next),
-        async () => helper.withNotifyContext(runJobAttempt),
-      )();
-    } finally {
-      helper.observabilityHelper.jobTypeIdleChange(1, workerId, typeNames);
-      helper.observabilityHelper.jobTypeProcessingChange(-1, job, workerId);
-    }
-  })();
-
-  await Promise.race([firstLeaseCommitted.onSignal, jobAttemptPromise]);
-
-  return async () => {
-    claimTransactionClosed.signalOnce();
-    await jobAttemptPromise;
-  };
+  await (attemptMiddlewares ?? []).reduceRight(
+    (next, mw) => async () => mw({ job: runningJob, workerId }, next),
+    async () => helper.withNotifyContext(runJobAttempt),
+  )();
 };

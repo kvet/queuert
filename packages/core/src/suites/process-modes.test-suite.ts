@@ -1,8 +1,8 @@
 import { type TestAPI } from "vitest";
 import { sleep } from "../helpers/sleep.js";
 import { createClient, createInProcessWorker, defineJobTypes } from "../index.js";
-import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 import { createSpyStateAdapter } from "../state-adapter/state-adapter.spy.spec-helper.js";
+import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
   const completionOptions = {
@@ -247,8 +247,8 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         children: [
           expect.objectContaining({ name: "acquireJob" }),
           expect.objectContaining({ name: "getJobBlockers" }), // TODO: why isn't it the part of acquireJob?
-          expect.objectContaining({ name: "user-preparation" }),
           expect.objectContaining({ name: "renewJobLease" }), // TODO: why do we need to renew the lease?
+          expect.objectContaining({ name: "user-preparation" }),
         ],
       }),
       expect.objectContaining({
@@ -425,6 +425,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         children: [
           expect.objectContaining({ name: "acquireJob" }),
           expect.objectContaining({ name: "getJobBlockers" }), // TODO: why isn't it the part of acquireJob?
+          expect.objectContaining({ name: "renewJobLease" }), // TODO: why do we need to renew the lease?
           expect.objectContaining({ name: "user-preparation" }),
           expect.objectContaining({ name: "user-completion" }),
           expect.objectContaining({ name: "completeJob" }),
@@ -506,6 +507,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         children: [
           expect.objectContaining({ name: "acquireJob" }),
           expect.objectContaining({ name: "getJobBlockers" }), // TODO: why isn't it the part of acquireJob?
+          expect.objectContaining({ name: "renewJobLease" }), // TODO: why do we need to renew the lease?
           expect.objectContaining({ name: "user-completion" }),
           expect.objectContaining({ name: "completeJob" }),
           expect.objectContaining({ name: "getJobById" }), // TODO: why do we need it?
