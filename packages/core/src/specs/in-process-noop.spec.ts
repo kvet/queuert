@@ -16,6 +16,7 @@ import {
 } from "../suites/spec-context.spec-helper.js";
 import { waitChainCompletionTestSuite } from "../suites/wait-chain-completion.test-suite.js";
 import { workerTestSuite } from "../suites/worker.test-suite.js";
+import { validationTestSuite } from "../suites/validation.test-suite.js";
 import { workerlessCompletionTestSuite } from "../suites/workerless-completion.test-suite.js";
 import { stateResilienceTestSuite } from "../testing.js";
 
@@ -76,4 +77,8 @@ describe("Workerless Completion", () => {
 
 describe("Scheduling", () => {
   schedulingTestSuite({ it: inProcessNoopIt });
+});
+
+describe("Validation", () => {
+  validationTestSuite({ it: inProcessNoopIt });
 });

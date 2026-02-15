@@ -293,7 +293,7 @@ export const createClient = async <
               throw new Error("continueWith can only be called once");
             }
 
-            return withJobContext(
+            continuedJob = await withJobContext(
               {
                 chainId: job.chainId,
                 rootChainId: job.rootChainId,
@@ -311,6 +311,8 @@ export const createClient = async <
                   fromTypeName: job.typeName,
                 }),
             );
+
+            return continuedJob;
           },
           ...txContext,
         });
