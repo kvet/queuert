@@ -28,7 +28,7 @@ import {
 import { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 import { type Log } from "./observability-adapter/log.js";
 import { type ObservabilityAdapter } from "./observability-adapter/observability-adapter.js";
-import { type ObservabilityHelper } from "./observability-adapter/observability-helper.js";
+import { setupHelpers } from "./setup-helpers.js";
 import {
   type BaseTxContext,
   type DeduplicationOptions,
@@ -36,7 +36,6 @@ import {
   type StateJob,
 } from "./state-adapter/state-adapter.js";
 import { RescheduleJobError } from "./worker/job-process.js";
-import { setupHelpers } from "./setup-helpers.js";
 
 export type StartBlockersFn<
   TJobId,
@@ -288,12 +287,9 @@ export const helper = ({
   };
 
   return {
-    // oxlint-disable-next-line no-unnecessary-type-assertion -- needed for --isolatedDeclarations
-    stateAdapter: stateAdapter as StateAdapter<BaseTxContext, any>,
-    // oxlint-disable-next-line no-unnecessary-type-assertion -- needed for --isolatedDeclarations
-    notifyAdapter: notifyAdapter as NotifyAdapter,
-    // oxlint-disable-next-line no-unnecessary-type-assertion -- needed for --isolatedDeclarations
-    observabilityHelper: observabilityHelper as ObservabilityHelper,
+    stateAdapter,
+    notifyAdapter,
+    observabilityHelper,
     withNotifyContext: (async <T>(cb: () => Promise<T>) =>
       withNotifyContext(notifyAdapter, cb)) as <T>(cb: () => Promise<T>) => Promise<T>,
     withJobContext: withJobContext as <T>(

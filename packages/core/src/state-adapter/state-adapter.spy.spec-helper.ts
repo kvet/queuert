@@ -3,6 +3,7 @@ import { type BaseTxContext, type StateAdapter } from "./state-adapter.js";
 export type SpyCall = {
   name: string;
   children: SpyCall[];
+  status?: "committed" | "rolled-back";
 };
 
 export type SpyStateAdapter<TTxContext extends BaseTxContext, TJobId extends string> = StateAdapter<
@@ -17,13 +18,13 @@ export const createSpyStateAdapter = <TTxContext extends BaseTxContext, TJobId e
   stateAdapter: StateAdapter<TTxContext, TJobId>,
 ): SpyStateAdapter<TTxContext, TJobId> => {
   const calls: SpyCall[] = [];
-  const weekMap = new WeakMap<symbol, SpyCall>();
+  const weakMap = new WeakMap<symbol, SpyCall>();
 
   const record = ({ txContext, name }: { txContext?: TTxContext; name: string }): SpyCall => {
     const call: SpyCall = { name, children: [] };
     const spyRef = (txContext as TTxContext & { spyRef?: symbol })?.spyRef;
-    if (spyRef && weekMap.has(spyRef)) {
-      const parent = weekMap.get(spyRef)!;
+    if (spyRef && weakMap.has(spyRef)) {
+      const parent = weakMap.get(spyRef)!;
       parent.children.push(call);
     } else {
       calls.push(call);
@@ -42,11 +43,18 @@ export const createSpyStateAdapter = <TTxContext extends BaseTxContext, TJobId e
 
     runInTransaction: async (fn) => {
       const call = record({ txContext: undefined, name: "runInTransaction" });
-      return stateAdapter.runInTransaction(async (txContext) => {
-        const spyRef = Symbol();
-        weekMap.set(spyRef, call);
-        return fn({ ...txContext, spyRef });
-      });
+      try {
+        const result = await stateAdapter.runInTransaction(async (txContext) => {
+          const spyRef = Symbol();
+          weakMap.set(spyRef, call);
+          return fn({ ...txContext, spyRef });
+        });
+        call.status = "committed";
+        return result;
+      } catch (error) {
+        call.status = "rolled-back";
+        throw error;
+      }
     },
     getJobChainById: wrap("getJobChainById", stateAdapter.getJobChainById),
     getJobById: wrap("getJobById", stateAdapter.getJobById),

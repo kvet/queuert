@@ -1,5 +1,5 @@
 {
-  "extends": "@queuert/tsconfig/package",
+  "extends": "@queuert/tsconfig/base",
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }

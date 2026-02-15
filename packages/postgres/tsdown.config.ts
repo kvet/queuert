@@ -2,7 +2,7 @@ import { defineConfig } from "tsdown";
 
 export default defineConfig({
   entry: ["./src/index.ts", "./src/testing.ts"],
-  dts: true,
+  dts: { eager: true },
   sourcemap: true,
   exports: {
     devExports: true,

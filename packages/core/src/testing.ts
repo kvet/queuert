@@ -4,6 +4,7 @@ export { deduplicationTestSuite } from "./suites/deduplication.test-suite.js";
 export { deletionTestSuite } from "./suites/deletion.test-suite.js";
 export { notifyResilienceTestSuite } from "./suites/notify-resilience.test-suite.js";
 export { notifyTestSuite } from "./suites/notify.test-suite.js";
+export { processErrorHandlingTestSuite } from "./suites/process-error-handling.test-suite.js";
 export { processModesTestSuite } from "./suites/process-modes.test-suite.js";
 export { processTestSuite } from "./suites/process.test-suite.js";
 export { reaperTestSuite } from "./suites/reaper.test-suite.js";

@@ -73,6 +73,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     const expected = [
       expect.objectContaining({
         name: "runInTransaction",
+        status: "committed",
         children: [
           expect.objectContaining({ name: "acquireJob" }),
           expect.objectContaining({ name: "getJobBlockers" }), // TODO: why isn't it the part of acquireJob?
@@ -154,6 +155,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     const expected = [
       expect.objectContaining({
         name: "runInTransaction",
+        status: "committed",
         children: [
           expect.objectContaining({ name: "acquireJob" }),
           expect.objectContaining({ name: "getJobBlockers" }), // TODO: why isn't it the part of acquireJob?
@@ -165,6 +167,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       }),
       expect.objectContaining({
         name: "runInTransaction",
+        status: "committed",
         children: [
           expect.objectContaining({ name: "getJobForUpdate" }), // TODO: why do we need it?
           expect.objectContaining({ name: "user-completion" }),
@@ -244,6 +247,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     const expected = [
       expect.objectContaining({
         name: "runInTransaction",
+        status: "committed",
         children: [
           expect.objectContaining({ name: "acquireJob" }),
           expect.objectContaining({ name: "getJobBlockers" }), // TODO: why isn't it the part of acquireJob?
@@ -256,6 +260,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       }),
       expect.objectContaining({
         name: "runInTransaction",
+        status: "committed",
         children: [
           expect.objectContaining({ name: "getJobForUpdate" }), // TODO: why do we need it?
           expect.objectContaining({ name: "user-completion" }),
@@ -332,6 +337,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     const expected = [
       expect.objectContaining({
         name: "runInTransaction",
+        status: "committed",
         children: [
           expect.objectContaining({ name: "acquireJob" }),
           expect.objectContaining({ name: "getJobBlockers" }), // TODO: why isn't it the part of acquireJob?
@@ -343,6 +349,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       }),
       expect.objectContaining({
         name: "runInTransaction",
+        status: "committed",
         children: [
           expect.objectContaining({ name: "getJobForUpdate" }), // TODO: why do we need it?
           expect.objectContaining({ name: "user-completion" }),
@@ -422,6 +429,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     const expected = [
       expect.objectContaining({
         name: "runInTransaction",
+        status: "committed",
         children: [
           expect.objectContaining({ name: "acquireJob" }),
           expect.objectContaining({ name: "getJobBlockers" }), // TODO: why isn't it the part of acquireJob?
@@ -504,6 +512,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     const expected = [
       expect.objectContaining({
         name: "runInTransaction",
+        status: "committed",
         children: [
           expect.objectContaining({ name: "acquireJob" }),
           expect.objectContaining({ name: "getJobBlockers" }), // TODO: why isn't it the part of acquireJob?

@@ -6,6 +6,7 @@ import {
   extendWithResourceLeakDetection,
   notifyResilienceTestSuite,
   notifyTestSuite,
+  processErrorHandlingTestSuite,
   processModesTestSuite,
   processTestSuite,
   reaperTestSuite,
@@ -28,6 +29,10 @@ const postgresPostgresIt = extendWithResourceLeakDetection(
 
 // NOTE: hack for vitest plugin
 it("index");
+
+describe("Process Error Handling", () => {
+  processErrorHandlingTestSuite({ it: postgresPostgresIt });
+});
 
 describe("Process Modes", () => {
   processModesTestSuite({ it: postgresPostgresIt });

@@ -4,10 +4,6 @@ Shared TypeScript configuration for the Queuert monorepo.
 
 ## Usage
 
-### For examples and internal utilities
-
-Extend from the base configuration:
-
 ```json
 {
   "extends": "@queuert/tsconfig/base",
@@ -15,25 +11,6 @@ Extend from the base configuration:
   "exclude": ["node_modules", "dist"]
 }
 ```
-
-### For published packages
-
-Use the package configuration which includes `isolatedDeclarations`:
-
-```json
-{
-  "extends": "@queuert/tsconfig/package",
-  "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "dist"]
-}
-```
-
-## Exports
-
-| Export                      | Description                                                           |
-| --------------------------- | --------------------------------------------------------------------- |
-| `@queuert/tsconfig/base`    | Base configuration for all projects                                   |
-| `@queuert/tsconfig/package` | Extends base with `isolatedDeclarations: true` for published packages |
 
 ## Base Configuration
 
