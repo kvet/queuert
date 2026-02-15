@@ -23,7 +23,7 @@ The notify adapter handles:
 - **Many workers** - Thundering herd optimization prevents database overload
 - **Existing Redis infrastructure** - If you already use Redis for caching/sessions
 
-This is a notify adapter only. You still need a state adapter ([PostgreSQL](https://github.com/kvet/queuert/tree/main/packages/postgres), [SQLite](https://github.com/kvet/queuert/tree/main/packages/sqlite), or [MongoDB](https://github.com/kvet/queuert/tree/main/packages/mongodb)) to store jobs.
+This is a notify adapter only. You still need a state adapter ([PostgreSQL](https://github.com/kvet/queuert/tree/main/packages/postgres) or [SQLite](https://github.com/kvet/queuert/tree/main/packages/sqlite)) to store jobs.
 
 ## Installation
 

@@ -38,7 +38,7 @@ export type BaseTxContext = {};
 /**
  * Abstracts database operations for job persistence.
  *
- * Allows different database implementations (PostgreSQL, SQLite, MongoDB, in-memory).
+ * Allows different database implementations (PostgreSQL, SQLite, in-memory).
  * Handles job creation, status transitions, leasing, and queries.
  *
  * All operation methods have an optional `txContext` parameter:

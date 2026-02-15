@@ -14,12 +14,10 @@
     "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
-    "@testcontainers/mongodb": "^11.10.0",
     "@testcontainers/nats": "^11.11.0",
     "@testcontainers/postgresql": "^11.10.0",
     "@testcontainers/redis": "^11.10.0",
     "dockerode": "^4.0.6",
-    "mongodb": "^6.12.0",
     "pg": "^8.16.3",
     "proper-lockfile": "^4.1.2",
     "testcontainers": "^11.10.0"

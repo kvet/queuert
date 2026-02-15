@@ -14,7 +14,6 @@
   ### New Features
   - **ObservabilityAdapter**: OpenTelemetry integration with histogram metrics for duration tracking and gauge metrics for worker state
   - **JobTypeRegistry**: Compile-time and runtime validation with support for Zod, Valibot, and TypeBox
-  - **MongoDB adapter**: New `@queuert/mongodb` state adapter
   - **NATS adapter**: New `@queuert/nats` notify adapter with optional JetStream KV
   - **Job attempt middlewares**: Support for contextual logging during job processing
   - **Deferred scheduling**: Schedule jobs for future execution via `schedule` option

@@ -109,7 +109,7 @@ These tools are powerful, but they come with trade-offs:
 
 - **Your database is the source of truth** — No separate persistence layer. Jobs live alongside your application data.
 - **True transactional consistency** — Start jobs inside your database transactions. If the transaction rolls back, the job is never created. No dual-write problems.
-- **No vendor lock-in** — Works with PostgreSQL, SQLite, MongoDB. Bring your own ORM (Kysely, Drizzle, Prisma, raw drivers).
+- **No vendor lock-in** — Works with PostgreSQL and SQLite. Bring your own ORM (Kysely, Drizzle, Prisma, raw drivers).
 - **Simple mental model** — Job chains work like Promise chains. No determinism requirements, no replay semantics to learn.
 - **Full type safety** — TypeScript inference for inputs, outputs, continuations, and blockers. Catch errors at compile time.
 - **Flexible notifications** — Use Redis, NATS, or PostgreSQL LISTEN/NOTIFY for low-latency. Or just poll—no extra infrastructure required.
@@ -124,7 +124,6 @@ npm install queuert
 # State adapters (pick one)
 npm install @queuert/postgres  # PostgreSQL - recommended for production
 npm install @queuert/sqlite    # SQLite (experimental)
-npm install @queuert/mongodb   # MongoDB (experimental)
 
 # Notify adapters (optional, for reduced latency)
 npm install @queuert/redis     # Redis pub/sub - recommended for production
@@ -151,13 +150,12 @@ Defines a named job type with its input/output types and attempt handler functio
 
 ### State Adapter
 
-Abstracts database operations for job persistence. Queuert provides adapters for PostgreSQL, SQLite, and MongoDB. The adapter handles job creation, status transitions, leasing, and queries.
+Abstracts database operations for job persistence. Queuert provides adapters for PostgreSQL and SQLite. The adapter handles job creation, status transitions, leasing, and queries.
 
 **Available adapters:**
 
 - `@queuert/postgres` - PostgreSQL state adapter (recommended for production)
 - `@queuert/sqlite` - SQLite state adapter _(experimental)_
-- `@queuert/mongodb` - MongoDB state adapter _(experimental)_
 
 ### State Provider
 
@@ -850,7 +848,7 @@ Test suites available in [`packages/core/src/suites/`](./packages/core/src/suite
 - [`reaper.test-suite.ts`](./packages/core/src/suites/reaper.test-suite.ts) — Expired lease reclamation
 - [`worker.test-suite.ts`](./packages/core/src/suites/worker.test-suite.ts) — Worker lifecycle and polling
 
-These suites run against all supported adapters (PostgreSQL, SQLite, MongoDB, in-memory) to ensure consistent behavior across databases.
+These suites run against all supported adapters (PostgreSQL, SQLite, in-memory) to ensure consistent behavior across databases.
 
 ## Benchmarks
 
@@ -860,7 +858,6 @@ Queuert adapters add minimal overhead on top of the database/messaging drivers (
 | ------------- | ---------------- |
 | PostgreSQL    | ~290 KB          |
 | SQLite        | ~45 KB           |
-| MongoDB       | ~370 KB          |
 
 | Notify Adapter | Adapter Overhead |
 | -------------- | ---------------- |

@@ -27,7 +27,7 @@ The notify adapter handles:
 - **Single connection** - Unlike Redis, NATS is fully multiplexed (one connection for both pub and sub)
 - **Optional persistence** - JetStream KV enables thundering herd optimization
 
-This is a notify adapter only. You still need a state adapter ([PostgreSQL](https://github.com/kvet/queuert/tree/main/packages/postgres), [SQLite](https://github.com/kvet/queuert/tree/main/packages/sqlite), or [MongoDB](https://github.com/kvet/queuert/tree/main/packages/mongodb)) to store jobs.
+This is a notify adapter only. You still need a state adapter ([PostgreSQL](https://github.com/kvet/queuert/tree/main/packages/postgres) or [SQLite](https://github.com/kvet/queuert/tree/main/packages/sqlite)) to store jobs.
 
 ## Installation
 

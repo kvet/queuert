@@ -8,7 +8,6 @@
  *   pnpm start:all                # Run all adapter measurements
  *   pnpm start:state-postgres     # Run PostgreSQL state adapter measurement
  *   pnpm start:state-sqlite       # Run SQLite state adapter measurement
- *   pnpm start:state-mongodb      # Run MongoDB state adapter measurement
  *   pnpm start:notify-redis       # Run Redis notify adapter measurement
  *   pnpm start:notify-postgres    # Run PostgreSQL notify adapter measurement
  *   pnpm start:notify-nats        # Run NATS notify adapter measurement
@@ -26,7 +25,6 @@ const args = process.argv.slice(2);
 const measurementModules: Record<string, string> = {
   "state-postgres": "state-postgres.ts",
   "state-sqlite": "state-sqlite.ts",
-  "state-mongodb": "state-mongodb.ts",
   "notify-redis": "notify-redis.ts",
   "notify-postgres": "notify-postgres.ts",
   "notify-nats": "notify-nats.ts",
@@ -77,8 +75,6 @@ async function main(): Promise<void> {
     toRun = ["state-postgres"];
   } else if (args.includes("--state-sqlite")) {
     toRun = ["state-sqlite"];
-  } else if (args.includes("--state-mongodb")) {
-    toRun = ["state-mongodb"];
   } else if (args.includes("--notify-redis")) {
     toRun = ["notify-redis"];
   } else if (args.includes("--notify-postgres")) {

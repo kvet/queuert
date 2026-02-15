@@ -27,7 +27,6 @@ High-level design decisions are documented in [docs/design/](docs/design/):
 - `queuert` - Core abstractions and in-memory implementations
 - `@queuert/postgres` - PostgreSQL state and notify adapters
 - `@queuert/sqlite` - SQLite state adapter
-- `@queuert/mongodb` - MongoDB state adapter
 - `@queuert/redis` - Redis notify adapter
 - `@queuert/nats` - NATS notify adapter with optional JetStream KV
 - `@queuert/otel` - OpenTelemetry observability adapter

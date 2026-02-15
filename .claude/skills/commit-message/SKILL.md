@@ -66,7 +66,6 @@ Map changed files to package scopes:
 | `packages/core/**`     | `core`                    |
 | `packages/postgres/**` | `postgres`                |
 | `packages/sqlite/**`   | `sqlite`                  |
-| `packages/mongodb/**`  | `mongodb`                 |
 | `packages/redis/**`    | `redis`                   |
 | `packages/nats/**`     | `nats`                    |
 | `packages/otel/**`     | `otel` or `observability` |

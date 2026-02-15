@@ -38,7 +38,6 @@ This is the core package. You also need a **state adapter** to store jobs:
 
 - [`@queuert/postgres`](https://github.com/kvet/queuert/tree/main/packages/postgres) - PostgreSQL (recommended for production)
 - [`@queuert/sqlite`](https://github.com/kvet/queuert/tree/main/packages/sqlite) - SQLite _(experimental)_
-- [`@queuert/mongodb`](https://github.com/kvet/queuert/tree/main/packages/mongodb) - MongoDB _(experimental)_
 
 Optional adapters:
 

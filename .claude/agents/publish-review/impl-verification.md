@@ -18,7 +18,6 @@ You are an implementation verification agent for the Queuert library. Your task 
 - `packages/core/README.md` - Core exports
 - `packages/postgres/README.md` - PostgreSQL adapter
 - `packages/sqlite/README.md` - SQLite adapter
-- `packages/mongodb/README.md` - MongoDB adapter
 - `packages/redis/README.md` - Redis adapter
 - `packages/nats/README.md` - NATS adapter
 - `packages/otel/README.md` - OTEL adapter

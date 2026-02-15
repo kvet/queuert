@@ -27,7 +27,7 @@ The state adapter handles:
 - **Small-scale deployments** - Embedded applications, CLI tools, edge functions
 - **Single-process apps** - When you don't need multiple distributed workers
 
-For production with multiple workers across machines, consider [PostgreSQL](https://github.com/kvet/queuert/tree/main/packages/postgres) or [MongoDB](https://github.com/kvet/queuert/tree/main/packages/mongodb).
+For production with multiple workers across machines, consider [PostgreSQL](https://github.com/kvet/queuert/tree/main/packages/postgres).
 
 ## Installation
 

@@ -9,7 +9,6 @@ Read and analyze:
 - `packages/core/src/index.ts` - Main core exports
 - `packages/postgres/src/index.ts` - PostgreSQL adapter exports
 - `packages/sqlite/src/index.ts` - SQLite adapter exports
-- `packages/mongodb/src/index.ts` - MongoDB adapter exports
 - `packages/redis/src/index.ts` - Redis adapter exports
 - `packages/nats/src/index.ts` - NATS adapter exports
 - `packages/otel/src/index.ts` - OpenTelemetry adapter exports

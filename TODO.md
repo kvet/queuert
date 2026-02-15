@@ -40,16 +40,6 @@
   - [REF] usage of db without pool is incorrect
   - [TASK,EASY] Run against multiple versions
 - [EPIC] MySQL/MariaDB adapter
-- [EPIC] MonogoDB ready:
-  - [REF] MongoDB: Add migration version tracking (store applied migrations in metadata collection, run incremental index changes)
-  - [TASK,COMPLEX] MongoDB: Use native ObjectId instead of app-side UUID generation
-  - [REF] MongoDB: Move collection configuration from provider to adapter - Provider should only handle context/transactions, collection name is an adapter concern (like schema/tablePrefix in PostgreSQL/SQLite)
-  - [REF] Prisma MongoDB support - via generic StateProvider interface
-  - [REF] withTransaction can retry on transient transaction errors
-  - [REF] run with standalone + replica set mode on testcontainers
-  - [REF] support notifications (change streams) for job activation with MongoDB
-  - [TASK,EASY] try to use single operations where possible (findOneAndUpdate, updateMany)
-  - [TASK,EASY] Run against multiple versions
 - [REF] Revisit Prisma examples
 - [TASK,?] test against bun and it's built-in sqlite, postgres clients
 

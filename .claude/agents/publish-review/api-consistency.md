@@ -9,7 +9,6 @@ You are an API consistency reviewer for the Queuert library. Your task is to ens
 - `packages/core/src/index.ts`
 - `packages/postgres/src/index.ts`
 - `packages/sqlite/src/index.ts`
-- `packages/mongodb/src/index.ts`
 - `packages/redis/src/index.ts`
 - `packages/nats/src/index.ts`
 - `packages/otel/src/index.ts`
@@ -38,7 +37,6 @@ Similar adapters should have similar APIs.
 
 - `createPgStateAdapter(options)`
 - `createSqliteStateAdapter(options)`
-- `createMongoStateAdapter(options)`
 
 **Check for:**
 
@@ -67,7 +65,7 @@ Options should be named consistently across packages.
 **Known variations to check:**
 
 - `channelPrefix` (Postgres, Redis) vs `subjectPrefix` (NATS)
-- `schema` (Postgres) vs `tablePrefix` (SQLite) vs nothing (MongoDB)
+- `schema` (Postgres) vs `tablePrefix` (SQLite)
 - `idType` / `idDefault` / `idGenerator` - consistent across adapters?
 
 **For each option:**
@@ -129,7 +127,6 @@ Testing utilities should follow consistent patterns.
 - `extendWithStateInProcess` (core)
 - `extendWithStatePostgres` (postgres)
 - `extendWithStateSqlite` (sqlite)
-- `extendWithStateMongodb` (mongodb)
 - `extendWithNotifyInProcess` (core)
 - `extendWithNotifyRedis` (redis)
 - `extendWithNatsNotify` (nats) - note: different pattern?
@@ -179,11 +176,11 @@ Provide your findings in this format:
 
 ### Configuration Option Comparison
 
-| Option      | Postgres | SQLite      | MongoDB | Redis         | NATS          | Standard? |
-| ----------- | -------- | ----------- | ------- | ------------- | ------------- | --------- |
-| idGenerator | Yes      | Yes         | Yes     | N/A           | N/A           | Yes       |
-| prefix      | schema   | tablePrefix | N/A     | channelPrefix | subjectPrefix | No        |
-| ...         | ...      | ...         | ...     | ...           | ...           | ...       |
+| Option      | Postgres | SQLite      | Redis         | NATS          | Standard? |
+| ----------- | -------- | ----------- | ------------- | ------------- | --------- | --- |
+| idGenerator | N/A      | Yes         | N/A           | N/A           | N/A       |
+| prefix      | schema   | tablePrefix | channelPrefix | subjectPrefix | No        |
+| ...         | ...      | ...         | ...           | ...           | ...       | ... |
 
 ### Factory Pattern Comparison
 

@@ -147,7 +147,7 @@ prompt: |
   - Compare testing exports
 
   Check for:
-  1. State adapter consistency (Postgres, SQLite, MongoDB)
+  1. State adapter consistency (Postgres, SQLite)
   2. Notify adapter consistency (Postgres, Redis, NATS)
   3. Configuration option naming (channelPrefix vs subjectPrefix)
   4. Factory pattern consistency

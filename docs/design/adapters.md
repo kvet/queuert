@@ -14,7 +14,6 @@ createClient → Promise<Client>
 createInProcessWorker → Promise<InProcessWorker>
 createPgStateAdapter → Promise<StateAdapter>
 createSqliteStateAdapter → Promise<StateAdapter>
-createMongoStateAdapter → Promise<StateAdapter>
 createPgNotifyAdapter → Promise<NotifyAdapter>
 createRedisNotifyAdapter → Promise<NotifyAdapter>
 createNatsNotifyAdapter → Promise<NotifyAdapter>

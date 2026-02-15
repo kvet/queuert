@@ -14,7 +14,6 @@ pnpm start:all
 # Run specific adapter measurements
 pnpm start:state-postgres    # PostgreSQL state adapter
 pnpm start:state-sqlite      # SQLite state adapter
-pnpm start:state-mongodb     # MongoDB state adapter
 pnpm start:notify-redis      # Redis notify adapter
 pnpm start:notify-postgres   # PostgreSQL notify adapter
 pnpm start:notify-nats       # NATS notify adapter
@@ -29,7 +28,6 @@ Measures adapter creation overhead with real database drivers:
 
 - **PostgreSQL** - postgres.js driver + testcontainers
 - **SQLite** - better-sqlite3 driver (in-memory)
-- **MongoDB** - mongodb driver + testcontainers
 
 ### Notify Adapters
 
@@ -51,7 +49,6 @@ Measures adapter creation overhead with real pub/sub drivers:
 | ---------- | ---------------- |
 | PostgreSQL | ~290 KB          |
 | SQLite     | ~45 KB           |
-| MongoDB    | ~370 KB          |
 
 ### Notify Adapters
 

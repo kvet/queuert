@@ -75,7 +75,7 @@ All adapter combinations should have working examples.
 
 **Database examples:**
 
-- Check each `examples/postgres-*`, `examples/mongodb-*`, `examples/sqlite-*`
+- Check each `examples/postgres-*`, `examples/sqlite-*`
 - Do they have README, working code, and dependencies?
 
 **Logging examples:**
@@ -115,7 +115,6 @@ Look for documented but non-functional features.
 **Known gaps from CLAUDE.md to verify:**
 
 - "tracing spans will be added later" (ObservabilityAdapter)
-- MongoDB-specific TODOs
 
 ### 6. In-Progress Work
 

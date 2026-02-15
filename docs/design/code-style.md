@@ -59,7 +59,6 @@ Adapter packages use their domain-specific prefixes (not "Queuert"):
 | ------------------- | -------------------------------- | -------------------- |
 | `@queuert/postgres` | `createPgStateAdapter`           | `PgStateAdapter`     |
 | `@queuert/sqlite`   | `createSqliteStateAdapter`       | `SqliteStateAdapter` |
-| `@queuert/mongodb`  | `createMongoStateAdapter`        | `MongoStateAdapter`  |
 | `@queuert/redis`    | `createRedisNotifyAdapter`       | -                    |
 | `@queuert/nats`     | `createNatsNotifyAdapter`        | -                    |
 | `@queuert/otel`     | `createOtelObservabilityAdapter` | -                    |
@@ -126,7 +125,6 @@ describe("MyFeature", () => {
 - `packages/core/src/specs/` - Running with in-process adapters
 - `packages/postgres/src/specs/` - Running with PostgreSQL adapter
 - `packages/sqlite/src/specs/` - Running with SQLite adapter
-- `packages/mongodb/src/specs/` - Running with MongoDB adapter
 - `packages/redis/src/specs/` - Running with Redis notify adapter
 - `packages/nats/src/specs/` - Running with NATS notify adapter
 
@@ -191,8 +189,6 @@ state-sqlite-prisma         # Prisma
 state-sqlite-drizzle        # Drizzle ORM
 state-sqlite-kysely         # Kysely
 
-state-mongodb-mongodb       # mongodb native driver
-state-mongodb-mongoose      # Mongoose ODM
 ```
 
 Each implements a state provider (`PgStateProvider` or `SqliteStateProvider`) with `runInTransaction` and `executeSql` methods specific to that client library.
@@ -225,11 +221,11 @@ This follows the principle of using each technology's native terminology rather 
 
 State adapters have configuration differences that reflect database capabilities:
 
-| Option       | PostgreSQL             | SQLite                | MongoDB               | Rationale                                                   |
-| ------------ | ---------------------- | --------------------- | --------------------- | ----------------------------------------------------------- |
-| Namespace    | `schema`               | `tablePrefix`         | N/A                   | PostgreSQL uses schemas; SQLite prefixes table names        |
-| ID default   | `idDefault` (SQL expr) | N/A                   | N/A                   | PostgreSQL can use SQL expressions like `gen_random_uuid()` |
-| ID generator | N/A                    | `idGenerator` (JS fn) | `idGenerator` (JS fn) | SQLite/MongoDB need app-side ID generation                  |
+| Option       | PostgreSQL             | SQLite                | Rationale                                                   |
+| ------------ | ---------------------- | --------------------- | ----------------------------------------------------------- |
+| Namespace    | `schema`               | `tablePrefix`         | PostgreSQL uses schemas; SQLite prefixes table names        |
+| ID default   | `idDefault` (SQL expr) | N/A                   | PostgreSQL can use SQL expressions like `gen_random_uuid()` |
+| ID generator | N/A                    | `idGenerator` (JS fn) | SQLite needs app-side ID generation                         |
 
 These differences are intentional — each adapter uses the most natural approach for its database.
 

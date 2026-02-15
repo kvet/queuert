@@ -27,7 +27,6 @@ Read and analyze these files:
 - `packages/core/README.md` - Core exports and usage
 - `packages/postgres/README.md` - PostgreSQL adapter config
 - `packages/sqlite/README.md` - SQLite adapter config
-- `packages/mongodb/README.md` - MongoDB adapter config
 - `packages/redis/README.md` - Redis adapter config
 - `packages/nats/README.md` - NATS adapter config
 - `packages/otel/README.md` - OTEL adapter metrics

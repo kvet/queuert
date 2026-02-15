@@ -48,7 +48,6 @@ Group changes by their documentation relevance:
 | `packages/core/src/**`     | `docs/design/*.md`, `packages/core/README.md`            |
 | `packages/postgres/**`     | `packages/postgres/README.md`, `docs/design/adapters.md` |
 | `packages/sqlite/**`       | `packages/sqlite/README.md`, `docs/design/adapters.md`   |
-| `packages/mongodb/**`      | `packages/mongodb/README.md`, `docs/design/adapters.md`  |
 | `packages/redis/**`        | `packages/redis/README.md`, `docs/design/adapters.md`    |
 | `packages/nats/**`         | `packages/nats/README.md`, `docs/design/adapters.md`     |
 | `packages/otel/**`         | `packages/otel/README.md`, `docs/design/adapters.md`     |
