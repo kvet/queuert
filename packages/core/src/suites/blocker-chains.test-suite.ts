@@ -93,24 +93,23 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     });
 
     expectTypeOf<
-      Parameters<typeof client.startJobChain<"main">>[0]["startBlockers"]
+      Parameters<typeof client.startJobChain<"main">>[0]["blockers"]
     >().not.toBeUndefined();
 
     const jobChain = await client.withNotify(async () =>
       runInTransaction(async (txContext) => {
+        const dependencyJobChain = await client.startJobChain({
+          ...txContext,
+          typeName: "blocker",
+          input: { value: 0 },
+        });
+        blockerChainId = dependencyJobChain.id;
+
         const jobChain = await client.startJobChain({
           ...txContext,
           typeName: "main",
           input: { start: true },
-          startBlockers: async () => {
-            const dependencyJobChain = await client.startJobChain({
-              ...txContext,
-              typeName: "blocker",
-              input: { value: 0 },
-            });
-            blockerChainId = dependencyJobChain.id;
-            return [dependencyJobChain];
-          },
+          blockers: [dependencyJobChain],
         });
 
         mainChainId = jobChain.id;
@@ -173,14 +172,10 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           },
         },
         main: {
-          attemptHandler: async ({
-            job: {
-              blockers: [blocker],
-            },
-            complete,
-          }) => {
-            // Blocker originId is null since it was created independently
-            expect(blocker.originId).toBeNull();
+          attemptHandler: async ({ job, complete }) => {
+            const [blocker] = job.blockers;
+            // Blocker originId set by post-hoc update to main job's id
+            expect(blocker.originId).toEqual(job.id);
 
             return complete(async () => ({
               finalResult: blocker.output.result,
@@ -215,7 +210,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           ...txContext,
           typeName: "main",
           input: null,
-          startBlockers: async () => [completedBlockerJobChain],
+          blockers: [completedBlockerJobChain],
         }),
       ),
     );
@@ -493,26 +488,27 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     });
 
     const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
-        client.startJobChain({
+      runInTransaction(async (txContext) => {
+        const blockerChains = await Promise.all(
+          Array.from({ length: 5 }, async (_, i) =>
+            client.startJobChain({
+              ...txContext,
+              typeName: "blocker",
+              input: { value: i + 1 },
+            }),
+          ),
+        );
+        return client.startJobChain({
           ...txContext,
           typeName: "main",
           input: null,
-          startBlockers: async () => {
-            const blockers = await Promise.all(
-              Array.from({ length: 5 }, async (_, i) =>
-                client.startJobChain({
-                  ...txContext,
-                  typeName: "blocker",
-                  input: { value: i + 1 },
-                }),
-              ),
-            );
-            // Assert non-empty tuple type - length 5 is guaranteed by Array.from
-            return blockers as [(typeof blockers)[number], ...(typeof blockers)[number][]];
-          },
-        }),
-      ),
+          // Assert non-empty tuple type - length 5 is guaranteed by Array.from
+          blockers: blockerChains as [
+            (typeof blockerChains)[number],
+            ...(typeof blockerChains)[number][],
+          ],
+        });
+      }),
     );
 
     await withWorkers([await worker.start()], async () => {
@@ -582,16 +578,15 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           attemptHandler: async ({ job, prepare, complete }) => {
             await prepare({ mode: "atomic" });
             return complete(async ({ continueWith, ...txContext }) => {
+              const blockerChain = await client.startJobChain({
+                ...txContext,
+                typeName: "blocker",
+                input: { value: 5 },
+              });
               const continuedJob = await continueWith({
                 typeName: "second",
                 input: { fromFirst: job.input.id },
-                startBlockers: async () => [
-                  await client.startJobChain({
-                    ...txContext,
-                    typeName: "blocker",
-                    input: { value: 5 },
-                  }),
-                ],
+                blockers: [blockerChain],
               });
               secondJobId = continuedJob.id;
               return continuedJob;

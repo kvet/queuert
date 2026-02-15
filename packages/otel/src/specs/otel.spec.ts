@@ -356,21 +356,20 @@ describe("Metrics", () => {
     });
 
     const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
-        client.startJobChain({
+      runInTransaction(async (txContext) => {
+        const dependencyJobChain = await client.startJobChain({
+          ...txContext,
+          typeName: "blocker",
+          input: { value: 0 },
+        });
+
+        return client.startJobChain({
           ...txContext,
           typeName: "main",
           input: { start: true },
-          startBlockers: async () => {
-            const dependencyJobChain = await client.startJobChain({
-              ...txContext,
-              typeName: "blocker",
-              input: { value: 0 },
-            });
-            return [dependencyJobChain];
-          },
-        }),
-      ),
+          blockers: [dependencyJobChain],
+        });
+      }),
     );
 
     await withWorkers([await worker.start()], async () => {
@@ -496,8 +495,7 @@ describe("Metrics", () => {
     withWorkers,
     observabilityAdapter,
     log,
-    _otelReader,
-    _otelExporter,
+    getMetricNames,
     expect,
   }) => {
     const registry = defineJobTypes<{
@@ -541,14 +539,7 @@ describe("Metrics", () => {
       await client.waitForJobChainCompletion(jobChain, completionOptions);
     });
 
-    await _otelReader.forceFlush();
-    const metricNames = new Set(
-      _otelExporter
-        .getMetrics()
-        .at(-1)
-        ?.scopeMetrics.flatMap((s) => s.metrics)
-        .map((m) => m.descriptor.name) ?? [],
-    );
+    const metricNames = await getMetricNames();
     expect(metricNames).toContain("queuert.job.attempt.lease_renewed");
   });
 
@@ -559,8 +550,7 @@ describe("Metrics", () => {
     withWorkers,
     observabilityAdapter,
     log,
-    _otelReader,
-    _otelExporter,
+    getMetricNames,
     expect,
   }) => {
     const registry = defineJobTypes<{
@@ -604,14 +594,7 @@ describe("Metrics", () => {
       await client.waitForJobChainCompletion(jobChain, completionOptions);
     });
 
-    await _otelReader.forceFlush();
-    const metricNames = new Set(
-      _otelExporter
-        .getMetrics()
-        .at(-1)
-        ?.scopeMetrics.flatMap((s) => s.metrics)
-        .map((m) => m.descriptor.name) ?? [],
-    );
+    const metricNames = await getMetricNames();
     expect(metricNames).toContain("queuert.job.attempt.lease_expired");
   });
 
@@ -622,8 +605,7 @@ describe("Metrics", () => {
     withWorkers,
     observabilityAdapter,
     log,
-    _otelReader,
-    _otelExporter,
+    getMetricNames,
     expect,
   }) => {
     const registry = defineJobTypes<{
@@ -719,14 +701,7 @@ describe("Metrics", () => {
       await jobCompleted.promise;
     });
 
-    await _otelReader.forceFlush();
-    const metricNames = new Set(
-      _otelExporter
-        .getMetrics()
-        .at(-1)
-        ?.scopeMetrics.flatMap((s) => s.metrics)
-        .map((m) => m.descriptor.name) ?? [],
-    );
+    const metricNames = await getMetricNames();
     expect(metricNames).toContain("queuert.job.reaped");
     expect(
       metricNames.has("queuert.job.attempt.taken_by_another_worker") ||
@@ -741,8 +716,7 @@ describe("Metrics", () => {
     withWorkers,
     observabilityAdapter,
     log,
-    _otelReader,
-    _otelExporter,
+    getMetricNames,
     expect,
   }) => {
     const registry = defineJobTypes<{
@@ -798,14 +772,7 @@ describe("Metrics", () => {
       await client.waitForJobChainCompletion(jobChain, completionOptions);
     });
 
-    await _otelReader.forceFlush();
-    const metricNames = new Set(
-      _otelExporter
-        .getMetrics()
-        .at(-1)
-        ?.scopeMetrics.flatMap((s) => s.metrics)
-        .map((m) => m.descriptor.name) ?? [],
-    );
+    const metricNames = await getMetricNames();
     expect(metricNames).toContain("queuert.state_adapter.error");
     expect(metricNames).toContain("queuert.worker.error");
   });
@@ -817,8 +784,7 @@ describe("Metrics", () => {
     withWorkers,
     observabilityAdapter,
     log,
-    _otelReader,
-    _otelExporter,
+    getMetricNames,
     expect,
   }) => {
     const registry = defineJobTypes<{
@@ -871,14 +837,7 @@ describe("Metrics", () => {
       });
     });
 
-    await _otelReader.forceFlush();
-    const metricNames = new Set(
-      _otelExporter
-        .getMetrics()
-        .at(-1)
-        ?.scopeMetrics.flatMap((s) => s.metrics)
-        .map((m) => m.descriptor.name) ?? [],
-    );
+    const metricNames = await getMetricNames();
     expect(metricNames).toContain("queuert.notify_adapter.error");
   });
 });
@@ -1205,21 +1164,20 @@ describe("Spans", () => {
     });
 
     const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
-        client.startJobChain({
+      runInTransaction(async (txContext) => {
+        const dependencyJobChain = await client.startJobChain({
+          ...txContext,
+          typeName: "blocker",
+          input: { value: 0 },
+        });
+
+        return client.startJobChain({
           ...txContext,
           typeName: "main",
           input: { start: true },
-          startBlockers: async () => {
-            const dependencyJobChain = await client.startJobChain({
-              ...txContext,
-              typeName: "blocker",
-              input: { value: 0 },
-            });
-            return [dependencyJobChain];
-          },
-        }),
-      ),
+          blockers: [dependencyJobChain],
+        });
+      }),
     );
 
     await withWorkers([await worker.start()], async () => {
@@ -1227,9 +1185,9 @@ describe("Spans", () => {
     });
 
     await expectSpans([
-      // Blocker chain creation (links to main job being blocked)
-      { name: "chain blocker", kind: "PRODUCER", links: 1 },
-      { name: "job blocker", kind: "PRODUCER", parentName: "chain blocker", links: 1 },
+      // Blocker chain created independently (no links yet)
+      { name: "chain blocker", kind: "PRODUCER" },
+      { name: "job blocker", kind: "PRODUCER", parentName: "chain blocker" },
       // Main chain creation
       { name: "chain main", kind: "PRODUCER" },
       { name: "job main", kind: "PRODUCER", parentName: "chain main" },

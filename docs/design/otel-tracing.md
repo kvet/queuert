@@ -92,7 +92,7 @@ When a job has blockers (dependencies on other chains), the relationship is capt
 1. **Span links**: Each blocker chain's PRODUCER span (and its job span) links back to the blocked job's span via `rootChainTraceContext`
 2. **Root chain ID**: Blocker chain spans carry `queuert.chain.root_id` identifying the chain they block for
 
-The parent-child hierarchy depends on the OTel active context at creation time. In the common case of a top-level `startJobChain` with `startBlockers`, all chains share the caller's active span as parent:
+The parent-child hierarchy depends on the OTel active context at creation time. In the common case of creating blocker chains and then a blocked `startJobChain`, all chains share the caller's active span as parent:
 
 ```
 EXTERNAL span (e.g., HTTP request)

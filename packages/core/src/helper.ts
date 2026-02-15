@@ -1,17 +1,7 @@
 import { type JobChain, mapStateJobPairToJobChain } from "./entities/job-chain.js";
 import { type JobTypeRegistry } from "./entities/job-type-registry.js";
-import {
-  type BaseJobTypeDefinitions,
-  type BlockerChains,
-  type EntryJobTypeDefinitions,
-  type JobOf,
-} from "./entities/job-type.js";
-import {
-  type Job,
-  type JobWithoutBlockers,
-  type PendingJob,
-  mapStateJobToJob,
-} from "./entities/job.js";
+import { type BaseJobTypeDefinitions, type JobOf } from "./entities/job-type.js";
+import { type Job, mapStateJobToJob } from "./entities/job.js";
 import { type ScheduleOptions } from "./entities/schedule.js";
 import {
   JobAlreadyCompletedError,
@@ -19,7 +9,6 @@ import {
   JobTakenByAnotherWorkerError,
 } from "./errors.js";
 import { type BackoffConfig, calculateBackoffMs } from "./helpers/backoff.js";
-import { jobContextStorage, withJobContext } from "./helpers/job-context.js";
 import {
   notifyChainCompletion,
   notifyJobScheduled,
@@ -37,17 +26,13 @@ import {
 } from "./state-adapter/state-adapter.js";
 import { RescheduleJobError } from "./worker/job-process.js";
 
-export type StartBlockersFn<
-  TJobId,
-  TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TJobTypeName extends keyof TJobTypeDefinitions & string,
-  TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string =
-    keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
-> = (options: {
-  job: PendingJob<
-    JobWithoutBlockers<JobOf<TJobId, TJobTypeDefinitions, TJobTypeName, TChainTypeName>>
-  >;
-}) => Promise<BlockerChains<TJobId, TJobTypeDefinitions, TJobTypeName>>;
+export type ChainContext = {
+  chainId: string;
+  chainTypeName: string;
+  rootChainId: string;
+  originId: string;
+  originTraceContext: unknown;
+};
 
 export const helper = ({
   stateAdapter: stateAdapterOption,
@@ -74,16 +59,18 @@ export const helper = ({
     typeName,
     input,
     txContext,
-    startBlockers,
+    blockers,
     isChain,
+    chainContext,
     deduplication,
     schedule,
   }: {
     typeName: string;
     input: unknown;
     txContext: BaseTxContext;
-    startBlockers?: StartBlockersFn<string, BaseJobTypeDefinitions, string>;
+    blockers?: JobChain<any, any, any, any>[];
     isChain: boolean;
+    chainContext?: ChainContext;
     deduplication?: DeduplicationOptions;
     schedule?: ScheduleOptions;
   }): Promise<{ job: StateJob; deduplicated: boolean }> => {
@@ -93,15 +80,14 @@ export const helper = ({
 
     const parsedInput = registry.parseInput(typeName, input);
 
-    const jobContext = jobContextStorage.getStore();
-    const chainTypeName = isChain ? typeName : jobContext!.chainTypeName;
+    const chainTypeName = isChain ? typeName : chainContext!.chainTypeName;
 
     const spanHandle = observabilityHelper.startJobSpan({
       chainTypeName,
       jobTypeName: typeName,
       isChainStart: isChain,
-      originTraceContext: isChain ? undefined : jobContext?.originTraceContext,
-      rootChainTraceContext: isChain ? jobContext?.originTraceContext : undefined,
+      originTraceContext: isChain ? undefined : chainContext?.originTraceContext,
+      rootChainTraceContext: isChain ? chainContext?.originTraceContext : undefined,
     });
 
     let createJobResult: { job: StateJob; deduplicated: boolean };
@@ -111,9 +97,9 @@ export const helper = ({
         typeName,
         chainTypeName,
         input: parsedInput,
-        originId: jobContext?.originId,
-        chainId: isChain ? undefined : jobContext!.chainId,
-        rootChainId: isChain ? jobContext?.rootChainId : jobContext!.rootChainId,
+        originId: chainContext?.originId,
+        chainId: isChain ? undefined : chainContext!.chainId,
+        rootChainId: isChain ? chainContext?.rootChainId : chainContext!.rootChainId,
         deduplication,
         schedule,
         traceContext: spanHandle?.getTraceContext(),
@@ -139,25 +125,16 @@ export const helper = ({
 
     let blockerChains: JobChain<any, any, any, any>[] = [];
     let incompleteBlockerChainIds: string[] = [];
-    if (startBlockers) {
-      const blockers = await withJobContext(
-        {
-          chainId: job.chainId,
-          chainTypeName: job.chainTypeName,
-          rootChainId: job.rootChainId,
-          originId: job.id,
-          originTraceContext: spanHandle?.getTraceContext(),
-        },
-        async () => startBlockers({ job: mapStateJobToJob(job) as any }),
-      );
-
-      blockerChains = [...blockers] as JobChain<any, any, any, any>[];
+    if (blockers && blockers.length > 0) {
+      blockerChains = blockers;
       const blockerChainIds = blockerChains.map((b) => b.id);
 
       const addBlockersResult = await stateAdapter.addJobBlockers({
         txContext,
         jobId: job.id,
         blockedByChainIds: blockerChainIds,
+        rootChainId: job.rootChainId,
+        originId: job.id,
       });
       job = addBlockersResult.job;
       incompleteBlockerChainIds = addBlockersResult.incompleteBlockerChainIds;
@@ -196,14 +173,16 @@ export const helper = ({
     input,
     txContext,
     schedule,
-    startBlockers,
+    blockers,
+    chainContext,
     fromTypeName,
   }: {
     typeName: TJobTypeName;
     input: TInput;
     txContext: any;
     schedule?: ScheduleOptions;
-    startBlockers?: StartBlockersFn<string, BaseJobTypeDefinitions, string>;
+    blockers?: JobChain<any, any, any, any>[];
+    chainContext: ChainContext;
     fromTypeName: string;
   }): Promise<JobOf<string, BaseJobTypeDefinitions, TJobTypeName, string>> => {
     registry.validateContinueWith(fromTypeName, { typeName, input });
@@ -212,8 +191,9 @@ export const helper = ({
       typeName,
       input,
       txContext,
-      startBlockers,
+      blockers,
       isChain: false,
+      chainContext,
       schedule,
     });
 
@@ -299,36 +279,26 @@ export const helper = ({
     observabilityHelper,
     withNotifyContext: (async <T>(cb: () => Promise<T>) =>
       withNotifyContext(notifyAdapter, cb)) as <T>(cb: () => Promise<T>) => Promise<T>,
-    withJobContext: withJobContext as <T>(
-      context: {
-        chainId: string;
-        chainTypeName: string;
-        rootChainId: string;
-        originId: string;
-        originTraceContext: unknown;
-      },
-      cb: () => Promise<T>,
-    ) => Promise<T>,
     startJobChain: async <TChainTypeName extends string, TInput, TOutput>({
       typeName,
       input,
       txContext,
       deduplication,
       schedule,
-      startBlockers,
+      blockers,
     }: {
       typeName: TChainTypeName;
       input: TInput;
       txContext: any;
       deduplication?: DeduplicationOptions;
       schedule?: ScheduleOptions;
-      startBlockers?: StartBlockersFn<string, BaseJobTypeDefinitions, string>;
+      blockers?: JobChain<any, any, any, any>[];
     }): Promise<JobChain<string, TChainTypeName, TInput, TOutput> & { deduplicated: boolean }> => {
       const { job, deduplicated } = await createStateJob({
         typeName,
         input,
         txContext,
-        startBlockers,
+        blockers,
         isChain: true,
         deduplication,
         schedule,
@@ -341,14 +311,16 @@ export const helper = ({
       input,
       txContext,
       schedule,
-      startBlockers,
+      blockers,
+      chainContext,
       fromTypeName,
     }: {
       typeName: TJobTypeName;
       input: TInput;
       txContext: any;
       schedule?: ScheduleOptions;
-      startBlockers?: StartBlockersFn<string, BaseJobTypeDefinitions, string>;
+      blockers?: JobChain<any, any, any, any>[];
+      chainContext: ChainContext;
       fromTypeName: string;
     }) => Promise<JobOf<string, BaseJobTypeDefinitions, TJobTypeName, string>>,
     handleJobHandlerError: async ({

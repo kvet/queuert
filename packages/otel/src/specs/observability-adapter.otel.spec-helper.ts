@@ -85,6 +85,7 @@ export const extendWithObservabilityOtel = <T extends {}>(
       jobTypeProcessingChange?: { delta: number; typeName?: string; workerId?: string }[];
     }) => Promise<void>;
     expectSpans: (expected: ExpectedSpan[]) => Promise<void>;
+    getMetricNames: () => Promise<Set<string>>;
   }
 > => {
   return api.extend<{
@@ -100,6 +101,7 @@ export const extendWithObservabilityOtel = <T extends {}>(
       jobTypeProcessingChange?: { delta: number; typeName?: string; workerId?: string }[];
     }) => Promise<void>;
     expectSpans: (expected: ExpectedSpan[]) => Promise<void>;
+    getMetricNames: () => Promise<Set<string>>;
     _otelExporter: InMemoryMetricExporter;
     _otelReader: PeriodicExportingMetricReader;
     _otelProvider: MeterProvider;
@@ -299,6 +301,21 @@ export const extendWithObservabilityOtel = <T extends {}>(
               if (entry.links !== undefined) matcher.links = entry.links;
               return expect.objectContaining(matcher);
             }),
+          );
+        });
+      },
+      { scope: "test" },
+    ],
+    getMetricNames: [
+      async ({ _otelReader, _otelExporter }, use) => {
+        await use(async () => {
+          await _otelReader.forceFlush();
+          return new Set(
+            _otelExporter
+              .getMetrics()
+              .at(-1)
+              ?.scopeMetrics.flatMap((s) => s.metrics)
+              .map((m) => m.descriptor.name) ?? [],
           );
         });
       },

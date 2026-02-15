@@ -418,14 +418,14 @@ type Definitions = {
 };
 
 // Start with blockers
+const fetchBlockers = await Promise.all([
+  queuert.startJobChain({ typeName: "fetch-data", input: { url: "/a" } }),
+  queuert.startJobChain({ typeName: "fetch-data", input: { url: "/b" } }),
+]);
 await queuert.startJobChain({
   typeName: "process-all",
   input: { ids: ["a", "b", "c"] },
-  startBlockers: async () =>
-    Promise.all([
-      queuert.startJobChain({ typeName: "fetch-data", input: { url: "/a" } }),
-      queuert.startJobChain({ typeName: "fetch-data", input: { url: "/b" } }),
-    ]),
+  blockers: fetchBlockers,
 });
 
 // Access completed blockers in worker

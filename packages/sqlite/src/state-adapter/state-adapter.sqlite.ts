@@ -38,6 +38,7 @@ import {
   renewJobLeaseSql,
   rescheduleJobSql,
   scheduleBlockedJobSql,
+  updateBlockerChainsSql,
   updateJobToBlockedSql,
 } from "./sql.js";
 
@@ -285,7 +286,13 @@ export const createSqliteStateAdapter = async <
       return { job: mapDbJobToStateJob(result), deduplicated: false };
     },
 
-    addJobBlockers: async ({ txContext, jobId, blockedByChainIds }) => {
+    addJobBlockers: async ({ txContext, jobId, blockedByChainIds, rootChainId, originId }) => {
+      await executeTypedSql({
+        txContext,
+        sql: updateBlockerChainsSql,
+        params: [rootChainId, originId, JSON.stringify(blockedByChainIds)],
+      });
+
       await executeTypedSql({
         txContext,
         sql: insertJobBlockersSql,

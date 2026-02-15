@@ -159,9 +159,27 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       return { job, deduplicated: false };
     },
 
-    addJobBlockers: async ({ jobId, blockedByChainIds }) => {
+    addJobBlockers: async ({ jobId, blockedByChainIds, rootChainId, originId }) => {
       const job = store.jobs.get(jobId);
       if (!job) throw new Error("Job not found");
+
+      const blockerChainIdSet = new Set(blockedByChainIds);
+
+      // Post-hoc update: set rootChainId/originId on blocker chain jobs
+      for (const existingJob of store.jobs.values()) {
+        if (
+          blockerChainIdSet.has(existingJob.chainId) &&
+          existingJob.rootChainId === existingJob.chainId
+        ) {
+          store.jobs.set(existingJob.id, { ...existingJob, rootChainId });
+        }
+      }
+      for (const blockerChainId of blockedByChainIds) {
+        const starterJob = store.jobs.get(blockerChainId);
+        if (starterJob && starterJob.originId === null) {
+          store.jobs.set(blockerChainId, { ...starterJob, originId });
+        }
+      }
 
       const blockerMap = store.jobBlockers.get(jobId) ?? new Map<string, number>();
       blockedByChainIds.forEach((blockerChainId, index) => {

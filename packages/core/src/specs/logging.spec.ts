@@ -439,19 +439,18 @@ describe("Logging", () => {
 
     const jobChain = await client.withNotify(async () =>
       runInTransaction(async (txContext) => {
+        const dependencyJobChain = await client.startJobChain({
+          ...txContext,
+          typeName: "blocker",
+          input: { value: 0 },
+        });
+        blockerChainId = dependencyJobChain.id;
+
         const jobChain = await client.startJobChain({
           ...txContext,
           typeName: "main",
           input: { start: true },
-          startBlockers: async () => {
-            const dependencyJobChain = await client.startJobChain({
-              ...txContext,
-              typeName: "blocker",
-              input: { value: 0 },
-            });
-            blockerChainId = dependencyJobChain.id;
-            return [dependencyJobChain];
-          },
+          blockers: [dependencyJobChain],
         });
 
         mainChainId = jobChain.id;
@@ -468,8 +467,8 @@ describe("Logging", () => {
         type: "job_chain_created",
         data: {
           typeName: "blocker",
-          rootChainId: mainChainId!,
-          originId: mainChainId!,
+          rootChainId: blockerChainId!,
+          originId: null,
         },
       },
       { type: "job_created", data: { typeName: "blocker" } },
@@ -482,8 +481,8 @@ describe("Logging", () => {
             {
               id: blockerChainId!,
               typeName: "blocker",
-              originId: mainChainId!,
-              rootChainId: mainChainId!,
+              originId: null,
+              rootChainId: blockerChainId!,
             },
           ],
         },
@@ -496,8 +495,8 @@ describe("Logging", () => {
             {
               id: blockerChainId!,
               typeName: "blocker",
-              originId: mainChainId!,
-              rootChainId: mainChainId!,
+              originId: null,
+              rootChainId: blockerChainId!,
             },
           ],
         },

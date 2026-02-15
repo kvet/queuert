@@ -239,21 +239,24 @@ console.log("Result:", orderResult.output);
 console.log("\n--- Scenario 3: Blockers ---");
 console.log("Two blockers run in parallel, main job waits. Traces linked across chains.\n");
 const blockerJob = await client.withNotify(async () =>
-  stateAdapter.runInTransaction(async (ctx) =>
-    client.startJobChain({
+  stateAdapter.runInTransaction(async (ctx) => {
+    const userBlocker = await client.startJobChain({
+      ...ctx,
+      typeName: "fetch-user",
+      input: { userId: "user-1" },
+    });
+    const permBlocker = await client.startJobChain({
+      ...ctx,
+      typeName: "fetch-permissions",
+      input: { userId: "user-1" },
+    });
+    return client.startJobChain({
       ...ctx,
       typeName: "process-with-blockers",
       input: { taskId: "TASK-456" },
-      startBlockers: async () => [
-        await client.startJobChain({ ...ctx, typeName: "fetch-user", input: { userId: "user-1" } }),
-        await client.startJobChain({
-          ...ctx,
-          typeName: "fetch-permissions",
-          input: { userId: "user-1" },
-        }),
-      ],
-    }),
-  ),
+      blockers: [userBlocker, permBlocker],
+    });
+  }),
 );
 const blockerResult = await client.waitForJobChainCompletion(blockerJob, { timeoutMs: 10000 });
 console.log("Result:", blockerResult.output);

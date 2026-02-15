@@ -176,28 +176,28 @@ console.log("Three fetch jobs run in parallel, aggregate waits for all.\n");
 const aggregateChain = await client.withNotify(async () =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
+    const fetchBlockers = await Promise.all([
+      client.startJobChain({
+        sql: txSql,
+        typeName: "fetch-source",
+        input: { sourceId: "users", url: "/users" },
+      }),
+      client.startJobChain({
+        sql: txSql,
+        typeName: "fetch-source",
+        input: { sourceId: "orders", url: "/orders" },
+      }),
+      client.startJobChain({
+        sql: txSql,
+        typeName: "fetch-source",
+        input: { sourceId: "products", url: "/products" },
+      }),
+    ]);
     return client.startJobChain({
       sql: txSql,
       typeName: "aggregate-data",
       input: { reportId: "report-001" },
-      startBlockers: async () =>
-        Promise.all([
-          client.startJobChain({
-            sql: txSql,
-            typeName: "fetch-source",
-            input: { sourceId: "users", url: "/users" },
-          }),
-          client.startJobChain({
-            sql: txSql,
-            typeName: "fetch-source",
-            input: { sourceId: "orders", url: "/orders" },
-          }),
-          client.startJobChain({
-            sql: txSql,
-            typeName: "fetch-source",
-            input: { sourceId: "products", url: "/products" },
-          }),
-        ]),
+      blockers: fetchBlockers,
     });
   }),
 );
@@ -212,22 +212,21 @@ console.log("Action requires exactly: validate-user + load-config.\n");
 const actionChain = await client.withNotify(async () =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
+    const userBlocker = await client.startJobChain({
+      sql: txSql,
+      typeName: "validate-user",
+      input: { userId: "user-123" },
+    });
+    const configBlocker = await client.startJobChain({
+      sql: txSql,
+      typeName: "load-config",
+      input: { configKey: "settings" },
+    });
     return client.startJobChain({
       sql: txSql,
       typeName: "perform-action",
       input: { actionId: "action-001" },
-      startBlockers: async () => [
-        await client.startJobChain({
-          sql: txSql,
-          typeName: "validate-user",
-          input: { userId: "user-123" },
-        }),
-        await client.startJobChain({
-          sql: txSql,
-          typeName: "load-config",
-          input: { configKey: "settings" },
-        }),
-      ],
+      blockers: [userBlocker, configBlocker],
     });
   }),
 );

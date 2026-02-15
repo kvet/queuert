@@ -286,6 +286,25 @@ FROM json_each(?) AS je
   false,
 );
 
+export const updateBlockerChainsSql: TypedSql<
+  readonly [
+    NamedParameter<"root_chain_id", string>,
+    NamedParameter<"origin_id", string>,
+    NamedParameter<"blocked_by_chain_ids_json", string>,
+  ],
+  void
+> = sql(
+  /* sql */ `
+UPDATE {{table_prefix}}job
+SET
+  root_chain_id = CASE WHEN root_chain_id = chain_id THEN ? ELSE root_chain_id END,
+  origin_id = CASE WHEN id = chain_id AND origin_id IS NULL THEN ? ELSE origin_id END
+WHERE chain_id IN (SELECT value FROM json_each(?))
+  AND (root_chain_id = chain_id OR (id = chain_id AND origin_id IS NULL))
+`,
+  false,
+);
+
 export const checkBlockersStatusSql: TypedSql<
   readonly [NamedParameter<"job_id", string>],
   { job_id: string; blocked_by_chain_id: string; blocker_status: string }[]

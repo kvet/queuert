@@ -251,7 +251,12 @@ LIMIT 1
 );
 
 export const addJobBlockersSql: TypedSql<
-  readonly [NamedParameter<"job_id", string[]>, NamedParameter<"blocked_by_chain_id", string[]>],
+  readonly [
+    NamedParameter<"job_id", string[]>,
+    NamedParameter<"blocked_by_chain_id", string[]>,
+    NamedParameter<"root_chain_id", string>,
+    NamedParameter<"origin_id", string>,
+  ],
   [DbJobWithIncompleteBlockers]
 > = sql(
   /* sql */ `
@@ -260,6 +265,15 @@ WITH inserted_blockers AS (
   SELECT job_id, blocked_by_chain_id, ord - 1 AS "index"
   FROM unnest($1::{{id_type}}[], $2::{{id_type}}[]) WITH ORDINALITY AS t(job_id, blocked_by_chain_id, ord)
   RETURNING job_id, blocked_by_chain_id
+),
+updated_blocker_chains AS (
+  UPDATE {{schema}}.{{table_prefix}}job
+  SET
+    root_chain_id = CASE WHEN root_chain_id = chain_id THEN $3::{{id_type}} ELSE root_chain_id END,
+    origin_id = CASE WHEN id = chain_id AND origin_id IS NULL THEN $4::{{id_type}} ELSE origin_id END
+  WHERE chain_id = ANY($2::{{id_type}}[])
+    AND (root_chain_id = chain_id OR (id = chain_id AND origin_id IS NULL))
+  RETURNING id
 ),
 blockers_status AS (
   SELECT

@@ -1,6 +1,7 @@
 import { type JobTypeRegistry } from "./entities/job-type-registry.js";
 import {
   type BaseJobTypeDefinitions,
+  type BlockerChains,
   type ChainJobTypes,
   type ChainJobs,
   type ContinuationJobs,
@@ -13,7 +14,7 @@ import { type ScheduleOptions } from "./entities/schedule.js";
 import { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 import { type Log } from "./observability-adapter/log.js";
 import { type ObservabilityAdapter } from "./observability-adapter/observability-adapter.js";
-import { type StartBlockersFn, helper } from "./helper.js";
+import { helper } from "./helper.js";
 import {
   type BaseTxContext,
   type DeduplicationOptions,
@@ -30,7 +31,6 @@ import {
 } from "./entities/job-chain.js";
 import { JobAlreadyCompletedError, JobNotFoundError, WaitChainTimeoutError } from "./errors.js";
 import { raceWithSleep } from "./helpers/sleep.js";
-import { withJobContext } from "./helpers/job-context.js";
 import { type Job } from "./entities/job.js";
 import { notifyJobOwnershipLost } from "./helpers/notify-context.js";
 import { type CompleteCallbackOptions } from "./worker/job-process.js";
@@ -145,23 +145,23 @@ export const createClient = async <
         schedule?: ScheduleOptions;
       } & (HasBlockers<TJobTypeDefinitions, TChainTypeName> extends true
         ? {
-            startBlockers: StartBlockersFn<TJobId, TJobTypeDefinitions, TChainTypeName>;
+            blockers: BlockerChains<TJobId, TJobTypeDefinitions, TChainTypeName>;
           }
-        : { startBlockers?: never }) &
+        : { blockers?: never }) &
         GetStateAdapterTxContext<TStateAdapter>,
     ): Promise<
       JobChainOf<TJobId, TJobTypeDefinitions, TChainTypeName> & {
         deduplicated: boolean;
       }
     > => {
-      const { input, typeName, deduplication, schedule, startBlockers, ...txContext } = options;
+      const { input, typeName, deduplication, schedule, blockers, ...txContext } = options;
       return (await h.startJobChain({
         typeName,
         input,
         txContext,
         deduplication,
         schedule,
-        startBlockers,
+        blockers,
       })) as JobChainOf<TJobId, TJobTypeDefinitions, TChainTypeName> & { deduplicated: boolean };
     },
     // TODO: should it handle typeName that is not correct for the given id?
@@ -273,7 +273,7 @@ export const createClient = async <
               typeName: string;
               input: unknown;
               schedule?: ScheduleOptions;
-              startBlockers?: StartBlockersFn<string, BaseJobTypeDefinitions, string>;
+              blockers?: JobChain<any, any, any, any>[];
             }) => Promise<unknown>;
           } & BaseTxContext,
         ) => unknown,
@@ -288,29 +288,26 @@ export const createClient = async <
         let continuedJob: Job<any, any, any, any, any[]> | null = null;
 
         const output = await jobCompleteCallback({
-          continueWith: async ({ typeName, input, schedule, startBlockers }) => {
+          continueWith: async ({ typeName, input, schedule, blockers }) => {
             if (continuedJob) {
               throw new Error("continueWith can only be called once");
             }
 
-            continuedJob = await withJobContext(
-              {
+            continuedJob = await h.continueWith({
+              typeName,
+              input,
+              txContext,
+              schedule,
+              blockers: blockers as any,
+              chainContext: {
                 chainId: job.chainId,
-                rootChainId: job.rootChainId,
                 chainTypeName: job.chainTypeName,
+                rootChainId: job.rootChainId,
                 originId: job.id,
                 originTraceContext: job.traceContext,
               },
-              async () =>
-                h.continueWith({
-                  typeName,
-                  input,
-                  txContext,
-                  schedule,
-                  startBlockers: startBlockers as any,
-                  fromTypeName: job.typeName,
-                }),
-            );
+              fromTypeName: job.typeName,
+            });
 
             return continuedJob;
           },

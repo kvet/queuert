@@ -175,11 +175,16 @@ export const createPgStateAdapter = async <
       return { job: mapDbJobToStateJob(result), deduplicated: result.deduplicated };
     },
 
-    addJobBlockers: async ({ txContext, jobId, blockedByChainIds }) => {
+    addJobBlockers: async ({ txContext, jobId, blockedByChainIds, rootChainId, originId }) => {
       const [result] = await executeTypedSql({
         txContext,
         sql: addJobBlockersSql,
-        params: [Array.from({ length: blockedByChainIds.length }, () => jobId), blockedByChainIds],
+        params: [
+          Array.from({ length: blockedByChainIds.length }, () => jobId),
+          blockedByChainIds,
+          rootChainId,
+          originId,
+        ],
       });
 
       return {

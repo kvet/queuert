@@ -134,7 +134,7 @@ Chains can depend on other chains to complete before starting:
 └──────────────┘
 ```
 
-Blockers are declared at the type level and provided via `startBlockers` callback. The main job starts as `blocked` and transitions to `pending` when all blockers complete.
+Blockers are declared at the type level and provided via the `blockers` array when creating a job chain. The main job starts as `blocked` and transitions to `pending` when all blockers complete.
 
 ## Consistent Terminology
 

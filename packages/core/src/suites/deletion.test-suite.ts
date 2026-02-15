@@ -209,7 +209,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
           ...txContext,
           typeName: "main",
           input: null,
-          startBlockers: async () => [blockerChain],
+          blockers: [blockerChain],
         }),
       ),
     );
@@ -217,6 +217,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     expect(mainChain.status).toBe("blocked");
 
     await withWorkers([await worker.start(), await worker.start()], async () => {
+      // Blocker chain is no longer a root chain (rootChainId was set to mainChain by post-hoc update)
       await expect(
         runInTransaction(async (txContext) =>
           client.deleteJobChains({
@@ -224,12 +225,13 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
             rootChainIds: [blockerChain.id],
           }),
         ),
-      ).rejects.toThrow("external job chains depend on them");
+      ).rejects.toThrow("must delete from the root chain");
 
+      // Deleting the main chain cascades to the adopted blocker chain
       await runInTransaction(async (txContext) =>
         client.deleteJobChains({
           ...txContext,
-          rootChainIds: [blockerChain.id, mainChain.id],
+          rootChainIds: [mainChain.id],
         }),
       );
 
@@ -285,21 +287,19 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
 
     let blockerChain: JobChain<string, "blocker", { value: number }, { result: number }>;
     const mainChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
-        client.startJobChain({
+      runInTransaction(async (txContext) => {
+        blockerChain = await client.startJobChain({
+          ...txContext,
+          typeName: "blocker",
+          input: { value: 1 },
+        });
+        return client.startJobChain({
           ...txContext,
           typeName: "main",
           input: null,
-          startBlockers: async () => {
-            blockerChain = await client.startJobChain({
-              ...txContext,
-              typeName: "blocker",
-              input: { value: 1 },
-            });
-            return [blockerChain];
-          },
-        }),
-      ),
+          blockers: [blockerChain],
+        });
+      }),
     );
 
     await expect(

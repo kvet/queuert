@@ -202,20 +202,19 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
     await withWorkers([await worker1.start(), await worker2.start()], async () => {
       const jobChain = await client.withNotify(async () =>
-        runInTransaction(async (txContext) =>
-          client.startJobChain({
+        runInTransaction(async (txContext) => {
+          const blockerChain = await client.startJobChain({
+            ...txContext,
+            typeName: "blocker",
+            input: null,
+          });
+          return client.startJobChain({
             ...txContext,
             typeName: "main",
             input: null,
-            startBlockers: async () => [
-              await client.startJobChain({
-                ...txContext,
-                typeName: "blocker",
-                input: null,
-              }),
-            ],
-          }),
-        ),
+            blockers: [blockerChain],
+          });
+        }),
       );
 
       const signal = AbortSignal.timeout(100);

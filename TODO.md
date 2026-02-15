@@ -3,7 +3,6 @@
 - [BUG,FLAKY] Fix flaky tests
   - Notify > notifies workers when reaper deletes "zombie" jobs (1/10 in sqlite-in-process)
   - Process > throws error when prepare, complete, or continueWith called incorrectly (1/10 in postgres-noop)
-- [TASK,COMPLEX] Get rid of `startBlockers` method - just provide blockers when creating jobs
 - [TASK,MEDIUM] Rework observability to emit only after transaction commits
   - Problem: spans/logs/metrics emitted inside transactions become misleading if transaction rolls back
   - Affected areas:
@@ -17,10 +16,15 @@
 - [EPIC] extract state and notify adapter test suites to efficiently test multiple configurations (prefixes etc)
   - [TASK,MEDIUM] support all methods for state adapter test suite
   - [TASK,MEDIUM] notify adapter
+- [REF,MEDIUM] Evaluate removing `rootChainId` and `originId` from job model
+  - `rootChainId`: Only used for cascade deletion (`deleteJobsByRootChainIds`). Deletion is the caller's problem; chain structure already captured via `chainId`
+  - `originId`: Only informational (observability logs, OTEL spans). The in-process adapter uses it for continuation deduplication but pg/sqlite don't — no unique constraint or ON CONFLICT
+  - Post-hoc update in `addJobBlockers` sets these on blocker chains — should be removed regardless (blocker chains are independent dependencies, not continuations)
+  - Affects: state adapter interface + all implementations, helper.ts, client.ts, job-process.ts, observability, tests
+- [TASK,MEDIUM] OTEL blocker spans
 
 # Medium term
 
-- [TASK,MEDIUM] OTEL blocker spans
 - [TASK,COMPLEX] Optimized batched lease renewal
 - [EPIC] Dashboard
 - [EPIC] Sqlite ready:

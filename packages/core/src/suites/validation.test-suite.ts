@@ -231,7 +231,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     await expect(
       client.withNotify(async () =>
         runInTransaction(async (txContext) =>
-          // @ts-expect-error testing runtime validation - no startBlockers
+          // @ts-expect-error testing runtime validation - no blockers
           client.startJobChain({
             ...txContext,
             typeName: "main",

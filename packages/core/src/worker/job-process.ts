@@ -5,6 +5,7 @@ import {
 } from "../entities/job-chain.js";
 import {
   type BaseJobTypeDefinitions,
+  type BlockerChains,
   type ChainTypesReaching,
   type ContinuationJobTypes,
   type ContinuationJobs,
@@ -25,7 +26,7 @@ import {
   JobNotFoundError,
   JobTakenByAnotherWorkerError,
 } from "../errors.js";
-import { type Helper, type StartBlockersFn } from "../helper.js";
+import { type Helper } from "../helper.js";
 import { type TypedAbortController, type TypedAbortSignal } from "../helpers/abort.js";
 import { type BackoffConfig } from "../helpers/backoff.js";
 import {
@@ -110,13 +111,13 @@ export type CompleteCallbackOptions<
       schedule?: ScheduleOptions;
     } & (HasBlockers<TJobTypeDefinitions, TContinueJobTypeName> extends true
       ? {
-          startBlockers: StartBlockersFn<
+          blockers: BlockerChains<
             GetStateAdapterJobId<TStateAdapter>,
             TJobTypeDefinitions,
             TContinueJobTypeName
           >;
         }
-      : { startBlockers?: never }),
+      : { blockers?: never }),
   ) => Promise<
     CreatedJob<
       JobOf<
@@ -432,7 +433,7 @@ export const runJobProcess = async ({
               typeName: string;
               input: unknown;
               schedule?: ScheduleOptions;
-              startBlockers?: StartBlockersFn<any, BaseJobTypeDefinitions, string>;
+              blockers?: JobChain<any, any, any, any>[];
             } & BaseTxContext,
           ) => Promise<unknown>;
         } & BaseTxContext,
@@ -459,28 +460,25 @@ export const runJobProcess = async ({
       const result = await runInGuardedTransaction(async (txContext) => {
         let continuedJob: Job<any, any, any, any, any[]> | null = null;
         const output = await completeCallback({
-          continueWith: async ({ typeName, input, schedule, startBlockers }) => {
+          continueWith: async ({ typeName, input, schedule, blockers }) => {
             if (continuedJob) {
               throw new Error("continueWith can only be called once");
             }
-            continuedJob = await helper.withJobContext(
-              {
+            continuedJob = await helper.continueWith({
+              typeName,
+              input,
+              txContext,
+              schedule,
+              blockers: blockers as any,
+              chainContext: {
                 chainId: job.chainId,
                 chainTypeName: job.chainTypeName,
                 rootChainId: job.rootChainId,
                 originId: job.id,
                 originTraceContext: attemptSpanHandle?.getTraceContext() ?? job.traceContext,
               },
-              async () =>
-                helper.continueWith({
-                  typeName,
-                  input,
-                  txContext,
-                  schedule,
-                  startBlockers: startBlockers as any,
-                  fromTypeName: job.typeName,
-                }),
-            );
+              fromTypeName: job.typeName,
+            });
             return continuedJob;
           },
           ...txContext,
