@@ -16,25 +16,25 @@
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.0",
-    "@opentelemetry/sdk-metrics": "^2.0.0",
+    "@opentelemetry/sdk-metrics": "^2.5.1",
     "@queuert/nats": "workspace:*",
     "@queuert/otel": "workspace:*",
     "@queuert/postgres": "workspace:*",
     "@queuert/redis": "workspace:*",
     "@queuert/sqlite": "workspace:*",
-    "better-sqlite3": "^11.0.0",
-    "nats": "^2.28.0",
-    "postgres": "^3.4.5",
+    "better-sqlite3": "^12.6.2",
+    "nats": "^2.29.3",
+    "postgres": "^3.4.8",
     "queuert": "workspace:*",
-    "redis": "^5.0.0"
+    "redis": "^5.10.0"
   },
   "devDependencies": {
     "@queuert/tsconfig": "workspace:*",
-    "@testcontainers/nats": "^10.21.0",
-    "@testcontainers/postgresql": "^10.21.0",
-    "@testcontainers/redis": "^10.21.0",
-    "@types/better-sqlite3": "^7.6.12",
-    "@types/node": "^22.0.0",
-    "tsx": "^4.0.0"
+    "@testcontainers/nats": "^11.11.0",
+    "@testcontainers/postgresql": "^11.11.0",
+    "@testcontainers/redis": "^11.11.0",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^24.10.4",
+    "tsx": "^4.21.0"
   }
 }

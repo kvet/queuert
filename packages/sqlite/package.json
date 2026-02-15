@@ -44,9 +44,9 @@
   "devDependencies": {
     "@queuert/tsconfig": "workspace:*",
     "@queuert/typed-sql": "workspace:*",
-    "@types/better-sqlite3": "^7.6.11",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^24.10.4",
-    "better-sqlite3": "^11.0.0",
+    "better-sqlite3": "^12.6.2",
     "queuert": "workspace:*"
   },
   "peerDependencies": {

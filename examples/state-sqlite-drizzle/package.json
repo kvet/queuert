@@ -19,8 +19,8 @@
     "@queuert/tsconfig": "workspace:*",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^24.10.4",
-    "better-sqlite3": "^11.8.1",
-    "drizzle-orm": "^0.44.2",
+    "better-sqlite3": "^12.6.2",
+    "drizzle-orm": "^0.45.1",
     "queuert": "workspace:*",
     "tsx": "^4.21.0"
   }

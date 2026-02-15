@@ -47,7 +47,7 @@
     "@queuert/tsconfig": "workspace:*",
     "@types/node": "^24.10.4",
     "queuert": "workspace:*",
-    "redis": "^5.0.0"
+    "redis": "^5.10.0"
   },
   "peerDependencies": {
     "queuert": "workspace:*"

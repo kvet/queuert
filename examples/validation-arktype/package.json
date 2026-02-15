@@ -9,12 +9,12 @@
     "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
-    "arktype": "^2.1.0",
+    "arktype": "^2.1.29",
     "queuert": "workspace:*"
   },
   "devDependencies": {
     "@queuert/tsconfig": "workspace:*",
-    "@types/node": "^22.0.0",
-    "tsx": "^4.0.0"
+    "@types/node": "^24.10.4",
+    "tsx": "^4.21.0"
   }
 }

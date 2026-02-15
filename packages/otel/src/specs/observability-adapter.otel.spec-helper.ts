@@ -283,8 +283,8 @@ export const extendWithObservabilityOtel = <T extends {}>(
             kind: span.kind,
             attributes: span.attributes,
             status: span.status.code,
-            parentName: span.parentSpanId
-              ? (spanIdToName.get(span.parentSpanId) ?? null)
+            parentName: span.parentSpanContext?.spanId
+              ? (spanIdToName.get(span.parentSpanContext.spanId) ?? null)
               : undefined,
             links: span.links.length,
           }));

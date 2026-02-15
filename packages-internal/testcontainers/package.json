@@ -15,16 +15,16 @@
   },
   "dependencies": {
     "@testcontainers/nats": "^11.11.0",
-    "@testcontainers/postgresql": "^11.10.0",
-    "@testcontainers/redis": "^11.10.0",
-    "dockerode": "^4.0.6",
-    "pg": "^8.16.3",
+    "@testcontainers/postgresql": "^11.11.0",
+    "@testcontainers/redis": "^11.11.0",
+    "dockerode": "^4.0.9",
+    "pg": "^8.18.0",
     "proper-lockfile": "^4.1.2",
-    "testcontainers": "^11.10.0"
+    "testcontainers": "^11.11.0"
   },
   "devDependencies": {
     "@queuert/tsconfig": "workspace:*",
-    "@types/dockerode": "^3.3.38",
+    "@types/dockerode": "^4.0.1",
     "@types/node": "^24.10.4",
     "@types/pg": "^8.16.0",
     "@types/proper-lockfile": "^4.1.4"

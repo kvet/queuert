@@ -9,12 +9,12 @@
     "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
-    "@sinclair/typebox": "^0.34.0",
+    "@sinclair/typebox": "^0.34.48",
     "queuert": "workspace:*"
   },
   "devDependencies": {
     "@queuert/tsconfig": "workspace:*",
-    "@types/node": "^22.0.0",
-    "tsx": "^4.0.0"
+    "@types/node": "^24.10.4",
+    "tsx": "^4.21.0"
   }
 }

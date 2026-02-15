@@ -24,6 +24,9 @@ config.cache.json
 # typescript
 *.tsbuildinfo
 
+# prisma
+**/generated/prisma
+
 # dist
 dist
 

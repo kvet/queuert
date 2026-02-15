@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execSync } from "node:child_process";
+import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import {
   type SqliteStateProvider,
   createAsyncLock,
@@ -15,17 +16,16 @@ const tempDir = mkdtempSync(join(tmpdir(), "queuert-sqlite-prisma-"));
 const dbPath = join(tempDir, "test.db");
 
 // 2. Push Prisma schema to database and generate client
-// Note: generate runs here because the module cache may have a stale client from another example
 process.env.DATABASE_URL = `file:${dbPath}`;
 execSync("pnpm prisma db push", {
   stdio: "inherit",
 });
 
 // Dynamic import after generate to get the freshly generated client
-const { PrismaClient } = await import("@prisma/client");
+const { PrismaClient } = await import("../prisma/generated/prisma/client.js");
 
-const prisma = new PrismaClient();
-await prisma.$connect();
+const adapter = new PrismaBetterSqlite3({ url: `file:${dbPath}` });
+const prisma = new PrismaClient({ adapter });
 
 // 3. Create async lock for write serialization (SQLite requirement)
 const lock = createAsyncLock();
@@ -42,7 +42,7 @@ const registry = defineJobTypes<{
 // 5. Create state provider for Prisma
 type PrismaTransactionClient = Omit<
   InstanceType<typeof PrismaClient>,
-  "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends"
+  "$connect" | "$disconnect" | "$on" | "$transaction" | "$extends"
 >;
 type DbContext = { prisma: PrismaTransactionClient };
 
