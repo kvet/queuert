@@ -30,9 +30,8 @@
 - [EPIC] Sqlite ready:
   - [REF] Better concurrency handling - WAL mode, busy timeout, retries
   - [REF] Separate read/write connection pools (single writer, multiple readers)
-  - [TASK,EASY] get rid of skipConcurrencyTests flag in resilience tests
   - [REF] usage of db without pool is incorrect
-  - [TASK,EASY] Run against multiple versions
+  - [TASK,EASY] get rid of skipConcurrencyTests flag in resilience tests (separate test suite?)
 - [EPIC] MySQL/MariaDB adapter
 - [REF] Revisit Prisma examples
 - [?,TASK] test against bun and it's built-in sqlite, postgres clients
