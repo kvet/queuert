@@ -8,6 +8,7 @@ import {
   createMockObservabilityAdapter,
 } from "../observability-adapter/observability-adapter.mock.js";
 import { type StateAdapter } from "../state-adapter/state-adapter.js";
+import { createFlakyBatchGenerator } from "./flaky-test-helper.spec-helper.js";
 
 export type TestSuiteContext = {
   stateAdapter: StateAdapter<{ $test: true }, string>;
@@ -289,11 +290,67 @@ export const extendWithCommon = <
 
 export const extendWithNotifyInProcess = <T extends {}>(
   it: TestAPI<T>,
-): TestAPI<T & Pick<TestSuiteContext, "notifyAdapter">> =>
-  it.extend<Pick<TestSuiteContext, "notifyAdapter">>({
+): TestAPI<T & Pick<TestSuiteContext, "notifyAdapter"> & { flakyNotifyAdapter: NotifyAdapter }> =>
+  it.extend<Pick<TestSuiteContext, "notifyAdapter"> & { flakyNotifyAdapter: NotifyAdapter }>({
     notifyAdapter: [
       async ({}, use) => {
         await use(createInProcessNotifyAdapter());
+      },
+      { scope: "test" },
+    ],
+    flakyNotifyAdapter: [
+      async ({ notifyAdapter, expect }, use) => {
+        if (!notifyAdapter) {
+          throw new Error("notifyAdapter is required for flaky notify tests");
+        }
+
+        let totalCalls = 0;
+        let errorCalls = 0;
+        const shouldError = createFlakyBatchGenerator();
+
+        const maybeThrow = (): void => {
+          totalCalls++;
+
+          if (shouldError()) {
+            errorCalls++;
+            const error = new Error("connection reset") as Error & { code: string };
+            error.code = "ECONNRESET";
+            throw error;
+          }
+        };
+
+        const flakyNotifyAdapter: NotifyAdapter = {
+          notifyJobScheduled: async (typeName, count) => {
+            maybeThrow();
+            return notifyAdapter.notifyJobScheduled(typeName, count);
+          },
+          listenJobScheduled: async (typeNames, onNotification) => {
+            maybeThrow();
+            return notifyAdapter.listenJobScheduled(typeNames, onNotification);
+          },
+          notifyJobChainCompleted: async (chainId) => {
+            maybeThrow();
+            return notifyAdapter.notifyJobChainCompleted(chainId);
+          },
+          listenJobChainCompleted: async (chainId, onNotification) => {
+            maybeThrow();
+            return notifyAdapter.listenJobChainCompleted(chainId, onNotification);
+          },
+          notifyJobOwnershipLost: async (jobId) => {
+            maybeThrow();
+            return notifyAdapter.notifyJobOwnershipLost(jobId);
+          },
+          listenJobOwnershipLost: async (jobId, onNotification) => {
+            maybeThrow();
+            return notifyAdapter.listenJobOwnershipLost(jobId, onNotification);
+          },
+        };
+
+        await use(flakyNotifyAdapter);
+
+        if (totalCalls > 5) {
+          expect(errorCalls).toBeGreaterThan(0);
+        }
       },
       { scope: "test" },
     ],
