@@ -29,6 +29,10 @@ The notify adapter handles:
 
 This is a notify adapter only. You still need a state adapter ([PostgreSQL](https://github.com/kvet/queuert/tree/main/packages/postgres) or [SQLite](https://github.com/kvet/queuert/tree/main/packages/sqlite)) to store jobs.
 
+## Requirements
+
+- Node.js 22 or later
+
 ## Installation
 
 ```bash

@@ -41,6 +41,9 @@
     "typecheck": "! tsgo --noEmit 2>&1 | grep -v 'specs/.*TS4023' | grep 'error TS'",
     "test": "vitest --run"
   },
+  "engines": {
+    "node": ">=22"
+  },
   "devDependencies": {
     "@queuert/tsconfig": "workspace:*",
     "@queuert/typed-sql": "workspace:*",

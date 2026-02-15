@@ -27,5 +27,8 @@
     "tsdown": "^0.20.3",
     "vitest": "^4.0.18"
   },
-  "packageManager": "pnpm@10.17.0"
+  "packageManager": "pnpm@10.17.0",
+  "engines": {
+    "node": ">=22"
+  }
 }

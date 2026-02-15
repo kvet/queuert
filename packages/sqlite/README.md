@@ -29,6 +29,10 @@ The state adapter handles:
 
 For production with multiple workers across machines, consider [PostgreSQL](https://github.com/kvet/queuert/tree/main/packages/postgres).
 
+## Requirements
+
+- Node.js 22 or later
+
 ## Installation
 
 ```bash

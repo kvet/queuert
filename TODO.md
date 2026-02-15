@@ -18,7 +18,6 @@
     - Transaction afterCommit hooks (requires state adapter support)
     - Span event pattern: end span for timing, add `transaction.committed` event after commit
   - See: transactional outbox pattern for reliable side effects
-- [TASK,MEDIUM] test against multiple versions of node on CI
 - [EPIC] extract state and notify adapter test suites to efficiently test multiple configurations (prefixes etc)
   - [TASK,MEDIUM] support all methods for state adapter test suite
   - [TASK,MEDIUM] notify adapter

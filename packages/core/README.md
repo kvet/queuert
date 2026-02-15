@@ -28,6 +28,10 @@ Key features:
 - **Distributed** - Multiple workers can process jobs with proper locking
 - **Flexible** - Linear chains, branching, loops, job dependencies (blockers)
 
+## Requirements
+
+- Node.js 22 or later
+
 ## Installation
 
 ```bash

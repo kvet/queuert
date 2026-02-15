@@ -32,6 +32,10 @@ PostgreSQL state adapter and notify adapter for [Queuert](https://github.com/kve
 
 For simpler setups, consider [SQLite](https://github.com/kvet/queuert/tree/main/packages/sqlite). For high-throughput pub/sub, consider [Redis](https://github.com/kvet/queuert/tree/main/packages/redis) or [NATS](https://github.com/kvet/queuert/tree/main/packages/nats) notify adapters alongside the PostgreSQL state adapter.
 
+## Requirements
+
+- Node.js 22 or later
+
 ## Installation
 
 ```bash

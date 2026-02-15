@@ -7,6 +7,10 @@
 
 OpenTelemetry observability adapter for [Queuert](https://github.com/kvet/queuert) - a TypeScript library for database-backed job queues. Provides **distributed tracing** and **metrics** (worker lifecycle, job events, chain completion, adapter health) for monitoring your job queues via Prometheus, Grafana, Datadog, or any OTEL-compatible backend.
 
+## Requirements
+
+- Node.js 22 or later
+
 ## Installation
 
 ```bash

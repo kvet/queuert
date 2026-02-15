@@ -6,6 +6,10 @@ inputs:
     description: Whether to install dependencies
     required: false
     default: "true"
+  node-version:
+    description: Node.js version to install (overrides .nvmrc if set)
+    required: false
+    default: ""
   registry-url:
     description: npm registry URL for authentication (used for publishing)
     required: false
@@ -24,13 +28,15 @@ runs:
       uses: actions/setup-node@v4
       with:
         cache: pnpm
-        node-version-file: .nvmrc
+        node-version: ${{ inputs.node-version }}
+        node-version-file: ${{ inputs.node-version == '' && '.nvmrc' || '' }}
         registry-url: ${{ inputs.registry-url || '' }}
     - name: Install Node.js
       if: inputs.install_dependencies == 'false'
       uses: actions/setup-node@v4
       with:
-        node-version-file: .nvmrc
+        node-version: ${{ inputs.node-version }}
+        node-version-file: ${{ inputs.node-version == '' && '.nvmrc' || '' }}
         registry-url: ${{ inputs.registry-url || '' }}
 
     - name: Install dependencies
