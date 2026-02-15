@@ -97,7 +97,12 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       // Chain 3: created normally (different key)
       { name: "chain test", kind: "PRODUCER" },
       { name: "job test", kind: "PRODUCER", parentName: "chain test" },
-      // Note: completeJobChain (workerless completion) does not create attempt spans
+      // Workerless completion of chain 1
+      { name: "chain test", kind: "CONSUMER", parentName: "job test", links: 1 },
+      { name: "job test", kind: "CONSUMER", parentName: "job test" },
+      // Workerless completion of chain 3
+      { name: "chain test", kind: "CONSUMER", parentName: "job test", links: 1 },
+      { name: "job test", kind: "CONSUMER", parentName: "job test" },
     ]);
   });
 

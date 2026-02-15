@@ -32,10 +32,12 @@ export type JobSpanResult =
       status: "error";
       error: unknown;
     };
+
 export type JobSpanHandle = {
   getTraceContext: () => unknown;
   end: (result: JobSpanResult) => void;
 };
+
 export type JobAttemptSpanInputData = {
   traceContext: unknown;
   chainId: string;
@@ -68,6 +70,16 @@ export type JobAttemptSpanHandle = {
   startPrepare: () => SpanHandle;
   startComplete: () => SpanHandle;
   end: (result: JobAttemptSpanResult) => void;
+};
+
+export type CompleteJobSpanInputData = {
+  traceContext: unknown;
+  chainId: string;
+  chainTypeName: string;
+  jobId: string;
+  jobTypeName: string;
+  continued?: { jobId: string; jobTypeName: string };
+  chainCompleted: boolean;
 };
 
 export type ObservabilityAdapter = {
@@ -152,4 +164,5 @@ export type ObservabilityAdapter = {
   // tracing
   startJobSpan: (data: JobSpanInputData) => JobSpanHandle | undefined;
   startAttemptSpan: (data: JobAttemptSpanInputData) => JobAttemptSpanHandle | undefined;
+  completeJobSpan: (data: CompleteJobSpanInputData) => void;
 };

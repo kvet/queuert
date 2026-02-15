@@ -38,6 +38,7 @@ Span kinds use OpenTelemetry's PRODUCER/CONSUMER/INTERNAL semantics. The chain h
 | **attempt**       | CONSUMER | Worker claims job                   | Attempt completes/fails | Processing time  |
 | **prepare**       | INTERNAL | `prepare()` called                  | `prepare()` returns     | Transaction time |
 | **complete**      | INTERNAL | `complete()` called                 | `complete()` returns    | Transaction time |
+| **job** (end)     | CONSUMER | Workerless completion               | Immediately             | ~0ms             |
 | **chain** (end)   | CONSUMER | Final job completes                 | Immediately             | ~0ms             |
 
 ## Trace Context Propagation
@@ -161,6 +162,37 @@ PRODUCER: chain multi-step ─────────────────�
 
 The origin link shows the causal flow: "step-two was created by step-one's completion".
 
+## Workerless Completion
+
+When a job is completed via `completeJobChain` (without a worker), there is no attempt. Instead, a CONSUMER job span marks the completion, and if the chain is fully completed, a CONSUMER chain span closes the trace:
+
+```
+PRODUCER: chain approve-order ──────────────────────────
+│
+└── PRODUCER: job approve-order
+    │
+    └── CONSUMER: job approve-order  ← Workerless completion
+        │
+        └── CONSUMER: chain approve-order
+```
+
+The CONSUMER job span is a child of the PRODUCER job span and carries the same chain/job attributes. When `continueWith` is called during workerless completion, the CONSUMER chain span is omitted (the chain continues):
+
+```
+PRODUCER: chain multi-step ─────────────────────────────
+│
+├── PRODUCER: job step-one
+│   │
+│   └── CONSUMER: job step-one  ← Workerless completion (continueWith)
+│
+└── PRODUCER: job step-two
+    │   links: [job step-one]
+    │
+    └── ...
+```
+
+This uses the `completeJobSpan` adapter method rather than `startAttemptSpan`, reflecting that no attempt processing occurred.
+
 ## Span Attributes
 
 ### Chain Spans
@@ -216,12 +248,13 @@ Queuert's tracing design provides:
 
 1. **Symmetric chain spans**: PRODUCER at creation, CONSUMER at completion
 2. **Hierarchical job spans**: Chain → Job → Attempt → prepare/complete
-3. **Blocker visibility**: Span links show dependencies between chains
-4. **Continuation tracking**: Span links connect jobs in a chain
-5. **Retry visibility**: Multiple attempt spans under each job
-6. **Deduplication tracking**: Attribute marks deduplicated chains, links to existing trace
-7. **Cross-worker correlation**: Trace context stored in job state
-8. **Optional integration**: Returns `undefined` when tracing disabled
+3. **Workerless completion**: CONSUMER job span closes the trace without an attempt
+4. **Blocker visibility**: Span links show dependencies between chains
+5. **Continuation tracking**: Span links connect jobs in a chain
+6. **Retry visibility**: Multiple attempt spans under each job
+7. **Deduplication tracking**: Attribute marks deduplicated chains, links to existing trace
+8. **Cross-worker correlation**: Trace context stored in job state
+9. **Optional integration**: Returns `undefined` when tracing disabled
 
 See also:
 

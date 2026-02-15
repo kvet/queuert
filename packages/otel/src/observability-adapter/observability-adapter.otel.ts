@@ -121,6 +121,30 @@ export const createOtelObservabilityAdapter = async ({
     description: "Jobs of this type currently being processed",
   });
 
+  const createChainConsumerSpan = (
+    tracer: Tracer,
+    tc: OtelTraceContext,
+    chainTypeName: string,
+    chainId: string,
+    parentCtx: ReturnType<typeof trace.setSpan>,
+  ) => {
+    const chainProducerCtx = deserializeSpanContext(tc.chain);
+    tracer
+      .startSpan(
+        `chain ${chainTypeName}`,
+        {
+          kind: SpanKind.CONSUMER,
+          links: [{ context: chainProducerCtx }],
+          attributes: {
+            "queuert.chain.id": chainId,
+            "queuert.chain.type": chainTypeName,
+          },
+        },
+        parentCtx,
+      )
+      .end();
+  };
+
   return {
     // worker
     workerStarted: ({ workerId }) => {
@@ -409,30 +433,49 @@ export const createOtelObservabilityAdapter = async ({
               );
             }
 
-            // Create CONSUMER chain span if chain completed
             if (result.chainCompleted) {
-              // tc is already validated at the start of startAttemptSpan
-              const chainProducerCtx = deserializeSpanContext(tc.chain);
-              tracer
-                .startSpan(
-                  `chain ${data.chainTypeName}`,
-                  {
-                    kind: SpanKind.CONSUMER,
-                    links: [{ context: chainProducerCtx }],
-                    attributes: {
-                      "queuert.chain.id": data.chainId,
-                      "queuert.chain.type": data.chainTypeName,
-                    },
-                  },
-                  attemptCtx,
-                )
-                .end();
+              createChainConsumerSpan(tracer, tc, data.chainTypeName, data.chainId, attemptCtx);
             }
           }
 
           attemptSpan.end();
         },
       };
+    },
+
+    completeJobSpan(data) {
+      if (!tracer) return;
+      if (!isValidOtelTraceContext(data.traceContext)) return;
+
+      const tc = data.traceContext;
+      const jobParentCtx = trace.setSpanContext(context.active(), deserializeSpanContext(tc.job));
+
+      const jobSpan = tracer.startSpan(
+        `job ${data.jobTypeName}`,
+        {
+          kind: SpanKind.CONSUMER,
+          attributes: {
+            "queuert.chain.id": data.chainId,
+            "queuert.chain.type": data.chainTypeName,
+            "queuert.job.id": data.jobId,
+            "queuert.job.type": data.jobTypeName,
+          },
+        },
+        jobParentCtx,
+      );
+
+      if (data.continued) {
+        jobSpan.setAttribute("queuert.continued_with.job_id", data.continued.jobId);
+        jobSpan.setAttribute("queuert.continued_with.job_type", data.continued.jobTypeName);
+      }
+
+      const jobConsumerCtx = trace.setSpan(context.active(), jobSpan);
+
+      if (data.chainCompleted) {
+        createChainConsumerSpan(tracer, tc, data.chainTypeName, data.chainId, jobConsumerCtx);
+      }
+
+      jobSpan.end();
     },
   };
 };

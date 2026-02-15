@@ -120,6 +120,10 @@ export type ObservabilityHelper = {
   // tracing
   startJobSpan: (data: JobSpanInputData) => JobSpanHandle | undefined;
   startAttemptSpan: (data: JobAttemptSpanInputData) => JobAttemptSpanHandle | undefined;
+  completeJobSpan: (
+    job: StateJob,
+    options: { continued?: Job<any, any, any, any, any[]>; chainCompleted: boolean },
+  ) => void;
 };
 
 const noopLog: Log = () => {};
@@ -498,5 +502,20 @@ export const createObservabilityHelper = ({
     } catch {
       return undefined;
     }
+  },
+  completeJobSpan: (job, options) => {
+    try {
+      adapter.completeJobSpan({
+        traceContext: job.traceContext,
+        chainId: job.chainId,
+        chainTypeName: job.chainTypeName,
+        jobId: job.id,
+        jobTypeName: job.typeName,
+        continued: options.continued
+          ? { jobId: options.continued.id, jobTypeName: options.continued.typeName }
+          : undefined,
+        chainCompleted: options.chainCompleted,
+      });
+    } catch {}
   },
 });

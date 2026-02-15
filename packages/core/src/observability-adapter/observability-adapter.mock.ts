@@ -65,5 +65,6 @@ export const createMockObservabilityAdapter = (): MockObservabilityAdapter => {
     // tracing
     startJobSpan: () => undefined,
     startAttemptSpan: () => undefined,
+    completeJobSpan: () => undefined,
   };
 };

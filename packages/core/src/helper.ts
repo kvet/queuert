@@ -254,6 +254,13 @@ export const helper = ({
     });
     observabilityHelper.jobDuration(job);
 
+    if (workerId === null) {
+      observabilityHelper.completeJobSpan(job, {
+        continued: hasContinuedJob ? rest.continuedJob : undefined,
+        chainCompleted: !hasContinuedJob,
+      });
+    }
+
     if (!hasContinuedJob) {
       const jobChainStartJob = await stateAdapter.getJobById({
         txContext,
