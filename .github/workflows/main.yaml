@@ -8,17 +8,8 @@ on:
 
 jobs:
   combined-checks:
-    name: Checks (${{ matrix.name }})
+    name: Checks
     runs-on: ubuntu-latest
-
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: Node 24 (.nvmrc)
-            node-version: ""
-          - name: Node 22
-            node-version: "22"
 
     timeout-minutes: 5
 
@@ -29,7 +20,7 @@ jobs:
 
       - uses: ./.github/actions/setup-repo
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: "22"
 
       - name: Check
         run: pnpm check
