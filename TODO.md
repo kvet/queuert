@@ -1,7 +1,6 @@
 # Short term
 
 - [BUG,FLAKY] Fix flaky tests
-  - Worker > processes jobs in order with multiple slots (2/10 in postgres-postgres and postgres-in-process) - race condition with concurrent slot processing
   - Notify > notifies workers when reaper deletes "zombie" jobs (1/10 in sqlite-in-process)
   - Process > throws error when prepare, complete, or continueWith called incorrectly (1/10 in postgres-noop)
 - [TASK,COMPLEX] Get rid of `startBlockers` method - just provide blockers when creating jobs
