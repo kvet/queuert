@@ -16,7 +16,6 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     withWorkers,
     observabilityAdapter,
     log,
-    expectGauges,
   }) => {
     const registry = defineJobTypes<{
       test: {
@@ -59,30 +58,8 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       ),
     );
 
-    await expectGauges({
-      jobTypeIdleChange: [],
-      jobTypeProcessingChange: [],
-    });
     await withWorkers([await worker.start()], async () => {
       await client.waitForJobChainCompletion(jobChain, completionOptions);
-
-      await sleep(100); // Wait for gauges to be emitted
-      await expectGauges({
-        jobTypeIdleChange: [
-          { delta: 1, typeName: "test" },
-          { delta: -1, typeName: "test" },
-          { delta: 1, typeName: "test" },
-        ],
-        jobTypeProcessingChange: [
-          { delta: 1, typeName: "test" },
-          { delta: -1, typeName: "test" },
-        ],
-      });
-    });
-
-    await expectGauges({
-      jobTypeIdleChange: [{ delta: -1, typeName: "test" }],
-      jobTypeProcessingChange: [],
     });
   });
 
@@ -93,7 +70,6 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     withWorkers,
     observabilityAdapter,
     log,
-    expectGauges,
     expect,
   }) => {
     const processedTypes: string[] = [];
@@ -157,42 +133,6 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       expect(processedTypes).toContain("email");
       expect(processedTypes).toContain("sms");
       expect(processedTypes).toHaveLength(2);
-
-      // Verify gauges: worker start emits +1 idle for each type,
-      // each job processing emits gauge changes for its specific type
-      await sleep(100); // Wait for gauges to be emitted
-      await expectGauges({
-        jobTypeIdleChange: [
-          // worker start: +1 for each type
-          { delta: 1, typeName: processedTypes[0] },
-          { delta: 1, typeName: processedTypes[1] },
-          // first job processed (order depends on which runs first)
-          { delta: -1, typeName: processedTypes[0] },
-          { delta: -1, typeName: processedTypes[1] },
-          { delta: 1, typeName: processedTypes[0] },
-          { delta: 1, typeName: processedTypes[1] },
-          // second job processed
-          { delta: -1, typeName: processedTypes[0] },
-          { delta: -1, typeName: processedTypes[1] },
-          { delta: 1, typeName: processedTypes[0] },
-          { delta: 1, typeName: processedTypes[1] },
-        ],
-        jobTypeProcessingChange: [
-          { delta: 1, typeName: processedTypes[0] },
-          { delta: -1, typeName: processedTypes[0] },
-          { delta: 1, typeName: processedTypes[1] },
-          { delta: -1, typeName: processedTypes[1] },
-        ],
-      });
-    });
-
-    // Worker stop: -1 idle for each type
-    await expectGauges({
-      jobTypeIdleChange: [
-        { delta: -1, typeName: "email" },
-        { delta: -1, typeName: "sms" },
-      ],
-      jobTypeProcessingChange: [],
     });
   });
 

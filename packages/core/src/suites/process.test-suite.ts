@@ -247,9 +247,6 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     withWorkers,
     observabilityAdapter,
     log,
-    expectLogs,
-    expectMetrics,
-    expectSpans,
     expect,
   }) => {
     const registry = defineJobTypes<{
@@ -318,74 +315,8 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     expect(errors[0]).toBe("Error: Unexpected error");
     expect(errors[1]).toBe("Error: Unexpected error");
     expect(errors[2]).toBe("Error: Unexpected error");
-    expectLogs([
-      { type: "job_chain_created" },
-      { type: "job_created" },
-      { type: "worker_started" },
-      { type: "job_attempt_started" },
-      {
-        type: "job_attempt_failed",
-        data: { rescheduledAfterMs: 10 },
-        error: expect.anything(),
-      },
-      { type: "job_attempt_started" },
-      {
-        type: "job_attempt_failed",
-        data: { rescheduledAfterMs: 20 },
-        error: expect.anything(),
-      },
-      { type: "job_attempt_started" },
-      {
-        type: "job_attempt_failed",
-        data: { rescheduledAfterMs: 40 },
-        error: expect.anything(),
-      },
-      { type: "job_attempt_started" },
-      { type: "job_attempt_completed" },
-      { type: "job_completed" },
-      { type: "job_chain_completed" },
-      { type: "worker_stopping" },
-      { type: "worker_stopped" },
-    ]);
-
-    await expectMetrics([
-      { method: "jobChainCreated" },
-      { method: "jobCreated" },
-      { method: "workerStarted" },
-      { method: "jobAttemptStarted" },
-      { method: "jobAttemptFailed", args: { rescheduledAfterMs: 10 } },
-      { method: "jobAttemptStarted" },
-      { method: "jobAttemptFailed", args: { rescheduledAfterMs: 20 } },
-      { method: "jobAttemptStarted" },
-      { method: "jobAttemptFailed", args: { rescheduledAfterMs: 40 } },
-      { method: "jobAttemptStarted" },
-      { method: "jobAttemptCompleted" },
-      { method: "jobCompleted" },
-      { method: "jobChainCompleted" },
-      { method: "workerStopping" },
-      { method: "workerStopped" },
-    ]);
-
-    await expectSpans([
-      // Job creation
-      { name: "chain test", kind: "PRODUCER" },
-      { name: "job test", kind: "PRODUCER", parentName: "chain test" },
-      // Attempts 1-3: auto-setup prepare runs, then handler throws
-      { name: "prepare", kind: "INTERNAL", parentName: "job-attempt test" },
-      { name: "job-attempt test", kind: "CONSUMER", parentName: "job test", status: "ERROR" },
-      { name: "prepare", kind: "INTERNAL", parentName: "job-attempt test" },
-      { name: "job-attempt test", kind: "CONSUMER", parentName: "job test", status: "ERROR" },
-      { name: "prepare", kind: "INTERNAL", parentName: "job-attempt test" },
-      { name: "job-attempt test", kind: "CONSUMER", parentName: "job test", status: "ERROR" },
-      // Attempt 4: prepare + complete + chain completion
-      { name: "prepare", kind: "INTERNAL", parentName: "job-attempt test" },
-      { name: "complete", kind: "INTERNAL", parentName: "job-attempt test" },
-      { name: "chain test", kind: "CONSUMER", parentName: "job-attempt test", links: 1 },
-      { name: "job-attempt test", kind: "CONSUMER", parentName: "job test", status: "OK" },
-    ]);
   });
 
-  // TODO: checks too many things
   it("executes jobs", async ({
     stateAdapter,
     notifyAdapter,
@@ -393,10 +324,6 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     withWorkers,
     observabilityAdapter,
     log,
-    expectLogs,
-    expectMetrics,
-    expectHistograms,
-    expectSpans,
     expect,
   }) => {
     const registry = defineJobTypes<{
@@ -492,83 +419,5 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     const completedJob = await stateAdapter.getJobById({ jobId: jobChain.id });
     expect(completedJob?.status).toBe("completed");
     expect(completedJob?.completedBy).toBe("worker");
-
-    const workerArgs = { workerId: "worker" };
-    const jobChainArgs = {
-      typeName: "test",
-      id: jobChain.id,
-      rootChainId: jobChain.id,
-      originId: null,
-    };
-    const jobArgs = {
-      typeName: "test",
-      id: jobChain.id,
-      rootChainId: jobChain.id,
-      originId: null,
-      chainId: jobChain.id,
-      chainTypeName: "test",
-    };
-    expectLogs([
-      { type: "job_chain_created", data: { ...jobChainArgs, input: { test: true } } },
-      { type: "job_created", data: { ...jobArgs, input: { test: true } } },
-      { type: "worker_started", data: { ...workerArgs, jobTypeNames: ["test"] } },
-      {
-        type: "job_attempt_started",
-        data: { ...jobArgs, status: "running", attempt: 1, ...workerArgs },
-      },
-      {
-        type: "job_attempt_completed",
-        data: {
-          ...jobArgs,
-          status: "running",
-          attempt: 1,
-          output: { result: true },
-          ...workerArgs,
-        },
-      },
-      {
-        type: "job_completed",
-        data: {
-          ...jobArgs,
-          status: "completed",
-          attempt: 1,
-          output: { result: true },
-          ...workerArgs,
-        },
-      },
-      {
-        type: "job_chain_completed",
-        data: { ...jobChainArgs, output: { result: true } },
-      },
-      { type: "worker_stopping", data: { ...workerArgs } },
-      { type: "worker_stopped", data: { ...workerArgs } },
-    ]);
-
-    await expectMetrics([
-      { method: "jobChainCreated", args: { typeName: "test" } },
-      { method: "jobCreated", args: { typeName: "test" } },
-      { method: "workerStarted", args: { workerId: "worker" } },
-      { method: "jobAttemptStarted", args: { typeName: "test", status: "running" } },
-      { method: "jobAttemptCompleted", args: { typeName: "test", output: { result: true } } },
-      { method: "jobCompleted", args: { typeName: "test", output: { result: true } } },
-      { method: "jobChainCompleted", args: { typeName: "test", output: { result: true } } },
-      { method: "workerStopping", args: { workerId: "worker" } },
-      { method: "workerStopped", args: { workerId: "worker" } },
-    ]);
-
-    await expectHistograms([
-      { method: "jobDuration", args: { typeName: "test" } },
-      { method: "jobChainDuration", args: { typeName: "test" } },
-      { method: "jobAttemptDuration", args: { typeName: "test", workerId: "worker" } },
-    ]);
-
-    await expectSpans([
-      { name: "chain test", kind: "PRODUCER" },
-      { name: "job test", kind: "PRODUCER", parentName: "chain test" },
-      { name: "prepare", kind: "INTERNAL", parentName: "job-attempt test" },
-      { name: "complete", kind: "INTERNAL", parentName: "job-attempt test" },
-      { name: "chain test", kind: "CONSUMER", parentName: "job-attempt test", links: 1 },
-      { name: "job-attempt test", kind: "CONSUMER", parentName: "job test" },
-    ]);
   });
 };

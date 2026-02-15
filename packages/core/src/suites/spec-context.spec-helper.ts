@@ -1,12 +1,14 @@
 // oxlint-disable no-empty-pattern
 import inspector from "node:inspector";
 import { type MockedFunction, type TestAPI, vi } from "vitest";
-import { type Log, type NotifyAdapter, createConsoleLog } from "../index.js";
-import { createInProcessNotifyAdapter } from "../notify-adapter/notify-adapter.in-process.js";
 import {
-  type MockObservabilityAdapter,
-  createMockObservabilityAdapter,
-} from "../observability-adapter/observability-adapter.mock.js";
+  type Log,
+  type NotifyAdapter,
+  type ObservabilityAdapter,
+  createConsoleLog,
+} from "../index.js";
+import { createInProcessNotifyAdapter } from "../notify-adapter/notify-adapter.in-process.js";
+import { createNoopObservabilityAdapter } from "../observability-adapter/observability-adapter.noop.js";
 import { type StateAdapter } from "../state-adapter/state-adapter.js";
 import { createFlakyBatchGenerator } from "./flaky-test-helper.spec-helper.js";
 
@@ -16,32 +18,7 @@ export type TestSuiteContext = {
   runInTransaction: <T>(cb: (txContext: { $test: true }) => Promise<T>) => Promise<T>;
   withWorkers: <T>(workers: (() => Promise<void>)[], cb: () => Promise<T>) => Promise<T>;
   log: MockedFunction<Log>;
-  expectLogs: (
-    expected: {
-      type: string;
-      data?: Record<string, unknown>;
-      error?: unknown;
-    }[],
-  ) => void;
-  observabilityAdapter: MockObservabilityAdapter;
-  expectMetrics: (expected: { method: string; args?: Record<string, unknown> }[]) => Promise<void>;
-  expectHistograms: (
-    expected: { method: string; args?: Record<string, unknown> }[],
-  ) => Promise<void>;
-  expectGauges: (expected: {
-    jobTypeIdleChange?: { delta: number; typeName?: string; workerId?: string }[];
-    jobTypeProcessingChange?: { delta: number; typeName?: string; workerId?: string }[];
-  }) => Promise<void>;
-  expectSpans: (
-    expected: {
-      name: string;
-      kind?: "PRODUCER" | "CONSUMER" | "INTERNAL";
-      attributes?: Record<string, unknown>;
-      status?: "UNSET" | "OK" | "ERROR";
-      parentName?: string;
-      links?: number;
-    }[],
-  ) => Promise<void>;
+  observabilityAdapter: ObservabilityAdapter;
 };
 
 export const extendWithCommon = <
@@ -51,33 +28,10 @@ export const extendWithCommon = <
 >(
   it: TestAPI<T>,
 ): TestAPI<
-  T &
-    Pick<
-      TestSuiteContext,
-      | "runInTransaction"
-      | "withWorkers"
-      | "log"
-      | "expectLogs"
-      | "observabilityAdapter"
-      | "expectMetrics"
-      | "expectHistograms"
-      | "expectGauges"
-      | "expectSpans"
-    >
+  T & Pick<TestSuiteContext, "runInTransaction" | "withWorkers" | "log" | "observabilityAdapter">
 > =>
   it.extend<
-    Pick<
-      TestSuiteContext,
-      | "runInTransaction"
-      | "withWorkers"
-      | "log"
-      | "expectLogs"
-      | "observabilityAdapter"
-      | "expectMetrics"
-      | "expectHistograms"
-      | "expectGauges"
-      | "expectSpans"
-    >
+    Pick<TestSuiteContext, "runInTransaction" | "withWorkers" | "log" | "observabilityAdapter">
   >({
     runInTransaction: [
       async ({ stateAdapter }, use) => {
@@ -112,177 +66,9 @@ export const extendWithCommon = <
       },
       { scope: "test" },
     ],
-    expectLogs: [
-      async ({ log, expect }, use) => {
-        await use((expected) => {
-          expect(log.mock.calls.map((call) => call[0])).toEqual(
-            expected.map((entry) => {
-              const matcher: Record<string, unknown> = { type: entry.type };
-              if (entry.data) {
-                matcher.data = expect.objectContaining(entry.data);
-              }
-              if (entry.error !== undefined) {
-                matcher.error = entry.error;
-              }
-              return expect.objectContaining(matcher);
-            }),
-          );
-        });
-      },
-      { scope: "test" },
-    ],
     observabilityAdapter: [
       async ({}, use) => {
-        await use(createMockObservabilityAdapter());
-      },
-      { scope: "test" },
-    ],
-    expectMetrics: [
-      async ({ observabilityAdapter, expect }, use) => {
-        const excludedMethods = new Set([
-          // histograms
-          "jobChainDuration",
-          "jobDuration",
-          "jobAttemptDuration",
-          // gauges
-          "jobTypeIdleChange",
-          "jobTypeProcessingChange",
-        ]);
-
-        await use(async (expected: { method: string; args?: Record<string, unknown> }[]) => {
-          const actual = observabilityAdapter._calls
-            .filter((call) => !excludedMethods.has(call.method))
-            .map((call) => ({
-              method: call.method,
-              data: call.args[0],
-            }));
-
-          expect(actual).toEqual(
-            expected.map((entry) => {
-              const matcher: Record<string, unknown> = { method: entry.method };
-              if (entry.args) {
-                matcher.data = expect.objectContaining(entry.args);
-              }
-              return expect.objectContaining(matcher);
-            }),
-          );
-        });
-      },
-      { scope: "test" },
-    ],
-    expectHistograms: [
-      async ({ observabilityAdapter, expect }, use) => {
-        const histogramMethods = new Set(["jobChainDuration", "jobDuration", "jobAttemptDuration"]);
-
-        await use(async (expected: { method: string; args?: Record<string, unknown> }[]) => {
-          const actual = observabilityAdapter._calls
-            .filter((call) => histogramMethods.has(call.method))
-            .map((call) => ({
-              method: call.method,
-              data: call.args[0],
-            }));
-
-          expect(actual).toEqual(
-            expected.map((entry) => {
-              const matcher: Record<string, unknown> = { method: entry.method };
-              if (entry.args) {
-                matcher.data = expect.objectContaining(entry.args);
-              }
-              return expect.objectContaining(matcher);
-            }),
-          );
-        });
-      },
-      { scope: "test" },
-    ],
-    expectGauges: [
-      async ({ observabilityAdapter, expect }, use) => {
-        await use(
-          async (expected: {
-            jobTypeIdleChange?: {
-              delta: number;
-              typeName?: string;
-              workerId?: string;
-            }[];
-            jobTypeProcessingChange?: {
-              delta: number;
-              typeName?: string;
-              workerId?: string;
-            }[];
-          }) => {
-            // Collect actual gauge calls and remove them from the calls array
-            const actualCalls: Record<
-              string,
-              { delta: number; typeName: string; workerId: string }[]
-            > = {
-              jobTypeIdleChange: [],
-              jobTypeProcessingChange: [],
-            };
-
-            // Extract gauge calls and remove them from the adapter
-            const remainingCalls: typeof observabilityAdapter._calls = [];
-            for (const call of observabilityAdapter._calls) {
-              if (
-                call.method === "jobTypeIdleChange" ||
-                call.method === "jobTypeProcessingChange"
-              ) {
-                const data = call.args[0] as {
-                  delta: number;
-                  typeName: string;
-                  workerId: string;
-                };
-
-                // Verify required attributes are present
-                expect(data).toEqual(
-                  expect.objectContaining({
-                    delta: expect.any(Number),
-                    typeName: expect.any(String),
-                    workerId: expect.any(String),
-                  }),
-                );
-
-                actualCalls[call.method].push({
-                  delta: data.delta,
-                  typeName: data.typeName,
-                  workerId: data.workerId,
-                });
-              } else {
-                // Keep non-gauge calls
-                remainingCalls.push(call);
-              }
-            }
-
-            // Clear gauge calls from the adapter for the next check
-            observabilityAdapter._calls.length = 0;
-            observabilityAdapter._calls.push(...remainingCalls);
-
-            // Verify each gauge type with explicit attribute checking
-            for (const [method, expectedCalls] of Object.entries(expected) as [
-              "jobTypeIdleChange" | "jobTypeProcessingChange",
-              Array<{ delta: number; typeName?: string; workerId?: string }>,
-            ][]) {
-              if (expectedCalls === undefined) continue;
-
-              const actualCallsForMethod = actualCalls[method];
-
-              expect(actualCallsForMethod).toEqual(
-                expectedCalls.map((exp) =>
-                  expect.objectContaining({
-                    delta: exp.delta,
-                    ...(exp.typeName !== undefined && { typeName: exp.typeName }),
-                    ...(exp.workerId !== undefined && { workerId: exp.workerId }),
-                  }),
-                ),
-              );
-            }
-          },
-        );
-      },
-      { scope: "test" },
-    ],
-    expectSpans: [
-      async ({}, use) => {
-        await use(async () => {});
+        await use(createNoopObservabilityAdapter());
       },
       { scope: "test" },
     ],

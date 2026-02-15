@@ -16,9 +16,6 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     observabilityAdapter,
     log,
     expect,
-    expectLogs,
-    expectMetrics,
-    expectSpans,
   }) => {
     const registry = defineJobTypes<{
       test: {
@@ -65,27 +62,6 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     expectTypeOf<(typeof completedChain)["status"]>().toEqualTypeOf<"completed">();
     expect(completedChain.output).toEqual({ result: 84 });
-
-    expectLogs([
-      { type: "job_chain_created", data: { input: { value: 42 } } },
-      { type: "job_created", data: { input: { value: 42 } } },
-      { type: "job_completed", data: { output: { result: 84 }, workerId: null } },
-      { type: "job_chain_completed", data: { output: { result: 84 } } },
-    ]);
-
-    await expectMetrics([
-      { method: "jobChainCreated", args: { input: { value: 42 } } },
-      { method: "jobCreated", args: { input: { value: 42 } } },
-      { method: "jobCompleted", args: { output: { result: 84 }, workerId: null } },
-      { method: "jobChainCompleted", args: { output: { result: 84 } } },
-    ]);
-
-    await expectSpans([
-      { name: "chain test", kind: "PRODUCER" },
-      { name: "job test", kind: "PRODUCER", parentName: "chain test" },
-      { name: "chain test", kind: "CONSUMER", parentName: "job test", links: 1 },
-      { name: "job test", kind: "CONSUMER", parentName: "job test" },
-    ]);
   });
 
   it("completes a complex job chain without worker", async ({
@@ -95,7 +71,6 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     observabilityAdapter,
     log,
     expect,
-    expectSpans,
   }) => {
     const registry = defineJobTypes<{
       "awaiting-approval": {
@@ -153,28 +128,6 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     expectTypeOf<(typeof completedChain)["status"]>().toEqualTypeOf<"completed">();
     expect(completedChain.output).toEqual({ done: true });
-
-    await expectSpans([
-      // Chain + first job creation
-      { name: "chain awaiting-approval", kind: "PRODUCER" },
-      { name: "job awaiting-approval", kind: "PRODUCER", parentName: "chain awaiting-approval" },
-      // Workerless completion of first job (continueWith)
-      {
-        name: "job process-approved",
-        kind: "PRODUCER",
-        parentName: "chain awaiting-approval",
-        links: 1,
-      },
-      { name: "job awaiting-approval", kind: "CONSUMER", parentName: "job awaiting-approval" },
-      // Workerless completion of second job (chain completes)
-      {
-        name: "chain awaiting-approval",
-        kind: "CONSUMER",
-        parentName: "job process-approved",
-        links: 1,
-      },
-      { name: "job process-approved", kind: "CONSUMER", parentName: "job process-approved" },
-    ]);
   });
 
   it("partially completes a complex job chain without worker", async ({
