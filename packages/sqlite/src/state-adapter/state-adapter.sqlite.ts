@@ -7,10 +7,8 @@ import {
   executeMigrations,
 } from "@queuert/typed-sql";
 import { type UUID } from "node:crypto";
-import { type BaseTxContext, type RetryConfig, type StateAdapter, type StateJob } from "queuert";
-import { wrapStateAdapterWithRetry } from "queuert/internal";
+import { type BaseTxContext, type StateAdapter, type StateJob } from "queuert";
 import { type SqliteStateProvider } from "../state-provider/state-provider.sqlite.js";
-import { isTransientSqliteError } from "./errors.js";
 import {
   type DbJob,
   type DbJobChainRow,
@@ -140,20 +138,11 @@ export const createSqliteStateAdapter = async <
   TIdType extends string = UUID,
 >({
   stateProvider,
-  connectionRetryConfig = {
-    maxAttempts: 3,
-    initialDelayMs: 1000,
-    multiplier: 5.0,
-    maxDelayMs: 10 * 1000,
-  },
-  isTransientError = isTransientSqliteError,
   tablePrefix = "queuert_",
   idType = "TEXT",
   idGenerator = () => crypto.randomUUID() as TIdType,
 }: {
   stateProvider: SqliteStateProvider<TTxContext>;
-  connectionRetryConfig?: RetryConfig;
-  isTransientError?: (error: unknown) => boolean;
   tablePrefix?: string;
   idType?: string;
   idGenerator?: () => TIdType;
@@ -472,11 +461,7 @@ export const createSqliteStateAdapter = async <
   };
 
   return {
-    ...wrapStateAdapterWithRetry({
-      stateAdapter: rawAdapter,
-      retryConfig: connectionRetryConfig,
-      isRetryableError: isTransientError,
-    }),
+    ...rawAdapter,
     migrateToLatest: async () => {
       const runMigrations = await executeMigrations<TTxContext>({
         migrations,

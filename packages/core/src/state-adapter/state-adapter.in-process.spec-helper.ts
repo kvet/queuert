@@ -6,7 +6,6 @@ import {
   createInProcessStateAdapter,
 } from "./state-adapter.in-process.js";
 import { type StateAdapter } from "./state-adapter.js";
-import { wrapStateAdapterWithRetry } from "./state-adapter.wrapper.retry.js";
 
 export const extendWithStateInProcess = <T>(
   api: TestAPI<T>,
@@ -46,8 +45,8 @@ export const extendWithStateInProcess = <T>(
         };
 
         // Only inject errors on calls without txContext.
-        // Calls within a transaction must not fail independently — the retry
-        // wrapper retries the entire transaction via runInTransaction instead.
+        // Calls within a transaction must not fail independently — the worker
+        // loop retries the entire operation on transient errors.
         const wrap = <T extends (...args: never[]) => Promise<unknown>>(fn: T): T =>
           (async (...args: Parameters<T>) => {
             const params = args[0] as { txContext?: InProcessContext } | undefined;
@@ -80,19 +79,7 @@ export const extendWithStateInProcess = <T>(
           getCurrentJobForUpdate: wrap(stateAdapter.getCurrentJobForUpdate),
         };
 
-        await use(
-          wrapStateAdapterWithRetry({
-            stateAdapter: flakyStateAdapter,
-            retryConfig: {
-              maxAttempts: 3,
-              initialDelayMs: 1,
-              multiplier: 1,
-              maxDelayMs: 1,
-            },
-            isRetryableError: (error) =>
-              error instanceof Error && (error as Error & { code?: string }).code === "ECONNRESET",
-          }),
-        );
+        await use(flakyStateAdapter);
 
         // Disable error generation during cleanup to avoid unhandled rejections
         // from background workers that are still finishing up

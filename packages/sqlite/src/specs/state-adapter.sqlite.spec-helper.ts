@@ -118,12 +118,6 @@ export const extendWithStateSqlite = <T>(
         return use(
           await createSqliteStateAdapter({
             stateProvider: flakyStateProvider,
-            connectionRetryConfig: {
-              maxAttempts: 3,
-              initialDelayMs: 1,
-              multiplier: 1,
-              maxDelayMs: 1,
-            },
           }),
         );
       },

@@ -137,12 +137,6 @@ export const extendWithStatePostgres = <
         return use(
           await createPgStateAdapter({
             stateProvider: flakyStateProvider,
-            connectionRetryConfig: {
-              maxAttempts: 3,
-              initialDelayMs: 1,
-              multiplier: 1,
-              maxDelayMs: 1,
-            },
           }),
         );
       },

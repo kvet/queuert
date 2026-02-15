@@ -63,11 +63,9 @@ const client = await createClient({
 ```typescript
 const stateAdapter = await createSqliteStateAdapter({
   stateProvider: mySqliteStateProvider,
-  tablePrefix: 'queuert_',              // Prefix for table names (default: "queuert_")
-  idType: 'TEXT',                       // SQL type for job IDs (default: "TEXT")
+  tablePrefix: "queuert_", // Prefix for table names (default: "queuert_")
+  idType: "TEXT", // SQL type for job IDs (default: "TEXT")
   idGenerator: () => crypto.randomUUID(), // ID generator function
-  connectionRetryConfig: { ... },       // Retry config for transient errors
-  isTransientError: (error) => ...,     // Custom transient error detection
 });
 ```
 

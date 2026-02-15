@@ -7,10 +7,8 @@ import {
   executeMigrations,
 } from "@queuert/typed-sql";
 import { type UUID } from "node:crypto";
-import { type BaseTxContext, type RetryConfig, type StateAdapter, type StateJob } from "queuert";
-import { wrapStateAdapterWithRetry } from "queuert/internal";
+import { type BaseTxContext, type StateAdapter, type StateJob } from "queuert";
 import { type PgStateProvider } from "../state-provider/state-provider.pg.js";
-import { isTransientPgError } from "./errors.js";
 import {
   type DbJob,
   acquireJobSql,
@@ -71,21 +69,12 @@ export const createPgStateAdapter = async <
   TIdType extends string = UUID,
 >({
   stateProvider,
-  connectionRetryConfig = {
-    maxAttempts: 3,
-    initialDelayMs: 1000,
-    multiplier: 5.0,
-    maxDelayMs: 10 * 1000,
-  },
-  isTransientError = isTransientPgError,
   schema = "queuert",
   tablePrefix = "",
   idType = "uuid",
   idDefault = "gen_random_uuid()",
 }: {
   stateProvider: PgStateProvider<TTxContext>;
-  connectionRetryConfig?: RetryConfig;
-  isTransientError?: (error: unknown) => boolean;
   schema?: string;
   tablePrefix?: string;
   idType?: string;
@@ -311,11 +300,7 @@ export const createPgStateAdapter = async <
   };
 
   return {
-    ...wrapStateAdapterWithRetry({
-      stateAdapter: rawAdapter,
-      retryConfig: connectionRetryConfig,
-      isRetryableError: isTransientError,
-    }),
+    ...rawAdapter,
     migrateToLatest: async () => {
       const runMigrations = await executeMigrations<TTxContext>({
         migrations,

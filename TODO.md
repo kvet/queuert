@@ -1,7 +1,6 @@
 # Short term
 
 - [BUG,FLAKY] Fix flaky tests
-  - State Resilience > handles transient database errors gracefully (10/10 failures in postgres-postgres, 6/10 in postgres-in-process and postgres-noop) - `WaitChainTimeoutError` after 1000ms
   - State Resilience > handles transient database errors gracefully with multiple slots/workers (1-4/10 across postgres specs)
   - Worker > processes jobs in order with multiple slots (2/10 in postgres-postgres and postgres-in-process) - race condition with concurrent slot processing
   - Notify > notifies workers when reaper deletes "zombie" jobs (1/10 in sqlite-in-process)

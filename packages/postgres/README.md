@@ -73,12 +73,10 @@ const client = await createClient({
 ```typescript
 const stateAdapter = await createPgStateAdapter({
   stateProvider: myPgStateProvider,
-  schema: 'queuert',                    // Schema name (default: "queuert")
-  tablePrefix: '',                      // Table name prefix (default: "")
-  idType: 'uuid',                       // SQL type for job IDs (default: "uuid")
-  idDefault: 'gen_random_uuid()',       // SQL DEFAULT expression (default: "gen_random_uuid()")
-  connectionRetryConfig: { ... },       // Retry config for transient errors
-  isTransientError: (error) => ...,     // Custom transient error detection
+  schema: "queuert", // Schema name (default: "queuert")
+  tablePrefix: "", // Table name prefix (default: "")
+  idType: "uuid", // SQL type for job IDs (default: "uuid")
+  idDefault: "gen_random_uuid()", // SQL DEFAULT expression (default: "gen_random_uuid()")
 });
 ```
 
