@@ -21,8 +21,6 @@
 - [EPIC] extract state and notify adapter test suites to efficiently test multiple configurations (prefixes etc)
   - [TASK,MEDIUM] support all methods for state adapter test suite
   - [TASK,MEDIUM] notify adapter
-- [TASK,EASY] Run postgres against multiple versions
-- [TASK,EASY] Run redis against multiple versions
 
 # Medium term
 
