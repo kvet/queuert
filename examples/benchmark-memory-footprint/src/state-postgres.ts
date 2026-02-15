@@ -22,7 +22,7 @@ const baseline = await measureBaseline();
 
 console.log("\nStarting PostgreSQL container...");
 const [beforeContainer, afterContainer, pgContainer] = await measureMemory(async () =>
-  new PostgreSqlContainer("postgres:14").withExposedPorts(5432).start(),
+  new PostgreSqlContainer("postgres:18").withExposedPorts(5432).start(),
 );
 console.log("\nAfter starting container (testcontainers overhead):");
 diffMemory(beforeContainer, afterContainer);

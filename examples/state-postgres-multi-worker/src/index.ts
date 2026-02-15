@@ -55,7 +55,7 @@ const registry = defineJobTypes<{
 type DbContext = { poolClient: PoolClient };
 
 console.log("Starting PostgreSQL container...");
-const pgContainer = await new PostgreSqlContainer("postgres:14").withExposedPorts(5432).start();
+const pgContainer = await new PostgreSqlContainer("postgres:18").withExposedPorts(5432).start();
 const connectionString = pgContainer.getConnectionUri();
 
 const pool = new Pool({ connectionString, max: 10 });

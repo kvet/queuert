@@ -59,7 +59,7 @@ async function simulatedFetch(url: string, signal: AbortSignal, delayMs: number)
   });
 }
 
-const pgContainer = await new PostgreSqlContainer("postgres:14").withExposedPorts(5432).start();
+const pgContainer = await new PostgreSqlContainer("postgres:18").withExposedPorts(5432).start();
 const sql = postgres(pgContainer.getConnectionUri(), { max: 10 });
 
 const stateProvider: PgStateProvider<DbContext> = {

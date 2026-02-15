@@ -6,7 +6,7 @@ import { createInProcessStateAdapter } from "queuert/internal";
 
 // 1. Start PostgreSQL using testcontainers
 console.log("Starting PostgreSQL...");
-const pgContainer = await new PostgreSqlContainer("postgres:14").withExposedPorts(5432).start();
+const pgContainer = await new PostgreSqlContainer("postgres:18").withExposedPorts(5432).start();
 
 // 2. Create postgres-js connection
 // postgres-js manages a dedicated connection for LISTEN automatically

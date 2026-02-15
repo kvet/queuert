@@ -6,7 +6,7 @@ import { createClient, createInProcessWorker, defineJobTypes } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 
 // 1. Start PostgreSQL using testcontainers
-const pgContainer = await new PostgreSqlContainer("postgres:14").withExposedPorts(5432).start();
+const pgContainer = await new PostgreSqlContainer("postgres:18").withExposedPorts(5432).start();
 const connectionString = pgContainer.getConnectionUri();
 
 // 2. Push Prisma schema to database and generate client

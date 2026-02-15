@@ -42,9 +42,6 @@
     "typecheck": "tsgo --noEmit",
     "test": "vitest --run"
   },
-  "engines": {
-    "node": ">=22"
-  },
   "devDependencies": {
     "@queuert/testcontainers": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
@@ -54,5 +51,8 @@
   },
   "peerDependencies": {
     "queuert": "workspace:*"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

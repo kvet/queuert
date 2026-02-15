@@ -18,7 +18,7 @@ export const extendWithRedis = <T>(
     container = await withContainerLock({
       containerName: CONTAINER_NAME,
       start: async () =>
-        new RedisContainer("redis:7")
+        new RedisContainer("redis:6")
           .withName(CONTAINER_NAME)
           .withLabels({
             label: CONTAINER_NAME,

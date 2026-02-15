@@ -28,6 +28,7 @@ This is a notify adapter only. You still need a state adapter ([PostgreSQL](http
 ## Requirements
 
 - Node.js 22 or later
+- Redis 6 or later
 
 ## Installation
 
