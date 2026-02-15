@@ -66,6 +66,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     await withWorkers([await worker.start()], async () => {
       await client.waitForJobChainCompletion(jobChain, completionOptions);
 
+      await sleep(100); // Wait for gauges to be emitted
       await expectGauges({
         jobTypeIdleChange: [
           { delta: 1, typeName: "test" },
@@ -159,6 +160,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
       // Verify gauges: worker start emits +1 idle for each type,
       // each job processing emits gauge changes for its specific type
+      await sleep(100); // Wait for gauges to be emitted
       await expectGauges({
         jobTypeIdleChange: [
           // worker start: +1 for each type

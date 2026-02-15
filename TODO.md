@@ -1,8 +1,17 @@
 # Short term
 
+- [BUG,FLAKY] Fix flaky tests
+  - State Resilience > handles transient database errors gracefully (10/10 failures in postgres-postgres, 6/10 in postgres-in-process and postgres-noop) - `WaitChainTimeoutError` after 1000ms
+  - State Resilience > handles transient database errors gracefully with multiple slots/workers (1-4/10 across postgres specs)
+  - Worker > processes jobs in order with multiple slots (2/10 in postgres-postgres and postgres-in-process) - race condition with concurrent slot processing
+  - Notify > notifies workers when reaper deletes "zombie" jobs (1/10 in sqlite-in-process)
+  - Process > throws error when prepare, complete, or continueWith called incorrectly (1/10 in postgres-noop)
+- [TASK,COMPLEX] Ensure that worker uses optimal number of state provider operations
+  - Error handling
+- [TASK,MEDIUM] Ensure registry validation for workerless completion
+- [TASK,MEDIUM] Ensure spans work with workerless completion
 - [TASK,SMALL] Notify resilience tests in core
 - [TASK,COMPLEX] Get rid of `startBlockers` method - just provide blockers when creating jobs
-- [TASK,MEDIUM] Ensure spans work with workerless completion
 - [TASK,MEDIUM] Rework observability to emit only after transaction commits
   - Problem: spans/logs/metrics emitted inside transactions become misleading if transaction rolls back
   - Affected areas:
@@ -13,24 +22,16 @@
     - Transaction afterCommit hooks (requires state adapter support)
     - Span event pattern: end span for timing, add `transaction.committed` event after commit
   - See: transactional outbox pattern for reliable side effects
-- [TASK,COMPLEX] Ensure that worker uses optimal number of state provider operations
-- [TASK,COMPLEX] Consolidate state adapter operations into atomic combined methods
-  - `acquireJob` should include `getJobBlockers` (avoid separate call after acquire)
-  - `completeJob` should include `scheduleBlockedJobs` and return the completed job (avoid separate `getJobById` after complete)
-  - Atomic mode should not need `renewJobLease` (prepare+complete in same transaction)
-  - Staged mode should not need `getJobForUpdate` before complete (job already held by worker)
-  - See: `process-modes.test-suite.ts` TODOs for per-mode call traces
-- [TASK,MEDIUM] OTEL blocker spans
 - [TASK,MEDIUM] test against multiple versions of node on CI
 - [EPIC] extract state and notify adapter test suites to efficiently test multiple configurations (prefixes etc)
   - [TASK,MEDIUM] support all methods for state adapter test suite
   - [TASK,MEDIUM] notify adapter
-- [TASK,MEDIUM] update lease in one operation (currently two: getForUpdate + update)
 - [TASK,EASY] Run postgres against multiple versions
 - [TASK,EASY] Run redis against multiple versions
 
 # Medium term
 
+- [TASK,MEDIUM] OTEL blocker spans
 - [TASK,COMPLEX] Optimized batched lease renewal
 - [EPIC] Dashboard
 - [EPIC] Sqlite ready:
@@ -41,7 +42,14 @@
   - [TASK,EASY] Run against multiple versions
 - [EPIC] MySQL/MariaDB adapter
 - [REF] Revisit Prisma examples
-- [TASK,?] test against bun and it's built-in sqlite, postgres clients
+- [?,TASK] test against bun and it's built-in sqlite, postgres clients
+- [?,TASK,MEDIUM] update lease in one operation (currently two: getForUpdate + update)
+- [?,TASK,COMPLEX] Consolidate state adapter operations into atomic combined methods
+  - `acquireJob` should include `getJobBlockers` (avoid separate call after acquire)
+  - `completeJob` should include `scheduleBlockedJobs` and return the completed job (avoid separate `getJobById` after complete)
+  - Atomic mode should not need `renewJobLease` (prepare+complete in same transaction)
+  - Staged mode should not need `getJobForUpdate` before complete (job already held by worker)
+  - See: `process-modes.test-suite.ts` TODOs for per-mode call traces
 
 # Long term
 

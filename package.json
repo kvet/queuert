@@ -9,7 +9,7 @@
     "lint": "oxlint --type-aware",
     "fmt": "oxlint --type-aware --fix && oxfmt",
     "fmt:check": "oxfmt --check",
-    "test": "vitest",
+    "test": "vitest --run",
     "typecheck": "pnpm -r typecheck",
     "examples": "pnpm -r --filter \"./examples/*\" start",
     "check": "pnpm fmt:check && pnpm lint && pnpm build && pnpm typecheck && vitest --run && pnpm examples",
