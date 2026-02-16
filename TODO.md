@@ -24,6 +24,7 @@
 
 - [TASK,COMPLEX] Optimized batched lease renewal
 - [EPIC] Dashboard
+- [EPIC] MCP server
 - [EPIC] Sqlite ready:
   - [REF] Better concurrency handling - WAL mode, busy timeout, retries
   - [REF] Separate read/write connection pools (single writer, multiple readers)
