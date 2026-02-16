@@ -60,7 +60,7 @@ describe("PostgreSQL State Adapter Conformance - Default Config", () => {
     expect(tableNames).toContain("migration");
   });
 
-  stateAdapterConformanceTestSuite({ it: conformanceIt as any });
+  stateAdapterConformanceTestSuite({ it: conformanceIt });
 });
 
 describe("PostgreSQL State Adapter Conformance - Custom Schema", () => {
@@ -111,7 +111,7 @@ describe("PostgreSQL State Adapter Conformance - Custom Schema", () => {
     expect(tableNames).toContain("migration");
   });
 
-  stateAdapterConformanceTestSuite({ it: conformanceIt as any });
+  stateAdapterConformanceTestSuite({ it: conformanceIt });
 });
 
 describe("PostgreSQL State Adapter Conformance - Text ID Type", () => {
@@ -167,7 +167,7 @@ describe("PostgreSQL State Adapter Conformance - Text ID Type", () => {
     expect(tableNames).toContain("migration");
   });
 
-  stateAdapterConformanceTestSuite({ it: conformanceIt as any });
+  stateAdapterConformanceTestSuite({ it: conformanceIt });
 });
 
 describe("PostgreSQL State Adapter Conformance - Custom Table Prefix", () => {
@@ -219,5 +219,5 @@ describe("PostgreSQL State Adapter Conformance - Custom Table Prefix", () => {
     expect(tableNames).toContain(`${tablePrefix}migration`);
   });
 
-  stateAdapterConformanceTestSuite({ it: conformanceIt as any });
+  stateAdapterConformanceTestSuite({ it: conformanceIt });
 });

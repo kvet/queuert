@@ -54,7 +54,7 @@ describe("SQLite State Adapter Conformance - Default Config", () => {
     expect(tableNames).toContain(`${tablePrefix}migration`);
   });
 
-  stateAdapterConformanceTestSuite({ it: conformanceIt as any });
+  stateAdapterConformanceTestSuite({ it: conformanceIt });
 });
 
 describe("SQLite State Adapter Conformance - Custom Table Prefix", () => {
@@ -102,7 +102,7 @@ describe("SQLite State Adapter Conformance - Custom Table Prefix", () => {
     expect(tableNames).toContain(`${tablePrefix}migration`);
   });
 
-  stateAdapterConformanceTestSuite({ it: conformanceIt as any });
+  stateAdapterConformanceTestSuite({ it: conformanceIt });
 });
 
 describe("SQLite State Adapter Conformance - Custom ID Generator", () => {
@@ -152,7 +152,7 @@ describe("SQLite State Adapter Conformance - Custom ID Generator", () => {
     expect(tableNames).toContain(`${tablePrefix}migration`);
   });
 
-  stateAdapterConformanceTestSuite({ it: conformanceIt as any });
+  stateAdapterConformanceTestSuite({ it: conformanceIt });
 });
 
 describe("SQLite State Adapter Conformance - All Custom Options", () => {
@@ -202,5 +202,5 @@ describe("SQLite State Adapter Conformance - All Custom Options", () => {
     expect(tableNames).toContain(`${tablePrefix}migration`);
   });
 
-  stateAdapterConformanceTestSuite({ it: conformanceIt as any });
+  stateAdapterConformanceTestSuite({ it: conformanceIt });
 });

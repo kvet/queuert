@@ -11,6 +11,10 @@ export { reaperTestSuite } from "./suites/reaper.test-suite.js";
 export { schedulingTestSuite } from "./suites/scheduling.test-suite.js";
 export { chainsTestSuite } from "./suites/chains.test-suite.js";
 export {
+  notifyAdapterConformanceTestSuite,
+  type NotifyAdapterConformanceContext,
+} from "./suites/notify-adapter-conformance.test-suite.js";
+export {
   stateAdapterConformanceTestSuite,
   type StateAdapterConformanceContext,
 } from "./suites/state-adapter-conformance.test-suite.js";

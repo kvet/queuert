@@ -10,9 +10,6 @@
     - Transaction afterCommit hooks (requires state adapter support)
     - Span event pattern: end span for timing, add `transaction.committed` event after commit
   - See: transactional outbox pattern for reliable side effects
-- [EPIC] extract state and notify adapter test suites to efficiently test multiple configurations (prefixes etc)
-  - [TASK,MEDIUM] support all methods for state adapter test suite
-  - [TASK,MEDIUM] notify adapter
 - [REF,MEDIUM] Evaluate removing `rootChainId` and `originId` from job model
   - `rootChainId`: Only used for cascade deletion (`deleteJobsByRootChainIds`). Deletion is the caller's problem; chain structure already captured via `chainId`
   - `originId`: Only informational (observability logs, OTEL spans). The in-process adapter uses it for continuation deduplication but pg/sqlite don't — no unique constraint or ON CONFLICT
