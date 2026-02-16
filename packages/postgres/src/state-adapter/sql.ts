@@ -537,7 +537,7 @@ WITH job_to_unlock AS (
   SELECT id
   FROM {{schema}}.{{table_prefix}}job
   WHERE leased_until IS NOT NULL
-    AND leased_until < now()
+    AND leased_until <= now()
     AND status = 'running'
     AND type_name IN (SELECT unnest($1::text[]))
     AND id != ALL($2::{{id_type}}[])

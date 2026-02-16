@@ -579,7 +579,7 @@ WHERE id = (
   SELECT id
   FROM {{table_prefix}}job
   WHERE leased_until IS NOT NULL
-    AND leased_until < datetime('now', 'subsec')
+    AND leased_until <= datetime('now', 'subsec')
     AND status = 'running'
     AND type_name IN (SELECT value FROM json_each(?))
     AND id NOT IN (SELECT value FROM json_each(?))
