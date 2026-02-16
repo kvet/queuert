@@ -287,4 +287,55 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expect(completedChain2.deduplicated).toBe(false);
     expect(completedChain2.id).not.toBe(completedChain1.id);
   });
+
+  it("does not deduplicate across different chain types with the same key", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const registry = defineJobTypes<{
+      typeA: {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+      typeB: {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+
+    const [chainA, chainB] = await client.withNotify(async () =>
+      runInTransaction(async (txContext) => [
+        await client.startJobChain({
+          ...txContext,
+          typeName: "typeA",
+          input: { value: 1 },
+          deduplication: { key: "shared-key" },
+        }),
+        await client.startJobChain({
+          ...txContext,
+          typeName: "typeB",
+          input: { value: 2 },
+          deduplication: { key: "shared-key" },
+        }),
+      ]),
+    );
+
+    expect(chainA.deduplicated).toBe(false);
+    expect(chainB.deduplicated).toBe(false);
+    expect(chainB.id).not.toBe(chainA.id);
+  });
 };

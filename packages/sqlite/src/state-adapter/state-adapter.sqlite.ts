@@ -244,6 +244,7 @@ export const createSqliteStateAdapter = async <
           deduplicationKey,
           deduplicationKey,
           deduplicationKey,
+          chainTypeName,
           deduplicationScope,
           deduplicationScope,
           deduplicationScope,

@@ -53,7 +53,10 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
     return undefined;
   };
 
-  const findDeduplicatedJob = (deduplication: DeduplicationOptions): StateJob | undefined => {
+  const findDeduplicatedJob = (
+    chainTypeName: string,
+    deduplication: DeduplicationOptions,
+  ): StateJob | undefined => {
     if (!deduplication.key) return undefined;
 
     let bestMatch: StateJob | undefined;
@@ -63,6 +66,7 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
     for (const job of store.jobs.values()) {
       if (job.deduplicationKey !== deduplication.key) continue;
       if (job.id !== job.chainId) continue; // Only first jobs in chain
+      if (job.chainTypeName !== chainTypeName) continue;
 
       if (scope === "incomplete" && job.status === "completed") continue;
 
@@ -124,7 +128,7 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
           return { job: existingContinuation, deduplicated: true };
         }
       } else if (deduplication) {
-        const existingDeduplicated = findDeduplicatedJob(deduplication);
+        const existingDeduplicated = findDeduplicatedJob(chainTypeName, deduplication);
         if (existingDeduplicated) {
           return { job: existingDeduplicated, deduplicated: true };
         }

@@ -191,6 +191,7 @@ export const findExistingJobSql: TypedSql<
     NamedParameter<"deduplication_key_2", string | null>,
     NamedParameter<"deduplication_key_3", string | null>,
     NamedParameter<"deduplication_key_4", string | null>,
+    NamedParameter<"chain_type_name", string>,
     NamedParameter<"deduplication_scope_1", DeduplicationScope | null>,
     NamedParameter<"deduplication_scope_2", DeduplicationScope | null>,
     NamedParameter<"deduplication_scope_3", DeduplicationScope | null>,
@@ -209,6 +210,7 @@ WHERE (
     ? IS NOT NULL
     AND deduplication_key = ?
     AND id = chain_id
+    AND chain_type_name = ?
     AND (
       ? IS NULL
       OR (? = 'incomplete' AND status != 'completed')

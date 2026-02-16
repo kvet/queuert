@@ -200,6 +200,7 @@ existing_deduplicated AS (
   WHERE $5::text IS NOT NULL
     AND j.deduplication_key = $5
     AND j.id = j.chain_id
+    AND j.chain_type_name = $3
     AND (
       $6::text IS NULL
       OR ($6::text = 'incomplete' AND j.status != 'completed')

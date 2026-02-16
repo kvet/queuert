@@ -14,11 +14,6 @@
   - [TASK,MEDIUM] support all methods for state adapter test suite
   - [TASK,MEDIUM] notify adapter
 - [TASK,MEDIUM] OTEL blocker spans
-- [BUG,EASY] Deduplication key is not scoped by chain type name
-  - `existing_deduplicated` CTE in `createJobSql` matches on `deduplication_key` only, ignoring `chain_type_name`
-  - Two chains of different types with the same key will incorrectly deduplicate against each other
-  - Fix: add `AND j.chain_type_name = $3` to the `existing_deduplicated` CTE (pg and sqlite)
-  - Affects: `packages/postgres/src/state-adapter/sql.ts`, `packages/sqlite/src/state-adapter/sql.ts`, in-process adapter
 - [TASK,EASY] `deleteJobChains` should return deleted chains
 
 # Medium term
