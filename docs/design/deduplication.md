@@ -36,6 +36,12 @@ When a duplicate is detected:
 - The returned chain has `deduplicated: true` to indicate it was not newly created
 - The input from the new request is ignored; the existing chain's input is used
 
+## Continuation Deduplication
+
+When a job calls `continueWith`, the continuation job is created with an internal deduplication key of `continued:${job.id}`. This ensures that if the same continuation is created twice (e.g., due to a retry after a crash), the second attempt returns the existing job instead of creating a duplicate.
+
+The continuation dedup key is scoped to the chain (`chain_id`) and only matches non-root jobs (`id != chain_id`), so it cannot collide with user-provided chain-level deduplication keys which only apply to root jobs.
+
 ## Continuation Restriction
 
 Within a `complete` callback, `continueWith` can only be called once. Calling it multiple times throws an error:

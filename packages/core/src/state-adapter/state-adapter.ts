@@ -11,8 +11,6 @@ export type StateJob = {
   input: unknown;
   output: unknown;
 
-  originId: string | null;
-
   status: "blocked" | "pending" | "running" | "completed";
   createdAt: Date;
   scheduledAt: Date;
@@ -71,7 +69,6 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     chainId: TJobId | undefined;
     chainTypeName: string;
     input: unknown;
-    originId: TJobId | undefined;
     deduplication?: DeduplicationOptions;
     schedule?: ScheduleOptions;
     traceContext?: unknown;

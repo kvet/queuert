@@ -113,7 +113,6 @@ The `removeExpiredJobLease` method supports an `ignoredJobIds` parameter to prev
 interface StateJob {
   id: string;
   chainId: string;
-  originId: string | null;
   // ... other fields
 }
 ```

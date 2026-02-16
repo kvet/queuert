@@ -11,7 +11,6 @@ export const mapStateJobPairToJobChain = (
 
   const base = {
     id: initialJob.id,
-    originId: initialJob.originId,
     typeName: initialJob.chainTypeName,
     input: initialJob.input,
     createdAt: initialJob.createdAt,

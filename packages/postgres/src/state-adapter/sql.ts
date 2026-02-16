@@ -10,8 +10,6 @@ export type DbJob = {
   input: unknown;
   output: unknown;
 
-  origin_id: string | null;
-
   status: "blocked" | "pending" | "running" | "completed";
   created_at: string;
   scheduled_at: string;
@@ -58,7 +56,6 @@ CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job (
   type_name                     text NOT NULL,
   chain_id                      {{id_type}} REFERENCES {{schema}}.{{table_prefix}}job(id) ON DELETE CASCADE,
   chain_type_name               text NOT NULL,
-  origin_id                     {{id_type}} REFERENCES {{schema}}.{{table_prefix}}job(id) ON DELETE CASCADE,
 
   input                         jsonb,
   output                        jsonb,
@@ -103,15 +100,6 @@ CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job_blocker (
       {
         sql: sql(
           /* sql */ `
-CREATE UNIQUE INDEX IF NOT EXISTS {{table_prefix}}job_chain_origin_unique_idx
-ON {{schema}}.{{table_prefix}}job (chain_id, origin_id)
-WHERE origin_id IS NOT NULL`,
-          false,
-        ),
-      },
-      {
-        sql: sql(
-          /* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_acquisition_idx
 ON {{schema}}.{{table_prefix}}job (type_name, scheduled_at)
 WHERE status = 'pending'`,
@@ -131,7 +119,7 @@ ON {{schema}}.{{table_prefix}}job (chain_id, created_at DESC)`,
           /* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_deduplication_idx
 ON {{schema}}.{{table_prefix}}job (deduplication_key, created_at DESC)
-WHERE deduplication_key IS NOT NULL`,
+WHERE deduplication_key IS NOT NULL AND id = chain_id`,
           false,
         ),
       },
@@ -186,7 +174,6 @@ export const createJobSql: TypedSql<
     NamedParameter<"chain_id", string | undefined>,
     NamedParameter<"chain_type_name", string>,
     NamedParameter<"input", unknown>,
-    NamedParameter<"origin_id", string | undefined>,
     NamedParameter<"deduplication_key", string | null | undefined>,
     NamedParameter<"deduplication_scope", DeduplicationScope | null | undefined>,
     NamedParameter<"deduplication_window_ms", number | null | undefined>,
@@ -201,35 +188,36 @@ WITH existing_continuation AS (
   SELECT *, TRUE AS deduplicated
   FROM {{schema}}.{{table_prefix}}job
   WHERE $2::{{id_type}} IS NOT NULL
-    AND $5::{{id_type}} IS NOT NULL
+    AND $5::text IS NOT NULL
     AND chain_id = $2::{{id_type}}
-    AND origin_id = $5::{{id_type}}
+    AND id != chain_id
+    AND deduplication_key = $5
   LIMIT 1
 ),
 existing_deduplicated AS (
   SELECT j.*, TRUE AS deduplicated
   FROM {{schema}}.{{table_prefix}}job j
-  WHERE $6::text IS NOT NULL
-    AND j.deduplication_key = $6
+  WHERE $5::text IS NOT NULL
+    AND j.deduplication_key = $5
     AND j.id = j.chain_id
     AND (
-      $7::text IS NULL
-      OR ($7::text = 'incomplete' AND j.status != 'completed')
-      OR ($7::text = 'any')
+      $6::text IS NULL
+      OR ($6::text = 'incomplete' AND j.status != 'completed')
+      OR ($6::text = 'any')
     )
     AND (
-      $8::bigint IS NULL
-      OR j.created_at >= now() - ($8::bigint || ' milliseconds')::interval
+      $7::bigint IS NULL
+      OR j.created_at >= now() - ($7::bigint || ' milliseconds')::interval
     )
   ORDER BY j.created_at DESC
   LIMIT 1
 ),
 new_id AS (SELECT {{id_default}} AS id),
 inserted_job AS (
-  INSERT INTO {{schema}}.{{table_prefix}}job (id, type_name, chain_id, chain_type_name, input, origin_id, deduplication_key, scheduled_at, trace_context)
-  SELECT id, $1, COALESCE($2, id), $3, $4, $5, $6,
-    COALESCE($9::timestamptz, now() + ($10::bigint || ' milliseconds')::interval, now()),
-    $11
+  INSERT INTO {{schema}}.{{table_prefix}}job (id, type_name, chain_id, chain_type_name, input, deduplication_key, scheduled_at, trace_context)
+  SELECT id, $1, COALESCE($2, id), $3, $4, $5,
+    COALESCE($8::timestamptz, now() + ($9::bigint || ' milliseconds')::interval, now()),
+    $10
   FROM new_id
   WHERE NOT EXISTS (SELECT 1 FROM existing_continuation)
     AND NOT EXISTS (SELECT 1 FROM existing_deduplicated)

@@ -122,7 +122,7 @@ EXTERNAL span (e.g., HTTP request)
             └── CONSUMER: chain fetch-inventory
 ```
 
-Blocker chains are independent — they have no span links to the blocked job and no `originId`. The dependency relationship is implicit through the shared parent span and visible when blocker outputs appear in the blocked job's attempt.
+Blocker chains are independent — they have no span links to the blocked job. The dependency relationship is implicit through the shared parent span and visible when blocker outputs appear in the blocked job's attempt.
 
 ## Continuation Relationships
 
@@ -197,7 +197,6 @@ This uses the `completeJobSpan` adapter method rather than `startAttemptSpan`, r
 | `queuert.chain.deduplicated` | boolean? | `true` if existing chain was returned |
 | `queuert.job.id`             | string   | Job ID                                |
 | `queuert.job.type`           | string   | Job type name                         |
-| `queuert.job.origin_id`      | string?  | Origin job ID (for continuations)     |
 
 ### Attempt Spans
 

@@ -108,12 +108,10 @@ describe("Logging", () => {
     const jobChainArgs = {
       typeName: "test",
       id: jobChain.id,
-      originId: null,
     };
     const jobArgs = {
       typeName: "test",
       id: jobChain.id,
-      originId: null,
       chainId: jobChain.id,
       chainTypeName: "test",
     };
@@ -273,8 +271,6 @@ describe("Logging", () => {
       log,
       registry,
     });
-    const originIds: string[] = [];
-
     const worker = await createInProcessWorker({
       stateAdapter,
       notifyAdapter,
@@ -285,7 +281,6 @@ describe("Logging", () => {
       processors: {
         linear: {
           attemptHandler: async ({ job, complete }) => {
-            originIds.push(job.id);
             return complete(async ({ continueWith }) =>
               continueWith({
                 typeName: "linear_next",
@@ -296,7 +291,6 @@ describe("Logging", () => {
         },
         linear_next: {
           attemptHandler: async ({ job, complete }) => {
-            originIds.push(job.id);
             return complete(async ({ continueWith }) =>
               continueWith({
                 typeName: "linear_next_next",
@@ -339,7 +333,6 @@ describe("Logging", () => {
           typeName: "linear_next",
           chainId: jobChain.id,
           chainTypeName: "linear",
-          originId: originIds[0],
         },
       },
       { type: "job_attempt_completed", data: { typeName: "linear" } },
@@ -351,7 +344,6 @@ describe("Logging", () => {
           typeName: "linear_next_next",
           chainId: jobChain.id,
           chainTypeName: "linear",
-          originId: originIds[1],
         },
       },
       { type: "job_attempt_completed", data: { typeName: "linear_next" } },
@@ -461,7 +453,6 @@ describe("Logging", () => {
         type: "job_chain_created",
         data: {
           typeName: "blocker",
-          originId: null,
         },
       },
       { type: "job_created", data: { typeName: "blocker" } },
@@ -474,7 +465,6 @@ describe("Logging", () => {
             {
               id: blockerChainId!,
               typeName: "blocker",
-              originId: null,
             },
           ],
         },
@@ -487,7 +477,6 @@ describe("Logging", () => {
             {
               id: blockerChainId!,
               typeName: "blocker",
-              originId: null,
             },
           ],
         },
@@ -508,7 +497,6 @@ describe("Logging", () => {
           unblockedByChain: {
             id: blockerChainId!,
             typeName: "blocker",
-            originId: null,
           },
         },
       },

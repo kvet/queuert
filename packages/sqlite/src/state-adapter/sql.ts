@@ -8,7 +8,6 @@ export const jobColumns = [
   "chain_type_name",
   "input",
   "output",
-  "origin_id",
   "status",
   "created_at",
   "scheduled_at",
@@ -36,8 +35,6 @@ export type DbJob = {
   chain_type_name: string;
   input: string | null;
   output: string | null;
-
-  origin_id: string | null;
 
   status: "blocked" | "pending" | "running" | "completed";
   created_at: string;
@@ -73,7 +70,6 @@ CREATE TABLE IF NOT EXISTS {{table_prefix}}job (
   type_name                     TEXT NOT NULL,
   chain_id                      {{id_type}} REFERENCES {{table_prefix}}job(id) ON DELETE CASCADE,
   chain_type_name               TEXT NOT NULL,
-  origin_id                     {{id_type}} REFERENCES {{table_prefix}}job(id) ON DELETE CASCADE,
 
   input                         TEXT,
   output                        TEXT,
@@ -119,15 +115,6 @@ CREATE TABLE IF NOT EXISTS {{table_prefix}}job_blocker (
       {
         sql: sql(
           /* sql */ `
-CREATE UNIQUE INDEX IF NOT EXISTS {{table_prefix}}job_chain_origin_unique_idx
-ON {{table_prefix}}job (chain_id, origin_id)
-WHERE origin_id IS NOT NULL`,
-          false,
-        ),
-      },
-      {
-        sql: sql(
-          /* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_acquisition_idx
 ON {{table_prefix}}job (type_name, scheduled_at)
 WHERE status = 'pending'`,
@@ -147,7 +134,7 @@ ON {{table_prefix}}job (chain_id, created_at DESC)`,
           /* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_deduplication_idx
 ON {{table_prefix}}job (deduplication_key, created_at DESC)
-WHERE deduplication_key IS NOT NULL`,
+WHERE deduplication_key IS NOT NULL AND id = chain_id`,
           false,
         ),
       },
@@ -199,11 +186,11 @@ export const recordMigrationSql: TypedSql<readonly [NamedParameter<"name", strin
 export const findExistingJobSql: TypedSql<
   [
     NamedParameter<"chain_id_1", string | null>,
-    NamedParameter<"origin_id_1", string | null>,
-    NamedParameter<"chain_id_2", string | null>,
-    NamedParameter<"origin_id_2", string | null>,
     NamedParameter<"deduplication_key_1", string | null>,
+    NamedParameter<"chain_id_2", string | null>,
     NamedParameter<"deduplication_key_2", string | null>,
+    NamedParameter<"deduplication_key_3", string | null>,
+    NamedParameter<"deduplication_key_4", string | null>,
     NamedParameter<"deduplication_scope_1", DeduplicationScope | null>,
     NamedParameter<"deduplication_scope_2", DeduplicationScope | null>,
     NamedParameter<"deduplication_scope_3", DeduplicationScope | null>,
@@ -216,7 +203,7 @@ export const findExistingJobSql: TypedSql<
 SELECT *, 1 AS deduplicated
 FROM {{table_prefix}}job
 WHERE (
-  (? IS NOT NULL AND ? IS NOT NULL AND chain_id = ? AND origin_id = ?)
+  (? IS NOT NULL AND ? IS NOT NULL AND chain_id = ? AND id != chain_id AND deduplication_key = ?)
   OR
   (
     ? IS NOT NULL
@@ -247,7 +234,6 @@ export const insertJobSql: TypedSql<
     NamedParameter<"id_for_chain", string>,
     NamedParameter<"chain_type_name", string>,
     NamedParameter<"input", string | null>,
-    NamedParameter<"origin_id", string | null>,
     NamedParameter<"deduplication_key", string | null>,
     NamedParameter<"scheduled_at", string | null>,
     NamedParameter<"schedule_after_ms_check", number | null>,
@@ -257,8 +243,8 @@ export const insertJobSql: TypedSql<
   [DbJob & { deduplicated: number }]
 > = sql(
   /* sql */ `
-INSERT INTO {{table_prefix}}job (id, type_name, chain_id, chain_type_name, input, origin_id, deduplication_key, scheduled_at, trace_context)
-VALUES (?, ?, COALESCE(?, ?), ?, ?, ?, ?,
+INSERT INTO {{table_prefix}}job (id, type_name, chain_id, chain_type_name, input, deduplication_key, scheduled_at, trace_context)
+VALUES (?, ?, COALESCE(?, ?), ?, ?, ?,
   COALESCE(?,
     CASE WHEN ? IS NOT NULL THEN datetime('now', 'subsec', '+' || (? / 1000.0) || ' seconds') ELSE NULL END,
     datetime('now', 'subsec')),

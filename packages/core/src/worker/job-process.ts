@@ -470,12 +470,10 @@ export const runJobProcess = async ({
               txContext,
               schedule,
               blockers: blockers as any,
-              chainContext: {
-                chainId: job.chainId,
-                chainTypeName: job.chainTypeName,
-                originId: job.id,
-                originTraceContext: attemptSpanHandle?.getTraceContext() ?? job.traceContext,
-              },
+              chainId: job.chainId,
+              chainTypeName: job.chainTypeName,
+              deduplicationKey: `continued:${job.id}`,
+              originTraceContext: attemptSpanHandle?.getTraceContext() ?? job.traceContext,
               fromTypeName: job.typeName,
             });
             return continuedJob;

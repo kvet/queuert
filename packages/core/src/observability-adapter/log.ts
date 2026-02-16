@@ -48,7 +48,6 @@ export type JobBasicData = {
   typeName: string;
   chainId: string;
   chainTypeName: string;
-  originId: string | null;
 };
 export type JobProcessingData = JobBasicData & { status: StateJob["status"]; attempt: number };
 type JobCreatedLogEntry = LogEntry<
@@ -121,7 +120,6 @@ type JobCompletedLogEntry = LogEntry<
 export type JobChainData = {
   id: string;
   typeName: string;
-  originId: string | null;
 };
 type JobChainCreatedLogEntry = LogEntry<
   "job_chain_created",

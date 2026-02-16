@@ -26,13 +26,6 @@ import {
 } from "./state-adapter/state-adapter.js";
 import { RescheduleJobError } from "./worker/job-process.js";
 
-export type ChainContext = {
-  chainId: string;
-  chainTypeName: string;
-  originId: string;
-  originTraceContext: unknown;
-};
-
 export const helper = ({
   stateAdapter: stateAdapterOption,
   notifyAdapter: notifyAdapterOption,
@@ -60,7 +53,10 @@ export const helper = ({
     txContext,
     blockers,
     isChain,
-    chainContext,
+    chainId,
+    chainTypeName,
+    deduplicationKey,
+    originTraceContext,
     deduplication,
     schedule,
   }: {
@@ -69,7 +65,10 @@ export const helper = ({
     txContext: BaseTxContext;
     blockers?: JobChain<any, any, any, any>[];
     isChain: boolean;
-    chainContext?: ChainContext;
+    chainId?: string;
+    chainTypeName?: string;
+    deduplicationKey?: string;
+    originTraceContext?: unknown;
     deduplication?: DeduplicationOptions;
     schedule?: ScheduleOptions;
   }): Promise<{ job: StateJob; deduplicated: boolean }> => {
@@ -79,13 +78,13 @@ export const helper = ({
 
     const parsedInput = registry.parseInput(typeName, input);
 
-    const chainTypeName = isChain ? typeName : chainContext!.chainTypeName;
+    const resolvedChainTypeName = isChain ? typeName : chainTypeName!;
 
     const spanHandle = observabilityHelper.startJobSpan({
-      chainTypeName,
+      chainTypeName: resolvedChainTypeName,
       jobTypeName: typeName,
       isChainStart: isChain,
-      originTraceContext: isChain ? undefined : chainContext?.originTraceContext,
+      originTraceContext: isChain ? undefined : originTraceContext,
     });
 
     let createJobResult: { job: StateJob; deduplicated: boolean };
@@ -93,11 +92,10 @@ export const helper = ({
       createJobResult = await stateAdapter.createJob({
         txContext,
         typeName,
-        chainTypeName,
+        chainTypeName: resolvedChainTypeName,
         input: parsedInput,
-        originId: chainContext?.originId,
-        chainId: isChain ? undefined : chainContext!.chainId,
-        deduplication,
+        chainId: isChain ? undefined : chainId,
+        deduplication: deduplicationKey ? { key: deduplicationKey } : deduplication,
         schedule,
         traceContext: spanHandle?.getTraceContext(),
       });
@@ -141,7 +139,6 @@ export const helper = ({
       status: "created",
       chainId: job.chainId,
       jobId: job.id,
-      originId: job.originId ?? null,
     });
 
     if (isChain) {
@@ -167,7 +164,10 @@ export const helper = ({
     txContext,
     schedule,
     blockers,
-    chainContext,
+    chainId,
+    chainTypeName,
+    deduplicationKey,
+    originTraceContext,
     fromTypeName,
   }: {
     typeName: TJobTypeName;
@@ -175,7 +175,10 @@ export const helper = ({
     txContext: any;
     schedule?: ScheduleOptions;
     blockers?: JobChain<any, any, any, any>[];
-    chainContext: ChainContext;
+    chainId: string;
+    chainTypeName: string;
+    deduplicationKey: string;
+    originTraceContext: unknown;
     fromTypeName: string;
   }): Promise<JobOf<string, BaseJobTypeDefinitions, TJobTypeName, string>> => {
     registry.validateContinueWith(fromTypeName, { typeName, input });
@@ -186,7 +189,10 @@ export const helper = ({
       txContext,
       blockers,
       isChain: false,
-      chainContext,
+      chainId,
+      chainTypeName,
+      deduplicationKey,
+      originTraceContext,
       schedule,
     });
 
@@ -305,7 +311,10 @@ export const helper = ({
       txContext,
       schedule,
       blockers,
-      chainContext,
+      chainId,
+      chainTypeName,
+      deduplicationKey,
+      originTraceContext,
       fromTypeName,
     }: {
       typeName: TJobTypeName;
@@ -313,7 +322,10 @@ export const helper = ({
       txContext: any;
       schedule?: ScheduleOptions;
       blockers?: JobChain<any, any, any, any>[];
-      chainContext: ChainContext;
+      chainId: string;
+      chainTypeName: string;
+      deduplicationKey: string;
+      originTraceContext: unknown;
       fromTypeName: string;
     }) => Promise<JobOf<string, BaseJobTypeDefinitions, TJobTypeName, string>>,
     handleJobHandlerError: async ({

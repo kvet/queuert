@@ -16,7 +16,6 @@ export type JobSpanResult =
       status: "created";
       jobId: string;
       chainId: string;
-      originId: string | null;
     }
   | {
       status: "deduplicated";

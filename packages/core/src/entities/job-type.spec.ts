@@ -259,7 +259,6 @@ describe("JobOf", () => {
 
     expectTypeOf<TestJob["id"]>().toEqualTypeOf<string>();
     expectTypeOf<TestJob["chainId"]>().toEqualTypeOf<string>();
-    expectTypeOf<TestJob["originId"]>().toEqualTypeOf<string | null>();
     expectTypeOf<TestJob["typeName"]>().toEqualTypeOf<"test">();
     expectTypeOf<TestJob["createdAt"]>().toEqualTypeOf<Date>();
     expectTypeOf<TestJob["attempt"]>().toEqualTypeOf<number>();

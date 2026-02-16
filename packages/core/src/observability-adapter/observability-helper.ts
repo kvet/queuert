@@ -18,7 +18,6 @@ import {
 const mapStateJobToJobBasicData = (job: StateJob): JobBasicData => ({
   id: job.id,
   typeName: job.typeName,
-  originId: job.originId,
   chainId: job.chainId,
   chainTypeName: job.chainTypeName,
 });
@@ -32,19 +31,16 @@ const mapStateJobToJobProcessingData = (job: StateJob): JobProcessingData => ({
 const mapStateJobToJobChainData = (job: StateJob): JobChainData => ({
   id: job.chainId,
   typeName: job.chainTypeName,
-  originId: job.originId,
 });
 
 const mapJobChainToData = (chain: JobChain<any, any, any, any>): JobChainData => ({
   id: chain.id,
   typeName: chain.typeName,
-  originId: chain.originId,
 });
 
 const mapJobToJobBasicData = (job: Job<any, any, any, any, any[]>): JobBasicData => ({
   id: job.id,
   typeName: job.typeName,
-  originId: job.originId,
   chainId: job.chainId,
   chainTypeName: job.chainTypeName,
 });

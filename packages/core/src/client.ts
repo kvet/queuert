@@ -259,12 +259,10 @@ export const createClient = async <
               txContext,
               schedule,
               blockers: blockers as any,
-              chainContext: {
-                chainId: job.chainId,
-                chainTypeName: job.chainTypeName,
-                originId: job.id,
-                originTraceContext: job.traceContext,
-              },
+              chainId: job.chainId,
+              chainTypeName: job.chainTypeName,
+              deduplicationKey: `continued:${job.id}`,
+              originTraceContext: job.traceContext,
               fromTypeName: job.typeName,
             });
 

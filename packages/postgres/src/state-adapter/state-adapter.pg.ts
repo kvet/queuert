@@ -47,8 +47,6 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
     input: dbJob.input,
     output: dbJob.output,
 
-    originId: dbJob.origin_id,
-
     status: dbJob.status,
     createdAt: new Date(dbJob.created_at),
     scheduledAt: new Date(dbJob.scheduled_at),
@@ -151,7 +149,6 @@ export const createPgStateAdapter = async <
       chainTypeName,
       input,
       chainId,
-      originId,
       deduplication,
       schedule,
       traceContext,
@@ -164,7 +161,6 @@ export const createPgStateAdapter = async <
           chainId,
           chainTypeName,
           input,
-          originId,
           deduplication?.key ?? null,
           deduplication ? (deduplication.scope ?? "incomplete") : null,
           deduplication?.windowMs ?? null,

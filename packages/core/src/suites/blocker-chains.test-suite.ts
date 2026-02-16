@@ -40,7 +40,6 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       registry,
     });
     let blockerChainId: string;
-    let originId: string | null = null;
 
     const worker = await createInProcessWorker({
       stateAdapter,
@@ -53,8 +52,6 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         blocker: {
           attemptHandler: async ({ job, complete }) => {
             expect(job.chainId).toEqual(blockerChainId);
-            expect(job.originId).toEqual(originId);
-            originId = job.id;
 
             return complete(async ({ continueWith }) =>
               job.input.value < 1
@@ -77,9 +74,6 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
             expectTypeOf<(typeof blocker)["output"]>().toEqualTypeOf<{
               done: true;
             }>();
-
-            expectTypeOf<(typeof blocker)["originId"]>().toEqualTypeOf<string | null>();
-            expect(blocker.originId).toBeNull();
 
             return complete(async () => ({
               finalResult: (blocker.output.done ? 1 : 0) + (input.start ? 1 : 0),
@@ -160,15 +154,12 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       processors: {
         blocker: {
           attemptHandler: async ({ job, complete }) => {
-            expect(job.originId).toBeNull();
-
             return complete(async () => ({ result: job.input.value }));
           },
         },
         main: {
           attemptHandler: async ({ job, complete }) => {
             const [blocker] = job.blockers;
-            expect(blocker.originId).toBeNull();
 
             return complete(async () => ({
               finalResult: blocker.output.result,
@@ -257,18 +248,14 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       concurrency: 1,
       processors: {
         inner: {
-          attemptHandler: async ({ job, complete }) => {
+          attemptHandler: async ({ complete }) => {
             return complete(async () => {
-              // Independent chains should NOT inherit originId from parent
-              expect(job.originId).toBeNull();
               return null;
             });
           },
         },
         outer: {
-          attemptHandler: async ({ job, prepare, complete }) => {
-            expect(job.originId).toBeNull();
-
+          attemptHandler: async ({ prepare, complete }) => {
             await prepare({ mode: "staged" }, async (txContext) => {
               childJobChains.push(
                 await client.withNotify(async () =>
@@ -545,8 +532,6 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       registry,
     });
-    let blockerOriginId: string | null;
-
     const worker = await createInProcessWorker({
       stateAdapter,
       notifyAdapter,
@@ -557,7 +542,6 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       processors: {
         blocker: {
           attemptHandler: async ({ job, prepare, complete }) => {
-            blockerOriginId = job.originId;
             await prepare({ mode: "atomic" });
             return complete(async () => ({ result: job.input.value * 10 }));
           },
@@ -609,7 +593,6 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       const succeededJobChain = await client.waitForJobChainCompletion(jobChain, completionOptions);
 
       expect(succeededJobChain.output).toEqual({ finalResult: 50 });
-      expect(blockerOriginId).toBeNull();
     });
   });
 };

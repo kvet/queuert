@@ -360,7 +360,6 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
             expect(job.status).toBe("running");
             expect(job.id).toBeDefined();
             expect(job.chainId).toEqual(job.id);
-            expect(job.originId).toBeNull();
 
             const result = await prepare({ mode: "staged" }, (txContext) => {
               expectTypeOf(txContext).toEqualTypeOf<{ $test: true }>();

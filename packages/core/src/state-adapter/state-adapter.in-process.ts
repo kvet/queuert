@@ -38,11 +38,15 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
 
   const findExistingContinuation = (
     chainId: string | undefined,
-    originId: string | undefined,
+    deduplicationKey: string | undefined,
   ): StateJob | undefined => {
-    if (!chainId || !originId) return undefined;
+    if (!chainId || !deduplicationKey) return undefined;
     for (const job of store.jobs.values()) {
-      if (job.chainId === chainId && job.originId === originId) {
+      if (
+        job.chainId === chainId &&
+        job.id !== job.chainId &&
+        job.deduplicationKey === deduplicationKey
+      ) {
         return job;
       }
     }
@@ -110,17 +114,16 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       chainTypeName,
       input,
       chainId,
-      originId,
       deduplication,
       schedule,
       traceContext,
     }) => {
-      const existingContinuation = findExistingContinuation(chainId, originId);
-      if (existingContinuation) {
-        return { job: existingContinuation, deduplicated: true };
-      }
-
-      if (deduplication) {
+      if (chainId) {
+        const existingContinuation = findExistingContinuation(chainId, deduplication?.key);
+        if (existingContinuation) {
+          return { job: existingContinuation, deduplicated: true };
+        }
+      } else if (deduplication) {
         const existingDeduplicated = findDeduplicatedJob(deduplication);
         if (existingDeduplicated) {
           return { job: existingDeduplicated, deduplicated: true };
@@ -139,7 +142,6 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
         input,
         output: null,
         chainId: chainId ?? id,
-        originId: originId ?? null,
         status: "pending",
         createdAt: now,
         scheduledAt: resolvedScheduledAt,

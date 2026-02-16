@@ -65,8 +65,6 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
     input: parseJson(dbJob.input),
     output: parseJson(dbJob.output),
 
-    originId: dbJob.origin_id,
-
     status: dbJob.status,
     createdAt: new Date(dbJob.created_at + "Z"),
     scheduledAt: new Date(dbJob.scheduled_at + "Z"),
@@ -94,7 +92,6 @@ const parseDbJobChainRow = (row: DbJobChainRow): { rootJob: DbJob; lastChainJob:
     chain_type_name: row.chain_type_name,
     input: row.input,
     output: row.output,
-    origin_id: row.origin_id,
     status: row.status,
     created_at: row.created_at,
     scheduled_at: row.scheduled_at,
@@ -117,7 +114,6 @@ const parseDbJobChainRow = (row: DbJobChainRow): { rootJob: DbJob; lastChainJob:
         chain_type_name: row.lc_chain_type_name!,
         input: row.lc_input,
         output: row.lc_output,
-        origin_id: row.lc_origin_id,
         status: row.lc_status!,
         created_at: row.lc_created_at!,
         scheduled_at: row.lc_scheduled_at!,
@@ -223,7 +219,6 @@ export const createSqliteStateAdapter = async <
       chainTypeName,
       input,
       chainId,
-      originId,
       deduplication,
       schedule,
       traceContext,
@@ -235,7 +230,6 @@ export const createSqliteStateAdapter = async <
       const deduplicationWindowMs = deduplication?.windowMs ?? null;
 
       const chainIdOrNull = chainId ?? null;
-      const originIdOrNull = originId ?? null;
       const scheduledAtIso = schedule?.at?.toISOString().replace("T", " ").replace("Z", "") ?? null;
       const scheduleAfterMsOrNull = schedule?.afterMs ?? null;
       const traceContextJson = traceContext !== undefined ? JSON.stringify(traceContext) : null;
@@ -245,9 +239,9 @@ export const createSqliteStateAdapter = async <
         sql: findExistingJobSql,
         params: [
           chainIdOrNull,
-          originIdOrNull,
+          deduplicationKey,
           chainIdOrNull,
-          originIdOrNull,
+          deduplicationKey,
           deduplicationKey,
           deduplicationKey,
           deduplicationScope,
@@ -272,7 +266,6 @@ export const createSqliteStateAdapter = async <
           newId,
           chainTypeName,
           inputJson,
-          originIdOrNull,
           deduplicationKey,
           scheduledAtIso,
           scheduleAfterMsOrNull,

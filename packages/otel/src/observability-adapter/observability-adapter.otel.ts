@@ -305,9 +305,6 @@ export const createOtelObservabilityAdapter = async ({
             }
             jobSpan.setAttribute("queuert.chain.id", result.chainId);
             jobSpan.setAttribute("queuert.job.id", result.jobId);
-            if (result.originId) {
-              jobSpan.setAttribute("queuert.job.origin_id", result.originId);
-            }
           } else if (result.status === "deduplicated") {
             // Deduplication: span status stays UNSET (not an error), add attribute
             if (chainSpan) {
