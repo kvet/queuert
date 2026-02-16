@@ -2,6 +2,8 @@ import { TESTCONTAINER_RESOURCE_TYPES, extendWithPostgres } from "@queuert/testc
 import {
   blockerChainsTestSuite,
   chainsTestSuite,
+  deduplicationTestSuite,
+  deletionTestSuite,
   extendWithCommon,
   extendWithResourceLeakDetection,
   notifyResilienceTestSuite,
@@ -56,6 +58,14 @@ describe("Chains", () => {
 
 describe("Blocker Chains", () => {
   blockerChainsTestSuite({ it: postgresPostgresIt });
+});
+
+describe("Deduplication", () => {
+  deduplicationTestSuite({ it: postgresPostgresIt });
+});
+
+describe("Deletion", () => {
+  deletionTestSuite({ it: postgresPostgresIt });
 });
 
 describe("Wait Chain Completion", () => {

@@ -1,4 +1,5 @@
 import { type TestAPI, describe } from "vitest";
+import { BlockerReferenceError } from "../errors.js";
 import { sleep } from "../helpers/sleep.js";
 import { type StateAdapter, type StateJob } from "../state-adapter/state-adapter.js";
 
@@ -21,7 +22,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "test-job",
           input: { value: 1 },
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -30,11 +30,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       expect(validateId(job.id)).toBe(true);
     });
 
-    it("assigns chainId and rootChainId correctly for new jobs", async ({
-      stateAdapter,
-      validateId,
-      expect,
-    }) => {
+    it("assigns chainId correctly for new jobs", async ({ stateAdapter, validateId, expect }) => {
       const { job } = await stateAdapter.runInTransaction(async (txContext) =>
         stateAdapter.createJob({
           txContext,
@@ -42,23 +38,16 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "chain-test",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
 
       expect(job.chainId).toBe(job.id);
-      expect(job.rootChainId).toBe(job.id);
       expect(job.originId).toBeNull();
       expect(validateId(job.chainId)).toBe(true);
-      expect(validateId(job.rootChainId)).toBe(true);
     });
 
-    it("preserves provided chainId and rootChainId", async ({
-      stateAdapter,
-      validateId,
-      expect,
-    }) => {
+    it("preserves provided chainId", async ({ stateAdapter, validateId, expect }) => {
       const { job: rootJob } = await stateAdapter.runInTransaction(async (txContext) =>
         stateAdapter.createJob({
           txContext,
@@ -66,7 +55,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "root-job",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -78,17 +66,14 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: rootJob.chainId,
           chainTypeName: "root-job",
           input: null,
-          rootChainId: rootJob.rootChainId,
           originId: rootJob.id,
         }),
       );
 
       expect(childJob.chainId).toBe(rootJob.chainId);
-      expect(childJob.rootChainId).toBe(rootJob.rootChainId);
       expect(childJob.originId).toBe(rootJob.id);
       expect(validateId(childJob.id)).toBe(true);
       expect(validateId(childJob.chainId)).toBe(true);
-      expect(validateId(childJob.rootChainId)).toBe(true);
       expect(validateId(childJob.originId!)).toBe(true);
     });
 
@@ -102,7 +87,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
             chainId: undefined,
             chainTypeName: "test-job",
             input: { value: i },
-            rootChainId: undefined,
             originId: undefined,
           });
           results.push(job);
@@ -124,7 +108,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "test-job",
           input,
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -138,26 +121,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       expect(retrieved!.status).toBe("pending");
     });
 
-    it("stores and retrieves dates correctly", async ({ stateAdapter, expect }) => {
-      const { job } = await stateAdapter.runInTransaction(async (txContext) =>
-        stateAdapter.createJob({
-          txContext,
-          typeName: "date-test",
-          chainId: undefined,
-          chainTypeName: "date-test",
-          input: null,
-          rootChainId: undefined,
-          originId: undefined,
-        }),
-      );
-
-      expect(job.createdAt).toBeInstanceOf(Date);
-      expect(job.scheduledAt).toBeInstanceOf(Date);
-
-      const timeDiff = Math.abs(Date.now() - job.createdAt.getTime());
-      expect(timeDiff).toBeLessThan(5000);
-    });
-
     it("handles null values correctly", async ({ stateAdapter, expect }) => {
       const { job } = await stateAdapter.runInTransaction(async (txContext) =>
         stateAdapter.createJob({
@@ -166,7 +129,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "null-test",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -208,7 +170,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "json-test",
           input: complexInput,
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -225,7 +186,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "dedup-test",
           input: { value: 1 },
-          rootChainId: undefined,
           originId: undefined,
           deduplication: { key: "same-key" },
         }),
@@ -238,7 +198,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "dedup-test",
           input: { value: 2 },
-          rootChainId: undefined,
           originId: undefined,
           deduplication: { key: "same-key" },
         }),
@@ -254,7 +213,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "dedup-test",
           input: { value: 3 },
-          rootChainId: undefined,
           originId: undefined,
           deduplication: { key: "different-key" },
         }),
@@ -274,7 +232,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "scope-test",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
           deduplication: { key: "scope-key", scope: "incomplete" },
         }),
@@ -297,7 +254,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
             chainId: undefined,
             chainTypeName: "scope-test",
             input: null,
-            rootChainId: undefined,
             originId: undefined,
             deduplication: { key: "scope-key", scope: "incomplete" },
           }),
@@ -312,7 +268,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "scope-test-any",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
           deduplication: { key: "any-key", scope: "any" },
         }),
@@ -334,7 +289,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "scope-test-any",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
           deduplication: { key: "any-key", scope: "any" },
         }),
@@ -352,7 +306,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "schedule-test",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
           schedule: { afterMs: 5000 },
         }),
@@ -370,7 +323,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "schedule-test-at",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
           schedule: { at: futureDate },
         }),
@@ -388,7 +340,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "trace-test",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
           traceContext,
         }),
@@ -396,6 +347,25 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
       const retrieved = await stateAdapter.getJobById({ jobId: job.id });
       expect(retrieved!.traceContext).toEqual(traceContext);
+    });
+
+    it("stores and retrieves dates correctly", async ({ stateAdapter, expect }) => {
+      const { job } = await stateAdapter.runInTransaction(async (txContext) =>
+        stateAdapter.createJob({
+          txContext,
+          typeName: "date-test",
+          chainId: undefined,
+          chainTypeName: "date-test",
+          input: null,
+          originId: undefined,
+        }),
+      );
+
+      expect(job.createdAt).toBeInstanceOf(Date);
+      expect(job.scheduledAt).toBeInstanceOf(Date);
+
+      const timeDiff = Math.abs(Date.now() - job.createdAt.getTime());
+      expect(timeDiff).toBeLessThan(5000);
     });
   });
 
@@ -408,7 +378,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "isolation-test",
           input: { value: "original" },
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -422,7 +391,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
             chainId: undefined,
             chainTypeName: "rollback-test",
             input: { value: "should-rollback" },
-            rootChainId: undefined,
             originId: undefined,
           });
           rolledBackJobId = innerJob.id;
@@ -451,7 +419,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "chain-root",
           input: { step: 1 },
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -461,7 +428,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       expect(chain).toBeDefined();
       expect(chain![0].id).toBe(rootJob.id);
       expect(chain![0].chainId).toBe(rootJob.id);
-      expect(chain![0].rootChainId).toBe(rootJob.id);
     });
 
     it("returns [rootJob, lastJob] for multi-job chain", async ({ stateAdapter, expect }) => {
@@ -472,7 +438,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "chain-root",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -484,7 +449,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: rootJob.chainId,
           chainTypeName: "chain-root",
           input: null,
-          rootChainId: rootJob.rootChainId,
           originId: rootJob.id,
         }),
       );
@@ -509,7 +473,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "blocker",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -521,7 +484,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "main",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -532,8 +494,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
             txContext,
             jobId: mainJob.id,
             blockedByChainIds: [blockerJob.chainId],
-            rootChainId: mainJob.rootChainId,
-            originId: mainJob.id,
           }),
       );
 
@@ -552,7 +512,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "blocker",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -573,7 +532,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "main",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -584,59 +542,11 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
             txContext,
             jobId: mainJob.id,
             blockedByChainIds: [blockerJob.chainId],
-            rootChainId: mainJob.rootChainId,
-            originId: mainJob.id,
           }),
       );
 
       expect(updatedMain.status).toBe("pending");
       expect(incompleteBlockerChainIds).toHaveLength(0);
-    });
-
-    it("updates rootChainId and originId on blocker chain jobs", async ({
-      stateAdapter,
-      expect,
-    }) => {
-      const { job: blockerJob } = await stateAdapter.runInTransaction(async (txContext) =>
-        stateAdapter.createJob({
-          txContext,
-          typeName: "blocker",
-          chainId: undefined,
-          chainTypeName: "blocker",
-          input: null,
-          rootChainId: undefined,
-          originId: undefined,
-        }),
-      );
-
-      expect(blockerJob.rootChainId).toBe(blockerJob.id);
-      expect(blockerJob.originId).toBeNull();
-
-      const { job: mainJob } = await stateAdapter.runInTransaction(async (txContext) =>
-        stateAdapter.createJob({
-          txContext,
-          typeName: "main",
-          chainId: undefined,
-          chainTypeName: "main",
-          input: null,
-          rootChainId: undefined,
-          originId: undefined,
-        }),
-      );
-
-      await stateAdapter.runInTransaction(async (txContext) =>
-        stateAdapter.addJobBlockers({
-          txContext,
-          jobId: mainJob.id,
-          blockedByChainIds: [blockerJob.chainId],
-          rootChainId: mainJob.rootChainId,
-          originId: mainJob.id,
-        }),
-      );
-
-      const updatedBlocker = await stateAdapter.getJobById({ jobId: blockerJob.id });
-      expect(updatedBlocker!.rootChainId).toBe(mainJob.rootChainId);
-      expect(updatedBlocker!.originId).toBe(mainJob.id);
     });
   });
 
@@ -649,7 +559,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "blocker",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -661,7 +570,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "main",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -671,8 +579,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           jobId: mainJob.id,
           blockedByChainIds: [blockerJob.chainId],
-          rootChainId: mainJob.rootChainId,
-          originId: mainJob.id,
         }),
       );
 
@@ -708,7 +614,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "blocker",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -720,7 +625,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "blocker",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -732,7 +636,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "main",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -742,8 +645,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           jobId: mainJob.id,
           blockedByChainIds: [blockerA.chainId, blockerB.chainId],
-          rootChainId: mainJob.rootChainId,
-          originId: mainJob.id,
         }),
       );
 
@@ -780,7 +681,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "standalone",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -805,7 +705,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "blocker",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -817,7 +716,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "blocker",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -829,7 +727,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "main",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -839,8 +736,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           jobId: mainJob.id,
           blockedByChainIds: [blockerA.chainId, blockerB.chainId],
-          rootChainId: mainJob.rootChainId,
-          originId: mainJob.id,
         }),
       );
 
@@ -869,7 +764,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "blocker-root",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -890,7 +784,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: blockerRoot.chainId,
           chainTypeName: "blocker-root",
           input: null,
-          rootChainId: blockerRoot.rootChainId,
           originId: blockerRoot.id,
         }),
       );
@@ -902,7 +795,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "main",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -912,8 +804,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           jobId: mainJob.id,
           blockedByChainIds: [blockerRoot.chainId],
-          rootChainId: mainJob.rootChainId,
-          originId: mainJob.id,
         }),
       );
 
@@ -934,7 +824,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "no-blockers",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -953,7 +842,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "avail-test",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -970,7 +858,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "future-test",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
           schedule: { afterMs: 5000 },
         }),
@@ -1000,7 +887,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "acquire-test",
           input: { order: 1 },
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -1012,7 +898,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "acquire-test",
           input: { order: 2 },
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -1035,7 +920,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "hasmore-test",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -1047,7 +931,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "hasmore-test",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -1081,7 +964,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "future-acquire",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
           schedule: { afterMs: 60_000 },
         }),
@@ -1104,7 +986,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "lease-test",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -1138,7 +1019,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "re-lease-test",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -1178,7 +1058,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "resched-test",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -1225,7 +1104,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "resched-at-test",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -1258,7 +1136,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "complete-test",
           input: { value: 1 },
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -1301,7 +1178,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "workerless-test",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -1329,7 +1205,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "expire-test",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -1368,7 +1243,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "no-expire-test",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -1401,7 +1275,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "ignore-test",
           input: { order: "a" },
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -1413,7 +1286,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "ignore-test",
           input: { order: "b" },
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -1457,100 +1329,8 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
   });
 
-  describe("getExternalBlockers", () => {
-    it("returns external blocker relationships", async ({ stateAdapter, expect }) => {
-      // Chain X is a shared dependency
-      const { job: chainX } = await stateAdapter.runInTransaction(async (txContext) =>
-        stateAdapter.createJob({
-          txContext,
-          typeName: "shared-dep",
-          chainId: undefined,
-          chainTypeName: "shared-dep",
-          input: null,
-          rootChainId: undefined,
-          originId: undefined,
-        }),
-      );
-
-      // Chain Y depends on X — addJobBlockers moves X into Y's root
-      const { job: chainY } = await stateAdapter.runInTransaction(async (txContext) =>
-        stateAdapter.createJob({
-          txContext,
-          typeName: "main-y",
-          chainId: undefined,
-          chainTypeName: "main-y",
-          input: null,
-          rootChainId: undefined,
-          originId: undefined,
-        }),
-      );
-
-      await stateAdapter.runInTransaction(async (txContext) =>
-        stateAdapter.addJobBlockers({
-          txContext,
-          jobId: chainY.id,
-          blockedByChainIds: [chainX.chainId],
-          rootChainId: chainY.rootChainId,
-          originId: chainY.id,
-        }),
-      );
-
-      // Chain Z also depends on X — X's rootChainId already != chainId, no post-hoc update
-      const { job: chainZ } = await stateAdapter.runInTransaction(async (txContext) =>
-        stateAdapter.createJob({
-          txContext,
-          typeName: "main-z",
-          chainId: undefined,
-          chainTypeName: "main-z",
-          input: null,
-          rootChainId: undefined,
-          originId: undefined,
-        }),
-      );
-
-      await stateAdapter.runInTransaction(async (txContext) =>
-        stateAdapter.addJobBlockers({
-          txContext,
-          jobId: chainZ.id,
-          blockedByChainIds: [chainX.chainId],
-          rootChainId: chainZ.rootChainId,
-          originId: chainZ.id,
-        }),
-      );
-
-      // Query Y's root — X is inside Y's root, Z is external and blocked by X
-      const externals = await stateAdapter.getExternalBlockers({
-        rootChainIds: [chainY.rootChainId],
-      });
-
-      expect(externals).toHaveLength(1);
-      expect(externals[0].jobId).toBe(chainZ.id);
-      expect(externals[0].blockedRootChainId).toBe(chainZ.rootChainId);
-    });
-
-    it("returns empty array when no external blockers exist", async ({ stateAdapter, expect }) => {
-      const { job } = await stateAdapter.runInTransaction(async (txContext) =>
-        stateAdapter.createJob({
-          txContext,
-          typeName: "standalone",
-          chainId: undefined,
-          chainTypeName: "standalone",
-          input: null,
-          rootChainId: undefined,
-          originId: undefined,
-        }),
-      );
-
-      const externals = await stateAdapter.getExternalBlockers({
-        rootChainIds: [job.rootChainId],
-      });
-
-      expect(externals).toHaveLength(0);
-    });
-  });
-
-  describe("deleteJobsByRootChainIds", () => {
-    it("deletes all jobs in the given root chains", async ({ stateAdapter, expect }) => {
+  describe("deleteJobsByChainIds", () => {
+    it("deletes all jobs in the given chains", async ({ stateAdapter, expect }) => {
       const { job } = await stateAdapter.runInTransaction(async (txContext) =>
         stateAdapter.createJob({
           txContext,
@@ -1558,15 +1338,14 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "delete-test",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
 
       const deleted = await stateAdapter.runInTransaction(async (txContext) =>
-        stateAdapter.deleteJobsByRootChainIds({
+        stateAdapter.deleteJobsByChainIds({
           txContext,
-          rootChainIds: [job.rootChainId],
+          chainIds: [job.chainId],
         }),
       );
 
@@ -1575,7 +1354,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       expect(await stateAdapter.getJobById({ jobId: job.id })).toBeUndefined();
     });
 
-    it("does not delete jobs from other root chains", async ({ stateAdapter, expect }) => {
+    it("does not delete jobs from other chains", async ({ stateAdapter, expect }) => {
       const { job: jobA } = await stateAdapter.runInTransaction(async (txContext) =>
         stateAdapter.createJob({
           txContext,
@@ -1583,7 +1362,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "chain-a",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -1595,20 +1373,73 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "chain-b",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
 
       await stateAdapter.runInTransaction(async (txContext) =>
-        stateAdapter.deleteJobsByRootChainIds({
+        stateAdapter.deleteJobsByChainIds({
           txContext,
-          rootChainIds: [jobA.rootChainId],
+          chainIds: [jobA.chainId],
         }),
       );
 
       expect(await stateAdapter.getJobById({ jobId: jobA.id })).toBeUndefined();
       expect(await stateAdapter.getJobById({ jobId: jobB.id })).toBeDefined();
+    });
+
+    it("throws BlockerReferenceError when chain is referenced as blocker", async ({
+      stateAdapter,
+      expect,
+    }) => {
+      const { job: blockerJob } = await stateAdapter.runInTransaction(async (txContext) =>
+        stateAdapter.createJob({
+          txContext,
+          typeName: "blocker",
+          chainId: undefined,
+          chainTypeName: "blocker",
+          input: null,
+          originId: undefined,
+        }),
+      );
+
+      const { job: mainJob } = await stateAdapter.runInTransaction(async (txContext) =>
+        stateAdapter.createJob({
+          txContext,
+          typeName: "main",
+          chainId: undefined,
+          chainTypeName: "main",
+          input: null,
+          originId: undefined,
+        }),
+      );
+
+      await stateAdapter.runInTransaction(async (txContext) =>
+        stateAdapter.addJobBlockers({
+          txContext,
+          jobId: mainJob.id,
+          blockedByChainIds: [blockerJob.chainId],
+        }),
+      );
+
+      await expect(
+        stateAdapter.runInTransaction(async (txContext) =>
+          stateAdapter.deleteJobsByChainIds({
+            txContext,
+            chainIds: [blockerJob.chainId],
+          }),
+        ),
+      ).rejects.toThrow(BlockerReferenceError);
+
+      // Deleting both together should succeed
+      const deleted = await stateAdapter.runInTransaction(async (txContext) =>
+        stateAdapter.deleteJobsByChainIds({
+          txContext,
+          chainIds: [mainJob.chainId, blockerJob.chainId],
+        }),
+      );
+
+      expect(deleted).toHaveLength(2);
     });
   });
 
@@ -1621,7 +1452,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "update-test",
           input: { value: 1 },
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -1659,7 +1489,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: undefined,
           chainTypeName: "chain-current",
           input: null,
-          rootChainId: undefined,
           originId: undefined,
         }),
       );
@@ -1671,7 +1500,6 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainId: rootJob.chainId,
           chainTypeName: "chain-current",
           input: null,
-          rootChainId: rootJob.rootChainId,
           originId: rootJob.id,
         }),
       );

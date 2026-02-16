@@ -1,6 +1,8 @@
 import {
   blockerChainsTestSuite,
   chainsTestSuite,
+  deduplicationTestSuite,
+  deletionTestSuite,
   extendWithCommon,
   extendWithNotifyNoop,
   extendWithResourceLeakDetection,
@@ -50,6 +52,14 @@ describe("Chains", () => {
 
 describe("Blocker Chains", () => {
   blockerChainsTestSuite({ it: sqliteNoopIt });
+});
+
+describe("Deduplication", () => {
+  deduplicationTestSuite({ it: sqliteNoopIt });
+});
+
+describe("Deletion", () => {
+  deletionTestSuite({ it: sqliteNoopIt });
 });
 
 describe("Wait Chain Completion", () => {

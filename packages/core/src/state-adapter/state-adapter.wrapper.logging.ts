@@ -41,11 +41,7 @@ export const wrapStateAdapterWithLogging = <
     rescheduleJob: wrap("rescheduleJob", stateAdapter.rescheduleJob),
     completeJob: wrap("completeJob", stateAdapter.completeJob),
     removeExpiredJobLease: wrap("removeExpiredJobLease", stateAdapter.removeExpiredJobLease),
-    getExternalBlockers: wrap("getExternalBlockers", stateAdapter.getExternalBlockers),
-    deleteJobsByRootChainIds: wrap(
-      "deleteJobsByRootChainIds",
-      stateAdapter.deleteJobsByRootChainIds,
-    ),
+    deleteJobsByChainIds: wrap("deleteJobsByChainIds", stateAdapter.deleteJobsByChainIds),
     getJobForUpdate: wrap("getJobForUpdate", stateAdapter.getJobForUpdate),
     getCurrentJobForUpdate: wrap("getCurrentJobForUpdate", stateAdapter.getCurrentJobForUpdate),
   };

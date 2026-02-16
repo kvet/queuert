@@ -8,7 +8,6 @@ export const jobColumns = [
   "chain_type_name",
   "input",
   "output",
-  "root_chain_id",
   "origin_id",
   "status",
   "created_at",
@@ -38,7 +37,6 @@ export type DbJob = {
   input: string | null;
   output: string | null;
 
-  root_chain_id: string;
   origin_id: string | null;
 
   status: "blocked" | "pending" | "running" | "completed";
@@ -75,13 +73,10 @@ CREATE TABLE IF NOT EXISTS {{table_prefix}}job (
   type_name                     TEXT NOT NULL,
   chain_id                      {{id_type}} REFERENCES {{table_prefix}}job(id) ON DELETE CASCADE,
   chain_type_name               TEXT NOT NULL,
+  origin_id                     {{id_type}} REFERENCES {{table_prefix}}job(id) ON DELETE CASCADE,
 
   input                         TEXT,
   output                        TEXT,
-
-  -- lineage / tracing
-  root_chain_id                 {{id_type}} REFERENCES {{table_prefix}}job(id) ON DELETE CASCADE,
-  origin_id                     {{id_type}} REFERENCES {{table_prefix}}job(id) ON DELETE CASCADE,
 
   -- state
   status                        TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('blocked','pending','running','completed')),
@@ -113,7 +108,8 @@ CREATE TABLE IF NOT EXISTS {{table_prefix}}job (
           /* sql */ `
 CREATE TABLE IF NOT EXISTS {{table_prefix}}job_blocker (
   job_id                        {{id_type}} NOT NULL REFERENCES {{table_prefix}}job(id) ON DELETE CASCADE,
-  blocked_by_chain_id           {{id_type}} NOT NULL REFERENCES {{table_prefix}}job(id) ON DELETE CASCADE,
+  -- NOTE: requires PRAGMA foreign_keys = ON (SQLite default is OFF)
+  blocked_by_chain_id           {{id_type}} NOT NULL REFERENCES {{table_prefix}}job(id),
   "index"                       INTEGER NOT NULL,
   PRIMARY KEY (job_id, blocked_by_chain_id)
 )`,
@@ -251,8 +247,6 @@ export const insertJobSql: TypedSql<
     NamedParameter<"id_for_chain", string>,
     NamedParameter<"chain_type_name", string>,
     NamedParameter<"input", string | null>,
-    NamedParameter<"root_chain_id", string | null>,
-    NamedParameter<"id_for_root", string>,
     NamedParameter<"origin_id", string | null>,
     NamedParameter<"deduplication_key", string | null>,
     NamedParameter<"scheduled_at", string | null>,
@@ -263,8 +257,8 @@ export const insertJobSql: TypedSql<
   [DbJob & { deduplicated: number }]
 > = sql(
   /* sql */ `
-INSERT INTO {{table_prefix}}job (id, type_name, chain_id, chain_type_name, input, root_chain_id, origin_id, deduplication_key, scheduled_at, trace_context)
-VALUES (?, ?, COALESCE(?, ?), ?, ?, COALESCE(?, ?), ?, ?,
+INSERT INTO {{table_prefix}}job (id, type_name, chain_id, chain_type_name, input, origin_id, deduplication_key, scheduled_at, trace_context)
+VALUES (?, ?, COALESCE(?, ?), ?, ?, ?, ?,
   COALESCE(?,
     CASE WHEN ? IS NOT NULL THEN datetime('now', 'subsec', '+' || (? / 1000.0) || ' seconds') ELSE NULL END,
     datetime('now', 'subsec')),
@@ -282,25 +276,6 @@ export const insertJobBlockersSql: TypedSql<
 INSERT INTO {{table_prefix}}job_blocker (job_id, blocked_by_chain_id, "index")
 SELECT ?, je.value, je.key
 FROM json_each(?) AS je
-`,
-  false,
-);
-
-export const updateBlockerChainsSql: TypedSql<
-  readonly [
-    NamedParameter<"root_chain_id", string>,
-    NamedParameter<"origin_id", string>,
-    NamedParameter<"blocked_by_chain_ids_json", string>,
-  ],
-  void
-> = sql(
-  /* sql */ `
-UPDATE {{table_prefix}}job
-SET
-  root_chain_id = CASE WHEN root_chain_id = chain_id THEN ? ELSE root_chain_id END,
-  origin_id = CASE WHEN id = chain_id AND origin_id IS NULL THEN ? ELSE origin_id END
-WHERE chain_id IN (SELECT value FROM json_each(?))
-  AND (root_chain_id = chain_id OR (id = chain_id AND origin_id IS NULL))
 `,
   false,
 );
@@ -591,32 +566,40 @@ RETURNING *
   true,
 );
 
-export const getExternalBlockersSql: TypedSql<
-  readonly [
-    NamedParameter<"root_chain_ids_json_1", string>,
-    NamedParameter<"root_chain_ids_json_2", string>,
-  ],
-  { job_id: string; blocked_root_chain_id: string }[]
+export const checkExternalBlockerRefsSql: TypedSql<
+  readonly [NamedParameter<"chain_ids_json_1", string>, NamedParameter<"chain_ids_json_2", string>],
+  { job_id: string; blocked_by_chain_id: string }[]
 > = sql(
   /* sql */ `
-SELECT DISTINCT jb.job_id, j.root_chain_id AS blocked_root_chain_id
+SELECT jb.job_id, jb.blocked_by_chain_id
 FROM {{table_prefix}}job_blocker jb
 JOIN {{table_prefix}}job j ON j.id = jb.job_id
-WHERE jb.blocked_by_chain_id IN (
-  SELECT id FROM {{table_prefix}}job WHERE root_chain_id IN (SELECT value FROM json_each(?))
-)
-AND j.root_chain_id NOT IN (SELECT value FROM json_each(?))
+WHERE jb.blocked_by_chain_id IN (SELECT value FROM json_each(?))
+  AND j.chain_id NOT IN (SELECT value FROM json_each(?))
 `,
   true,
 );
 
-export const deleteJobsByRootChainIdsSql: TypedSql<
-  readonly [NamedParameter<"root_chain_ids_json", string>],
+export const deleteBlockersByChainIdsSql: TypedSql<
+  readonly [NamedParameter<"chain_ids_json", string>],
+  []
+> = sql(
+  /* sql */ `
+DELETE FROM {{table_prefix}}job_blocker
+WHERE job_id IN (
+  SELECT id FROM {{table_prefix}}job WHERE chain_id IN (SELECT value FROM json_each(?))
+)
+`,
+  false,
+);
+
+export const deleteJobsByChainIdsSql: TypedSql<
+  readonly [NamedParameter<"chain_ids_json", string>],
   DbJob[]
 > = sql(
   /* sql */ `
 DELETE FROM {{table_prefix}}job
-WHERE root_chain_id IN (SELECT value FROM json_each(?))
+WHERE chain_id IN (SELECT value FROM json_each(?))
 RETURNING *
 `,
   true,

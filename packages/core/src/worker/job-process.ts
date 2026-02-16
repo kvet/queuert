@@ -473,7 +473,6 @@ export const runJobProcess = async ({
               chainContext: {
                 chainId: job.chainId,
                 chainTypeName: job.chainTypeName,
-                rootChainId: job.rootChainId,
                 originId: job.id,
                 originTraceContext: attemptSpanHandle?.getTraceContext() ?? job.traceContext,
               },

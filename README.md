@@ -22,6 +22,7 @@ Run your application logic as a series of background jobs that are started along
 - [Deferred Start](#deferred-start)
 - [Deduplication](#deduplication)
 - [Workerless Completion](#workerless-completion)
+- [Chain Deletion](#chain-deletion)
 - [Complete Type Safety](#complete-type-safety)
 - [Runtime Validation](#runtime-validation)
 - [Timeouts](#timeouts)
@@ -736,6 +737,25 @@ await queuert.completeJobChain({
 This pattern lets you interweave external actions with your job chains — waiting for user input, third-party callbacks, or manual approval steps.
 
 See [examples/showcase-workerless](./examples/showcase-workerless) for a complete working example demonstrating approval workflows and deferred start with early completion.
+
+## Chain Deletion
+
+Job chains can be deleted using `deleteJobChains`. All jobs in the chain (entry job and continuations) are removed together.
+
+```ts
+await client.deleteJobChains({
+  chainIds: [chain.id],
+});
+```
+
+If a chain is referenced as a blocker by another chain, deletion is rejected unless both chains are deleted together:
+
+```ts
+await client.deleteJobChains({ chainIds: [blockerChain.id] }); // throws
+await client.deleteJobChains({ chainIds: [mainChain.id, blockerChain.id] }); // ok
+```
+
+If a worker is currently processing a job in a deleted chain, the worker's `signal` is aborted with reason `"not_found"`, allowing graceful cleanup.
 
 ## Complete Type Safety
 

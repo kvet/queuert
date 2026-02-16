@@ -21,7 +21,6 @@ const mapStateJobToJobBasicData = (job: StateJob): JobBasicData => ({
   originId: job.originId,
   chainId: job.chainId,
   chainTypeName: job.chainTypeName,
-  rootChainId: job.rootChainId,
 });
 
 const mapStateJobToJobProcessingData = (job: StateJob): JobProcessingData => ({
@@ -34,14 +33,12 @@ const mapStateJobToJobChainData = (job: StateJob): JobChainData => ({
   id: job.chainId,
   typeName: job.chainTypeName,
   originId: job.originId,
-  rootChainId: job.rootChainId,
 });
 
 const mapJobChainToData = (chain: JobChain<any, any, any, any>): JobChainData => ({
   id: chain.id,
   typeName: chain.typeName,
   originId: chain.originId,
-  rootChainId: chain.rootChainId,
 });
 
 const mapJobToJobBasicData = (job: Job<any, any, any, any, any[]>): JobBasicData => ({
@@ -50,7 +47,6 @@ const mapJobToJobBasicData = (job: Job<any, any, any, any, any[]>): JobBasicData
   originId: job.originId,
   chainId: job.chainId,
   chainTypeName: job.chainTypeName,
-  rootChainId: job.rootChainId,
 });
 
 /**

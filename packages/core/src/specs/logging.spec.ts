@@ -108,13 +108,11 @@ describe("Logging", () => {
     const jobChainArgs = {
       typeName: "test",
       id: jobChain.id,
-      rootChainId: jobChain.id,
       originId: null,
     };
     const jobArgs = {
       typeName: "test",
       id: jobChain.id,
-      rootChainId: jobChain.id,
       originId: null,
       chainId: jobChain.id,
       chainTypeName: "test",
@@ -341,7 +339,6 @@ describe("Logging", () => {
           typeName: "linear_next",
           chainId: jobChain.id,
           chainTypeName: "linear",
-          rootChainId: jobChain.id,
           originId: originIds[0],
         },
       },
@@ -354,7 +351,6 @@ describe("Logging", () => {
           typeName: "linear_next_next",
           chainId: jobChain.id,
           chainTypeName: "linear",
-          rootChainId: jobChain.id,
           originId: originIds[1],
         },
       },
@@ -400,7 +396,6 @@ describe("Logging", () => {
       log,
       registry,
     });
-    let mainChainId: string;
     let blockerChainId: string;
 
     const worker = await createInProcessWorker({
@@ -453,7 +448,6 @@ describe("Logging", () => {
           blockers: [dependencyJobChain],
         });
 
-        mainChainId = jobChain.id;
         return jobChain;
       }),
     );
@@ -467,7 +461,6 @@ describe("Logging", () => {
         type: "job_chain_created",
         data: {
           typeName: "blocker",
-          rootChainId: blockerChainId!,
           originId: null,
         },
       },
@@ -482,7 +475,6 @@ describe("Logging", () => {
               id: blockerChainId!,
               typeName: "blocker",
               originId: null,
-              rootChainId: blockerChainId!,
             },
           ],
         },
@@ -496,7 +488,6 @@ describe("Logging", () => {
               id: blockerChainId!,
               typeName: "blocker",
               originId: null,
-              rootChainId: blockerChainId!,
             },
           ],
         },
@@ -517,8 +508,7 @@ describe("Logging", () => {
           unblockedByChain: {
             id: blockerChainId!,
             typeName: "blocker",
-            originId: mainChainId!,
-            rootChainId: mainChainId!,
+            originId: null,
           },
         },
       },

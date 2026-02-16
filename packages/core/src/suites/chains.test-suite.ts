@@ -60,7 +60,6 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             expect(job.id).toEqual(jobChain.id);
             expect(job.chainId).toEqual(jobChain.id);
             expect(job.originId).toBeNull();
-            expect(job.rootChainId).toEqual(jobChain.id);
             originIds.push(job.id);
 
             return complete(async ({ continueWith }) => {
@@ -86,7 +85,6 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             expect(job.id).not.toEqual(jobChain.id);
             expect(job.chainId).toEqual(jobChain.id);
             expect(job.originId).toEqual(originIds[0]);
-            expect(job.rootChainId).toEqual(jobChain.id);
             originIds.push(job.id);
 
             return complete(async ({ continueWith }) => {
@@ -109,7 +107,6 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             expect(job.id).not.toEqual(jobChain.id);
             expect(job.chainId).toEqual(jobChain.id);
             expect(job.originId).toEqual(originIds[1]);
-            expect(job.rootChainId).toEqual(jobChain.id);
 
             const result = await complete(async () => ({
               result: job.input.valueNextNext,
@@ -542,7 +539,6 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       registry,
     });
     let independentChainId: string | null = null;
-    let independentChainRootChainId: string | null = null;
     let independentChainOriginId: string | null = null;
 
     const worker = await createInProcessWorker({
@@ -576,7 +572,6 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         independent: {
           attemptHandler: async ({ job, complete }) => {
             // Capture the chain context for verification
-            independentChainRootChainId = job.rootChainId;
             independentChainOriginId = job.originId;
 
             return complete(async () => ({
@@ -616,13 +611,8 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       expect(completedParent.output.childChainId).toBe(independentChainId);
 
       // The independent chain should NOT have inherited context from parent
-      // rootChainId should be self-referential (its own id)
-      expect(independentChainRootChainId).toBe(independentChainId);
       // originId should be null (not linked to parent job)
       expect(independentChainOriginId).toBeNull();
-
-      // Verify they are truly independent - parent's rootChainId is different
-      expect(independentChainRootChainId).not.toBe(parentChain.id);
     });
   });
 

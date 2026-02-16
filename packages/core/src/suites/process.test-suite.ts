@@ -361,7 +361,6 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
             expect(job.id).toBeDefined();
             expect(job.chainId).toEqual(job.id);
             expect(job.originId).toBeNull();
-            expect(job.rootChainId).toEqual(job.id);
 
             const result = await prepare({ mode: "staged" }, (txContext) => {
               expectTypeOf(txContext).toEqualTypeOf<{ $test: true }>();

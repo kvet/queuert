@@ -11,10 +11,10 @@ import {
   type JobOf,
 } from "./entities/job-type.js";
 import { type ScheduleOptions } from "./entities/schedule.js";
+import { helper } from "./helper.js";
 import { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 import { type Log } from "./observability-adapter/log.js";
 import { type ObservabilityAdapter } from "./observability-adapter/observability-adapter.js";
-import { helper } from "./helper.js";
 import {
   type BaseTxContext,
   type DeduplicationOptions,
@@ -29,12 +29,12 @@ import {
   type JobChain,
   mapStateJobPairToJobChain,
 } from "./entities/job-chain.js";
-import { JobAlreadyCompletedError, JobNotFoundError, WaitChainTimeoutError } from "./errors.js";
-import { raceWithSleep } from "./helpers/sleep.js";
 import { type Job } from "./entities/job.js";
+import { JobAlreadyCompletedError, JobNotFoundError, WaitChainTimeoutError } from "./errors.js";
 import { notifyJobOwnershipLost } from "./helpers/notify-context.js";
-import { type CompleteCallbackOptions } from "./worker/job-process.js";
+import { raceWithSleep } from "./helpers/sleep.js";
 import { setupHelpers } from "./setup-helpers.js";
+import { type CompleteCallbackOptions } from "./worker/job-process.js";
 
 export type JobChainCompleteOptions<
   TStateAdapter extends StateAdapter<any, any>,
@@ -187,54 +187,14 @@ export const createClient = async <
     },
     deleteJobChains: async (
       options: {
-        rootChainIds: TJobId[];
+        chainIds: TJobId[];
       } & GetStateAdapterTxContext<TStateAdapter>,
     ): Promise<void> => {
-      const { rootChainIds, ...txContext } = options;
-      const chainJobs = await Promise.all(
-        rootChainIds.map(async (chainId: TJobId) =>
-          stateAdapter.getJobById({
-            txContext,
-            jobId: chainId,
-          }),
-        ),
-      );
+      const { chainIds, ...txContext } = options;
 
-      for (let i = 0; i < rootChainIds.length; i++) {
-        const chainJob = chainJobs[i];
-        const chainId = rootChainIds[i];
-
-        if (!chainJob) {
-          throw new JobNotFoundError(`Job chain with id ${chainId} not found`);
-        }
-
-        if (chainJob.rootChainId !== chainJob.id) {
-          // TODO: properly typed error
-          throw new Error(
-            `Cannot delete job chain ${chainId}: must delete from the root chain (rootChainId: ${chainJob.rootChainId})`,
-          );
-        }
-      }
-
-      const externalBlockers = await stateAdapter.getExternalBlockers({
+      await stateAdapter.deleteJobsByChainIds({
         txContext,
-        rootChainIds,
-      });
-
-      if (externalBlockers.length > 0) {
-        const uniqueBlockedRootIds = [
-          ...new Set(externalBlockers.map((b) => b.blockedRootChainId)),
-        ];
-        // TODO: properly typed error
-        throw new Error(
-          `Cannot delete job chains: external job chains depend on them. ` +
-            `Include the following root chains in the deletion: ${uniqueBlockedRootIds.join(", ")}`,
-        );
-      }
-
-      await stateAdapter.deleteJobsByRootChainIds({
-        txContext,
-        rootChainIds,
+        chainIds,
       });
     },
     // TODO: validation
@@ -302,7 +262,6 @@ export const createClient = async <
               chainContext: {
                 chainId: job.chainId,
                 chainTypeName: job.chainTypeName,
-                rootChainId: job.rootChainId,
                 originId: job.id,
                 originTraceContext: job.traceContext,
               },

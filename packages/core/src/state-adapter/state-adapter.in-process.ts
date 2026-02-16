@@ -1,3 +1,4 @@
+import { type BlockerReference, BlockerReferenceError } from "../errors.js";
 import { createAsyncLock } from "../helpers/async-lock.js";
 import { type DeduplicationOptions, type StateAdapter, type StateJob } from "./state-adapter.js";
 
@@ -108,7 +109,6 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       typeName,
       chainTypeName,
       input,
-      rootChainId,
       chainId,
       originId,
       deduplication,
@@ -138,7 +138,6 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
         chainTypeName,
         input,
         output: null,
-        rootChainId: rootChainId ?? id,
         chainId: chainId ?? id,
         originId: originId ?? null,
         status: "pending",
@@ -159,27 +158,9 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       return { job, deduplicated: false };
     },
 
-    addJobBlockers: async ({ jobId, blockedByChainIds, rootChainId, originId }) => {
+    addJobBlockers: async ({ jobId, blockedByChainIds }) => {
       const job = store.jobs.get(jobId);
       if (!job) throw new Error("Job not found");
-
-      const blockerChainIdSet = new Set(blockedByChainIds);
-
-      // Post-hoc update: set rootChainId/originId on blocker chain jobs
-      for (const existingJob of store.jobs.values()) {
-        if (
-          blockerChainIdSet.has(existingJob.chainId) &&
-          existingJob.rootChainId === existingJob.chainId
-        ) {
-          store.jobs.set(existingJob.id, { ...existingJob, rootChainId });
-        }
-      }
-      for (const blockerChainId of blockedByChainIds) {
-        const starterJob = store.jobs.get(blockerChainId);
-        if (starterJob && starterJob.originId === null) {
-          store.jobs.set(blockerChainId, { ...starterJob, originId });
-        }
-      }
 
       const blockerMap = store.jobBlockers.get(jobId) ?? new Map<string, number>();
       blockedByChainIds.forEach((blockerChainId, index) => {
@@ -386,39 +367,32 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       return updatedJob;
     },
 
-    getExternalBlockers: async ({ rootChainIds }) => {
-      const result: { jobId: string; blockedRootChainId: string }[] = [];
-      const rootChainIdSet = new Set(rootChainIds);
+    deleteJobsByChainIds: async ({ chainIds }) => {
+      const chainIdSet = new Set(chainIds);
 
-      const chainIdsInRoots = new Set<string>();
-      for (const job of store.jobs.values()) {
-        if (rootChainIdSet.has(job.rootChainId)) {
-          chainIdsInRoots.add(job.chainId);
-        }
-      }
-
+      const refs: BlockerReference[] = [];
       for (const [jobId, blockerMap] of store.jobBlockers) {
         const job = store.jobs.get(jobId);
         if (!job) continue;
-        if (rootChainIdSet.has(job.rootChainId)) continue;
+        if (chainIdSet.has(job.chainId)) continue;
 
         for (const blockerChainId of blockerMap.keys()) {
-          if (chainIdsInRoots.has(blockerChainId)) {
-            result.push({ jobId, blockedRootChainId: job.rootChainId });
-            break;
+          if (chainIdSet.has(blockerChainId)) {
+            refs.push({ chainId: blockerChainId, referencedByJobId: jobId });
           }
         }
       }
+      if (refs.length > 0) {
+        throw new BlockerReferenceError(
+          `Cannot delete chains: ${refs.map((r) => r.chainId).join(", ")} referenced as blockers`,
+          refs,
+        );
+      }
 
-      return result;
-    },
-
-    deleteJobsByRootChainIds: async ({ rootChainIds }) => {
       const deletedJobs: StateJob[] = [];
-      const rootChainIdSet = new Set(rootChainIds);
 
       for (const [jobId, job] of store.jobs) {
-        if (rootChainIdSet.has(job.rootChainId)) {
+        if (chainIdSet.has(job.chainId)) {
           deletedJobs.push(job);
           store.jobs.delete(jobId);
           store.jobBlockers.delete(jobId);
@@ -427,7 +401,7 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
 
       for (const blockerMap of store.jobBlockers.values()) {
         for (const blockerChainId of blockerMap.keys()) {
-          if (!store.jobs.has(blockerChainId)) {
+          if (chainIdSet.has(blockerChainId)) {
             blockerMap.delete(blockerChainId);
           }
         }

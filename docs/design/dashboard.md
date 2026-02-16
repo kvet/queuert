@@ -126,6 +126,7 @@ Cursor-based pagination. The cursor is opaque to callers — adapter implementat
 ### Placement
 
 These methods are added directly to the `StateAdapter` interface. They follow the same patterns as existing methods:
+
 - Optional `txContext` parameter
 - O(1) database round-trips (single query per call)
 - Return plain `StateJob` types

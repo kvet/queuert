@@ -39,9 +39,8 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       registry,
     });
-    let mainChainId: string;
     let blockerChainId: string;
-    let originId: string;
+    let originId: string | null = null;
 
     const worker = await createInProcessWorker({
       stateAdapter,
@@ -54,7 +53,6 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         blocker: {
           attemptHandler: async ({ job, complete }) => {
             expect(job.chainId).toEqual(blockerChainId);
-            expect(job.rootChainId).toEqual(mainChainId);
             expect(job.originId).toEqual(originId);
             originId = job.id;
 
@@ -72,7 +70,6 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           attemptHandler: async ({
             job: {
               blockers: [blocker],
-              id,
               input,
             },
             complete,
@@ -82,7 +79,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
             }>();
 
             expectTypeOf<(typeof blocker)["originId"]>().toEqualTypeOf<string | null>();
-            expect(blocker.originId).toEqual(id);
+            expect(blocker.originId).toBeNull();
 
             return complete(async () => ({
               finalResult: (blocker.output.done ? 1 : 0) + (input.start ? 1 : 0),
@@ -111,9 +108,6 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           input: { start: true },
           blockers: [dependencyJobChain],
         });
-
-        mainChainId = jobChain.id;
-        originId = jobChain.id;
 
         return jobChain;
       }),
@@ -174,8 +168,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         main: {
           attemptHandler: async ({ job, complete }) => {
             const [blocker] = job.blockers;
-            // Blocker originId set by post-hoc update to main job's id
-            expect(blocker.originId).toEqual(job.id);
+            expect(blocker.originId).toBeNull();
 
             return complete(async () => ({
               finalResult: blocker.output.result,
@@ -268,8 +261,6 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
             return complete(async () => {
               // Independent chains should NOT inherit originId from parent
               expect(job.originId).toBeNull();
-              // Independent chains should have self-referential rootChainId
-              expect(job.rootChainId).toEqual(job.id);
               return null;
             });
           },
@@ -554,9 +545,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       registry,
     });
-    let blockerRootChainId: string;
     let blockerOriginId: string | null;
-    let secondJobId: string;
 
     const worker = await createInProcessWorker({
       stateAdapter,
@@ -568,7 +557,6 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       processors: {
         blocker: {
           attemptHandler: async ({ job, prepare, complete }) => {
-            blockerRootChainId = job.rootChainId;
             blockerOriginId = job.originId;
             await prepare({ mode: "atomic" });
             return complete(async () => ({ result: job.input.value * 10 }));
@@ -588,7 +576,6 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
                 input: { fromFirst: job.input.id },
                 blockers: [blockerChain],
               });
-              secondJobId = continuedJob.id;
               return continuedJob;
             });
           },
@@ -622,11 +609,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       const succeededJobChain = await client.waitForJobChainCompletion(jobChain, completionOptions);
 
       expect(succeededJobChain.output).toEqual({ finalResult: 50 });
-
-      // Blocker should have the second job as originId (created in continueWith context)
-      // and the first job's rootChainId (since continueWith runs in first job's chain)
-      expect(blockerOriginId).toEqual(secondJobId);
-      expect(blockerRootChainId).toEqual(jobChain.id);
+      expect(blockerOriginId).toBeNull();
     });
   });
 };

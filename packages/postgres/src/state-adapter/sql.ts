@@ -10,7 +10,6 @@ export type DbJob = {
   input: unknown;
   output: unknown;
 
-  root_chain_id: string;
   origin_id: string | null;
 
   status: "blocked" | "pending" | "running" | "completed";
@@ -59,13 +58,10 @@ CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job (
   type_name                     text NOT NULL,
   chain_id                      {{id_type}} REFERENCES {{schema}}.{{table_prefix}}job(id) ON DELETE CASCADE,
   chain_type_name               text NOT NULL,
+  origin_id                     {{id_type}} REFERENCES {{schema}}.{{table_prefix}}job(id) ON DELETE CASCADE,
 
   input                         jsonb,
   output                        jsonb,
-
-  -- lineage / tracing
-  root_chain_id                 {{id_type}} REFERENCES {{schema}}.{{table_prefix}}job(id) ON DELETE CASCADE,
-  origin_id                     {{id_type}} REFERENCES {{schema}}.{{table_prefix}}job(id) ON DELETE CASCADE,
 
   -- state
   status                        {{schema}}.{{table_prefix}}job_status NOT NULL DEFAULT 'pending',
@@ -97,7 +93,7 @@ CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job (
           /* sql */ `
 CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job_blocker (
   job_id                        {{id_type}} NOT NULL REFERENCES {{schema}}.{{table_prefix}}job(id) ON DELETE CASCADE,
-  blocked_by_chain_id           {{id_type}} NOT NULL REFERENCES {{schema}}.{{table_prefix}}job(id) ON DELETE CASCADE,
+  blocked_by_chain_id           {{id_type}} NOT NULL REFERENCES {{schema}}.{{table_prefix}}job(id),
   index                         integer NOT NULL,
   PRIMARY KEY (job_id, blocked_by_chain_id)
 )`,
@@ -190,7 +186,6 @@ export const createJobSql: TypedSql<
     NamedParameter<"chain_id", string | undefined>,
     NamedParameter<"chain_type_name", string>,
     NamedParameter<"input", unknown>,
-    NamedParameter<"root_chain_id", string | undefined>,
     NamedParameter<"origin_id", string | undefined>,
     NamedParameter<"deduplication_key", string | null | undefined>,
     NamedParameter<"deduplication_scope", DeduplicationScope | null | undefined>,
@@ -206,35 +201,35 @@ WITH existing_continuation AS (
   SELECT *, TRUE AS deduplicated
   FROM {{schema}}.{{table_prefix}}job
   WHERE $2::{{id_type}} IS NOT NULL
-    AND $6::{{id_type}} IS NOT NULL
+    AND $5::{{id_type}} IS NOT NULL
     AND chain_id = $2::{{id_type}}
-    AND origin_id = $6::{{id_type}}
+    AND origin_id = $5::{{id_type}}
   LIMIT 1
 ),
 existing_deduplicated AS (
   SELECT j.*, TRUE AS deduplicated
   FROM {{schema}}.{{table_prefix}}job j
-  WHERE $7::text IS NOT NULL
-    AND j.deduplication_key = $7
+  WHERE $6::text IS NOT NULL
+    AND j.deduplication_key = $6
     AND j.id = j.chain_id
     AND (
-      $8::text IS NULL
-      OR ($8::text = 'incomplete' AND j.status != 'completed')
-      OR ($8::text = 'any')
+      $7::text IS NULL
+      OR ($7::text = 'incomplete' AND j.status != 'completed')
+      OR ($7::text = 'any')
     )
     AND (
-      $9::bigint IS NULL
-      OR j.created_at >= now() - ($9::bigint || ' milliseconds')::interval
+      $8::bigint IS NULL
+      OR j.created_at >= now() - ($8::bigint || ' milliseconds')::interval
     )
   ORDER BY j.created_at DESC
   LIMIT 1
 ),
 new_id AS (SELECT {{id_default}} AS id),
 inserted_job AS (
-  INSERT INTO {{schema}}.{{table_prefix}}job (id, type_name, chain_id, chain_type_name, input, root_chain_id, origin_id, deduplication_key, scheduled_at, trace_context)
-  SELECT id, $1, COALESCE($2, id), $3, $4, COALESCE($5, id), $6, $7,
-    COALESCE($10::timestamptz, now() + ($11::bigint || ' milliseconds')::interval, now()),
-    $12
+  INSERT INTO {{schema}}.{{table_prefix}}job (id, type_name, chain_id, chain_type_name, input, origin_id, deduplication_key, scheduled_at, trace_context)
+  SELECT id, $1, COALESCE($2, id), $3, $4, $5, $6,
+    COALESCE($9::timestamptz, now() + ($10::bigint || ' milliseconds')::interval, now()),
+    $11
   FROM new_id
   WHERE NOT EXISTS (SELECT 1 FROM existing_continuation)
     AND NOT EXISTS (SELECT 1 FROM existing_deduplicated)
@@ -251,12 +246,7 @@ LIMIT 1
 );
 
 export const addJobBlockersSql: TypedSql<
-  readonly [
-    NamedParameter<"job_id", string[]>,
-    NamedParameter<"blocked_by_chain_id", string[]>,
-    NamedParameter<"root_chain_id", string>,
-    NamedParameter<"origin_id", string>,
-  ],
+  readonly [NamedParameter<"job_id", string[]>, NamedParameter<"blocked_by_chain_id", string[]>],
   [DbJobWithIncompleteBlockers]
 > = sql(
   /* sql */ `
@@ -265,15 +255,6 @@ WITH inserted_blockers AS (
   SELECT job_id, blocked_by_chain_id, ord - 1 AS "index"
   FROM unnest($1::{{id_type}}[], $2::{{id_type}}[]) WITH ORDINALITY AS t(job_id, blocked_by_chain_id, ord)
   RETURNING job_id, blocked_by_chain_id
-),
-updated_blocker_chains AS (
-  UPDATE {{schema}}.{{table_prefix}}job
-  SET
-    root_chain_id = CASE WHEN root_chain_id = chain_id THEN $3::{{id_type}} ELSE root_chain_id END,
-    origin_id = CASE WHEN id = chain_id AND origin_id IS NULL THEN $4::{{id_type}} ELSE origin_id END
-  WHERE chain_id = ANY($2::{{id_type}}[])
-    AND (root_chain_id = chain_id OR (id = chain_id AND origin_id IS NULL))
-  RETURNING id
 ),
 blockers_status AS (
   SELECT
@@ -556,29 +537,43 @@ RETURNING job.*
   true,
 );
 
-export const getExternalBlockersSql: TypedSql<
-  readonly [NamedParameter<"root_chain_ids", string[]>],
-  { job_id: string; blocked_root_chain_id: string }[]
+export const checkExternalBlockerRefsSql: TypedSql<
+  readonly [NamedParameter<"chain_ids_1", string[]>, NamedParameter<"chain_ids_2", string[]>],
+  { job_id: string; blocked_by_chain_id: string }[]
 > = sql(
   /* sql */ `
-SELECT DISTINCT jb.job_id, j.root_chain_id AS blocked_root_chain_id
+WITH _locked AS (
+  -- Lock all jobs in chains being deleted to prevent concurrent mutations
+  -- between the check and the subsequent DELETE.
+  -- Rows are locked in ctid order (physical), so concurrent deletes on
+  -- overlapping chain sets acquire locks in the same order — no deadlock.
+  SELECT id FROM {{schema}}.{{table_prefix}}job
+  WHERE chain_id = ANY($1::{{id_type}}[])
+  ORDER BY ctid
+  FOR UPDATE
+)
+SELECT jb.job_id, jb.blocked_by_chain_id
 FROM {{schema}}.{{table_prefix}}job_blocker jb
 JOIN {{schema}}.{{table_prefix}}job j ON j.id = jb.job_id
-WHERE jb.blocked_by_chain_id IN (
-  SELECT id FROM {{schema}}.{{table_prefix}}job WHERE root_chain_id = ANY($1::{{id_type}}[])
-)
-AND j.root_chain_id != ALL($1::{{id_type}}[])
+WHERE jb.blocked_by_chain_id = ANY($1::{{id_type}}[])
+  AND j.chain_id != ALL($2::{{id_type}}[])
 `,
   true,
 );
 
-export const deleteJobsByRootChainIdsSql: TypedSql<
-  readonly [NamedParameter<"root_chain_ids", string[]>],
+export const deleteJobsByChainIdsSql: TypedSql<
+  readonly [NamedParameter<"chain_ids", string[]>],
   DbJob[]
 > = sql(
   /* sql */ `
+WITH _deleted_blockers AS (
+  DELETE FROM {{schema}}.{{table_prefix}}job_blocker
+  WHERE job_id IN (
+    SELECT id FROM {{schema}}.{{table_prefix}}job WHERE chain_id = ANY($1::{{id_type}}[])
+  )
+)
 DELETE FROM {{schema}}.{{table_prefix}}job
-WHERE root_chain_id = ANY($1::{{id_type}}[])
+WHERE chain_id = ANY($1::{{id_type}}[])
 RETURNING *
 `,
   true,

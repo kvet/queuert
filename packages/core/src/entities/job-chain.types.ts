@@ -3,7 +3,6 @@ export type JobChainStatus = "blocked" | "pending" | "running" | "completed";
 export type JobChain<TJobId, TChainTypeName, TInput, TOutput> = {
   id: TJobId;
   typeName: TChainTypeName;
-  rootChainId: TJobId;
   originId: TJobId | null;
   input: TInput;
   createdAt: Date;

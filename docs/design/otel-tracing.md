@@ -87,12 +87,7 @@ PRODUCER chain process-user [0ms] ───────────────�
 
 ## Blocker Relationships
 
-When a job has blockers (dependencies on other chains), the relationship is captured through two mechanisms:
-
-1. **Span links**: Each blocker chain's PRODUCER span (and its job span) links back to the blocked job's span via `rootChainTraceContext`
-2. **Root chain ID**: Blocker chain spans carry `queuert.chain.root_id` identifying the chain they block for
-
-The parent-child hierarchy depends on the OTel active context at creation time. In the common case of creating blocker chains and then a blocked `startJobChain`, all chains share the caller's active span as parent:
+When a job has blockers (dependencies on other chains), the relationship is visible through shared parent context. In the common case of creating blocker chains and a blocked `startJobChain` in the same caller scope, all chains share the caller's active span as parent:
 
 ```
 EXTERNAL span (e.g., HTTP request)
@@ -109,11 +104,8 @@ EXTERNAL span (e.g., HTTP request)
 │           └── CONSUMER: chain process-order
 │
 ├── PRODUCER: chain fetch-user ─────────────────────────
-│   │   queuert.chain.root_id: <process-order chain id>
-│   │   links: [job process-order]
 │   │
 │   └── PRODUCER: job fetch-user
-│       │   links: [job process-order]
 │       │
 │       └── CONSUMER: attempt ✓
 │           ├── INTERNAL: prepare
@@ -121,11 +113,8 @@ EXTERNAL span (e.g., HTTP request)
 │           └── CONSUMER: chain fetch-user
 │
 └── PRODUCER: chain fetch-inventory ────────────────────
-    │   queuert.chain.root_id: <process-order chain id>
-    │   links: [job process-order]
     │
     └── PRODUCER: job fetch-inventory
-        │   links: [job process-order]
         │
         └── CONSUMER: attempt ✓
             ├── INTERNAL: prepare
@@ -133,11 +122,7 @@ EXTERNAL span (e.g., HTTP request)
             └── CONSUMER: chain fetch-inventory
 ```
 
-The span links enable tracing tools to:
-
-- Navigate from blocker chains to the job they unblock
-- Show the dependency graph through link traversal
-- Track total time from request start to completion
+Blocker chains are independent — they have no span links to the blocked job and no `originId`. The dependency relationship is implicit through the shared parent span and visible when blocker outputs appear in the blocked job's attempt.
 
 ## Continuation Relationships
 
@@ -197,24 +182,22 @@ This uses the `completeJobSpan` adapter method rather than `startAttemptSpan`, r
 
 ### Chain Spans
 
-| Attribute                    | Type     | Description                               |
-| ---------------------------- | -------- | ----------------------------------------- |
-| `queuert.chain.id`           | string   | Chain ID                                  |
-| `queuert.chain.type`         | string   | Chain type name                           |
-| `queuert.chain.root_id`      | string?  | Root chain ID (null for top-level chains) |
-| `queuert.chain.deduplicated` | boolean? | `true` if existing chain was returned     |
+| Attribute                    | Type     | Description                           |
+| ---------------------------- | -------- | ------------------------------------- |
+| `queuert.chain.id`           | string   | Chain ID                              |
+| `queuert.chain.type`         | string   | Chain type name                       |
+| `queuert.chain.deduplicated` | boolean? | `true` if existing chain was returned |
 
 ### Job Spans
 
-| Attribute                       | Type      | Description                           |
-| ------------------------------- | --------- | ------------------------------------- |
-| `queuert.chain.id`              | string    | Chain ID                              |
-| `queuert.chain.type`            | string    | Chain type name                       |
-| `queuert.chain.deduplicated`    | boolean?  | `true` if existing chain was returned |
-| `queuert.job.id`                | string    | Job ID                                |
-| `queuert.job.type`              | string    | Job type name                         |
-| `queuert.job.origin_id`         | string?   | Origin job ID (for continuations)     |
-| `queuert.job.blocker_chain_ids` | string[]? | Blocker chain IDs (if blocked)        |
+| Attribute                    | Type     | Description                           |
+| ---------------------------- | -------- | ------------------------------------- |
+| `queuert.chain.id`           | string   | Chain ID                              |
+| `queuert.chain.type`         | string   | Chain type name                       |
+| `queuert.chain.deduplicated` | boolean? | `true` if existing chain was returned |
+| `queuert.job.id`             | string   | Job ID                                |
+| `queuert.job.type`           | string   | Job type name                         |
+| `queuert.job.origin_id`      | string?  | Origin job ID (for continuations)     |
 
 ### Attempt Spans
 
@@ -249,7 +232,7 @@ Queuert's tracing design provides:
 1. **Symmetric chain spans**: PRODUCER at creation, CONSUMER at completion
 2. **Hierarchical job spans**: Chain → Job → Attempt → prepare/complete
 3. **Workerless completion**: CONSUMER job span closes the trace without an attempt
-4. **Blocker visibility**: Span links show dependencies between chains
+4. **Blocker visibility**: Shared parent context groups related chains
 5. **Continuation tracking**: Span links connect jobs in a chain
 6. **Retry visibility**: Multiple attempt spans under each job
 7. **Deduplication tracking**: Attribute marks deduplicated chains, links to existing trace

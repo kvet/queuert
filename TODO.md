@@ -10,12 +10,16 @@
     - Transaction afterCommit hooks (requires state adapter support)
     - Span event pattern: end span for timing, add `transaction.committed` event after commit
   - See: transactional outbox pattern for reliable side effects
-- [REF,MEDIUM] Evaluate removing `rootChainId` and `originId` from job model
-  - `rootChainId`: Only used for cascade deletion (`deleteJobsByRootChainIds`). Deletion is the caller's problem; chain structure already captured via `chainId`
-  - `originId`: Only informational (observability logs, OTEL spans). The in-process adapter uses it for continuation deduplication but pg/sqlite don't — no unique constraint or ON CONFLICT
-  - Post-hoc update in `addJobBlockers` sets these on blocker chains — should be removed regardless (blocker chains are independent dependencies, not continuations)
-  - Affects: state adapter interface + all implementations, helper.ts, client.ts, job-process.ts, observability, tests
+- [EPIC] extract state and notify adapter test suites to efficiently test multiple configurations (prefixes etc)
+  - [TASK,MEDIUM] support all methods for state adapter test suite
+  - [TASK,MEDIUM] notify adapter
 - [TASK,MEDIUM] OTEL blocker spans
+- [TASK,EASY] `deleteJobChains` should return deleted chains
+- [REF,MEDIUM] Evaluate removing `originId` from job model
+  - Only used for continuation deduplication (in-process adapter) and observability (logs, OTEL origin link)
+  - pg/sqlite don't use it for deduplication — no unique constraint or ON CONFLICT on `(chain_id, origin_id)`
+  - Could be replaced by: continuation dedup via `(chain_id, type_name)` uniqueness, OTEL link via `traceContext`
+  - Affects: state adapter interface + all implementations, helper.ts, observability, tests
 
 # Medium term
 
@@ -26,6 +30,7 @@
   - [REF] Better concurrency handling - WAL mode, busy timeout, retries
   - [REF] Separate read/write connection pools (single writer, multiple readers)
   - [REF] usage of db without pool is incorrect
+  - [TASK,EASY] Validate `PRAGMA foreign_keys = ON` at adapter init (FK on `job_blocker.blocked_by_chain_id` requires it)
   - [TASK,EASY] get rid of skipConcurrencyTests flag in resilience tests (separate test suite?)
 - [EPIC] MySQL/MariaDB adapter
 - [REF] Revisit Prisma examples
@@ -37,6 +42,7 @@
   - Atomic mode should not need `renewJobLease` (prepare+complete in same transaction)
   - Staged mode should not need `getJobForUpdate` before complete (job already held by worker)
   - See: `process-modes.test-suite.ts` TODOs for per-mode call traces
+- [EPIC] Website for docs, examples, dashboard, etc (currently in monorepo README)
 
 # Long term
 

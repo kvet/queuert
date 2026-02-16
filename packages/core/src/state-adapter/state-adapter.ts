@@ -11,7 +11,6 @@ export type StateJob = {
   input: unknown;
   output: unknown;
 
-  rootChainId: string;
   originId: string | null;
 
   status: "blocked" | "pending" | "running" | "completed";
@@ -72,20 +71,17 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     chainId: TJobId | undefined;
     chainTypeName: string;
     input: unknown;
-    rootChainId: TJobId | undefined;
     originId: TJobId | undefined;
     deduplication?: DeduplicationOptions;
     schedule?: ScheduleOptions;
     traceContext?: unknown;
   }) => Promise<{ job: StateJob; deduplicated: boolean }>;
 
-  /** Adds blocker dependencies to a job. Also retroactively updates blocker chains' rootChainId and originId. */
+  /** Adds blocker dependencies to a job. */
   addJobBlockers: (params: {
     txContext?: TTxContext;
     jobId: TJobId;
     blockedByChainIds: TJobId[];
-    rootChainId: TJobId;
-    originId: TJobId;
   }) => Promise<{ job: StateJob; incompleteBlockerChainIds: string[] }>;
 
   /** Schedules blocked jobs when a blocker chain completes. */
@@ -143,16 +139,10 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     ignoredJobIds?: TJobId[];
   }) => Promise<StateJob | undefined>;
 
-  /** Gets external blockers that depend on the given root chains. */
-  getExternalBlockers: (params: {
+  /** Deletes all jobs in the given chains. Throws if external jobs depend on them as blockers. */
+  deleteJobsByChainIds: (params: {
     txContext?: TTxContext;
-    rootChainIds: TJobId[];
-  }) => Promise<{ jobId: TJobId; blockedRootChainId: TJobId }[]>;
-
-  /** Deletes all jobs in the given root chains. */
-  deleteJobsByRootChainIds: (params: {
-    txContext?: TTxContext;
-    rootChainIds: TJobId[];
+    chainIds: TJobId[];
   }) => Promise<StateJob[]>;
 
   /** Gets a job by ID with a FOR UPDATE lock. */

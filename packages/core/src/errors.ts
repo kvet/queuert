@@ -50,6 +50,25 @@ export class WaitChainTimeoutError extends Error {
   }
 }
 
+export type BlockerReference = {
+  chainId: string;
+  referencedByJobId: string;
+};
+
+export class BlockerReferenceError extends Error {
+  readonly references: readonly BlockerReference[];
+
+  constructor(
+    message: string,
+    references: readonly BlockerReference[],
+    options?: { cause?: unknown },
+  ) {
+    super(message, options);
+    this.name = "BlockerReferenceError";
+    this.references = references;
+  }
+}
+
 export type JobTypeValidationErrorCode =
   | "not_entry_point"
   | "invalid_continuation"

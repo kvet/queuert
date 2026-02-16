@@ -9,8 +9,6 @@ export type JobSpanInputData = {
 
   /** For continuation jobs: trace context of the origin job */
   originTraceContext?: unknown;
-  /** For blocker chains: trace context of the job that will be blocked by this chain */
-  rootChainTraceContext?: unknown;
 };
 
 export type JobSpanResult =
@@ -18,14 +16,12 @@ export type JobSpanResult =
       status: "created";
       jobId: string;
       chainId: string;
-      rootChainId: string | null;
       originId: string | null;
     }
   | {
       status: "deduplicated";
       jobId: string;
       chainId: string;
-      rootChainId: string | null;
       existingTraceContext?: unknown;
     }
   | {

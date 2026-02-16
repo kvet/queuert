@@ -7,21 +7,27 @@ import {
   executeMigrations,
 } from "@queuert/typed-sql";
 import { type UUID } from "node:crypto";
-import { type BaseTxContext, type StateAdapter, type StateJob } from "queuert";
+import {
+  type BaseTxContext,
+  BlockerReferenceError,
+  type StateAdapter,
+  type StateJob,
+} from "queuert";
 import { type SqliteStateProvider } from "../state-provider/state-provider.sqlite.js";
 import {
   type DbJob,
   type DbJobChainRow,
   acquireJobSql,
   checkBlockersStatusSql,
+  checkExternalBlockerRefsSql,
   completeJobSql,
   createMigrationTableSql,
-  deleteJobsByRootChainIdsSql,
+  deleteBlockersByChainIdsSql,
+  deleteJobsByChainIdsSql,
   findExistingJobSql,
   findReadyJobsSql,
   getAppliedMigrationsSql,
   getCurrentJobForUpdateSql,
-  getExternalBlockersSql,
   getJobBlockersSql,
   getJobByIdForBlockersSql,
   getJobByIdSql,
@@ -38,7 +44,6 @@ import {
   renewJobLeaseSql,
   rescheduleJobSql,
   scheduleBlockedJobSql,
-  updateBlockerChainsSql,
   updateJobToBlockedSql,
 } from "./sql.js";
 
@@ -60,7 +65,6 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
     input: parseJson(dbJob.input),
     output: parseJson(dbJob.output),
 
-    rootChainId: dbJob.root_chain_id,
     originId: dbJob.origin_id,
 
     status: dbJob.status,
@@ -90,7 +94,6 @@ const parseDbJobChainRow = (row: DbJobChainRow): { rootJob: DbJob; lastChainJob:
     chain_type_name: row.chain_type_name,
     input: row.input,
     output: row.output,
-    root_chain_id: row.root_chain_id,
     origin_id: row.origin_id,
     status: row.status,
     created_at: row.created_at,
@@ -114,7 +117,6 @@ const parseDbJobChainRow = (row: DbJobChainRow): { rootJob: DbJob; lastChainJob:
         chain_type_name: row.lc_chain_type_name!,
         input: row.lc_input,
         output: row.lc_output,
-        root_chain_id: row.lc_root_chain_id!,
         origin_id: row.lc_origin_id,
         status: row.lc_status!,
         created_at: row.lc_created_at!,
@@ -220,7 +222,6 @@ export const createSqliteStateAdapter = async <
       typeName,
       chainTypeName,
       input,
-      rootChainId,
       chainId,
       originId,
       deduplication,
@@ -235,7 +236,6 @@ export const createSqliteStateAdapter = async <
 
       const chainIdOrNull = chainId ?? null;
       const originIdOrNull = originId ?? null;
-      const rootChainIdOrNull = rootChainId ?? null;
       const scheduledAtIso = schedule?.at?.toISOString().replace("T", " ").replace("Z", "") ?? null;
       const scheduleAfterMsOrNull = schedule?.afterMs ?? null;
       const traceContextJson = traceContext !== undefined ? JSON.stringify(traceContext) : null;
@@ -272,8 +272,6 @@ export const createSqliteStateAdapter = async <
           newId,
           chainTypeName,
           inputJson,
-          rootChainIdOrNull,
-          newId,
           originIdOrNull,
           deduplicationKey,
           scheduledAtIso,
@@ -286,13 +284,7 @@ export const createSqliteStateAdapter = async <
       return { job: mapDbJobToStateJob(result), deduplicated: false };
     },
 
-    addJobBlockers: async ({ txContext, jobId, blockedByChainIds, rootChainId, originId }) => {
-      await executeTypedSql({
-        txContext,
-        sql: updateBlockerChainsSql,
-        params: [rootChainId, originId, JSON.stringify(blockedByChainIds)],
-      });
-
+    addJobBlockers: async ({ txContext, jobId, blockedByChainIds }) => {
       await executeTypedSql({
         txContext,
         sql: insertJobBlockersSql,
@@ -429,23 +421,31 @@ export const createSqliteStateAdapter = async <
       });
       return job ? mapDbJobToStateJob(job) : undefined;
     },
-    getExternalBlockers: async ({ txContext, rootChainIds }) => {
-      const rootChainIdsJson = JSON.stringify(rootChainIds);
-      const blockers = await executeTypedSql({
+    deleteJobsByChainIds: async ({ txContext, chainIds }) => {
+      const chainIdsJson = JSON.stringify(chainIds);
+      const refs = await executeTypedSql({
         txContext,
-        sql: getExternalBlockersSql,
-        params: [rootChainIdsJson, rootChainIdsJson],
+        sql: checkExternalBlockerRefsSql,
+        params: [chainIdsJson, chainIdsJson],
       });
-      return blockers.map((b) => ({
-        jobId: b.job_id as TIdType,
-        blockedRootChainId: b.blocked_root_chain_id as TIdType,
-      }));
-    },
-    deleteJobsByRootChainIds: async ({ txContext, rootChainIds }) => {
+      if (refs.length > 0) {
+        throw new BlockerReferenceError(
+          `Cannot delete chains: ${[...new Set(refs.map((r) => r.blocked_by_chain_id))].join(", ")} referenced as blockers`,
+          refs.map((r) => ({
+            chainId: r.blocked_by_chain_id,
+            referencedByJobId: r.job_id,
+          })),
+        );
+      }
+      await executeTypedSql({
+        txContext,
+        sql: deleteBlockersByChainIdsSql,
+        params: [chainIdsJson],
+      });
       const jobs = await executeTypedSql({
         txContext,
-        sql: deleteJobsByRootChainIdsSql,
-        params: [JSON.stringify(rootChainIds)],
+        sql: deleteJobsByChainIdsSql,
+        params: [chainIdsJson],
       });
       return jobs.map(mapDbJobToStateJob);
     },

@@ -15,6 +15,8 @@ export { type ValidatedJobTypeDefinitions } from "./entities/job-type.validation
 export { type CompletedJob, type Job, type JobWithoutBlockers } from "./entities/job.js";
 export { type ScheduleOptions } from "./entities/schedule.js";
 export {
+  type BlockerReference,
+  BlockerReferenceError,
   JobAlreadyCompletedError,
   JobNotFoundError,
   JobTakenByAnotherWorkerError,

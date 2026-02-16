@@ -253,18 +253,10 @@ export const createOtelObservabilityAdapter = async ({
       let chainSpanContext: SpanContext;
       let chainTraceContext: string;
 
-      // Build links for blocker chains: link to the job being blocked
-      const blockerLinks: { context: SpanContext }[] = [];
-      if (isValidOtelTraceContext(data.rootChainTraceContext)) {
-        blockerLinks.push({ context: deserializeSpanContext(data.rootChainTraceContext.job) });
-      }
-
       if (data.isChainStart) {
         // Create chain PRODUCER span (kept open until end() to set chain ID)
-        // For blocker chains, link to the job that will be blocked by this chain
         chainSpan = tracer.startSpan(`chain ${data.chainTypeName}`, {
           kind: SpanKind.PRODUCER,
-          links: blockerLinks,
           attributes: {
             "queuert.chain.type": data.chainTypeName,
           },
@@ -282,8 +274,8 @@ export const createOtelObservabilityAdapter = async ({
       // Create job PRODUCER span as child of chain
       const chainCtx = trace.setSpanContext(context.active(), chainSpanContext);
 
-      // Build links: origin job (for continuations) or blocked job (for blocker chains)
-      const jobLinks: { context: SpanContext }[] = [...blockerLinks];
+      // Build links: origin job (for continuations)
+      const jobLinks: { context: SpanContext }[] = [];
       if (isValidOtelTraceContext(data.originTraceContext)) {
         jobLinks.push({ context: deserializeSpanContext(data.originTraceContext.job) });
       }
@@ -310,15 +302,9 @@ export const createOtelObservabilityAdapter = async ({
             // Set chain ID on both chain span (if new chain) and job span
             if (chainSpan) {
               chainSpan.setAttribute("queuert.chain.id", result.chainId);
-              if (result.rootChainId) {
-                chainSpan.setAttribute("queuert.chain.root_id", result.rootChainId);
-              }
             }
             jobSpan.setAttribute("queuert.chain.id", result.chainId);
             jobSpan.setAttribute("queuert.job.id", result.jobId);
-            if (result.rootChainId) {
-              jobSpan.setAttribute("queuert.chain.root_id", result.rootChainId);
-            }
             if (result.originId) {
               jobSpan.setAttribute("queuert.job.origin_id", result.originId);
             }
@@ -327,16 +313,10 @@ export const createOtelObservabilityAdapter = async ({
             if (chainSpan) {
               chainSpan.setAttribute("queuert.chain.id", result.chainId);
               chainSpan.setAttribute("queuert.chain.deduplicated", true);
-              if (result.rootChainId) {
-                chainSpan.setAttribute("queuert.chain.root_id", result.rootChainId);
-              }
             }
             jobSpan.setAttribute("queuert.chain.id", result.chainId);
             jobSpan.setAttribute("queuert.job.id", result.jobId);
             jobSpan.setAttribute("queuert.chain.deduplicated", true);
-            if (result.rootChainId) {
-              jobSpan.setAttribute("queuert.chain.root_id", result.rootChainId);
-            }
             // Link to existing chain's trace if available
             if (isValidOtelTraceContext(result.existingTraceContext)) {
               jobSpan.addLink({

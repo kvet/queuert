@@ -7,19 +7,24 @@ import {
   executeMigrations,
 } from "@queuert/typed-sql";
 import { type UUID } from "node:crypto";
-import { type BaseTxContext, type StateAdapter, type StateJob } from "queuert";
+import {
+  type BaseTxContext,
+  BlockerReferenceError,
+  type StateAdapter,
+  type StateJob,
+} from "queuert";
 import { type PgStateProvider } from "../state-provider/state-provider.pg.js";
 import {
   type DbJob,
   acquireJobSql,
   addJobBlockersSql,
+  checkExternalBlockerRefsSql,
   completeJobSql,
   createJobSql,
   createMigrationTableSql,
-  deleteJobsByRootChainIdsSql,
+  deleteJobsByChainIdsSql,
   getAppliedMigrationsSql,
   getCurrentJobForUpdateSql,
-  getExternalBlockersSql,
   getJobBlockersSql,
   getJobByIdSql,
   getJobChainByIdSql,
@@ -42,7 +47,6 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
     input: dbJob.input,
     output: dbJob.output,
 
-    rootChainId: dbJob.root_chain_id,
     originId: dbJob.origin_id,
 
     status: dbJob.status,
@@ -146,7 +150,6 @@ export const createPgStateAdapter = async <
       typeName,
       chainTypeName,
       input,
-      rootChainId,
       chainId,
       originId,
       deduplication,
@@ -161,7 +164,6 @@ export const createPgStateAdapter = async <
           chainId,
           chainTypeName,
           input,
-          rootChainId,
           originId,
           deduplication?.key ?? null,
           deduplication ? (deduplication.scope ?? "incomplete") : null,
@@ -175,16 +177,11 @@ export const createPgStateAdapter = async <
       return { job: mapDbJobToStateJob(result), deduplicated: result.deduplicated };
     },
 
-    addJobBlockers: async ({ txContext, jobId, blockedByChainIds, rootChainId, originId }) => {
+    addJobBlockers: async ({ txContext, jobId, blockedByChainIds }) => {
       const [result] = await executeTypedSql({
         txContext,
         sql: addJobBlockersSql,
-        params: [
-          Array.from({ length: blockedByChainIds.length }, () => jobId),
-          blockedByChainIds,
-          rootChainId,
-          originId,
-        ],
+        params: [Array.from({ length: blockedByChainIds.length }, () => jobId), blockedByChainIds],
       });
 
       return {
@@ -267,22 +264,25 @@ export const createPgStateAdapter = async <
       });
       return job ? mapDbJobToStateJob(job) : undefined;
     },
-    getExternalBlockers: async ({ txContext, rootChainIds }) => {
-      const blockers = await executeTypedSql({
+    deleteJobsByChainIds: async ({ txContext, chainIds }) => {
+      const refs = await executeTypedSql({
         txContext,
-        sql: getExternalBlockersSql,
-        params: [rootChainIds],
+        sql: checkExternalBlockerRefsSql,
+        params: [chainIds, chainIds],
       });
-      return blockers.map((b) => ({
-        jobId: b.job_id as TIdType,
-        blockedRootChainId: b.blocked_root_chain_id as TIdType,
-      }));
-    },
-    deleteJobsByRootChainIds: async ({ txContext, rootChainIds }) => {
+      if (refs.length > 0) {
+        throw new BlockerReferenceError(
+          `Cannot delete chains: ${[...new Set(refs.map((r) => r.blocked_by_chain_id))].join(", ")} referenced as blockers`,
+          refs.map((r) => ({
+            chainId: r.blocked_by_chain_id,
+            referencedByJobId: r.job_id,
+          })),
+        );
+      }
       const jobs = await executeTypedSql({
         txContext,
-        sql: deleteJobsByRootChainIdsSql,
-        params: [rootChainIds],
+        sql: deleteJobsByChainIdsSql,
+        params: [chainIds],
       });
       return jobs.map(mapDbJobToStateJob);
     },

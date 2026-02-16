@@ -1,6 +1,8 @@
 import {
   blockerChainsTestSuite,
   chainsTestSuite,
+  deduplicationTestSuite,
+  deletionTestSuite,
   extendWithCommon,
   extendWithNotifyInProcess,
   extendWithResourceLeakDetection,
@@ -51,6 +53,14 @@ describe("Chains", () => {
 
 describe("Blocker Chains", () => {
   blockerChainsTestSuite({ it: sqliteInProcessIt });
+});
+
+describe("Deduplication", () => {
+  deduplicationTestSuite({ it: sqliteInProcessIt });
+});
+
+describe("Deletion", () => {
+  deletionTestSuite({ it: sqliteInProcessIt });
 });
 
 describe("Wait Chain Completion", () => {

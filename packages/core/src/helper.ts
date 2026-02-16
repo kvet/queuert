@@ -29,7 +29,6 @@ import { RescheduleJobError } from "./worker/job-process.js";
 export type ChainContext = {
   chainId: string;
   chainTypeName: string;
-  rootChainId: string;
   originId: string;
   originTraceContext: unknown;
 };
@@ -87,7 +86,6 @@ export const helper = ({
       jobTypeName: typeName,
       isChainStart: isChain,
       originTraceContext: isChain ? undefined : chainContext?.originTraceContext,
-      rootChainTraceContext: isChain ? chainContext?.originTraceContext : undefined,
     });
 
     let createJobResult: { job: StateJob; deduplicated: boolean };
@@ -99,7 +97,6 @@ export const helper = ({
         input: parsedInput,
         originId: chainContext?.originId,
         chainId: isChain ? undefined : chainContext!.chainId,
-        rootChainId: isChain ? chainContext?.rootChainId : chainContext!.rootChainId,
         deduplication,
         schedule,
         traceContext: spanHandle?.getTraceContext(),
@@ -117,7 +114,6 @@ export const helper = ({
         status: "deduplicated",
         chainId: job.chainId,
         jobId: job.id,
-        rootChainId: job.rootChainId !== job.chainId ? job.rootChainId : null,
         existingTraceContext: job.traceContext,
       });
       return { job, deduplicated };
@@ -133,8 +129,6 @@ export const helper = ({
         txContext,
         jobId: job.id,
         blockedByChainIds: blockerChainIds,
-        rootChainId: job.rootChainId,
-        originId: job.id,
       });
       job = addBlockersResult.job;
       incompleteBlockerChainIds = addBlockersResult.incompleteBlockerChainIds;
@@ -147,7 +141,6 @@ export const helper = ({
       status: "created",
       chainId: job.chainId,
       jobId: job.id,
-      rootChainId: job.rootChainId !== job.chainId ? job.rootChainId : null,
       originId: job.originId ?? null,
     });
 
