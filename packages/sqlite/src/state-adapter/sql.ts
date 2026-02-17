@@ -68,7 +68,7 @@ export const migrations: Migration[] = [
 CREATE TABLE IF NOT EXISTS {{table_prefix}}job (
   id                            {{id_type}} PRIMARY KEY,
   type_name                     TEXT NOT NULL,
-  chain_id                      {{id_type}} REFERENCES {{table_prefix}}job(id) ON DELETE CASCADE,
+  chain_id                      {{id_type}} REFERENCES {{table_prefix}}job(id),
   chain_type_name               TEXT NOT NULL,
 
   input                         TEXT,
@@ -103,7 +103,7 @@ CREATE TABLE IF NOT EXISTS {{table_prefix}}job (
         sql: sql(
           /* sql */ `
 CREATE TABLE IF NOT EXISTS {{table_prefix}}job_blocker (
-  job_id                        {{id_type}} NOT NULL REFERENCES {{table_prefix}}job(id) ON DELETE CASCADE,
+  job_id                        {{id_type}} NOT NULL REFERENCES {{table_prefix}}job(id),
   -- NOTE: requires PRAGMA foreign_keys = ON (SQLite default is OFF)
   blocked_by_chain_id           {{id_type}} NOT NULL REFERENCES {{table_prefix}}job(id),
   "index"                       INTEGER NOT NULL,

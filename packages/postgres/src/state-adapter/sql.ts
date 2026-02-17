@@ -54,7 +54,7 @@ END$$`,
 CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job (
   id                            {{id_type}} PRIMARY KEY DEFAULT {{id_default}},
   type_name                     text NOT NULL,
-  chain_id                      {{id_type}} REFERENCES {{schema}}.{{table_prefix}}job(id) ON DELETE CASCADE,
+  chain_id                      {{id_type}} REFERENCES {{schema}}.{{table_prefix}}job(id),
   chain_type_name               text NOT NULL,
 
   input                         jsonb,
@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job (
         sql: sql(
           /* sql */ `
 CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job_blocker (
-  job_id                        {{id_type}} NOT NULL REFERENCES {{schema}}.{{table_prefix}}job(id) ON DELETE CASCADE,
+  job_id                        {{id_type}} NOT NULL REFERENCES {{schema}}.{{table_prefix}}job(id),
   blocked_by_chain_id           {{id_type}} NOT NULL REFERENCES {{schema}}.{{table_prefix}}job(id),
   index                         integer NOT NULL,
   PRIMARY KEY (job_id, blocked_by_chain_id)
