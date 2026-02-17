@@ -107,6 +107,7 @@ CREATE TABLE IF NOT EXISTS {{table_prefix}}job_blocker (
   -- NOTE: requires PRAGMA foreign_keys = ON (SQLite default is OFF)
   blocked_by_chain_id           {{id_type}} NOT NULL REFERENCES {{table_prefix}}job(id),
   "index"                       INTEGER NOT NULL,
+  trace_context                 TEXT,
   PRIMARY KEY (job_id, blocked_by_chain_id)
 )`,
           false,
@@ -257,12 +258,16 @@ RETURNING *, 0 AS deduplicated
 );
 
 export const insertJobBlockersSql: TypedSql<
-  readonly [NamedParameter<"job_id", string>, NamedParameter<"blocked_by_chain_ids_json", string>],
+  readonly [
+    NamedParameter<"job_id", string>,
+    NamedParameter<"trace_contexts_json", string>,
+    NamedParameter<"blocked_by_chain_ids_json", string>,
+  ],
   void
 > = sql(
   /* sql */ `
-INSERT INTO {{table_prefix}}job_blocker (job_id, blocked_by_chain_id, "index")
-SELECT ?, je.value, je.key
+INSERT INTO {{table_prefix}}job_blocker (job_id, blocked_by_chain_id, "index", trace_context)
+SELECT ?, je.value, je.key, json_extract(?, '$[' || je.key || ']')
 FROM json_each(?) AS je
 `,
   false,
@@ -371,6 +376,32 @@ SET scheduled_at = datetime('now', 'subsec'),
     status = 'pending'
 WHERE id = ? AND status = 'blocked'
 RETURNING *
+`,
+  true,
+);
+
+export const getJobBlockerTraceContextsSql: TypedSql<
+  readonly [NamedParameter<"blocked_by_chain_id", string>],
+  { trace_context: string | null }[]
+> = sql(
+  /* sql */ `
+SELECT jb.trace_context
+FROM {{table_prefix}}job_blocker jb
+WHERE jb.blocked_by_chain_id = ?
+  AND jb.trace_context IS NOT NULL
+`,
+  true,
+);
+
+export const getBlockerChainTraceContextsSql: TypedSql<
+  readonly [NamedParameter<"blocked_by_chain_ids_json", string>],
+  { blocked_by_chain_id: string; trace_context: string | null }[]
+> = sql(
+  /* sql */ `
+SELECT j.id AS blocked_by_chain_id, j.trace_context
+FROM {{table_prefix}}job j
+WHERE j.id IN (SELECT value FROM json_each(?))
+ORDER BY j.id
 `,
   true,
 );

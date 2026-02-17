@@ -74,18 +74,23 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     traceContext?: unknown;
   }) => Promise<{ job: StateJob; deduplicated: boolean }>;
 
-  /** Adds blocker dependencies to a job. */
+  /** Adds blocker dependencies to a job. Returns `blockerChainTraceContexts` in the same order as `blockedByChainIds`. */
   addJobBlockers: (params: {
     txContext?: TTxContext;
     jobId: TJobId;
     blockedByChainIds: TJobId[];
-  }) => Promise<{ job: StateJob; incompleteBlockerChainIds: string[] }>;
+    blockerTraceContexts?: unknown[];
+  }) => Promise<{
+    job: StateJob;
+    incompleteBlockerChainIds: string[];
+    blockerChainTraceContexts: unknown[];
+  }>;
 
   /** Schedules blocked jobs when a blocker chain completes. */
   scheduleBlockedJobs: (params: {
     txContext?: TTxContext;
     blockedByChainId: TJobId;
-  }) => Promise<StateJob[]>;
+  }) => Promise<{ unblockedJobs: StateJob[]; blockerTraceContexts: unknown[] }>;
 
   /** Gets the blocker chains for a job. */
   getJobBlockers: (params: {

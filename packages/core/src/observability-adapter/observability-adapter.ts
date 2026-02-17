@@ -77,6 +77,27 @@ export type CompleteJobSpanInputData = {
   chainCompleted: boolean;
 };
 
+export type BlockerSpanInputData = {
+  chainId: string;
+  chainTypeName: string;
+  jobId: string;
+  jobTypeName: string;
+  jobTraceContext: unknown;
+  blockerChainId: string;
+  blockerChainTypeName: string;
+  blockerIndex: number;
+};
+
+export type BlockerSpanHandle = {
+  getTraceContext: () => unknown;
+  end: (data?: { blockerTraceContext?: unknown }) => void;
+};
+
+export type CompleteBlockerSpanData = {
+  traceContext: unknown;
+  blockerChainTypeName: string;
+};
+
 export type ObservabilityAdapter = {
   // worker
   workerStarted: (data: { workerId: string; jobTypeNames: string[] }) => void;
@@ -158,6 +179,8 @@ export type ObservabilityAdapter = {
 
   // tracing
   startJobSpan: (data: JobSpanInputData) => JobSpanHandle | undefined;
+  startBlockerSpan: (data: BlockerSpanInputData) => BlockerSpanHandle | undefined;
+  completeBlockerSpan: (data: CompleteBlockerSpanData) => void;
   startAttemptSpan: (data: JobAttemptSpanInputData) => JobAttemptSpanHandle | undefined;
   completeJobSpan: (data: CompleteJobSpanInputData) => void;
 };

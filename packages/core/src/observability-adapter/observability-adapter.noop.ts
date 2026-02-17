@@ -45,6 +45,8 @@ export const createNoopObservabilityAdapter = (): ObservabilityAdapter => ({
 
   // tracing
   startJobSpan: () => undefined,
+  startBlockerSpan: () => undefined,
+  completeBlockerSpan: () => undefined,
   startAttemptSpan: () => undefined,
   completeJobSpan: () => undefined,
 });

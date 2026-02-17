@@ -13,7 +13,6 @@ import { type ObservabilityAdapter } from "queuert";
 type OtelTraceContext = {
   chain: string;
   job: string;
-  attempt?: string;
 };
 
 const serializeSpanContext = (ctx: SpanContext): string =>
@@ -43,7 +42,6 @@ const isValidOtelTraceContext = (ctx: unknown): ctx is OtelTraceContext => {
   const obj = ctx as Record<string, unknown>;
   if (!isValidTraceparent(obj.chain)) return false;
   if (!isValidTraceparent(obj.job)) return false;
-  if (obj.attempt !== undefined && !isValidTraceparent(obj.attempt)) return false;
   return true;
 };
 
@@ -131,7 +129,7 @@ export const createOtelObservabilityAdapter = async ({
     const chainProducerCtx = deserializeSpanContext(tc.chain);
     tracer
       .startSpan(
-        `chain ${chainTypeName}`,
+        `complete chain.${chainTypeName}`,
         {
           kind: SpanKind.CONSUMER,
           links: [{ context: chainProducerCtx }],
@@ -255,7 +253,7 @@ export const createOtelObservabilityAdapter = async ({
 
       if (data.isChainStart) {
         // Create chain PRODUCER span (kept open until end() to set chain ID)
-        chainSpan = tracer.startSpan(`chain ${data.chainTypeName}`, {
+        chainSpan = tracer.startSpan(`create chain.${data.chainTypeName}`, {
           kind: SpanKind.PRODUCER,
           attributes: {
             "queuert.chain.type": data.chainTypeName,
@@ -281,7 +279,7 @@ export const createOtelObservabilityAdapter = async ({
       }
 
       const jobSpan = tracer.startSpan(
-        `job ${data.jobTypeName}`,
+        `create job.${data.jobTypeName}`,
         {
           kind: SpanKind.PRODUCER,
           links: jobLinks,
@@ -345,7 +343,7 @@ export const createOtelObservabilityAdapter = async ({
       const ctx = trace.setSpanContext(context.active(), parentCtx);
 
       const attemptSpan = tracer.startSpan(
-        `job-attempt ${data.jobTypeName}`,
+        `start job-attempt.${data.jobTypeName}`,
         {
           kind: SpanKind.CONSUMER,
           attributes: {
@@ -361,10 +359,9 @@ export const createOtelObservabilityAdapter = async ({
       );
 
       const attemptCtx = trace.setSpan(context.active(), attemptSpan);
-      const attemptTraceContext = serializeSpanContext(attemptSpan.spanContext());
 
       return {
-        getTraceContext: () => ({ ...tc, attempt: attemptTraceContext }) as OtelTraceContext,
+        getTraceContext: () => tc,
 
         startPrepare() {
           const span = tracer.startSpan("prepare", { kind: SpanKind.INTERNAL }, attemptCtx);
@@ -420,6 +417,68 @@ export const createOtelObservabilityAdapter = async ({
       };
     },
 
+    startBlockerSpan(data) {
+      if (!tracer) return undefined;
+      if (!isValidOtelTraceContext(data.jobTraceContext)) return undefined;
+
+      const tc = data.jobTraceContext;
+      const jobParentCtx = trace.setSpanContext(context.active(), deserializeSpanContext(tc.job));
+
+      const blockerAttributes = {
+        "queuert.chain.id": data.chainId,
+        "queuert.chain.type": data.chainTypeName,
+        "queuert.job.id": data.jobId,
+        "queuert.job.type": data.jobTypeName,
+        "queuert.blocker.chain.id": data.blockerChainId,
+        "queuert.blocker.chain.type": data.blockerChainTypeName,
+        "queuert.blocker.index": data.blockerIndex,
+      };
+
+      const producerSpan = tracer.startSpan(
+        `await chain.${data.blockerChainTypeName}`,
+        {
+          kind: SpanKind.PRODUCER,
+          attributes: blockerAttributes,
+        },
+        jobParentCtx,
+      );
+      const producerTraceparent = serializeSpanContext(producerSpan.spanContext());
+
+      return {
+        getTraceContext: () => producerTraceparent,
+        end: (endData?: { blockerTraceContext?: unknown }) => {
+          if (
+            endData?.blockerTraceContext &&
+            isValidOtelTraceContext(endData.blockerTraceContext)
+          ) {
+            producerSpan.addLink({
+              context: deserializeSpanContext(endData.blockerTraceContext.chain),
+            });
+          }
+          producerSpan.end();
+        },
+      };
+    },
+
+    completeBlockerSpan(data) {
+      if (!tracer) return;
+      if (!isValidTraceparent(data.traceContext)) return;
+
+      const producerCtx = trace.setSpanContext(
+        context.active(),
+        deserializeSpanContext(data.traceContext),
+      );
+
+      const consumerSpan = tracer.startSpan(
+        `resolve chain.${data.blockerChainTypeName}`,
+        {
+          kind: SpanKind.CONSUMER,
+        },
+        producerCtx,
+      );
+      consumerSpan.end();
+    },
+
     completeJobSpan(data) {
       if (!tracer) return;
       if (!isValidOtelTraceContext(data.traceContext)) return;
@@ -428,7 +487,7 @@ export const createOtelObservabilityAdapter = async ({
       const jobParentCtx = trace.setSpanContext(context.active(), deserializeSpanContext(tc.job));
 
       const jobSpan = tracer.startSpan(
-        `job ${data.jobTypeName}`,
+        `complete job.${data.jobTypeName}`,
         {
           kind: SpanKind.CONSUMER,
           attributes: {

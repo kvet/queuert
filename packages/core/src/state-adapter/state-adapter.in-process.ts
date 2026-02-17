@@ -4,14 +4,21 @@ import { type DeduplicationOptions, type StateAdapter, type StateJob } from "./s
 
 export type InProcessContext = { inTransaction?: boolean };
 
+type BlockerEntry = { index: number; traceContext: unknown };
+
 type InProcessStore = {
   jobs: Map<string, StateJob>;
-  jobBlockers: Map<string, Map<string, number>>;
+  jobBlockers: Map<string, Map<string, BlockerEntry>>;
 };
 
 const deepCloneStore = (store: InProcessStore): InProcessStore => ({
   jobs: new Map(Array.from(store.jobs).map(([k, v]) => [k, { ...v }])),
-  jobBlockers: new Map(Array.from(store.jobBlockers).map(([k, v]) => [k, new Map(v)])),
+  jobBlockers: new Map(
+    Array.from(store.jobBlockers).map(([k, v]) => [
+      k,
+      new Map(Array.from(v).map(([bk, bv]) => [bk, { ...bv }])),
+    ]),
+  ),
 });
 
 export type InProcessStateAdapter = StateAdapter<InProcessContext, string>;
@@ -164,39 +171,51 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       return { job, deduplicated: false };
     },
 
-    addJobBlockers: async ({ jobId, blockedByChainIds }) => {
+    addJobBlockers: async ({ jobId, blockedByChainIds, blockerTraceContexts }) => {
       const job = store.jobs.get(jobId);
       if (!job) throw new Error("Job not found");
 
-      const blockerMap = store.jobBlockers.get(jobId) ?? new Map<string, number>();
+      const blockerMap = store.jobBlockers.get(jobId) ?? new Map<string, BlockerEntry>();
       blockedByChainIds.forEach((blockerChainId, index) => {
-        blockerMap.set(blockerChainId, index);
+        blockerMap.set(blockerChainId, {
+          index,
+          traceContext: blockerTraceContexts?.[index] ?? null,
+        });
       });
       store.jobBlockers.set(jobId, blockerMap);
 
       const incompleteBlockerChainIds: string[] = [];
+      const blockerChainTraceContexts: unknown[] = [];
       for (const blockerChainId of blockedByChainIds) {
         const lastJob = getLastJobInChain(blockerChainId);
         if (!lastJob || lastJob.status !== "completed") {
           incompleteBlockerChainIds.push(blockerChainId);
         }
+        const rootJob = store.jobs.get(blockerChainId);
+        blockerChainTraceContexts.push(rootJob?.traceContext ?? null);
       }
 
       if (incompleteBlockerChainIds.length > 0 && job.status === "pending") {
         const updatedJob: StateJob = { ...job, status: "blocked" };
         store.jobs.set(jobId, updatedJob);
-        return { job: updatedJob, incompleteBlockerChainIds };
+        return { job: updatedJob, incompleteBlockerChainIds, blockerChainTraceContexts };
       }
 
-      return { job, incompleteBlockerChainIds: [] };
+      return { job, incompleteBlockerChainIds: [], blockerChainTraceContexts };
     },
 
     scheduleBlockedJobs: async ({ blockedByChainId }) => {
-      const scheduledJobs: StateJob[] = [];
+      const unblockedJobs: StateJob[] = [];
+      const blockerTraceContexts: unknown[] = [];
       const now = new Date();
 
       for (const [jobId, blockerMap] of store.jobBlockers) {
-        if (!blockerMap.has(blockedByChainId)) continue;
+        const entry = blockerMap.get(blockedByChainId);
+        if (!entry) continue;
+
+        if (entry.traceContext != null) {
+          blockerTraceContexts.push(entry.traceContext);
+        }
 
         const job = store.jobs.get(jobId);
         if (!job || job.status !== "blocked") continue;
@@ -217,18 +236,18 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
             scheduledAt: now,
           };
           store.jobs.set(jobId, updatedJob);
-          scheduledJobs.push(updatedJob);
+          unblockedJobs.push(updatedJob);
         }
       }
 
-      return scheduledJobs;
+      return { unblockedJobs, blockerTraceContexts };
     },
 
     getJobBlockers: async ({ jobId }) => {
       const blockerMap = store.jobBlockers.get(jobId);
       if (!blockerMap) return [];
 
-      const entries = Array.from(blockerMap.entries()).sort((a, b) => a[1] - b[1]);
+      const entries = Array.from(blockerMap.entries()).sort((a, b) => a[1].index - b[1].index);
 
       const result: [StateJob, StateJob | undefined][] = [];
       for (const [blockerChainId] of entries) {

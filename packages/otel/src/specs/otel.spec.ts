@@ -899,12 +899,17 @@ describe("Spans", () => {
     });
 
     await expectSpans([
-      { name: "chain test", kind: "PRODUCER" },
-      { name: "job test", kind: "PRODUCER", parentName: "chain test" },
-      { name: "prepare", kind: "INTERNAL", parentName: "job-attempt test" },
-      { name: "complete", kind: "INTERNAL", parentName: "job-attempt test" },
-      { name: "chain test", kind: "CONSUMER", parentName: "job-attempt test", links: 1 },
-      { name: "job-attempt test", kind: "CONSUMER", parentName: "job test" },
+      { name: "create chain.test", kind: "PRODUCER" },
+      { name: "create job.test", kind: "PRODUCER", parentName: "create chain.test" },
+      { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.test" },
+      { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.test" },
+      {
+        name: "complete chain.test",
+        kind: "CONSUMER",
+        parentName: "start job-attempt.test",
+        links: 1,
+      },
+      { name: "start job-attempt.test", kind: "CONSUMER", parentName: "create job.test" },
     ]);
   });
 
@@ -973,20 +978,45 @@ describe("Spans", () => {
     });
 
     await expectSpans([
-      { name: "chain test", kind: "PRODUCER" },
-      { name: "job test", kind: "PRODUCER", parentName: "chain test" },
+      { name: "create chain.test", kind: "PRODUCER" },
+      { name: "create job.test", kind: "PRODUCER", parentName: "create chain.test" },
       // Attempts 1-3: auto-setup prepare runs, then handler throws
-      { name: "prepare", kind: "INTERNAL", parentName: "job-attempt test" },
-      { name: "job-attempt test", kind: "CONSUMER", parentName: "job test", status: "ERROR" },
-      { name: "prepare", kind: "INTERNAL", parentName: "job-attempt test" },
-      { name: "job-attempt test", kind: "CONSUMER", parentName: "job test", status: "ERROR" },
-      { name: "prepare", kind: "INTERNAL", parentName: "job-attempt test" },
-      { name: "job-attempt test", kind: "CONSUMER", parentName: "job test", status: "ERROR" },
+      { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.test" },
+      {
+        name: "start job-attempt.test",
+        kind: "CONSUMER",
+        parentName: "create job.test",
+        status: "ERROR",
+      },
+      { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.test" },
+      {
+        name: "start job-attempt.test",
+        kind: "CONSUMER",
+        parentName: "create job.test",
+        status: "ERROR",
+      },
+      { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.test" },
+      {
+        name: "start job-attempt.test",
+        kind: "CONSUMER",
+        parentName: "create job.test",
+        status: "ERROR",
+      },
       // Attempt 4: prepare + complete + chain completion
-      { name: "prepare", kind: "INTERNAL", parentName: "job-attempt test" },
-      { name: "complete", kind: "INTERNAL", parentName: "job-attempt test" },
-      { name: "chain test", kind: "CONSUMER", parentName: "job-attempt test", links: 1 },
-      { name: "job-attempt test", kind: "CONSUMER", parentName: "job test", status: "OK" },
+      { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.test" },
+      { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.test" },
+      {
+        name: "complete chain.test",
+        kind: "CONSUMER",
+        parentName: "start job-attempt.test",
+        links: 1,
+      },
+      {
+        name: "start job-attempt.test",
+        kind: "CONSUMER",
+        parentName: "create job.test",
+        status: "OK",
+      },
     ]);
   });
 
@@ -1072,28 +1102,42 @@ describe("Spans", () => {
     });
 
     await expectSpans([
-      { name: "chain linear", kind: "PRODUCER" },
-      { name: "job linear", kind: "PRODUCER", parentName: "chain linear" },
-      { name: "prepare", kind: "INTERNAL", parentName: "job-attempt linear" },
-      { name: "job linear_next", kind: "PRODUCER", parentName: "chain linear", links: 1 },
-      { name: "complete", kind: "INTERNAL", parentName: "job-attempt linear" },
-      { name: "job-attempt linear", kind: "CONSUMER", parentName: "job linear" },
-      { name: "prepare", kind: "INTERNAL", parentName: "job-attempt linear_next" },
-      { name: "job linear_next_next", kind: "PRODUCER", parentName: "chain linear", links: 1 },
-      { name: "complete", kind: "INTERNAL", parentName: "job-attempt linear_next" },
-      { name: "job-attempt linear_next", kind: "CONSUMER", parentName: "job linear_next" },
-      { name: "prepare", kind: "INTERNAL", parentName: "job-attempt linear_next_next" },
-      { name: "complete", kind: "INTERNAL", parentName: "job-attempt linear_next_next" },
+      { name: "create chain.linear", kind: "PRODUCER" },
+      { name: "create job.linear", kind: "PRODUCER", parentName: "create chain.linear" },
+      { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.linear" },
       {
-        name: "chain linear",
+        name: "create job.linear_next",
+        kind: "PRODUCER",
+        parentName: "create chain.linear",
+        links: 1,
+      },
+      { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.linear" },
+      { name: "start job-attempt.linear", kind: "CONSUMER", parentName: "create job.linear" },
+      { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.linear_next" },
+      {
+        name: "create job.linear_next_next",
+        kind: "PRODUCER",
+        parentName: "create chain.linear",
+        links: 1,
+      },
+      { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.linear_next" },
+      {
+        name: "start job-attempt.linear_next",
         kind: "CONSUMER",
-        parentName: "job-attempt linear_next_next",
+        parentName: "create job.linear_next",
+      },
+      { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.linear_next_next" },
+      { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.linear_next_next" },
+      {
+        name: "complete chain.linear",
+        kind: "CONSUMER",
+        parentName: "start job-attempt.linear_next_next",
         links: 1,
       },
       {
-        name: "job-attempt linear_next_next",
+        name: "start job-attempt.linear_next_next",
         kind: "CONSUMER",
-        parentName: "job linear_next_next",
+        parentName: "create job.linear_next_next",
       },
     ]);
   });
@@ -1186,26 +1230,161 @@ describe("Spans", () => {
 
     await expectSpans([
       // Blocker chain created independently (no links yet)
-      { name: "chain blocker", kind: "PRODUCER" },
-      { name: "job blocker", kind: "PRODUCER", parentName: "chain blocker" },
-      // Main chain creation
-      { name: "chain main", kind: "PRODUCER" },
-      { name: "job main", kind: "PRODUCER", parentName: "chain main" },
+      { name: "create chain.blocker", kind: "PRODUCER" },
+      { name: "create job.blocker", kind: "PRODUCER", parentName: "create chain.blocker" },
+      // Main chain creation: blocker PRODUCER ends after addJobBlockers (before chain/job)
+      { name: "await chain.blocker", kind: "PRODUCER", parentName: "create job.main", links: 1 },
+      { name: "create chain.main", kind: "PRODUCER" },
+      { name: "create job.main", kind: "PRODUCER", parentName: "create chain.main" },
       // Processing blocker job 1: continueWith creates blocker job 2
-      { name: "prepare", kind: "INTERNAL", parentName: "job-attempt blocker" },
-      { name: "job blocker", kind: "PRODUCER", parentName: "chain blocker", links: 1 },
-      { name: "complete", kind: "INTERNAL", parentName: "job-attempt blocker" },
-      { name: "job-attempt blocker", kind: "CONSUMER", parentName: "job blocker" },
-      // Processing blocker job 2: chain completes
-      { name: "prepare", kind: "INTERNAL", parentName: "job-attempt blocker" },
-      { name: "complete", kind: "INTERNAL", parentName: "job-attempt blocker" },
-      { name: "chain blocker", kind: "CONSUMER", parentName: "job-attempt blocker", links: 1 },
-      { name: "job-attempt blocker", kind: "CONSUMER", parentName: "job blocker" },
+      { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.blocker" },
+      {
+        name: "create job.blocker",
+        kind: "PRODUCER",
+        parentName: "create chain.blocker",
+        links: 1,
+      },
+      { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.blocker" },
+      { name: "start job-attempt.blocker", kind: "CONSUMER", parentName: "create job.blocker" },
+      // Processing blocker job 2: chain completes, blocker CONSUMER span ends
+      { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.blocker" },
+      { name: "resolve chain.blocker", kind: "CONSUMER", parentName: "await chain.blocker" },
+      { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.blocker" },
+      {
+        name: "complete chain.blocker",
+        kind: "CONSUMER",
+        parentName: "start job-attempt.blocker",
+        links: 1,
+      },
+      { name: "start job-attempt.blocker", kind: "CONSUMER", parentName: "create job.blocker" },
       // Processing main job: unblocked, completes
-      { name: "prepare", kind: "INTERNAL", parentName: "job-attempt main" },
-      { name: "complete", kind: "INTERNAL", parentName: "job-attempt main" },
-      { name: "chain main", kind: "CONSUMER", parentName: "job-attempt main", links: 1 },
-      { name: "job-attempt main", kind: "CONSUMER", parentName: "job main" },
+      { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.main" },
+      { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.main" },
+      {
+        name: "complete chain.main",
+        kind: "CONSUMER",
+        parentName: "start job-attempt.main",
+        links: 1,
+      },
+      { name: "start job-attempt.main", kind: "CONSUMER", parentName: "create job.main" },
+    ]);
+  });
+
+  it("tracks blocker spans when blocker chain is already completed", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expectSpans,
+  }) => {
+    const registry = defineJobTypes<{
+      blocker: {
+        entry: true;
+        input: { value: number };
+        output: { done: true };
+      };
+      main: {
+        entry: true;
+        input: { start: boolean };
+        output: { finalResult: number };
+        blockers: [{ typeName: "blocker" }];
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+    const worker = await createInProcessWorker({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+      concurrency: 1,
+      processors: {
+        blocker: {
+          attemptHandler: async ({ complete }) => complete(async () => ({ done: true })),
+        },
+        main: {
+          attemptHandler: async ({
+            job: {
+              blockers: [blocker],
+              input,
+            },
+            complete,
+          }) =>
+            complete(async () => ({
+              finalResult: (blocker.output.done ? 1 : 0) + (input.start ? 1 : 0),
+            })),
+        },
+      },
+    });
+
+    // Create and complete the blocker chain first
+    const dependencyJobChain = await client.withNotify(async () =>
+      runInTransaction(async (txContext) =>
+        client.startJobChain({
+          ...txContext,
+          typeName: "blocker",
+          input: { value: 1 },
+        }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.waitForJobChainCompletion(dependencyJobChain, completionOptions);
+    });
+
+    // Now create main chain with already-completed blocker
+    const jobChain = await client.withNotify(async () =>
+      runInTransaction(async (txContext) =>
+        client.startJobChain({
+          ...txContext,
+          typeName: "main",
+          input: { start: true },
+          blockers: [dependencyJobChain],
+        }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.waitForJobChainCompletion(jobChain, completionOptions);
+    });
+
+    await expectSpans([
+      // Phase 1: blocker chain created and processed
+      { name: "create chain.blocker", kind: "PRODUCER" },
+      { name: "create job.blocker", kind: "PRODUCER", parentName: "create chain.blocker" },
+      { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.blocker" },
+      { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.blocker" },
+      {
+        name: "complete chain.blocker",
+        kind: "CONSUMER",
+        parentName: "start job-attempt.blocker",
+        links: 1,
+      },
+      { name: "start job-attempt.blocker", kind: "CONSUMER", parentName: "create job.blocker" },
+      // Phase 2: main chain with already-completed blocker — both PRODUCER and CONSUMER end immediately
+      { name: "await chain.blocker", kind: "PRODUCER", parentName: "create job.main", links: 1 },
+      { name: "resolve chain.blocker", kind: "CONSUMER", parentName: "await chain.blocker" },
+      { name: "create chain.main", kind: "PRODUCER" },
+      { name: "create job.main", kind: "PRODUCER", parentName: "create chain.main" },
+      // Phase 3: main job processes immediately (no blocking wait)
+      { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.main" },
+      { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.main" },
+      {
+        name: "complete chain.main",
+        kind: "CONSUMER",
+        parentName: "start job-attempt.main",
+        links: 1,
+      },
+      { name: "start job-attempt.main", kind: "CONSUMER", parentName: "create job.main" },
     ]);
   });
 
@@ -1258,18 +1437,22 @@ describe("Spans", () => {
 
     await expectSpans([
       // Chain 1: created normally
-      { name: "chain test", kind: "PRODUCER" },
-      { name: "job test", kind: "PRODUCER", parentName: "chain test" },
+      { name: "create chain.test", kind: "PRODUCER" },
+      { name: "create job.test", kind: "PRODUCER", parentName: "create chain.test" },
       // Chain 2: deduplicated (same key)
       {
-        name: "chain test",
+        name: "create chain.test",
         kind: "PRODUCER",
         attributes: { "queuert.chain.deduplicated": true },
       },
-      { name: "job test", kind: "PRODUCER", attributes: { "queuert.chain.deduplicated": true } },
+      {
+        name: "create job.test",
+        kind: "PRODUCER",
+        attributes: { "queuert.chain.deduplicated": true },
+      },
       // Chain 3: created normally (different key)
-      { name: "chain test", kind: "PRODUCER" },
-      { name: "job test", kind: "PRODUCER", parentName: "chain test" },
+      { name: "create chain.test", kind: "PRODUCER" },
+      { name: "create job.test", kind: "PRODUCER", parentName: "create chain.test" },
     ]);
   });
 
@@ -1321,10 +1504,10 @@ describe("Spans", () => {
     );
 
     await expectSpans([
-      { name: "chain test", kind: "PRODUCER" },
-      { name: "job test", kind: "PRODUCER", parentName: "chain test" },
-      { name: "chain test", kind: "CONSUMER", parentName: "job test", links: 1 },
-      { name: "job test", kind: "CONSUMER", parentName: "job test" },
+      { name: "create chain.test", kind: "PRODUCER" },
+      { name: "create job.test", kind: "PRODUCER", parentName: "create chain.test" },
+      { name: "complete chain.test", kind: "CONSUMER", parentName: "complete job.test", links: 1 },
+      { name: "complete job.test", kind: "CONSUMER", parentName: "create job.test" },
     ]);
   });
 
@@ -1391,22 +1574,34 @@ describe("Spans", () => {
     expect(completedChain.output).toEqual({ done: true });
 
     await expectSpans([
-      { name: "chain awaiting-approval", kind: "PRODUCER" },
-      { name: "job awaiting-approval", kind: "PRODUCER", parentName: "chain awaiting-approval" },
+      { name: "create chain.awaiting-approval", kind: "PRODUCER" },
       {
-        name: "job process-approved",
+        name: "create job.awaiting-approval",
         kind: "PRODUCER",
-        parentName: "chain awaiting-approval",
-        links: 1,
+        parentName: "create chain.awaiting-approval",
       },
-      { name: "job awaiting-approval", kind: "CONSUMER", parentName: "job awaiting-approval" },
       {
-        name: "chain awaiting-approval",
-        kind: "CONSUMER",
-        parentName: "job process-approved",
+        name: "create job.process-approved",
+        kind: "PRODUCER",
+        parentName: "create chain.awaiting-approval",
         links: 1,
       },
-      { name: "job process-approved", kind: "CONSUMER", parentName: "job process-approved" },
+      {
+        name: "complete job.awaiting-approval",
+        kind: "CONSUMER",
+        parentName: "create job.awaiting-approval",
+      },
+      {
+        name: "complete chain.awaiting-approval",
+        kind: "CONSUMER",
+        parentName: "complete job.process-approved",
+        links: 1,
+      },
+      {
+        name: "complete job.process-approved",
+        kind: "CONSUMER",
+        parentName: "create job.process-approved",
+      },
     ]);
   });
 });

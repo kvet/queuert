@@ -5,15 +5,12 @@
   - Affected areas:
     - `startJobChain` / `createStateJob` - span ended and logs emitted before caller's transaction commits
     - `complete()` in job-process.ts - `jobAttemptCompleted` called inside transaction
+    - `finishJob` - `completeBlockerSpan` called inside transaction (blocker CONSUMER span emitted before commit)
   - Potential approaches:
     - Buffer pattern (like `withNotifyContext` already does for notifications)
     - Transaction afterCommit hooks (requires state adapter support)
     - Span event pattern: end span for timing, add `transaction.committed` event after commit
   - See: transactional outbox pattern for reliable side effects
-- [EPIC] extract state and notify adapter test suites to efficiently test multiple configurations (prefixes etc)
-  - [TASK,MEDIUM] support all methods for state adapter test suite
-  - [TASK,MEDIUM] notify adapter
-- [TASK,MEDIUM] OTEL blocker spans
 - [TASK,EASY] `deleteJobChains` should return deleted chains
 
 # Medium term

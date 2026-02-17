@@ -6,40 +6,46 @@ This document describes Queuert's OpenTelemetry tracing implementation. For the 
 
 ## Span Hierarchy
 
-Queuert uses a four-level span hierarchy:
+Queuert uses a five-level span hierarchy:
 
 ```
-PRODUCER: chain              ← Chain published (ends immediately)
+PRODUCER: create chain.{type}          ← Chain published (ends immediately)
 │
-├── PRODUCER: job            ← Job published (ends immediately)
+├── PRODUCER: create job.{type}        ← Job published (ends immediately)
 │   │
-│   ├── CONSUMER: attempt    ← Worker processes attempt (has duration)
+│   ├── PRODUCER: await chain.{type}    ← Blocker dependency
+│   │       links: [blocker chain]
+│   │   └── CONSUMER: resolve chain.{type}  ← Blocker resolved
+│   │
+│   ├── CONSUMER: start job-attempt.{type}    ← Worker processes attempt (has duration)
 │   │   ├── INTERNAL: prepare
 │   │   └── INTERNAL: complete
 │   │
-│   └── CONSUMER: attempt    ← Retry attempt
+│   └── CONSUMER: start job-attempt.{type}    ← Retry attempt
 │       ├── INTERNAL: prepare
 │       └── INTERNAL: complete
 │
-├── PRODUCER: job            ← Continuation job
+├── PRODUCER: create job.{type}        ← Continuation job
 │   │
-│   └── CONSUMER: attempt (final)
+│   └── CONSUMER: start job-attempt.{type} (final)
 │       ├── INTERNAL: prepare
 │       ├── INTERNAL: complete
-│       └── CONSUMER: chain  ← Chain consumed (created on attempt success)
+│       └── CONSUMER: complete chain.{type}  ← Chain completion
 ```
 
 Span kinds use OpenTelemetry's PRODUCER/CONSUMER/INTERNAL semantics. The chain has both a PRODUCER (creation) and CONSUMER (completion) span for symmetry.
 
-| Span              | Kind     | Created                             | Ended                   | Duration         |
-| ----------------- | -------- | ----------------------------------- | ----------------------- | ---------------- |
-| **chain** (start) | PRODUCER | `startJobChain()`                   | Immediately             | ~0ms             |
-| **job**           | PRODUCER | `startJobChain()`, `continueWith()` | Immediately             | ~0ms             |
-| **attempt**       | CONSUMER | Worker claims job                   | Attempt completes/fails | Processing time  |
-| **prepare**       | INTERNAL | `prepare()` called                  | `prepare()` returns     | Transaction time |
-| **complete**      | INTERNAL | `complete()` called                 | `complete()` returns    | Transaction time |
-| **job** (end)     | CONSUMER | Workerless completion               | Immediately             | ~0ms             |
-| **chain** (end)   | CONSUMER | Final job completes                 | Immediately             | ~0ms             |
+| Span                         | Kind     | Created                             | Ended                   | Duration         |
+| ---------------------------- | -------- | ----------------------------------- | ----------------------- | ---------------- |
+| **create chain.{type}**      | PRODUCER | `startJobChain()`                   | Immediately             | ~0ms             |
+| **create job.{type}**        | PRODUCER | `startJobChain()`, `continueWith()` | Immediately             | ~0ms             |
+| **await chain.{type}**       | PRODUCER | `startJobChain()` with blockers     | Immediately             | ~0ms             |
+| **resolve chain.{type}**     | CONSUMER | Blocker chain completes             | Immediately             | ~0ms             |
+| **start job-attempt.{type}** | CONSUMER | Worker claims job                   | Attempt completes/fails | Processing time  |
+| **prepare**                  | INTERNAL | `prepare()` called                  | `prepare()` returns     | Transaction time |
+| **complete**                 | INTERNAL | `complete()` called                 | `complete()` returns    | Transaction time |
+| **complete job.{type}**      | CONSUMER | Workerless completion               | Immediately             | ~0ms             |
+| **complete chain.{type}**    | CONSUMER | Final job completes                 | Immediately             | ~0ms             |
 
 ## Trace Context Propagation
 
@@ -48,8 +54,10 @@ Trace context is stored in job state (`traceContext` field) to enable span linki
 Context flows through the system:
 
 - **Chain start**: Creates chain and job spans, stores context with job
+- **Blockers**: Creates blocker spans as children of job, stores context in `job_blocker` table
 - **Continuation**: Inherits chain context, creates new job span, links to origin
 - **Worker processing**: Creates attempt span as child of job, updates context
+- **Blocker completion**: Ends blocker span using context from `job_blocker` table
 - **Chain completion**: Creates CONSUMER chain span linked to PRODUCER chain
 
 ## Deduplication
@@ -72,14 +80,14 @@ When deduplication occurs:
 Caller requests startJobChain with deduplication key "user-123":
 
 First call (creates new chain):
-PRODUCER chain process-user [0ms] ──────────────────────
+PRODUCER create chain.process-user [0ms] ──────────────
 │   queuert.chain.id: "abc-123"
 │   queuert.chain.deduplicated: false
 │
 └── ... (normal processing)
 
 Second call (deduplicated):
-PRODUCER chain process-user [0ms] ──────────────────────
+PRODUCER create chain.process-user [0ms] ──────────────
     queuert.chain.id: "abc-123"  ← same as existing
     queuert.chain.deduplicated: true
     links: [chain abc-123]  ← link to existing chain
@@ -87,90 +95,101 @@ PRODUCER chain process-user [0ms] ───────────────�
 
 ## Blocker Relationships
 
-When a job has blockers (dependencies on other chains), the relationship is visible through shared parent context. In the common case of creating blocker chains and a blocked `startJobChain` in the same caller scope, all chains share the caller's active span as parent:
+When a job has blockers (dependencies on other chains), each blocker gets a PRODUCER/CONSUMER span pair as a child of the blocked job's PRODUCER span. The PRODUCER (`await chain.{type}`) is created at `startJobChain` time with a link to the blocker chain. The CONSUMER (`resolve chain.{type}`) is created when the blocker chain completes, so the time between them represents the blocking duration.
+
+The blocker PRODUCER span's trace context is persisted in the `job_blocker` table so the CONSUMER can be created later by a different process (the one completing the blocker chain).
 
 ```
 EXTERNAL span (e.g., HTTP request)
 │
-├── PRODUCER: chain process-order ──────────────────────
+├── PRODUCER: create chain.process-order ──────────────
 │   │
-│   └── PRODUCER: job process-order
-│       │   (created with status: blocked)
+│   └── PRODUCER: create job.process-order
 │       │
-│       └── CONSUMER: attempt
+│       ├── PRODUCER: await chain.fetch-user ──link──→ chain fetch-user
+│       │   └── CONSUMER: resolve chain.fetch-user
+│       │
+│       ├── PRODUCER: await chain.fetch-inventory ──link──→ chain fetch-inventory
+│       │   └── CONSUMER: resolve chain.fetch-inventory
+│       │
+│       └── CONSUMER: start job-attempt.process-order
 │           │   job.blockers contains resolved blocker outputs
 │           ├── INTERNAL: prepare
 │           ├── INTERNAL: complete ✓
-│           └── CONSUMER: chain process-order
+│           └── CONSUMER: complete chain.process-order
 │
-├── PRODUCER: chain fetch-user ─────────────────────────
+├── PRODUCER: create chain.fetch-user ─────────────────
 │   │
-│   └── PRODUCER: job fetch-user
+│   └── PRODUCER: create job.fetch-user
 │       │
-│       └── CONSUMER: attempt ✓
+│       └── CONSUMER: start job-attempt.fetch-user ✓
 │           ├── INTERNAL: prepare
 │           ├── INTERNAL: complete
-│           └── CONSUMER: chain fetch-user
+│           └── CONSUMER: complete chain.fetch-user
 │
-└── PRODUCER: chain fetch-inventory ────────────────────
+└── PRODUCER: create chain.fetch-inventory ────────────
     │
-    └── PRODUCER: job fetch-inventory
+    └── PRODUCER: create job.fetch-inventory
         │
-        └── CONSUMER: attempt ✓
+        └── CONSUMER: start job-attempt.fetch-inventory ✓
             ├── INTERNAL: prepare
             ├── INTERNAL: complete
-            └── CONSUMER: chain fetch-inventory
+            └── CONSUMER: complete chain.fetch-inventory
 ```
 
-Blocker chains are independent — they have no span links to the blocked job. The dependency relationship is implicit through the shared parent span and visible when blocker outputs appear in the blocked job's attempt.
+### Blocker Span Lifecycle
+
+1. **PRODUCER created and ended** in `startJobChain` when the job has blockers — one PRODUCER span per blocker, as a child of the job's PRODUCER span, with a link to the blocker chain's trace context
+2. **Persisted** — the PRODUCER span context is stored in the `job_blocker` table (`trace_context` column) so the CONSUMER can be created by another process
+3. **CONSUMER created** when `scheduleBlockedJobs` detects the blocker chain has completed — the PRODUCER span context is read from `job_blocker` and a CONSUMER span is created as its child
 
 ## Continuation Relationships
 
 When a job continues to another job via `continueWith`, the continuation links to its origin:
 
 ```
-PRODUCER: chain multi-step ─────────────────────────────
+PRODUCER: create chain.multi-step ────────────────────────
 │
-├── PRODUCER: job step-one
-│   └── CONSUMER: attempt #1
+├── PRODUCER: create job.step-one
+│   └── CONSUMER: start job-attempt.step-one #1
 │       ├── INTERNAL: prepare
 │       └── INTERNAL: complete (calls continueWith)
 │
-└── PRODUCER: job step-two
+└── PRODUCER: create job.step-two
     │   links: [job step-one]  ← origin link
     │
-    └── CONSUMER: attempt #1 (final)
+    └── CONSUMER: start job-attempt.step-two #1 (final)
         ├── INTERNAL: prepare
         ├── INTERNAL: complete
-        └── CONSUMER: chain multi-step
+        └── CONSUMER: complete chain.multi-step
 ```
 
 The origin link shows the causal flow: "step-two was created by step-one's completion".
 
 ## Workerless Completion
 
-When a job is completed via `completeJobChain` (without a worker), there is no attempt. Instead, a CONSUMER job span marks the completion, and if the chain is fully completed, a CONSUMER chain span closes the trace:
+When a job is completed via `completeJobChain` (without a worker), there is no job-attempt. Instead, a CONSUMER job span marks the completion, and if the chain is fully completed, a CONSUMER chain span closes the trace:
 
 ```
-PRODUCER: chain approve-order ──────────────────────────
+PRODUCER: create chain.approve-order ─────────────────────
 │
-└── PRODUCER: job approve-order
+└── PRODUCER: create job.approve-order
     │
-    └── CONSUMER: job approve-order  ← Workerless completion
+    └── CONSUMER: complete job.approve-order  ← Workerless completion
         │
-        └── CONSUMER: chain approve-order
+        └── CONSUMER: complete chain.approve-order
 ```
 
 The CONSUMER job span is a child of the PRODUCER job span and carries the same chain/job attributes. When `continueWith` is called during workerless completion, the CONSUMER chain span is omitted (the chain continues):
 
 ```
-PRODUCER: chain multi-step ─────────────────────────────
+PRODUCER: create chain.multi-step ────────────────────────
 │
-├── PRODUCER: job step-one
+├── PRODUCER: create job.step-one
 │   │
-│   └── CONSUMER: job step-one  ← Workerless completion (continueWith)
+│   └── CONSUMER: complete job.step-one  ← Workerless completion (continueWith)
 │
-└── PRODUCER: job step-two
+└── PRODUCER: create job.step-two
     │   links: [job step-one]
     │
     └── ...
@@ -198,6 +217,18 @@ This uses the `completeJobSpan` adapter method rather than `startAttemptSpan`, r
 | `queuert.job.id`             | string   | Job ID                                |
 | `queuert.job.type`           | string   | Job type name                         |
 
+### Blocker Spans
+
+| Attribute                    | Type   | Description              |
+| ---------------------------- | ------ | ------------------------ |
+| `queuert.chain.id`           | string | Blocked job's chain ID   |
+| `queuert.chain.type`         | string | Blocked job's chain type |
+| `queuert.job.id`             | string | Blocked job ID           |
+| `queuert.job.type`           | string | Blocked job type         |
+| `queuert.blocker.chain.id`   | string | Blocker chain ID         |
+| `queuert.blocker.chain.type` | string | Blocker chain type       |
+| `queuert.blocker.index`      | number | Blocker index (0-based)  |
+
 ### Attempt Spans
 
 | Attribute                         | Type    | Description                           |
@@ -216,10 +247,10 @@ This uses the `completeJobSpan` adapter method rather than `startAttemptSpan`, r
 
 ## Chain Duration Measurement
 
-With PRODUCER chain at start and CONSUMER chain at end, total chain duration is calculated as:
+With `create chain` at start and `complete chain` at end, total chain duration is calculated as:
 
 ```
-Chain Duration = CONSUMER chain.startTime - PRODUCER chain.startTime
+Chain Duration = complete chain.startTime - create chain.startTime
 ```
 
 This provides end-to-end visibility even though individual PRODUCER/CONSUMER spans are instantaneous markers.
@@ -231,7 +262,7 @@ Queuert's tracing design provides:
 1. **Symmetric chain spans**: PRODUCER at creation, CONSUMER at completion
 2. **Hierarchical job spans**: Chain → Job → Attempt → prepare/complete
 3. **Workerless completion**: CONSUMER job span closes the trace without an attempt
-4. **Blocker visibility**: Shared parent context groups related chains
+4. **Blocker visibility**: Dedicated blocker spans with links to blocker chains, duration = blocking time
 5. **Continuation tracking**: Span links connect jobs in a chain
 6. **Retry visibility**: Multiple attempt spans under each job
 7. **Deduplication tracking**: Attribute marks deduplicated chains, links to existing trace

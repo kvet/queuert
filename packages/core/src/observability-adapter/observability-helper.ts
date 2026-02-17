@@ -6,6 +6,9 @@ import { type NotifyAdapter } from "../notify-adapter/notify-adapter.js";
 import { type StateAdapter, type StateJob } from "../state-adapter/state-adapter.js";
 import { type JobBasicData, type JobChainData, type JobProcessingData, type Log } from "./log.js";
 import {
+  type BlockerSpanHandle,
+  type BlockerSpanInputData,
+  type CompleteBlockerSpanData,
   type JobAttemptSpanHandle,
   type JobAttemptSpanInputData,
   type JobSpanHandle,
@@ -116,6 +119,8 @@ export type ObservabilityHelper = {
     job: StateJob,
     options: { continued?: Job<any, any, any, any, any[]>; chainCompleted: boolean },
   ) => void;
+  startBlockerSpan: (data: BlockerSpanInputData) => BlockerSpanHandle | undefined;
+  completeBlockerSpan: (data: CompleteBlockerSpanData) => void;
 };
 
 const noopLog: Log = () => {};
@@ -487,6 +492,18 @@ export const createObservabilityHelper = ({
     } catch {
       return undefined;
     }
+  },
+  startBlockerSpan: (data) => {
+    try {
+      return adapter.startBlockerSpan(data);
+    } catch {
+      return undefined;
+    }
+  },
+  completeBlockerSpan: (data) => {
+    try {
+      adapter.completeBlockerSpan(data);
+    } catch {}
   },
   startAttemptSpan: (data) => {
     try {

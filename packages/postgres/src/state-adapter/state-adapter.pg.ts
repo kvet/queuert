@@ -173,25 +173,33 @@ export const createPgStateAdapter = async <
       return { job: mapDbJobToStateJob(result), deduplicated: result.deduplicated };
     },
 
-    addJobBlockers: async ({ txContext, jobId, blockedByChainIds }) => {
+    addJobBlockers: async ({ txContext, jobId, blockedByChainIds, blockerTraceContexts }) => {
       const [result] = await executeTypedSql({
         txContext,
         sql: addJobBlockersSql,
-        params: [Array.from({ length: blockedByChainIds.length }, () => jobId), blockedByChainIds],
+        params: [
+          Array.from({ length: blockedByChainIds.length }, () => jobId),
+          blockedByChainIds,
+          blockerTraceContexts ?? Array.from({ length: blockedByChainIds.length }, () => null),
+        ],
       });
 
       return {
         job: mapDbJobToStateJob(result),
         incompleteBlockerChainIds: result.incomplete_blocker_chain_ids,
+        blockerChainTraceContexts: result.blocker_chain_trace_contexts,
       };
     },
     scheduleBlockedJobs: async ({ txContext, blockedByChainId }) => {
-      const jobs = await executeTypedSql({
+      const [result] = await executeTypedSql({
         txContext,
         sql: scheduleBlockedJobsSql,
         params: [blockedByChainId],
       });
-      return jobs.map(mapDbJobToStateJob);
+      return {
+        unblockedJobs: result.unblocked_jobs.map(mapDbJobToStateJob),
+        blockerTraceContexts: result.blocker_trace_contexts,
+      };
     },
     getJobBlockers: async ({ txContext, jobId }) => {
       const jobChains = await executeTypedSql({

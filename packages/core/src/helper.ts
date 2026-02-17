@@ -123,13 +123,39 @@ export const helper = ({
       blockerChains = blockers;
       const blockerChainIds = blockerChains.map((b) => b.id);
 
+      const blockerSpanHandles = blockerChains.map((blocker, i) =>
+        observabilityHelper.startBlockerSpan({
+          chainId: job.chainId,
+          chainTypeName: resolvedChainTypeName,
+          jobId: job.id,
+          jobTypeName: typeName,
+          jobTraceContext: spanHandle?.getTraceContext(),
+          blockerChainId: blocker.id,
+          blockerChainTypeName: blocker.typeName,
+          blockerIndex: i,
+        }),
+      );
+
       const addBlockersResult = await stateAdapter.addJobBlockers({
         txContext,
         jobId: job.id,
         blockedByChainIds: blockerChainIds,
+        blockerTraceContexts: blockerSpanHandles.map((h) => h?.getTraceContext() ?? null),
       });
       job = addBlockersResult.job;
       incompleteBlockerChainIds = addBlockersResult.incompleteBlockerChainIds;
+
+      const incompleteSet = new Set(incompleteBlockerChainIds);
+      blockerSpanHandles.forEach((handle, i) => {
+        if (!handle) return;
+        handle.end({ blockerTraceContext: addBlockersResult.blockerChainTraceContexts[i] });
+        if (!incompleteSet.has(blockerChainIds[i])) {
+          observabilityHelper.completeBlockerSpan({
+            traceContext: handle.getTraceContext(),
+            blockerChainTypeName: blockerChains[i].typeName,
+          });
+        }
+      });
     }
 
     const blockerRefs = blockerChains.map((b) => ({ typeName: b.typeName, input: b.input }));
@@ -254,10 +280,16 @@ export const helper = ({
       observabilityHelper.jobChainDuration(jobChainStartJob, job);
       notifyChainCompletion(job);
 
-      const unblockedJobs = await stateAdapter.scheduleBlockedJobs({
+      const { unblockedJobs, blockerTraceContexts } = await stateAdapter.scheduleBlockedJobs({
         txContext,
         blockedByChainId: jobChainStartJob.id,
       });
+      for (const traceContext of blockerTraceContexts) {
+        observabilityHelper.completeBlockerSpan({
+          traceContext,
+          blockerChainTypeName: jobChainStartJob.chainTypeName,
+        });
+      }
 
       if (unblockedJobs.length > 0) {
         unblockedJobs.forEach((unblockedJob) => {

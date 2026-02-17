@@ -8,6 +8,7 @@
  * 2. Continuations: Linear chain of jobs → chain span contains multiple sequential job spans
  * 3. Blockers: Fan-out/fan-in pattern → chain span shows parallel blocker jobs with links
  * 4. Retries: Job fails then succeeds → job span contains multiple attempt spans
+ * 5. Workerless Completion: Job completed externally → CONSUMER job span without attempt spans
  */
 
 import { createClient, createInProcessWorker, defineJobTypes } from "queuert";
@@ -61,16 +62,14 @@ const registry = defineJobTypes<{
    *                    +--> process-with-blockers
    *   fetch-permissions+
    *
-   * Trace structure (3 separate chains with links):
-   *   chain-span (process-with-blockers)     chain-span (fetch-user)
-   *     └─ job-span ←─────link──────────────── └─ job-span
-   *          └─ attempt-span                        └─ attempt-span
-   *               ↑
-   *               link
-   *               ↓
-   *                                          chain-span (fetch-permissions)
-   *                                            └─ job-span
-   *                                                 └─ attempt-span
+   * Trace structure:
+   *   chain-span (process-with-blockers)
+   *     └─ job-span
+   *          ├─ PRODUCER: await chain.fetch-user ──link──→ chain fetch-user
+   *          │    └─ CONSUMER: resolve chain.fetch-user
+   *          ├─ PRODUCER: await chain.fetch-permissions ──link──→ chain fetch-permissions
+   *          │    └─ CONSUMER: resolve chain.fetch-permissions
+   *          └─ attempt-span
    */
   "fetch-user": {
     entry: true;
@@ -100,6 +99,22 @@ const registry = defineJobTypes<{
    *          └─ attempt-span #2 [OK]
    */
   "might-fail": { entry: true; input: { shouldFail: boolean }; output: { success: true } };
+
+  /*
+   * Scenario 5 - Workerless Completion:
+   *   awaiting-approval → completed externally via completeJobChain
+   *
+   * Trace structure:
+   *   chain-span PRODUCER
+   *     └─ job-span PRODUCER (awaiting-approval)
+   *          └─ job-span CONSUMER (awaiting-approval)
+   *               └─ chain-span CONSUMER
+   */
+  "awaiting-approval": {
+    entry: true;
+    input: { requestId: string };
+    output: { approved: boolean; approvedBy: string };
+  };
 }>();
 
 // Create adapters
@@ -271,6 +286,34 @@ const retryJob = await client.withNotify(async () =>
 );
 const retryResult = await client.waitForJobChainCompletion(retryJob, { timeoutMs: 5000 });
 console.log("Result:", retryResult.output);
+
+// Scenario 5: Workerless Completion
+console.log("\n--- Scenario 5: Workerless Completion ---");
+console.log("Job completed externally without a worker. CONSUMER job span, no attempt spans.\n");
+const approvalJob = await client.withNotify(async () =>
+  stateAdapter.runInTransaction(async (ctx) =>
+    client.startJobChain({
+      ...ctx,
+      typeName: "awaiting-approval",
+      input: { requestId: "REQ-789" },
+    }),
+  ),
+);
+const approvalResult = await client.withNotify(async () =>
+  stateAdapter.runInTransaction(async (ctx) =>
+    client.completeJobChain({
+      ...ctx,
+      typeName: "awaiting-approval",
+      id: approvalJob.id,
+      complete: async ({ job, complete }) =>
+        complete(job, async () => ({
+          approved: true,
+          approvedBy: "admin",
+        })),
+    }),
+  ),
+);
+console.log("Result:", approvalResult.output);
 
 // Cleanup
 await stopWorker();
