@@ -612,16 +612,38 @@ WHERE job_id IN (
   false,
 );
 
+export const getJobChainsByChainIdsSql: TypedSql<
+  readonly [NamedParameter<"chain_ids_json", string>],
+  DbJobChainRow[]
+> = sql(
+  /* sql */ `
+SELECT
+  {{job_columns:j}},
+  {{job_columns_prefixed:lc:lc_}}
+FROM {{table_prefix}}job AS j
+LEFT JOIN {{table_prefix}}job AS lc
+  ON lc.chain_id = j.id
+  AND lc.rowid = (
+    SELECT rowid FROM {{table_prefix}}job
+    WHERE chain_id = j.id
+    ORDER BY created_at DESC, rowid DESC
+    LIMIT 1
+  )
+WHERE j.id = j.chain_id
+  AND j.chain_id IN (SELECT value FROM json_each(?))
+`,
+  true,
+);
+
 export const deleteJobsByChainIdsSql: TypedSql<
   readonly [NamedParameter<"chain_ids_json", string>],
-  DbJob[]
+  []
 > = sql(
   /* sql */ `
 DELETE FROM {{table_prefix}}job
 WHERE chain_id IN (SELECT value FROM json_each(?))
-RETURNING *
 `,
-  true,
+  false,
 );
 
 export const getJobForUpdateSql: TypedSql<

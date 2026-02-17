@@ -44,12 +44,20 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       ),
     );
 
-    await runInTransaction(async (txContext) =>
+    const deletedChains = await runInTransaction(async (txContext) =>
       client.deleteJobChains({
         ...txContext,
         chainIds: [jobChain.id],
       }),
     );
+
+    expect(deletedChains).toHaveLength(1);
+    expect(deletedChains[0]).toMatchObject({
+      id: jobChain.id,
+      typeName: "test",
+      input: { value: 1 },
+      status: "pending",
+    });
 
     await runInTransaction(async (txContext) => {
       const fetchedJobChain = await client.getJobChain({
@@ -58,6 +66,73 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
         typeName: "test",
       });
       expect(fetchedJobChain).toBeNull();
+    });
+  });
+
+  it("returns correct chain status for chain with continuation", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const registry = defineJobTypes<{
+      step1: {
+        entry: true;
+        input: { value: number };
+        continueWith: { typeName: "step2" };
+      };
+      step2: {
+        input: { continued: boolean };
+        output: null;
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+
+    const jobChain = await runInTransaction(async (txContext) =>
+      client.startJobChain({
+        ...txContext,
+        typeName: "step1",
+        input: { value: 1 },
+      }),
+    );
+
+    await runInTransaction(async (txContext) =>
+      client.completeJobChain({
+        ...txContext,
+        typeName: "step1",
+        id: jobChain.id,
+        complete: async ({ job, complete }) => {
+          if (job.typeName === "step1") {
+            await complete(job, async ({ continueWith }) =>
+              continueWith({ typeName: "step2", input: { continued: true } }),
+            );
+          }
+        },
+      }),
+    );
+
+    const deletedChains = await runInTransaction(async (txContext) =>
+      client.deleteJobChains({
+        ...txContext,
+        chainIds: [jobChain.id],
+      }),
+    );
+
+    expect(deletedChains).toHaveLength(1);
+    expect(deletedChains[0]).toMatchObject({
+      id: jobChain.id,
+      typeName: "step1",
+      input: { value: 1 },
+      status: "pending",
     });
   });
 
@@ -126,12 +201,20 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     await withWorkers([await worker.start()], async () => {
       await jobStarted.promise;
 
-      await runInTransaction(async (txContext) =>
+      const deletedChains = await runInTransaction(async (txContext) =>
         client.deleteJobChains({
           ...txContext,
           chainIds: [jobChain.id],
         }),
       );
+
+      expect(deletedChains).toHaveLength(1);
+      expect(deletedChains[0]).toMatchObject({
+        id: jobChain.id,
+        typeName: "test",
+        input: null,
+        status: "running",
+      });
 
       await jobDeleted.promise;
     });
@@ -197,12 +280,27 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     ).rejects.toThrow(BlockerReferenceError);
 
     // Deleting both together should succeed
-    await runInTransaction(async (txContext) =>
+    const deletedChains = await runInTransaction(async (txContext) =>
       client.deleteJobChains({
         ...txContext,
         chainIds: [mainChain.id, blockerChain!.id],
       }),
     );
+
+    expect(deletedChains).toHaveLength(2);
+    const deletedByType = Object.fromEntries(deletedChains.map((c) => [c.typeName, c]));
+    expect(deletedByType["blocker"]).toMatchObject({
+      id: blockerChain!.id,
+      typeName: "blocker",
+      input: { value: 1 },
+      status: "pending",
+    });
+    expect(deletedByType["main"]).toMatchObject({
+      id: mainChain.id,
+      typeName: "main",
+      input: null,
+      status: "blocked",
+    });
 
     await runInTransaction(async (txContext) => {
       const fetchedBlocker = await client.getJobChain({
@@ -287,12 +385,19 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     await withWorkers([await worker.start()], async () => {
       await jobStarted.promise;
 
-      await runInTransaction(async (txContext) =>
+      const deletedChains = await runInTransaction(async (txContext) =>
         client.deleteJobChains({
           ...txContext,
           chainIds: [jobChain.id],
         }),
       );
+
+      expect(deletedChains).toHaveLength(1);
+      expect(deletedChains[0]).toMatchObject({
+        id: jobChain.id,
+        typeName: "test",
+        input: null,
+      });
 
       await processThrown.promise;
     });

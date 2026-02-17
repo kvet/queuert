@@ -1539,7 +1539,8 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       );
 
       expect(deleted).toHaveLength(1);
-      expect(deleted[0].id).toBe(job.id);
+      expect(deleted[0][0].id).toBe(job.id);
+      expect(deleted[0][1]).toBeUndefined();
       expect(await stateAdapter.getJobById({ jobId: job.id })).toBeUndefined();
     });
 

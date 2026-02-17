@@ -283,12 +283,17 @@ export const createPgStateAdapter = async <
           })),
         );
       }
-      const jobs = await executeTypedSql({
+      const rows = await executeTypedSql({
         txContext,
         sql: deleteJobsByChainIdsSql,
         params: [chainIds],
       });
-      return jobs.map(mapDbJobToStateJob);
+      return rows.map((row) => [
+        mapDbJobToStateJob(row.root_job),
+        row.last_chain_job && row.last_chain_job.id !== row.root_job.id
+          ? mapDbJobToStateJob(row.last_chain_job)
+          : undefined,
+      ]);
     },
     getJobForUpdate: async ({ txContext, jobId }) => {
       const [job] = await executeTypedSql({

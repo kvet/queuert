@@ -11,7 +11,12 @@
     - Transaction afterCommit hooks (requires state adapter support)
     - Span event pattern: end span for timing, add `transaction.committed` event after commit
   - See: transactional outbox pattern for reliable side effects
-- [TASK,EASY] `deleteJobChains` should return deleted chains
+- [TASK,MEDIUM] Add `chain_index` column to job table
+  - Solves two problems at once:
+    1. Deterministic ordering within a chain (replaces unreliable `created_at DESC` when jobs share `created_at` in same transaction)
+    2. Replaces `continued:<id>` deduplication key hack for continuations (chain_index is a natural deduplication key within a chain)
+  - Index: replace `job_chain_created_at_idx (chain_id, created_at DESC)` → `job_chain_index_idx (chain_id, chain_index DESC)`
+  - Tests to add back: `getJobChainById` and `deleteJobsByChainIds` same-transaction ordering tests (removed because Postgres lacks a deterministic tiebreaker for shared `created_at`)
 
 # Medium term
 

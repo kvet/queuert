@@ -34,6 +34,7 @@ import {
   getJobByIdForBlockersSql,
   getJobByIdSql,
   getJobChainByIdSql,
+  getJobChainsByChainIdsSql,
   getJobForUpdateSql,
   getNextJobAvailableInMsSql,
   insertJobBlockersSql,
@@ -470,17 +471,30 @@ export const createSqliteStateAdapter = async <
           })),
         );
       }
+      const rows = await executeTypedSql({
+        txContext,
+        sql: getJobChainsByChainIdsSql,
+        params: [chainIdsJson],
+      });
       await executeTypedSql({
         txContext,
         sql: deleteBlockersByChainIdsSql,
         params: [chainIdsJson],
       });
-      const jobs = await executeTypedSql({
+      await executeTypedSql({
         txContext,
         sql: deleteJobsByChainIdsSql,
         params: [chainIdsJson],
       });
-      return jobs.map(mapDbJobToStateJob);
+      return rows.map((row) => {
+        const { rootJob, lastChainJob } = parseDbJobChainRow(row);
+        return [
+          mapDbJobToStateJob(rootJob),
+          lastChainJob && lastChainJob.id !== rootJob.id
+            ? mapDbJobToStateJob(lastChainJob)
+            : undefined,
+        ] as [StateJob, StateJob | undefined];
+      });
     },
     getJobForUpdate: async ({ txContext, jobId }) => {
       const [job] = await executeTypedSql({

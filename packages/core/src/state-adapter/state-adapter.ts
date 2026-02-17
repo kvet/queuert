@@ -145,7 +145,7 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
   deleteJobsByChainIds: (params: {
     txContext?: TTxContext;
     chainIds: TJobId[];
-  }) => Promise<StateJob[]>;
+  }) => Promise<[StateJob, StateJob | undefined][]>;
 
   /** Gets a job by ID with a FOR UPDATE lock. */
   getJobForUpdate: (params: {

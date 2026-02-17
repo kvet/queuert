@@ -578,7 +578,7 @@ WHERE jb.blocked_by_chain_id = ANY($1::{{id_type}}[])
 
 export const deleteJobsByChainIdsSql: TypedSql<
   readonly [NamedParameter<"chain_ids", string[]>],
-  DbJob[]
+  { root_job: DbJob; last_chain_job: DbJob | null }[]
 > = sql(
   /* sql */ `
 WITH _deleted_blockers AS (
@@ -586,10 +586,23 @@ WITH _deleted_blockers AS (
   WHERE job_id IN (
     SELECT id FROM {{schema}}.{{table_prefix}}job WHERE chain_id = ANY($1::{{id_type}}[])
   )
+),
+_deleted_jobs AS (
+  DELETE FROM {{schema}}.{{table_prefix}}job
+  WHERE chain_id = ANY($1::{{id_type}}[])
+  RETURNING *
 )
-DELETE FROM {{schema}}.{{table_prefix}}job
-WHERE chain_id = ANY($1::{{id_type}}[])
-RETURNING *
+SELECT
+  row_to_json(root) AS root_job,
+  row_to_json(lc) AS last_chain_job
+FROM (SELECT * FROM _deleted_jobs WHERE id = chain_id) AS root
+LEFT JOIN LATERAL (
+  SELECT *
+  FROM _deleted_jobs
+  WHERE chain_id = root.id
+  ORDER BY created_at DESC
+  LIMIT 1
+) AS lc ON TRUE
 `,
   true,
 );

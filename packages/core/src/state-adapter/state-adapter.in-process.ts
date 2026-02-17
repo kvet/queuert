@@ -414,11 +414,15 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
         );
       }
 
-      const deletedJobs: StateJob[] = [];
+      const pairs: [StateJob, StateJob | undefined][] = chainIds.flatMap((chainId) => {
+        const rootJob = store.jobs.get(chainId);
+        if (!rootJob) return [];
+        const lastJob = getLastJobInChain(chainId);
+        return [[rootJob, lastJob?.id !== rootJob.id ? lastJob : undefined]];
+      });
 
       for (const [jobId, job] of store.jobs) {
         if (chainIdSet.has(job.chainId)) {
-          deletedJobs.push(job);
           store.jobs.delete(jobId);
           store.jobBlockers.delete(jobId);
         }
@@ -432,7 +436,7 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
         }
       }
 
-      return deletedJobs;
+      return pairs;
     },
 
     getJobForUpdate: async ({ jobId }) => {

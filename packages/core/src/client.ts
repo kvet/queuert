@@ -189,13 +189,28 @@ export const createClient = async <
       options: {
         chainIds: TJobId[];
       } & GetStateAdapterTxContext<TStateAdapter>,
-    ): Promise<void> => {
+    ): Promise<
+      JobChainOf<
+        TJobId,
+        TJobTypeDefinitions,
+        keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string
+      >[]
+    > => {
       const { chainIds, ...txContext } = options;
 
-      await stateAdapter.deleteJobsByChainIds({
+      const deletedChainPairs = await stateAdapter.deleteJobsByChainIds({
         txContext,
         chainIds,
       });
+
+      return deletedChainPairs.map(
+        (pair) =>
+          mapStateJobPairToJobChain(pair) as JobChainOf<
+            TJobId,
+            TJobTypeDefinitions,
+            keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string
+          >,
+      );
     },
     // TODO: validation
     completeJobChain: async <
