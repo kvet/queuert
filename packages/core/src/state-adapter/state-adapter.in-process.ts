@@ -1,5 +1,13 @@
 import { createAsyncLock } from "../helpers/async-lock.js";
-import { type DeduplicationOptions, type StateAdapter, type StateJob } from "./state-adapter.js";
+import { decodeCursor, encodeCursor } from "./cursor.js";
+import {
+  type DeduplicationOptions,
+  type Page,
+  type PageParams,
+  type StateAdapter,
+  type StateJob,
+  type StateJobStatus,
+} from "./state-adapter.js";
 
 export type InProcessContext = { inTransaction?: boolean };
 
@@ -22,6 +30,42 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
   };
 
   const lock = createAsyncLock();
+
+  const paginate = <T extends StateJob>(items: T[], page: PageParams): Page<T> => {
+    const sorted = items.sort((a, b) => {
+      const d = b.createdAt.getTime() - a.createdAt.getTime();
+      if (d !== 0) return d;
+      return b.id < a.id ? -1 : b.id > a.id ? 1 : 0;
+    });
+
+    let startIndex = 0;
+    if (page.cursor) {
+      const cursor = decodeCursor(page.cursor);
+      startIndex = sorted.findIndex((item) => {
+        const sv = item.createdAt.toISOString();
+        return sv < cursor.createdAt || (sv === cursor.createdAt && item.id < cursor.id);
+      });
+      if (startIndex === -1) startIndex = sorted.length;
+    }
+
+    const pageItems = sorted.slice(startIndex, startIndex + page.limit);
+    const hasMore = startIndex + page.limit < sorted.length;
+    const lastItem = pageItems[pageItems.length - 1];
+
+    return {
+      items: pageItems,
+      nextCursor:
+        hasMore && lastItem
+          ? encodeCursor({ id: lastItem.id, createdAt: lastItem.createdAt.toISOString() })
+          : null,
+    };
+  };
+
+  const matchesStatusFilter = (job: StateJob, statuses?: StateJobStatus[]): boolean =>
+    !statuses || statuses.length === 0 || statuses.includes(job.status);
+
+  const matchesTypeNameFilter = (job: StateJob, typeNames?: string[]): boolean =>
+    !typeNames || typeNames.length === 0 || typeNames.includes(job.typeName);
 
   const getLastJobInChain = (chainId: string): StateJob | undefined => {
     let lastJob: StateJob | undefined;
@@ -442,6 +486,86 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
 
     getCurrentJobForUpdate: async ({ chainId }) => {
       return getLastJobInChain(chainId);
+    },
+
+    listChains: async ({ filter, page }) => {
+      // Pre-compute chain ID lookup for id filter (find chain containing a job with that ID)
+      let idMatchChainIds: Set<string> | undefined;
+      if (filter?.id) {
+        idMatchChainIds = new Set<string>();
+        for (const j of store.jobs.values()) {
+          if (j.chainId === filter.id || j.id === filter.id) {
+            idMatchChainIds.add(j.chainId);
+          }
+        }
+      }
+
+      const chains: [StateJob, StateJob | undefined][] = [];
+      for (const job of store.jobs.values()) {
+        if (job.id !== job.chainId) continue;
+
+        const lastJob = getLastJobInChain(job.id);
+
+        if (idMatchChainIds && !idMatchChainIds.has(job.chainId)) continue;
+        if (filter?.rootOnly && job.rootChainId !== job.chainId) continue;
+        if (!matchesTypeNameFilter(job, filter?.typeName)) continue;
+
+        chains.push([job, lastJob?.id !== job.id ? lastJob : undefined]);
+      }
+
+      const sorted = chains.sort((a, b) => {
+        const d = b[0].createdAt.getTime() - a[0].createdAt.getTime();
+        if (d !== 0) return d;
+        return b[0].id < a[0].id ? -1 : b[0].id > a[0].id ? 1 : 0;
+      });
+
+      let startIndex = 0;
+      if (page.cursor) {
+        const cursor = decodeCursor(page.cursor);
+        startIndex = sorted.findIndex((item) => {
+          const sv = item[0].createdAt.toISOString();
+          return sv < cursor.createdAt || (sv === cursor.createdAt && item[0].id < cursor.id);
+        });
+        if (startIndex === -1) startIndex = sorted.length;
+      }
+
+      const pageItems = sorted.slice(startIndex, startIndex + page.limit);
+      const hasMore = startIndex + page.limit < sorted.length;
+      const lastItem = pageItems[pageItems.length - 1];
+
+      return {
+        items: pageItems,
+        nextCursor:
+          hasMore && lastItem
+            ? encodeCursor({
+                id: lastItem[0].id,
+                createdAt: lastItem[0].createdAt.toISOString(),
+              })
+            : null,
+      };
+    },
+
+    listJobs: async ({ filter, page }) => {
+      const jobs: StateJob[] = [];
+      for (const job of store.jobs.values()) {
+        if (filter?.id && job.id !== filter.id && job.chainId !== filter.id) continue;
+        if (!matchesStatusFilter(job, filter?.status)) continue;
+        if (!matchesTypeNameFilter(job, filter?.typeName)) continue;
+        if (filter?.chainId && job.chainId !== filter.chainId) continue;
+        jobs.push(job);
+      }
+
+      return paginate(jobs, page);
+    },
+
+    getJobsBlockedByChain: async ({ chainId }) => {
+      const result: StateJob[] = [];
+      for (const [jobId, blockerMap] of store.jobBlockers) {
+        if (!blockerMap.has(chainId)) continue;
+        const job = store.jobs.get(jobId);
+        if (job) result.push(job);
+      }
+      return result;
     },
   };
 };

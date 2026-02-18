@@ -24,6 +24,8 @@
 
 - [TASK,COMPLEX] Optimized batched lease renewal
 - [EPIC] Dashboard
+  - [TASK,MEDIUM] Filter by status in chains view
+  - [TASK,MEDIUM] Add list methods to queuert client for programmatic access to dashboard data (chains, jobs, blockers)
 - [EPIC] MCP server
 - [EPIC] Sqlite ready:
   - [REF] Better concurrency handling - WAL mode, busy timeout, retries

@@ -6,7 +6,7 @@ This document describes code style conventions, testing patterns, and project or
 
 ## General Principles
 
-- **Inline types used in only one place**: Don't create separate type definitions for types used once
+- **Inline types used in only one place**: Don't create separate type definitions for types used once. This applies to function parameters, return types, and generic type arguments — embed them directly in the function signature instead of extracting a named type alias
 - **Remove obvious comments**: Code should be self-documenting; comments explain "why", not "what"
 - **Merge similar functionality**: Look for patterns and consolidate before adding new code
 - **Search before implementing**: Check for similar existing implementations before adding new features

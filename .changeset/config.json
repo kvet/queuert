@@ -10,7 +10,8 @@
       "@queuert/sqlite",
       "@queuert/redis",
       "@queuert/nats",
-      "@queuert/otel"
+      "@queuert/otel",
+      "@queuert/dashboard"
     ]
   ],
   "access": "public",

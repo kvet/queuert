@@ -77,6 +77,9 @@ export const extendWithStateInProcess = <T>(
           deleteJobsByRootChainIds: wrap(stateAdapter.deleteJobsByRootChainIds),
           getJobForUpdate: wrap(stateAdapter.getJobForUpdate),
           getCurrentJobForUpdate: wrap(stateAdapter.getCurrentJobForUpdate),
+          listChains: wrap(stateAdapter.listChains),
+          listJobs: wrap(stateAdapter.listJobs),
+          getJobsBlockedByChain: wrap(stateAdapter.getJobsBlockedByChain),
         };
 
         await use(flakyStateAdapter);

@@ -21,6 +21,7 @@ High-level design decisions are documented in [docs/design/](docs/design/):
 - [Observability Adapter](docs/design/observability-adapter.md) - ObservabilityAdapter interface, metrics and tracing methods
 - [OTEL Tracing](docs/design/otel-tracing.md) - OpenTelemetry spans, chain/job/attempt hierarchy, blocker links
 - [OTEL Metrics](docs/design/otel-metrics.md) - OpenTelemetry counters, histograms, gauges for queue monitoring
+- [Dashboard](docs/design/dashboard.md) - Embeddable read-only observation UI, Hono API + SolidJS frontend
 
 ## Packages
 
@@ -30,6 +31,7 @@ High-level design decisions are documented in [docs/design/](docs/design/):
 - `@queuert/redis` - Redis notify adapter
 - `@queuert/nats` - NATS notify adapter with optional JetStream KV
 - `@queuert/otel` - OpenTelemetry observability adapter
+- `@queuert/dashboard` - Embeddable web dashboard (Hono + SolidJS)
 - `examples/` - Integration examples organized by prefix: `state-{state_adapter_name}-*`, `notify-{notify_adapter_name}-*`, `validation-*`, `log-*`, `observability-*`, `showcase-*`, `benchmark-*`
 
 See each package's README.md for exports, configuration, and usage.

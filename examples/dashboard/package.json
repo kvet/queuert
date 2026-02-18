@@ -1,0 +1,29 @@
+{
+  "name": "example-dashboard",
+  "version": "0.0.1",
+  "private": true,
+  "description": "An example demonstrating the @queuert/dashboard web UI with SQLite.",
+  "license": "MIT",
+  "author": "kvet",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kvet/queuert.git"
+  },
+  "type": "module",
+  "scripts": {
+    "dashboard": "tsx src/dashboard.ts",
+    "start": "tsx src/start.ts",
+    "typecheck": "tsgo --noEmit"
+  },
+  "devDependencies": {
+    "@hono/node-server": "^1.19.9",
+    "@queuert/dashboard": "workspace:*",
+    "@queuert/sqlite": "workspace:*",
+    "@queuert/tsconfig": "workspace:*",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^24.10.4",
+    "better-sqlite3": "^12.6.2",
+    "queuert": "workspace:*",
+    "tsx": "^4.21.0"
+  }
+}

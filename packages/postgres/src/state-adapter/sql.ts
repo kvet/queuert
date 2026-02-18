@@ -156,6 +156,46 @@ ON {{schema}}.{{table_prefix}}job_blocker (blocked_by_chain_id)`,
           false,
         ),
       },
+      {
+        sql: sql(
+          /* sql */ `
+CREATE INDEX IF NOT EXISTS {{table_prefix}}job_chain_listing_idx
+ON {{schema}}.{{table_prefix}}job (created_at DESC) WHERE id = chain_id`,
+          false,
+        ),
+      },
+      {
+        sql: sql(
+          /* sql */ `
+CREATE INDEX IF NOT EXISTS {{table_prefix}}job_listing_idx
+ON {{schema}}.{{table_prefix}}job (created_at DESC)`,
+          false,
+        ),
+      },
+      {
+        sql: sql(
+          /* sql */ `
+CREATE INDEX IF NOT EXISTS {{table_prefix}}job_listing_status_idx
+ON {{schema}}.{{table_prefix}}job (status, created_at DESC)`,
+          false,
+        ),
+      },
+      {
+        sql: sql(
+          /* sql */ `
+CREATE INDEX IF NOT EXISTS {{table_prefix}}job_listing_type_name_idx
+ON {{schema}}.{{table_prefix}}job (type_name, created_at DESC)`,
+          false,
+        ),
+      },
+      {
+        sql: sql(
+          /* sql */ `
+CREATE INDEX IF NOT EXISTS {{table_prefix}}job_chain_listing_type_name_idx
+ON {{schema}}.{{table_prefix}}job (type_name, created_at DESC) WHERE id = chain_id`,
+          false,
+        ),
+      },
     ],
   },
 ];
@@ -580,6 +620,19 @@ export const deleteJobsByRootChainIdsSql: TypedSql<
 DELETE FROM {{schema}}.{{table_prefix}}job
 WHERE root_chain_id = ANY($1::{{id_type}}[])
 RETURNING *
+`,
+  true,
+);
+
+export const getJobsBlockedByChainSql: TypedSql<
+  readonly [NamedParameter<"blocked_by_chain_id", string>],
+  DbJob[]
+> = sql(
+  /* sql */ `
+SELECT j.*
+FROM {{schema}}.{{table_prefix}}job_blocker jb
+JOIN {{schema}}.{{table_prefix}}job j ON j.id = jb.job_id
+WHERE jb.blocked_by_chain_id = $1
 `,
   true,
 );
