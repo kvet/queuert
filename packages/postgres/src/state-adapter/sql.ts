@@ -6,6 +6,7 @@ export type DbJob = {
   type_name: string;
   chain_id: string;
   chain_type_name: string;
+  chain_index: number;
 
   input: unknown;
   output: unknown;
@@ -56,6 +57,7 @@ CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job (
   type_name                     text NOT NULL,
   chain_id                      {{id_type}} REFERENCES {{schema}}.{{table_prefix}}job(id),
   chain_type_name               text NOT NULL,
+  chain_index                   integer NOT NULL,
 
   input                         jsonb,
   output                        jsonb,
@@ -110,8 +112,8 @@ WHERE status = 'pending'`,
       {
         sql: sql(
           /* sql */ `
-CREATE INDEX IF NOT EXISTS {{table_prefix}}job_chain_created_at_idx
-ON {{schema}}.{{table_prefix}}job (chain_id, created_at DESC)`,
+CREATE UNIQUE INDEX IF NOT EXISTS {{table_prefix}}job_chain_index_idx
+ON {{schema}}.{{table_prefix}}job (chain_id, chain_index)`,
           false,
         ),
       },
@@ -181,18 +183,19 @@ export const createJobSql: TypedSql<
     NamedParameter<"scheduled_at", Date | null>,
     NamedParameter<"schedule_after_ms", number | null>,
     NamedParameter<"trace_context", unknown>,
+    NamedParameter<"chain_index", number>,
   ],
   [DbJob & { deduplicated: boolean }]
 > = sql(
   /* sql */ `
-WITH existing_continuation AS (
+WITH new_id AS (SELECT {{id_default}} AS id),
+existing_continuation AS (
   SELECT *, TRUE AS deduplicated
   FROM {{schema}}.{{table_prefix}}job
   WHERE $2::{{id_type}} IS NOT NULL
-    AND $5::text IS NOT NULL
     AND chain_id = $2::{{id_type}}
+    AND chain_index = $11::integer
     AND id != chain_id
-    AND deduplication_key = $5
   LIMIT 1
 ),
 existing_deduplicated AS (
@@ -214,16 +217,18 @@ existing_deduplicated AS (
   ORDER BY j.created_at DESC
   LIMIT 1
 ),
-new_id AS (SELECT {{id_default}} AS id),
 inserted_job AS (
-  INSERT INTO {{schema}}.{{table_prefix}}job (id, type_name, chain_id, chain_type_name, input, deduplication_key, scheduled_at, trace_context)
-  SELECT id, $1, COALESCE($2, id), $3, $4, $5,
+  INSERT INTO {{schema}}.{{table_prefix}}job (id, type_name, chain_id, chain_type_name, chain_index, input, deduplication_key, scheduled_at, trace_context)
+  SELECT id, $1, COALESCE($2, id), $3,
+    $11::integer,
+    $4, $5,
     COALESCE($8::timestamptz, now() + ($9::bigint || ' milliseconds')::interval, now()),
     $10
   FROM new_id
   WHERE NOT EXISTS (SELECT 1 FROM existing_continuation)
     AND NOT EXISTS (SELECT 1 FROM existing_deduplicated)
-  RETURNING *, FALSE AS deduplicated
+  ON CONFLICT (chain_id, chain_index) DO UPDATE SET id = {{schema}}.{{table_prefix}}job.id
+  RETURNING *, (id != (SELECT id FROM new_id)) AS deduplicated
 )
 SELECT * FROM existing_continuation
 UNION ALL
@@ -262,7 +267,7 @@ blockers_status AS (
       SELECT j2.status
       FROM {{schema}}.{{table_prefix}}job j2
       WHERE j2.chain_id = ib.blocked_by_chain_id
-      ORDER BY j2.created_at DESC
+      ORDER BY j2.chain_index DESC
       LIMIT 1
     ) AS blocker_status
   FROM inserted_blockers ib
@@ -345,7 +350,7 @@ blockers_status AS (
       SELECT j2.status
       FROM {{schema}}.{{table_prefix}}job j2
       WHERE j2.chain_id = jb.blocked_by_chain_id
-      ORDER BY j2.created_at DESC
+      ORDER BY j2.chain_index DESC
       LIMIT 1
     ) AS blocker_status
   FROM {{schema}}.{{table_prefix}}job_blocker jb
@@ -391,7 +396,7 @@ LEFT JOIN LATERAL (
   SELECT *
   FROM {{schema}}.{{table_prefix}}job
   WHERE chain_id = j.id
-  ORDER BY created_at DESC
+  ORDER BY chain_index DESC
   LIMIT 1
 ) AS lc ON TRUE
 WHERE j.id = $1
@@ -414,7 +419,7 @@ LEFT JOIN LATERAL (
   SELECT *
   FROM {{schema}}.{{table_prefix}}job
   WHERE chain_id = j.id
-  ORDER BY created_at DESC
+  ORDER BY chain_index DESC
   LIMIT 1
 ) AS lc ON TRUE
 WHERE b.job_id = $1
@@ -600,7 +605,7 @@ LEFT JOIN LATERAL (
   SELECT *
   FROM _deleted_jobs
   WHERE chain_id = root.id
-  ORDER BY created_at DESC
+  ORDER BY chain_index DESC
   LIMIT 1
 ) AS lc ON TRUE
 `,
@@ -628,7 +633,7 @@ export const getCurrentJobForUpdateSql: TypedSql<
 SELECT *
 FROM {{schema}}.{{table_prefix}}job
 WHERE chain_id = $1
-ORDER BY created_at DESC
+ORDER BY chain_index DESC
 LIMIT 1
 FOR UPDATE
 `,

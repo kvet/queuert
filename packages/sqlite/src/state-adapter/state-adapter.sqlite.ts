@@ -24,7 +24,8 @@ import {
   createMigrationTableSql,
   deleteBlockersByChainIdsSql,
   deleteJobsByChainIdsSql,
-  findExistingJobSql,
+  findDeduplicatedJobSql,
+  findExistingContinuationSql,
   findReadyJobsSql,
   getAppliedMigrationsSql,
   getBlockerChainTraceContextsSql,
@@ -65,6 +66,7 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
     typeName: dbJob.type_name,
     chainId: dbJob.chain_id,
     chainTypeName: dbJob.chain_type_name,
+    chainIndex: dbJob.chain_index,
     input: parseJson(dbJob.input),
     output: parseJson(dbJob.output),
 
@@ -93,6 +95,7 @@ const parseDbJobChainRow = (row: DbJobChainRow): { rootJob: DbJob; lastChainJob:
     type_name: row.type_name,
     chain_id: row.chain_id,
     chain_type_name: row.chain_type_name,
+    chain_index: row.chain_index,
     input: row.input,
     output: row.output,
     status: row.status,
@@ -115,6 +118,7 @@ const parseDbJobChainRow = (row: DbJobChainRow): { rootJob: DbJob; lastChainJob:
         type_name: row.lc_type_name!,
         chain_id: row.lc_chain_id!,
         chain_type_name: row.lc_chain_type_name!,
+        chain_index: row.lc_chain_index!,
         input: row.lc_input,
         output: row.lc_output,
         status: row.lc_status!,
@@ -220,6 +224,7 @@ export const createSqliteStateAdapter = async <
       txContext,
       typeName,
       chainTypeName,
+      chainIndex,
       input,
       chainId,
       deduplication,
@@ -237,27 +242,35 @@ export const createSqliteStateAdapter = async <
       const scheduleAfterMsOrNull = schedule?.afterMs ?? null;
       const traceContextJson = traceContext !== undefined ? JSON.stringify(traceContext) : null;
 
-      const [existing] = await executeTypedSql({
-        txContext,
-        sql: findExistingJobSql,
-        params: [
-          chainIdOrNull,
-          deduplicationKey,
-          chainIdOrNull,
-          deduplicationKey,
-          deduplicationKey,
-          deduplicationKey,
-          chainTypeName,
-          deduplicationScope,
-          deduplicationScope,
-          deduplicationScope,
-          deduplicationWindowMs,
-          deduplicationWindowMs,
-        ],
-      });
+      if (chainId) {
+        const [existingContinuation] = await executeTypedSql({
+          txContext,
+          sql: findExistingContinuationSql,
+          params: [chainId, chainIndex],
+        });
 
-      if (existing) {
-        return { job: mapDbJobToStateJob(existing), deduplicated: true };
+        if (existingContinuation) {
+          return { job: mapDbJobToStateJob(existingContinuation), deduplicated: true };
+        }
+      } else if (deduplicationKey) {
+        const [existingDeduplicated] = await executeTypedSql({
+          txContext,
+          sql: findDeduplicatedJobSql,
+          params: [
+            deduplicationKey,
+            deduplicationKey,
+            chainTypeName,
+            deduplicationScope,
+            deduplicationScope,
+            deduplicationScope,
+            deduplicationWindowMs,
+            deduplicationWindowMs,
+          ],
+        });
+
+        if (existingDeduplicated) {
+          return { job: mapDbJobToStateJob(existingDeduplicated), deduplicated: true };
+        }
       }
 
       const [result] = await executeTypedSql({
@@ -269,6 +282,7 @@ export const createSqliteStateAdapter = async <
           chainIdOrNull,
           newId,
           chainTypeName,
+          chainIndex,
           inputJson,
           deduplicationKey,
           scheduledAtIso,
@@ -278,7 +292,7 @@ export const createSqliteStateAdapter = async <
         ],
       });
 
-      return { job: mapDbJobToStateJob(result), deduplicated: false };
+      return { job: mapDbJobToStateJob(result), deduplicated: result.id !== newId };
     },
 
     addJobBlockers: async ({ txContext, jobId, blockedByChainIds, blockerTraceContexts }) => {

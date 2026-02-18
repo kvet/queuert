@@ -44,6 +44,7 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
     typeName: dbJob.type_name,
     chainId: dbJob.chain_id,
     chainTypeName: dbJob.chain_type_name,
+    chainIndex: dbJob.chain_index,
     input: dbJob.input,
     output: dbJob.output,
 
@@ -147,6 +148,7 @@ export const createPgStateAdapter = async <
       txContext,
       typeName,
       chainTypeName,
+      chainIndex,
       input,
       chainId,
       deduplication,
@@ -167,6 +169,7 @@ export const createPgStateAdapter = async <
           schedule?.at ?? null,
           schedule?.afterMs ?? null,
           traceContext ?? null,
+          chainIndex,
         ],
       });
 

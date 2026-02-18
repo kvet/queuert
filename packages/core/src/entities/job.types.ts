@@ -5,6 +5,7 @@ export type Job<TJobId, TJobTypeName, TChainTypeName, TInput, TBlockerChains ext
   chainId: TJobId;
   typeName: TJobTypeName;
   chainTypeName: TChainTypeName;
+  chainIndex: number;
   input: TInput;
   createdAt: Date;
   scheduledAt: Date;

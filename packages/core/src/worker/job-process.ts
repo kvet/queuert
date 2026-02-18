@@ -471,8 +471,8 @@ export const runJobProcess = async ({
               schedule,
               blockers: blockers as any,
               chainId: job.chainId,
+              chainIndex: job.chainIndex + 1,
               chainTypeName: job.chainTypeName,
-              deduplicationKey: `continued:${job.id}`,
               originTraceContext: attemptSpanHandle?.getTraceContext() ?? job.traceContext,
               fromTypeName: job.typeName,
             });

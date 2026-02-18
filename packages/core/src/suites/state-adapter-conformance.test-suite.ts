@@ -20,6 +20,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "test-job",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "test-job",
           input: { value: 1 },
         }),
@@ -35,6 +36,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "chain-test",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "chain-test",
           input: null,
         }),
@@ -50,6 +52,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "root-job",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "root-job",
           input: null,
         }),
@@ -60,13 +63,14 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "child-job",
           chainId: rootJob.chainId,
+          chainIndex: 1,
           chainTypeName: "root-job",
           input: null,
-          deduplication: { key: `continued:${rootJob.id}` },
         }),
       );
 
       expect(childJob.chainId).toBe(rootJob.chainId);
+      expect(childJob.chainIndex).toBe(1);
       expect(validateId(childJob.id)).toBe(true);
       expect(validateId(childJob.chainId)).toBe(true);
     });
@@ -79,6 +83,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
             txContext,
             typeName: "test-job",
             chainId: undefined,
+            chainIndex: 0,
             chainTypeName: "test-job",
             input: { value: i },
           });
@@ -99,6 +104,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "test-job",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "test-job",
           input,
         }),
@@ -119,6 +125,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "null-test",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "null-test",
           input: null,
         }),
@@ -133,6 +140,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       expect(job.leasedBy).toBeNull();
       expect(job.leasedUntil).toBeNull();
       expect(job.deduplicationKey).toBeNull();
+      expect(job.chainIndex).toBe(0);
     });
 
     it("handles complex JSON input/output", async ({ stateAdapter, expect }) => {
@@ -158,6 +166,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "json-test",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "json-test",
           input: complexInput,
         }),
@@ -173,6 +182,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "dedup-test",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "dedup-test",
           input: { value: 1 },
           deduplication: { key: "same-key" },
@@ -184,6 +194,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "dedup-test",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "dedup-test",
           input: { value: 2 },
           deduplication: { key: "same-key" },
@@ -198,6 +209,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "dedup-test",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "dedup-test",
           input: { value: 3 },
           deduplication: { key: "different-key" },
@@ -207,7 +219,53 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       expect(notDeduped).toBe(false);
     });
 
-    it("deduplicates continuation jobs with same deduplication key", async ({
+    it("deduplicates continuation with same chain_index", async ({ stateAdapter, expect }) => {
+      const { job: rootJob } = await stateAdapter.runInTransaction(async (txContext) =>
+        stateAdapter.createJob({
+          txContext,
+          typeName: "chain-root",
+          chainId: undefined,
+          chainIndex: 0,
+          chainTypeName: "chain-root",
+          input: null,
+        }),
+      );
+
+      expect(rootJob.chainIndex).toBe(0);
+
+      const { job: continuation1, deduplicated: dedup1 } = await stateAdapter.runInTransaction(
+        async (txContext) =>
+          stateAdapter.createJob({
+            txContext,
+            typeName: "chain-step2",
+            chainId: rootJob.chainId,
+            chainIndex: 1,
+            chainTypeName: "chain-root",
+            input: { value: 1 },
+          }),
+      );
+
+      expect(dedup1).toBe(false);
+      expect(continuation1.chainIndex).toBe(1);
+
+      const { job: continuation2, deduplicated: dedup2 } = await stateAdapter.runInTransaction(
+        async (txContext) =>
+          stateAdapter.createJob({
+            txContext,
+            typeName: "chain-step2",
+            chainId: rootJob.chainId,
+            chainIndex: 1,
+            chainTypeName: "chain-root",
+            input: { value: 2 },
+          }),
+      );
+
+      expect(dedup2).toBe(true);
+      expect(continuation2.id).toBe(continuation1.id);
+      expect(continuation2.input).toEqual({ value: 1 });
+    });
+
+    it("deduplicates concurrent continuations with same chain_index", async ({
       stateAdapter,
       expect,
     }) => {
@@ -216,40 +274,79 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "chain-root",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "chain-root",
           input: null,
         }),
       );
 
-      const { job: continuation1, deduplicated: dedup1 } = await stateAdapter.runInTransaction(
-        async (txContext) =>
+      const [result1, result2] = await Promise.all([
+        stateAdapter.runInTransaction(async (txContext) =>
           stateAdapter.createJob({
             txContext,
             typeName: "chain-step2",
             chainId: rootJob.chainId,
+            chainIndex: 1,
             chainTypeName: "chain-root",
-            input: { value: 1 },
-            deduplication: { key: `continued:${rootJob.id}` },
+            input: { from: "tx1" },
           }),
-      );
-
-      expect(dedup1).toBe(false);
-
-      const { job: continuation2, deduplicated: dedup2 } = await stateAdapter.runInTransaction(
-        async (txContext) =>
+        ),
+        stateAdapter.runInTransaction(async (txContext) =>
           stateAdapter.createJob({
             txContext,
             typeName: "chain-step2",
             chainId: rootJob.chainId,
+            chainIndex: 1,
             chainTypeName: "chain-root",
-            input: { value: 2 },
-            deduplication: { key: `continued:${rootJob.id}` },
+            input: { from: "tx2" },
           }),
+        ),
+      ]);
+
+      expect(result1.job.id).toBe(result2.job.id);
+      expect([result1.deduplicated, result2.deduplicated].sort()).toEqual([false, true]);
+    });
+
+    it("assigns sequential chain_index values", async ({ stateAdapter, expect }) => {
+      const { job: rootJob } = await stateAdapter.runInTransaction(async (txContext) =>
+        stateAdapter.createJob({
+          txContext,
+          typeName: "t",
+          chainId: undefined,
+          chainIndex: 0,
+          chainTypeName: "t",
+          input: null,
+        }),
+      );
+      expect(rootJob.chainIndex).toBe(0);
+
+      const { job: cont1 } = await stateAdapter.runInTransaction(async (txContext) =>
+        stateAdapter.createJob({
+          txContext,
+          typeName: "t2",
+          chainId: rootJob.chainId,
+          chainIndex: 1,
+          chainTypeName: "t",
+          input: null,
+        }),
+      );
+      expect(cont1.chainIndex).toBe(1);
+
+      await stateAdapter.runInTransaction(async (txContext) =>
+        stateAdapter.completeJob({ txContext, jobId: cont1.id, output: null, workerId: null }),
       );
 
-      expect(dedup2).toBe(true);
-      expect(continuation2.id).toBe(continuation1.id);
-      expect(continuation2.input).toEqual({ value: 1 });
+      const { job: cont2 } = await stateAdapter.runInTransaction(async (txContext) =>
+        stateAdapter.createJob({
+          txContext,
+          typeName: "t3",
+          chainId: rootJob.chainId,
+          chainIndex: 2,
+          chainTypeName: "t",
+          input: null,
+        }),
+      );
+      expect(cont2.chainIndex).toBe(2);
     });
 
     it("deduplication scope 'incomplete' does not match completed jobs", async ({
@@ -261,6 +358,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "scope-test",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "scope-test",
           input: null,
           deduplication: { key: "scope-key", scope: "incomplete" },
@@ -282,6 +380,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
             txContext,
             typeName: "scope-test",
             chainId: undefined,
+            chainIndex: 0,
             chainTypeName: "scope-test",
             input: null,
             deduplication: { key: "scope-key", scope: "incomplete" },
@@ -295,6 +394,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "scope-test-any",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "scope-test-any",
           input: null,
           deduplication: { key: "any-key", scope: "any" },
@@ -315,6 +415,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "scope-test-any",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "scope-test-any",
           input: null,
           deduplication: { key: "any-key", scope: "any" },
@@ -331,6 +432,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "schedule-test",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "schedule-test",
           input: null,
           schedule: { afterMs: 5000 },
@@ -347,6 +449,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "schedule-test-at",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "schedule-test-at",
           input: null,
           schedule: { at: futureDate },
@@ -363,6 +466,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "trace-test",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "trace-test",
           input: null,
           traceContext,
@@ -379,6 +483,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "date-test",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "date-test",
           input: null,
         }),
@@ -399,6 +504,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "isolation-test",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "isolation-test",
           input: { value: "original" },
         }),
@@ -411,6 +517,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
             txContext,
             typeName: "rollback-test",
             chainId: undefined,
+            chainIndex: 0,
             chainTypeName: "rollback-test",
             input: { value: "should-rollback" },
           });
@@ -438,6 +545,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "chain-root",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "chain-root",
           input: { step: 1 },
         }),
@@ -456,6 +564,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "chain-root",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "chain-root",
           input: null,
         }),
@@ -466,9 +575,9 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "chain-step2",
           chainId: rootJob.chainId,
+          chainIndex: 1,
           chainTypeName: "chain-root",
           input: null,
-          deduplication: { key: `continued:${rootJob.id}` },
         }),
       );
 
@@ -490,6 +599,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "blocker",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "blocker",
           input: null,
         }),
@@ -500,6 +610,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "main",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "main",
           input: null,
         }),
@@ -527,6 +638,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "blocker",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "blocker",
           input: null,
         }),
@@ -546,6 +658,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "main",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "main",
           input: null,
         }),
@@ -572,6 +685,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "blocker",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "blocker",
           input: null,
         }),
@@ -582,6 +696,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "main",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "main",
           input: null,
         }),
@@ -625,6 +740,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "blocker",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "blocker",
           input: null,
         }),
@@ -635,6 +751,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "blocker",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "blocker",
           input: null,
         }),
@@ -645,6 +762,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "main",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "main",
           input: null,
         }),
@@ -689,6 +807,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "standalone",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "standalone",
           input: null,
         }),
@@ -713,6 +832,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "blocker",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "blocker",
           input: null,
         }),
@@ -723,6 +843,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "main",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "main",
           input: null,
         }),
@@ -759,6 +880,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "standalone",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "standalone",
           input: null,
         }),
@@ -783,6 +905,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "blocker",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "blocker",
           input: null,
         }),
@@ -793,6 +916,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "main",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "main",
           input: null,
         }),
@@ -828,6 +952,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "blocker",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "blocker",
           input: null,
           traceContext: blockerTraceContext,
@@ -839,6 +964,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "main",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "main",
           input: null,
         }),
@@ -868,6 +994,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "blockerA",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "blockerA",
           input: null,
           traceContext: traceA,
@@ -879,6 +1006,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "blockerB",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "blockerB",
           input: null,
           traceContext: traceB,
@@ -890,6 +1018,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "main",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "main",
           input: null,
         }),
@@ -916,6 +1045,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "blocker",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "blocker",
           input: null,
         }),
@@ -926,6 +1056,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "blocker",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "blocker",
           input: null,
         }),
@@ -936,6 +1067,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "main",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "main",
           input: null,
         }),
@@ -972,6 +1104,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "blocker-root",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "blocker-root",
           input: null,
         }),
@@ -991,9 +1124,9 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "blocker-step2",
           chainId: blockerRoot.chainId,
+          chainIndex: 1,
           chainTypeName: "blocker-root",
           input: null,
-          deduplication: { key: `continued:${blockerRoot.id}` },
         }),
       );
 
@@ -1002,6 +1135,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "main",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "main",
           input: null,
         }),
@@ -1030,6 +1164,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "no-blockers",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "no-blockers",
           input: null,
         }),
@@ -1047,6 +1182,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "avail-test",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "avail-test",
           input: null,
         }),
@@ -1062,6 +1198,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "future-test",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "future-test",
           input: null,
           schedule: { afterMs: 5000 },
@@ -1090,6 +1227,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "acquire-test",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "acquire-test",
           input: { order: 1 },
         }),
@@ -1100,6 +1238,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "acquire-test",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "acquire-test",
           input: { order: 2 },
         }),
@@ -1121,6 +1260,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "hasmore-test",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "hasmore-test",
           input: null,
         }),
@@ -1131,6 +1271,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "hasmore-test",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "hasmore-test",
           input: null,
         }),
@@ -1163,6 +1304,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "future-acquire",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "future-acquire",
           input: null,
           schedule: { afterMs: 60_000 },
@@ -1184,6 +1326,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "lease-test",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "lease-test",
           input: null,
         }),
@@ -1216,6 +1359,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "re-lease-test",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "re-lease-test",
           input: null,
         }),
@@ -1254,6 +1398,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "resched-test",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "resched-test",
           input: null,
         }),
@@ -1299,6 +1444,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "resched-at-test",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "resched-at-test",
           input: null,
         }),
@@ -1330,6 +1476,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "complete-test",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "complete-test",
           input: { value: 1 },
         }),
@@ -1371,6 +1518,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "workerless-test",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "workerless-test",
           input: null,
         }),
@@ -1397,6 +1545,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "expire-test",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "expire-test",
           input: null,
         }),
@@ -1434,6 +1583,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "no-expire-test",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "no-expire-test",
           input: null,
         }),
@@ -1465,6 +1615,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "ignore-test",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "ignore-test",
           input: { order: "a" },
         }),
@@ -1475,6 +1626,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "ignore-test",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "ignore-test",
           input: { order: "b" },
         }),
@@ -1526,6 +1678,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "delete-test",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "delete-test",
           input: null,
         }),
@@ -1550,6 +1703,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "chain-a",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "chain-a",
           input: null,
         }),
@@ -1560,6 +1714,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "chain-b",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "chain-b",
           input: null,
         }),
@@ -1585,6 +1740,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "blocker",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "blocker",
           input: null,
         }),
@@ -1595,6 +1751,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "main",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "main",
           input: null,
         }),
@@ -1636,6 +1793,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "update-test",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "update-test",
           input: { value: 1 },
         }),
@@ -1672,6 +1830,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "chain-current",
           chainId: undefined,
+          chainIndex: 0,
           chainTypeName: "chain-current",
           input: null,
         }),
@@ -1682,9 +1841,9 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           txContext,
           typeName: "chain-current-step2",
           chainId: rootJob.chainId,
+          chainIndex: 1,
           chainTypeName: "chain-current",
           input: null,
-          deduplication: { key: `continued:${rootJob.id}` },
         }),
       );
 

@@ -35,7 +35,7 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
     let lastJob: StateJob | undefined;
     for (const job of store.jobs.values()) {
       if (job.chainId === chainId) {
-        if (!lastJob || job.createdAt >= lastJob.createdAt) {
+        if (!lastJob || job.chainIndex > lastJob.chainIndex) {
           lastJob = job;
         }
       }
@@ -43,17 +43,9 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
     return lastJob;
   };
 
-  const findExistingContinuation = (
-    chainId: string | undefined,
-    deduplicationKey: string | undefined,
-  ): StateJob | undefined => {
-    if (!chainId || !deduplicationKey) return undefined;
+  const findExistingContinuation = (chainId: string, chainIndex: number): StateJob | undefined => {
     for (const job of store.jobs.values()) {
-      if (
-        job.chainId === chainId &&
-        job.id !== job.chainId &&
-        job.deduplicationKey === deduplicationKey
-      ) {
+      if (job.chainId === chainId && job.chainIndex === chainIndex && job.id !== job.chainId) {
         return job;
       }
     }
@@ -123,6 +115,7 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
     createJob: async ({
       typeName,
       chainTypeName,
+      chainIndex,
       input,
       chainId,
       deduplication,
@@ -130,7 +123,7 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       traceContext,
     }) => {
       if (chainId) {
-        const existingContinuation = findExistingContinuation(chainId, deduplication?.key);
+        const existingContinuation = findExistingContinuation(chainId, chainIndex);
         if (existingContinuation) {
           return { job: existingContinuation, deduplicated: true };
         }
@@ -150,6 +143,7 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
         id,
         typeName,
         chainTypeName,
+        chainIndex,
         input,
         output: null,
         chainId: chainId ?? id,

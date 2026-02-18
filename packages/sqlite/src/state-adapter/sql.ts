@@ -6,6 +6,7 @@ export const jobColumns = [
   "type_name",
   "chain_id",
   "chain_type_name",
+  "chain_index",
   "input",
   "output",
   "status",
@@ -33,6 +34,7 @@ export type DbJob = {
   type_name: string;
   chain_id: string;
   chain_type_name: string;
+  chain_index: number;
   input: string | null;
   output: string | null;
 
@@ -70,6 +72,7 @@ CREATE TABLE IF NOT EXISTS {{table_prefix}}job (
   type_name                     TEXT NOT NULL,
   chain_id                      {{id_type}} REFERENCES {{table_prefix}}job(id),
   chain_type_name               TEXT NOT NULL,
+  chain_index                   INTEGER NOT NULL,
 
   input                         TEXT,
   output                        TEXT,
@@ -125,8 +128,8 @@ WHERE status = 'pending'`,
       {
         sql: sql(
           /* sql */ `
-CREATE INDEX IF NOT EXISTS {{table_prefix}}job_chain_created_at_idx
-ON {{table_prefix}}job (chain_id, created_at DESC)`,
+CREATE UNIQUE INDEX IF NOT EXISTS {{table_prefix}}job_chain_index_idx
+ON {{table_prefix}}job (chain_id, chain_index)`,
           false,
         ),
       },
@@ -184,14 +187,23 @@ export const recordMigrationSql: TypedSql<readonly [NamedParameter<"name", strin
   false,
 );
 
-export const findExistingJobSql: TypedSql<
+export const findExistingContinuationSql: TypedSql<
+  [NamedParameter<"chain_id", string>, NamedParameter<"chain_index", number>],
+  [DbJob & { deduplicated: number }]
+> = sql(
+  /* sql */ `
+SELECT *, 1 AS deduplicated
+FROM {{table_prefix}}job
+WHERE chain_id = ? AND chain_index = ? AND id != chain_id
+LIMIT 1
+`,
+  true,
+);
+
+export const findDeduplicatedJobSql: TypedSql<
   [
-    NamedParameter<"chain_id_1", string | null>,
     NamedParameter<"deduplication_key_1", string | null>,
-    NamedParameter<"chain_id_2", string | null>,
     NamedParameter<"deduplication_key_2", string | null>,
-    NamedParameter<"deduplication_key_3", string | null>,
-    NamedParameter<"deduplication_key_4", string | null>,
     NamedParameter<"chain_type_name", string>,
     NamedParameter<"deduplication_scope_1", DeduplicationScope | null>,
     NamedParameter<"deduplication_scope_2", DeduplicationScope | null>,
@@ -204,25 +216,19 @@ export const findExistingJobSql: TypedSql<
   /* sql */ `
 SELECT *, 1 AS deduplicated
 FROM {{table_prefix}}job
-WHERE (
-  (? IS NOT NULL AND ? IS NOT NULL AND chain_id = ? AND id != chain_id AND deduplication_key = ?)
-  OR
-  (
-    ? IS NOT NULL
-    AND deduplication_key = ?
-    AND id = chain_id
-    AND chain_type_name = ?
-    AND (
-      ? IS NULL
-      OR (? = 'incomplete' AND status != 'completed')
-      OR (? = 'any')
-    )
-    AND (
-      ? IS NULL
-      OR created_at >= datetime('now', 'subsec', '-' || (? / 1000.0) || ' seconds')
-    )
+WHERE ? IS NOT NULL
+  AND deduplication_key = ?
+  AND id = chain_id
+  AND chain_type_name = ?
+  AND (
+    ? IS NULL
+    OR (? = 'incomplete' AND status != 'completed')
+    OR (? = 'any')
   )
-)
+  AND (
+    ? IS NULL
+    OR created_at >= datetime('now', 'subsec', '-' || (? / 1000.0) || ' seconds')
+  )
 ORDER BY created_at DESC
 LIMIT 1
 `,
@@ -236,6 +242,7 @@ export const insertJobSql: TypedSql<
     NamedParameter<"chain_id", string | null>,
     NamedParameter<"id_for_chain", string>,
     NamedParameter<"chain_type_name", string>,
+    NamedParameter<"chain_index", number>,
     NamedParameter<"input", string | null>,
     NamedParameter<"deduplication_key", string | null>,
     NamedParameter<"scheduled_at", string | null>,
@@ -243,16 +250,17 @@ export const insertJobSql: TypedSql<
     NamedParameter<"schedule_after_ms", number | null>,
     NamedParameter<"trace_context", string | null>,
   ],
-  [DbJob & { deduplicated: number }]
+  [DbJob]
 > = sql(
   /* sql */ `
-INSERT INTO {{table_prefix}}job (id, type_name, chain_id, chain_type_name, input, deduplication_key, scheduled_at, trace_context)
-VALUES (?, ?, COALESCE(?, ?), ?, ?, ?,
+INSERT INTO {{table_prefix}}job (id, type_name, chain_id, chain_type_name, chain_index, input, deduplication_key, scheduled_at, trace_context)
+VALUES (?, ?, COALESCE(?, ?), ?, ?, ?, ?,
   COALESCE(?,
     CASE WHEN ? IS NOT NULL THEN datetime('now', 'subsec', '+' || (? / 1000.0) || ' seconds') ELSE NULL END,
     datetime('now', 'subsec')),
   ?)
-RETURNING *, 0 AS deduplicated
+ON CONFLICT (chain_id, chain_index) DO UPDATE SET id = {{table_prefix}}job.id
+RETURNING *
 `,
   true,
 );
@@ -285,7 +293,7 @@ SELECT
     SELECT j2.status
     FROM {{table_prefix}}job j2
     WHERE j2.chain_id = jb.blocked_by_chain_id
-    ORDER BY j2.created_at DESC, j2.rowid DESC
+    ORDER BY j2.chain_index DESC
     LIMIT 1
   ) AS blocker_status
 FROM {{table_prefix}}job_blocker jb
@@ -352,7 +360,7 @@ blockers_status AS (
       SELECT j2.status
       FROM {{table_prefix}}job j2
       WHERE j2.chain_id = jb.blocked_by_chain_id
-      ORDER BY j2.created_at DESC, j2.rowid DESC
+      ORDER BY j2.chain_index DESC
       LIMIT 1
     ) AS blocker_status
   FROM {{table_prefix}}job_blocker jb
@@ -419,7 +427,7 @@ LEFT JOIN (
   SELECT *
   FROM {{table_prefix}}job
   WHERE chain_id = ?
-  ORDER BY created_at DESC, rowid DESC
+  ORDER BY chain_index DESC
   LIMIT 1
 ) AS lc ON 1=1
 WHERE j.id = ?
@@ -438,12 +446,10 @@ JOIN {{table_prefix}}job AS j
   ON j.id = b.blocked_by_chain_id
 LEFT JOIN {{table_prefix}}job AS lc
   ON lc.chain_id = j.id
-  AND lc.rowid = (
-    SELECT lj.rowid
+  AND lc.chain_index = (
+    SELECT MAX(lj.chain_index)
     FROM {{table_prefix}}job lj
     WHERE lj.chain_id = j.id
-    ORDER BY lj.created_at DESC, lj.rowid DESC
-    LIMIT 1
   )
 WHERE b.job_id = ?
 ORDER BY b."index" ASC
@@ -623,11 +629,9 @@ SELECT
 FROM {{table_prefix}}job AS j
 LEFT JOIN {{table_prefix}}job AS lc
   ON lc.chain_id = j.id
-  AND lc.rowid = (
-    SELECT rowid FROM {{table_prefix}}job
+  AND lc.chain_index = (
+    SELECT MAX(chain_index) FROM {{table_prefix}}job
     WHERE chain_id = j.id
-    ORDER BY created_at DESC, rowid DESC
-    LIMIT 1
   )
 WHERE j.id = j.chain_id
   AND j.chain_id IN (SELECT value FROM json_each(?))
@@ -666,7 +670,7 @@ export const getCurrentJobForUpdateSql: TypedSql<
 SELECT *
 FROM {{table_prefix}}job
 WHERE chain_id = ?
-ORDER BY created_at DESC, rowid DESC
+ORDER BY chain_index DESC
 LIMIT 1
 `,
   true,

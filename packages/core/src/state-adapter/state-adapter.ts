@@ -8,6 +8,7 @@ export type StateJob = {
   typeName: string;
   chainId: string;
   chainTypeName: string;
+  chainIndex: number;
   input: unknown;
   output: unknown;
 
@@ -68,6 +69,7 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     typeName: string;
     chainId: TJobId | undefined;
     chainTypeName: string;
+    chainIndex: number;
     input: unknown;
     deduplication?: DeduplicationOptions;
     schedule?: ScheduleOptions;

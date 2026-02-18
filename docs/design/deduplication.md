@@ -38,9 +38,9 @@ When a duplicate is detected:
 
 ## Continuation Deduplication
 
-When a job calls `continueWith`, the continuation job is created with an internal deduplication key of `continued:${job.id}`. This ensures that if the same continuation is created twice (e.g., due to a retry after a crash), the second attempt returns the existing job instead of creating a duplicate.
+Each job in a chain has a `chain_index` that provides deterministic ordering (root = 0, first continuation = 1, etc.). The caller computes the index as `currentJob.chainIndex + 1` when creating a continuation. A UNIQUE constraint on `(chain_id, chain_index)` ensures that if the same continuation is created twice (e.g., due to a retry), the second attempt detects the existing job at the same index instead of creating a duplicate.
 
-The continuation dedup key is scoped to the chain (`chain_id`) and only matches non-root jobs (`id != chain_id`), so it cannot collide with user-provided chain-level deduplication keys which only apply to root jobs.
+Continuation deduplication is completely separate from chain-level deduplication. Continuation jobs do not use `deduplication_key` at all; the `deduplication_key` column is reserved exclusively for root-level dedup via the `deduplication` option on `startJobChain`.
 
 ## Continuation Restriction
 

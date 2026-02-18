@@ -275,8 +275,8 @@ export const createClient = async <
               schedule,
               blockers: blockers as any,
               chainId: job.chainId,
+              chainIndex: job.chainIndex + 1,
               chainTypeName: job.chainTypeName,
-              deduplicationKey: `continued:${job.id}`,
               originTraceContext: job.traceContext,
               fromTypeName: job.typeName,
             });

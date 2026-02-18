@@ -54,8 +54,8 @@ export const helper = ({
     blockers,
     isChain,
     chainId,
+    chainIndex,
     chainTypeName,
-    deduplicationKey,
     originTraceContext,
     deduplication,
     schedule,
@@ -66,8 +66,8 @@ export const helper = ({
     blockers?: JobChain<any, any, any, any>[];
     isChain: boolean;
     chainId?: string;
+    chainIndex: number;
     chainTypeName?: string;
-    deduplicationKey?: string;
     originTraceContext?: unknown;
     deduplication?: DeduplicationOptions;
     schedule?: ScheduleOptions;
@@ -93,9 +93,10 @@ export const helper = ({
         txContext,
         typeName,
         chainTypeName: resolvedChainTypeName,
+        chainIndex,
         input: parsedInput,
         chainId: isChain ? undefined : chainId,
-        deduplication: deduplicationKey ? { key: deduplicationKey } : deduplication,
+        deduplication,
         schedule,
         traceContext: spanHandle?.getTraceContext(),
       });
@@ -191,8 +192,8 @@ export const helper = ({
     schedule,
     blockers,
     chainId,
+    chainIndex,
     chainTypeName,
-    deduplicationKey,
     originTraceContext,
     fromTypeName,
   }: {
@@ -202,8 +203,8 @@ export const helper = ({
     schedule?: ScheduleOptions;
     blockers?: JobChain<any, any, any, any>[];
     chainId: string;
+    chainIndex: number;
     chainTypeName: string;
-    deduplicationKey: string;
     originTraceContext: unknown;
     fromTypeName: string;
   }): Promise<JobOf<string, BaseJobTypeDefinitions, TJobTypeName, string>> => {
@@ -216,8 +217,8 @@ export const helper = ({
       blockers,
       isChain: false,
       chainId,
+      chainIndex,
       chainTypeName,
-      deduplicationKey,
       originTraceContext,
       schedule,
     });
@@ -331,6 +332,7 @@ export const helper = ({
         txContext,
         blockers,
         isChain: true,
+        chainIndex: 0,
         deduplication,
         schedule,
       });
@@ -344,8 +346,8 @@ export const helper = ({
       schedule,
       blockers,
       chainId,
+      chainIndex,
       chainTypeName,
-      deduplicationKey,
       originTraceContext,
       fromTypeName,
     }: {
@@ -355,8 +357,8 @@ export const helper = ({
       schedule?: ScheduleOptions;
       blockers?: JobChain<any, any, any, any>[];
       chainId: string;
+      chainIndex: number;
       chainTypeName: string;
-      deduplicationKey: string;
       originTraceContext: unknown;
       fromTypeName: string;
     }) => Promise<JobOf<string, BaseJobTypeDefinitions, TJobTypeName, string>>,
