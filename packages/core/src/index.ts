@@ -44,6 +44,7 @@ export {
   type DeduplicationOptions,
   type DeduplicationScope,
   type GetStateAdapterJobId,
+  type StateJobStatus,
   type StateAdapter,
   type StateJob,
 } from "./state-adapter/state-adapter.js";

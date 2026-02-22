@@ -138,7 +138,7 @@ ON {{table_prefix}}job (chain_id, chain_index)`,
           /* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_deduplication_idx
 ON {{table_prefix}}job (deduplication_key, created_at DESC)
-WHERE deduplication_key IS NOT NULL AND id = chain_id`,
+WHERE deduplication_key IS NOT NULL AND chain_index = 0`,
           false,
         ),
       },
@@ -156,6 +156,46 @@ WHERE status = 'running' AND leased_until IS NOT NULL`,
           /* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_blocker_chain_idx
 ON {{table_prefix}}job_blocker (blocked_by_chain_id)`,
+          false,
+        ),
+      },
+      {
+        sql: sql(
+          /* sql */ `
+CREATE INDEX IF NOT EXISTS {{table_prefix}}job_chain_listing_idx
+ON {{table_prefix}}job (created_at DESC) WHERE chain_index = 0`,
+          false,
+        ),
+      },
+      {
+        sql: sql(
+          /* sql */ `
+CREATE INDEX IF NOT EXISTS {{table_prefix}}job_listing_idx
+ON {{table_prefix}}job (created_at DESC)`,
+          false,
+        ),
+      },
+      {
+        sql: sql(
+          /* sql */ `
+CREATE INDEX IF NOT EXISTS {{table_prefix}}job_listing_status_idx
+ON {{table_prefix}}job (status, created_at DESC)`,
+          false,
+        ),
+      },
+      {
+        sql: sql(
+          /* sql */ `
+CREATE INDEX IF NOT EXISTS {{table_prefix}}job_listing_type_name_idx
+ON {{table_prefix}}job (type_name, created_at DESC)`,
+          false,
+        ),
+      },
+      {
+        sql: sql(
+          /* sql */ `
+CREATE INDEX IF NOT EXISTS {{table_prefix}}job_chain_listing_type_name_idx
+ON {{table_prefix}}job (type_name, created_at DESC) WHERE chain_index = 0`,
           false,
         ),
       },
@@ -218,7 +258,7 @@ SELECT *, 1 AS deduplicated
 FROM {{table_prefix}}job
 WHERE ? IS NOT NULL
   AND deduplication_key = ?
-  AND id = chain_id
+  AND chain_index = 0
   AND chain_type_name = ?
   AND (
     ? IS NULL
@@ -648,6 +688,19 @@ DELETE FROM {{table_prefix}}job
 WHERE chain_id IN (SELECT value FROM json_each(?))
 `,
   false,
+);
+
+export const getJobsBlockedByChainSql: TypedSql<
+  readonly [NamedParameter<"blocked_by_chain_id", string>],
+  DbJob[]
+> = sql(
+  /* sql */ `
+SELECT j.*
+FROM {{table_prefix}}job_blocker jb
+JOIN {{table_prefix}}job j ON j.id = jb.job_id
+WHERE jb.blocked_by_chain_id = ?
+`,
+  true,
 );
 
 export const getJobForUpdateSql: TypedSql<

@@ -1,3 +1,5 @@
+export const clientInternalsSymbol = Symbol("queuert.clientInternals");
+
 import { type JobTypeRegistry } from "./entities/job-type-registry.js";
 import {
   type BaseJobTypeDefinitions,
@@ -135,6 +137,8 @@ export const createClient = async <
   });
 
   return {
+    [clientInternalsSymbol]: { stateAdapter: stateAdapterOption },
+
     startJobChain: async <
       TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
     >(

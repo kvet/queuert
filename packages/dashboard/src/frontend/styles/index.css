@@ -1,0 +1,338 @@
+:root {
+  --bg: #fafafa;
+  --bg-card: #fff;
+  --bg-hover: #f5f5f5;
+  --border: #e5e7eb;
+  --text: #1f2937;
+  --text-secondary: #6b7280;
+  --text-muted: #9ca3af;
+  --accent: #3b82f6;
+  --accent-hover: #2563eb;
+
+  --status-pending: #eab308;
+  --status-running: #3b82f6;
+  --status-completed: #22c55e;
+  --status-blocked: #a855f7;
+
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --radius: 6px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111827;
+    --bg-card: #1f2937;
+    --bg-hover: #374151;
+    --border: #374151;
+    --text: #f9fafb;
+    --text-secondary: #9ca3af;
+    --text-muted: #6b7280;
+  }
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+a:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+
+.layout {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+
+.nav {
+  display: flex;
+  gap: 16px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 12px;
+  margin-bottom: 24px;
+}
+
+.nav a {
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: var(--radius);
+}
+
+.nav a[aria-current="page"] {
+  background: var(--accent);
+  color: #fff;
+}
+
+.nav-title {
+  font-weight: 700;
+  margin-right: auto;
+  color: var(--text);
+}
+
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.filter-bar select,
+.filter-bar input:not([type="checkbox"]) {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  margin-left: auto;
+}
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.card:hover {
+  background: var(--bg-hover);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.card-type {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.card-id {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.filter-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+
+.filter-btn::after {
+  content: "\29D7";
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.card:hover .filter-btn {
+  opacity: 1;
+}
+
+.filter-btn:hover {
+  background: var(--bg-hover);
+}
+
+.card-time {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.card-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.card-input {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 1px 8px;
+  border-radius: 999px;
+}
+
+.status-badge[data-status="pending"] {
+  color: var(--status-pending);
+  background: color-mix(in srgb, var(--status-pending) 15%, transparent);
+}
+.status-badge[data-status="running"] {
+  color: var(--status-running);
+  background: color-mix(in srgb, var(--status-running) 15%, transparent);
+}
+.status-badge[data-status="completed"] {
+  color: var(--status-completed);
+  background: color-mix(in srgb, var(--status-completed) 15%, transparent);
+}
+.status-badge[data-status="blocked"] {
+  color: var(--status-blocked);
+  background: color-mix(in srgb, var(--status-blocked) 15%, transparent);
+}
+
+.load-more {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.load-more:hover {
+  background: var(--bg-hover);
+}
+
+.back-link {
+  display: inline-block;
+  margin-bottom: 16px;
+  font-size: 13px;
+}
+
+.detail-header {
+  margin-bottom: 20px;
+}
+
+.detail-header h2 {
+  font-size: 18px;
+  margin-bottom: 4px;
+}
+
+.detail-header .id {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.section {
+  margin-bottom: 24px;
+}
+
+.section h3 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+  margin-bottom: 12px;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 4px 12px;
+  font-size: 13px;
+}
+
+.info-grid dt {
+  color: var(--text-secondary);
+}
+.info-grid dd {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.json-view {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow: auto;
+  max-height: 300px;
+}
+
+.blocker-list {
+  list-style: none;
+}
+
+.blocker-list li {
+  padding: 6px 0;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+}
+
+.blocker-list li:last-child {
+  border-bottom: none;
+}
+
+.empty {
+  text-align: center;
+  padding: 40px;
+  color: var(--text-muted);
+}
+
+.chain-link {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.error-text {
+  color: #ef4444;
+  font-size: 12px;
+}

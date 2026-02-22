@@ -3,6 +3,18 @@ import { type ScheduleOptions } from "../entities/schedule.js";
 
 export type { DeduplicationOptions, DeduplicationScope, ScheduleOptions };
 
+export type PageParams = {
+  cursor?: string;
+  limit: number;
+};
+
+export type Page<T> = {
+  items: T[];
+  nextCursor: string | null;
+};
+
+export type StateJobStatus = "blocked" | "pending" | "running" | "completed";
+
 export type StateJob = {
   id: string;
   typeName: string;
@@ -12,7 +24,7 @@ export type StateJob = {
   input: unknown;
   output: unknown;
 
-  status: "blocked" | "pending" | "running" | "completed";
+  status: StateJobStatus;
   createdAt: Date;
   scheduledAt: Date;
   completedAt: Date | null;
@@ -160,6 +172,35 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     txContext?: TTxContext;
     chainId: TJobId;
   }) => Promise<StateJob | undefined>;
+
+  /** Lists chains with pagination and filtering. */
+  listChains: (params: {
+    txContext?: TTxContext;
+    filter?: {
+      typeName?: string[];
+      rootOnly?: boolean;
+      id?: string;
+    };
+    page: PageParams;
+  }) => Promise<Page<[StateJob, StateJob | undefined]>>;
+
+  /** Lists jobs with pagination and filtering. */
+  listJobs: (params: {
+    txContext?: TTxContext;
+    filter?: {
+      status?: StateJobStatus[];
+      typeName?: string[];
+      chainId?: string;
+      id?: string;
+    };
+    page: PageParams;
+  }) => Promise<Page<StateJob>>;
+
+  /** Gets jobs that depend on the given chain as a blocker. */
+  getJobsBlockedByChain: (params: {
+    txContext?: TTxContext;
+    chainId: TJobId;
+  }) => Promise<StateJob[]>;
 };
 
 export type GetStateAdapterTxContext<TStateAdapter> =

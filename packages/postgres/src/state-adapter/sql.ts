@@ -122,7 +122,7 @@ ON {{schema}}.{{table_prefix}}job (chain_id, chain_index)`,
           /* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_deduplication_idx
 ON {{schema}}.{{table_prefix}}job (deduplication_key, created_at DESC)
-WHERE deduplication_key IS NOT NULL AND id = chain_id`,
+WHERE deduplication_key IS NOT NULL AND chain_index = 0`,
           false,
         ),
       },
@@ -140,6 +140,46 @@ WHERE status = 'running' AND leased_until IS NOT NULL`,
           /* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_blocker_chain_idx
 ON {{schema}}.{{table_prefix}}job_blocker (blocked_by_chain_id)`,
+          false,
+        ),
+      },
+      {
+        sql: sql(
+          /* sql */ `
+CREATE INDEX IF NOT EXISTS {{table_prefix}}job_chain_listing_idx
+ON {{schema}}.{{table_prefix}}job (created_at DESC) WHERE chain_index = 0`,
+          false,
+        ),
+      },
+      {
+        sql: sql(
+          /* sql */ `
+CREATE INDEX IF NOT EXISTS {{table_prefix}}job_listing_idx
+ON {{schema}}.{{table_prefix}}job (created_at DESC)`,
+          false,
+        ),
+      },
+      {
+        sql: sql(
+          /* sql */ `
+CREATE INDEX IF NOT EXISTS {{table_prefix}}job_listing_status_idx
+ON {{schema}}.{{table_prefix}}job (status, created_at DESC)`,
+          false,
+        ),
+      },
+      {
+        sql: sql(
+          /* sql */ `
+CREATE INDEX IF NOT EXISTS {{table_prefix}}job_listing_type_name_idx
+ON {{schema}}.{{table_prefix}}job (type_name, created_at DESC)`,
+          false,
+        ),
+      },
+      {
+        sql: sql(
+          /* sql */ `
+CREATE INDEX IF NOT EXISTS {{table_prefix}}job_chain_listing_type_name_idx
+ON {{schema}}.{{table_prefix}}job (type_name, created_at DESC) WHERE chain_index = 0`,
           false,
         ),
       },
@@ -600,7 +640,7 @@ _deleted_jobs AS (
 SELECT
   row_to_json(root) AS root_job,
   row_to_json(lc) AS last_chain_job
-FROM (SELECT * FROM _deleted_jobs WHERE id = chain_id) AS root
+FROM (SELECT * FROM _deleted_jobs WHERE chain_index = 0) AS root
 LEFT JOIN LATERAL (
   SELECT *
   FROM _deleted_jobs
@@ -608,6 +648,19 @@ LEFT JOIN LATERAL (
   ORDER BY chain_index DESC
   LIMIT 1
 ) AS lc ON TRUE
+`,
+  true,
+);
+
+export const getJobsBlockedByChainSql: TypedSql<
+  readonly [NamedParameter<"blocked_by_chain_id", string>],
+  DbJob[]
+> = sql(
+  /* sql */ `
+SELECT j.*
+FROM {{schema}}.{{table_prefix}}job_blocker jb
+JOIN {{schema}}.{{table_prefix}}job j ON j.id = jb.job_id
+WHERE jb.blocked_by_chain_id = $1
 `,
   true,
 );

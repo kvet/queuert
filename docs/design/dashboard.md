@@ -2,24 +2,23 @@
 
 ## Overview
 
-The `@queuert/dashboard` package provides an embeddable web dashboard for observing job chains and jobs. It is a read-only observation platform — no mutations (retry, cancel, delete). Users can list, filter, sort, inspect chain/job details, and view blocker relationships.
+The `@queuert/dashboard` package provides an embeddable web dashboard for observing job chains and jobs. It is a read-only observation platform — no mutations (retry, cancel, delete). Users can list, filter, inspect chain/job details, and view blocker relationships.
 
 The dashboard complements `@queuert/otel` (push-based metrics/traces to external backends) with a focused, embedded UI that queries the job state directly. Like OTEL, the dashboard is opt-in.
 
 ## Goals
 
-- **Observation only**: List, filter, sort, inspect — no job mutations
+- **Observation only**: List, filter, inspect — no job mutations
 - **Embedded**: Ships as a single `fetch` handler users mount on their existing server
 - **All adapters**: Works with PostgreSQL, SQLite, and in-memory state adapters
-- **Per-type detail hooks**: Users can attach async functions that return additional JSON context for specific job types, similar to how processors are keyed by type name
 - **Polling**: No notify adapter integration — users refresh the page for updated data
 
 ## Package
 
 Single package: `@queuert/dashboard`
 
-- **Backend**: Hono (standard `fetch` handler)
-- **Frontend**: SolidJS (pre-built JS/CSS shipped in package, served by Hono)
+- **Backend**: Standard `fetch` handler (Hono bundled internally)
+- **Frontend**: SolidJS (pre-built JS/CSS shipped in package)
 - **No auth**: Authentication/authorization is the user's responsibility (middleware before the dashboard handler)
 
 ## Configuration API
@@ -28,135 +27,14 @@ Single package: `@queuert/dashboard`
 import { createDashboard } from "@queuert/dashboard";
 
 const dashboard = createDashboard({
-  stateAdapter,
-
-  // Optional: per-type hooks returning JSON for job detail views
-  jobDetail: {
-    "send-email": async ({ job }) => ({
-      recipient: job.input.to,
-      provider: "mailgun",
-      deliveryStatus: await mailgun.getStatus(job.output?.messageId),
-    }),
-    "process-payment": async ({ job }) => ({
-      amount: job.input.amount,
-      gateway: "stripe",
-    }),
-  },
+  client,
 });
 
-// Mount on any server that supports the fetch API
-// Hono
-app.route("/dashboard", dashboard);
-// Express (with adapter), Fastify, Bun, Deno, etc.
+// Use with any server that accepts a fetch handler
+serve({ fetch: dashboard.fetch, port: 3000 });
 ```
 
-`createDashboard` returns a Hono app instance. Users mount it at their chosen path. The app serves both API routes and the pre-built SolidJS frontend.
-
-### Job Detail Hooks
-
-Hooks are keyed by job type name, matching the pattern used by worker processors. Each hook receives the `StateJob` and returns a JSON-serializable value displayed in the job detail view.
-
-```typescript
-jobDetail: {
-  [typeName: string]: (params: { job: StateJob }) => Promise<unknown> | unknown;
-}
-```
-
-Hooks are called on-demand when a user views a job's detail. Errors in hooks are caught and displayed as error state in the UI (not propagated to the caller).
-
-## State Adapter Extensions
-
-The existing `StateAdapter` has point-query methods only. The dashboard needs list/filter/aggregate capabilities.
-
-### New Methods
-
-```typescript
-// Pagination
-type PageParams = {
-  cursor?: string;
-  limit: number;
-};
-
-type Page<T> = {
-  items: T[];
-  nextCursor: string | null;
-};
-
-// Filtering and sorting
-type ChainListParams = {
-  txContext?: TTxContext;
-  filter?: {
-    status?: ("blocked" | "pending" | "running" | "completed")[];
-    typeName?: string[];
-  };
-  sort?: {
-    field: "createdAt" | "completedAt";
-    direction: "asc" | "desc";
-  };
-  page: PageParams;
-};
-
-type JobListParams = {
-  txContext?: TTxContext;
-  filter?: {
-    status?: ("blocked" | "pending" | "running" | "completed")[];
-    typeName?: string[];
-    chainId?: string;
-  };
-  sort?: {
-    field: "createdAt" | "completedAt";
-    direction: "asc" | "desc";
-  };
-  page: PageParams;
-};
-```
-
-New methods on `StateAdapter`:
-
-- **`listChains`** — List chains with pagination, filtering by status/type, sorting by createdAt/completedAt. Returns chains as `[rootJob, lastJob]` pairs (same shape as `getJobChainById`). The root job represents the chain identity; the last job shows current chain state.
-
-- **`listJobs`** — List jobs with pagination, filtering by status/type/chainId, sorting by createdAt/completedAt. Returns `StateJob` items. When `chainId` is provided, returns all jobs in that chain (ordered by creation). Without `chainId`, returns jobs across all chains.
-
-- **`getJobsBlockedByChain`** — Get jobs that depend on a given chain as a blocker. Returns jobs whose `blockedByChainIds` include this chain. Supports the "blocking" section in chain detail.
-
-### Pagination
-
-Cursor-based pagination. The cursor is opaque to callers — adapter implementations encode position information (e.g., ID + sort field value) into the cursor string. This avoids OFFSET-based pagination performance issues.
-
-### Placement
-
-These methods are added directly to the `StateAdapter` interface. They follow the same patterns as existing methods:
-
-- Optional `txContext` parameter
-- O(1) database round-trips (single query per call)
-- Return plain `StateJob` types
-
-The methods are optional on the interface (using `?:`) so existing adapter implementations continue to compile. The dashboard validates at startup that the required methods are present.
-
-## API Routes
-
-The Hono app serves:
-
-### Static Assets
-
-- `GET /` — SolidJS app (index.html)
-- `GET /assets/*` — Pre-built JS/CSS bundles
-
-### JSON API
-
-All list endpoints return `Page<T>` responses with `items` and `nextCursor`.
-
-**Chains**
-
-- `GET /api/chains` — List chains. Query params: `status`, `typeName`, `sort`, `direction`, `cursor`, `limit`
-- `GET /api/chains/:chainId` — Chain detail: root job, last job, all jobs in chain
-- `GET /api/chains/:chainId/blocking` — Jobs that depend on this chain as a blocker
-
-**Jobs**
-
-- `GET /api/jobs` — List jobs across all chains. Query params: same as chains + `chainId`
-- `GET /api/jobs/:jobId` — Job detail: job + blockers
-- `GET /api/jobs/:jobId/detail` — Job detail hook result (calls user-provided hook for the job's type)
+`createDashboard` accepts a Queuert `client` (created via `createClient`) and returns `{ fetch }` — a standard web `fetch` handler. Users pass it to any server runtime (Node.js, Bun, Deno, etc.). The handler serves both API routes and the pre-built SolidJS frontend. The dashboard extracts the state adapter from the client internally.
 
 ## UI Views
 
@@ -164,89 +42,96 @@ All list endpoints return `Page<T>` responses with `items` and `nextCursor`.
 
 The primary view. A list of chains with inline previews showing the most important info at a glance.
 
-- **Filtering**: By status (multi-select), by type name
-- **Sorting**: By created at, completed at (asc/desc)
+- **Filtering**: By chain/job ID, by type name
+- **Ordering**: Always by created_at DESC (newest first)
 - **Pagination**: Cursor-based, load more
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│  Chains                                                             │
-│                                                                     │
-│  Status: [● All ▾]    Type: [All types ▾]    Sort: [Created ▾] [↓] │
-│ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ │
-│                                                                     │
-│  ● send-welcome-email                              2m ago           │
-│  ✓ completed                                                        │
-│  { to: "alice@example.com" }              completed 1m ago          │
-│                                                                     │
-│ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ │
-│                                                                     │
-│  ● process-order                                   5m ago           │
-│  ▸ running  (2/4 jobs)                                              │
-│  { orderId: "ord_123" }                   attempt #1 in progress    │
-│                                                                     │
-│ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ │
-│                                                                     │
-│  ● generate-report                                 8m ago           │
-│  ✗ running  (attempt #3)                                            │
-│  { reportId: "rpt_456" }     error: "Connection timeout" at 6m ago  │
-│                                                                     │
-│ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ │
-│                                                                     │
-│  ● sync-inventory                                 12m ago           │
-│  ◆ blocked  (waiting on 2 blockers)                                 │
-│  { warehouseId: "wh_01" }                 scheduled 10m ago         │
-│                                                                     │
-│ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ │
-│                                                                     │
-│  [Load more]                                                        │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  Chain or job ID: [___________]   Type name: [___________]                   │
+│                                                         [✓] Hide blockers    │
+│ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ │
+│                                                                              │
+│  send-welcome-email ⊕  f1234567-…-345678901234 ⊕              2m ago         │
+│  ✓ completed                                                                 │
+│  { "to": "alice@example.com", "subject": "Welcome!" }                       │
+│                                                                              │
+│ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ │
+│                                                                              │
+│  process-order ⊕  ab12ef34-…-b56789012345 ⊕                   5m ago        │
+│  ▸ running   order:charge (last)                                             │
+│  { "orderId": "ORD-001", "items": 3 }                                       │
+│                                                                              │
+│ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ │
+│                                                                              │
+│  flaky-import ⊕  f8901234-…-d34567890123 ⊕                    8m ago        │
+│  ▸ running                                                                   │
+│  { "fileUrl": "https://data.example.com/export.csv" }                        │
+│                                                                              │
+│ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ │
+│                                                                              │
+│  create-listing ⊕  e78b1234-…-d34567890123 ⊕                 12m ago        │
+│  ◆ blocked   attempt #2                                                      │
+│  { "productId": "prod-001" }                                                 │
+│                                                                              │
+│ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ │
+│                                                                              │
+│  [Load more]                                                                 │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-Each row shows: chain type name, status badge, creation time, input summary, and the current state (last job status, error preview, blocker count). Clicking a row navigates to the chain detail view.
+`⊕` is the filter button — clicking it sets the corresponding filter (type name or chain ID). The "Chain or job ID" field searches by chain ID directly, or finds the chain containing a job with that ID. Each row shows: chain type name (with filter button), chain ID (with filter button), status badge, last job type (if continuation), attempt count (blocked only), creation time, and input preview. Clicking a row navigates to the chain detail view.
 
 ### Chain Detail
 
 Shows a specific chain with its full job sequence and blocker relationships.
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│  ← Back                                                             │
-│                                                                     │
-│  process-order                                     chain ab12ef     │
-│  ▸ running                                         created 5m ago   │
-│                                                                     │
-│  ── Jobs ───────────────────────────────────────────────────────── ─ │
-│                                                                     │
-│  1. validate-order                                                  │
-│     ✓ completed    attempt #1    1m                 created 5m ago   │
-│     input:  { orderId: "ord_123" }                                  │
-│     output: { valid: true, items: 3 }                               │
-│                                                                     │
-│  2. charge-payment                                                  │
-│     ▸ running      attempt #1    worker-2           created 4m ago   │
-│     input:  { amount: 59.99, currency: "USD" }                      │
-│     leased by worker-2 until 2m from now                            │
-│     ┌ blockers ─────────────────────────────────┐                   │
-│     │  ✓ verify-identity (chain c34f)  completed │                  │
-│     │  ▸ fraud-check     (chain d56a)  running   │                  │
-│     └────────────────────────────────────────────┘                  │
-│                                                                     │
-│  3. send-confirmation  ○ pending                                    │
-│                                                                     │
-│  4. update-inventory   ○ pending                                    │
-│                                                                     │
-│  ── Blocking ───────────────────────────────────────────────────── ─ │
-│                                                                     │
-│  Jobs depending on this chain as a blocker:                         │
-│     ◆ sync-inventory (chain e78b) → job sync-inventory  blocked     │
-│     ◆ notify-warehouse (chain f90c) → job notify-warehouse  blocked │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  ← Back to chains                                                            │
+│                                                                              │
+│  process-order  ▸ running                                                    │
+│  chain ab12ef34-5678-4901-a234-b56789012345                                  │
+│  Created 5m ago                                                              │
+│                                                                              │
+│  ── Jobs (4) ────────────────────────────────────────────────────────────── │
+│                                                                              │
+│  ┌ 1. order:validate                                                       ┐ │
+│  │  ✓ completed   attempt #1                                    5m ago     │ │
+│  │  ── Input ──                                                            │ │
+│  │  { "orderId": "ORD-001", "items": 3 }                                  │ │
+│  │  ── Output ──                                                           │ │
+│  │  { "orderId": "ORD-001", "valid": true }                               │ │
+│  └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│  ┌ 2. order:charge                                                         ┐ │
+│  │  ▸ running   attempt #1   worker-2                           4m ago     │ │
+│  │  ── Input ──                                                            │ │
+│  │  { "orderId": "ORD-001", "amount": 89.97 }                             │ │
+│  │  Blockers                                                               │ │
+│  │  ✓ verify-identity  [chain c34f5678-9a01-4b23-c456-d78901234567]        │ │
+│  │  ▸ fraud-check      [chain d56a7890-1b23-4c45-d678-e90123456789]        │ │
+│  └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│  ┌ 3. order:ship                                                           ┐ │
+│  │  ○ pending                                                   3m ago     │ │
+│  └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│  ┌ 4. order:confirm                                                        ┐ │
+│  │  ○ pending                                                   3m ago     │ │
+│  └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│  ── Blocking ────────────────────────────────────────────────────────────── │
+│                                                                              │
+│  Jobs depending on this chain as a blocker:                                  │
+│  ◆ sync-inventory      [chain e78b1234-5a67-4b89-c012-d34567890123]         │
+│  ◆ notify-warehouse    [chain f90c2345-6b78-4c90-d123-e45678901234]         │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Jobs section**: All jobs in the chain, ordered by creation. Completed jobs show input/output. Running jobs show lease info. Failed attempts show the error.
+- **Jobs section**: All jobs in the chain, ordered by creation. Each job is a clickable card. Completed jobs show input/output. Running jobs show lease info and worker. Failed attempts show the error.
 - **Blockers**: Shown per-job — only jobs that have blockers display the blockers subsection with chain links and status.
 - **Blocking section**: Jobs from other chains that depend on this chain as a blocker.
 
@@ -255,116 +140,199 @@ Shows a specific chain with its full job sequence and blocker relationships.
 Cross-chain job view. Same layout as chain list, but each row is a job with a link to its parent chain.
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│  Jobs                                                               │
-│                                                                     │
-│  Status: [● All ▾]    Type: [All types ▾]    Sort: [Created ▾] [↓] │
-│ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ │
-│                                                                     │
-│  ● charge-payment                    chain: process-order (ab12ef)  │
-│  ▸ running    attempt #1             worker-2              4m ago   │
-│  { amount: 59.99, currency: "USD" }                                 │
-│                                                                     │
-│ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ │
-│                                                                     │
-│  ● send-welcome-email                chain: send-welcome-email (x)  │
-│  ✓ completed  attempt #1                                   2m ago   │
-│  { to: "alice@example.com" }                   completed 1m ago     │
-│                                                                     │
-│ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ │
-│                                                                     │
-│  ● generate-report                   chain: generate-report (y)     │
-│  ✗ running    attempt #3             worker-1              8m ago   │
-│  { reportId: "rpt_456" }          error: "Connection timeout"       │
-│                                                                     │
-│ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ │
-│  [Load more]                                                        │
-└─────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  Job or chain ID: [___________]   Type name: [___________]                   │
+│  Status: [All statuses ▾]                                                    │
+│ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ │
+│                                                                              │
+│  order:charge ⊕  a1b2c3d4-…-e56789012345 ⊕                    4m ago        │
+│  ▸ running   worker-2                                                        │
+│  [chain ab12ef34-5678-4901-a234-b56789012345]                                │
+│  { "orderId": "ORD-001", "amount": 89.97 }                                  │
+│                                                                              │
+│ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ │
+│                                                                              │
+│  send-welcome-email ⊕  b2c3d4e5-…-f67890123456 ⊕              2m ago        │
+│  ✓ completed                                                                 │
+│  [chain f1234567-89ab-4cde-f012-345678901234]                                │
+│  { "to": "alice@example.com", "subject": "Welcome!" }                       │
+│                                                                              │
+│ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ │
+│                                                                              │
+│  flaky-import ⊕  c3d4e5f6-…-a78901234567 ⊕                    8m ago        │
+│  ▸ running   worker-1                                                        │
+│  [chain f8901234-5a67-4b89-c012-d34567890123]                                │
+│  { "fileUrl": "https://data.example.com/export.csv" }                        │
+│                                                                              │
+│ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ │
+│                                                                              │
+│  [Load more]                                                                 │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-Each row shows: job type, status badge, attempt count, worker ID (if running), chain link, creation time, input summary, and error preview (if any). Clicking a row opens the job detail. The chain link navigates to the chain detail view.
+Each row shows: job type (with filter button), job ID (with filter button), status badge, attempt count (blocked only), worker ID (if running), chain link (full ID), creation time, and input preview. The "Job or chain ID" field matches job ID directly or chain ID. The `⊕` filter button on the job ID sets the ID filter. Clicking a row opens the job detail. The chain link navigates to the chain detail view.
 
 ### Job Detail
 
-Full job inspection. Shown as a dedicated view when navigating from the job list, or inline-expanded in the chain detail view.
+Full job inspection. Shown as a dedicated view when navigating from the job list, or inline-expanded in the chain detail view. Sections appear conditionally based on job state.
+
+#### Blocked
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│  ← Back                                                             │
-│                                                                     │
-│  charge-payment                                    job 7f8a2b       │
-│  ▸ running                           chain: process-order (ab12ef)  │
-│                                                                     │
-│  ── Info ────────────────────────────────────────────────────────── │
-│                                                                     │
-│  Status       ▸ running                                             │
-│  Attempt      #1                                                    │
-│  Created      2024-01-15 14:30:02                                   │
-│  Scheduled    2024-01-15 14:30:02                                   │
-│  Leased by    worker-2                                              │
-│  Leased until 2024-01-15 14:35:02                                   │
-│                                                                     │
-│  ── Input ───────────────────────────────────────────────────────── │
-│                                                                     │
-│  {                                                                  │
-│    "amount": 59.99,                                                 │
-│    "currency": "USD",                                               │
-│    "customerId": "cus_abc123"                                       │
-│  }                                                                  │
-│                                                                     │
-│  ── Blockers ────────────────────────────────────────────────────── │
-│                                                                     │
-│  ✓ verify-identity  (chain c34f)   completed                        │
-│  ▸ fraud-check      (chain d56a)   running                          │
-│                                                                     │
-│  ── Detail (charge-payment hook) ────────────────────────────────── │
-│                                                                     │
-│  {                                                                  │
-│    "gateway": "stripe",                                             │
-│    "stripePaymentIntent": "pi_3abc",                                │
-│    "gatewayStatus": "processing"                                    │
-│  }                                                                  │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  ← Back to jobs                                                              │
+│                                                                              │
+│  create-listing  ◆ blocked                                                   │
+│  job a12b3456-7c89-4def-a012-bcdef3456789                                    │
+│  chain: [create-listing (e78b90ab-1c23-4d56-e789-f01234567890)]              │
+│                                                                              │
+│  ── Info ─────────────────────────────────────────────────────────────────── │
+│                                                                              │
+│  Status        ◆ blocked                                                     │
+│  Attempt       #0                                                            │
+│  Created       Jan 15, 2024, 2:25:00 PM (10m ago)                           │
+│  Scheduled     Jan 15, 2024, 2:25:00 PM (10m ago)                           │
+│                                                                              │
+│  ── Blockers ─────────────────────────────────────────────────────────────── │
+│                                                                              │
+│  ✓ fetch-inventory  [chain c34f5678-9a01-4b23-c456-d78901234567]             │
+│  ▸ fetch-pricing    [chain d56a7890-1b23-4c45-d678-e90123456789]             │
+│                                                                              │
+│  ── Input ────────────────────────────────────────────────────────────────── │
+│                                                                              │
+│  {                                                                           │
+│    "productId": "prod-001"                                                   │
+│  }                                                                           │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-When a job is completed, the **Output** section appears. When a job has a `lastAttemptError`, the **Error** section appears with the error message. The **Detail** section only appears when a `jobDetail` hook is configured for the job's type.
-
-## Build and Packaging
-
-The `@queuert/dashboard` package contains:
+#### Running
 
 ```
-packages/dashboard/
-├── src/
-│   ├── api/           # Hono routes
-│   ├── frontend/      # SolidJS app source
-│   └── index.ts       # createDashboard export
-├── dist/
-│   ├── api/           # Compiled Hono routes
-│   ├── assets/        # Pre-built SolidJS JS/CSS
-│   └── index.js       # Package entry point
-└── package.json
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  ← Back to jobs                                                              │
+│                                                                              │
+│  flaky-import  ▸ running                                                     │
+│  job e45f6789-0a12-4b34-c567-d89012345678                                    │
+│  chain: [flaky-import (f8901234-5a67-4b89-c012-d34567890123)]                │
+│                                                                              │
+│  ── Info ─────────────────────────────────────────────────────────────────── │
+│                                                                              │
+│  Status        ▸ running                                                     │
+│  Attempt       #3                                                            │
+│  Created       Jan 15, 2024, 2:25:00 PM (10m ago)                           │
+│  Scheduled     Jan 15, 2024, 2:34:30 PM (30s ago)                           │
+│  Leased by     worker-1                                                      │
+│  Lease until   Jan 15, 2024, 2:39:30 PM (in 4m)                             │
+│                                                                              │
+│  ── Input ────────────────────────────────────────────────────────────────── │
+│                                                                              │
+│  {                                                                           │
+│    "fileUrl": "https://data.example.com/export.csv"                          │
+│  }                                                                           │
+│                                                                              │
+│  ── Error ────────────────────────────────────────────────────────────────── │
+│                                                                              │
+│  Connection reset (attempt 2)                                                │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-The SolidJS frontend is built at package build time. The built assets are included in the published package. At runtime, Hono serves these assets as static files — no build step required by users.
+#### Completed (with output)
 
-### Dependencies
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  ← Back to jobs                                                              │
+│                                                                              │
+│  charge-payment  ✓ completed                                                 │
+│  job 7f8a2b34-5c67-4d89-e012-f34567890123                                    │
+│  chain: [process-order (ab12ef34-5678-4901-a234-b56789012345)]               │
+│                                                                              │
+│  ── Info ─────────────────────────────────────────────────────────────────── │
+│                                                                              │
+│  Status        ✓ completed                                                   │
+│  Attempt       #1                                                            │
+│  Created       Jan 15, 2024, 2:30:02 PM (5m ago)                            │
+│  Scheduled     Jan 15, 2024, 2:30:02 PM (5m ago)                            │
+│  Completed     Jan 15, 2024, 2:34:00 PM (1m ago)                            │
+│  Completed by  worker-2                                                      │
+│                                                                              │
+│  ── Blockers ─────────────────────────────────────────────────────────────── │
+│                                                                              │
+│  ✓ verify-identity  [chain c34f5678-9a01-4b23-c456-d78901234567]             │
+│  ✓ fraud-check      [chain d56a7890-1b23-4c45-d678-e90123456789]             │
+│                                                                              │
+│  ── Input ────────────────────────────────────────────────────────────────── │
+│                                                                              │
+│  {                                                                           │
+│    "amount": 59.99,                                                          │
+│    "currency": "USD",                                                        │
+│    "customerId": "cus_abc123"                                                │
+│  }                                                                           │
+│                                                                              │
+│  ── Output ───────────────────────────────────────────────────────────────── │
+│                                                                              │
+│  {                                                                           │
+│    "chargeId": "ch_abc123",                                                  │
+│    "orderId": "ord_456"                                                      │
+│  }                                                                           │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
 
-- `hono` — HTTP framework (fetch-compatible)
-- `solid-js` / related build tooling — dev dependency only (pre-built at publish time)
-- `queuert` — peer dependency (for `StateAdapter` types)
+#### Completed (with continuation)
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  ← Back to jobs                                                              │
+│                                                                              │
+│  order:validate  ✓ completed                                                 │
+│  job 3a9c1d23-4e56-4f78-9012-a34567890123                                    │
+│  chain: [process-order (ab12ef34-5678-4901-a234-b56789012345)]               │
+│                                                                              │
+│  ── Info ─────────────────────────────────────────────────────────────────── │
+│                                                                              │
+│  Status        ✓ completed                                                   │
+│  Attempt       #1                                                            │
+│  Created       Jan 15, 2024, 2:28:00 PM (7m ago)                            │
+│  Scheduled     Jan 15, 2024, 2:28:00 PM (7m ago)                            │
+│  Completed     Jan 15, 2024, 2:29:00 PM (6m ago)                            │
+│  Completed by  worker-1                                                      │
+│                                                                              │
+│  ── Input ────────────────────────────────────────────────────────────────── │
+│                                                                              │
+│  {                                                                           │
+│    "orderId": "ORD-001",                                                     │
+│    "items": 3                                                                │
+│  }                                                                           │
+│                                                                              │
+│  ── Continued with ──────────────────────────────────────────────────────── │
+│                                                                              │
+│  [order:charge  ✓ completed]                                                 │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+`[text]` denotes a clickable link. Links navigate to the corresponding chain or job detail view.
+
+Conditional sections:
+
+- **Blockers** — only when the job has blockers.
+- **Input** — when the job has input data.
+- **Output** or **Continued with** (mutually exclusive) — Output shows the result JSON for terminal jobs. Continued with shows a link to the next job with its status.
+- **Error** — when the job has a `lastAttemptError`.
 
 ## Summary
 
 The dashboard provides:
 
 1. **Embeddable observation UI** — single `fetch` handler, mount anywhere
-2. **Read-only** — list, filter, sort, inspect chains and jobs
-3. **Per-type detail hooks** — user-defined async JSON context for job inspection
-4. **Adapter-agnostic** — works with all state adapters via new list/filter methods
-5. **Self-contained** — pre-built frontend, no external build steps
-6. **Opt-in** — separate package, no impact on existing code unless adopted
+2. **Read-only** — list, filter, inspect chains and jobs
+3. **Adapter-agnostic** — works with all state adapters via new list/filter methods
+4. **Self-contained** — pre-built frontend, no external build steps
+5. **Opt-in** — separate package, no impact on existing code unless adopted
 
 See also:
 

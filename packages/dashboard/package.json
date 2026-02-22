@@ -1,0 +1,59 @@
+{
+  "name": "@queuert/dashboard",
+  "version": "0.1.0",
+  "description": "Embeddable web dashboard for Queuert job queue observation",
+  "keywords": [
+    "background-jobs",
+    "dashboard",
+    "job-queue",
+    "monitoring",
+    "queue",
+    "typescript"
+  ],
+  "license": "MIT",
+  "author": "kvet",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kvet/queuert.git"
+  },
+  "files": [
+    "dist",
+    "package.json",
+    "README.md"
+  ],
+  "type": "module",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": "./dist/index.mjs",
+      "./package.json": "./package.json"
+    }
+  },
+  "scripts": {
+    "prepublishOnly": "pnpm build",
+    "build": "pnpm build:frontend && tsdown",
+    "build:frontend": "vite build",
+    "typecheck": "tsgo --noEmit",
+    "test": "vitest --run"
+  },
+  "devDependencies": {
+    "@queuert/tsconfig": "workspace:*",
+    "@solidjs/router": "^0.15.4",
+    "@types/node": "^24.10.4",
+    "hono": "^4.11.9",
+    "queuert": "workspace:*",
+    "solid-js": "^1.9.11",
+    "vite": "^7.3.1",
+    "vite-plugin-solid": "^2.11.10"
+  },
+  "peerDependencies": {
+    "queuert": "workspace:*"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

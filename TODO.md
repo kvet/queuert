@@ -12,7 +12,15 @@
     - Span event pattern: end span for timing, add `transaction.committed` event after commit
   - See: transactional outbox pattern for reliable side effects
 - [EPIC] Dashboard
+  - [TASK,COMPLEX] Better UI
+  - [?,REF] Filter by status in chains view
+  - [TASK,MEDIUM] Add list methods to queuert client for programmatic access to dashboard data (chains, jobs, blockers)
 - [TASK,MEDIUM] Job cleanup utility
+- [?,REF] createInProcessWorker should accept client instance
+- [REF] Review state adapter method naming for clarity and consistency
+- [REF] Review OTEL tracing design - reconsider trace contexts stored in DB
+- [?,REF] Consider extracting a dedicated chain table at the DB level
+- [REF] Review state adapter schema design (indices, normalization, etc) to prevent future performance bottlenecks (pending query performance testing and schema analysis) and to better support future features (e.g. singletons, partitioning, etc) and to ensure absence breaking changes in future iterations (e.g. adding new columns to job table should not require altering existing queries)
 - [EPIC] Prepare 0.3 release
 
 # Medium term
@@ -43,3 +51,4 @@
 - [EPIC] Hard timeout (worker threads) - True isolation with `terminate()`; enables memory limits and untrusted code sandboxing
 - [EPIC] Singletons/concurrency limit
 - [EPIC] Partitioning (PG) - Scaling concern; defer until users hit limits
+- [?,EPIC] Browser runtime support - SQLite WASM (OPFS) state adapter, Web Workers as job processors, BroadcastChannel notify adapter
