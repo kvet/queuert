@@ -50,7 +50,7 @@
     "@opentelemetry/sdk-metrics": "^2.5.1",
     "@opentelemetry/sdk-trace-base": "^2.5.1",
     "@queuert/tsconfig": "workspace:*",
-    "@types/node": "^24.10.4",
+    "@types/node": "^22.19.11",
     "queuert": "workspace:*"
   },
   "peerDependencies": {

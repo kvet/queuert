@@ -22,7 +22,7 @@
   },
   "devDependencies": {
     "@queuert/tsconfig": "workspace:*",
-    "@types/node": "^24.10.4",
+    "@types/node": "^22.19.11",
     "tsx": "^4.21.0"
   }
 }

@@ -18,7 +18,7 @@
     "@queuert/redis": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
     "@testcontainers/redis": "^11.11.0",
-    "@types/node": "^24.10.4",
+    "@types/node": "^22.19.11",
     "ioredis": "^5.9.3",
     "queuert": "workspace:*",
     "testcontainers": "^11.11.0",

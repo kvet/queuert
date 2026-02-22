@@ -18,7 +18,7 @@
     "@queuert/postgres": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
     "@testcontainers/postgresql": "^11.11.0",
-    "@types/node": "^24.10.4",
+    "@types/node": "^22.19.11",
     "postgres": "^3.4.8",
     "queuert": "workspace:*",
     "testcontainers": "^11.11.0",

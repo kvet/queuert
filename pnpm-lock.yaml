@@ -85,17 +85,14 @@ importers:
         specifier: ^7.6.13
         version: 7.6.13
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
+        specifier: ^22.19.11
+        version: 22.19.11
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
 
   examples/dashboard:
     devDependencies:
-      '@hono/node-server':
-        specifier: ^1.19.9
-        version: 1.19.9(hono@4.11.9)
       '@queuert/dashboard':
         specifier: workspace:*
         version: link:../../packages/dashboard
@@ -109,8 +106,8 @@ importers:
         specifier: ^7.6.13
         version: 7.6.13
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
+        specifier: ^22.19.11
+        version: 22.19.11
       better-sqlite3:
         specifier: ^12.6.2
         version: 12.6.2
@@ -131,8 +128,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages-internal/tsconfig
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
+        specifier: ^22.19.11
+        version: 22.19.11
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
@@ -153,8 +150,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages-internal/tsconfig
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
+        specifier: ^22.19.11
+        version: 22.19.11
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
@@ -172,8 +169,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages-internal/tsconfig
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
+        specifier: ^22.19.11
+        version: 22.19.11
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
@@ -190,8 +187,8 @@ importers:
         specifier: ^11.11.0
         version: 11.11.0
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
+        specifier: ^22.19.11
+        version: 22.19.11
       nats:
         specifier: ^2.29.3
         version: 2.29.3
@@ -217,8 +214,8 @@ importers:
         specifier: ^11.11.0
         version: 11.11.0
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
+        specifier: ^22.19.11
+        version: 22.19.11
       '@types/pg':
         specifier: ^8.16.0
         version: 8.16.0
@@ -247,8 +244,8 @@ importers:
         specifier: ^11.11.0
         version: 11.11.0
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
+        specifier: ^22.19.11
+        version: 22.19.11
       postgres:
         specifier: ^3.4.8
         version: 3.4.8
@@ -274,8 +271,8 @@ importers:
         specifier: ^11.11.0
         version: 11.11.0
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
+        specifier: ^22.19.11
+        version: 22.19.11
       ioredis:
         specifier: ^5.9.3
         version: 5.9.3
@@ -301,8 +298,8 @@ importers:
         specifier: ^11.11.0
         version: 11.11.0
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
+        specifier: ^22.19.11
+        version: 22.19.11
       queuert:
         specifier: workspace:*
         version: link:../../packages/core
@@ -353,8 +350,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages-internal/tsconfig
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
+        specifier: ^22.19.11
+        version: 22.19.11
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
@@ -378,8 +375,8 @@ importers:
         specifier: ^11.11.0
         version: 11.11.0
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
+        specifier: ^22.19.11
+        version: 22.19.11
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
@@ -403,8 +400,8 @@ importers:
         specifier: ^11.11.0
         version: 11.11.0
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
+        specifier: ^22.19.11
+        version: 22.19.11
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
@@ -428,8 +425,8 @@ importers:
         specifier: ^11.11.0
         version: 11.11.0
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
+        specifier: ^22.19.11
+        version: 22.19.11
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
@@ -453,8 +450,8 @@ importers:
         specifier: ^11.11.0
         version: 11.11.0
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
+        specifier: ^22.19.11
+        version: 22.19.11
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
@@ -478,8 +475,8 @@ importers:
         specifier: ^11.11.0
         version: 11.11.0
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
+        specifier: ^22.19.11
+        version: 22.19.11
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
@@ -503,8 +500,8 @@ importers:
         specifier: ^11.11.0
         version: 11.11.0
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
+        specifier: ^22.19.11
+        version: 22.19.11
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
@@ -528,8 +525,8 @@ importers:
         specifier: ^11.11.0
         version: 11.11.0
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
+        specifier: ^22.19.11
+        version: 22.19.11
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
@@ -546,8 +543,8 @@ importers:
         specifier: ^11.11.0
         version: 11.11.0
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
+        specifier: ^22.19.11
+        version: 22.19.11
       '@types/pg':
         specifier: ^8.16.0
         version: 8.16.0
@@ -579,8 +576,8 @@ importers:
         specifier: ^11.11.0
         version: 11.11.0
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
+        specifier: ^22.19.11
+        version: 22.19.11
       '@types/pg':
         specifier: ^8.16.0
         version: 8.16.0
@@ -612,8 +609,8 @@ importers:
         specifier: ^11.11.0
         version: 11.11.0
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
+        specifier: ^22.19.11
+        version: 22.19.11
       '@types/pg':
         specifier: ^8.16.0
         version: 8.16.0
@@ -642,8 +639,8 @@ importers:
         specifier: ^11.11.0
         version: 11.11.0
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
+        specifier: ^22.19.11
+        version: 22.19.11
       '@types/pg':
         specifier: ^8.16.0
         version: 8.16.0
@@ -672,8 +669,8 @@ importers:
         specifier: ^11.11.0
         version: 11.11.0
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
+        specifier: ^22.19.11
+        version: 22.19.11
       postgres:
         specifier: ^3.4.8
         version: 3.4.8
@@ -705,8 +702,8 @@ importers:
         specifier: ^11.11.0
         version: 11.11.0
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
+        specifier: ^22.19.11
+        version: 22.19.11
       pg:
         specifier: ^8.16.0
         version: 8.18.0
@@ -735,8 +732,8 @@ importers:
         specifier: ^7.6.13
         version: 7.6.13
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
+        specifier: ^22.19.11
+        version: 22.19.11
       better-sqlite3:
         specifier: ^12.6.2
         version: 12.6.2
@@ -759,8 +756,8 @@ importers:
         specifier: ^7.6.13
         version: 7.6.13
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
+        specifier: ^22.19.11
+        version: 22.19.11
       better-sqlite3:
         specifier: ^12.6.2
         version: 12.6.2
@@ -786,8 +783,8 @@ importers:
         specifier: ^7.6.13
         version: 7.6.13
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
+        specifier: ^22.19.11
+        version: 22.19.11
       better-sqlite3:
         specifier: ^12.6.2
         version: 12.6.2
@@ -816,8 +813,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages-internal/tsconfig
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
+        specifier: ^22.19.11
+        version: 22.19.11
       better-sqlite3:
         specifier: ^12.2.0
         version: 12.6.2
@@ -840,8 +837,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages-internal/tsconfig
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
+        specifier: ^22.19.11
+        version: 22.19.11
       queuert:
         specifier: workspace:*
         version: link:../../packages/core
@@ -865,8 +862,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages-internal/tsconfig
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
+        specifier: ^22.19.11
+        version: 22.19.11
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
@@ -884,8 +881,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages-internal/tsconfig
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
+        specifier: ^22.19.11
+        version: 22.19.11
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
@@ -903,8 +900,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages-internal/tsconfig
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
+        specifier: ^22.19.11
+        version: 22.19.11
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
@@ -922,8 +919,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages-internal/tsconfig
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
+        specifier: ^22.19.11
+        version: 22.19.11
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
@@ -959,8 +956,8 @@ importers:
         specifier: ^4.0.1
         version: 4.0.1
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
+        specifier: ^22.19.11
+        version: 22.19.11
       '@types/pg':
         specifier: ^8.16.0
         version: 8.16.0
@@ -982,8 +979,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages-internal/tsconfig
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
+        specifier: ^22.19.11
+        version: 22.19.11
 
   packages/dashboard:
     devDependencies:
@@ -994,11 +991,8 @@ importers:
         specifier: ^0.15.4
         version: 0.15.4(solid-js@1.9.11)
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
-      hono:
-        specifier: ^4.11.9
-        version: 4.11.9
+        specifier: ^22.19.11
+        version: 22.19.11
       queuert:
         specifier: workspace:*
         version: link:../core
@@ -1007,10 +1001,10 @@ importers:
         version: 1.9.11
       vite:
         specifier: ^7.3.1
-        version: 7.3.1(@types/node@24.10.13)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 7.3.1(@types/node@22.19.11)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
       vite-plugin-solid:
         specifier: ^2.11.10
-        version: 2.11.10(solid-js@1.9.11)(vite@7.3.1(@types/node@24.10.13)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2))
+        version: 2.11.10(solid-js@1.9.11)(vite@7.3.1(@types/node@22.19.11)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2))
 
   packages/nats:
     devDependencies:
@@ -1021,8 +1015,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages-internal/tsconfig
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
+        specifier: ^22.19.11
+        version: 22.19.11
       nats:
         specifier: ^2.29.3
         version: 2.29.3
@@ -1045,8 +1039,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages-internal/tsconfig
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
+        specifier: ^22.19.11
+        version: 22.19.11
       queuert:
         specifier: workspace:*
         version: link:../core
@@ -1063,8 +1057,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages-internal/typed-sql
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
+        specifier: ^22.19.11
+        version: 22.19.11
       '@types/pg':
         specifier: ^8.16.0
         version: 8.16.0
@@ -1084,8 +1078,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages-internal/tsconfig
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
+        specifier: ^22.19.11
+        version: 22.19.11
       queuert:
         specifier: workspace:*
         version: link:../core
@@ -1105,8 +1099,8 @@ importers:
         specifier: ^7.6.13
         version: 7.6.13
       '@types/node':
-        specifier: ^24.10.4
-        version: 24.10.13
+        specifier: ^22.19.11
+        version: 22.19.11
       better-sqlite3:
         specifier: ^12.6.2
         version: 12.6.2
@@ -2320,8 +2314,8 @@ packages:
   '@types/node@18.19.130':
     resolution: {integrity: sha512-GRaXQx6jGfL8sKfaIDD6OupbIHBr9jv7Jnaml9tB7l4v068PAOXqfcujMMo5PhbIs6ggR1XODELqahT2R8v0fg==}
 
-  '@types/node@24.10.13':
-    resolution: {integrity: sha512-oH72nZRfDv9lADUBSo104Aq7gPHpQZc4BTx38r9xf9pg5LfP6EzSyH2n7qFmmxRQXh7YlUXODcYsg6PuTDSxGg==}
+  '@types/node@22.19.11':
+    resolution: {integrity: sha512-BH7YwL6rA93ReqeQS1c4bsPpcfOmJasG+Fkr6Y59q83f9M1WcBRHR2vM+P9eOisYRcN3ujQoiZY8uk5W+1WL8w==}
 
   '@types/node@25.2.3':
     resolution: {integrity: sha512-m0jEgYlYz+mDJZ2+F4v8D1AyQb+QzsNqRuI7xg1VQX/KlKS0qT9r1Mo16yo5F/MtifXFgaofIFsdFMox2SxIbQ==}
@@ -3170,10 +3164,6 @@ packages:
 
   hono@4.11.4:
     resolution: {integrity: sha512-U7tt8JsyrxSRKspfhtLET79pU8K+tInj5QZXs1jSugO1Vq5dFj3kmZsRldo29mTBfcjDRVRXrEZ6LS63Cog9ZA==}
-    engines: {node: '>=16.9.0'}
-
-  hono@4.11.9:
-    resolution: {integrity: sha512-Eaw2YTGM6WOxA6CXbckaEvslr2Ne4NFsKrvc0v97JD5awbmeBLO5w9Ho9L9kmKonrwF9RJlW6BxT1PVv/agBHQ==}
     engines: {node: '>=16.9.0'}
 
   hookable@6.0.1:
@@ -4235,6 +4225,9 @@ packages:
   undici-types@5.26.5:
     resolution: {integrity: sha512-JlCMO+ehdEIKqlFxk6IfVoAUVmgz7cU7zD/h9XZ0qzeosSHmUJVOzSQvvYSYWXkFXC+IfLKSIffhv0sVZup6pA==}
 
+  undici-types@6.21.0:
+    resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
+
   undici-types@7.16.0:
     resolution: {integrity: sha512-Zz+aZWSj8LE6zoxD+xrjh4VfkIG8Ya6LvYkZqtUQGJPZjYl53ypCaUwWqo7eI0x66KBGeRo+mlBEkMSeSZ38Nw==}
 
@@ -4886,10 +4879,6 @@ snapshots:
     dependencies:
       hono: 4.11.4
 
-  '@hono/node-server@1.19.9(hono@4.11.9)':
-    dependencies:
-      hono: 4.11.9
-
   '@inquirer/external-editor@1.0.3(@types/node@25.2.3)':
     dependencies:
       chardet: 2.1.1
@@ -5533,7 +5522,7 @@ snapshots:
 
   '@types/better-sqlite3@7.6.13':
     dependencies:
-      '@types/node': 24.10.13
+      '@types/node': 22.19.11
 
   '@types/chai@5.2.3':
     dependencies:
@@ -5544,19 +5533,19 @@ snapshots:
 
   '@types/docker-modem@3.0.6':
     dependencies:
-      '@types/node': 24.10.13
+      '@types/node': 22.19.11
       '@types/ssh2': 1.15.5
 
   '@types/dockerode@3.3.47':
     dependencies:
       '@types/docker-modem': 3.0.6
-      '@types/node': 24.10.13
+      '@types/node': 22.19.11
       '@types/ssh2': 1.15.5
 
   '@types/dockerode@4.0.1':
     dependencies:
       '@types/docker-modem': 3.0.6
-      '@types/node': 24.10.13
+      '@types/node': 22.19.11
       '@types/ssh2': 1.15.5
 
   '@types/estree@1.0.8': {}
@@ -5569,9 +5558,9 @@ snapshots:
     dependencies:
       undici-types: 5.26.5
 
-  '@types/node@24.10.13':
+  '@types/node@22.19.11':
     dependencies:
-      undici-types: 7.16.0
+      undici-types: 6.21.0
 
   '@types/node@25.2.3':
     dependencies:
@@ -5580,7 +5569,7 @@ snapshots:
 
   '@types/pg@8.16.0':
     dependencies:
-      '@types/node': 24.10.13
+      '@types/node': 22.19.11
       pg-protocol: 1.11.0
       pg-types: 2.2.0
 
@@ -5596,11 +5585,11 @@ snapshots:
 
   '@types/ssh2-streams@0.1.13':
     dependencies:
-      '@types/node': 24.10.13
+      '@types/node': 22.19.11
 
   '@types/ssh2@0.5.52':
     dependencies:
-      '@types/node': 24.10.13
+      '@types/node': 22.19.11
       '@types/ssh2-streams': 0.1.13
 
   '@types/ssh2@1.15.5':
@@ -6390,8 +6379,6 @@ snapshots:
 
   hono@4.11.4: {}
 
-  hono@4.11.9: {}
-
   hookable@6.0.1: {}
 
   html-entities@2.3.3: {}
@@ -7070,7 +7057,7 @@ snapshots:
       '@protobufjs/path': 1.1.2
       '@protobufjs/pool': 1.1.0
       '@protobufjs/utf8': 1.1.0
-      '@types/node': 24.10.13
+      '@types/node': 22.19.11
       long: 5.3.2
 
   protobufjs@8.0.0:
@@ -7085,7 +7072,7 @@ snapshots:
       '@protobufjs/path': 1.1.2
       '@protobufjs/pool': 1.1.0
       '@protobufjs/utf8': 1.1.0
-      '@types/node': 24.10.13
+      '@types/node': 22.19.11
       long: 5.3.2
 
   pump@3.0.3:
@@ -7608,7 +7595,10 @@ snapshots:
 
   undici-types@5.26.5: {}
 
-  undici-types@7.16.0: {}
+  undici-types@6.21.0: {}
+
+  undici-types@7.16.0:
+    optional: true
 
   undici@7.22.0: {}
 
@@ -7642,7 +7632,7 @@ snapshots:
     optionalDependencies:
       typescript: 5.9.3
 
-  vite-plugin-solid@2.11.10(solid-js@1.9.11)(vite@7.3.1(@types/node@24.10.13)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)):
+  vite-plugin-solid@2.11.10(solid-js@1.9.11)(vite@7.3.1(@types/node@22.19.11)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)):
     dependencies:
       '@babel/core': 7.29.0
       '@types/babel__core': 7.20.5
@@ -7650,12 +7640,12 @@ snapshots:
       merge-anything: 5.1.7
       solid-js: 1.9.11
       solid-refresh: 0.6.3(solid-js@1.9.11)
-      vite: 7.3.1(@types/node@24.10.13)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
-      vitefu: 1.1.1(vite@7.3.1(@types/node@24.10.13)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2))
+      vite: 7.3.1(@types/node@22.19.11)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
+      vitefu: 1.1.1(vite@7.3.1(@types/node@22.19.11)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2))
     transitivePeerDependencies:
       - supports-color
 
-  vite@7.3.1(@types/node@24.10.13)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2):
+  vite@7.3.1(@types/node@22.19.11)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2):
     dependencies:
       esbuild: 0.27.3
       fdir: 6.5.0(picomatch@4.0.3)
@@ -7664,7 +7654,7 @@ snapshots:
       rollup: 4.57.1
       tinyglobby: 0.2.15
     optionalDependencies:
-      '@types/node': 24.10.13
+      '@types/node': 22.19.11
       fsevents: 2.3.3
       jiti: 2.6.1
       tsx: 4.21.0
@@ -7685,9 +7675,9 @@ snapshots:
       tsx: 4.21.0
       yaml: 2.8.2
 
-  vitefu@1.1.1(vite@7.3.1(@types/node@24.10.13)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)):
+  vitefu@1.1.1(vite@7.3.1(@types/node@22.19.11)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)):
     optionalDependencies:
-      vite: 7.3.1(@types/node@24.10.13)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
+      vite: 7.3.1(@types/node@22.19.11)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
 
   vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.2.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2):
     dependencies:

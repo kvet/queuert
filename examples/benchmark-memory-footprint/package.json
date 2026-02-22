@@ -34,7 +34,7 @@
     "@testcontainers/postgresql": "^11.11.0",
     "@testcontainers/redis": "^11.11.0",
     "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "^24.10.4",
+    "@types/node": "^22.19.11",
     "tsx": "^4.21.0"
   }
 }

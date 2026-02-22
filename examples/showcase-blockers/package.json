@@ -15,7 +15,7 @@
   "devDependencies": {
     "@queuert/tsconfig": "workspace:*",
     "@testcontainers/postgresql": "^11.11.0",
-    "@types/node": "^24.10.4",
+    "@types/node": "^22.19.11",
     "tsx": "^4.21.0"
   }
 }
