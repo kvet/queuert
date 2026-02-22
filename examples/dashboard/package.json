@@ -16,12 +16,11 @@
     "typecheck": "tsgo --noEmit"
   },
   "devDependencies": {
-    "@hono/node-server": "^1.19.9",
     "@queuert/dashboard": "workspace:*",
     "@queuert/sqlite": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
     "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "^24.10.4",
+    "@types/node": "^22.19.11",
     "better-sqlite3": "^12.6.2",
     "queuert": "workspace:*",
     "tsx": "^4.21.0"

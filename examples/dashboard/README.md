@@ -4,7 +4,7 @@ This example demonstrates how to use `@queuert/dashboard` to observe job chains 
 
 ## What it shows
 
-1. Embedding the dashboard as a `fetch` handler with `@hono/node-server`
+1. Embedding the dashboard as a `fetch` handler with Node's built-in HTTP server
 2. Browsing chains and jobs with filtering, pagination, and status badges
 3. Inspecting chain detail views with job sequences and blocker relationships
 4. Viewing job details with input/output data, errors, and continuations

@@ -1,8 +1,7 @@
-import { Hono } from "hono";
 import { type BaseJobTypeDefinitions, type Client, type StateAdapter } from "queuert";
 import { clientInternals } from "queuert/internal";
-import { createChainRoutes } from "./routes/chains.js";
-import { createJobRoutes } from "./routes/jobs.js";
+import { handleChainBlocking, handleChainDetail, handleChainsList } from "./routes/chains.js";
+import { handleJobDetail, handleJobsList } from "./routes/jobs.js";
 
 type Assets = Record<string, { content: string; contentType: string }>;
 
@@ -27,18 +26,31 @@ export const createDashboard = <
 }): { fetch: (request: Request) => Response | Promise<Response> } => {
   const stateAdapter = options.client[clientInternals].stateAdapter;
 
-  const app = new Hono();
+  const handleRequest = async (request: Request): Promise<Response> => {
+    const url = new URL(request.url);
+    const { pathname } = url;
+    let match: RegExpMatchArray | null;
 
-  app.route("/api/chains", createChainRoutes(stateAdapter));
-  app.route("/api/jobs", createJobRoutes(stateAdapter));
+    // API routes
+    match = pathname.match(/^\/api\/chains\/([^/]+)\/blocking$/);
+    if (match) return handleChainBlocking(url, stateAdapter, match[1]);
 
-  // Static assets + SPA fallback
-  app.get("/*", async (c) => {
+    match = pathname.match(/^\/api\/chains\/([^/]+)$/);
+    if (match) return handleChainDetail(url, stateAdapter, match[1]);
+
+    if (pathname === "/api/chains") return handleChainsList(url, stateAdapter);
+
+    match = pathname.match(/^\/api\/jobs\/([^/]+)$/);
+    if (match) return handleJobDetail(url, stateAdapter, match[1]);
+
+    if (pathname === "/api/jobs") return handleJobsList(url, stateAdapter);
+
+    // Static assets + SPA fallback
     const assets = await loadAssets();
-    if (!assets) return c.text("Dashboard assets not built. Run `pnpm build` first.", 503);
+    if (!assets)
+      return new Response("Dashboard assets not built. Run `pnpm build` first.", { status: 503 });
 
-    // Serve asset if path ends with /assets/... (works at any mount depth)
-    const assetMatch = c.req.path.match(/\/(assets\/.+)$/);
+    const assetMatch = pathname.match(/\/(assets\/.+)$/);
     if (assetMatch) {
       const assetPath = "/" + assetMatch[1];
       const asset = assets[assetPath];
@@ -47,19 +59,21 @@ export const createDashboard = <
         if (/\.[a-f0-9]{8,}\.\w+$/.test(assetPath)) {
           headers["Cache-Control"] = "public, max-age=31536000, immutable";
         }
-        return c.body(asset.content, { headers });
+        return new Response(asset.content, { headers });
       }
     }
 
     // SPA fallback — serve index.html with <base> tag for correct relative URLs
     const html = assets["/index.html"];
-    if (!html) return c.notFound();
-    const mountPath = c.req.path
+    if (!html) return new Response("Not Found", { status: 404 });
+    const mountPath = pathname
       .replace(/\/(?:chains|jobs)\/.*$/, "/")
       .replace(/\/+$/, "/")
       .replace(/[^a-zA-Z0-9/_.-]/g, "");
-    return c.html(html.content.replace("<head>", `<head><base href="${mountPath}" />`));
-  });
+    return new Response(html.content.replace("<head>", `<head><base href="${mountPath}" />`), {
+      headers: { "Content-Type": "text/html" },
+    });
+  };
 
-  return { fetch: app.fetch };
+  return { fetch: handleRequest };
 };

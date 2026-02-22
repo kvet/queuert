@@ -43,8 +43,7 @@
   "devDependencies": {
     "@queuert/tsconfig": "workspace:*",
     "@solidjs/router": "^0.15.4",
-    "@types/node": "^24.10.4",
-    "hono": "^4.11.9",
+    "@types/node": "^22.19.11",
     "queuert": "workspace:*",
     "solid-js": "^1.9.11",
     "vite": "^7.3.1",
