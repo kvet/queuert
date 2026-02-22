@@ -1,22 +1,13 @@
 import { TESTCONTAINER_RESOURCE_TYPES, extendWithPostgres } from "@queuert/testcontainers";
 import {
-  blockerChainsTestSuite,
-  chainsTestSuite,
-  deduplicationTestSuite,
-  deletionTestSuite,
   extendWithCommon,
   extendWithNotifyInProcess,
   extendWithResourceLeakDetection,
-  notifyTestSuite,
   processErrorHandlingTestSuite,
   processModesTestSuite,
   processTestSuite,
   reaperTestSuite,
-  schedulingTestSuite,
-  stateResilienceTestSuite,
-  waitChainCompletionTestSuite,
   workerTestSuite,
-  workerlessCompletionTestSuite,
 } from "queuert/testing";
 import { describe, it } from "vitest";
 import { extendWithStatePostgres } from "./state-adapter.pg.spec-helper.js";
@@ -49,40 +40,4 @@ describe("Worker", () => {
 
 describe("Reaper", () => {
   reaperTestSuite({ it: postgresInProcessIt });
-});
-
-describe("Chains", () => {
-  chainsTestSuite({ it: postgresInProcessIt });
-});
-
-describe("Blocker Chains", () => {
-  blockerChainsTestSuite({ it: postgresInProcessIt });
-});
-
-describe("Deduplication", () => {
-  deduplicationTestSuite({ it: postgresInProcessIt });
-});
-
-describe("Deletion", () => {
-  deletionTestSuite({ it: postgresInProcessIt });
-});
-
-describe("Wait Chain Completion", () => {
-  waitChainCompletionTestSuite({ it: postgresInProcessIt });
-});
-
-describe("State Resilience", () => {
-  stateResilienceTestSuite({ it: postgresInProcessIt });
-});
-
-describe("Workerless Completion", () => {
-  workerlessCompletionTestSuite({ it: postgresInProcessIt });
-});
-
-describe("Scheduling", () => {
-  schedulingTestSuite({ it: postgresInProcessIt });
-});
-
-describe("Notify", () => {
-  notifyTestSuite({ it: postgresInProcessIt });
 });

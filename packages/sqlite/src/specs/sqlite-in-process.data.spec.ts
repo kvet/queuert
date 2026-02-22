@@ -7,14 +7,9 @@ import {
   extendWithNotifyInProcess,
   extendWithResourceLeakDetection,
   notifyTestSuite,
-  processErrorHandlingTestSuite,
-  processModesTestSuite,
-  processTestSuite,
-  reaperTestSuite,
   schedulingTestSuite,
   stateResilienceTestSuite,
   waitChainCompletionTestSuite,
-  workerTestSuite,
   workerlessCompletionTestSuite,
 } from "queuert/testing";
 import { describe, it } from "vitest";
@@ -26,26 +21,6 @@ const sqliteInProcessIt = extendWithResourceLeakDetection(
 
 // NOTE: hack for vitest plugin
 it("index");
-
-describe("Process Error Handling", () => {
-  processErrorHandlingTestSuite({ it: sqliteInProcessIt });
-});
-
-describe("Process Modes", () => {
-  processModesTestSuite({ it: sqliteInProcessIt });
-});
-
-describe("Process", () => {
-  processTestSuite({ it: sqliteInProcessIt });
-});
-
-describe("Worker", () => {
-  workerTestSuite({ it: sqliteInProcessIt });
-});
-
-describe("Reaper", () => {
-  reaperTestSuite({ it: sqliteInProcessIt });
-});
 
 describe("Chains", () => {
   chainsTestSuite({ it: sqliteInProcessIt });

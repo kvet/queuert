@@ -11,6 +11,7 @@ export default defineConfig({
   external: [
     "@opentelemetry/api",
     "@opentelemetry/sdk-metrics",
+    "@opentelemetry/sdk-trace-base",
     "@opentelemetry/core",
     "@opentelemetry/semantic-conventions",
     "@opentelemetry/resources",

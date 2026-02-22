@@ -6,14 +6,9 @@ import {
   extendWithCommon,
   extendWithNotifyNoop,
   extendWithResourceLeakDetection,
-  processErrorHandlingTestSuite,
-  processModesTestSuite,
-  processTestSuite,
-  reaperTestSuite,
   schedulingTestSuite,
   stateResilienceTestSuite,
   waitChainCompletionTestSuite,
-  workerTestSuite,
   workerlessCompletionTestSuite,
 } from "queuert/testing";
 import { describe, it } from "vitest";
@@ -25,26 +20,6 @@ const sqliteNoopIt = extendWithResourceLeakDetection(
 
 // NOTE: hack for vitest plugin
 it("index");
-
-describe("Process Error Handling", () => {
-  processErrorHandlingTestSuite({ it: sqliteNoopIt });
-});
-
-describe("Process Modes", () => {
-  processModesTestSuite({ it: sqliteNoopIt });
-});
-
-describe("Process", () => {
-  processTestSuite({ it: sqliteNoopIt });
-});
-
-describe("Worker", () => {
-  workerTestSuite({ it: sqliteNoopIt });
-});
-
-describe("Reaper", () => {
-  reaperTestSuite({ it: sqliteNoopIt });
-});
 
 describe("Chains", () => {
   chainsTestSuite({ it: sqliteNoopIt });

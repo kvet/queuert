@@ -7,14 +7,9 @@ import {
   extendWithCommon,
   extendWithNotifyNoop,
   extendWithResourceLeakDetection,
-  processErrorHandlingTestSuite,
-  processModesTestSuite,
-  processTestSuite,
-  reaperTestSuite,
   schedulingTestSuite,
   stateResilienceTestSuite,
   waitChainCompletionTestSuite,
-  workerTestSuite,
   workerlessCompletionTestSuite,
 } from "queuert/testing";
 import { describe, it } from "vitest";
@@ -29,26 +24,6 @@ const postgresNoopIt = extendWithResourceLeakDetection(
 
 // NOTE: hack for vitest plugin
 it("index");
-
-describe("Process Error Handling", () => {
-  processErrorHandlingTestSuite({ it: postgresNoopIt });
-});
-
-describe("Process Modes", () => {
-  processModesTestSuite({ it: postgresNoopIt });
-});
-
-describe("Process", () => {
-  processTestSuite({ it: postgresNoopIt });
-});
-
-describe("Worker", () => {
-  workerTestSuite({ it: postgresNoopIt });
-});
-
-describe("Reaper", () => {
-  reaperTestSuite({ it: postgresNoopIt });
-});
 
 describe("Chains", () => {
   chainsTestSuite({ it: postgresNoopIt });
