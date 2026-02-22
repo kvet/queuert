@@ -19,8 +19,6 @@ jobs:
           fetch-depth: 0
 
       - uses: ./.github/actions/setup-repo
-        with:
-          node-version: "22"
 
       - name: Format check
         run: pnpm fmt:check
@@ -35,7 +33,7 @@ jobs:
         run: pnpm typecheck
 
       - name: Test
-        run: vitest --run
+        run: pnpm test
 
       - name: Examples
         run: pnpm examples
