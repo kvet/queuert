@@ -29,7 +29,7 @@ jobs:
         run: pnpm lint
 
       - name: Build
-        run: pnpm -r build 2>&1 || { echo "Build failed. Retrying with verbose output..."; pnpm -r --workspace-concurrency=1 build; }
+        run: pnpm build
 
       - name: Typecheck
         run: pnpm typecheck

@@ -7,5 +7,6 @@ export default defineConfig({
   exports: {
     devExports: true,
   },
+  inlineOnly: false,
   external: ["vitest"],
 });
