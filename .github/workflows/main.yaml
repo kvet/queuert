@@ -22,8 +22,23 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Check
-        run: pnpm check
+      - name: Format check
+        run: pnpm fmt:check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Build
+        run: pnpm build
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: vitest --run
+
+      - name: Examples
+        run: pnpm examples
 
   # PR CHECKS
 
