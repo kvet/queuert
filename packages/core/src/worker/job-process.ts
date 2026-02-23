@@ -26,7 +26,11 @@ import {
   JobNotFoundError,
   JobTakenByAnotherWorkerError,
 } from "../errors.js";
-import { type Helper } from "../helper.js";
+import { continueWith } from "../implementation/continue-with.js";
+import { finishJob } from "../implementation/finish-job.js";
+import { handleJobHandlerError } from "../implementation/handle-job-handler-error.js";
+import { refetchJobForUpdate as refetchJobForUpdateImpl } from "../implementation/refetch-job-for-update.js";
+import { type Helpers } from "../setup-helpers.js";
 import { type TypedAbortController, type TypedAbortSignal } from "../helpers/abort.js";
 import { type BackoffConfig } from "../helpers/backoff.js";
 import { type CommitHooks, withCommitHooks } from "../commit-hooks.js";
@@ -70,27 +74,7 @@ export type JobAbortReason =
   | "not_found"
   | "already_completed";
 
-export class RescheduleJobError extends Error {
-  public readonly schedule: ScheduleOptions;
-  constructor(
-    message: string,
-    options: {
-      schedule: ScheduleOptions;
-      cause?: unknown;
-    },
-  ) {
-    super(message, { cause: options.cause });
-    this.name = "RescheduleJobError";
-    this.schedule = options.schedule;
-  }
-}
-
-export const rescheduleJob = (schedule: ScheduleOptions, cause?: unknown): never => {
-  throw new RescheduleJobError(`Reschedule job`, {
-    schedule,
-    cause,
-  });
-};
+export { RescheduleJobError, rescheduleJob } from "../errors.js";
 
 export type CompleteCallbackOptions<
   TStateAdapter extends StateAdapter<BaseTxContext, any>,
@@ -233,7 +217,7 @@ export type AttemptHandlerFn<
 >;
 
 export const runJobProcess = async ({
-  helper,
+  helpers,
   attemptHandler,
   prepareTransactionContext,
   job,
@@ -242,7 +226,7 @@ export const runJobProcess = async ({
   workerId,
   attemptMiddlewares,
 }: {
-  helper: Helper;
+  helpers: Helpers;
   attemptHandler: AttemptHandlerFn<
     StateAdapter<BaseTxContext, any>,
     BaseJobTypeDefinitions,
@@ -275,27 +259,25 @@ export const runJobProcess = async ({
       throw new Error(`Job processing aborted: ${abortController.signal.reason}`);
     }
 
-    await helper
-      .refetchJobForUpdate({
-        txCtx,
-        job,
-        allowEmptyWorker: prepareTransactionContext.status === "pending", // TODO!!!: remove?
-        workerId,
-      })
-      .catch((error: unknown) => {
-        if (!abortController.signal.aborted) {
-          if (error instanceof JobNotFoundError) {
-            abortController.abort("not_found");
-          }
-          if (error instanceof JobAlreadyCompletedError) {
-            abortController.abort("already_completed");
-          }
-          if (error instanceof JobTakenByAnotherWorkerError) {
-            abortController.abort("taken_by_another_worker");
-          }
+    await refetchJobForUpdateImpl(helpers, {
+      txCtx,
+      job,
+      allowEmptyWorker: prepareTransactionContext.status === "pending", // TODO!!!: remove?
+      workerId,
+    }).catch((error: unknown) => {
+      if (!abortController.signal.aborted) {
+        if (error instanceof JobNotFoundError) {
+          abortController.abort("not_found");
         }
-        throw error;
-      });
+        if (error instanceof JobAlreadyCompletedError) {
+          abortController.abort("already_completed");
+        }
+        if (error instanceof JobTakenByAnotherWorkerError) {
+          abortController.abort("taken_by_another_worker");
+        }
+      }
+      throw error;
+    });
   };
   const runInGuardedTransaction = async <T>(
     cb: (txCtx: BaseTxContext) => Promise<T>,
@@ -320,7 +302,7 @@ export const runJobProcess = async ({
       return completeTransactionContext.run(async (txCtx) => cb(txCtx));
     }
 
-    return helper.stateAdapter.runInTransaction(async (txCtx) => {
+    return helpers.stateAdapter.runInTransaction(async (txCtx) => {
       await refetchJobForUpdate(txCtx);
       return cb(txCtx);
     });
@@ -329,14 +311,14 @@ export const runJobProcess = async ({
     commitLease: async (leaseMs: number) => {
       try {
         await runInGuardedTransaction(async (txCtx) => {
-          await helper.stateAdapter.renewJobLease({
+          await helpers.stateAdapter.renewJobLease({
             txCtx,
             jobId: job.id,
             workerId,
             leaseDurationMs: leaseMs,
           });
         });
-        helper.observabilityHelper.jobAttemptLeaseRenewed(job, { workerId });
+        helpers.observabilityHelper.jobAttemptLeaseRenewed(job, { workerId });
       } catch (error) {
         if (
           error instanceof JobTakenByAnotherWorkerError ||
@@ -354,10 +336,10 @@ export const runJobProcess = async ({
   let disposeOwnershipListener: (() => Promise<void>) | null = null;
 
   const blockerPairs = await prepareTransactionContext.run(async (txCtx) =>
-    helper.stateAdapter.getJobBlockers({ txCtx, jobId: job.id }),
+    helpers.stateAdapter.getJobBlockers({ txCtx, jobId: job.id }),
   );
   await prepareTransactionContext.run(async (txCtx) =>
-    helper.stateAdapter.renewJobLease({
+    helpers.stateAdapter.renewJobLease({
       txCtx,
       jobId: job.id,
       workerId,
@@ -374,8 +356,8 @@ export const runJobProcess = async ({
   const runJobAttempt = async (commitHooks: CommitHooks) => {
     const attemptStartTime = Date.now();
 
-    helper.observabilityHelper.jobAttemptStarted(job, { workerId });
-    const attemptSpanHandle = helper.observabilityHelper.startAttemptSpan({
+    helpers.observabilityHelper.jobAttemptStarted(job, { workerId });
+    const attemptSpanHandle = helpers.observabilityHelper.startAttemptSpan({
       chainId: job.chainId,
       chainTypeName: job.chainTypeName,
       jobId: job.id,
@@ -411,7 +393,7 @@ export const runJobProcess = async ({
 
         await leaseManager.start();
         try {
-          disposeOwnershipListener = await helper.notifyAdapter.listenJobOwnershipLost(
+          disposeOwnershipListener = await helpers.notifyAdapter.listenJobOwnershipLost(
             job.id,
             () => {
               if (!abortController.signal.aborted) {
@@ -452,7 +434,7 @@ export const runJobProcess = async ({
       const completeSpan = attemptSpanHandle?.startComplete();
       if (prepareTransactionContext.status !== "pending") {
         completeTransactionContext = await createTransactionContext(
-          helper.stateAdapter.runInTransaction,
+          helpers.stateAdapter.runInTransaction,
         );
         await completeTransactionContext.run(async (txCtx) => {
           await refetchJobForUpdate(txCtx);
@@ -465,7 +447,7 @@ export const runJobProcess = async ({
             if (continuedJob) {
               throw new Error("continueWith can only be called once");
             }
-            continuedJob = await helper.continueWith({
+            continuedJob = await continueWith(helpers, {
               typeName,
               input,
               txCtx,
@@ -483,12 +465,13 @@ export const runJobProcess = async ({
           commitHooks,
           ...txCtx,
         });
-        helper.observabilityHelper.jobAttemptCompleted(job, {
+        helpers.observabilityHelper.jobAttemptCompleted(job, {
           output: continuedJob ? null : output,
           continuedWith: continuedJob ?? undefined,
           workerId,
         });
-        const completedStateJob = await helper.finishJob(
+        const completedStateJob = await finishJob(
+          helpers,
           continuedJob
             ? { job, txCtx, commitHooks, workerId, type: "continueWith", continuedJob }
             : { job, txCtx, commitHooks, workerId, type: "completeChain", output },
@@ -511,7 +494,7 @@ export const runJobProcess = async ({
         };
       });
       completeSpan?.end();
-      helper.observabilityHelper.jobAttemptDuration(job, {
+      helpers.observabilityHelper.jobAttemptDuration(job, {
         durationMs: Date.now() - attemptStartTime,
         workerId,
       });
@@ -554,7 +537,7 @@ export const runJobProcess = async ({
     } catch (error) {
       try {
         const errorResult = await runInGuardedTransaction(async (txCtx) =>
-          helper.handleJobHandlerError({
+          handleJobHandlerError(helpers, {
             job,
             error,
             txCtx,

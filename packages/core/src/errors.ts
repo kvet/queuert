@@ -1,3 +1,5 @@
+import { type ScheduleOptions } from "./entities/schedule.js";
+
 export class JobTakenByAnotherWorkerError extends Error {
   readonly jobId: string | undefined;
   readonly workerId: string | undefined;
@@ -78,6 +80,28 @@ export class HookNotRegisteredError extends Error {
     this.key = key;
   }
 }
+
+export class RescheduleJobError extends Error {
+  public readonly schedule: ScheduleOptions;
+  constructor(
+    message: string,
+    options: {
+      schedule: ScheduleOptions;
+      cause?: unknown;
+    },
+  ) {
+    super(message, { cause: options.cause });
+    this.name = "RescheduleJobError";
+    this.schedule = options.schedule;
+  }
+}
+
+export const rescheduleJob = (schedule: ScheduleOptions, cause?: unknown): never => {
+  throw new RescheduleJobError(`Reschedule job`, {
+    schedule,
+    cause,
+  });
+};
 
 export type JobTypeValidationErrorCode =
   | "not_entry_point"

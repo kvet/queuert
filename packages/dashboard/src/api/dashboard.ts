@@ -1,5 +1,5 @@
 import { type BaseJobTypeDefinitions, type Client, type StateAdapter } from "queuert";
-import { clientInternals } from "queuert/internal";
+import { helpersSymbol } from "queuert/internal";
 import { handleChainBlocking, handleChainDetail, handleChainsList } from "./routes/chains.js";
 import { handleJobDetail, handleJobsList } from "./routes/jobs.js";
 
@@ -24,7 +24,7 @@ export const createDashboard = <
 >(options: {
   client: Client<TJobTypeDefinitions, TStateAdapter>;
 }): { fetch: (request: Request) => Response | Promise<Response> } => {
-  const stateAdapter = options.client[clientInternals].stateAdapter;
+  const { stateAdapter } = options.client[helpersSymbol];
 
   const handleRequest = async (request: Request): Promise<Response> => {
     const url = new URL(request.url);

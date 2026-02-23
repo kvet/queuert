@@ -22,6 +22,8 @@ export {
   JobTakenByAnotherWorkerError,
   JobTypeValidationError,
   HookNotRegisteredError,
+  RescheduleJobError,
+  rescheduleJob,
   WaitChainTimeoutError,
   type JobTypeValidationErrorCode,
 } from "./errors.js";
@@ -51,8 +53,6 @@ export {
   type StateJob,
 } from "./state-adapter/state-adapter.js";
 export {
-  rescheduleJob,
-  RescheduleJobError,
   type AttemptHandlerFn,
   type JobAbortReason,
   type JobAttemptMiddleware,

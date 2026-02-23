@@ -4,16 +4,13 @@ import { type ObservabilityAdapter } from "./observability-adapter/observability
 import { type JobTypeRegistry } from "./entities/job-type-registry.js";
 import { type Log } from "./observability-adapter/log.js";
 import { createNoopObservabilityAdapter } from "./observability-adapter/observability-adapter.noop.js";
-import {
-  type ObservabilityHelper,
-  createObservabilityHelper,
-} from "./observability-adapter/observability-helper.js";
+import { createObservabilityHelper } from "./observability-adapter/observability-helper.js";
 import { wrapStateAdapterWithLogging } from "./state-adapter/state-adapter.wrapper.logging.js";
 import { wrapNotifyAdapterWithLogging } from "./notify-adapter/notify-adapter.wrapper.logging.js";
 import { createNoopNotifyAdapter } from "./notify-adapter/notify-adapter.noop.js";
 import { wrapJobTypeRegistryWithLogging } from "./entities/job-type-registry.wrapper.logging.js";
 
-export const setupHelpers = ({
+export const createHelpers = ({
   stateAdapter: stateAdapterOption,
   notifyAdapter: notifyAdapterOption,
   observabilityAdapter: observabilityAdapterOption,
@@ -25,12 +22,7 @@ export const setupHelpers = ({
   observabilityAdapter?: ObservabilityAdapter;
   registry: JobTypeRegistry;
   log?: Log;
-}): {
-  stateAdapter: StateAdapter<any, any>;
-  notifyAdapter: NotifyAdapter;
-  observabilityHelper: ObservabilityHelper;
-  registry: JobTypeRegistry;
-} => {
+}) => {
   const observabilityAdapter = observabilityAdapterOption ?? createNoopObservabilityAdapter();
   const observabilityHelper = createObservabilityHelper({ log, adapter: observabilityAdapter });
   const stateAdapter = wrapStateAdapterWithLogging({
@@ -55,3 +47,5 @@ export const setupHelpers = ({
     registry,
   };
 };
+
+export type Helpers = ReturnType<typeof createHelpers>;

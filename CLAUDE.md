@@ -6,43 +6,20 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ## Design Documentation
 
-**Before modifying core library behavior, read the relevant design doc.** These documents capture architectural decisions that must be preserved:
-
-High-level design decisions are documented in [docs/design/](docs/design/):
-
-- [Job Chain Model](docs/design/job-chain-model.md) - Unified job/chain model, Promise analogy, terminology
-- [Job Type References](docs/design/job-type-references.md) - Nominal/structural references, continueWith, blockers
-- [Runtime Job Validation](docs/design/runtime-job-validation.md) - JobTypeRegistry, schema adapters (Zod, Valibot, TypeBox, ArkType)
-- [Job Processing](docs/design/job-processing.md) - Prepare/complete pattern, timeouts
-- [Workerless Completion](docs/design/workerless-completion.md) - Completing jobs without a worker
-- [Deduplication](docs/design/deduplication.md) - Chain-level deduplication, continuation restriction
-- [Adapters](docs/design/adapters.md) - Factory patterns, dual-context design, notification optimization
-- [Code Style](docs/design/code-style.md) - Code conventions, testing patterns, project organization, examples structure
-- [Client](docs/design/client.md) - Client API, mutating vs read-only methods, internal hooks
-- [In-Process Worker](docs/design/in-process-worker.md) - Worker lifecycle, leasing, reaper, retry logic
-- [Observability Adapter](docs/design/observability-adapter.md) - ObservabilityAdapter interface, metrics and tracing methods
-- [OTEL Tracing](docs/design/otel-tracing.md) - OpenTelemetry spans, chain/job/attempt hierarchy, blocker links
-- [OTEL Metrics](docs/design/otel-metrics.md) - OpenTelemetry counters, histograms, gauges for queue monitoring
-- [Dashboard](docs/design/dashboard.md) - Embeddable read-only observation UI, Hono API + SolidJS frontend
+**Before modifying core library behavior, read the relevant design doc in [docs/design/](docs/design/).** These documents capture architectural decisions that must be preserved.
 
 ## Packages
 
-- `queuert` - Core abstractions and in-memory implementations
-- `@queuert/postgres` - PostgreSQL state and notify adapters
-- `@queuert/sqlite` - SQLite state adapter
-- `@queuert/redis` - Redis notify adapter
-- `@queuert/nats` - NATS notify adapter with optional JetStream KV
-- `@queuert/otel` - OpenTelemetry observability adapter
-- `@queuert/dashboard` - Embeddable web dashboard (Hono + SolidJS)
-- `examples/` - Integration examples organized by prefix: `state-{state_adapter_name}-*`, `notify-{notify_adapter_name}-*`, `validation-*`, `log-*`, `observability-*`, `showcase-*`, `benchmark-*`
-
-See each package's README.md for exports, configuration, and usage.
+- `packages/` - Publishable packages
+- `packages-internal/` - Internal packages
+- `examples/` - Integration examples organized by prefix: `state-*`, `notify-*`, `validation-*`, `log-*`, `observability-*`, `showcase-*`, `benchmark-*`
 
 ## Session Requirements
 
 - **Consult design docs before changes**: When modifying adapters, job processing, workers, or other core systems, read the corresponding design doc first to understand existing decisions
 - No obvious comments
 - Run `pnpm fmt` before running checks to fix formatting issues
-- Run `pnpm check` to run all checks together (or separately: `pnpm lint`, `pnpm typecheck`, `pnpm test`)
+- Run individual tests during development (e.g., `pnpm vitest run packages/core/src/specs/some.spec.ts`)
+- Run `pnpm check` once the change is finalized to verify everything passes (`pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm examples`)
 - See [Code Style](docs/design/code-style.md) for testing patterns, documentation update guidelines, and examples naming conventions
 - When creating or modifying examples, follow the naming convention and single-purpose design described in Code Style

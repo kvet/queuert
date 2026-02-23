@@ -108,6 +108,12 @@ Example with defaults: 10s → 20s → 40s → 80s → 160s → 300s → 300s...
 
 See [Job Processing](job-processing.md) for details on error handling and abort signals.
 
+## Client-Based Construction
+
+`createClient` and `createInProcessWorker` share the same infrastructure parameters (`stateAdapter`, `notifyAdapter`, `observabilityAdapter`, `registry`, `log`). In practice, consumers always pass identical values to both. The worker should accept a `client` instance as a shorthand, extracting infrastructure from it internally. The two forms (client vs individual params) are mutually exclusive; worker-specific options (`processors`, `concurrency`, etc.) remain unchanged.
+
+This is purely a construction convenience — no lifecycle coupling is introduced. The client and worker remain independent after construction.
+
 ## Extensibility
 
 ### Multi-Type Workers

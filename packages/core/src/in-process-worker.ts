@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { type JobTypeRegistry } from "./entities/job-type-registry.js";
 import { type BaseJobTypeDefinitions } from "./entities/job-type.js";
-import { type Helper, helper } from "./helper.js";
 import { type BackoffConfig } from "./helpers/backoff.js";
 import { type ParallelExecutor, createParallelExecutor } from "./helpers/parallel-executor.js";
 import { raceWithSleep } from "./helpers/sleep.js";
@@ -13,7 +12,7 @@ import { withRetry } from "./internal.js";
 import { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 import { type Log } from "./observability-adapter/log.js";
 import { type ObservabilityAdapter } from "./observability-adapter/observability-adapter.js";
-import { setupHelpers } from "./setup-helpers.js";
+import { type Helpers, createHelpers } from "./setup-helpers.js";
 import {
   type BaseTxContext,
   type StateAdapter,
@@ -113,8 +112,7 @@ const waitForNextJob = async ({
 };
 
 const performJob = async ({
-  helper,
-  stateAdapter,
+  helpers,
   typeNames,
   processors,
   defaultRetryConfig,
@@ -122,8 +120,7 @@ const performJob = async ({
   workerId,
   attemptMiddlewares,
 }: {
-  helper: Helper; // TODO: remove
-  stateAdapter: StateAdapter<any, any>;
+  helpers: Helpers;
   typeNames: string[];
   processors: InProcessWorkerProcessors<any, any>;
   defaultRetryConfig: BackoffConfig;
@@ -133,13 +130,15 @@ const performJob = async ({
 }): Promise<
   { job: null; hasMore: false } | { job: StateJob; hasMore: boolean; execute: () => Promise<void> }
 > => {
-  const prepareTransactionContext = await createTransactionContext(stateAdapter.runInTransaction);
+  const prepareTransactionContext = await createTransactionContext(
+    helpers.stateAdapter.runInTransaction,
+  );
 
   let job: StateJob | undefined;
   let hasMore: boolean;
   try {
     ({ job, hasMore } = await prepareTransactionContext.run(async (txCtx) =>
-      stateAdapter.acquireJob({
+      helpers.stateAdapter.acquireJob({
         txCtx,
         typeNames,
       }),
@@ -167,7 +166,7 @@ const performJob = async ({
     execute: async () => {
       try {
         await runJobProcess({
-          helper,
+          helpers,
           attemptHandler: processor.attemptHandler as any,
           job,
           prepareTransactionContext: prepareTransactionContext as TransactionContext<BaseTxContext>,
@@ -231,13 +230,14 @@ export const createInProcessWorker = async <
 
   return {
     start: async (): Promise<() => Promise<void>> => {
-      const { stateAdapter, notifyAdapter, observabilityHelper } = setupHelpers({
+      const helpers = createHelpers({
         stateAdapter: stateAdapterOption,
         notifyAdapter: notifyAdapterOption,
         observabilityAdapter: observabilityAdapterOption,
         registry: registryOption,
         log,
       });
+      const { stateAdapter, notifyAdapter, observabilityHelper } = helpers;
 
       observabilityHelper.workerStarted({ workerId, jobTypeNames: typeNames });
       observabilityHelper.jobTypeIdleChange(concurrency ?? 1, workerId, typeNames);
@@ -251,14 +251,7 @@ export const createInProcessWorker = async <
           try {
             while (executor.idleSlots() > 0) {
               const result = await performJob({
-                helper: helper({
-                  stateAdapter: stateAdapterOption,
-                  notifyAdapter: notifyAdapterOption,
-                  observabilityAdapter: observabilityAdapterOption,
-                  registry: registryOption,
-                  log,
-                }),
-                stateAdapter,
+                helpers,
                 typeNames,
                 processors,
                 defaultRetryConfig,

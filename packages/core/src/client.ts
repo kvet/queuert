@@ -1,4 +1,4 @@
-export const clientInternalsSymbol = Symbol("queuert.clientInternals");
+export const helpersSymbol = Symbol("queuert.helpers");
 
 import { type JobTypeRegistry } from "./entities/job-type-registry.js";
 import {
@@ -13,7 +13,9 @@ import {
   type JobOf,
 } from "./entities/job-type.js";
 import { type ScheduleOptions } from "./entities/schedule.js";
-import { helper } from "./helper.js";
+import { continueWith } from "./implementation/continue-with.js";
+import { finishJob } from "./implementation/finish-job.js";
+import { startJobChain } from "./implementation/start-job-chain.js";
 import { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 import { type Log } from "./observability-adapter/log.js";
 import { type ObservabilityAdapter } from "./observability-adapter/observability-adapter.js";
@@ -36,7 +38,7 @@ import { JobAlreadyCompletedError, JobNotFoundError, WaitChainTimeoutError } fro
 import { type CommitHooks } from "./commit-hooks.js";
 import { bufferNotifyJobOwnershipLost } from "./helpers/notify-hooks.js";
 import { raceWithSleep } from "./helpers/sleep.js";
-import { setupHelpers } from "./setup-helpers.js";
+import { createHelpers } from "./setup-helpers.js";
 import { type CompleteCallbackOptions } from "./worker/job-process.js";
 
 export type JobChainCompleteOptions<
@@ -120,25 +122,15 @@ export const createClient = async <
   type TJobTypeDefinitions = TJobTypeRegistry["$definitions"];
   type TJobId = GetStateAdapterJobId<TStateAdapter>;
 
-  const { stateAdapter, notifyAdapter } = setupHelpers({
+  const helpers = createHelpers({
     stateAdapter: stateAdapterOption,
     notifyAdapter: notifyAdapterOption,
     observabilityAdapter: observabilityAdapterOption,
     registry: registryOption,
     log,
   });
-
-  // TODO: get rid of helper and just use client methods directly
-  const h = helper({
-    stateAdapter: stateAdapterOption,
-    notifyAdapter: notifyAdapterOption,
-    observabilityAdapter: observabilityAdapterOption,
-    registry: registryOption,
-    log,
-  });
-
   return {
-    [clientInternalsSymbol]: { stateAdapter: stateAdapterOption },
+    [helpersSymbol]: helpers,
 
     startJobChain: async <
       TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
@@ -161,7 +153,7 @@ export const createClient = async <
       }
     > => {
       const { input, typeName, deduplication, schedule, blockers, commitHooks, ...txCtx } = options;
-      return (await h.startJobChain({
+      return (await startJobChain(helpers, {
         typeName,
         input,
         txCtx,
@@ -181,7 +173,7 @@ export const createClient = async <
       } & GetStateAdapterTxContext<TStateAdapter>,
     ): Promise<JobChainOf<TJobId, TJobTypeDefinitions, TChainTypeName> | null> => {
       const { id, typeName: _, ...txCtx } = options;
-      const jobChain = await stateAdapter.getJobChainById({
+      const jobChain = await helpers.stateAdapter.getJobChainById({
         txCtx,
         jobId: id,
       });
@@ -207,7 +199,7 @@ export const createClient = async <
     > => {
       const { chainIds, commitHooks: _commitHooks, ...txCtx } = options;
 
-      const deletedChainPairs = await stateAdapter.deleteJobsByChainIds({
+      const deletedChainPairs = await helpers.stateAdapter.deleteJobsByChainIds({
         txCtx,
         chainIds,
       });
@@ -241,7 +233,7 @@ export const createClient = async <
       CompleteJobChainResult<TStateAdapter, TJobTypeDefinitions, TChainTypeName, TCompleteReturn>
     > => {
       const { id, typeName: _, complete: completeCallback, commitHooks, ...txCtx } = options;
-      const currentJob = await stateAdapter.getCurrentJobForUpdate({
+      const currentJob = await helpers.stateAdapter.getCurrentJobForUpdate({
         txCtx,
         chainId: id,
       });
@@ -278,7 +270,7 @@ export const createClient = async <
               throw new Error("continueWith can only be called once");
             }
 
-            continuedJob = await h.continueWith({
+            continuedJob = await continueWith(helpers, {
               typeName,
               input,
               txCtx,
@@ -299,14 +291,15 @@ export const createClient = async <
 
         const wasRunning = job.status === "running";
 
-        await h.finishJob(
+        await finishJob(
+          helpers,
           continuedJob
             ? { job, txCtx, commitHooks, workerId: null, type: "continueWith", continuedJob }
             : { job, txCtx, commitHooks, workerId: null, type: "completeChain", output },
         );
 
         if (wasRunning) {
-          bufferNotifyJobOwnershipLost(commitHooks, h.notifyAdapter, job.id);
+          bufferNotifyJobOwnershipLost(commitHooks, helpers.notifyAdapter, job.id);
         }
 
         return continuedJob ?? output;
@@ -314,7 +307,7 @@ export const createClient = async <
 
       await completeCallback({ job: currentJob, complete });
 
-      const updatedChain = await stateAdapter.getJobChainById({
+      const updatedChain = await helpers.stateAdapter.getJobChainById({
         txCtx,
         jobId: id,
       });
@@ -348,7 +341,7 @@ export const createClient = async <
       const { timeoutMs, pollIntervalMs = 15_000, signal } = options;
 
       const checkChain = async () => {
-        const chain = await stateAdapter.getJobChainById({ jobId: id });
+        const chain = await helpers.stateAdapter.getJobChainById({ jobId: id });
         if (!chain) {
           throw new JobNotFoundError(`Job chain with id ${id} not found`);
         }
@@ -377,7 +370,7 @@ export const createClient = async <
 
       let dispose: () => Promise<void> = async () => {};
       try {
-        dispose = await notifyAdapter.listenJobChainCompleted(id, () => {
+        dispose = await helpers.notifyAdapter.listenJobChainCompleted(id, () => {
           resolveNotification?.();
         });
       } catch {}

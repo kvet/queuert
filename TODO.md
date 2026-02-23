@@ -13,11 +13,11 @@
   - [?,REF] Add inputs for date range filtering in chains and jobs views
   - [TASK,MEDIUM] Add list methods to queuert client for programmatic access to dashboard data (chains, jobs, blockers)
 - [TASK,MEDIUM] Job cleanup utility
-- [?,REF] createInProcessWorker should accept client instance
+- [REF] createInProcessWorker should accept client instance (see [In-Process Worker § Client-Based Construction](docs/design/in-process-worker.md#client-based-construction))
 - [REF] Review state adapter method naming for clarity and consistency
 - [REF] Review OTEL tracing design - reconsider trace contexts stored in DB
 - [?,REF] Consider extracting a dedicated chain table at the DB level
-- [TASK,MEDIUM] delete should accept an option to delete a whole tree
+- [TASK,MEDIUM] delete should accept an option to delete a whole tree (see [Deletion § Cascade Deletion](docs/design/deletion.md#proposed-cascade-deletion))
 - [EPIC] Prepare 0.3 release
 
 # Medium term

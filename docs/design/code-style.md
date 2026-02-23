@@ -16,6 +16,8 @@ This document describes code style conventions, testing patterns, and project or
 - **Prefer explicit context passing over async context**: Use parameters, callbacks, and handles to pass context rather than relying on `AsyncLocalStorage` or `async_hooks`. When async context is genuinely needed (e.g., preserving OTEL traces across boundaries), use dynamic imports with fallbacks so the library works in runtimes without `async_hooks` support (e.g., Bun).
 - **Arrow functions over function declarations**: Use `export const fn = () => {}` instead of `export function fn() {}`. This applies to all exports — named functions, factories, helpers, etc.
 - **Async factory functions**: Factory functions that perform I/O (database setup, network connections) should be async. Pure configuration factories like `createConsoleLog` or `createJobTypeRegistry` should be sync. Note: `createOtelObservabilityAdapter` is async for future-proofing even though current OTEL instrument creation is synchronous.
+- **No barrel files**: Do not create `index.ts` barrel re-export files within subdirectories. The only barrel file is each package's top-level `index.ts` (the package entry point). Internal modules import directly from the source file they need.
+- **Symbol descriptions prefixed with `queuert.`**: All internal `Symbol()` instances must use a `"queuert."` prefix in their description string, e.g. `Symbol("queuert.helpers")`. This makes symbols identifiable in debugging and avoids collisions.
 
 ## Naming Conventions
 
@@ -65,6 +67,7 @@ Adapter packages use their domain-specific prefixes (not "Queuert"):
 | `@queuert/redis`    | `createRedisNotifyAdapter`       | -                    |
 | `@queuert/nats`     | `createNatsNotifyAdapter`        | -                    |
 | `@queuert/otel`     | `createOtelObservabilityAdapter` | -                    |
+| `@queuert/dashboard` | `createDashboard`               | -                    |
 
 ## Design Documentation
 

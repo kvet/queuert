@@ -4,7 +4,7 @@ export { sleep } from "./helpers/sleep.js";
 
 export { decodeCursor, encodeCursor } from "./state-adapter/cursor.js";
 
-export { clientInternalsSymbol as clientInternals } from "./client.js";
+export { helpersSymbol } from "./client.js";
 
 export { createInProcessNotifyAdapter } from "./notify-adapter/notify-adapter.in-process.js";
 export {
