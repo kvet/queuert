@@ -3,11 +3,11 @@ import { sleep } from "./sleep.js";
 import { createTransactionContext } from "./transaction-context.js";
 
 describe("createTransactionContext", () => {
-  test("resolve lifecycle: passes txContext, returns values, drains work, closes transaction", async () => {
+  test("resolve lifecycle: passes txCtx, returns values, drains work, closes transaction", async () => {
     const mockTx = { client: "mock-client", id: 42 };
     let transactionEnded = false;
 
-    const runInTransaction = async (callback: (txContext: typeof mockTx) => Promise<void>) => {
+    const runInTransaction = async (callback: (txCtx: typeof mockTx) => Promise<void>) => {
       await callback(mockTx);
       transactionEnded = true;
     };
@@ -16,7 +16,7 @@ describe("createTransactionContext", () => {
     expect(ctx.status).toBe("pending");
     expect(transactionEnded).toBe(false);
 
-    const received = await ctx.run(async (txContext) => txContext);
+    const received = await ctx.run(async (txCtx) => txCtx);
     expect(received).toBe(mockTx);
 
     const res = await ctx.run(async () => 42);
@@ -37,7 +37,7 @@ describe("createTransactionContext", () => {
   });
 
   test("executes callbacks sequentially", async () => {
-    const mockRunInTransaction = async (callback: (txContext: unknown) => Promise<void>) => {
+    const mockRunInTransaction = async (callback: (txCtx: unknown) => Promise<void>) => {
       await callback(undefined);
     };
     const ctx = await createTransactionContext(mockRunInTransaction);
@@ -62,7 +62,7 @@ describe("createTransactionContext", () => {
   test("reject lifecycle: propagates errors and rolls back", async () => {
     let transactionError: unknown;
 
-    const runInTransaction = async (callback: (txContext: unknown) => Promise<void>) => {
+    const runInTransaction = async (callback: (txCtx: unknown) => Promise<void>) => {
       try {
         await callback(undefined);
       } catch (err) {
@@ -97,7 +97,7 @@ describe("createTransactionContext", () => {
   });
 
   test("terminal state: idempotent resolve/reject, run rejects after close", async () => {
-    const mockRunInTransaction = async (callback: (txContext: unknown) => Promise<void>) => {
+    const mockRunInTransaction = async (callback: (txCtx: unknown) => Promise<void>) => {
       await callback(undefined);
     };
 

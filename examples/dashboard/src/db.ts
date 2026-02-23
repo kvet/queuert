@@ -37,7 +37,7 @@ export const createStateProvider = (db: Database.Database): SqliteStateProvider<
         lock.release();
       }
     },
-    executeSql: async ({ txContext, sql, params, returns }) => {
+    executeSql: async ({ txCtx, sql, params, returns }) => {
       const executeRaw = ({
         database,
         sql,
@@ -63,8 +63,8 @@ export const createStateProvider = (db: Database.Database): SqliteStateProvider<
         }
       };
 
-      if (txContext) {
-        return executeRaw({ database: txContext.db, sql, params, returns });
+      if (txCtx) {
+        return executeRaw({ database: txCtx.db, sql, params, returns });
       }
 
       await lock.acquire();

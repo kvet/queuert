@@ -1,6 +1,6 @@
 import { type TestAPI } from "vitest";
 import { sleep } from "../helpers/sleep.js";
-import { createClient, createInProcessWorker, defineJobTypes } from "../index.js";
+import { createClient, createInProcessWorker, defineJobTypes, withCommitHooks } from "../index.js";
 import { createSpyStateAdapter } from "../state-adapter/state-adapter.spy.spec-helper.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
@@ -46,8 +46,8 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       processors: {
         "atomic-complete": {
           attemptHandler: async ({ job, complete }) => {
-            return complete(async ({ continueWith: _, ...txContext }) => {
-              await spyStateAdapter.record({ name: "user-completion", ...txContext });
+            return complete(async ({ continueWith: _, ...txCtx }) => {
+              await spyStateAdapter.record({ name: "user-completion", ...txCtx });
               return { result: job.input.value * 2 };
             });
           },
@@ -55,10 +55,11 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       },
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "atomic-complete",
           input: { value: 10 },
         }),
@@ -128,8 +129,8 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         "staged-complete": {
           attemptHandler: async ({ job, complete }) => {
             await sleep(1);
-            return complete(async ({ continueWith: _, ...txContext }) => {
-              await spyStateAdapter.record({ name: "user-completion", ...txContext });
+            return complete(async ({ continueWith: _, ...txCtx }) => {
+              await spyStateAdapter.record({ name: "user-completion", ...txCtx });
               return { result: job.input.value * 3 };
             });
           },
@@ -137,10 +138,11 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       },
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "staged-complete",
           input: { value: 10 },
         }),
@@ -216,12 +218,12 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       processors: {
         "staged-with-callback": {
           attemptHandler: async ({ job, prepare, complete }) => {
-            const multiplier = await prepare({ mode: "staged" }, async (txContext) => {
-              await spyStateAdapter.record({ name: "user-preparation", ...txContext });
+            const multiplier = await prepare({ mode: "staged" }, async (txCtx) => {
+              await spyStateAdapter.record({ name: "user-preparation", ...txCtx });
               return 4;
             });
-            return complete(async ({ continueWith: _, ...txContext }) => {
-              await spyStateAdapter.record({ name: "user-completion", ...txContext });
+            return complete(async ({ continueWith: _, ...txCtx }) => {
+              await spyStateAdapter.record({ name: "user-completion", ...txCtx });
               return { result: job.input.value * multiplier };
             });
           },
@@ -229,10 +231,11 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       },
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "staged-with-callback",
           input: { value: 10 },
         }),
@@ -310,8 +313,8 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         "staged-without-callback": {
           attemptHandler: async ({ job, prepare, complete }) => {
             await prepare({ mode: "staged" });
-            return complete(async ({ continueWith: _, ...txContext }) => {
-              await spyStateAdapter.record({ name: "user-completion", ...txContext });
+            return complete(async ({ continueWith: _, ...txCtx }) => {
+              await spyStateAdapter.record({ name: "user-completion", ...txCtx });
               return { result: job.input.value * 5 };
             });
           },
@@ -319,10 +322,11 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       },
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "staged-without-callback",
           input: { value: 10 },
         }),
@@ -398,12 +402,12 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       processors: {
         "atomic-with-callback": {
           attemptHandler: async ({ job, prepare, complete }) => {
-            const multiplier = await prepare({ mode: "atomic" }, async (txContext) => {
-              await spyStateAdapter.record({ name: "user-preparation", ...txContext });
+            const multiplier = await prepare({ mode: "atomic" }, async (txCtx) => {
+              await spyStateAdapter.record({ name: "user-preparation", ...txCtx });
               return 6;
             });
-            return complete(async ({ continueWith: _, ...txContext }) => {
-              await spyStateAdapter.record({ name: "user-completion", ...txContext });
+            return complete(async ({ continueWith: _, ...txCtx }) => {
+              await spyStateAdapter.record({ name: "user-completion", ...txCtx });
               return { result: job.input.value * multiplier };
             });
           },
@@ -411,10 +415,11 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       },
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "atomic-with-callback",
           input: { value: 10 },
         }),
@@ -485,8 +490,8 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         "atomic-without-callback": {
           attemptHandler: async ({ job, prepare, complete }) => {
             await prepare({ mode: "atomic" });
-            return complete(async ({ continueWith: _, ...txContext }) => {
-              await spyStateAdapter.record({ name: "user-completion", ...txContext });
+            return complete(async ({ continueWith: _, ...txCtx }) => {
+              await spyStateAdapter.record({ name: "user-completion", ...txCtx });
               return { result: job.input.value * 7 };
             });
           },
@@ -494,10 +499,11 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       },
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "atomic-without-callback",
           input: { value: 10 },
         }),

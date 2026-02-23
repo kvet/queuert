@@ -175,18 +175,18 @@ export const createSqliteStateAdapter = async <
       | readonly [],
     TResult,
   >({
-    txContext,
+    txCtx,
     sql,
     params,
   }: {
-    txContext?: TTxContext;
+    txCtx?: TTxContext;
     sql: TypedSql<TParams, TResult>;
   } & (TParams extends readonly []
     ? { params?: undefined }
     : { params: UnwrapNamedParameters<TParams> })): Promise<TResult> => {
     const resolvedSql = applyTemplate(sql);
     return stateProvider.executeSql({
-      txContext,
+      txCtx,
       sql: resolvedSql.sql,
       params,
       returns: resolvedSql.returns,
@@ -196,9 +196,9 @@ export const createSqliteStateAdapter = async <
   const rawAdapter: StateAdapter<TTxContext, TIdType> = {
     runInTransaction: stateProvider.runInTransaction,
 
-    getJobChainById: async ({ txContext, jobId }) => {
+    getJobChainById: async ({ txCtx, jobId }) => {
       const [row] = await executeTypedSql({
-        txContext,
+        txCtx,
         sql: getJobChainByIdSql,
         params: [jobId, jobId],
       });
@@ -214,9 +214,9 @@ export const createSqliteStateAdapter = async <
           : undefined,
       ];
     },
-    getJobById: async ({ txContext, jobId }) => {
+    getJobById: async ({ txCtx, jobId }) => {
       const [job] = await executeTypedSql({
-        txContext,
+        txCtx,
         sql: getJobByIdSql,
         params: [jobId],
       });
@@ -225,7 +225,7 @@ export const createSqliteStateAdapter = async <
     },
 
     createJob: async ({
-      txContext,
+      txCtx,
       typeName,
       chainTypeName,
       chainIndex,
@@ -248,7 +248,7 @@ export const createSqliteStateAdapter = async <
 
       if (chainId) {
         const [existingContinuation] = await executeTypedSql({
-          txContext,
+          txCtx,
           sql: findExistingContinuationSql,
           params: [chainId, chainIndex],
         });
@@ -258,7 +258,7 @@ export const createSqliteStateAdapter = async <
         }
       } else if (deduplicationKey) {
         const [existingDeduplicated] = await executeTypedSql({
-          txContext,
+          txCtx,
           sql: findDeduplicatedJobSql,
           params: [
             deduplicationKey,
@@ -278,7 +278,7 @@ export const createSqliteStateAdapter = async <
       }
 
       const [result] = await executeTypedSql({
-        txContext,
+        txCtx,
         sql: insertJobSql,
         params: [
           newId,
@@ -299,25 +299,25 @@ export const createSqliteStateAdapter = async <
       return { job: mapDbJobToStateJob(result), deduplicated: result.id !== newId };
     },
 
-    addJobBlockers: async ({ txContext, jobId, blockedByChainIds, blockerTraceContexts }) => {
+    addJobBlockers: async ({ txCtx, jobId, blockedByChainIds, blockerTraceContexts }) => {
       const traceContextsJson = JSON.stringify(
         (blockerTraceContexts ?? []).map((tc) => (tc != null ? JSON.stringify(tc) : null)),
       );
 
       await executeTypedSql({
-        txContext,
+        txCtx,
         sql: insertJobBlockersSql,
         params: [jobId, traceContextsJson, JSON.stringify(blockedByChainIds)],
       });
 
       const blockerStatuses = await executeTypedSql({
-        txContext,
+        txCtx,
         sql: checkBlockersStatusSql,
         params: [jobId],
       });
 
       const chainTraceContextRows = await executeTypedSql({
-        txContext,
+        txCtx,
         sql: getBlockerChainTraceContextsSql,
         params: [JSON.stringify(blockedByChainIds)],
       });
@@ -338,7 +338,7 @@ export const createSqliteStateAdapter = async <
 
       if (incompleteBlockerChainIds.length > 0) {
         const [updatedJob] = await executeTypedSql({
-          txContext,
+          txCtx,
           sql: updateJobToBlockedSql,
           params: [jobId],
         });
@@ -352,7 +352,7 @@ export const createSqliteStateAdapter = async <
       }
 
       const [job] = await executeTypedSql({
-        txContext,
+        txCtx,
         sql: getJobByIdForBlockersSql,
         params: [jobId],
       });
@@ -362,9 +362,9 @@ export const createSqliteStateAdapter = async <
         blockerChainTraceContexts,
       };
     },
-    scheduleBlockedJobs: async ({ txContext, blockedByChainId }) => {
+    scheduleBlockedJobs: async ({ txCtx, blockedByChainId }) => {
       const readyJobs = await executeTypedSql({
-        txContext,
+        txCtx,
         sql: findReadyJobsSql,
         params: [blockedByChainId],
       });
@@ -372,7 +372,7 @@ export const createSqliteStateAdapter = async <
       const unblockedJobs: StateJob[] = [];
       for (const { job_id } of readyJobs) {
         const [job] = await executeTypedSql({
-          txContext,
+          txCtx,
           sql: scheduleBlockedJobSql,
           params: [job_id],
         });
@@ -382,7 +382,7 @@ export const createSqliteStateAdapter = async <
       }
 
       const traceContextResults = await executeTypedSql({
-        txContext,
+        txCtx,
         sql: getJobBlockerTraceContextsSql,
         params: [blockedByChainId],
       });
@@ -392,9 +392,9 @@ export const createSqliteStateAdapter = async <
 
       return { unblockedJobs, blockerTraceContexts };
     },
-    getJobBlockers: async ({ txContext, jobId }) => {
+    getJobBlockers: async ({ txCtx, jobId }) => {
       const rows = await executeTypedSql({
-        txContext,
+        txCtx,
         sql: getJobBlockersSql,
         params: [jobId],
       });
@@ -410,18 +410,18 @@ export const createSqliteStateAdapter = async <
       });
     },
 
-    getNextJobAvailableInMs: async ({ txContext, typeNames }) => {
+    getNextJobAvailableInMs: async ({ txCtx, typeNames }) => {
       const [result] = await executeTypedSql({
-        txContext,
+        txCtx,
         sql: getNextJobAvailableInMsSql,
         params: [JSON.stringify(typeNames)],
       });
       return result ? result.available_in_ms : null;
     },
-    acquireJob: async ({ txContext, typeNames }) => {
+    acquireJob: async ({ txCtx, typeNames }) => {
       const typeNamesJson = JSON.stringify(typeNames);
       const [result] = await executeTypedSql({
-        txContext,
+        txCtx,
         sql: acquireJobSql,
         params: [typeNamesJson, typeNamesJson],
       });
@@ -430,20 +430,20 @@ export const createSqliteStateAdapter = async <
         ? { job: mapDbJobToStateJob(result), hasMore: result.has_more === 1 }
         : { job: undefined, hasMore: false };
     },
-    renewJobLease: async ({ txContext, jobId, workerId, leaseDurationMs }) => {
+    renewJobLease: async ({ txCtx, jobId, workerId, leaseDurationMs }) => {
       const [job] = await executeTypedSql({
-        txContext,
+        txCtx,
         sql: renewJobLeaseSql,
         params: [workerId, leaseDurationMs, jobId],
       });
 
       return mapDbJobToStateJob(job);
     },
-    rescheduleJob: async ({ txContext, jobId, schedule, error }) => {
+    rescheduleJob: async ({ txCtx, jobId, schedule, error }) => {
       const scheduledAtIso = schedule.at?.toISOString().replace("T", " ").replace("Z", "") ?? null;
       const scheduleAfterMsOrNull = schedule.afterMs ?? null;
       const [job] = await executeTypedSql({
-        txContext,
+        txCtx,
         sql: rescheduleJobSql,
         params: [
           scheduledAtIso,
@@ -456,27 +456,27 @@ export const createSqliteStateAdapter = async <
 
       return mapDbJobToStateJob(job);
     },
-    completeJob: async ({ txContext, jobId, output, workerId }) => {
+    completeJob: async ({ txCtx, jobId, output, workerId }) => {
       const [job] = await executeTypedSql({
-        txContext,
+        txCtx,
         sql: completeJobSql,
         params: [workerId, output !== undefined ? JSON.stringify(output) : null, jobId],
       });
 
       return mapDbJobToStateJob(job);
     },
-    removeExpiredJobLease: async ({ txContext, typeNames, ignoredJobIds }) => {
+    removeExpiredJobLease: async ({ txCtx, typeNames, ignoredJobIds }) => {
       const [job] = await executeTypedSql({
-        txContext,
+        txCtx,
         sql: removeExpiredJobLeaseSql,
         params: [JSON.stringify(typeNames), JSON.stringify(ignoredJobIds ?? [])],
       });
       return job ? mapDbJobToStateJob(job) : undefined;
     },
-    deleteJobsByChainIds: async ({ txContext, chainIds }) => {
+    deleteJobsByChainIds: async ({ txCtx, chainIds }) => {
       const chainIdsJson = JSON.stringify(chainIds);
       const refs = await executeTypedSql({
-        txContext,
+        txCtx,
         sql: checkExternalBlockerRefsSql,
         params: [chainIdsJson, chainIdsJson],
       });
@@ -490,17 +490,17 @@ export const createSqliteStateAdapter = async <
         );
       }
       const rows = await executeTypedSql({
-        txContext,
+        txCtx,
         sql: getJobChainsByChainIdsSql,
         params: [chainIdsJson],
       });
       await executeTypedSql({
-        txContext,
+        txCtx,
         sql: deleteBlockersByChainIdsSql,
         params: [chainIdsJson],
       });
       await executeTypedSql({
-        txContext,
+        txCtx,
         sql: deleteJobsByChainIdsSql,
         params: [chainIdsJson],
       });
@@ -514,24 +514,24 @@ export const createSqliteStateAdapter = async <
         ] as [StateJob, StateJob | undefined];
       });
     },
-    getJobForUpdate: async ({ txContext, jobId }) => {
+    getJobForUpdate: async ({ txCtx, jobId }) => {
       const [job] = await executeTypedSql({
-        txContext,
+        txCtx,
         sql: getJobForUpdateSql,
         params: [jobId],
       });
       return job ? mapDbJobToStateJob(job) : undefined;
     },
-    getCurrentJobForUpdate: async ({ txContext, chainId }) => {
+    getCurrentJobForUpdate: async ({ txCtx, chainId }) => {
       const [job] = await executeTypedSql({
-        txContext,
+        txCtx,
         sql: getCurrentJobForUpdateSql,
         params: [chainId],
       });
       return job ? mapDbJobToStateJob(job) : undefined;
     },
 
-    listChains: async ({ txContext, filter, page }) => {
+    listChains: async ({ txCtx, filter, page }) => {
       const cursor = page.cursor ? decodeCursor(page.cursor) : null;
       const conditions: string[] = ["j.chain_index = 0"];
       const params: unknown[] = [];
@@ -561,7 +561,7 @@ export const createSqliteStateAdapter = async <
       const sqlStr = `SELECT ${jobColumnsSelect("j")}, ${jobColumnsPrefixedSelect("lc", "lc_")} FROM ${tablePrefix}job AS j LEFT JOIN ${tablePrefix}job AS lc ON lc.chain_id = j.id AND lc.rowid = (SELECT lj.rowid FROM ${tablePrefix}job lj WHERE lj.chain_id = j.id ORDER BY lj.created_at DESC, lj.rowid DESC LIMIT 1) WHERE ${conditions.join(" AND ")} ORDER BY j.created_at DESC, j.id DESC LIMIT ?`;
 
       const rows = (await stateProvider.executeSql({
-        txContext,
+        txCtx,
         sql: sqlStr,
         params,
         returns: true,
@@ -593,7 +593,7 @@ export const createSqliteStateAdapter = async <
       return { items, nextCursor };
     },
 
-    listJobs: async ({ txContext, filter, page }) => {
+    listJobs: async ({ txCtx, filter, page }) => {
       const cursor = page.cursor ? decodeCursor(page.cursor) : null;
       const conditions: string[] = [];
       const params: unknown[] = [];
@@ -625,7 +625,7 @@ export const createSqliteStateAdapter = async <
       const sqlStr = `SELECT * FROM ${tablePrefix}job j ${where} ORDER BY j.created_at DESC, j.id DESC LIMIT ?`;
 
       const rows = (await stateProvider.executeSql({
-        txContext,
+        txCtx,
         sql: sqlStr,
         params,
         returns: true,
@@ -647,9 +647,9 @@ export const createSqliteStateAdapter = async <
       return { items, nextCursor };
     },
 
-    getJobsBlockedByChain: async ({ txContext, chainId }) => {
+    getJobsBlockedByChain: async ({ txCtx, chainId }) => {
       const jobs = await executeTypedSql({
-        txContext,
+        txCtx,
         sql: getJobsBlockedByChainSql,
         params: [chainId],
       });
@@ -662,31 +662,31 @@ export const createSqliteStateAdapter = async <
     migrateToLatest: async () => {
       const runMigrations = await executeMigrations<TTxContext>({
         migrations,
-        getAppliedMigrationNames: async (txContext) => {
+        getAppliedMigrationNames: async (txCtx) => {
           await stateProvider.executeSql({
-            txContext,
+            txCtx,
             sql: applyTemplate(createMigrationTableSql).sql,
             returns: false,
           });
           const applied = (await stateProvider.executeSql({
-            txContext,
+            txCtx,
             sql: applyTemplate(getAppliedMigrationsSql).sql,
             returns: true,
           })) as { name: string }[];
           return applied.map((m) => m.name);
         },
-        executeMigrationStatements: async (txContext, migration) => {
+        executeMigrationStatements: async (txCtx, migration) => {
           for (const stmt of migration.statements) {
             await stateProvider.executeSql({
-              txContext,
+              txCtx,
               sql: applyTemplate(stmt.sql).sql,
               returns: false,
             });
           }
         },
-        recordMigration: async (txContext, name) => {
+        recordMigration: async (txCtx, name) => {
           await stateProvider.executeSql({
-            txContext,
+            txCtx,
             sql: applyTemplate(recordMigrationSql).sql,
             params: [name],
             returns: false,

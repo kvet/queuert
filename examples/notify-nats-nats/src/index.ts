@@ -1,7 +1,7 @@
 import { createNatsNotifyAdapter } from "@queuert/nats";
 import { NatsContainer } from "@testcontainers/nats";
 import { connect } from "nats";
-import { createClient, createInProcessWorker, defineJobTypes } from "queuert";
+import { createClient, createInProcessWorker, defineJobTypes, withCommitHooks } from "queuert";
 import { createInProcessStateAdapter } from "queuert/internal";
 
 // 1. Start NATS using testcontainers (with JetStream enabled)
@@ -65,10 +65,11 @@ const qrtWorker = await createInProcessWorker({
 const stopWorker = await qrtWorker.start();
 
 console.log("Requesting sales report...");
-const jobChain = await qrtClient.withNotify(async () =>
+const jobChain = await withCommitHooks(async (commitHooks) =>
   stateAdapter.runInTransaction(async (ctx) =>
     qrtClient.startJobChain({
       ...ctx,
+      commitHooks,
       typeName: "generate_report",
       input: { reportType: "sales", dateRange: { from: "2024-01-01", to: "2024-12-31" } },
     }),

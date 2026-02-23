@@ -4,156 +4,69 @@ You are an API consistency reviewer for the Queuert library. Your task is to ens
 
 ## Files to Check
 
-**Package Exports:**
-
-- `packages/core/src/index.ts`
-- `packages/postgres/src/index.ts`
-- `packages/sqlite/src/index.ts`
-- `packages/redis/src/index.ts`
-- `packages/nats/src/index.ts`
-- `packages/otel/src/index.ts`
-
-**Testing Exports:**
-
-- `packages/core/src/testing.ts` (or `/testing` export)
-- `packages/postgres/src/testing.ts`
-- `packages/sqlite/src/testing.ts`
-- `packages/redis/src/testing.ts`
-- `packages/nats/src/testing.ts`
-
-**Adapter Implementations:**
-
-- State adapters in each package
-- Notify adapters in each package
-- Provider interfaces
+- All `packages/*/src/index.ts` — public exports
+- All `packages/*/src/testing.ts` (or `./testing` subpath export) — testing utilities
+- Adapter implementation files within each package
 
 ## Checks to Perform
 
 ### 1. Cross-Package Patterns
 
-Similar adapters should have similar APIs.
-
-**State Adapters:**
-
-- `createPgStateAdapter(options)`
-- `createSqliteStateAdapter(options)`
-
-**Check for:**
+Similar adapters should have similar APIs. Compare all state adapters against each other, all notify adapters against each other:
 
 - Same option names for same concepts
-- Same return types
+- Same return types for equivalent operations
 - Same method signatures
-- Same error handling
-
-**Notify Adapters:**
-
-- `createPgNotifyAdapter(options)`
-- `createRedisNotifyAdapter(options)`
-- `createNatsNotifyAdapter(options)`
-- `createInProcessNotifyAdapter()`
-
-**Check for:**
-
-- Consistent channel/subject naming options
-- Consistent subscription patterns
-- Consistent disposal patterns
+- Same error handling patterns
 
 ### 2. Configuration Patterns
 
 Options should be named consistently across packages.
 
-**Known variations to check:**
+For each configuration option that appears in multiple packages:
 
-- `channelPrefix` (Postgres, Redis) vs `subjectPrefix` (NATS)
-- `schema` (Postgres) vs `tablePrefix` (SQLite)
-- `idType` / `idDefault` / `idGenerator` - consistent across adapters?
-
-**For each option:**
-
-- Is the name intuitive?
-- Is the default documented?
+- Is the name the same or does it vary?
 - Is the type consistent?
+- Is the default documented?
+- Flag any variations that could confuse users
 
 ### 3. Lifecycle Patterns
 
-Creation, usage, and disposal should be consistent.
+Creation, usage, and disposal should be consistent:
 
-**Creation:**
-
-- All adapters async or mixed? (Expected: async for I/O adapters)
-- Same parameter patterns?
-- Same error handling during creation?
-
-**Usage:**
-
-- Same context patterns (`runInTransaction`, optional context on operations)?
-- Same method naming?
-
-**Disposal:**
-
-- Do adapters need disposal?
-- Is it consistent?
+- Are all I/O adapters created with async factories?
+- Do they use the same parameter patterns?
+- Is disposal handled consistently?
+- Are context patterns (transactions, optional context) consistent?
 
 ### 4. Type Export Patterns
 
-Type exports should follow consistent conventions.
+Type exports should follow consistent conventions:
 
-**Check for:**
-
-- Type naming: `PgStateAdapter` vs `PostgresStateAdapter`
-- Generic parameter naming: `TContext` vs `Context`
+- Naming style consistent across packages (e.g., prefix conventions)
+- Generic parameter naming consistent
 - Helper types exported consistently
-
-**Core type exports to verify:**
-
-- `StateAdapter`, `NotifyAdapter`, `ObservabilityAdapter`
-- Provider types for each adapter
-- Job types, chain types
 
 ### 5. Testing Export Patterns
 
-Testing utilities should follow consistent patterns.
+Testing utilities should follow consistent patterns:
 
-**Pattern:** `./testing` subpath export
-
-**Check for:**
-
-- `extendWith*` helper naming consistency
-- Context types consistency
-- Test suite export patterns
-
-**Expected:**
-
-- `extendWithStateInProcess` (core)
-- `extendWithStatePostgres` (postgres)
-- `extendWithStateSqlite` (sqlite)
-- `extendWithNotifyInProcess` (core)
-- `extendWithNotifyRedis` (redis)
-- `extendWithNatsNotify` (nats) - note: different pattern?
+- Do all packages use the same `./testing` subpath export pattern?
+- Are helper function names consistent (e.g., `extendWith*` naming)?
+- Are context types consistent?
 
 ### 6. Error Handling Consistency
 
-Errors should be handled consistently across adapters.
-
-**Check for:**
-
-- Same error types thrown for same conditions
+- Same error types thrown for same conditions across packages
 - Consistent error messages
-- Transient error detection patterns
+- Transient error detection patterns consistent
 
 ### 7. Re-export Patterns
 
-Some utilities are re-exported from multiple packages.
+Check for utilities re-exported from multiple packages:
 
-**Known:**
-
-- `createAsyncLock` re-exported from `@queuert/sqlite`
-
-**Check:**
-
-- Is this intentional?
-- Is it documented?
-- Are there other re-exports?
+- Are they intentional and documented?
+- Could they cause version conflicts?
 
 ## Output Format
 
@@ -176,35 +89,27 @@ Provide your findings in this format:
 
 ### Configuration Option Comparison
 
-| Option      | Postgres | SQLite      | Redis         | NATS          | Standard? |
-| ----------- | -------- | ----------- | ------------- | ------------- | --------- | --- |
-| idGenerator | N/A      | Yes         | N/A           | N/A           | N/A       |
-| prefix      | schema   | tablePrefix | channelPrefix | subjectPrefix | No        |
-| ...         | ...      | ...         | ...           | ...           | ...       | ... |
+| Option | Package A | Package B | ... | Consistent? |
+| ------ | --------- | --------- | --- | ----------- |
+| ...    | ...       | ...       | ... | ...         |
 
 ### Factory Pattern Comparison
 
-| Factory                  | Async | Options Object | Returns      | Notes |
-| ------------------------ | ----- | -------------- | ------------ | ----- |
-| createPgStateAdapter     | Yes   | Yes            | StateAdapter | OK    |
-| createSqliteStateAdapter | Yes   | Yes            | StateAdapter | OK    |
-| ...                      | ...   | ...            | ...          | ...   |
+| Factory | Async | Options Object | Returns | Notes |
+| ------- | ----- | -------------- | ------- | ----- |
+| ...     | ...   | ...            | ...     | ...   |
 
 ### Testing Export Comparison
 
-| Package  | Export Path | Helpers                  | Pattern    |
-| -------- | ----------- | ------------------------ | ---------- |
-| core     | ./testing   | extendWithStateInProcess | Standard   |
-| postgres | ./testing   | extendWithStatePostgres  | Standard   |
-| nats     | ./testing   | extendWithNatsNotify     | Different! |
-| ...      | ...         | ...                      | ...        |
+| Package | Export Path | Helpers | Pattern |
+| ------- | ----------- | ------- | ------- |
+| ...     | ...         | ...     | ...     |
 
 ### Recommended Standardizations
 
-| Area          | Current                     | Recommended   | Packages Affected |
-| ------------- | --------------------------- | ------------- | ----------------- |
-| Prefix option | channelPrefix/subjectPrefix | channelPrefix | nats              |
-| ...           | ...                         | ...           | ...               |
+| Area | Current Variations | Recommended | Packages Affected |
+| ---- | ------------------ | ----------- | ----------------- |
+| ...  | ...                | ...         | ...               |
 ```
 
 For each finding, include:

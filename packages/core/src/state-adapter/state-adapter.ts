@@ -51,9 +51,9 @@ export type BaseTxContext = {};
  * Allows different database implementations (PostgreSQL, SQLite, in-memory).
  * Handles job creation, status transitions, leasing, and queries.
  *
- * All operation methods have an optional `txContext` parameter:
- * - When txContext is provided (from within `runInTransaction`), operations use that transaction
- * - When txContext is omitted, the adapter acquires its own connection, executes, and releases
+ * All operation methods have an optional `txCtx` parameter:
+ * - When txCtx is provided (from within `runInTransaction`), operations use that transaction
+ * - When txCtx is omitted, the adapter acquires its own connection, executes, and releases
  *
  * @typeParam TTxContext - The transaction context type containing database client/session info
  * @typeParam TJobId - The job ID type used for input parameters
@@ -64,20 +64,20 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
    * Acquires a connection, starts a transaction, executes the callback,
    * commits on success, rolls back on error, and releases the connection.
    */
-  runInTransaction: <T>(fn: (txContext: TTxContext) => Promise<T>) => Promise<T>;
+  runInTransaction: <T>(fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
 
   /** Gets a job chain by its root job ID. Returns [rootJob, lastJob] or undefined. */
   getJobChainById: (params: {
-    txContext?: TTxContext;
+    txCtx?: TTxContext;
     jobId: TJobId;
   }) => Promise<[StateJob, StateJob | undefined] | undefined>;
 
   /** Gets a job by its ID. */
-  getJobById: (params: { txContext?: TTxContext; jobId: TJobId }) => Promise<StateJob | undefined>;
+  getJobById: (params: { txCtx?: TTxContext; jobId: TJobId }) => Promise<StateJob | undefined>;
 
   /** Creates a new job. Returns the job and whether it was deduplicated. */
   createJob: (params: {
-    txContext?: TTxContext;
+    txCtx?: TTxContext;
     typeName: string;
     chainId: TJobId | undefined;
     chainTypeName: string;
@@ -90,7 +90,7 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
 
   /** Adds blocker dependencies to a job. Returns `blockerChainTraceContexts` in the same order as `blockedByChainIds`. */
   addJobBlockers: (params: {
-    txContext?: TTxContext;
+    txCtx?: TTxContext;
     jobId: TJobId;
     blockedByChainIds: TJobId[];
     blockerTraceContexts?: unknown[];
@@ -102,31 +102,31 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
 
   /** Schedules blocked jobs when a blocker chain completes. */
   scheduleBlockedJobs: (params: {
-    txContext?: TTxContext;
+    txCtx?: TTxContext;
     blockedByChainId: TJobId;
   }) => Promise<{ unblockedJobs: StateJob[]; blockerTraceContexts: unknown[] }>;
 
   /** Gets the blocker chains for a job. */
   getJobBlockers: (params: {
-    txContext?: TTxContext;
+    txCtx?: TTxContext;
     jobId: TJobId;
   }) => Promise<[StateJob, StateJob | undefined][]>;
 
   /** Gets the time in ms until the next job is available, or null if none. */
   getNextJobAvailableInMs: (params: {
-    txContext?: TTxContext;
+    txCtx?: TTxContext;
     typeNames: string[];
   }) => Promise<number | null>;
 
   /** Acquires a pending job for processing. Returns the job and whether more jobs are waiting. */
   acquireJob: (params: {
-    txContext?: TTxContext;
+    txCtx?: TTxContext;
     typeNames: string[];
   }) => Promise<{ job: StateJob | undefined; hasMore: boolean }>;
 
   /** Renews the lease on a running job. */
   renewJobLease: (params: {
-    txContext?: TTxContext;
+    txCtx?: TTxContext;
     jobId: TJobId;
     workerId: string;
     leaseDurationMs: number;
@@ -134,7 +134,7 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
 
   /** Reschedules a job for later processing. */
   rescheduleJob: (params: {
-    txContext?: TTxContext;
+    txCtx?: TTxContext;
     jobId: TJobId;
     schedule: ScheduleOptions;
     error: string;
@@ -142,7 +142,7 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
 
   /** Completes a job with the given output. */
   completeJob: (params: {
-    txContext?: TTxContext;
+    txCtx?: TTxContext;
     jobId: TJobId;
     output: unknown;
     workerId: string | null;
@@ -150,32 +150,29 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
 
   /** Removes an expired lease and resets the job to pending. */
   removeExpiredJobLease: (params: {
-    txContext?: TTxContext;
+    txCtx?: TTxContext;
     typeNames: string[];
     ignoredJobIds?: TJobId[];
   }) => Promise<StateJob | undefined>;
 
   /** Deletes all jobs in the given chains. Throws if external jobs depend on them as blockers. */
   deleteJobsByChainIds: (params: {
-    txContext?: TTxContext;
+    txCtx?: TTxContext;
     chainIds: TJobId[];
   }) => Promise<[StateJob, StateJob | undefined][]>;
 
   /** Gets a job by ID with a FOR UPDATE lock. */
-  getJobForUpdate: (params: {
-    txContext?: TTxContext;
-    jobId: TJobId;
-  }) => Promise<StateJob | undefined>;
+  getJobForUpdate: (params: { txCtx?: TTxContext; jobId: TJobId }) => Promise<StateJob | undefined>;
 
   /** Gets the current (latest) job in a chain with a FOR UPDATE lock. */
   getCurrentJobForUpdate: (params: {
-    txContext?: TTxContext;
+    txCtx?: TTxContext;
     chainId: TJobId;
   }) => Promise<StateJob | undefined>;
 
   /** Lists chains with pagination and filtering. */
   listChains: (params: {
-    txContext?: TTxContext;
+    txCtx?: TTxContext;
     filter?: {
       typeName?: string[];
       rootOnly?: boolean;
@@ -186,7 +183,7 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
 
   /** Lists jobs with pagination and filtering. */
   listJobs: (params: {
-    txContext?: TTxContext;
+    txCtx?: TTxContext;
     filter?: {
       status?: StateJobStatus[];
       typeName?: string[];
@@ -197,10 +194,7 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
   }) => Promise<Page<StateJob>>;
 
   /** Gets jobs that depend on the given chain as a blocker. */
-  getJobsBlockedByChain: (params: {
-    txContext?: TTxContext;
-    chainId: TJobId;
-  }) => Promise<StateJob[]>;
+  getJobsBlockedByChain: (params: { txCtx?: TTxContext; chainId: TJobId }) => Promise<StateJob[]>;
 };
 
 export type GetStateAdapterTxContext<TStateAdapter> =

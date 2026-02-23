@@ -162,7 +162,6 @@ export type ObservabilityAdapter = {
   jobUnblocked: (data: JobBasicData & { unblockedByChain: JobChainData }) => void;
 
   // notify adapter
-  notifyContextAbsence: (data: JobBasicData) => void;
   notifyAdapterError: (data: { operation: keyof NotifyAdapter; error: unknown }) => void;
 
   // state adapter

@@ -1,6 +1,6 @@
 import { type TestAPI, expectTypeOf } from "vitest";
 import { sleep } from "../helpers/sleep.js";
-import { createClient, createInProcessWorker, defineJobTypes } from "../index.js";
+import { createClient, createInProcessWorker, defineJobTypes, withCommitHooks } from "../index.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -117,26 +117,30 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     });
 
     const [prepareJobChain, completeJobChain, prepareAfterAutoSetupJobChain, continueWithJobChain] =
-      await client.withNotify(async () =>
-        runInTransaction(async (txContext) =>
+      await withCommitHooks(async (commitHooks) =>
+        runInTransaction(async (txCtx) =>
           Promise.all([
             client.startJobChain({
-              ...txContext,
+              ...txCtx,
+              commitHooks,
               typeName: "test-prepare-twice",
               input: null,
             }),
             client.startJobChain({
-              ...txContext,
+              ...txCtx,
+              commitHooks,
               typeName: "test-complete-twice",
               input: null,
             }),
             client.startJobChain({
-              ...txContext,
+              ...txCtx,
+              commitHooks,
               typeName: "test-prepare-after-auto-setup",
               input: null,
             }),
             client.startJobChain({
-              ...txContext,
+              ...txCtx,
+              commitHooks,
               typeName: "test-continueWith-twice",
               input: null,
             }),
@@ -224,10 +228,11 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       },
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "test",
           input: null,
         }),
@@ -297,10 +302,11 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       },
     });
 
-    const job = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const job = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "test",
           input: null,
         }),
@@ -361,20 +367,23 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
             expect(job.id).toBeDefined();
             expect(job.chainId).toEqual(job.id);
 
-            const result = await prepare({ mode: "staged" }, (txContext) => {
-              expectTypeOf(txContext).toEqualTypeOf<{ $test: true }>();
-              expect(txContext).toBeDefined();
+            const result = await prepare({ mode: "staged" }, (txCtx) => {
+              expectTypeOf(txCtx).toEqualTypeOf<{ $test: true }>();
+              expect(txCtx).toBeDefined();
 
               return "prepare";
             });
             expect(result).toEqual("prepare");
 
-            const completedJob = await complete(async ({ continueWith: _, ...txContext }) => {
-              expectTypeOf(txContext).toEqualTypeOf<{ $test: true }>();
-              expect(txContext).toBeDefined();
+            const completedJob = await complete(
+              async ({ continueWith: _, commitHooks, ...txCtx }) => {
+                expectTypeOf(txCtx).toEqualTypeOf<{ $test: true }>();
+                expect(txCtx).toBeDefined();
+                expect(commitHooks).toBeDefined();
 
-              return { result: true };
-            });
+                return { result: true };
+              },
+            );
             expectTypeOf(completedJob.typeName).toEqualTypeOf<"test">();
             expectTypeOf(completedJob.status).toEqualTypeOf<"completed">();
             expect(completedJob.typeName).toBe("test");
@@ -389,10 +398,11 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       },
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "test",
           input: { test: true },
         }),

@@ -6,7 +6,7 @@ import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import postgres from "postgres";
 import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
 import { createInProcessNotifyAdapter } from "queuert/internal";
-import { createClient, createInProcessWorker } from "queuert";
+import { createClient, createInProcessWorker, withCommitHooks } from "queuert";
 import {
   diffMemory,
   measureBaseline,
@@ -42,8 +42,8 @@ const stateProvider: PgStateProvider<DbContext> = {
     });
     return result as never;
   },
-  executeSql: async ({ txContext, sql: query, params }) => {
-    const sqlClient = txContext?.sql ?? sql;
+  executeSql: async ({ txCtx, sql: query, params }) => {
+    const sqlClient = txCtx?.sql ?? sql;
     const normalizedParams = params ? params.map((p) => (p === undefined ? null : p)) : [];
     const result = await sqlClient.unsafe(query, normalizedParams as never[]);
     return result as Record<string, unknown>[];
@@ -87,10 +87,11 @@ console.log("\nProcessing 100 jobs...");
 const [beforeProcessing, afterProcessing] = await measureMemory(async () => {
   const promises = [];
   for (let i = 0; i < 100; i++) {
-    const chain = await qrtClient.withNotify(async () =>
+    const chain = await withCommitHooks(async (commitHooks) =>
       stateProvider.runInTransaction(async (ctx) =>
         qrtClient.startJobChain({
           ...ctx,
+          commitHooks,
           typeName: "test-job",
           input: { message: `Test message ${i}` },
         }),

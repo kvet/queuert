@@ -138,9 +138,9 @@ const performJob = async ({
   let job: StateJob | undefined;
   let hasMore: boolean;
   try {
-    ({ job, hasMore } = await prepareTransactionContext.run(async (txContext) =>
+    ({ job, hasMore } = await prepareTransactionContext.run(async (txCtx) =>
       stateAdapter.acquireJob({
-        txContext,
+        txCtx,
         typeNames,
       }),
     ));

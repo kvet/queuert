@@ -1,5 +1,11 @@
 import { type TestAPI } from "vitest";
-import { createClient, createInProcessWorker, defineJobTypes, rescheduleJob } from "../index.js";
+import {
+  createClient,
+  createInProcessWorker,
+  defineJobTypes,
+  rescheduleJob,
+  withCommitHooks,
+} from "../index.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -45,10 +51,11 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       },
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "test",
           input: { value: 1 },
           schedule: { afterMs: 300 },
@@ -112,10 +119,11 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       },
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "test",
           input: { value: 1 },
           schedule: { at: new Date(Date.now() + 300) },
@@ -201,10 +209,11 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       },
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "first",
           input: { value: 1 },
         }),
@@ -291,10 +300,11 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       },
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "first",
           input: { value: 1 },
         }),
@@ -368,10 +378,11 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       },
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "test",
           input: { value: 1 },
         }),
@@ -447,10 +458,11 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       },
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "test",
           input: { value: 1 },
         }),

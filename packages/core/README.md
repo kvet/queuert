@@ -52,7 +52,7 @@ Optional adapters:
 ## Quick Start
 
 ```typescript
-import { createClient, createInProcessWorker, defineJobTypes } from "queuert";
+import { createClient, createInProcessWorker, defineJobTypes, withCommitHooks } from "queuert";
 import { createSqliteStateAdapter } from "@queuert/sqlite";
 
 // Define your job types with full type safety
@@ -88,10 +88,11 @@ const worker = await createInProcessWorker({
 
 // Start a job chain (within your database transaction)
 // Use your database client's transaction mechanism and pass the context
-await client.withNotify(async () =>
+await withCommitHooks(async (commitHooks) =>
   db.transaction(async (tx) =>
     client.startJobChain({
       tx, // Transaction context - matches your stateProvider's TTxContext
+      commitHooks,
       typeName: "send-email",
       input: { to: "user@example.com", subject: "Hello!" },
     }),

@@ -17,7 +17,7 @@ import postgres, {
   type Row,
   type TransactionSql as _TransactionSql,
 } from "postgres";
-import { createClient, createInProcessWorker, defineJobTypes } from "queuert";
+import { createClient, createInProcessWorker, defineJobTypes, withCommitHooks } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 
 type TransactionSql = _TransactionSql & {
@@ -101,8 +101,8 @@ const stateProvider: PgStateProvider<DbContext> = {
     });
     return result;
   },
-  executeSql: async ({ txContext, sql: query, params }) => {
-    const client = txContext?.sql ?? sql;
+  executeSql: async ({ txCtx, sql: query, params }) => {
+    const client = txCtx?.sql ?? sql;
     return client.unsafe(
       query,
       (params ?? []).map((p) => (p === undefined ? null : p)) as (
@@ -319,11 +319,12 @@ console.log("Linear -> Branched (convert) -> Loop (billing) -> Go-To (cancel)\n"
 
 userConverts = true;
 
-const chain1 = await client.withNotify(async () =>
+const chain1 = await withCommitHooks(async (commitHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     return client.startJobChain({
       sql: txSql,
+      commitHooks,
       typeName: "create-subscription",
       input: { userId: "user-123", planId: "pro-monthly" },
     });
@@ -356,11 +357,12 @@ console.log("Linear -> Branched (expire) -> Terminal\n");
 
 userConverts = false;
 
-const chain2 = await client.withNotify(async () =>
+const chain2 = await withCommitHooks(async (commitHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     return client.startJobChain({
       sql: txSql,
+      commitHooks,
       typeName: "create-subscription",
       input: { userId: "user-456", planId: "pro-monthly" },
     });

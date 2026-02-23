@@ -4,16 +4,8 @@ You are an API design reviewer for the Queuert library. Your task is to identify
 
 ## Files to Check
 
-Read and analyze:
-
-- `packages/core/src/index.ts` - Main core exports
-- `packages/postgres/src/index.ts` - PostgreSQL adapter exports
-- `packages/sqlite/src/index.ts` - SQLite adapter exports
-- `packages/redis/src/index.ts` - Redis adapter exports
-- `packages/nats/src/index.ts` - NATS adapter exports
-- `packages/otel/src/index.ts` - OpenTelemetry adapter exports
-
-Also check implementation files for factory functions (search for `export const create`).
+- All `packages/*/src/index.ts` — public exports for each package
+- Implementation files with factory functions (search for `export const create` or `export function create`)
 
 ## Checks to Perform
 
@@ -21,46 +13,24 @@ Also check implementation files for factory functions (search for `export const 
 
 Factories that perform I/O should be async. Pure factories should be sync.
 
-**Expected patterns:**
+For each `create*` factory found across all packages:
 
-- `createClient` - async (creates client, may do I/O)
-- `createInProcessWorker` - async (creates worker, may do I/O)
-- `createPgStateAdapter` - async (may connect to DB)
-- `createSqliteStateAdapter` - async (may open file)
-- `createRedisNotifyAdapter` - async (may connect)
-- `defineJobTypes` - sync (pure type definition)
-- `createConsoleLog` - sync (pure object creation)
-- `createInProcessStateAdapter` - sync (no I/O, testing only)
-
-**Check specifically:**
-
-- `createOtelObservabilityAdapter` - is it sync? Should it be async?
-- `createJobTypeRegistry` - sync or async?
+- Does it do I/O (DB, network, filesystem)? → should be async
+- Is it pure (in-memory, type definitions)? → should be sync
+- Flag any mismatches
 
 ### 2. Naming Consistency
 
-- Factory functions should follow `create*` pattern
+- Factory functions should follow `create*` pattern consistently
 - Type exports should follow consistent casing
 - No naming conflicts between packages
-- "Provider" vs "Adapter" distinction should be clear
-
-**Check for:**
-
-- Inconsistent naming (e.g., `createFoo` vs `makeFoo` vs `buildFoo`)
-- Type name conflicts across packages
-- Unclear Provider/Adapter distinction
+- "Provider" vs "Adapter" distinction should be clear and consistent
 
 ### 3. Generic Parameter Patterns
 
 - Generic constraints should not be overly loose (`any`)
-- Type parameters should be consistent across similar functions
+- Type parameters should be named consistently across similar functions
 - Type helper utilities should be properly exported
-
-**Check for:**
-
-- `extends StateAdapter<any, any, any>` patterns - are they necessary?
-- Inconsistent generic parameter naming (T vs TInput vs Input)
-- Missing type helper exports
 
 ### 4. Error Class Design
 
@@ -68,45 +38,22 @@ Factories that perform I/O should be async. Pure factories should be sync.
 - Error inheritance hierarchy should make sense
 - Error codes should be consistent and documented
 
-**Check for:**
-
-- Errors missing useful properties (e.g., missing `code` property)
-- Inconsistent error naming (`*Error` suffix)
-- Missing error types for documented failure modes
-
 ### 5. Configuration Object Patterns
 
-- Optional vs required properties should be consistent
+- Optional vs required properties should be consistent across packages
 - Default values should be documented
-- Destructuring patterns should be user-friendly
-
-**Check for:**
-
-- Required properties that could have defaults
-- Undocumented default values
-- Deep nesting that makes destructuring hard
+- Similar adapters should accept similarly-shaped option objects
 
 ### 6. Return Type Consistency
 
 - Promise vs sync returns should be clear from function names
-- Nullable returns should be explicit (`| null` vs `| undefined`)
+- Nullable returns should be explicit and consistent (`| null` vs `| undefined`)
 - Complex returns should have proper type exports
-
-**Check for:**
-
-- Functions returning `Promise<T | null>` vs `Promise<T | undefined>` inconsistently
-- Missing type exports for return types
-- Confusing return type unions
 
 ### 7. Potential Footguns
 
 - Easy-to-misuse patterns
-- Silent failures
-- Type unsafety holes
-
-**Check for:**
-
-- Functions that fail silently instead of throwing
+- Silent failures (functions that swallow errors instead of throwing)
 - APIs where wrong usage compiles but fails at runtime
 - Missing runtime validation for user input
 
@@ -131,18 +78,15 @@ Provide your findings in this format:
 
 ### Factory Pattern Analysis
 
-| Factory                        | Sync/Async | Expected | Notes  |
-| ------------------------------ | ---------- | -------- | ------ |
-| createClient                   | async      | async    | OK     |
-| createInProcessWorker          | async      | async    | OK     |
-| createOtelObservabilityAdapter | sync       | ?        | Review |
-| ...                            | ...        | ...      | ...    |
+| Factory | Sync/Async | Expected | Notes |
+| ------- | ---------- | -------- | ----- |
+| ...     | ...        | ...      | ...   |
 
 ### Naming Consistency
 
-| Pattern  | Examples | Consistent? | Notes |
-| -------- | -------- | ----------- | ----- |
-| create\* | ...      | Yes/No      | ...   |
+| Pattern | Examples | Consistent? | Notes |
+| ------- | -------- | ----------- | ----- |
+| ...     | ...      | ...         | ...   |
 
 ### Type Safety Analysis
 

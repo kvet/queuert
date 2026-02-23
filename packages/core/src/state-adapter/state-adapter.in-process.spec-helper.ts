@@ -44,13 +44,13 @@ export const extendWithStateInProcess = <T>(
           }
         };
 
-        // Only inject errors on calls without txContext.
+        // Only inject errors on calls without txCtx.
         // Calls within a transaction must not fail independently — the worker
         // loop retries the entire operation on transient errors.
         const wrap = <T extends (...args: never[]) => Promise<unknown>>(fn: T): T =>
           (async (...args: Parameters<T>) => {
-            const params = args[0] as { txContext?: InProcessContext } | undefined;
-            if (params?.txContext === undefined) {
+            const params = args[0] as { txCtx?: InProcessContext } | undefined;
+            if (params?.txCtx === undefined) {
               maybeThrow();
             }
             return fn(...args);

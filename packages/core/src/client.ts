@@ -33,7 +33,8 @@ import {
 } from "./entities/job-chain.js";
 import { type Job } from "./entities/job.js";
 import { JobAlreadyCompletedError, JobNotFoundError, WaitChainTimeoutError } from "./errors.js";
-import { notifyJobOwnershipLost } from "./helpers/notify-context.js";
+import { type CommitHooks } from "./commit-hooks.js";
+import { bufferNotifyJobOwnershipLost } from "./helpers/notify-hooks.js";
 import { raceWithSleep } from "./helpers/sleep.js";
 import { setupHelpers } from "./setup-helpers.js";
 import { type CompleteCallbackOptions } from "./worker/job-process.js";
@@ -145,6 +146,7 @@ export const createClient = async <
       options: {
         typeName: TChainTypeName;
         input: TJobTypeDefinitions[TChainTypeName]["input"];
+        commitHooks: CommitHooks;
         deduplication?: DeduplicationOptions;
         schedule?: ScheduleOptions;
       } & (HasBlockers<TJobTypeDefinitions, TChainTypeName> extends true
@@ -158,11 +160,12 @@ export const createClient = async <
         deduplicated: boolean;
       }
     > => {
-      const { input, typeName, deduplication, schedule, blockers, ...txContext } = options;
+      const { input, typeName, deduplication, schedule, blockers, commitHooks, ...txCtx } = options;
       return (await h.startJobChain({
         typeName,
         input,
-        txContext,
+        txCtx,
+        commitHooks,
         deduplication,
         schedule,
         blockers,
@@ -177,9 +180,9 @@ export const createClient = async <
         id: TJobId;
       } & GetStateAdapterTxContext<TStateAdapter>,
     ): Promise<JobChainOf<TJobId, TJobTypeDefinitions, TChainTypeName> | null> => {
-      const { id, typeName: _, ...txContext } = options;
+      const { id, typeName: _, ...txCtx } = options;
       const jobChain = await stateAdapter.getJobChainById({
-        txContext,
+        txCtx,
         jobId: id,
       });
 
@@ -189,9 +192,11 @@ export const createClient = async <
         TChainTypeName
       > | null;
     },
+    // TODO: use commitHooks to buffer post-delete side effects (e.g., observability events)
     deleteJobChains: async (
       options: {
         chainIds: TJobId[];
+        commitHooks: CommitHooks;
       } & GetStateAdapterTxContext<TStateAdapter>,
     ): Promise<
       JobChainOf<
@@ -200,10 +205,10 @@ export const createClient = async <
         keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string
       >[]
     > => {
-      const { chainIds, ...txContext } = options;
+      const { chainIds, commitHooks: _commitHooks, ...txCtx } = options;
 
       const deletedChainPairs = await stateAdapter.deleteJobsByChainIds({
-        txContext,
+        txCtx,
         chainIds,
       });
 
@@ -224,6 +229,7 @@ export const createClient = async <
       options: {
         typeName: TChainTypeName;
         id: TJobId;
+        commitHooks: CommitHooks;
         complete: JobChainCompleteOptions<
           TStateAdapter,
           TJobTypeDefinitions,
@@ -234,9 +240,9 @@ export const createClient = async <
     ): Promise<
       CompleteJobChainResult<TStateAdapter, TJobTypeDefinitions, TChainTypeName, TCompleteReturn>
     > => {
-      const { id, typeName: _, complete: completeCallback, ...txContext } = options;
+      const { id, typeName: _, complete: completeCallback, commitHooks, ...txCtx } = options;
       const currentJob = await stateAdapter.getCurrentJobForUpdate({
-        txContext,
+        txCtx,
         chainId: id,
       });
 
@@ -275,7 +281,8 @@ export const createClient = async <
             continuedJob = await h.continueWith({
               typeName,
               input,
-              txContext,
+              txCtx,
+              commitHooks,
               schedule,
               blockers: blockers as any,
               chainId: job.chainId,
@@ -287,19 +294,19 @@ export const createClient = async <
 
             return continuedJob;
           },
-          ...txContext,
+          ...txCtx,
         });
 
         const wasRunning = job.status === "running";
 
         await h.finishJob(
           continuedJob
-            ? { job, txContext, workerId: null, type: "continueWith", continuedJob }
-            : { job, txContext, workerId: null, type: "completeChain", output },
+            ? { job, txCtx, commitHooks, workerId: null, type: "continueWith", continuedJob }
+            : { job, txCtx, commitHooks, workerId: null, type: "completeChain", output },
         );
 
         if (wasRunning) {
-          notifyJobOwnershipLost(job.id);
+          bufferNotifyJobOwnershipLost(commitHooks, h.notifyAdapter, job.id);
         }
 
         return continuedJob ?? output;
@@ -308,7 +315,7 @@ export const createClient = async <
       await completeCallback({ job: currentJob, complete });
 
       const updatedChain = await stateAdapter.getJobChainById({
-        txContext,
+        txCtx,
         jobId: id,
       });
 
@@ -323,8 +330,6 @@ export const createClient = async <
         TCompleteReturn
       >;
     },
-    withNotify: async <T>(cb: () => Promise<T>): Promise<T> =>
-      h.withNotifyContext(async () => cb()),
     // TODO: should it handle typeName that is not correct for the given id?
     waitForJobChainCompletion: async <
       TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,

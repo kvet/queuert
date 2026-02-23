@@ -15,7 +15,7 @@ import postgres, {
   type Row,
   type TransactionSql as _TransactionSql,
 } from "postgres";
-import { createClient, createInProcessWorker, defineJobTypes } from "queuert";
+import { createClient, createInProcessWorker, defineJobTypes, withCommitHooks } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 
 type TransactionSql = _TransactionSql & {
@@ -81,8 +81,8 @@ const stateProvider: PgStateProvider<DbContext> = {
     });
     return result;
   },
-  executeSql: async ({ txContext, sql: query, params }) => {
-    const client = txContext?.sql ?? sql;
+  executeSql: async ({ txCtx, sql: query, params }) => {
+    const client = txCtx?.sql ?? sql;
     return client.unsafe(
       query,
       (params ?? []).map((p) => (p === undefined ? null : p)) as (
@@ -173,28 +173,32 @@ const stopWorker = await worker.start();
 console.log("\n--- Scenario 1: Fan-out/Fan-in ---");
 console.log("Three fetch jobs run in parallel, aggregate waits for all.\n");
 
-const aggregateChain = await client.withNotify(async () =>
+const aggregateChain = await withCommitHooks(async (commitHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     const fetchBlockers = await Promise.all([
       client.startJobChain({
         sql: txSql,
+        commitHooks,
         typeName: "fetch-source",
         input: { sourceId: "users", url: "/users" },
       }),
       client.startJobChain({
         sql: txSql,
+        commitHooks,
         typeName: "fetch-source",
         input: { sourceId: "orders", url: "/orders" },
       }),
       client.startJobChain({
         sql: txSql,
+        commitHooks,
         typeName: "fetch-source",
         input: { sourceId: "products", url: "/products" },
       }),
     ]);
     return client.startJobChain({
       sql: txSql,
+      commitHooks,
       typeName: "aggregate-data",
       input: { reportId: "report-001" },
       blockers: fetchBlockers,
@@ -209,21 +213,24 @@ console.log(`\nResult: ${result1.output.totalSources} sources → "${result1.out
 console.log("\n--- Scenario 2: Fixed Blocker Slots ---");
 console.log("Action requires exactly: validate-user + load-config.\n");
 
-const actionChain = await client.withNotify(async () =>
+const actionChain = await withCommitHooks(async (commitHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     const userBlocker = await client.startJobChain({
       sql: txSql,
+      commitHooks,
       typeName: "validate-user",
       input: { userId: "user-123" },
     });
     const configBlocker = await client.startJobChain({
       sql: txSql,
+      commitHooks,
       typeName: "load-config",
       input: { configKey: "settings" },
     });
     return client.startJobChain({
       sql: txSql,
+      commitHooks,
       typeName: "perform-action",
       input: { actionId: "action-001" },
       blockers: [userBlocker, configBlocker],

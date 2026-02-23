@@ -8,7 +8,7 @@ import {
 } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import { Pool, type PoolClient } from "pg";
-import { createClient, defineJobTypes } from "queuert";
+import { createClient, defineJobTypes, withCommitHooks } from "queuert";
 
 // ============================================================================
 // Multi-Worker Order Processing Example (with Child Processes)
@@ -76,9 +76,9 @@ const stateAdapter = await createPgStateAdapter({
         poolClient.release();
       }
     },
-    executeSql: async ({ txContext, sql, params }) => {
-      if (txContext) {
-        const result = await (txContext as DbContext).poolClient.query(sql, params);
+    executeSql: async ({ txCtx, sql, params }) => {
+      if (txCtx) {
+        const result = await (txCtx as DbContext).poolClient.query(sql, params);
         return result.rows;
       }
       const poolClient = await pool.connect();
@@ -206,7 +206,7 @@ await Promise.all(readyPromises);
 console.log(`\nQueueing ${JOBS_TO_PROCESS} orders...\n`);
 
 const products = ["Widget", "Gadget", "Gizmo", "Doohickey", "Thingamajig", "Contraption"];
-const jobChains = await qrtClient.withNotify(async () =>
+const jobChains = await withCommitHooks(async (commitHooks) =>
   stateAdapter.runInTransaction(async (ctx) => {
     const chains = [];
     for (let i = 1; i <= JOBS_TO_PROCESS; i++) {
@@ -220,6 +220,7 @@ const jobChains = await qrtClient.withNotify(async () =>
       chains.push(
         await qrtClient.startJobChain({
           ...ctx,
+          commitHooks,
           typeName: "process_order",
           input: { orderId: `ORD-${String(i).padStart(3, "0")}`, items, total },
         }),

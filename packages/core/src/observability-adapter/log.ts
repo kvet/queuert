@@ -147,12 +147,6 @@ type JobUnblockedLogEntry = LogEntry<
   { unblockedByChain: JobChainData } & JobBasicData
 >;
 
-type NotifyContextAbsenceLogEntry = LogEntry<
-  "notify_context_absence",
-  "warn",
-  "Not withNotify context when creating job for queue. The job processing may be delayed.",
-  JobBasicData
->;
 type NotifyAdapterErrorLogEntry = LogEntry<
   "notify_adapter_error",
   "warn",
@@ -201,7 +195,6 @@ type TypedLogEntry =
   | JobBlockedLogEntry
   | JobUnblockedLogEntry
   // notify adapter
-  | NotifyContextAbsenceLogEntry
   | NotifyAdapterErrorLogEntry
   // state adapter
   | StateAdapterErrorLogEntry

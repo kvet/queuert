@@ -28,7 +28,6 @@ export const createNoopObservabilityAdapter = (): ObservabilityAdapter => ({
   jobUnblocked: () => {},
 
   // notify adapter
-  notifyContextAbsence: () => {},
   notifyAdapterError: () => {},
 
   // state adapter

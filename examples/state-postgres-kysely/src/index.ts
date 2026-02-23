@@ -2,7 +2,7 @@ import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import { CompiledQuery, type Generated, Kysely, PostgresDialect } from "kysely";
 import { Pool } from "pg";
-import { createClient, createInProcessWorker, defineJobTypes } from "queuert";
+import { createClient, createInProcessWorker, defineJobTypes, withCommitHooks } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 
 // 1. Start PostgreSQL using testcontainers
@@ -45,11 +45,11 @@ const registry = defineJobTypes<{
 // 5. Create state provider for Kysely
 const stateProvider: PgStateProvider<{ db: Kysely<Database> }> = {
   runInTransaction: async (cb) => db.transaction().execute(async (txDb) => cb({ db: txDb })),
-  executeSql: async ({ txContext, sql, params }) => {
-    if (txContext && !txContext.db.isTransaction) {
+  executeSql: async ({ txCtx, sql, params }) => {
+    if (txCtx && !txCtx.db.isTransaction) {
       throw new Error("Provided context is not in a transaction");
     }
-    const result = await (txContext?.db ?? db).executeQuery(CompiledQuery.raw(sql, params));
+    const result = await (txCtx?.db ?? db).executeQuery(CompiledQuery.raw(sql, params));
     return result.rows;
   },
 };
@@ -91,7 +91,7 @@ const qrtWorker = await createInProcessWorker({
 const stopWorker = await qrtWorker.start();
 
 // 8. Register a new user and queue welcome email atomically
-const jobChain = await qrtClient.withNotify(async () =>
+const jobChain = await withCommitHooks(async (commitHooks) =>
   db.transaction().execute(async (db) => {
     const user = await db
       .insertInto("users")
@@ -102,6 +102,7 @@ const jobChain = await qrtClient.withNotify(async () =>
     // Queue welcome email - if user creation fails, no email job is created
     return qrtClient.startJobChain({
       db,
+      commitHooks,
       typeName: "send_welcome_email",
       input: { userId: user.id, email: user.email, name: user.name },
     });

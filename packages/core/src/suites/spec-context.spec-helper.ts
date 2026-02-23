@@ -15,7 +15,7 @@ import { createFlakyBatchGenerator } from "./flaky-test-helper.spec-helper.js";
 export type TestSuiteContext = {
   stateAdapter: StateAdapter<{ $test: true }, string>;
   notifyAdapter: NotifyAdapter | undefined;
-  runInTransaction: <T>(cb: (txContext: { $test: true }) => Promise<T>) => Promise<T>;
+  runInTransaction: <T>(cb: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
   withWorkers: <T>(workers: (() => Promise<void>)[], cb: () => Promise<T>) => Promise<T>;
   log: MockedFunction<Log>;
   observabilityAdapter: ObservabilityAdapter;

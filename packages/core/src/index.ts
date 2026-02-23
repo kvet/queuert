@@ -21,11 +21,13 @@ export {
   JobNotFoundError,
   JobTakenByAnotherWorkerError,
   JobTypeValidationError,
+  HookNotRegisteredError,
   WaitChainTimeoutError,
   type JobTypeValidationErrorCode,
 } from "./errors.js";
 export { type TypedAbortSignal } from "./helpers/abort.js";
 export { type BackoffConfig } from "./helpers/backoff.js";
+export { type CommitHooks, withCommitHooks } from "./commit-hooks.js";
 export { type RetryConfig } from "./helpers/retry.js";
 export { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 export { createConsoleLog } from "./observability-adapter/log.console.js";

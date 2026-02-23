@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes how Queuert processes jobs, including the transactional design, prepare/complete pattern, timeout philosophy, and workerless completion.
+This document describes how Queuert processes jobs: transactional design, prepare/complete pattern, and timeout philosophy.
 
 ## Transactional Design
 
@@ -115,25 +115,9 @@ For hard timeouts (forceful termination), the lease mechanism already handles th
 - If the job doesn't complete or renew its lease in time, the reaper reclaims it
 - Another worker can then retry the job
 
-## Workerless Completion
+## See Also
 
-Jobs can be completed without a worker using `completeJobChain` (sets `completedBy: null`). This enables approval workflows, webhook-triggered completions, and patterns where jobs wait for external events.
-
-**Key behaviors:**
-
-- Must be called within a transaction (uses `FOR UPDATE` lock on current job)
-- Partial completion supported: complete one job and leave the next pending
-- Can complete blocked jobs (user's responsibility to handle/compensate blockers)
-- Running workers detect completion by others via `JobAlreadyCompletedError` and abort signal with reason `"already_completed"`
-
-Deferred start pairs well with workerless completion—schedule a job to auto-reject after a timeout, but allow early completion based on user action.
-
-## Summary
-
-The job processing model provides:
-
-1. **Transactional integrity**: Jobs are created atomically with application state changes (transactional outbox pattern)
-2. **Flexible transaction boundaries**: Atomic mode for quick operations, staged mode for long-running work
-3. **Automatic lease renewal**: Workers maintain job ownership during staged processing
-4. **Cooperative timeouts**: Users combine signals for cancellation without framework overhead
-5. **External completion**: Jobs can be completed by external events, not just workers
+- [Workerless Completion](workerless-completion.md) — Completing jobs without a worker
+- [Client](client.md) — Client API
+- [In-Process Worker](in-process-worker.md) — Worker lifecycle, leasing, reaper
+- [Adapters](adapters.md) — StateAdapter context architecture

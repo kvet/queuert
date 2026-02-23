@@ -9,7 +9,7 @@
  */
 
 import * as v from "valibot";
-import { createClient, createInProcessWorker } from "queuert";
+import { createClient, createInProcessWorker, withCommitHooks } from "queuert";
 import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
 import { createValibotJobTypeRegistry } from "./valibot-adapter.js";
 
@@ -133,10 +133,11 @@ const stopWorker = await qrtWorker.start();
 
 // 4. Run a chain
 console.log("\n=== Running fetch-data chain ===");
-const chain = await qrtClient.withNotify(async () =>
+const chain = await withCommitHooks(async (commitHooks) =>
   stateAdapter.runInTransaction(async (ctx) =>
     qrtClient.startJobChain({
       ...ctx,
+      commitHooks,
       typeName: "fetch-data",
       input: { url: "https://api.example.com/data" },
     }),

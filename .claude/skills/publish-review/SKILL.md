@@ -1,24 +1,24 @@
 ---
 name: publish-review
-description: Run a comprehensive review of the Queuert library before publishing, launching 5 parallel agents to check documentation coherence, API design, implementation verification, feature completeness, and API consistency. Use when preparing to publish or validating publish readiness.
+description: Run a comprehensive review of the Queuert library before publishing, launching 7 parallel agents to check documentation coherence, API design, implementation verification, feature completeness, API consistency, schema design, and code style. Use when preparing to publish or validating publish readiness.
 ---
 
 # Publish Readiness Review
 
-Run a comprehensive review of the Queuert library before publishing. This skill launches 5 specialized review agents in parallel to check different aspects of publish readiness.
+Run a comprehensive review of the Queuert library before publishing. This skill launches 7 specialized review agents in parallel to check different aspects of publish readiness.
 
 ## Instructions
 
 When this skill is invoked, you MUST:
 
-1. Launch all 5 review agents IN PARALLEL using the Task tool with a single message containing 5 tool calls
+1. Launch all 7 review agents IN PARALLEL using the Task tool with a single message containing 7 tool calls
 2. Wait for all agents to complete
 3. Write a combined report to `docs/publish-readiness-report.md`
 4. Display a summary of findings in the conversation
 
 ## Agents to Launch
 
-Launch these 5 agents in parallel using the Task tool (all in one message with 5 Task tool calls):
+Launch these 7 agents in parallel using the Task tool (all in one message with 7 Task tool calls):
 
 ### 1. Documentation Coherence Agent
 
@@ -57,20 +57,8 @@ prompt: |
 
   First, read the detailed instructions in .claude/agents/publish-review/api-design.md
 
-  Then review the public API for design issues:
-  - packages/core/src/index.ts - Main exports
-  - packages/*/src/index.ts - All package exports
-
-  Check for:
-  1. Async/Sync factory consistency (I/O should be async)
-  2. Naming conventions (create* pattern, casing)
-  3. Generic parameter patterns
-  4. Error class design
-  5. Configuration patterns
-  6. Return type consistency
-  7. Potential footguns
-
-  Known item to investigate: createOtelObservabilityAdapter is sync while other adapters are async.
+  Then review the public API across all packages/*/src/index.ts for design issues,
+  following the checks described in the instructions file.
 
   Categorize findings as CRITICAL, WARNING, or SUGGESTION.
   Return a structured report.
@@ -86,19 +74,9 @@ prompt: |
 
   First, read the detailed instructions in .claude/agents/publish-review/impl-verification.md
 
-  Then verify implementation matches documentation:
-  - Compare design docs claims against actual code
-  - Compare package README exports against actual exports
-  - Verify test suites exist for documented features
-  - Check examples compile and use current API
-  - Verify all exports documented in package READMEs are actually exported
-
-  Focus on:
-  1. JobTypeRegistry interface compliance
-  2. StateAdapter interface compliance
-  3. NotifyAdapter interface compliance
-  4. Example verification (especially runtime-validation-* examples)
-  5. Export audit
+  Then verify implementation matches documentation by following the checks
+  described in the instructions file: export audit, interface compliance,
+  design doc compliance, test coverage, and example verification.
 
   Categorize findings as CRITICAL, WARNING, or SUGGESTION.
   Return a structured report.
@@ -114,18 +92,9 @@ prompt: |
 
   First, read the detailed instructions in .claude/agents/publish-review/feature-completeness.md
 
-  Then identify undercooked features and missing functionality:
-  - Review TODO.md for publish-blocking items
-  - Search test suites for skipped tests or TODOs
-  - Check examples for stub implementations
-  - Verify package.json files have required fields
-
-  Check for:
-  1. TODO.md items that block publish
-  2. Skipped tests without explanation
-  3. Incomplete examples (especially runtime-validation-valibot, runtime-validation-typebox)
-  4. Missing package.json fields (files, exports)
-  5. Code TODOs/FIXMEs in implementation
+  Then identify undercooked features and missing functionality by following
+  the checks described in the instructions file: TODO.md audit, test health,
+  example completeness, package readiness, and feature gaps.
 
   Categorize findings as CRITICAL, WARNING, or SUGGESTION.
   Return a structured report.
@@ -141,21 +110,50 @@ prompt: |
 
   First, read the detailed instructions in .claude/agents/publish-review/api-consistency.md
 
-  Then ensure consistent patterns across all packages:
-  - Compare all packages/*/src/index.ts exports
-  - Compare adapter implementations
-  - Compare testing exports
-
-  Check for:
-  1. State adapter consistency (Postgres, SQLite)
-  2. Notify adapter consistency (Postgres, Redis, NATS)
-  3. Configuration option naming (channelPrefix vs subjectPrefix)
-  4. Factory pattern consistency
-  5. Testing export patterns (extendWith* naming)
-  6. Re-export patterns
+  Then ensure consistent patterns across all packages by following the checks
+  described in the instructions file: cross-package patterns, configuration,
+  lifecycle, type exports, testing exports, error handling, and re-exports.
 
   Categorize findings as CRITICAL, WARNING, or SUGGESTION.
   Return a structured report with recommendations for standardization.
+```
+
+### 6. Schema Review Agent
+
+```
+subagent_type: general-purpose
+description: Review schema design
+prompt: |
+  You are a database schema reviewer for the Queuert library.
+
+  First, read the detailed instructions in .claude/agents/publish-review/schema-review.md
+
+  Then review the state adapter schema design across PostgreSQL and SQLite by
+  following the checks described in the instructions file: index coverage,
+  normalization, query efficiency, cross-backend consistency, forward-compatibility,
+  locking/concurrency, and data integrity.
+
+  Categorize findings as CRITICAL, WARNING, or SUGGESTION.
+  Return a structured report.
+```
+
+### 7. Code Style Agent
+
+```
+subagent_type: general-purpose
+description: Review code style
+prompt: |
+  You are a code style reviewer for the Queuert library.
+
+  First, read the detailed instructions in .claude/agents/publish-review/code-style.md
+
+  Then verify the codebase follows conventions from docs/design/code-style.md by
+  following the checks described in the instructions file: function declaration style,
+  unnecessary async wrapping, redundant types, comment quality, nullable conventions,
+  error class usage, and naming conventions.
+
+  Categorize findings as CRITICAL, WARNING, or SUGGESTION.
+  Return a structured report.
 ```
 
 ## Report Format
@@ -192,6 +190,14 @@ Generated: [current date]
 ## 5. API Consistency
 
 [Agent 5 findings]
+
+## 6. Schema Review
+
+[Agent 6 findings]
+
+## 7. Code Style
+
+[Agent 7 findings]
 
 ## Action Items
 

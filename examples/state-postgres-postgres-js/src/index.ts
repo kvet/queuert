@@ -5,7 +5,7 @@ import postgres, {
   type Row,
   type TransactionSql as _TransactionSql,
 } from "postgres";
-import { createClient, createInProcessWorker, defineJobTypes } from "queuert";
+import { createClient, createInProcessWorker, defineJobTypes, withCommitHooks } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 
 // 1. Start PostgreSQL using testcontainers
@@ -54,8 +54,8 @@ const stateProvider: PgStateProvider<DbContext> = {
     });
     return result;
   },
-  executeSql: async ({ txContext, sql: query, params }) => {
-    const sqlClient = txContext?.sql ?? sql;
+  executeSql: async ({ txCtx, sql: query, params }) => {
+    const sqlClient = txCtx?.sql ?? sql;
     const normalizedParams = params
       ? (params as any[]).map((p) => (p === undefined ? null : p))
       : [];
@@ -100,7 +100,7 @@ const qrtWorker = await createInProcessWorker({
 const stopWorker = await qrtWorker.start();
 
 // 7. Register a new user and queue welcome email atomically
-const jobChain = await qrtClient.withNotify(async () =>
+const jobChain = await withCommitHooks(async (commitHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     const [user] = await txSql<{ id: number; name: string; email: string }[]>`
@@ -112,6 +112,7 @@ const jobChain = await qrtClient.withNotify(async () =>
     // Queue welcome email - if user creation fails, no email job is created
     return qrtClient.startJobChain({
       sql: txSql,
+      commitHooks,
       typeName: "send_welcome_email",
       input: { userId: user.id, email: user.email, name: user.name },
     });

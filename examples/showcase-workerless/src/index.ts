@@ -15,7 +15,7 @@ import postgres, {
   type Row,
   type TransactionSql as _TransactionSql,
 } from "postgres";
-import { createClient, createInProcessWorker, defineJobTypes } from "queuert";
+import { createClient, createInProcessWorker, defineJobTypes, withCommitHooks } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 
 type TransactionSql = _TransactionSql & {
@@ -77,8 +77,8 @@ const stateProvider: PgStateProvider<DbContext> = {
     });
     return result;
   },
-  executeSql: async ({ txContext, sql: query, params }) => {
-    const client = txContext?.sql ?? sql;
+  executeSql: async ({ txCtx, sql: query, params }) => {
+    const client = txCtx?.sql ?? sql;
     return client.unsafe(
       query,
       (params ?? []).map((p) => (p === undefined ? null : p)) as (
@@ -135,11 +135,12 @@ const stopWorker = await worker.start();
 console.log("\n--- Scenario 1a: Approval Workflow (Approved) ---");
 console.log("Job is completed externally before worker timeout.\n");
 
-const approval1 = await client.withNotify(async () =>
+const approval1 = await withCommitHooks(async (commitHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     return client.startJobChain({
       sql: txSql,
+      commitHooks,
       typeName: "await-approval",
       input: { requestId: "req-001", requester: "alice" },
       schedule: { afterMs: 5000 }, // Would auto-reject after 5s
@@ -149,11 +150,12 @@ const approval1 = await client.withNotify(async () =>
 console.log(`Created approval request: ${approval1.id} (scheduled for 5s timeout)`);
 
 console.log(`Approving externally...`);
-await client.withNotify(async () =>
+await withCommitHooks(async (commitHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     return client.completeJobChain({
       sql: txSql,
+      commitHooks,
       id: approval1.id,
       typeName: "await-approval",
       complete: async ({ job, complete }) => {
@@ -176,11 +178,12 @@ console.log(`Result: ${JSON.stringify(result1.output)}`);
 console.log("\n--- Scenario 1b: Approval Workflow (Rejected) ---");
 console.log("Job is rejected externally.\n");
 
-const approval2 = await client.withNotify(async () =>
+const approval2 = await withCommitHooks(async (commitHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     return client.startJobChain({
       sql: txSql,
+      commitHooks,
       typeName: "await-approval",
       input: { requestId: "req-002", requester: "bob" },
       schedule: { afterMs: 5000 },
@@ -190,11 +193,12 @@ const approval2 = await client.withNotify(async () =>
 console.log(`Created approval request: ${approval2.id}`);
 
 console.log(`Rejecting externally...`);
-await client.withNotify(async () =>
+await withCommitHooks(async (commitHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     return client.completeJobChain({
       sql: txSql,
+      commitHooks,
       id: approval2.id,
       typeName: "await-approval",
       complete: async ({ job, complete }) => {
@@ -212,11 +216,12 @@ console.log(`Result: ${JSON.stringify(result2.output)}`);
 console.log("\n--- Scenario 2: Deferred Start with Early Completion ---");
 console.log("Job scheduled to expire, but completed early.\n");
 
-const action = await client.withNotify(async () =>
+const action = await withCommitHooks(async (commitHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     return client.startJobChain({
       sql: txSql,
+      commitHooks,
       typeName: "pending-action",
       input: { actionId: "action-001", expiresInMs: 5000 },
       schedule: { afterMs: 5000 }, // Would expire after 5s
@@ -226,11 +231,12 @@ const action = await client.withNotify(async () =>
 console.log(`Created pending action: ${action.id} (expires in 5s)`);
 
 console.log(`Completing early...`);
-await client.withNotify(async () =>
+await withCommitHooks(async (commitHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     return client.completeJobChain({
       sql: txSql,
+      commitHooks,
       id: action.id,
       typeName: "pending-action",
       complete: async ({ job, complete }) => {

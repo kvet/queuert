@@ -59,18 +59,11 @@ Determine:
 
 ### Step 4: Determine Scope
 
-Map changed files to package scopes:
+Derive scope from changed file paths:
 
-| Path Pattern           | Scope                     |
-| ---------------------- | ------------------------- |
-| `packages/core/**`     | `core`                    |
-| `packages/postgres/**` | `postgres`                |
-| `packages/sqlite/**`   | `sqlite`                  |
-| `packages/redis/**`    | `redis`                   |
-| `packages/nats/**`     | `nats`                    |
-| `packages/otel/**`     | `otel` or `observability` |
-| `examples/**`          | `examples`                |
-| `docs/**`              | `docs`                    |
+- `packages/<name>/**` → use `<name>` as scope (e.g., `core`, `postgres`, `sqlite`)
+- `examples/**` → `examples`
+- `docs/**` → `docs`
 
 If multiple packages are affected equally, omit the scope or use the primary one.
 

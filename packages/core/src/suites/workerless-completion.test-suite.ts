@@ -1,6 +1,6 @@
 import { type TestAPI, expectTypeOf, vi } from "vitest";
 import { sleep } from "../helpers/sleep.js";
-import { createClient, createInProcessWorker, defineJobTypes } from "../index.js";
+import { createClient, createInProcessWorker, defineJobTypes, withCommitHooks } from "../index.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -33,20 +33,22 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       registry,
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "test",
           input: { value: 42 },
         }),
       ),
     );
 
-    const completedChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const completedChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.completeJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "test",
           id: jobChain.id,
           complete: async ({ job, complete }) => {
@@ -92,10 +94,11 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       registry,
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "awaiting-approval",
           input: { requestId: "req-123" },
         }),
@@ -104,10 +107,11 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     expect(jobChain.status).toEqual("pending");
 
-    const completedChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const completedChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.completeJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "awaiting-approval",
           id: jobChain.id,
           complete: async ({ job, complete }) => {
@@ -175,10 +179,11 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       },
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "awaiting-approval",
           input: { requestId: "req-123" },
         }),
@@ -187,10 +192,11 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     expect(jobChain.status).toEqual("pending");
 
-    const partiallyCompletedChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const partiallyCompletedChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.completeJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "awaiting-approval",
           id: jobChain.id,
           complete: async ({ job, complete }) => {
@@ -243,20 +249,22 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       registry,
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "test",
           input: null,
         }),
       ),
     );
 
-    await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.completeJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "test",
           id: jobChain.id,
           complete: async ({ job, complete }) => {
@@ -267,10 +275,11 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
 
     await expect(
-      client.withNotify(async () =>
-        runInTransaction(async (txContext) =>
+      withCommitHooks(async (commitHooks) =>
+        runInTransaction(async (txCtx) =>
           client.completeJobChain({
-            ...txContext,
+            ...txCtx,
+            commitHooks,
             typeName: "test",
             id: jobChain.id,
             complete: async ({ job, complete }) => {
@@ -306,10 +315,11 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       registry,
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "test",
           input: { value: 42 },
         }),
@@ -317,10 +327,11 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
 
     const completeFn = vi.fn();
-    const updatedChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const updatedChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.completeJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "test",
           id: jobChain.id,
           complete: completeFn,
@@ -397,10 +408,11 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       },
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "test",
           input: null,
         }),
@@ -411,10 +423,11 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       await jobStarted.promise;
       await sleep(10);
 
-      await client.withNotify(async () =>
-        runInTransaction(async (txContext) =>
+      await withCommitHooks(async (commitHooks) =>
+        runInTransaction(async (txCtx) =>
           client.completeJobChain({
-            ...txContext,
+            ...txCtx,
+            commitHooks,
             typeName: "test",
             id: jobChain.id,
             complete: async ({ job, complete }) => {
@@ -451,16 +464,17 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       registry,
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
-        client.startJobChain({ ...txContext, typeName: "entryA", input: null }),
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({ ...txCtx, commitHooks, typeName: "entryA", input: null }),
       ),
     );
 
-    await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.completeJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "entryA",
           id: jobChain.id,
           complete: async ({ job, complete }) => {

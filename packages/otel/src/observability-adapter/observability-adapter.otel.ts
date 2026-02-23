@@ -89,9 +89,6 @@ export const createOtelObservabilityAdapter = async ({
   const jobUnblockedCounter = meter?.createCounter("queuert.job.unblocked");
 
   // notify adapter
-  const notifyContextAbsenceCounter = meter?.createCounter(
-    "queuert.notify_adapter.context_absence",
-  );
   const notifyAdapterErrorCounter = meter?.createCounter("queuert.notify_adapter.error");
 
   // state adapter
@@ -212,9 +209,6 @@ export const createOtelObservabilityAdapter = async ({
     },
 
     // notify adapter
-    notifyContextAbsence: ({ typeName, chainTypeName }) => {
-      notifyContextAbsenceCounter?.add(1, { typeName, chainTypeName });
-    },
     notifyAdapterError: ({ operation }) => {
       notifyAdapterErrorCounter?.add(1, { operation });
     },

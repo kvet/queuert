@@ -50,4 +50,4 @@ The ObservabilityAdapter interface provides:
 See also:
 
 - [Adapters](adapters.md) - Overall adapter design philosophy
-- [Worker](worker.md) - Worker lifecycle and processing
+- [In-Process Worker](in-process-worker.md) - Worker lifecycle and processing

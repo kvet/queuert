@@ -11,25 +11,9 @@ Read and analyze these files:
 - `README.md` - User-facing overview
 - `CLAUDE.md` - Index to design docs and packages (minimal content)
 
-**Design docs** (`docs/design/`):
+**Design docs:** All files in `docs/design/` (see CLAUDE.md for the indexed list)
 
-- `job-chain-model.md` - Unified job/chain model, Promise analogy
-- `job-type-references.md` - Nominal/structural references, continueWith, blockers
-- `runtime-job-validation.md` - JobTypeRegistry, schema adapters
-- `job-processing.md` - Prepare/complete pattern, timeouts, workerless completion
-- `deduplication.md` - Chain-level deduplication
-- `adapters.md` - Factory patterns, dual-context design
-- `code-style.md` - Code conventions, testing patterns
-- `worker.md` - Worker lifecycle, leasing, reaper
-
-**Package READMEs** (API documentation):
-
-- `packages/core/README.md` - Core exports and usage
-- `packages/postgres/README.md` - PostgreSQL adapter config
-- `packages/sqlite/README.md` - SQLite adapter config
-- `packages/redis/README.md` - Redis adapter config
-- `packages/nats/README.md` - NATS adapter config
-- `packages/otel/README.md` - OTEL adapter metrics
+**Package READMEs:** All `packages/*/README.md` files
 
 ## Checks to Perform
 

@@ -1,5 +1,5 @@
 import { type UUID } from "node:crypto";
-import { createClient, createInProcessWorker, defineJobTypes } from "queuert";
+import { createClient, createInProcessWorker, defineJobTypes, withCommitHooks } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 import { withWorkers } from "queuert/testing";
 import { it as baseIt, expectTypeOf, vi } from "vitest";
@@ -52,18 +52,29 @@ it("should infer types correctly with custom ID", async ({ db }) => {
     },
   });
 
-  const jobChain = await client.withNotify(async () => {
+  const outerDb = db;
+  const runInTransaction = async <T>(fn: (db: typeof outerDb) => Promise<T>): Promise<T> => {
     db.exec("BEGIN IMMEDIATE");
     try {
-      return await client.startJobChain({
+      const result = await fn(outerDb);
+      db.exec("COMMIT");
+      return result;
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+  };
+
+  const jobChain = await withCommitHooks(async (commitHooks) =>
+    runInTransaction(async (db) =>
+      client.startJobChain({
         db,
+        commitHooks,
         typeName: "test",
         input: { foo: "hello" },
-      });
-    } finally {
-      db.exec("COMMIT");
-    }
-  });
+      }),
+    ),
+  );
   expectTypeOf(jobChain.id).toEqualTypeOf<`job.${UUID}`>();
 
   await withWorkers([await worker.start()], async () => {

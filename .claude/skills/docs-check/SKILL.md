@@ -43,23 +43,13 @@ Also run `git diff --name-only` (with appropriate flags) to get the list of chan
 
 Group changes by their documentation relevance:
 
-| File Pattern               | Related Documentation                                    |
-| -------------------------- | -------------------------------------------------------- |
-| `packages/core/src/**`     | `docs/design/*.md`, `packages/core/README.md`            |
-| `packages/postgres/**`     | `packages/postgres/README.md`, `docs/design/adapters.md` |
-| `packages/sqlite/**`       | `packages/sqlite/README.md`, `docs/design/adapters.md`   |
-| `packages/redis/**`        | `packages/redis/README.md`, `docs/design/adapters.md`    |
-| `packages/nats/**`         | `packages/nats/README.md`, `docs/design/adapters.md`     |
-| `packages/otel/**`         | `packages/otel/README.md`, `docs/design/adapters.md`     |
-| `examples/**`              | Package READMEs, `CLAUDE.md`                             |
-| Worker-related changes     | `docs/design/worker.md`                                  |
-| Job chain/sequence changes | `docs/design/job-chain-model.md`                         |
-| Deduplication logic        | `docs/design/deduplication.md`                           |
-| Job processing/timeouts    | `docs/design/job-processing.md`                          |
-| Type references/blockers   | `docs/design/job-type-references.md`                     |
-| Validation/registry        | `docs/design/runtime-job-validation.md`                  |
-| Adapter interfaces         | `docs/design/adapters.md`                                |
-| Exports/public API         | Package README.md, `CLAUDE.md`                           |
+| File Pattern        | Related Documentation                                  |
+| ------------------- | ------------------------------------------------------ |
+| `packages/*/src/**` | Package README, relevant design docs in `docs/design/` |
+| `examples/**`       | Package READMEs, `CLAUDE.md`                           |
+| Exports/public API  | Package README, `CLAUDE.md`                            |
+
+Use CLAUDE.md to identify which design docs are relevant for a given package or subsystem.
 
 ### Step 3: Analyze Documentation Impact
 

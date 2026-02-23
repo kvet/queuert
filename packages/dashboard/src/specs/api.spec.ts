@@ -16,9 +16,9 @@ const createJob = async (
   typeName: string,
   input: unknown,
 ) => {
-  const { job } = await stateAdapter.runInTransaction(async (txContext) =>
+  const { job } = await stateAdapter.runInTransaction(async (txCtx) =>
     stateAdapter.createJob({
-      txContext,
+      txCtx,
       typeName,
       chainId: undefined,
       chainIndex: 0,
@@ -37,9 +37,9 @@ const createContinuation = async (
   chainIndex: number,
   input: unknown,
 ) => {
-  const { job } = await stateAdapter.runInTransaction(async (txContext) =>
+  const { job } = await stateAdapter.runInTransaction(async (txCtx) =>
     stateAdapter.createJob({
-      txContext,
+      txCtx,
       typeName,
       chainId,
       chainTypeName,
@@ -150,9 +150,9 @@ describe("Dashboard API", () => {
       const blockerChain = await createJob(stateAdapter, "blocker-type", null);
       const blockedJob = await createJob(stateAdapter, "blocked-type", null);
 
-      await stateAdapter.runInTransaction(async (txContext) =>
+      await stateAdapter.runInTransaction(async (txCtx) =>
         stateAdapter.addJobBlockers({
-          txContext,
+          txCtx,
           jobId: blockedJob.id,
           blockedByChainIds: [blockerChain.chainId],
         }),

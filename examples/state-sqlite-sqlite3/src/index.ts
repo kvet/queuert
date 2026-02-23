@@ -3,7 +3,7 @@ import {
   createAsyncLock,
   createSqliteStateAdapter,
 } from "@queuert/sqlite";
-import { createClient, createInProcessWorker, defineJobTypes } from "queuert";
+import { createClient, createInProcessWorker, defineJobTypes, withCommitHooks } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 import sqlite3 from "sqlite3";
 
@@ -82,8 +82,8 @@ const stateProvider: SqliteStateProvider<DbContext> = {
       lock.release();
     }
   },
-  executeSql: async ({ txContext, sql, params, returns }) => {
-    const database = txContext?.db ?? db;
+  executeSql: async ({ txCtx, sql, params, returns }) => {
+    const database = txCtx?.db ?? db;
     if (returns) {
       return promisify.all(database, sql, params);
     }
@@ -126,7 +126,7 @@ const qrtWorker = await createInProcessWorker({
 const stopWorker = await qrtWorker.start();
 
 // 8. Register a new user and queue welcome email atomically
-const jobChain = await qrtClient.withNotify(async () => {
+const jobChain = await withCommitHooks(async (commitHooks) => {
   await lock.acquire();
   try {
     await promisify.exec(db, "BEGIN IMMEDIATE");
@@ -145,6 +145,7 @@ const jobChain = await qrtClient.withNotify(async () => {
     // Queue welcome email - if user creation fails, no email job is created
     const result = await qrtClient.startJobChain({
       db,
+      commitHooks,
       typeName: "send_welcome_email",
       input: { userId: user.id, email: user.email, name: user.name },
     });

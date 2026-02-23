@@ -5,7 +5,7 @@ import {
 } from "@queuert/sqlite";
 import BetterSqlite3 from "better-sqlite3";
 import { CompiledQuery, type Generated, Kysely, SqliteDialect, sql } from "kysely";
-import { createClient, createInProcessWorker, defineJobTypes } from "queuert";
+import { createClient, createInProcessWorker, defineJobTypes, withCommitHooks } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 
 // 1. Create in-memory SQLite database
@@ -56,8 +56,8 @@ const stateProvider: SqliteStateProvider<{ db: Kysely<Database> }> = {
       lock.release();
     }
   },
-  executeSql: async ({ txContext, sql: sqlStr, params, returns }) => {
-    const database = txContext?.db ?? db;
+  executeSql: async ({ txCtx, sql: sqlStr, params, returns }) => {
+    const database = txCtx?.db ?? db;
     const result = await database.executeQuery(CompiledQuery.raw(sqlStr, params));
     return returns ? result.rows : [];
   },
@@ -99,7 +99,7 @@ const qrtWorker = await createInProcessWorker({
 const stopWorker = await qrtWorker.start();
 
 // 9. Register a new user and queue welcome email atomically
-const jobChain = await qrtClient.withNotify(async () =>
+const jobChain = await withCommitHooks(async (commitHooks) =>
   db.transaction().execute(async (txDb) => {
     const user = await txDb
       .insertInto("users")
@@ -110,6 +110,7 @@ const jobChain = await qrtClient.withNotify(async () =>
     // Queue welcome email - if user creation fails, no email job is created
     return qrtClient.startJobChain({
       db: txDb,
+      commitHooks,
       typeName: "send_welcome_email",
       input: { userId: user.id, email: user.email, name: user.name },
     });

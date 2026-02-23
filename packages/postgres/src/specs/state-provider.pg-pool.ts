@@ -6,9 +6,9 @@ export type PgPoolProvider = PgStateProvider<PgPoolContext>;
 
 export const createPgPoolProvider = ({ pool }: { pool: Pool }): PgPoolProvider => {
   return {
-    executeSql: async ({ txContext, sql, params }) => {
-      if (txContext) {
-        const result = await txContext.poolClient.query(sql, params);
+    executeSql: async ({ txCtx, sql, params }) => {
+      if (txCtx) {
+        const result = await txCtx.poolClient.query(sql, params);
         return result.rows as any;
       }
       const poolClient = await pool.connect();

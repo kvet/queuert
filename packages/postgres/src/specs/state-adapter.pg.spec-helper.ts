@@ -104,7 +104,7 @@ export const extendWithStatePostgres = <
         const originalExecuteSql = stateProvider.executeSql.bind(stateProvider);
         const flakyStateProvider: typeof stateProvider = {
           ...stateProvider,
-          executeSql: async ({ txContext, sql, params }) => {
+          executeSql: async ({ txCtx, sql, params }) => {
             queryCount++;
 
             if (shouldError()) {
@@ -114,7 +114,7 @@ export const extendWithStatePostgres = <
               throw error;
             }
 
-            return originalExecuteSql({ txContext, sql, params });
+            return originalExecuteSql({ txCtx, sql, params });
           },
         };
 

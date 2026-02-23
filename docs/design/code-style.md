@@ -10,8 +10,10 @@ This document describes code style conventions, testing patterns, and project or
 - **Remove obvious comments**: Code should be self-documenting; comments explain "why", not "what"
 - **Merge similar functionality**: Look for patterns and consolidate before adding new code
 - **Search before implementing**: Check for similar existing implementations before adding new features
-- **Typed error classes**: Use specific error types for public-facing errors (`JobNotFoundError`, `JobAlreadyCompletedError`, etc.) to enable proper error handling by consumers. Internal assertion errors can remain as generic `Error`.
+- **Typed error classes**: Use specific error types for all thrown errors (`JobNotFoundError`, `JobAlreadyCompletedError`, etc.) to enable proper error handling by consumers. Generic `Error` should only be used for truly unreachable code paths (assertion-style guards). If a caller could reasonably need to catch and handle an error, it must have a specific type.
+- **Factory functions over classes**: Expose `createClient()` instead of `new Client()`. Classes can be used internally, but the public API should always be factory functions. This keeps constructors private, allows async initialization, and makes the API consistent.
 - **Nullable conventions**: Use `undefined` for "not found/not present" and `null` for "explicitly set to no value". For example, `getJobById` returns `undefined` when job doesn't exist, while `job.completedAt` is `null` before completion.
+- **Arrow functions over function declarations**: Use `export const fn = () => {}` instead of `export function fn() {}`. This applies to all exports — named functions, factories, helpers, etc.
 - **Async factory functions**: Factory functions that perform I/O (database setup, network connections) should be async. Pure configuration factories like `createConsoleLog` or `createJobTypeRegistry` should be sync. Note: `createOtelObservabilityAdapter` is async for future-proofing even though current OTEL instrument creation is synchronous.
 
 ## Naming Conventions

@@ -36,7 +36,6 @@ const methodToMetricName: Record<string, string> = {
   jobChainCompleted: "queuert.job_chain.completed",
   jobBlocked: "queuert.job.blocked",
   jobUnblocked: "queuert.job.unblocked",
-  notifyContextAbsence: "queuert.notify_adapter.context_absence",
   notifyAdapterError: "queuert.notify_adapter.error",
   stateAdapterError: "queuert.state_adapter.error",
   // histograms

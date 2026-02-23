@@ -4,6 +4,7 @@ import {
   createClient,
   createInProcessWorker,
   defineJobTypes,
+  withCommitHooks,
 } from "../index.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
@@ -112,10 +113,11 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       },
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) => {
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) => {
         return client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "linear",
           input: { value: 1 },
         });
@@ -213,19 +215,21 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       },
     });
 
-    const evenJobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const evenJobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "main",
           input: { value: 2 },
         }),
       ),
     );
-    const oddJobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const oddJobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "main",
           input: { value: 3 },
         }),
@@ -308,10 +312,11 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       },
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "loop",
           input: { counter: 0 },
         }),
@@ -399,10 +404,11 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       },
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "start",
           input: { value: 0 },
         }),
@@ -481,14 +487,14 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       },
     });
 
-    const chainA = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
-        client.startJobChain({ ...txContext, typeName: "entryA", input: { fromA: true } }),
+    const chainA = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({ ...txCtx, commitHooks, typeName: "entryA", input: { fromA: true } }),
       ),
     );
-    const chainB = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
-        client.startJobChain({ ...txContext, typeName: "entryB", input: { fromB: true } }),
+    const chainB = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({ ...txCtx, commitHooks, typeName: "entryB", input: { fromB: true } }),
       ),
     );
 
@@ -544,10 +550,11 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         parent: {
           attemptHandler: async ({ job, complete }) => {
             // Create an independent chain during job processing
-            const independentChain = await client.withNotify(async () =>
-              runInTransaction(async (txContext) =>
+            const independentChain = await withCommitHooks(async (commitHooks) =>
+              runInTransaction(async (txCtx) =>
                 client.startJobChain({
-                  ...txContext,
+                  ...txCtx,
+                  commitHooks,
                   typeName: "independent",
                   input: { fromParent: job.input.value },
                 }),
@@ -571,10 +578,11 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       },
     });
 
-    const parentChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const parentChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "parent",
           input: { value: 42 },
         }),
@@ -591,7 +599,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             await new Promise((resolve) => setTimeout(resolve, 50));
           }
           return client.waitForJobChainCompletion(
-            { id: independentChainId, typeName: "independent" } as any,
+            { id: independentChainId, typeName: "independent" },
             completionOptions,
           );
         })(),

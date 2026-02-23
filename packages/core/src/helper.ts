@@ -9,11 +9,8 @@ import {
   JobTakenByAnotherWorkerError,
 } from "./errors.js";
 import { type BackoffConfig, calculateBackoffMs } from "./helpers/backoff.js";
-import {
-  notifyChainCompletion,
-  notifyJobScheduled,
-  withNotifyContext,
-} from "./helpers/notify-context.js";
+import { type CommitHooks } from "./commit-hooks.js";
+import { bufferNotifyChainCompletion, bufferNotifyJobScheduled } from "./helpers/notify-hooks.js";
 import { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 import { type Log } from "./observability-adapter/log.js";
 import { type ObservabilityAdapter } from "./observability-adapter/observability-adapter.js";
@@ -50,7 +47,8 @@ export const helper = ({
   const createStateJob = async ({
     typeName,
     input,
-    txContext,
+    txCtx,
+    commitHooks,
     blockers,
     isChain,
     chainId,
@@ -62,7 +60,8 @@ export const helper = ({
   }: {
     typeName: string;
     input: unknown;
-    txContext: BaseTxContext;
+    txCtx: BaseTxContext;
+    commitHooks: CommitHooks;
     blockers?: JobChain<any, any, any, any>[];
     isChain: boolean;
     chainId?: string;
@@ -90,7 +89,7 @@ export const helper = ({
     let createJobResult: { job: StateJob; deduplicated: boolean };
     try {
       createJobResult = await stateAdapter.createJob({
-        txContext,
+        txCtx,
         typeName,
         chainTypeName: resolvedChainTypeName,
         chainIndex,
@@ -138,7 +137,7 @@ export const helper = ({
       );
 
       const addBlockersResult = await stateAdapter.addJobBlockers({
-        txContext,
+        txCtx,
         jobId: job.id,
         blockedByChainIds: blockerChainIds,
         blockerTraceContexts: blockerSpanHandles.map((h) => h?.getTraceContext() ?? null),
@@ -180,7 +179,7 @@ export const helper = ({
       observabilityHelper.jobBlocked(job, { blockedByChains: incompleteBlockerChains });
     }
 
-    notifyJobScheduled(job, notifyAdapterOption, observabilityHelper);
+    bufferNotifyJobScheduled(commitHooks, notifyAdapter, job);
 
     return { job, deduplicated };
   };
@@ -188,7 +187,8 @@ export const helper = ({
   const continueWith = async <TJobTypeName extends string, TInput>({
     typeName,
     input,
-    txContext,
+    txCtx,
+    commitHooks,
     schedule,
     blockers,
     chainId,
@@ -199,7 +199,8 @@ export const helper = ({
   }: {
     typeName: TJobTypeName;
     input: TInput;
-    txContext: any;
+    txCtx: any;
+    commitHooks: CommitHooks;
     schedule?: ScheduleOptions;
     blockers?: JobChain<any, any, any, any>[];
     chainId: string;
@@ -213,7 +214,8 @@ export const helper = ({
     const { job } = await createStateJob({
       typeName,
       input,
-      txContext,
+      txCtx,
+      commitHooks,
       blockers,
       isChain: false,
       chainId,
@@ -228,12 +230,14 @@ export const helper = ({
 
   const finishJob = async ({
     job,
-    txContext,
+    txCtx,
+    commitHooks,
     workerId,
     ...rest
   }: {
     job: StateJob;
-    txContext: BaseTxContext;
+    txCtx: BaseTxContext;
+    commitHooks: CommitHooks;
     workerId: string | null;
   } & (
     | { type: "completeChain"; output: unknown }
@@ -247,7 +251,7 @@ export const helper = ({
     }
 
     job = await stateAdapter.completeJob({
-      txContext,
+      txCtx,
       jobId: job.id,
       output,
       workerId,
@@ -269,7 +273,7 @@ export const helper = ({
 
     if (!hasContinuedJob) {
       const jobChainStartJob = await stateAdapter.getJobById({
-        txContext,
+        txCtx,
         jobId: job.chainId,
       });
 
@@ -279,10 +283,10 @@ export const helper = ({
 
       observabilityHelper.jobChainCompleted(jobChainStartJob, { output });
       observabilityHelper.jobChainDuration(jobChainStartJob, job);
-      notifyChainCompletion(job);
+      bufferNotifyChainCompletion(commitHooks, notifyAdapter, job);
 
       const { unblockedJobs, blockerTraceContexts } = await stateAdapter.scheduleBlockedJobs({
-        txContext,
+        txCtx,
         blockedByChainId: jobChainStartJob.id,
       });
       for (const traceContext of blockerTraceContexts) {
@@ -294,7 +298,7 @@ export const helper = ({
 
       if (unblockedJobs.length > 0) {
         unblockedJobs.forEach((unblockedJob) => {
-          notifyJobScheduled(unblockedJob, notifyAdapterOption, observabilityHelper);
+          bufferNotifyJobScheduled(commitHooks, notifyAdapter, unblockedJob);
           observabilityHelper.jobUnblocked(unblockedJob, {
             unblockedByChain: jobChainStartJob,
           });
@@ -309,19 +313,19 @@ export const helper = ({
     stateAdapter,
     notifyAdapter,
     observabilityHelper,
-    withNotifyContext: (async <T>(cb: () => Promise<T>) =>
-      withNotifyContext(notifyAdapter, cb)) as <T>(cb: () => Promise<T>) => Promise<T>,
     startJobChain: async <TChainTypeName extends string, TInput, TOutput>({
       typeName,
       input,
-      txContext,
+      txCtx,
+      commitHooks,
       deduplication,
       schedule,
       blockers,
     }: {
       typeName: TChainTypeName;
       input: TInput;
-      txContext: any;
+      txCtx: any;
+      commitHooks: CommitHooks;
       deduplication?: DeduplicationOptions;
       schedule?: ScheduleOptions;
       blockers?: JobChain<any, any, any, any>[];
@@ -329,7 +333,8 @@ export const helper = ({
       const { job, deduplicated } = await createStateJob({
         typeName,
         input,
-        txContext,
+        txCtx,
+        commitHooks,
         blockers,
         isChain: true,
         chainIndex: 0,
@@ -342,7 +347,8 @@ export const helper = ({
     continueWith: continueWith as <TJobTypeName extends string, TInput>({
       typeName,
       input,
-      txContext,
+      txCtx,
+      commitHooks,
       schedule,
       blockers,
       chainId,
@@ -353,7 +359,8 @@ export const helper = ({
     }: {
       typeName: TJobTypeName;
       input: TInput;
-      txContext: any;
+      txCtx: any;
+      commitHooks: CommitHooks;
       schedule?: ScheduleOptions;
       blockers?: JobChain<any, any, any, any>[];
       chainId: string;
@@ -365,13 +372,13 @@ export const helper = ({
     handleJobHandlerError: async ({
       job,
       error,
-      txContext,
+      txCtx,
       retryConfig,
       workerId,
     }: {
       job: StateJob;
       error: unknown;
-      txContext: BaseTxContext;
+      txCtx: BaseTxContext;
       retryConfig: BackoffConfig;
       workerId: string;
     }): Promise<{
@@ -394,7 +401,7 @@ export const helper = ({
       observabilityHelper.jobAttemptFailed(job, { workerId, rescheduledSchedule: schedule, error });
 
       await stateAdapter.rescheduleJob({
-        txContext,
+        txCtx,
         jobId: job.id,
         schedule,
         error: errorString,
@@ -405,7 +412,8 @@ export const helper = ({
     finishJob: finishJob as (
       options: {
         job: StateJob;
-        txContext: BaseTxContext;
+        txCtx: BaseTxContext;
+        commitHooks: CommitHooks;
         workerId: string | null;
       } & (
         | { type: "completeChain"; output: unknown }
@@ -413,18 +421,18 @@ export const helper = ({
       ),
     ) => Promise<StateJob>,
     refetchJobForUpdate: async ({
-      txContext,
+      txCtx,
       job,
       workerId,
       allowEmptyWorker,
     }: {
-      txContext: BaseTxContext;
+      txCtx: BaseTxContext;
       job: StateJob;
       workerId: string;
       allowEmptyWorker: boolean;
     }): Promise<StateJob> => {
       const fetchedJob = await stateAdapter.getJobForUpdate({
-        txContext,
+        txCtx,
         jobId: job.id,
       });
 

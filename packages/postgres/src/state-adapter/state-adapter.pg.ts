@@ -103,17 +103,17 @@ export const createPgStateAdapter = async <
       | readonly [],
     TResult,
   >({
-    txContext,
+    txCtx,
     sql,
     params,
   }: {
-    txContext?: TTxContext;
+    txCtx?: TTxContext;
     sql: TypedSql<TParams, TResult>;
   } & (TParams extends readonly []
     ? { params?: undefined }
     : { params: UnwrapNamedParameters<TParams> })): Promise<TResult> => {
     return stateProvider.executeSql({
-      txContext,
+      txCtx,
       sql: applyTemplate(sql).sql,
       params,
     }) as Promise<TResult>;
@@ -122,9 +122,9 @@ export const createPgStateAdapter = async <
   const rawAdapter: StateAdapter<TTxContext, TIdType> = {
     runInTransaction: stateProvider.runInTransaction,
 
-    getJobChainById: async ({ txContext, jobId }) => {
+    getJobChainById: async ({ txCtx, jobId }) => {
       const [jobChain] = await executeTypedSql({
-        txContext,
+        txCtx,
         sql: getJobChainByIdSql,
         params: [jobId],
       });
@@ -136,9 +136,9 @@ export const createPgStateAdapter = async <
           ]
         : undefined;
     },
-    getJobById: async ({ txContext, jobId }) => {
+    getJobById: async ({ txCtx, jobId }) => {
       const [job] = await executeTypedSql({
-        txContext,
+        txCtx,
         sql: getJobByIdSql,
         params: [jobId],
       });
@@ -147,7 +147,7 @@ export const createPgStateAdapter = async <
     },
 
     createJob: async ({
-      txContext,
+      txCtx,
       typeName,
       chainTypeName,
       chainIndex,
@@ -158,7 +158,7 @@ export const createPgStateAdapter = async <
       traceContext,
     }) => {
       const [result] = await executeTypedSql({
-        txContext,
+        txCtx,
         sql: createJobSql,
         params: [
           typeName,
@@ -178,9 +178,9 @@ export const createPgStateAdapter = async <
       return { job: mapDbJobToStateJob(result), deduplicated: result.deduplicated };
     },
 
-    addJobBlockers: async ({ txContext, jobId, blockedByChainIds, blockerTraceContexts }) => {
+    addJobBlockers: async ({ txCtx, jobId, blockedByChainIds, blockerTraceContexts }) => {
       const [result] = await executeTypedSql({
-        txContext,
+        txCtx,
         sql: addJobBlockersSql,
         params: [
           Array.from({ length: blockedByChainIds.length }, () => jobId),
@@ -195,9 +195,9 @@ export const createPgStateAdapter = async <
         blockerChainTraceContexts: result.blocker_chain_trace_contexts,
       };
     },
-    scheduleBlockedJobs: async ({ txContext, blockedByChainId }) => {
+    scheduleBlockedJobs: async ({ txCtx, blockedByChainId }) => {
       const [result] = await executeTypedSql({
-        txContext,
+        txCtx,
         sql: scheduleBlockedJobsSql,
         params: [blockedByChainId],
       });
@@ -206,9 +206,9 @@ export const createPgStateAdapter = async <
         blockerTraceContexts: result.blocker_trace_contexts,
       };
     },
-    getJobBlockers: async ({ txContext, jobId }) => {
+    getJobBlockers: async ({ txCtx, jobId }) => {
       const jobChains = await executeTypedSql({
-        txContext,
+        txCtx,
         sql: getJobBlockersSql,
         params: [jobId],
       });
@@ -219,17 +219,17 @@ export const createPgStateAdapter = async <
       ]);
     },
 
-    getNextJobAvailableInMs: async ({ txContext, typeNames }) => {
+    getNextJobAvailableInMs: async ({ txCtx, typeNames }) => {
       const [result] = await executeTypedSql({
-        txContext,
+        txCtx,
         sql: getNextJobAvailableInMsSql,
         params: [typeNames],
       });
       return result ? result.available_in_ms : null;
     },
-    acquireJob: async ({ txContext, typeNames }) => {
+    acquireJob: async ({ txCtx, typeNames }) => {
       const [result] = await executeTypedSql({
-        txContext,
+        txCtx,
         sql: acquireJobSql,
         params: [typeNames],
       });
@@ -238,44 +238,44 @@ export const createPgStateAdapter = async <
         ? { job: mapDbJobToStateJob(result), hasMore: result.has_more }
         : { job: undefined, hasMore: false };
     },
-    renewJobLease: async ({ txContext, jobId, workerId, leaseDurationMs }) => {
+    renewJobLease: async ({ txCtx, jobId, workerId, leaseDurationMs }) => {
       const [job] = await executeTypedSql({
-        txContext,
+        txCtx,
         sql: renewJobLeaseSql,
         params: [jobId, workerId, leaseDurationMs],
       });
 
       return mapDbJobToStateJob(job);
     },
-    rescheduleJob: async ({ txContext, jobId, schedule, error }) => {
+    rescheduleJob: async ({ txCtx, jobId, schedule, error }) => {
       const [job] = await executeTypedSql({
-        txContext,
+        txCtx,
         sql: rescheduleJobSql,
         params: [jobId, schedule.at ?? null, schedule.afterMs ?? null, JSON.stringify(error)],
       });
 
       return mapDbJobToStateJob(job);
     },
-    completeJob: async ({ txContext, jobId, output, workerId }) => {
+    completeJob: async ({ txCtx, jobId, output, workerId }) => {
       const [job] = await executeTypedSql({
-        txContext,
+        txCtx,
         sql: completeJobSql,
         params: [jobId, output, workerId],
       });
 
       return mapDbJobToStateJob(job);
     },
-    removeExpiredJobLease: async ({ txContext, typeNames, ignoredJobIds }) => {
+    removeExpiredJobLease: async ({ txCtx, typeNames, ignoredJobIds }) => {
       const [job] = await executeTypedSql({
-        txContext,
+        txCtx,
         sql: removeExpiredJobLeaseSql,
         params: [typeNames, ignoredJobIds ?? []],
       });
       return job ? mapDbJobToStateJob(job) : undefined;
     },
-    deleteJobsByChainIds: async ({ txContext, chainIds }) => {
+    deleteJobsByChainIds: async ({ txCtx, chainIds }) => {
       const refs = await executeTypedSql({
-        txContext,
+        txCtx,
         sql: checkExternalBlockerRefsSql,
         params: [chainIds, chainIds],
       });
@@ -289,7 +289,7 @@ export const createPgStateAdapter = async <
         );
       }
       const rows = await executeTypedSql({
-        txContext,
+        txCtx,
         sql: deleteJobsByChainIdsSql,
         params: [chainIds],
       });
@@ -300,24 +300,24 @@ export const createPgStateAdapter = async <
           : undefined,
       ]);
     },
-    getJobForUpdate: async ({ txContext, jobId }) => {
+    getJobForUpdate: async ({ txCtx, jobId }) => {
       const [job] = await executeTypedSql({
-        txContext,
+        txCtx,
         sql: getJobForUpdateSql,
         params: [jobId],
       });
       return job ? mapDbJobToStateJob(job) : undefined;
     },
-    getCurrentJobForUpdate: async ({ txContext, chainId }) => {
+    getCurrentJobForUpdate: async ({ txCtx, chainId }) => {
       const [job] = await executeTypedSql({
-        txContext,
+        txCtx,
         sql: getCurrentJobForUpdateSql,
         params: [chainId],
       });
       return job ? mapDbJobToStateJob(job) : undefined;
     },
 
-    listChains: async ({ txContext, filter, page }) => {
+    listChains: async ({ txCtx, filter, page }) => {
       const cursor = page.cursor ? decodeCursor(page.cursor) : null;
       const conditions: string[] = ["root_job.chain_index = 0"];
       const params: unknown[] = [];
@@ -352,7 +352,7 @@ export const createPgStateAdapter = async <
       const sqlStr = `SELECT row_to_json(root_job) AS root_job, row_to_json(last_job) AS last_chain_job FROM ${schema}.${tablePrefix}job root_job LEFT JOIN LATERAL (SELECT * FROM ${schema}.${tablePrefix}job WHERE chain_id = root_job.id ORDER BY chain_index DESC LIMIT 1) last_job ON TRUE WHERE ${conditions.join(" AND ")} ORDER BY root_job.created_at DESC, root_job.id DESC LIMIT $${p}`;
 
       const rows = (await stateProvider.executeSql({
-        txContext,
+        txCtx,
         sql: sqlStr,
         params,
       })) as { root_job: DbJob; last_chain_job: DbJob }[];
@@ -381,7 +381,7 @@ export const createPgStateAdapter = async <
       return { items, nextCursor };
     },
 
-    listJobs: async ({ txContext, filter, page }) => {
+    listJobs: async ({ txCtx, filter, page }) => {
       const cursor = page.cursor ? decodeCursor(page.cursor) : null;
       const conditions: string[] = [];
       const params: unknown[] = [];
@@ -420,7 +420,7 @@ export const createPgStateAdapter = async <
       const sqlStr = `SELECT * FROM ${schema}.${tablePrefix}job j ${where} ORDER BY j.created_at DESC, j.id DESC LIMIT $${p}`;
 
       const rows = (await stateProvider.executeSql({
-        txContext,
+        txCtx,
         sql: sqlStr,
         params,
       })) as DbJob[];
@@ -441,9 +441,9 @@ export const createPgStateAdapter = async <
       return { items, nextCursor };
     },
 
-    getJobsBlockedByChain: async ({ txContext, chainId }) => {
+    getJobsBlockedByChain: async ({ txCtx, chainId }) => {
       const jobs = await executeTypedSql({
-        txContext,
+        txCtx,
         sql: getJobsBlockedByChainSql,
         params: [chainId],
       });
@@ -456,28 +456,28 @@ export const createPgStateAdapter = async <
     migrateToLatest: async () => {
       const runMigrations = await executeMigrations<TTxContext>({
         migrations,
-        getAppliedMigrationNames: async (txContext) => {
+        getAppliedMigrationNames: async (txCtx) => {
           await stateProvider.executeSql({
-            txContext,
+            txCtx,
             sql: applyTemplate(createMigrationTableSql).sql,
           });
           const applied = (await stateProvider.executeSql({
-            txContext,
+            txCtx,
             sql: applyTemplate(getAppliedMigrationsSql).sql,
           })) as { name: string }[];
           return applied.map((m) => m.name);
         },
-        executeMigrationStatements: async (txContext, migration) => {
+        executeMigrationStatements: async (txCtx, migration) => {
           for (const stmt of migration.statements) {
             await stateProvider.executeSql({
-              txContext,
+              txCtx,
               sql: applyTemplate(stmt.sql).sql,
             });
           }
         },
-        recordMigration: async (txContext, name) => {
+        recordMigration: async (txCtx, name) => {
           await stateProvider.executeSql({
-            txContext,
+            txCtx,
             sql: applyTemplate(recordMigrationSql).sql,
             params: [name],
           });

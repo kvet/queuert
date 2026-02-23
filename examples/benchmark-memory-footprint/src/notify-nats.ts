@@ -6,7 +6,7 @@ import { NatsContainer } from "@testcontainers/nats";
 import { connect } from "nats";
 import { createNatsNotifyAdapter } from "@queuert/nats";
 import { createInProcessStateAdapter } from "queuert/internal";
-import { createClient, createInProcessWorker } from "queuert";
+import { createClient, createInProcessWorker, withCommitHooks } from "queuert";
 import {
   diffMemory,
   measureBaseline,
@@ -68,10 +68,11 @@ console.log("\nProcessing 100 jobs...");
 const [beforeProcessing, afterProcessing] = await measureMemory(async () => {
   const promises = [];
   for (let i = 0; i < 100; i++) {
-    const chain = await qrtClient.withNotify(async () =>
+    const chain = await withCommitHooks(async (commitHooks) =>
       stateAdapter.runInTransaction(async (ctx) =>
         qrtClient.startJobChain({
           ...ctx,
+          commitHooks,
           typeName: "test-job",
           input: { message: `Test message ${i}` },
         }),

@@ -107,4 +107,4 @@ See also:
 - [ObservabilityAdapter](observability-adapter.md) - Interface design and methods
 - [OTEL Tracing](otel-tracing.md) - Distributed tracing with spans
 - [Adapters](adapters.md) - Overall adapter design philosophy
-- [Worker](worker.md) - Worker lifecycle and processing
+- [In-Process Worker](in-process-worker.md) - Worker lifecycle and processing

@@ -131,10 +131,10 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       await lock.acquire();
 
       const snapshot = deepCloneStore(store);
-      const txContext: InProcessContext = { inTransaction: true };
+      const txCtx: InProcessContext = { inTransaction: true };
 
       try {
-        return await fn(txContext);
+        return await fn(txCtx);
       } catch (error) {
         store.jobs = snapshot.jobs;
         store.jobBlockers = snapshot.jobBlockers;

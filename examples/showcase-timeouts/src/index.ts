@@ -15,7 +15,7 @@ import postgres, {
   type Row,
   type TransactionSql as _TransactionSql,
 } from "postgres";
-import { createClient, createInProcessWorker, defineJobTypes } from "queuert";
+import { createClient, createInProcessWorker, defineJobTypes, withCommitHooks } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 
 type TransactionSql = _TransactionSql & {
@@ -70,8 +70,8 @@ const stateProvider: PgStateProvider<DbContext> = {
     });
     return result;
   },
-  executeSql: async ({ txContext, sql: query, params }) => {
-    const client = txContext?.sql ?? sql;
+  executeSql: async ({ txCtx, sql: query, params }) => {
+    const client = txCtx?.sql ?? sql;
     return client.unsafe(
       query,
       (params ?? []).map((p) => (p === undefined ? null : p)) as (
@@ -146,11 +146,12 @@ const stopWorker = await worker.start();
 console.log("\n--- Scenario 1a: Cooperative Timeout (Success) ---");
 console.log("Fetch completes before timeout.\n");
 
-const fetch1 = await client.withNotify(async () =>
+const fetch1 = await withCommitHooks(async (commitHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     return client.startJobChain({
       sql: txSql,
+      commitHooks,
       typeName: "fetch-with-timeout",
       input: { url: "/api/fast", timeoutMs: 500 }, // 500ms timeout, 300ms fetch
     });
@@ -163,11 +164,12 @@ console.log(`Result: ${JSON.stringify(result1.output)}`);
 console.log("\n--- Scenario 1b: Cooperative Timeout (Timeout) ---");
 console.log("Fetch times out before completing.\n");
 
-const fetch2 = await client.withNotify(async () =>
+const fetch2 = await withCommitHooks(async (commitHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     return client.startJobChain({
       sql: txSql,
+      commitHooks,
       typeName: "fetch-with-timeout",
       input: { url: "/api/slow", timeoutMs: 100 }, // 100ms timeout, 300ms fetch
     });
@@ -180,11 +182,12 @@ console.log(`Result: ${JSON.stringify(result2.output)}`);
 console.log("\n--- Scenario 2: Hard Timeout via Lease ---");
 console.log("Job with leaseConfig completes within lease period.\n");
 
-const longJob = await client.withNotify(async () =>
+const longJob = await withCommitHooks(async (commitHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     return client.startJobChain({
       sql: txSql,
+      commitHooks,
       typeName: "long-running-job",
       input: { taskId: "task-001", durationMs: 200 }, // 200ms work, 500ms lease
     });

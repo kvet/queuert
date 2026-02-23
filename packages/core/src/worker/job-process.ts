@@ -29,6 +29,7 @@ import {
 import { type Helper } from "../helper.js";
 import { type TypedAbortController, type TypedAbortSignal } from "../helpers/abort.js";
 import { type BackoffConfig } from "../helpers/backoff.js";
+import { type CommitHooks, withCommitHooks } from "../commit-hooks.js";
 import {
   type TransactionContext,
   createTransactionContext,
@@ -128,7 +129,7 @@ export type CompleteCallbackOptions<
       >
     >
   >;
-} & GetStateAdapterTxContext<TStateAdapter>;
+} & { commitHooks: CommitHooks } & GetStateAdapterTxContext<TStateAdapter>;
 
 export type CompleteCallback<
   TStateAdapter extends StateAdapter<BaseTxContext, any>,
@@ -260,7 +261,7 @@ export const runJobProcess = async ({
   let completeTransactionContext: TransactionContext<BaseTxContext> | null = null;
 
   const abortController = new AbortController() as TypedAbortController<JobAbortReason>;
-  const refetchJobForUpdate = async (txContext: BaseTxContext) => {
+  const refetchJobForUpdate = async (txCtx: BaseTxContext) => {
     if (abortController.signal.aborted && abortController.signal.reason) {
       if (abortController.signal.reason === "already_completed") {
         throw new JobAlreadyCompletedError("Job already completed (signal aborted)");
@@ -276,7 +277,7 @@ export const runJobProcess = async ({
 
     await helper
       .refetchJobForUpdate({
-        txContext,
+        txCtx,
         job,
         allowEmptyWorker: prepareTransactionContext.status === "pending", // TODO!!!: remove?
         workerId,
@@ -297,7 +298,7 @@ export const runJobProcess = async ({
       });
   };
   const runInGuardedTransaction = async <T>(
-    cb: (txContext: BaseTxContext) => Promise<T>,
+    cb: (txCtx: BaseTxContext) => Promise<T>,
   ): Promise<T> => {
     if (abortController.signal.aborted && abortController.signal.reason) {
       if (abortController.signal.reason === "already_completed") {
@@ -313,23 +314,23 @@ export const runJobProcess = async ({
     }
 
     if (prepareTransactionContext.status === "pending") {
-      return prepareTransactionContext.run(async (txContext) => cb(txContext));
+      return prepareTransactionContext.run(async (txCtx) => cb(txCtx));
     }
     if (completeTransactionContext && completeTransactionContext.status === "pending") {
-      return completeTransactionContext.run(async (txContext) => cb(txContext));
+      return completeTransactionContext.run(async (txCtx) => cb(txCtx));
     }
 
-    return helper.stateAdapter.runInTransaction(async (txContext) => {
-      await refetchJobForUpdate(txContext);
-      return cb(txContext);
+    return helper.stateAdapter.runInTransaction(async (txCtx) => {
+      await refetchJobForUpdate(txCtx);
+      return cb(txCtx);
     });
   };
   const leaseManager = createLeaseManager({
     commitLease: async (leaseMs: number) => {
       try {
-        await runInGuardedTransaction(async (txContext) => {
+        await runInGuardedTransaction(async (txCtx) => {
           await helper.stateAdapter.renewJobLease({
-            txContext,
+            txCtx,
             jobId: job.id,
             workerId,
             leaseDurationMs: leaseMs,
@@ -352,12 +353,12 @@ export const runJobProcess = async ({
   });
   let disposeOwnershipListener: (() => Promise<void>) | null = null;
 
-  const blockerPairs = await prepareTransactionContext.run(async (txContext) =>
-    helper.stateAdapter.getJobBlockers({ txContext, jobId: job.id }),
+  const blockerPairs = await prepareTransactionContext.run(async (txCtx) =>
+    helper.stateAdapter.getJobBlockers({ txCtx, jobId: job.id }),
   );
-  await prepareTransactionContext.run(async (txContext) =>
+  await prepareTransactionContext.run(async (txCtx) =>
     helper.stateAdapter.renewJobLease({
-      txContext,
+      txCtx,
       jobId: job.id,
       workerId,
       leaseDurationMs: leaseConfig.leaseMs,
@@ -370,7 +371,7 @@ export const runJobProcess = async ({
     >[],
   } as RunningJob<JobOf<any, any, any, any>>;
 
-  const runJobAttempt = async () => {
+  const runJobAttempt = async (commitHooks: CommitHooks) => {
     const attemptStartTime = Date.now();
 
     helper.observabilityHelper.jobAttemptStarted(job, { workerId });
@@ -398,8 +399,8 @@ export const runJobProcess = async ({
       const prepareSpan = attemptSpanHandle?.startPrepare();
       let callbackOutput: T | undefined;
       try {
-        callbackOutput = await prepareTransactionContext.run(async (txContext) =>
-          prepareCallback?.({ ...txContext }),
+        callbackOutput = await prepareTransactionContext.run(async (txCtx) =>
+          prepareCallback?.({ ...txCtx }),
         );
       } finally {
         prepareSpan?.end();
@@ -436,7 +437,7 @@ export const runJobProcess = async ({
               blockers?: JobChain<any, any, any, any>[];
             } & BaseTxContext,
           ) => Promise<unknown>;
-        } & BaseTxContext,
+        } & { commitHooks: CommitHooks } & BaseTxContext,
       ) => unknown,
     ) => {
       if (autoPreparePromise) {
@@ -453,11 +454,11 @@ export const runJobProcess = async ({
         completeTransactionContext = await createTransactionContext(
           helper.stateAdapter.runInTransaction,
         );
-        await completeTransactionContext.run(async (txContext) => {
-          await refetchJobForUpdate(txContext);
+        await completeTransactionContext.run(async (txCtx) => {
+          await refetchJobForUpdate(txCtx);
         });
       }
-      const result = await runInGuardedTransaction(async (txContext) => {
+      const result = await runInGuardedTransaction(async (txCtx) => {
         let continuedJob: Job<any, any, any, any, any[]> | null = null;
         const output = await completeCallback({
           continueWith: async ({ typeName, input, schedule, blockers }) => {
@@ -467,7 +468,8 @@ export const runJobProcess = async ({
             continuedJob = await helper.continueWith({
               typeName,
               input,
-              txContext,
+              txCtx,
+              commitHooks,
               schedule,
               blockers: blockers as any,
               chainId: job.chainId,
@@ -478,7 +480,8 @@ export const runJobProcess = async ({
             });
             return continuedJob;
           },
-          ...txContext,
+          commitHooks,
+          ...txCtx,
         });
         helper.observabilityHelper.jobAttemptCompleted(job, {
           output: continuedJob ? null : output,
@@ -487,8 +490,8 @@ export const runJobProcess = async ({
         });
         const completedStateJob = await helper.finishJob(
           continuedJob
-            ? { job, txContext, workerId, type: "continueWith", continuedJob }
-            : { job, txContext, workerId, type: "completeChain", output },
+            ? { job, txCtx, commitHooks, workerId, type: "continueWith", continuedJob }
+            : { job, txCtx, commitHooks, workerId, type: "completeChain", output },
         );
         const jobResult = continuedJob ?? {
           ...mapStateJobToJob(completedStateJob),
@@ -550,11 +553,11 @@ export const runJobProcess = async ({
       await completeTransactionContext?.resolve();
     } catch (error) {
       try {
-        const errorResult = await runInGuardedTransaction(async (txContext) =>
+        const errorResult = await runInGuardedTransaction(async (txCtx) =>
           helper.handleJobHandlerError({
             job,
             error,
-            txContext,
+            txCtx,
             retryConfig,
             workerId,
           }),
@@ -578,6 +581,9 @@ export const runJobProcess = async ({
 
   await (attemptMiddlewares ?? []).reduceRight(
     (next, mw) => async () => mw({ job: runningJob, workerId }, next),
-    async () => helper.withNotifyContext(runJobAttempt),
+    async () =>
+      withCommitHooks(async (commitHooks) => {
+        await runJobAttempt(commitHooks);
+      }),
   )();
 };

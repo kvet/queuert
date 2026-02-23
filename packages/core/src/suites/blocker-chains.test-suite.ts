@@ -1,5 +1,11 @@
 import { type TestAPI, expectTypeOf } from "vitest";
-import { type JobChain, createClient, createInProcessWorker, defineJobTypes } from "../index.js";
+import {
+  type JobChain,
+  createClient,
+  createInProcessWorker,
+  defineJobTypes,
+  withCommitHooks,
+} from "../index.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -87,17 +93,19 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       Parameters<typeof client.startJobChain<"main">>[0]["blockers"]
     >().not.toBeUndefined();
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) => {
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) => {
         const dependencyJobChain = await client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "blocker",
           input: { value: 0 },
         });
         blockerChainId = dependencyJobChain.id;
 
         const jobChain = await client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "main",
           input: { start: true },
           blockers: [dependencyJobChain],
@@ -169,29 +177,34 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       },
     });
 
-    const blockerJobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const blockerJobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "blocker",
           input: { value: 1 },
         }),
       ),
     );
-    const completedBlockerJobChain = await runInTransaction(async (txContext) =>
-      client.completeJobChain({
-        ...txContext,
-        ...blockerJobChain,
-        complete: async ({ job, complete }) => {
-          return complete(job, async () => ({ result: job.input.value }));
-        },
-      }),
+    const completedBlockerJobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.completeJobChain({
+          ...txCtx,
+          commitHooks,
+          ...blockerJobChain,
+          complete: async ({ job, complete }) => {
+            return complete(job, async () => ({ result: job.input.value }));
+          },
+        }),
+      ),
     );
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "main",
           input: null,
           blockers: [completedBlockerJobChain],
@@ -256,11 +269,12 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         },
         outer: {
           attemptHandler: async ({ prepare, complete }) => {
-            await prepare({ mode: "staged" }, async (txContext) => {
+            await prepare({ mode: "staged" }, async (txCtx) => {
               childJobChains.push(
-                await client.withNotify(async () =>
+                await withCommitHooks(async (commitHooks) =>
                   client.startJobChain({
-                    ...txContext,
+                    ...txCtx,
+                    commitHooks,
                     typeName: "inner",
                     input: null,
                   }),
@@ -269,10 +283,11 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
             });
 
             childJobChains.push(
-              await client.withNotify(async () =>
-                runInTransaction(async (txContext) =>
+              await withCommitHooks(async (commitHooks) =>
+                runInTransaction(async (txCtx) =>
                   client.startJobChain({
-                    ...txContext,
+                    ...txCtx,
+                    commitHooks,
                     typeName: "inner",
                     input: null,
                   }),
@@ -280,11 +295,12 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
               ),
             );
 
-            return complete(async (txContext) => {
+            return complete(async (txCtx) => {
               childJobChains.push(
-                await client.withNotify(async () =>
+                await withCommitHooks(async (commitHooks) =>
                   client.startJobChain({
-                    ...txContext,
+                    ...txCtx,
+                    commitHooks,
                     typeName: "inner",
                     input: null,
                   }),
@@ -298,10 +314,11 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       },
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "outer",
           input: null,
         }),
@@ -395,10 +412,11 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       },
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "test",
           input: { value: 1 },
         }),
@@ -465,19 +483,21 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       },
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) => {
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) => {
         const blockerChains = await Promise.all(
           Array.from({ length: 5 }, async (_, i) =>
             client.startJobChain({
-              ...txContext,
+              ...txCtx,
+              commitHooks,
               typeName: "blocker",
               input: { value: i + 1 },
             }),
           ),
         );
         return client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "main",
           input: null,
           // Assert non-empty tuple type - length 5 is guaranteed by Array.from
@@ -549,9 +569,9 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         first: {
           attemptHandler: async ({ job, prepare, complete }) => {
             await prepare({ mode: "atomic" });
-            return complete(async ({ continueWith, ...txContext }) => {
+            return complete(async ({ continueWith, ...txCtx }) => {
               const blockerChain = await client.startJobChain({
-                ...txContext,
+                ...txCtx,
                 typeName: "blocker",
                 input: { value: 5 },
               });
@@ -579,10 +599,11 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       },
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "first",
           input: { id: "test-123" },
         }),

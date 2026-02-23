@@ -100,14 +100,14 @@ export const executeMigrations = async <TTxContext>({
   recordMigration,
 }: {
   migrations: Migration[];
-  getAppliedMigrationNames: (txContext: TTxContext) => Promise<string[]>;
-  executeMigrationStatements: (txContext: TTxContext, migration: Migration) => Promise<void>;
-  recordMigration: (txContext: TTxContext, name: string) => Promise<void>;
-}): Promise<(txContext: TTxContext) => Promise<MigrationResult>> => {
+  getAppliedMigrationNames: (txCtx: TTxContext) => Promise<string[]>;
+  executeMigrationStatements: (txCtx: TTxContext, migration: Migration) => Promise<void>;
+  recordMigration: (txCtx: TTxContext, name: string) => Promise<void>;
+}): Promise<(txCtx: TTxContext) => Promise<MigrationResult>> => {
   const migrationNames = new Set(migrations.map((m) => m.name));
 
-  return async (txContext: TTxContext): Promise<MigrationResult> => {
-    const previouslyApplied = await getAppliedMigrationNames(txContext);
+  return async (txCtx: TTxContext): Promise<MigrationResult> => {
+    const previouslyApplied = await getAppliedMigrationNames(txCtx);
     const previouslyAppliedSet = new Set(previouslyApplied);
 
     const skipped = previouslyApplied.filter((name) => migrationNames.has(name));
@@ -116,8 +116,8 @@ export const executeMigrations = async <TTxContext>({
     const applied: string[] = [];
 
     for (const migration of pending) {
-      await executeMigrationStatements(txContext, migration);
-      await recordMigration(txContext, migration.name);
+      await executeMigrationStatements(txCtx, migration);
+      await recordMigration(txCtx, migration.name);
       applied.push(migration.name);
     }
 

@@ -1,7 +1,7 @@
 import { type PgNotifyProvider, createPgNotifyAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import { Pool, type PoolClient } from "pg";
-import { createClient, createInProcessWorker, defineJobTypes } from "queuert";
+import { createClient, createInProcessWorker, defineJobTypes, withCommitHooks } from "queuert";
 import { createInProcessStateAdapter } from "queuert/internal";
 
 // 1. Start PostgreSQL using testcontainers
@@ -137,10 +137,11 @@ const qrtWorker = await createInProcessWorker({
 const stopWorker = await qrtWorker.start();
 
 console.log("Requesting sales report...");
-const jobChain = await qrtClient.withNotify(async () =>
+const jobChain = await withCommitHooks(async (commitHooks) =>
   stateAdapter.runInTransaction(async (ctx) =>
     qrtClient.startJobChain({
       ...ctx,
+      commitHooks,
       typeName: "generate_report",
       input: { reportType: "sales", dateRange: { from: "2024-01-01", to: "2024-12-31" } },
     }),

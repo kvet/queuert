@@ -1,4 +1,4 @@
-# Worker Design
+# In-Process Worker
 
 ## Overview
 

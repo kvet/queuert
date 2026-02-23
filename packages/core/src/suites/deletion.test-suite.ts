@@ -6,6 +6,7 @@ import {
   createClient,
   createInProcessWorker,
   defineJobTypes,
+  withCommitHooks,
 } from "../index.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
@@ -34,21 +35,25 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       registry,
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "test",
           input: { value: 1 },
         }),
       ),
     );
 
-    const deletedChains = await runInTransaction(async (txContext) =>
-      client.deleteJobChains({
-        ...txContext,
-        chainIds: [jobChain.id],
-      }),
+    const deletedChains = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.deleteJobChains({
+          ...txCtx,
+          commitHooks,
+          chainIds: [jobChain.id],
+        }),
+      ),
     );
 
     expect(deletedChains).toHaveLength(1);
@@ -59,9 +64,9 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       status: "pending",
     });
 
-    await runInTransaction(async (txContext) => {
+    await runInTransaction(async (txCtx) => {
       const fetchedJobChain = await client.getJobChain({
-        ...txContext,
+        ...txCtx,
         id: jobChain.id,
         typeName: "test",
       });
@@ -97,34 +102,43 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       registry,
     });
 
-    const jobChain = await runInTransaction(async (txContext) =>
-      client.startJobChain({
-        ...txContext,
-        typeName: "step1",
-        input: { value: 1 },
-      }),
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          commitHooks,
+          typeName: "step1",
+          input: { value: 1 },
+        }),
+      ),
     );
 
-    await runInTransaction(async (txContext) =>
-      client.completeJobChain({
-        ...txContext,
-        typeName: "step1",
-        id: jobChain.id,
-        complete: async ({ job, complete }) => {
-          if (job.typeName === "step1") {
-            await complete(job, async ({ continueWith }) =>
-              continueWith({ typeName: "step2", input: { continued: true } }),
-            );
-          }
-        },
-      }),
+    await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.completeJobChain({
+          ...txCtx,
+          commitHooks,
+          typeName: "step1",
+          id: jobChain.id,
+          complete: async ({ job, complete }) => {
+            if (job.typeName === "step1") {
+              await complete(job, async ({ continueWith }) =>
+                continueWith({ typeName: "step2", input: { continued: true } }),
+              );
+            }
+          },
+        }),
+      ),
     );
 
-    const deletedChains = await runInTransaction(async (txContext) =>
-      client.deleteJobChains({
-        ...txContext,
-        chainIds: [jobChain.id],
-      }),
+    const deletedChains = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.deleteJobChains({
+          ...txCtx,
+          commitHooks,
+          chainIds: [jobChain.id],
+        }),
+      ),
     );
 
     expect(deletedChains).toHaveLength(1);
@@ -188,10 +202,11 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       },
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "test",
           input: null,
         }),
@@ -201,11 +216,14 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     await withWorkers([await worker.start()], async () => {
       await jobStarted.promise;
 
-      const deletedChains = await runInTransaction(async (txContext) =>
-        client.deleteJobChains({
-          ...txContext,
-          chainIds: [jobChain.id],
-        }),
+      const deletedChains = await withCommitHooks(async (commitHooks) =>
+        runInTransaction(async (txCtx) =>
+          client.deleteJobChains({
+            ...txCtx,
+            commitHooks,
+            chainIds: [jobChain.id],
+          }),
+        ),
       );
 
       expect(deletedChains).toHaveLength(1);
@@ -251,15 +269,17 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     });
 
     let blockerChain: JobChain<string, "blocker", { value: number }, { result: number }>;
-    const mainChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) => {
+    const mainChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) => {
         blockerChain = await client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "blocker",
           input: { value: 1 },
         });
         return client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "main",
           input: null,
           blockers: [blockerChain],
@@ -271,20 +291,26 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
 
     // Deleting blocker chain alone should fail — main chain depends on it
     await expect(
-      runInTransaction(async (txContext) =>
-        client.deleteJobChains({
-          ...txContext,
-          chainIds: [blockerChain!.id],
-        }),
+      withCommitHooks(async (commitHooks) =>
+        runInTransaction(async (txCtx) =>
+          client.deleteJobChains({
+            ...txCtx,
+            commitHooks,
+            chainIds: [blockerChain!.id],
+          }),
+        ),
       ),
     ).rejects.toThrow(BlockerReferenceError);
 
     // Deleting both together should succeed
-    const deletedChains = await runInTransaction(async (txContext) =>
-      client.deleteJobChains({
-        ...txContext,
-        chainIds: [mainChain.id, blockerChain!.id],
-      }),
+    const deletedChains = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.deleteJobChains({
+          ...txCtx,
+          commitHooks,
+          chainIds: [mainChain.id, blockerChain!.id],
+        }),
+      ),
     );
 
     expect(deletedChains).toHaveLength(2);
@@ -302,14 +328,14 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       status: "blocked",
     });
 
-    await runInTransaction(async (txContext) => {
+    await runInTransaction(async (txCtx) => {
       const fetchedBlocker = await client.getJobChain({
-        ...txContext,
+        ...txCtx,
         id: blockerChain!.id,
         typeName: "blocker",
       });
       const fetchedMain = await client.getJobChain({
-        ...txContext,
+        ...txCtx,
         id: mainChain.id,
         typeName: "main",
       });
@@ -372,10 +398,11 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       },
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "test",
           input: null,
         }),
@@ -385,11 +412,14 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     await withWorkers([await worker.start()], async () => {
       await jobStarted.promise;
 
-      const deletedChains = await runInTransaction(async (txContext) =>
-        client.deleteJobChains({
-          ...txContext,
-          chainIds: [jobChain.id],
-        }),
+      const deletedChains = await withCommitHooks(async (commitHooks) =>
+        runInTransaction(async (txCtx) =>
+          client.deleteJobChains({
+            ...txCtx,
+            commitHooks,
+            chainIds: [jobChain.id],
+          }),
+        ),
       );
 
       expect(deletedChains).toHaveLength(1);

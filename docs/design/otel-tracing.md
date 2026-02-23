@@ -277,4 +277,4 @@ See also:
 - [Job Processing](job-processing.md) - Prepare/complete pattern
 - [Deduplication](deduplication.md) - Chain-level deduplication options
 - [Adapters](adapters.md) - Overall adapter design philosophy
-- [Worker](worker.md) - Worker lifecycle and attempt handling
+- [In-Process Worker](in-process-worker.md) - Worker lifecycle and attempt handling

@@ -6,7 +6,7 @@ import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import postgres from "postgres";
 import { type PgNotifyProvider, createPgNotifyAdapter } from "@queuert/postgres";
 import { createInProcessStateAdapter } from "queuert/internal";
-import { createClient, createInProcessWorker } from "queuert";
+import { createClient, createInProcessWorker, withCommitHooks } from "queuert";
 import {
   diffMemory,
   measureBaseline,
@@ -86,10 +86,11 @@ console.log("\nProcessing 100 jobs...");
 const [beforeProcessing, afterProcessing] = await measureMemory(async () => {
   const promises = [];
   for (let i = 0; i < 100; i++) {
-    const chain = await qrtClient.withNotify(async () =>
+    const chain = await withCommitHooks(async (commitHooks) =>
       stateAdapter.runInTransaction(async (ctx) =>
         qrtClient.startJobChain({
           ...ctx,
+          commitHooks,
           typeName: "test-job",
           input: { message: `Test message ${i}` },
         }),

@@ -13,11 +13,13 @@ High-level design decisions are documented in [docs/design/](docs/design/):
 - [Job Chain Model](docs/design/job-chain-model.md) - Unified job/chain model, Promise analogy, terminology
 - [Job Type References](docs/design/job-type-references.md) - Nominal/structural references, continueWith, blockers
 - [Runtime Job Validation](docs/design/runtime-job-validation.md) - JobTypeRegistry, schema adapters (Zod, Valibot, TypeBox, ArkType)
-- [Job Processing](docs/design/job-processing.md) - Prepare/complete pattern, timeouts, workerless completion
+- [Job Processing](docs/design/job-processing.md) - Prepare/complete pattern, timeouts
+- [Workerless Completion](docs/design/workerless-completion.md) - Completing jobs without a worker
 - [Deduplication](docs/design/deduplication.md) - Chain-level deduplication, continuation restriction
 - [Adapters](docs/design/adapters.md) - Factory patterns, dual-context design, notification optimization
 - [Code Style](docs/design/code-style.md) - Code conventions, testing patterns, project organization, examples structure
-- [Worker](docs/design/worker.md) - Worker lifecycle, leasing, reaper, retry logic
+- [Client](docs/design/client.md) - Client API, mutating vs read-only methods, internal hooks
+- [In-Process Worker](docs/design/in-process-worker.md) - Worker lifecycle, leasing, reaper, retry logic
 - [Observability Adapter](docs/design/observability-adapter.md) - ObservabilityAdapter interface, metrics and tracing methods
 - [OTEL Tracing](docs/design/otel-tracing.md) - OpenTelemetry spans, chain/job/attempt hierarchy, blocker links
 - [OTEL Metrics](docs/design/otel-metrics.md) - OpenTelemetry counters, histograms, gauges for queue monitoring

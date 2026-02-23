@@ -49,7 +49,7 @@ const client = await createClient({
   registry: jobTypes,
 });
 
-await client.withNotify(async () =>
+await withCommitHooks(async (commitHooks) =>
   db.transaction(async (tx) => {
     const user = await tx.users.create({
       name: "Alice",
@@ -58,6 +58,7 @@ await client.withNotify(async () =>
 
     await client.startJobChain({
       tx,
+      commitHooks,
       typeName: "send-welcome-email",
       input: { userId: user.id, email: user.email, name: user.name },
     });

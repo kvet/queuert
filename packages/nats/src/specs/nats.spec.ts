@@ -1,6 +1,6 @@
 import { extendWithNats } from "@queuert/testcontainers";
 import { connect } from "nats";
-import { createClient, createInProcessWorker, defineJobTypes } from "queuert";
+import { createClient, createInProcessWorker, defineJobTypes, withCommitHooks } from "queuert";
 import { createInProcessStateAdapter } from "queuert/internal";
 import { withWorkers } from "queuert/testing";
 import { it as baseIt, vi } from "vitest";
@@ -51,10 +51,11 @@ it("should work end-to-end with NATS notify adapter", async ({ natsConnectionOpt
     },
   });
 
-  const jobChain = await client.withNotify(async () =>
-    stateAdapter.runInTransaction(async (ctx) =>
+  const jobChain = await withCommitHooks(async (commitHooks) =>
+    stateAdapter.runInTransaction(async (txCtx) =>
       client.startJobChain({
-        ...ctx,
+        ...txCtx,
+        commitHooks,
         typeName: "test",
         input: { message: "hello from nats" },
       }),
@@ -107,10 +108,11 @@ it("should work end-to-end without JetStream KV", async ({ natsConnectionOptions
     },
   });
 
-  const jobChain = await client.withNotify(async () =>
-    stateAdapter.runInTransaction(async (ctx) =>
+  const jobChain = await withCommitHooks(async (commitHooks) =>
+    stateAdapter.runInTransaction(async (txCtx) =>
       client.startJobChain({
-        ...ctx,
+        ...txCtx,
+        commitHooks,
         typeName: "test",
         input: { value: 21 },
       }),

@@ -99,7 +99,6 @@ export type ObservabilityHelper = {
   jobBlocked: (job: StateJob, options: { blockedByChains: JobChain<any, any, any, any>[] }) => void;
   jobUnblocked: (job: StateJob, options: { unblockedByChain: StateJob }) => void;
   // notify adapter
-  notifyContextAbsence: (job: StateJob) => void;
   notifyAdapterError: (operation: keyof NotifyAdapter, error: unknown) => void;
   // state adapter
   stateAdapterError: (operation: keyof StateAdapter<any, any>, error: unknown) => void;
@@ -397,18 +396,6 @@ export const createObservabilityHelper = ({
   },
 
   // notify adapter
-  notifyContextAbsence(job) {
-    const data = mapStateJobToJobBasicData(job);
-    log({
-      type: "notify_context_absence",
-      level: "warn",
-      message:
-        "Not withNotify context when creating job for queue. The job processing may be delayed.",
-      data,
-    });
-    adapter.notifyContextAbsence(data);
-  },
-
   notifyAdapterError(operation, error) {
     log({
       type: "notify_adapter_error",

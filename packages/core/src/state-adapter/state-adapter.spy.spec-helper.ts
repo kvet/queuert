@@ -20,9 +20,9 @@ export const createSpyStateAdapter = <TTxContext extends BaseTxContext, TJobId e
   const calls: SpyCall[] = [];
   const weakMap = new WeakMap<symbol, SpyCall>();
 
-  const record = ({ txContext, name }: { txContext?: TTxContext; name: string }): SpyCall => {
+  const record = ({ txCtx, name }: { txCtx?: TTxContext; name: string }): SpyCall => {
     const call: SpyCall = { name, children: [] };
-    const spyRef = (txContext as TTxContext & { spyRef?: symbol })?.spyRef;
+    const spyRef = (txCtx as TTxContext & { spyRef?: symbol })?.spyRef;
     if (spyRef && weakMap.has(spyRef)) {
       const parent = weakMap.get(spyRef)!;
       parent.children.push(call);
@@ -34,7 +34,7 @@ export const createSpyStateAdapter = <TTxContext extends BaseTxContext, TJobId e
 
   const wrap = <T extends (...args: never[]) => Promise<unknown>>(name: string, fn: T): T =>
     (async (...args: unknown[]) => {
-      record({ txContext: (args[0] as any).txContext, name });
+      record({ txCtx: (args[0] as any).txCtx, name });
       return fn(...(args as Parameters<T>));
     }) as unknown as T;
 
@@ -42,12 +42,12 @@ export const createSpyStateAdapter = <TTxContext extends BaseTxContext, TJobId e
     calls,
 
     runInTransaction: async (fn) => {
-      const call = record({ txContext: undefined, name: "runInTransaction" });
+      const call = record({ txCtx: undefined, name: "runInTransaction" });
       try {
-        const result = await stateAdapter.runInTransaction(async (txContext) => {
+        const result = await stateAdapter.runInTransaction(async (txCtx) => {
           const spyRef = Symbol();
           weakMap.set(spyRef, call);
-          return fn({ ...txContext, spyRef });
+          return fn({ ...txCtx, spyRef });
         });
         call.status = "committed";
         return result;
@@ -75,7 +75,7 @@ export const createSpyStateAdapter = <TTxContext extends BaseTxContext, TJobId e
     listJobs: wrap("listJobs", stateAdapter.listJobs),
     getJobsBlockedByChain: wrap("getJobsBlockedByChain", stateAdapter.getJobsBlockedByChain),
 
-    record: async ({ name, ...txContext }: { name: string } & TTxContext) =>
-      record({ name, txContext: txContext as unknown as TTxContext }),
+    record: async ({ name, ...txCtx }: { name: string } & TTxContext) =>
+      record({ name, txCtx: txCtx as unknown as TTxContext }),
   };
 };

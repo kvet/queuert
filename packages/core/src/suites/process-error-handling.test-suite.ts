@@ -1,6 +1,6 @@
 import { type TestAPI } from "vitest";
 import { sleep } from "../helpers/sleep.js";
-import { createClient, createInProcessWorker, defineJobTypes } from "../index.js";
+import { createClient, createInProcessWorker, defineJobTypes, withCommitHooks } from "../index.js";
 import { createSpyStateAdapter } from "../state-adapter/state-adapter.spy.spec-helper.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
@@ -61,10 +61,11 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       },
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "test",
           input: { value: 10 },
         }),
@@ -144,10 +145,11 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       },
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "test",
           input: { value: 10 },
         }),
@@ -226,10 +228,11 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       },
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "test",
           input: { value: 10 },
         }),
@@ -309,10 +312,11 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       },
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "test",
           input: { value: 10 },
         }),
@@ -400,10 +404,11 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       },
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "test",
           input: { value: 10 },
         }),
@@ -485,10 +490,11 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       },
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "test",
           input: { value: 10 },
         }),
@@ -577,10 +583,11 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       },
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "test",
           input: { value: 10 },
         }),
@@ -669,10 +676,11 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       },
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "test",
           input: { value: 10 },
         }),

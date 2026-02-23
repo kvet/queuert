@@ -6,21 +6,19 @@
     - `startJobChain` / `createStateJob` - span ended and logs emitted before caller's transaction commits
     - `complete()` in job-process.ts - `jobAttemptCompleted` called inside transaction
     - `finishJob` - `completeBlockerSpan` called inside transaction (blocker CONSUMER span emitted before commit)
-  - Potential approaches:
-    - Buffer pattern (like `withNotifyContext` already does for notifications)
-    - Transaction afterCommit hooks (requires state adapter support)
-    - Span event pattern: end span for timing, add `transaction.committed` event after commit
   - See: transactional outbox pattern for reliable side effects
 - [EPIC] Dashboard
   - [TASK,COMPLEX] Better UI
   - [?,REF] Filter by status in chains view
+  - [?,REF] Add inputs for date range filtering in chains and jobs views
   - [TASK,MEDIUM] Add list methods to queuert client for programmatic access to dashboard data (chains, jobs, blockers)
 - [TASK,MEDIUM] Job cleanup utility
 - [?,REF] createInProcessWorker should accept client instance
 - [REF] Review state adapter method naming for clarity and consistency
 - [REF] Review OTEL tracing design - reconsider trace contexts stored in DB
 - [?,REF] Consider extracting a dedicated chain table at the DB level
-- [REF] Review state adapter schema design (indices, normalization, etc) to prevent future performance bottlenecks (pending query performance testing and schema analysis) and to better support future features (e.g. singletons, partitioning, etc) and to ensure absence breaking changes in future iterations (e.g. adding new columns to job table should not require altering existing queries)
+- [TASK,EASY] Reintroduce `withCommitHooks` runner overload (2-arg variant that composes transaction runner with CommitHooks). Removed due to tsgo higher-order generic inference limitation.
+- [TASK,EASY] Ensure no or minimal (and optional) use of async context in the library. Async context can cause subtle bugs and is not universally supported (e.g. bun). Use explicit context passing instead (e.g. pass observability handles directly to job processing functions instead of relying on async context). Don't forget about code style guide for it
 - [EPIC] Prepare 0.3 release
 
 # Medium term

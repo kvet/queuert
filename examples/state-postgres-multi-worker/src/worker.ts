@@ -37,9 +37,9 @@ const stateAdapter = await createPgStateAdapter({
         poolClient.release();
       }
     },
-    executeSql: async ({ txContext, sql, params }) => {
-      if (txContext) {
-        const result = await (txContext as DbContext).poolClient.query(sql, params);
+    executeSql: async ({ txCtx, sql, params }) => {
+      if (txCtx) {
+        const result = await (txCtx as DbContext).poolClient.query(sql, params);
         return result.rows;
       }
       const poolClient = await pool.connect();

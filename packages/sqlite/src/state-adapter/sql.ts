@@ -469,7 +469,7 @@ LEFT JOIN (
   WHERE chain_id = ?
   ORDER BY chain_index DESC
   LIMIT 1
-) AS lc ON 1=1
+) AS lc ON lc.chain_id = j.id
 WHERE j.id = ?
 `,
   true,

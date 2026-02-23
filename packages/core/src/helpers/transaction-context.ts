@@ -1,15 +1,15 @@
 export const createTransactionContext = async <TTxContext>(
-  runInTransaction: (callback: (txContext: TTxContext) => Promise<void>) => Promise<void>,
+  runInTransaction: (callback: (txCtx: TTxContext) => Promise<void>) => Promise<void>,
 ) => {
   const openPromiseHandlers = Promise.withResolvers<void>();
   const closePromiseHandlers = Promise.withResolvers<void>();
   let status: "pending" | "resolved" | "rejected" = "pending";
   let chain = Promise.resolve();
-  let runInContext: <T>(cb: (txContext: TTxContext) => Promise<T>) => Promise<T>;
+  let runInContext: <T>(cb: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
 
-  const transactionContext = runInTransaction(async (txContext) => {
+  const transactionContext = runInTransaction(async (txCtx) => {
     // TODO: return AsyncResource.bind support
-    runInContext = async <T>(cb: (transactionContext: TTxContext) => Promise<T>) => cb(txContext);
+    runInContext = async <T>(cb: (transactionContext: TTxContext) => Promise<T>) => cb(txCtx);
 
     openPromiseHandlers.resolve();
     await closePromiseHandlers.promise;
@@ -21,9 +21,7 @@ export const createTransactionContext = async <TTxContext>(
     get status() {
       return status;
     },
-    run: async <TReturn>(
-      callback: (txContext: TTxContext) => Promise<TReturn>,
-    ): Promise<TReturn> => {
+    run: async <TReturn>(callback: (txCtx: TTxContext) => Promise<TReturn>): Promise<TReturn> => {
       if (status !== "pending") throw new Error("Transaction is already " + status);
       const { resolve, reject, promise } = Promise.withResolvers<TReturn>();
       chain = chain.then(async () => runInContext(callback).then(resolve, reject));

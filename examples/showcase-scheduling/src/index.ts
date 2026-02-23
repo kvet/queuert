@@ -16,7 +16,7 @@ import postgres, {
   type Row,
   type TransactionSql as _TransactionSql,
 } from "postgres";
-import { createClient, createInProcessWorker, defineJobTypes } from "queuert";
+import { createClient, createInProcessWorker, defineJobTypes, withCommitHooks } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 
 type TransactionSql = _TransactionSql & {
@@ -85,8 +85,8 @@ const stateProvider: PgStateProvider<DbContext> = {
     });
     return result;
   },
-  executeSql: async ({ txContext, sql: query, params }) => {
-    const client = txContext?.sql ?? sql;
+  executeSql: async ({ txCtx, sql: query, params }) => {
+    const client = txCtx?.sql ?? sql;
     return client.unsafe(
       query,
       (params ?? []).map((p) => (p === undefined ? null : p)) as (
@@ -236,11 +236,12 @@ console.log("Job loops to itself with scheduled delays - no cron needed!\n");
 
 userSubscribed = true;
 
-const digestChain = await client.withNotify(async () =>
+const digestChain = await withCommitHooks(async (commitHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     return client.startJobChain({
       sql: txSql,
+      commitHooks,
       typeName: "daily-digest",
       input: { userId: "user-123", iteration: 1 },
     });
@@ -268,11 +269,12 @@ console.log("Deduplication prevents duplicate recurring job instances.\n");
 serviceRunning = true;
 
 // Start first health check with deduplication
-const healthChain1 = await client.withNotify(async () =>
+const healthChain1 = await withCommitHooks(async (commitHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     return client.startJobChain({
       sql: txSql,
+      commitHooks,
       typeName: "health-check",
       input: { serviceId: "api-server", checkNumber: 1 },
       deduplication: {
@@ -286,11 +288,12 @@ console.log(`Started health check chain: ${healthChain1.id}`);
 console.log(`Deduplicated: ${healthChain1.deduplicated}`);
 
 // Try to start another health check - should be deduplicated
-const healthChain2 = await client.withNotify(async () =>
+const healthChain2 = await withCommitHooks(async (commitHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     return client.startJobChain({
       sql: txSql,
+      commitHooks,
       typeName: "health-check",
       input: { serviceId: "api-server", checkNumber: 1 },
       deduplication: {
@@ -322,11 +325,12 @@ console.log("\n--- Scenario 3: Time-Windowed Deduplication ---");
 console.log(`Rate-limiting syncs with ${SYNC_WINDOW_MS}ms window.\n`);
 
 // First sync - should succeed
-const sync1 = await client.withNotify(async () =>
+const sync1 = await withCommitHooks(async (commitHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     return client.startJobChain({
       sql: txSql,
+      commitHooks,
       typeName: "sync-data",
       input: { sourceId: "db-primary" },
       deduplication: {
@@ -343,11 +347,12 @@ console.log(`Deduplicated: ${sync1.deduplicated}`);
 await client.waitForJobChainCompletion(sync1, { timeoutMs: 5000 });
 
 // Second sync immediately after - should be deduplicated (within window)
-const sync2 = await client.withNotify(async () =>
+const sync2 = await withCommitHooks(async (commitHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     return client.startJobChain({
       sql: txSql,
+      commitHooks,
       typeName: "sync-data",
       input: { sourceId: "db-primary" },
       deduplication: {
@@ -366,11 +371,12 @@ console.log(`\nWaiting ${SYNC_WINDOW_MS}ms for window to expire...`);
 await new Promise((r) => setTimeout(r, SYNC_WINDOW_MS + 100));
 
 // Third sync after window - should succeed
-const sync3 = await client.withNotify(async () =>
+const sync3 = await withCommitHooks(async (commitHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     return client.startJobChain({
       sql: txSql,
+      commitHooks,
       typeName: "sync-data",
       input: { sourceId: "db-primary" },
       deduplication: {

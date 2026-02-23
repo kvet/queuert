@@ -69,6 +69,16 @@ export class BlockerReferenceError extends Error {
   }
 }
 
+export class HookNotRegisteredError extends Error {
+  readonly key: symbol;
+
+  constructor(key: symbol) {
+    super(`CommitHooks hook not registered: ${String(key)}`);
+    this.name = "HookNotRegisteredError";
+    this.key = key;
+  }
+}
+
 export type JobTypeValidationErrorCode =
   | "not_entry_point"
   | "invalid_continuation"

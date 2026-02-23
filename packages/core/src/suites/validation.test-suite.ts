@@ -4,6 +4,7 @@ import {
   createClient,
   createInProcessWorker,
   createJobTypeRegistry,
+  withCommitHooks,
 } from "../index.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
@@ -138,10 +139,11 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       registry: simpleRegistry,
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "main",
           input: { value: 42 },
         }),
@@ -169,10 +171,11 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     await expect(
-      client.withNotify(async () =>
-        runInTransaction(async (txContext) =>
+      withCommitHooks(async (commitHooks) =>
+        runInTransaction(async (txCtx) =>
           client.startJobChain({
-            ...txContext,
+            ...txCtx,
+            commitHooks,
             // @ts-expect-error testing runtime validation
             typeName: "nonexistent",
             input: { value: 1 },
@@ -199,10 +202,11 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     await expect(
-      client.withNotify(async () =>
-        runInTransaction(async (txContext) =>
+      withCommitHooks(async (commitHooks) =>
+        runInTransaction(async (txCtx) =>
           client.startJobChain({
-            ...txContext,
+            ...txCtx,
+            commitHooks,
             typeName: "main",
             // @ts-expect-error testing runtime validation
             input: { value: "not-a-number" },
@@ -229,11 +233,12 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     await expect(
-      client.withNotify(async () =>
-        runInTransaction(async (txContext) =>
+      withCommitHooks(async (commitHooks) =>
+        runInTransaction(async (txCtx) =>
           // @ts-expect-error testing runtime validation - no blockers
           client.startJobChain({
-            ...txContext,
+            ...txCtx,
+            commitHooks,
             typeName: "main",
             input: { id: "main-1" },
           }),
@@ -272,10 +277,11 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       },
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "main",
           input: { value: 42 },
         }),
@@ -328,10 +334,11 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       },
     });
 
-    await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "main",
           input: { value: 42 },
         }),
@@ -380,10 +387,11 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       },
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "step1",
           input: { value: 1 },
         }),
@@ -440,10 +448,11 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       },
     });
 
-    await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "step1",
           input: { value: 1 },
         }),
@@ -472,20 +481,22 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       registry: simpleRegistry,
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "main",
           input: { value: 42 },
         }),
       ),
     );
 
-    const completedChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const completedChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.completeJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "main",
           id: jobChain.id,
           complete: async ({ job, complete }) => complete(job, async () => ({ result: 84 })),
@@ -513,10 +524,11 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       registry: simpleRegistry,
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "main",
           input: { value: 42 },
         }),
@@ -524,10 +536,11 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     );
 
     await expect(
-      client.withNotify(async () =>
-        runInTransaction(async (txContext) =>
+      withCommitHooks(async (commitHooks) =>
+        runInTransaction(async (txCtx) =>
           client.completeJobChain({
-            ...txContext,
+            ...txCtx,
+            commitHooks,
             typeName: "main",
             id: jobChain.id,
             complete: async ({ job, complete }) =>
@@ -569,20 +582,22 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       },
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "step1",
           input: { value: 1 },
         }),
       ),
     );
 
-    const partialChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const partialChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.completeJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "step1",
           id: jobChain.id,
           complete: async ({ job, complete }) => {
@@ -620,10 +635,11 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       registry: continuationNoFollowUpRegistry,
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "step1",
           input: { value: 1 },
         }),
@@ -631,10 +647,11 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     );
 
     await expect(
-      client.withNotify(async () =>
-        runInTransaction(async (txContext) =>
+      withCommitHooks(async (commitHooks) =>
+        runInTransaction(async (txCtx) =>
           client.completeJobChain({
-            ...txContext,
+            ...txCtx,
+            commitHooks,
             typeName: "step1",
             id: jobChain.id,
             complete: async ({ job, complete }) => {

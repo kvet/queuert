@@ -15,16 +15,16 @@ export type SqliteStateProvider<TTxContext extends BaseTxContext> = {
    * Acquires a connection, starts a transaction, executes the callback,
    * commits on success, rolls back on error, and releases the connection.
    */
-  runInTransaction: <T>(fn: (txContext: TTxContext) => Promise<T>) => Promise<T>;
+  runInTransaction: <T>(fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
 
   /**
    * Executes a SQL query.
-   * When txContext is provided, uses that transaction connection.
-   * When txContext is omitted, acquires a connection, executes, and releases.
+   * When txCtx is provided, uses that transaction connection.
+   * When txCtx is omitted, acquires a connection, executes, and releases.
    * @param options.returns - Whether the query returns rows
    */
   executeSql: (options: {
-    txContext?: TTxContext;
+    txCtx?: TTxContext;
     sql: string;
     params?: unknown[];
     returns: boolean;

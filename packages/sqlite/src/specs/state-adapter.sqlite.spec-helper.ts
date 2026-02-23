@@ -83,7 +83,7 @@ export const extendWithStateSqlite = <T>(
         const originalExecuteSql = stateProvider.executeSql.bind(stateProvider);
         const flakyStateProvider: typeof stateProvider = {
           ...stateProvider,
-          executeSql: async ({ txContext, sql, params, returns }) => {
+          executeSql: async ({ txCtx, sql, params, returns }) => {
             queryCount++;
 
             if (shouldError()) {
@@ -95,7 +95,7 @@ export const extendWithStateSqlite = <T>(
               throw error;
             }
 
-            return originalExecuteSql({ txContext, sql, params, returns });
+            return originalExecuteSql({ txCtx, sql, params, returns });
           },
         };
 

@@ -37,7 +37,7 @@ createInProcessNotifyAdapter → NotifyAdapter
 
 ### Atomic Operations Principle
 
-All StateAdapter methods must complete in a **single database round-trip**. This is a core design principle:
+All StateAdapter methods must complete in a **single database round-trip**, where the database engine supports it. This is a core design principle:
 
 - **O(1) round trips**: Each method—regardless of how many jobs it affects—executes exactly one database operation
 - **O(n) is incorrect**: If an adapter implementation requires multiple round trips proportional to input size, the implementation is wrong
@@ -65,23 +65,23 @@ Users create a `StateProvider` implementation to integrate with their database c
 ```typescript
 interface PgStateProvider<TTxContext> {
   // Manages connection and transaction - called for transactional operations
-  runInTransaction: <T>(fn: (txContext: TTxContext) => Promise<T>) => Promise<T>;
+  runInTransaction: <T>(fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
 
-  // Execute SQL - when txContext is provided uses it, when omitted manages own connection
+  // Execute SQL - when txCtx is provided uses it, when omitted manages own connection
   executeSql: (options: {
-    txContext?: TTxContext;
+    txCtx?: TTxContext;
     sql: string;
     params?: unknown[];
   }) => Promise<unknown[]>;
 }
 ```
 
-### Optional txContext Semantics
+### Optional txCtx Semantics
 
-All `StateAdapter` operation methods accept an optional `txContext` parameter:
+All `StateAdapter` operation methods accept an optional `txCtx` parameter:
 
-- **With txContext**: Uses the provided transaction connection (must come from a `runInTransaction` callback)
-- **Without txContext**: Acquires its own connection from the pool, executes, and releases
+- **With txCtx**: Uses the provided transaction connection (must come from a `runInTransaction` callback)
+- **Without txCtx**: Acquires its own connection from the pool, executes, and releases
 
 This enables transactional operations, standalone operations, and DDL operations (like `CREATE INDEX CONCURRENTLY`) that cannot run inside transactions.
 
@@ -157,14 +157,3 @@ The `ObservabilityAdapter` provides two observability mechanisms:
 2. **Tracing**: `startJobSpan` and `startAttemptSpan` methods return handles for managing span lifecycle. Spans follow OpenTelemetry messaging conventions with PRODUCER spans for job creation and CONSUMER spans for processing.
 
 When no adapter is provided, a noop implementation is used automatically, making observability opt-in. See [ObservabilityAdapter Design](observability-adapter.md) for the full interface, [OTEL Tracing](otel-tracing.md) for span hierarchy, and [OTEL Metrics](otel-metrics.md) for available metrics.
-
-## Summary
-
-Queuert's adapter design emphasizes:
-
-1. **Atomic O(1) operations**: Every adapter method completes in a single database round-trip regardless of input size
-2. **Consistent async factories**: Public adapters are always async
-3. **Optional txContext**: StateProvider operations support optional txContext for non-transactional operations
-4. **Internal connection management**: NotifyProvider manages connections internally with no txContext parameters
-5. **Broadcast with optimization**: NotifyAdapter uses hints to prevent thundering herd
-6. **Two-layer observability**: Low-level primitives for adapters, high-level objects for internal use

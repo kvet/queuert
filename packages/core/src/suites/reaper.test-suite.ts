@@ -1,7 +1,13 @@
 import { type TestAPI } from "vitest";
 import { JobAlreadyCompletedError, JobTakenByAnotherWorkerError } from "../errors.js";
 import { sleep } from "../helpers/sleep.js";
-import { type LeaseConfig, createClient, createInProcessWorker, defineJobTypes } from "../index.js";
+import {
+  type LeaseConfig,
+  createClient,
+  createInProcessWorker,
+  defineJobTypes,
+  withCommitHooks,
+} from "../index.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -55,10 +61,11 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       },
     });
 
-    const jobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "test",
           input: null,
         }),
@@ -175,10 +182,11 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       },
     });
 
-    const failJobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const failJobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "test",
           input: null,
         }),
@@ -189,10 +197,11 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       await jobStarted.promise;
       await sleep(10);
 
-      const successJobChain = await client.withNotify(async () =>
-        runInTransaction(async (txContext) =>
+      const successJobChain = await withCommitHooks(async (commitHooks) =>
+        runInTransaction(async (txCtx) =>
           client.startJobChain({
-            ...txContext,
+            ...txCtx,
+            commitHooks,
             typeName: "test",
             input: null,
           }),
@@ -318,10 +327,11 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       },
     });
 
-    const failJobChain = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const failJobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "test",
           input: null,
         }),
@@ -332,10 +342,11 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       await jobStarted.promise;
       await sleep(10);
 
-      const successJobChain = await client.withNotify(async () =>
-        runInTransaction(async (txContext) =>
+      const successJobChain = await withCommitHooks(async (commitHooks) =>
+        runInTransaction(async (txCtx) =>
           client.startJobChain({
-            ...txContext,
+            ...txCtx,
+            commitHooks,
             typeName: "test",
             input: null,
           }),
@@ -415,10 +426,11 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       },
     });
 
-    const jobChain1 = await client.withNotify(async () =>
-      runInTransaction(async (txContext) =>
+    const jobChain1 = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
         client.startJobChain({
-          ...txContext,
+          ...txCtx,
+          commitHooks,
           typeName: "test",
           input: { id: 1 },
         }),
@@ -430,10 +442,11 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
       await sleep(leaseConfig.leaseMs * 5);
 
-      const jobChain2 = await client.withNotify(async () =>
-        runInTransaction(async (txContext) =>
+      const jobChain2 = await withCommitHooks(async (commitHooks) =>
+        runInTransaction(async (txCtx) =>
           client.startJobChain({
-            ...txContext,
+            ...txCtx,
+            commitHooks,
             typeName: "test",
             input: { id: 2 },
           }),

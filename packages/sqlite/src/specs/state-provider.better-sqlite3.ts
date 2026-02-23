@@ -12,7 +12,7 @@ export const createBetterSqlite3Provider = ({
   const lock = createAsyncLock();
 
   return {
-    executeSql: async ({ txContext, sql, params, returns }) => {
+    executeSql: async ({ txCtx, sql, params, returns }) => {
       const executeRaw = ({
         database,
         sql,
@@ -38,8 +38,8 @@ export const createBetterSqlite3Provider = ({
         }
       };
 
-      if (txContext) {
-        return executeRaw({ database: txContext.db, sql, params, returns });
+      if (txCtx) {
+        return executeRaw({ database: txCtx.db, sql, params, returns });
       }
 
       await lock.acquire();

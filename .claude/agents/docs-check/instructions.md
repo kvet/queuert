@@ -15,18 +15,7 @@ This project has multiple documentation layers:
 
 ### Design Documents (`docs/design/`)
 
-High-level architectural documentation:
-
-| Document                    | Covers                                                            |
-| --------------------------- | ----------------------------------------------------------------- |
-| `job-chain-model.md`        | Unified job/chain model, Promise analogy, terminology             |
-| `job-type-references.md`    | Nominal/structural references, continueWith, blockers             |
-| `runtime-job-validation.md` | JobTypeRegistry, schema adapters (Zod, Valibot, TypeBox, ArkType) |
-| `job-processing.md`         | Prepare/complete pattern, timeouts, workerless completion         |
-| `deduplication.md`          | Chain-level deduplication, continuation restriction               |
-| `adapters.md`               | Factory patterns, dual-context design, notification optimization  |
-| `code-style.md`             | Code conventions, testing patterns, project organization          |
-| `worker.md`                 | Worker lifecycle, leasing, reaper, retry logic                    |
+High-level architectural documentation. See the **Design Documentation** section in CLAUDE.md for the complete indexed list of all design docs and what they cover.
 
 ### Package READMEs
 
@@ -69,17 +58,13 @@ Each package has a README documenting:
 
 ### 2. Map Code to Documentation
 
-Use these patterns to identify relevant docs:
+For each changed file, identify relevant documentation:
 
-```
-packages/core/src/queuert.ts → docs/design/job-chain-model.md, packages/core/README.md
-packages/core/src/worker/** → docs/design/worker.md
-packages/core/src/*-adapter/** → docs/design/adapters.md
-packages/*/src/state-adapter/** → docs/design/adapters.md, packages/*/README.md
-packages/*/src/notify-adapter/** → docs/design/adapters.md, packages/*/README.md
-packages/core/src/index.ts → packages/core/README.md, CLAUDE.md
-examples/** → relevant package READMEs
-```
+- **Package source** (`packages/*/src/**`) → that package's README + relevant design docs in `docs/design/`
+- **Package exports** (`packages/*/src/index.ts`) → package README + CLAUDE.md
+- **Examples** (`examples/**`) → relevant package READMEs
+
+Use CLAUDE.md to identify which design docs are relevant for a given subsystem.
 
 ### 3. Check for Sync Issues
 
@@ -169,25 +154,17 @@ When `packages/*/src/index.ts` changes:
 - Check the package's README.md for export documentation
 - Verify CLAUDE.md package descriptions
 
-### Adapter Interface Changes
+### Subsystem Changes
 
-When adapter interfaces change:
+When adapter interfaces, worker logic, job processing, or other core subsystems change:
 
-- Check `docs/design/adapters.md` for interface documentation
-- Check all package READMEs that implement the adapter
-- Check examples that use the adapter
-
-### Worker/Processing Changes
-
-When worker or job processing changes:
-
-- Check `docs/design/worker.md`
-- Check `docs/design/job-processing.md`
-- Check examples for usage patterns
+- Identify the relevant design doc(s) in `docs/design/` via CLAUDE.md
+- Check all package READMEs that implement or expose the subsystem
+- Check examples that use the subsystem
 
 ### Terminology Changes
 
-When renaming concepts (like JobSequence → JobChain):
+When renaming concepts:
 
 - Search all docs for old terminology
 - Check code comments

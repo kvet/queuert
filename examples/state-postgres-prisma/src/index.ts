@@ -2,7 +2,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import { execSync } from "node:child_process";
-import { createClient, createInProcessWorker, defineJobTypes } from "queuert";
+import { createClient, createInProcessWorker, defineJobTypes, withCommitHooks } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 
 // 1. Start PostgreSQL using testcontainers
@@ -41,8 +41,8 @@ const stateProvider: PgStateProvider<DbContext> = {
   runInTransaction: async (cb) => {
     return prisma.$transaction(async (prisma) => cb({ prisma }));
   },
-  executeSql: async ({ txContext, sql, params }) => {
-    const prismaClient = txContext?.prisma ?? prisma;
+  executeSql: async ({ txCtx, sql, params }) => {
+    const prismaClient = txCtx?.prisma ?? prisma;
 
     if (params && params.length > 0) {
       return (prismaClient as any).$queryRawUnsafe(sql, ...params);
@@ -100,7 +100,7 @@ const qrtWorker = await createInProcessWorker({
 const stopWorker = await qrtWorker.start();
 
 // 7. Register a new user and queue welcome email atomically
-const jobChain = await qrtClient.withNotify(async () =>
+const jobChain = await withCommitHooks(async (commitHooks) =>
   prisma.$transaction(async (prisma) => {
     const user = await prisma.user.create({
       data: { name: "Alice", email: "alice@example.com" },
@@ -109,6 +109,7 @@ const jobChain = await qrtClient.withNotify(async () =>
     // Queue welcome email - if user creation fails, no email job is created
     return qrtClient.startJobChain({
       prisma,
+      commitHooks,
       typeName: "send_welcome_email",
       input: { userId: user.id, email: user.email, name: user.name },
     });

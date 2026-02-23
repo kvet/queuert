@@ -15,15 +15,15 @@ export type PgStateProvider<TTxContext extends BaseTxContext> = {
    * Acquires a connection, starts a transaction, executes the callback,
    * commits on success, rolls back on error, and releases the connection.
    */
-  runInTransaction: <T>(fn: (txContext: TTxContext) => Promise<T>) => Promise<T>;
+  runInTransaction: <T>(fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
 
   /**
    * Executes a SQL query.
-   * When txContext is provided, uses that transaction connection.
-   * When txContext is omitted, acquires a connection from the pool, executes, and releases.
+   * When txCtx is provided, uses that transaction connection.
+   * When txCtx is omitted, acquires a connection from the pool, executes, and releases.
    */
   executeSql: (options: {
-    txContext?: TTxContext;
+    txCtx?: TTxContext;
     sql: string;
     params?: unknown[];
   }) => Promise<unknown[]>;
