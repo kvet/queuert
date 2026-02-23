@@ -341,6 +341,431 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     });
   });
 
+  it("cascade throws when deleting chain referenced as blocker", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const registry = defineJobTypes<{
+      blocker: {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+      main: {
+        entry: true;
+        input: null;
+        output: { finalResult: number };
+        blockers: [{ typeName: "blocker" }];
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+
+    let blockerChain: JobChain<string, "blocker", { value: number }, { result: number }>;
+    await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) => {
+        blockerChain = await client.startJobChain({
+          ...txCtx,
+          commitHooks,
+          typeName: "blocker",
+          input: { value: 1 },
+        });
+        return client.startJobChain({
+          ...txCtx,
+          commitHooks,
+          typeName: "main",
+          input: null,
+          blockers: [blockerChain],
+        });
+      }),
+    );
+
+    // Cascade only expands downward (dependencies), not upward (dependents)
+    // Blocker has no dependencies, so the set is just [blocker] — main still references it
+    await expect(
+      withCommitHooks(async (commitHooks) =>
+        runInTransaction(async (txCtx) =>
+          client.deleteJobChains({
+            ...txCtx,
+            commitHooks,
+            chainIds: [blockerChain!.id],
+            cascade: true,
+          }),
+        ),
+      ),
+    ).rejects.toThrow(BlockerReferenceError);
+  });
+
+  it("cascade deletes chain and its dependencies", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const registry = defineJobTypes<{
+      blocker: {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+      main: {
+        entry: true;
+        input: null;
+        output: { finalResult: number };
+        blockers: [{ typeName: "blocker" }];
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+
+    let blockerChain: JobChain<string, "blocker", { value: number }, { result: number }>;
+    let mainChain: JobChain<string, "main", null, { finalResult: number }>;
+    await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) => {
+        blockerChain = await client.startJobChain({
+          ...txCtx,
+          commitHooks,
+          typeName: "blocker",
+          input: { value: 1 },
+        });
+        mainChain = await client.startJobChain({
+          ...txCtx,
+          commitHooks,
+          typeName: "main",
+          input: null,
+          blockers: [blockerChain],
+        });
+      }),
+    );
+
+    // Cascade from the dependent includes its blocker dependency
+    const deletedChains = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.deleteJobChains({
+          ...txCtx,
+          commitHooks,
+          chainIds: [mainChain!.id],
+          cascade: true,
+        }),
+      ),
+    );
+
+    expect(deletedChains).toHaveLength(2);
+  });
+
+  it("cascade resolves transitive dependencies", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const registry = defineJobTypes<{
+      root: {
+        entry: true;
+        input: { label: string };
+        output: null;
+      };
+      dependent: {
+        entry: true;
+        input: { label: string };
+        output: null;
+        blockers: [{ typeName: "root" } | { typeName: "dependent" }];
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+
+    // A ← B ← C (C depends on B, B depends on A)
+    let chainA: JobChain<string, "root", { label: string }, null>;
+    let chainB: JobChain<string, "dependent", { label: string }, null>;
+    const chainC = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) => {
+        chainA = await client.startJobChain({
+          ...txCtx,
+          commitHooks,
+          typeName: "root",
+          input: { label: "A" },
+        });
+        chainB = await client.startJobChain({
+          ...txCtx,
+          commitHooks,
+          typeName: "dependent",
+          input: { label: "B" },
+          blockers: [chainA],
+        });
+        return client.startJobChain({
+          ...txCtx,
+          commitHooks,
+          typeName: "dependent",
+          input: { label: "C" },
+          blockers: [chainB],
+        });
+      }),
+    );
+
+    // Cascade from the leaf deletes the entire dependency chain
+    const deletedChains = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.deleteJobChains({
+          ...txCtx,
+          commitHooks,
+          chainIds: [chainC.id],
+          cascade: true,
+        }),
+      ),
+    );
+
+    expect(deletedChains).toHaveLength(3);
+    const deletedIds = new Set(deletedChains.map((c) => c.id));
+    expect(deletedIds).toContain(chainA!.id);
+    expect(deletedIds).toContain(chainB!.id);
+    expect(deletedIds).toContain(chainC.id);
+  });
+
+  it("cascade deduplicates diamond dependencies", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const registry = defineJobTypes<{
+      root: {
+        entry: true;
+        input: { label: string };
+        output: null;
+      };
+      mid: {
+        entry: true;
+        input: { label: string };
+        output: null;
+        blockers: [{ typeName: "root" }];
+      };
+      top: {
+        entry: true;
+        input: { label: string };
+        output: null;
+        blockers: [{ typeName: "mid" }, { typeName: "mid" }];
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+
+    //     D
+    //    / \
+    //   B   C
+    //    \ /
+    //     A
+    let chainA: JobChain<string, "root", { label: string }, null>;
+    let chainB: JobChain<string, "mid", { label: string }, null>;
+    let chainC: JobChain<string, "mid", { label: string }, null>;
+    const chainD = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) => {
+        chainA = await client.startJobChain({
+          ...txCtx,
+          commitHooks,
+          typeName: "root",
+          input: { label: "A" },
+        });
+        chainB = await client.startJobChain({
+          ...txCtx,
+          commitHooks,
+          typeName: "mid",
+          input: { label: "B" },
+          blockers: [chainA],
+        });
+        chainC = await client.startJobChain({
+          ...txCtx,
+          commitHooks,
+          typeName: "mid",
+          input: { label: "C" },
+          blockers: [chainA],
+        });
+        return client.startJobChain({
+          ...txCtx,
+          commitHooks,
+          typeName: "top",
+          input: { label: "D" },
+          blockers: [chainB, chainC],
+        });
+      }),
+    );
+
+    const deletedChains = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.deleteJobChains({
+          ...txCtx,
+          commitHooks,
+          chainIds: [chainD.id],
+          cascade: true,
+        }),
+      ),
+    );
+
+    expect(deletedChains).toHaveLength(4);
+    const deletedIds = new Set(deletedChains.map((c) => c.id));
+    expect(deletedIds).toContain(chainA!.id);
+    expect(deletedIds).toContain(chainB!.id);
+    expect(deletedIds).toContain(chainC!.id);
+    expect(deletedIds).toContain(chainD.id);
+  });
+
+  it("cascade with no dependencies behaves like normal delete", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const registry = defineJobTypes<{
+      test: {
+        entry: true;
+        input: null;
+        output: null;
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+
+    const jobChain = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          commitHooks,
+          typeName: "test",
+          input: null,
+        }),
+      ),
+    );
+
+    const deletedChains = await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.deleteJobChains({
+          ...txCtx,
+          commitHooks,
+          chainIds: [jobChain.id],
+          cascade: true,
+        }),
+      ),
+    );
+
+    expect(deletedChains).toHaveLength(1);
+    expect(deletedChains[0]).toMatchObject({ id: jobChain.id });
+  });
+
+  it("cascade throws when dependency has external dependents", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const registry = defineJobTypes<{
+      shared: {
+        entry: true;
+        input: null;
+        output: null;
+      };
+      consumer: {
+        entry: true;
+        input: { label: string };
+        output: null;
+        blockers: [{ typeName: "shared" }];
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+
+    // shared ← consumerA, shared ← consumerB
+    let sharedChain: JobChain<string, "shared", null, null>;
+    let consumerA: JobChain<string, "consumer", { label: string }, null>;
+    await withCommitHooks(async (commitHooks) =>
+      runInTransaction(async (txCtx) => {
+        sharedChain = await client.startJobChain({
+          ...txCtx,
+          commitHooks,
+          typeName: "shared",
+          input: null,
+        });
+        consumerA = await client.startJobChain({
+          ...txCtx,
+          commitHooks,
+          typeName: "consumer",
+          input: { label: "A" },
+          blockers: [sharedChain],
+        });
+        return client.startJobChain({
+          ...txCtx,
+          commitHooks,
+          typeName: "consumer",
+          input: { label: "B" },
+          blockers: [sharedChain],
+        });
+      }),
+    );
+
+    // Cascade from consumerA includes shared (dependency), but consumerB also depends on shared
+    await expect(
+      withCommitHooks(async (commitHooks) =>
+        runInTransaction(async (txCtx) =>
+          client.deleteJobChains({
+            ...txCtx,
+            commitHooks,
+            chainIds: [consumerA!.id],
+            cascade: true,
+          }),
+        ),
+      ),
+    ).rejects.toThrow(BlockerReferenceError);
+  });
+
   it("deleted job during complete is handled gracefully", async ({
     stateAdapter,
     notifyAdapter,

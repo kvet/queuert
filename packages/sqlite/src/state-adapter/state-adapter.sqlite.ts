@@ -30,6 +30,7 @@ import {
   findReadyJobsSql,
   getAppliedMigrationsSql,
   getBlockerChainTraceContextsSql,
+  getConnectedChainIdsSql,
   getCurrentJobForUpdateSql,
   getJobBlockerTraceContextsSql,
   getJobBlockersSql,
@@ -473,8 +474,17 @@ export const createSqliteStateAdapter = async <
       });
       return job ? mapDbJobToStateJob(job) : undefined;
     },
-    deleteJobsByChainIds: async ({ txCtx, chainIds }) => {
-      const chainIdsJson = JSON.stringify(chainIds);
+    deleteJobsByChainIds: async ({ txCtx, chainIds, cascade }) => {
+      let effectiveChainIds = chainIds;
+      if (cascade) {
+        const connected = await executeTypedSql({
+          txCtx,
+          sql: getConnectedChainIdsSql,
+          params: [JSON.stringify(chainIds)],
+        });
+        effectiveChainIds = connected.map((r) => r.chain_id) as typeof chainIds;
+      }
+      const chainIdsJson = JSON.stringify(effectiveChainIds);
       const refs = await executeTypedSql({
         txCtx,
         sql: checkExternalBlockerRefsSql,

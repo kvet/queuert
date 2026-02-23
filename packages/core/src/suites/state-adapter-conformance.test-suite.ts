@@ -1784,6 +1784,290 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
       expect(deleted).toHaveLength(2);
     });
+
+    it("cascade deletes chain and its dependencies", async ({ stateAdapter, expect }) => {
+      const { job: blockerJob } = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJob({
+          txCtx,
+          typeName: "blocker",
+          chainId: undefined,
+          chainIndex: 0,
+          chainTypeName: "blocker",
+          input: null,
+        }),
+      );
+
+      const { job: mainJob } = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJob({
+          txCtx,
+          typeName: "main",
+          chainId: undefined,
+          chainIndex: 0,
+          chainTypeName: "main",
+          input: null,
+        }),
+      );
+
+      await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.addJobBlockers({
+          txCtx,
+          jobId: mainJob.id,
+          blockedByChainIds: [blockerJob.chainId],
+        }),
+      );
+
+      const deleted = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.deleteJobsByChainIds({
+          txCtx,
+          chainIds: [mainJob.chainId],
+          cascade: true,
+        }),
+      );
+
+      expect(deleted).toHaveLength(2);
+      expect(await stateAdapter.getJobById({ jobId: blockerJob.id })).toBeUndefined();
+      expect(await stateAdapter.getJobById({ jobId: mainJob.id })).toBeUndefined();
+    });
+
+    it("cascade throws when deleting chain referenced as blocker", async ({
+      stateAdapter,
+      expect,
+    }) => {
+      const { job: blockerJob } = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJob({
+          txCtx,
+          typeName: "blocker",
+          chainId: undefined,
+          chainIndex: 0,
+          chainTypeName: "blocker",
+          input: null,
+        }),
+      );
+
+      const { job: mainJob } = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJob({
+          txCtx,
+          typeName: "main",
+          chainId: undefined,
+          chainIndex: 0,
+          chainTypeName: "main",
+          input: null,
+        }),
+      );
+
+      await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.addJobBlockers({
+          txCtx,
+          jobId: mainJob.id,
+          blockedByChainIds: [blockerJob.chainId],
+        }),
+      );
+
+      await expect(
+        stateAdapter.runInTransaction(async (txCtx) =>
+          stateAdapter.deleteJobsByChainIds({
+            txCtx,
+            chainIds: [blockerJob.chainId],
+            cascade: true,
+          }),
+        ),
+      ).rejects.toThrow(BlockerReferenceError);
+    });
+
+    it("cascade resolves transitive dependencies", async ({ stateAdapter, expect }) => {
+      // A ← B ← C (C depends on B, B depends on A)
+      const { job: jobA } = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJob({
+          txCtx,
+          typeName: "chain-a",
+          chainId: undefined,
+          chainIndex: 0,
+          chainTypeName: "chain-a",
+          input: null,
+        }),
+      );
+
+      const { job: jobB } = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJob({
+          txCtx,
+          typeName: "chain-b",
+          chainId: undefined,
+          chainIndex: 0,
+          chainTypeName: "chain-b",
+          input: null,
+        }),
+      );
+
+      const { job: jobC } = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJob({
+          txCtx,
+          typeName: "chain-c",
+          chainId: undefined,
+          chainIndex: 0,
+          chainTypeName: "chain-c",
+          input: null,
+        }),
+      );
+
+      await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.addJobBlockers({
+          txCtx,
+          jobId: jobB.id,
+          blockedByChainIds: [jobA.chainId],
+        }),
+      );
+
+      await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.addJobBlockers({
+          txCtx,
+          jobId: jobC.id,
+          blockedByChainIds: [jobB.chainId],
+        }),
+      );
+
+      // Delete from C (topmost dependent) — cascades down to B and A
+      const deleted = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.deleteJobsByChainIds({
+          txCtx,
+          chainIds: [jobC.chainId],
+          cascade: true,
+        }),
+      );
+
+      expect(deleted).toHaveLength(3);
+      expect(await stateAdapter.getJobById({ jobId: jobA.id })).toBeUndefined();
+      expect(await stateAdapter.getJobById({ jobId: jobB.id })).toBeUndefined();
+      expect(await stateAdapter.getJobById({ jobId: jobC.id })).toBeUndefined();
+    });
+
+    it("cascade deduplicates diamond dependencies", async ({ stateAdapter, expect }) => {
+      //     D
+      //    / \
+      //   B   C
+      //    \ /
+      //     A
+      const { job: jobA } = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJob({
+          txCtx,
+          typeName: "diamond-a",
+          chainId: undefined,
+          chainIndex: 0,
+          chainTypeName: "diamond-a",
+          input: null,
+        }),
+      );
+
+      const { job: jobB } = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJob({
+          txCtx,
+          typeName: "diamond-b",
+          chainId: undefined,
+          chainIndex: 0,
+          chainTypeName: "diamond-b",
+          input: null,
+        }),
+      );
+
+      const { job: jobC } = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJob({
+          txCtx,
+          typeName: "diamond-c",
+          chainId: undefined,
+          chainIndex: 0,
+          chainTypeName: "diamond-c",
+          input: null,
+        }),
+      );
+
+      const { job: jobD } = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJob({
+          txCtx,
+          typeName: "diamond-d",
+          chainId: undefined,
+          chainIndex: 0,
+          chainTypeName: "diamond-d",
+          input: null,
+        }),
+      );
+
+      await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.addJobBlockers({
+          txCtx,
+          jobId: jobB.id,
+          blockedByChainIds: [jobA.chainId],
+        }),
+      );
+
+      await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.addJobBlockers({
+          txCtx,
+          jobId: jobC.id,
+          blockedByChainIds: [jobA.chainId],
+        }),
+      );
+
+      await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.addJobBlockers({
+          txCtx,
+          jobId: jobD.id,
+          blockedByChainIds: [jobB.chainId, jobC.chainId],
+        }),
+      );
+
+      const deleted = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.deleteJobsByChainIds({
+          txCtx,
+          chainIds: [jobD.chainId],
+          cascade: true,
+        }),
+      );
+
+      expect(deleted).toHaveLength(4);
+      expect(await stateAdapter.getJobById({ jobId: jobA.id })).toBeUndefined();
+      expect(await stateAdapter.getJobById({ jobId: jobB.id })).toBeUndefined();
+      expect(await stateAdapter.getJobById({ jobId: jobC.id })).toBeUndefined();
+      expect(await stateAdapter.getJobById({ jobId: jobD.id })).toBeUndefined();
+    });
+
+    it("cascade with no blocker relationships deletes only specified chains", async ({
+      stateAdapter,
+      expect,
+    }) => {
+      const { job: jobA } = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJob({
+          txCtx,
+          typeName: "standalone-a",
+          chainId: undefined,
+          chainIndex: 0,
+          chainTypeName: "standalone-a",
+          input: null,
+        }),
+      );
+
+      const { job: jobB } = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJob({
+          txCtx,
+          typeName: "standalone-b",
+          chainId: undefined,
+          chainIndex: 0,
+          chainTypeName: "standalone-b",
+          input: null,
+        }),
+      );
+
+      const deleted = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.deleteJobsByChainIds({
+          txCtx,
+          chainIds: [jobA.chainId],
+          cascade: true,
+        }),
+      );
+
+      expect(deleted).toHaveLength(1);
+      expect(deleted[0][0].id).toBe(jobA.id);
+      expect(await stateAdapter.getJobById({ jobId: jobA.id })).toBeUndefined();
+      expect(await stateAdapter.getJobById({ jobId: jobB.id })).toBeDefined();
+    });
   });
 
   describe("getJobForUpdate", () => {

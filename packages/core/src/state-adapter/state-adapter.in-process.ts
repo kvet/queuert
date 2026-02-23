@@ -430,8 +430,29 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       return updatedJob;
     },
 
-    deleteJobsByChainIds: async ({ chainIds }) => {
-      const chainIdSet = new Set(chainIds);
+    deleteJobsByChainIds: async ({ chainIds, cascade }) => {
+      let effectiveChainIds = chainIds;
+
+      if (cascade) {
+        const visited = new Set(chainIds);
+        const queue = [...chainIds];
+        while (queue.length > 0) {
+          const current = queue.shift()!;
+          // jobBlockers is keyed by jobId; chainId = root job id by construction
+          const blockerMap = store.jobBlockers.get(current);
+          if (blockerMap) {
+            for (const blockerChainId of blockerMap.keys()) {
+              if (!visited.has(blockerChainId)) {
+                visited.add(blockerChainId);
+                queue.push(blockerChainId);
+              }
+            }
+          }
+        }
+        effectiveChainIds = [...visited];
+      }
+
+      const chainIdSet = new Set(effectiveChainIds);
 
       const refs: BlockerReference[] = [];
       for (const [jobId, blockerMap] of store.jobBlockers) {
@@ -452,7 +473,7 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
         );
       }
 
-      const pairs: [StateJob, StateJob | undefined][] = chainIds.flatMap((chainId) => {
+      const pairs: [StateJob, StateJob | undefined][] = effectiveChainIds.flatMap((chainId) => {
         const rootJob = store.jobs.get(chainId);
         if (!rootJob) return [];
         const lastJob = getLastJobInChain(chainId);

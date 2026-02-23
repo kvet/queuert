@@ -631,6 +631,24 @@ RETURNING *
   true,
 );
 
+export const getConnectedChainIdsSql: TypedSql<
+  readonly [NamedParameter<"seed_chain_ids_json", string>],
+  { chain_id: string }[]
+> = sql(
+  /* sql */ `
+WITH RECURSIVE connected(chain_id) AS (
+  SELECT value AS chain_id FROM json_each(?)
+  UNION
+  -- jb.job_id = chain_id because blockers are added to the root job whose id = chain_id
+  SELECT jb.blocked_by_chain_id AS chain_id
+  FROM {{table_prefix}}job_blocker jb
+  JOIN connected c ON jb.job_id = c.chain_id
+)
+SELECT chain_id FROM connected
+`,
+  true,
+);
+
 export const checkExternalBlockerRefsSql: TypedSql<
   readonly [NamedParameter<"chain_ids_json_1", string>, NamedParameter<"chain_ids_json_2", string>],
   { job_id: string; blocked_by_chain_id: string }[]

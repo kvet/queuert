@@ -32,38 +32,38 @@ Returns the deleted chains as `JobChain` objects (root job + optional last job i
 
 If a deleted chain has a currently running job, the worker's lease renewal detects the job is gone and aborts via signal with `reason: "not_found"`. The attempt handler receives this through its `signal` parameter.
 
-## Proposed: Cascade Deletion
+## Cascade Deletion
 
 ### Motivation
 
-Currently, deleting a chain that has dependents requires the caller to know and enumerate all related chains. For deep dependency graphs, this is tedious and error-prone. A cascade option would let the system resolve the full dependency graph and delete everything in one operation.
+Deleting a chain that has dependents normally requires the caller to know and enumerate all related chains. For deep dependency graphs, this is tedious and error-prone. The `cascade` option resolves the full dependency graph and deletes everything in one operation.
 
 ### Dependency Graph
 
 Chains form a DAG through blocker relationships:
 
 ```
-         ┌──── Blocker X
-         │
-Main ────┤
-         │              ┌── Blocker Z
-         └── Blocker Y ─┘
+Main ──depends on──┬── Blocker X
+                   │
+                   └── Blocker Y ──depends on── Blocker Z
 ```
 
-Cascade delete starting from `Main` would delete `Main`, `Blocker X`, `Blocker Y`, and `Blocker Z` — the full connected component.
+Cascade delete starting from `Main` follows dependencies downward to include `Main`, `Blocker X`, `Blocker Y`, and `Blocker Z` in the deletion set.
 
 ### Traversal Direction
 
-The tree is resolved in both directions:
+Cascade resolves dependencies **downward only** — from a chain, it finds all chains it depends on (blockers), recursively.
 
-- **Downward (blockers)**: From a chain, find all chains it depends on, recursively
-- **Upward (dependents)**: From a chain, find all chains that depend on it, recursively
+```
+A ← B ← C   (C depends on B, B depends on A)
 
-Both directions are needed to collect the complete connected component.
+deleteJobChains({ chainIds: [C], cascade: true })  // ✅ Deletes C, B, A
+deleteJobChains({ chainIds: [A], cascade: true })  // ❌ BlockerReferenceError — B depends on A
+```
+
+The blocker safety check still applies to the expanded set: if any chain in the resolved set is referenced as a blocker by an external chain, the operation throws `BlockerReferenceError`.
 
 ### API Shape
-
-Add an optional `cascade` flag to the existing method:
 
 ```typescript
 client.deleteJobChains({
@@ -74,14 +74,14 @@ client.deleteJobChains({
 });
 ```
 
-- `cascade: true` — expand `chainIds` to the full connected component, then delete all. The blocker safety check is satisfied implicitly since all references are internal to the deletion set.
+- `cascade: true` — expand `chainIds` to include transitive dependencies (downward), then delete all. The blocker safety check runs on the expanded set.
 - `cascade: false` (default) — current behavior unchanged.
 
 ### Considerations
 
 - Blocker graphs are DAGs by construction (blockers must exist at chain creation time), so cycles are impossible
 - Running jobs in the tree are handled by the existing lease-renewal signal mechanism
-- All adapters already support transactional multi-chain deletion; cascade only changes which chains are included in the set
+- All adapters support transactional multi-chain deletion; cascade only changes which chains are included in the set
 
 ## See Also
 

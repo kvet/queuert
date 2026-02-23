@@ -155,10 +155,11 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     ignoredJobIds?: TJobId[];
   }) => Promise<StateJob | undefined>;
 
-  /** Deletes all jobs in the given chains. Throws if external jobs depend on them as blockers. */
+  /** Deletes all jobs in the given chains. Throws if external jobs depend on them as blockers. When `cascade` is true, expands `chainIds` to include transitive dependencies (downward only) before deleting. */
   deleteJobsByChainIds: (params: {
     txCtx?: TTxContext;
     chainIds: TJobId[];
+    cascade?: boolean;
   }) => Promise<[StateJob, StateJob | undefined][]>;
 
   /** Gets a job by ID with a FOR UPDATE lock. */

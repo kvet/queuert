@@ -188,6 +188,7 @@ export const createClient = async <
     deleteJobChains: async (
       options: {
         chainIds: TJobId[];
+        cascade?: boolean;
         commitHooks: CommitHooks;
       } & GetStateAdapterTxContext<TStateAdapter>,
     ): Promise<
@@ -197,11 +198,12 @@ export const createClient = async <
         keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string
       >[]
     > => {
-      const { chainIds, commitHooks: _commitHooks, ...txCtx } = options;
+      const { chainIds, cascade, commitHooks: _commitHooks, ...txCtx } = options;
 
       const deletedChainPairs = await helpers.stateAdapter.deleteJobsByChainIds({
         txCtx,
         chainIds,
+        cascade,
       });
 
       return deletedChainPairs.map(

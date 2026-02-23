@@ -16,7 +16,6 @@
 - [REF] Review state adapter method naming for clarity and consistency
 - [REF] Review OTEL tracing design - reconsider trace contexts stored in DB
 - [?,REF] Consider extracting a dedicated chain table at the DB level
-- [TASK,MEDIUM] delete should accept an option to delete a whole tree (see [Deletion § Cascade Deletion](docs/design/deletion.md#proposed-cascade-deletion))
 - [EPIC] Prepare 0.3 release
 
 # Medium term

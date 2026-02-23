@@ -745,6 +745,19 @@ await client.deleteJobChains({ chainIds: [blockerChain.id] }); // throws
 await client.deleteJobChains({ chainIds: [mainChain.id, blockerChain.id] }); // ok
 ```
 
+### Cascade Deletion
+
+Use `cascade: true` to automatically resolve and delete transitive dependencies (blockers) without enumerating them manually:
+
+```ts
+await client.deleteJobChains({
+  chainIds: [mainChain.id],
+  cascade: true,
+});
+```
+
+Cascade follows dependencies downward — it deletes the specified chains and everything they depend on. If any chain in the resolved set is still referenced by an external chain, deletion is rejected with `BlockerReferenceError`.
+
 If a worker is currently processing a job in a deleted chain, the worker's `signal` is aborted with reason `"not_found"`, allowing graceful cleanup.
 
 ## Commit Hooks

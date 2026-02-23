@@ -25,6 +25,7 @@ import {
   createMigrationTableSql,
   deleteJobsByChainIdsSql,
   getAppliedMigrationsSql,
+  getConnectedChainIdsSql,
   getCurrentJobForUpdateSql,
   getJobBlockersSql,
   getJobByIdSql,
@@ -273,11 +274,20 @@ export const createPgStateAdapter = async <
       });
       return job ? mapDbJobToStateJob(job) : undefined;
     },
-    deleteJobsByChainIds: async ({ txCtx, chainIds }) => {
+    deleteJobsByChainIds: async ({ txCtx, chainIds, cascade }) => {
+      let effectiveChainIds = chainIds;
+      if (cascade) {
+        const connected = await executeTypedSql({
+          txCtx,
+          sql: getConnectedChainIdsSql,
+          params: [chainIds],
+        });
+        effectiveChainIds = connected.map((r) => r.chain_id) as typeof chainIds;
+      }
       const refs = await executeTypedSql({
         txCtx,
         sql: checkExternalBlockerRefsSql,
-        params: [chainIds, chainIds],
+        params: [effectiveChainIds, effectiveChainIds],
       });
       if (refs.length > 0) {
         throw new BlockerReferenceError(
@@ -291,7 +301,7 @@ export const createPgStateAdapter = async <
       const rows = await executeTypedSql({
         txCtx,
         sql: deleteJobsByChainIdsSql,
-        params: [chainIds],
+        params: [effectiveChainIds],
       });
       return rows.map((row) => [
         mapDbJobToStateJob(row.root_job),
