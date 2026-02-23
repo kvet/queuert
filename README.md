@@ -23,6 +23,7 @@ Run your application logic as a series of background jobs that are started along
 - [Deduplication](#deduplication)
 - [Workerless Completion](#workerless-completion)
 - [Chain Deletion](#chain-deletion)
+- [Commit Hooks](#commit-hooks)
 - [Complete Type Safety](#complete-type-safety)
 - [Runtime Validation](#runtime-validation)
 - [Timeouts](#timeouts)
@@ -757,6 +758,44 @@ await client.deleteJobChains({ chainIds: [mainChain.id, blockerChain.id] }); // 
 ```
 
 If a worker is currently processing a job in a deleted chain, the worker's `signal` is aborted with reason `"not_found"`, allowing graceful cleanup.
+
+## Commit Hooks
+
+`withCommitHooks` buffers side effects (like notify events) during a transaction and flushes them only after the callback returns successfully. On error, all buffered side effects are discarded.
+
+```ts
+await withCommitHooks(async (commitHooks) =>
+  db.transaction(async (tx) => {
+    await client.startJobChain({ tx, commitHooks, typeName: "send-email", input });
+    // If the transaction rolls back, no notifications are sent
+  }),
+);
+```
+
+For manual control over the flush/discard lifecycle, use `createCommitHooks` directly. This is useful when your database client uses explicit `BEGIN`/`COMMIT`/`ROLLBACK` rather than a callback-style transaction:
+
+```ts
+const { commitHooks, flush, discard } = createCommitHooks();
+const connection = await db.connect();
+try {
+  await connection.query("BEGIN");
+  const result = await client.startJobChain({
+    connection,
+    commitHooks,
+    typeName: "send-email",
+    input,
+  });
+  await connection.query("COMMIT");
+  await flush(); // Side effects fire only after commit
+  return result;
+} catch (error) {
+  await connection.query("ROLLBACK").catch(() => {});
+  discard(); // Side effects discarded on error
+  throw error;
+} finally {
+  connection.release();
+}
+```
 
 ## Complete Type Safety
 

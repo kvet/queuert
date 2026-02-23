@@ -17,7 +17,6 @@
 - [REF] Review state adapter method naming for clarity and consistency
 - [REF] Review OTEL tracing design - reconsider trace contexts stored in DB
 - [?,REF] Consider extracting a dedicated chain table at the DB level
-- [TASK,EASY] Reintroduce `withCommitHooks` runner overload (2-arg variant that composes transaction runner with CommitHooks). Removed due to tsgo higher-order generic inference limitation.
 - [EPIC] Prepare 0.3 release
 
 # Medium term

@@ -10,7 +10,7 @@ export type CommitHooks = {
   delete(key: symbol): void;
 };
 
-const createCommitHooks = () => {
+export const createCommitHooks = () => {
   const hooks = new Map<symbol, HookDef<any>>();
 
   const commitHooks: CommitHooks = {
@@ -37,7 +37,9 @@ const createCommitHooks = () => {
   };
 
   const flush = async (): Promise<void> => {
-    for (const hook of hooks.values()) {
+    const snapshot = [...hooks.values()];
+    hooks.clear();
+    for (const hook of snapshot) {
       await hook.flush(hook.state);
     }
   };

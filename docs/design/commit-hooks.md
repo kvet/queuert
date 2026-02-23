@@ -69,3 +69,25 @@ await withCommitHooks(async (commitHooks) => {
 ```
 
 If the callback throws, all hooks are discarded — no flush, no side effects.
+
+### `createCommitHooks()`
+
+For cases where manual control over the flush/discard lifecycle is needed, `createCommitHooks()` is exported directly:
+
+```typescript
+const { commitHooks, flush, discard } = createCommitHooks();
+try {
+  const order = await startTransaction(async (db) => {
+    const inserted = await db.insert(orders).values({ ... });
+    bufferMessage(commitHooks, "Order created");
+    return inserted;
+  });
+  await flush();
+  return order;
+} catch (error) {
+  discard();
+  throw error;
+}
+```
+
+The caller is responsible for calling `flush()` after commit and `discard()` on error. This is the same lifecycle that `withCommitHooks` manages automatically — `createCommitHooks` just exposes it.

@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
-import { withCommitHooks } from "./commit-hooks.js";
+import { createCommitHooks, withCommitHooks } from "./commit-hooks.js";
 import { HookNotRegisteredError } from "./errors.js";
 
 describe("CommitHooks", () => {
@@ -114,34 +114,6 @@ describe("CommitHooks", () => {
     expect(flush).toHaveBeenCalledWith(new Set(["a", "b"]));
   });
 
-  test("discard: hooks are not flushed when callback throws", async () => {
-    const flush = vi.fn();
-    const key = Symbol("test");
-
-    await expect(
-      withCommitHooks(async (hooks) => {
-        hooks.set(key, { state: "data", flush });
-        throw new Error("transaction failed");
-      }),
-    ).rejects.toThrow("transaction failed");
-
-    expect(flush).not.toHaveBeenCalled();
-  });
-
-  test("withCommitHooks: returns callback result on success", async () => {
-    const result = await withCommitHooks(async () => 42);
-    expect(result).toBe(42);
-  });
-
-  test("withCommitHooks: propagates callback error", async () => {
-    const error = new Error("boom");
-    await expect(
-      withCommitHooks(async () => {
-        throw error;
-      }),
-    ).rejects.toThrow(error);
-  });
-
   test("flush: supports async flush functions", async () => {
     const order: string[] = [];
     const key1 = Symbol("async1");
@@ -182,5 +154,63 @@ describe("CommitHooks", () => {
 
     expect(flush1).toHaveBeenCalledWith([1, 10]);
     expect(flush2).toHaveBeenCalledWith([2, 20]);
+  });
+});
+
+describe("withCommitHooks", () => {
+  test("returns callback result on success", async () => {
+    const result = await withCommitHooks(async () => 42);
+    expect(result).toBe(42);
+  });
+
+  test("propagates callback error", async () => {
+    const error = new Error("boom");
+    await expect(
+      withCommitHooks(async () => {
+        throw error;
+      }),
+    ).rejects.toThrow(error);
+  });
+
+  test("discards hooks when callback throws", async () => {
+    const flush = vi.fn();
+    const key = Symbol("test");
+
+    await expect(
+      withCommitHooks(async (hooks) => {
+        hooks.set(key, { state: "data", flush });
+        throw new Error("transaction failed");
+      }),
+    ).rejects.toThrow("transaction failed");
+
+    expect(flush).not.toHaveBeenCalled();
+  });
+});
+
+describe("createCommitHooks", () => {
+  test("manual lifecycle - flush on success", async () => {
+    const key = Symbol("test");
+    const flushFn = vi.fn();
+
+    const { commitHooks, flush } = createCommitHooks();
+    commitHooks.set(key, { state: "data", flush: flushFn });
+
+    await flush();
+
+    expect(flushFn).toHaveBeenCalledOnce();
+    expect(flushFn).toHaveBeenCalledWith("data");
+  });
+
+  test("manual lifecycle - discard on error", async () => {
+    const key = Symbol("test");
+    const flushFn = vi.fn();
+
+    const { commitHooks, discard } = createCommitHooks();
+    commitHooks.set(key, { state: "data", flush: flushFn });
+
+    discard();
+
+    expect(flushFn).not.toHaveBeenCalled();
+    expect(commitHooks.has(key)).toBe(false);
   });
 });

@@ -52,7 +52,13 @@ Optional adapters:
 ## Quick Start
 
 ```typescript
-import { createClient, createInProcessWorker, defineJobTypes, withCommitHooks } from "queuert";
+import {
+  createClient,
+  createInProcessWorker,
+  defineJobTypes,
+  withCommitHooks,
+  createCommitHooks,
+} from "queuert";
 import { createSqliteStateAdapter } from "@queuert/sqlite";
 
 // Define your job types with full type safety
@@ -181,6 +187,8 @@ For production, integrate with your logging library (Pino, Winston, etc.) by imp
 - `createConsoleLog` - Simple console logger for development
 - `defineJobTypes` - Define job types with compile-time type safety
 - `createJobTypeRegistry` - Create a registry with runtime validation
+- `withCommitHooks` - Buffer side effects during a transaction, flush on success, discard on error
+- `createCommitHooks` - Manual commit hooks lifecycle (flush/discard) for advanced use cases
 
 **Types:**
 
