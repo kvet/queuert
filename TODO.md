@@ -12,7 +12,7 @@
   - [?,REF] Filter by status in chains view
   - [?,REF] Add inputs for date range filtering in chains and jobs views
 - [TASK,MEDIUM] Add list methods to queuert client for programmatic access to dashboard data (chains, jobs, blockers)
-- [REF] Job cleanup utility
+- [TASK,COMPLEX] Job cleanup utility (see [Plugins](docs/design/plugins.md), [Cleanup Plugin](docs/design/cleanup-plugin.md))
 - [REF] Review state adapter method naming for clarity and consistency
 - [REF] Review OTEL tracing design - reconsider trace contexts stored in DB
 - [?,REF] Consider extracting a dedicated chain table at the DB level
