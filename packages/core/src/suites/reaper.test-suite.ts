@@ -41,11 +41,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       registry,
     });
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       concurrency: 1,
       processDefaults: {
         leaseConfig: { leaseMs: 10, renewIntervalMs: 100 },
@@ -115,11 +111,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const leaseConfig = { leaseMs: 10, renewIntervalMs: 100 } satisfies LeaseConfig;
 
     const worker1 = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       workerId: "w1",
       concurrency: 1,
       processDefaults: {
@@ -149,11 +141,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     const worker2 = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       workerId: "w2",
       concurrency: 1,
       processDefaults: {
@@ -254,11 +242,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const leaseConfig = { leaseMs: 10, renewIntervalMs: 100 } satisfies LeaseConfig;
 
     const worker1 = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       workerId: "w1",
       concurrency: 1,
       processDefaults: {
@@ -291,11 +275,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     const worker2 = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       workerId: "w2",
       concurrency: 1,
       processDefaults: {
@@ -399,11 +379,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const leaseConfig = { leaseMs: 10, renewIntervalMs: 1000 } satisfies LeaseConfig;
 
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       workerId: "concurrent-worker",
       concurrency: 2,
       processDefaults: {

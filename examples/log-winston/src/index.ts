@@ -104,10 +104,7 @@ const contextualLoggingMiddleware: JobAttemptMiddleware<
 
 // 7. Create and start qrtWorker with the middleware
 const qrtWorker = await createInProcessWorker({
-  stateAdapter,
-  notifyAdapter,
-  log,
-  registry,
+  client: qrtClient,
   workerId: "worker-1",
   processDefaults: {
     attemptMiddlewares: [contextualLoggingMiddleware],

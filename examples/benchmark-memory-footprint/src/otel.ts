@@ -61,10 +61,7 @@ const [beforeSetup, afterSetup, { qrtClient, stopWorker }] = await measureMemory
   });
 
   const qrtWorker = await createInProcessWorker({
-    stateAdapter,
-    notifyAdapter,
-    observabilityAdapter,
-    registry,
+    client: qrtClient,
     processors: {
       "test-job": {
         attemptHandler: async ({ complete }) => complete(async () => ({ processed: true })),

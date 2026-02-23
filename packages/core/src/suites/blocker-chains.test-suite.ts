@@ -48,11 +48,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     let blockerChainId: string;
 
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       concurrency: 1,
       processors: {
         blocker: {
@@ -153,11 +149,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       registry,
     });
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       concurrency: 1,
       processors: {
         blocker: {
@@ -253,11 +245,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     const childJobChains: JobChain<string, "inner", null, null>[] = [];
 
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       concurrency: 1,
       processors: {
         inner: {
@@ -367,11 +355,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       registry,
     });
     const worker1 = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       concurrency: 1,
       processDefaults: {
         pollIntervalMs: 100,
@@ -391,11 +375,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       },
     });
     const worker2 = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       concurrency: 1,
       processDefaults: {
         pollIntervalMs: 100,
@@ -461,11 +441,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       registry,
     });
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       concurrency: 1,
       processors: {
         blocker: {
@@ -553,11 +529,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       registry,
     });
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       concurrency: 1,
       processors: {
         blocker: {

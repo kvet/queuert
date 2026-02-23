@@ -39,11 +39,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       registry,
     });
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       concurrency: 1,
       processors: {
         test: {
@@ -94,11 +90,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       registry,
     });
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       concurrency: 1,
       processors: {
         email: {
@@ -173,11 +165,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       registry,
     });
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       concurrency: 1,
       processDefaults: {
         pollIntervalMs: 100,
@@ -234,11 +222,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       registry,
     });
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       concurrency: 1,
       processors: {
         test: {
@@ -307,11 +291,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       registry,
     });
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       concurrency: 1,
       processDefaults: {
         attemptMiddlewares: [

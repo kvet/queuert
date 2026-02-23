@@ -39,12 +39,15 @@ export const stateResilienceTestSuite = ({
       log,
       registry,
     });
-    const flakyWorker = await createInProcessWorker({
+    const flakyWorkerClient = await createClient({
       stateAdapter: flakyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       registry,
+    });
+    const flakyWorker = await createInProcessWorker({
+      client: flakyWorkerClient,
       concurrency: 1,
       retryConfig: {
         initialDelayMs: 1,
@@ -124,12 +127,15 @@ export const stateResilienceTestSuite = ({
         log,
         registry,
       });
-      const flakyWorker = await createInProcessWorker({
+      const flakyWorkerClient = await createClient({
         stateAdapter: flakyStateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         registry,
+      });
+      const flakyWorker = await createInProcessWorker({
+        client: flakyWorkerClient,
         concurrency: 5,
         retryConfig: {
           initialDelayMs: 1,
@@ -210,12 +216,15 @@ export const stateResilienceTestSuite = ({
         log,
         registry,
       });
-      const workerConfig = {
+      const flakyWorkerClient = await createClient({
         stateAdapter: flakyStateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         registry,
+      });
+      const workerConfig = {
+        client: flakyWorkerClient,
         concurrency: 5,
         retryConfig: {
           initialDelayMs: 1,

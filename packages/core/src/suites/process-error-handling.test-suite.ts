@@ -36,12 +36,15 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       log,
       registry,
     });
-    const worker = await createInProcessWorker({
+    const workerClient = await createClient({
       stateAdapter: spyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       registry,
+    });
+    const worker = await createInProcessWorker({
+      client: workerClient,
       concurrency: 1,
       processors: {
         test: {
@@ -120,12 +123,15 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       log,
       registry,
     });
-    const worker = await createInProcessWorker({
+    const workerClient = await createClient({
       stateAdapter: spyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       registry,
+    });
+    const worker = await createInProcessWorker({
+      client: workerClient,
       concurrency: 1,
       processors: {
         test: {
@@ -204,12 +210,15 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       log,
       registry,
     });
-    const worker = await createInProcessWorker({
+    const workerClient = await createClient({
       stateAdapter: spyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       registry,
+    });
+    const worker = await createInProcessWorker({
+      client: workerClient,
       concurrency: 1,
       processors: {
         test: {
@@ -287,12 +296,15 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       log,
       registry,
     });
-    const worker = await createInProcessWorker({
+    const workerClient = await createClient({
       stateAdapter: spyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       registry,
+    });
+    const worker = await createInProcessWorker({
+      client: workerClient,
       concurrency: 1,
       processors: {
         test: {
@@ -378,12 +390,15 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       log,
       registry,
     });
-    const worker = await createInProcessWorker({
+    const workerClient = await createClient({
       stateAdapter: spyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       registry,
+    });
+    const worker = await createInProcessWorker({
+      client: workerClient,
       concurrency: 1,
       processors: {
         test: {
@@ -463,12 +478,15 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       log,
       registry,
     });
-    const worker = await createInProcessWorker({
+    const workerClient = await createClient({
       stateAdapter: spyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       registry,
+    });
+    const worker = await createInProcessWorker({
+      client: workerClient,
       concurrency: 1,
       processors: {
         test: {
@@ -557,12 +575,15 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       log,
       registry,
     });
-    const worker = await createInProcessWorker({
+    const workerClient = await createClient({
       stateAdapter: spyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       registry,
+    });
+    const worker = await createInProcessWorker({
+      client: workerClient,
       concurrency: 1,
       processors: {
         test: {
@@ -649,12 +670,15 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       log,
       registry,
     });
-    const worker = await createInProcessWorker({
+    const workerClient = await createClient({
       stateAdapter: spyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       registry,
+    });
+    const worker = await createInProcessWorker({
+      client: workerClient,
       concurrency: 1,
       processors: {
         test: {

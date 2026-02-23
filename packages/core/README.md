@@ -79,8 +79,7 @@ const client = await createClient({
 
 // Create a worker
 const worker = await createInProcessWorker({
-  stateAdapter,
-  registry: jobTypes,
+  client,
   workerId: "worker-1",
   processors: {
     "send-email": {
@@ -110,8 +109,7 @@ await withCommitHooks(async (commitHooks) =>
 
 ```typescript
 const worker = await createInProcessWorker({
-  stateAdapter,
-  registry: jobTypes,
+  client,
   workerId: "worker-1", // Unique worker identifier (optional)
   concurrency: 10, // Number of jobs to process in parallel (default: 1)
   processDefaults: {
@@ -149,8 +147,7 @@ Per-job-type configuration:
 
 ```typescript
 const worker = await createInProcessWorker({
-  stateAdapter,
-  registry: jobTypes,
+  client,
   processors: {
     'long-running-job': {
       retryConfig: { initialDelayMs: 30_000, multiplier: 2.0, maxDelayMs: 600_000 },
@@ -171,7 +168,7 @@ import { createConsoleLog, createClient, createInProcessWorker } from "queuert";
 const log = createConsoleLog();
 
 const client = await createClient({ stateAdapter, registry, log });
-const worker = await createInProcessWorker({ stateAdapter, registry, log, processors });
+const worker = await createInProcessWorker({ client, processors });
 ```
 
 For production, integrate with your logging library (Pino, Winston, etc.) by implementing a custom `Log` function. See the `log-console`, `log-pino`, and `log-winston` examples.

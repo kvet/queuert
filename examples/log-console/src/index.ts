@@ -35,10 +35,7 @@ const qrtClient = await createClient({
 
 // 3. Create and start worker
 const qrtWorker = await createInProcessWorker({
-  stateAdapter,
-  notifyAdapter,
-  log,
-  registry,
+  client: qrtClient,
   workerId: "worker-1",
   processors: {
     greet: {

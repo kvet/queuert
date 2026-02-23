@@ -73,9 +73,7 @@ Later, a background worker picks up the job and sends the email:
 
 ```ts
 const worker = await createInProcessWorker({
-  stateAdapter,
-  registry: jobTypes,
-  log: createConsoleLog(),
+  client,
   processors: {
     "send-welcome-email": {
       attemptHandler: async ({ job, complete }) => {
@@ -190,9 +188,7 @@ Deploy multiple worker processes sharing the same database for horizontal scalin
 ```ts
 // Process A (e.g., machine-1)
 const worker = await createInProcessWorker({
-  stateAdapter,
-  notifyAdapter,
-  registry,
+  client,
   workerId: "worker-a",
   concurrency: 10,
   processors: { ... },
@@ -200,9 +196,7 @@ const worker = await createInProcessWorker({
 
 // Process B (e.g., machine-2)
 const worker = await createInProcessWorker({
-  stateAdapter,
-  notifyAdapter,
-  registry,
+  client,
   workerId: "worker-b",
   concurrency: 10,
   processors: { ... },
@@ -433,9 +427,7 @@ await queuert.startJobChain({
 
 // Access completed blockers in worker
 const worker = await createInProcessWorker({
-  stateAdapter,
-  registry: jobTypes,
-  log: createConsoleLog(),
+  client,
   processors: {
     "process-all": {
       attemptHandler: async ({ job, complete }) => {
@@ -496,9 +488,7 @@ When a job throws an error, it's automatically rescheduled with exponential back
 import { rescheduleJob } from "queuert";
 
 const worker = await createInProcessWorker({
-  stateAdapter,
-  registry: jobTypes,
-  log: createConsoleLog(),
+  client,
   processors: {
     "call-external-api": {
       attemptHandler: async ({ job, prepare, complete }) => {
@@ -695,9 +685,7 @@ const chain = await queuert.startJobChain({
 
 // The worker handles the timeout case (auto-reject) and processes approved requests
 const worker = await createInProcessWorker({
-  stateAdapter,
-  registry: jobTypes,
-  log: createConsoleLog(),
+  client,
   processors: {
     "await-approval": {
       attemptHandler: async ({ complete }) => complete(() => ({ rejected: true })),
@@ -822,9 +810,7 @@ For cooperative timeouts, combine `AbortSignal.timeout()` with the provided `sig
 
 ```ts
 const worker = await createInProcessWorker({
-  stateAdapter,
-  registry: jobTypes,
-  log: createConsoleLog(),
+  client,
   processors: {
     "fetch-data": {
       attemptHandler: async ({ signal, job, complete }) => {
@@ -848,9 +834,7 @@ For hard timeouts, configure `leaseConfig` in the job type processor — if a jo
 
 ```ts
 const worker = await createInProcessWorker({
-  stateAdapter,
-  registry: jobTypes,
-  log: createConsoleLog(),
+  client,
   processors: {
     'long-running-job': {
       leaseConfig: { leaseMs: 300_000, renewIntervalMs: 60_000 }, // 5 min lease

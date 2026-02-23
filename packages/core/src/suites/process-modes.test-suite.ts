@@ -36,12 +36,15 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       log,
       registry,
     });
-    const worker = await createInProcessWorker({
+    const workerClient = await createClient({
       stateAdapter: spyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       registry,
+    });
+    const worker = await createInProcessWorker({
+      client: workerClient,
       concurrency: 1,
       processors: {
         "atomic-complete": {
@@ -118,12 +121,15 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       log,
       registry,
     });
-    const worker = await createInProcessWorker({
+    const workerClient = await createClient({
       stateAdapter: spyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       registry,
+    });
+    const worker = await createInProcessWorker({
+      client: workerClient,
       concurrency: 1,
       processors: {
         "staged-complete": {
@@ -208,12 +214,15 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       log,
       registry,
     });
-    const worker = await createInProcessWorker({
+    const workerClient = await createClient({
       stateAdapter: spyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       registry,
+    });
+    const worker = await createInProcessWorker({
+      client: workerClient,
       concurrency: 1,
       processors: {
         "staged-with-callback": {
@@ -302,12 +311,15 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       log,
       registry,
     });
-    const worker = await createInProcessWorker({
+    const workerClient = await createClient({
       stateAdapter: spyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       registry,
+    });
+    const worker = await createInProcessWorker({
+      client: workerClient,
       concurrency: 1,
       processors: {
         "staged-without-callback": {
@@ -392,12 +404,15 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       log,
       registry,
     });
-    const worker = await createInProcessWorker({
+    const workerClient = await createClient({
       stateAdapter: spyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       registry,
+    });
+    const worker = await createInProcessWorker({
+      client: workerClient,
       concurrency: 1,
       processors: {
         "atomic-with-callback": {
@@ -479,12 +494,15 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       log,
       registry,
     });
-    const worker = await createInProcessWorker({
+    const workerClient = await createClient({
       stateAdapter: spyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       registry,
+    });
+    const worker = await createInProcessWorker({
+      client: workerClient,
       concurrency: 1,
       processors: {
         "atomic-without-callback": {

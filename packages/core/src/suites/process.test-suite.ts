@@ -53,11 +53,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       registry,
     });
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       concurrency: 1,
       processors: {
         "test-prepare-twice": {
@@ -185,11 +181,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       registry,
     });
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       concurrency: 1,
       processDefaults: {
         retryConfig: {
@@ -272,11 +264,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       registry,
     });
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       concurrency: 1,
       processDefaults: {
         retryConfig: {
@@ -348,11 +336,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       registry,
     });
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       workerId: "worker",
       concurrency: 1,
       processors: {

@@ -11,9 +11,8 @@
   - [TASK,COMPLEX] Better UI
   - [?,REF] Filter by status in chains view
   - [?,REF] Add inputs for date range filtering in chains and jobs views
-  - [TASK,MEDIUM] Add list methods to queuert client for programmatic access to dashboard data (chains, jobs, blockers)
-- [TASK,MEDIUM] Job cleanup utility
-- [REF] createInProcessWorker should accept client instance (see [In-Process Worker § Client-Based Construction](docs/design/in-process-worker.md#client-based-construction))
+- [TASK,MEDIUM] Add list methods to queuert client for programmatic access to dashboard data (chains, jobs, blockers)
+- [REF] Job cleanup utility
 - [REF] Review state adapter method naming for clarity and consistency
 - [REF] Review OTEL tracing design - reconsider trace contexts stored in DB
 - [?,REF] Consider extracting a dedicated chain table at the DB level

@@ -37,11 +37,7 @@ export const notifyResilienceTestSuite = ({
       registry,
     });
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter: flakyNotifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       concurrency: 1,
       retryConfig: {
         initialDelayMs: 1,

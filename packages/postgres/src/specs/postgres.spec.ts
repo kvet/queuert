@@ -48,10 +48,7 @@ it("should infer types correctly with custom ID", async ({ postgresConnectionStr
       registry,
     });
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      log,
-      registry,
+      client,
       processors: {
         test: {
           attemptHandler: async ({ job, complete }) => {

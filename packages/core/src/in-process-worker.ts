@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { type JobTypeRegistry } from "./entities/job-type-registry.js";
+import { type Client, helpersSymbol } from "./client.js";
 import { type BaseJobTypeDefinitions } from "./entities/job-type.js";
 import { type BackoffConfig } from "./helpers/backoff.js";
 import { type ParallelExecutor, createParallelExecutor } from "./helpers/parallel-executor.js";
@@ -10,9 +10,7 @@ import {
 } from "./helpers/transaction-context.js";
 import { withRetry } from "./internal.js";
 import { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
-import { type Log } from "./observability-adapter/log.js";
-import { type ObservabilityAdapter } from "./observability-adapter/observability-adapter.js";
-import { type Helpers, createHelpers } from "./setup-helpers.js";
+import { type Helpers } from "./setup-helpers.js";
 import {
   type BaseTxContext,
   type StateAdapter,
@@ -184,30 +182,22 @@ const performJob = async ({
 };
 
 export const createInProcessWorker = async <
-  TJobTypeRegistry extends JobTypeRegistry<any>,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TStateAdapter extends StateAdapter<any, any>,
 >({
-  stateAdapter: stateAdapterOption,
-  notifyAdapter: notifyAdapterOption,
-  observabilityAdapter: observabilityAdapterOption,
-  registry: registryOption,
-  log,
+  client,
   workerId = randomUUID(),
   concurrency,
   retryConfig,
   processDefaults,
   processors,
 }: {
-  stateAdapter: TStateAdapter;
-  notifyAdapter?: NotifyAdapter;
-  observabilityAdapter?: ObservabilityAdapter;
-  registry: TJobTypeRegistry;
-  log?: Log;
+  client: Client<TJobTypeDefinitions, TStateAdapter>;
   workerId?: string;
   concurrency?: number;
   retryConfig?: BackoffConfig;
-  processDefaults?: InProcessWorkerProcessDefaults<TStateAdapter, TJobTypeRegistry["$definitions"]>;
-  processors: InProcessWorkerProcessors<TStateAdapter, TJobTypeRegistry["$definitions"]>;
+  processDefaults?: InProcessWorkerProcessDefaults<TStateAdapter, TJobTypeDefinitions>;
+  processors: InProcessWorkerProcessors<TStateAdapter, TJobTypeDefinitions>;
 }) => {
   const typeNames = Array.from(Object.keys(processors));
 
@@ -230,13 +220,7 @@ export const createInProcessWorker = async <
 
   return {
     start: async (): Promise<() => Promise<void>> => {
-      const helpers = createHelpers({
-        stateAdapter: stateAdapterOption,
-        notifyAdapter: notifyAdapterOption,
-        observabilityAdapter: observabilityAdapterOption,
-        registry: registryOption,
-        log,
-      });
+      const helpers = client[helpersSymbol];
       const { stateAdapter, notifyAdapter, observabilityHelper } = helpers;
 
       observabilityHelper.workerStarted({ workerId, jobTypeNames: typeNames });

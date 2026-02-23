@@ -83,9 +83,7 @@ const qrtClient = await createClient({
 
 // 3. Create and start qrtWorker with job type processors
 const qrtWorker = await createInProcessWorker({
-  stateAdapter,
-  notifyAdapter,
-  registry,
+  client: qrtClient,
   processors: {
     "fetch-data": {
       attemptHandler: async ({ job, complete }) => {

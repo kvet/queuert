@@ -126,9 +126,7 @@ const client = await createClient({
 });
 
 const worker = await createInProcessWorker({
-  stateAdapter,
-  notifyAdapter,
-  registry: jobTypes,
+  client,
   processors: {
     "process-payment": {
       attemptHandler: async ({ job, complete }) => {

@@ -102,9 +102,7 @@ const client = await createClient({
 });
 
 const worker = await createInProcessWorker({
-  stateAdapter,
-  notifyAdapter,
-  registry: jobTypes,
+  client,
   processors: {
     "await-approval": {
       attemptHandler: async ({ job, complete }) => {

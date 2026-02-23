@@ -34,11 +34,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       registry,
     });
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       workerId: "worker",
       concurrency: 1,
       processDefaults: { pollIntervalMs: 50 },
@@ -102,11 +98,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       registry,
     });
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       workerId: "worker",
       concurrency: 1,
       processDefaults: { pollIntervalMs: 50 },
@@ -177,11 +169,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     const firstCompleted = Promise.withResolvers<void>();
 
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       workerId: "worker",
       concurrency: 1,
       processDefaults: { pollIntervalMs: 50 },
@@ -268,11 +256,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     const firstCompleted = Promise.withResolvers<void>();
 
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       workerId: "worker",
       concurrency: 1,
       processDefaults: { pollIntervalMs: 50 },
@@ -356,11 +340,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     const firstAttemptDone = Promise.withResolvers<void>();
 
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       workerId: "worker",
       concurrency: 1,
       processDefaults: { pollIntervalMs: 50 },
@@ -436,11 +416,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     const firstAttemptDone = Promise.withResolvers<void>();
 
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       workerId: "worker",
       concurrency: 1,
       processDefaults: { pollIntervalMs: 50 },

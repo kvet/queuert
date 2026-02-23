@@ -54,9 +54,7 @@ const qrtClient = await createClient({
 });
 
 const qrtWorker = await createInProcessWorker({
-  stateAdapter,
-  notifyAdapter,
-  registry,
+  client: qrtClient,
   processors: {
     generate_report: {
       attemptHandler: async ({ job, complete }) => {

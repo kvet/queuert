@@ -9,12 +9,10 @@
  */
 
 import { createInProcessWorker, withCommitHooks } from "queuert";
-import { client, db, notifyAdapter, registry, stateAdapter } from "./client.js";
+import { client, db, stateAdapter } from "./client.js";
 
 const worker = await createInProcessWorker({
-  stateAdapter,
-  notifyAdapter,
-  registry,
+  client,
   processors: {
     greet: {
       attemptHandler: async ({ job, complete }) => {

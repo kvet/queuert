@@ -50,11 +50,7 @@ describe("Metrics", () => {
       registry,
     });
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       workerId: "worker",
       concurrency: 1,
       processors: {
@@ -126,11 +122,7 @@ describe("Metrics", () => {
       registry,
     });
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       concurrency: 1,
       processDefaults: {
         retryConfig: {
@@ -219,11 +211,7 @@ describe("Metrics", () => {
       registry,
     });
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       concurrency: 1,
       processors: {
         linear: {
@@ -331,11 +319,7 @@ describe("Metrics", () => {
       registry,
     });
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       concurrency: 1,
       processors: {
         blocker: {
@@ -491,11 +475,7 @@ describe("Metrics", () => {
       registry,
     });
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       concurrency: 1,
       processDefaults: {
         leaseConfig: { leaseMs: 500, renewIntervalMs: 50 },
@@ -546,11 +526,7 @@ describe("Metrics", () => {
       registry,
     });
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       concurrency: 1,
       processDefaults: {
         leaseConfig: { leaseMs: 10, renewIntervalMs: 100 },
@@ -607,11 +583,7 @@ describe("Metrics", () => {
     const leaseConfig = { leaseMs: 10, renewIntervalMs: 100 };
 
     const worker1 = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       workerId: "w1",
       concurrency: 1,
       processDefaults: { leaseConfig, pollIntervalMs: leaseConfig.leaseMs },
@@ -633,11 +605,7 @@ describe("Metrics", () => {
       },
     });
     const worker2 = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       workerId: "w2",
       concurrency: 1,
       processDefaults: { leaseConfig, pollIntervalMs: leaseConfig.leaseMs },
@@ -726,12 +694,15 @@ describe("Metrics", () => {
       log,
       registry,
     });
-    const worker = await createInProcessWorker({
+    const workerClient = await createClient({
       stateAdapter: erroringStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       registry,
+    });
+    const worker = await createInProcessWorker({
+      client: workerClient,
       concurrency: 1,
       retryConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
       processors: {
@@ -787,11 +758,7 @@ describe("Metrics", () => {
       registry,
     });
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter: failingNotifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       concurrency: 1,
       processDefaults: {
         pollIntervalMs: 100,
@@ -849,11 +816,7 @@ describe("Spans", () => {
       registry,
     });
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       concurrency: 1,
       processors: {
         test: {
@@ -920,11 +883,7 @@ describe("Spans", () => {
       registry,
     });
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       concurrency: 1,
       processDefaults: {
         retryConfig: {
@@ -1036,11 +995,7 @@ describe("Spans", () => {
       registry,
     });
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       concurrency: 1,
       processors: {
         linear: {
@@ -1158,11 +1113,7 @@ describe("Spans", () => {
       registry,
     });
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       concurrency: 1,
       processors: {
         blocker: {
@@ -1287,11 +1238,7 @@ describe("Spans", () => {
       registry,
     });
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       concurrency: 1,
       processors: {
         blocker: {
@@ -1627,11 +1574,7 @@ describe("Gauges", () => {
       registry,
     });
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       concurrency: 1,
       processors: {
         test: {
@@ -1705,11 +1648,7 @@ describe("Gauges", () => {
       registry,
     });
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       concurrency: 1,
       processors: {
         email: {

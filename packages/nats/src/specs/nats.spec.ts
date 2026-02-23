@@ -38,10 +38,7 @@ it("should work end-to-end with NATS notify adapter", async ({ natsConnectionOpt
     registry,
   });
   const worker = await createInProcessWorker({
-    stateAdapter,
-    notifyAdapter,
-    log,
-    registry,
+    client,
     processors: {
       test: {
         attemptHandler: async ({ complete }) => {
@@ -95,10 +92,7 @@ it("should work end-to-end without JetStream KV", async ({ natsConnectionOptions
     registry,
   });
   const worker = await createInProcessWorker({
-    stateAdapter,
-    notifyAdapter,
-    log,
-    registry,
+    client,
     processors: {
       test: {
         attemptHandler: async ({ job, complete }) => {

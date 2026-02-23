@@ -29,11 +29,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       registry,
     });
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       concurrency: 1,
       processors: {
         test: {
@@ -92,11 +88,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
     const createWorker = async () =>
       createInProcessWorker({
-        stateAdapter,
-        notifyAdapter,
-        observabilityAdapter,
-        log,
-        registry,
+        client,
         concurrency: 1,
         processors: {
           test: {
@@ -170,11 +162,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       registry,
     });
     const worker1 = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       concurrency: 1,
       processors: {
         blocker: {
@@ -186,11 +174,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       },
     });
     const worker2 = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       concurrency: 1,
       processors: {
         main: {
@@ -261,11 +245,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       registry,
     });
     const worker1 = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       concurrency: 1,
       processors: {
         step1: {
@@ -282,11 +262,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       },
     });
     const worker2 = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       concurrency: 1,
       processors: {
         step2: {
@@ -350,11 +326,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const jobCompleted = Promise.withResolvers<void>();
 
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry,
+      client,
       workerId: "worker",
       concurrency: 1,
       processors: {
@@ -436,11 +408,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
     const createWorker = async () =>
       createInProcessWorker({
-        stateAdapter,
-        notifyAdapter,
-        observabilityAdapter,
-        log,
-        registry,
+        client,
         concurrency: 1,
         processors: {
           test: {

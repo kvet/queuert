@@ -264,11 +264,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       registry: simpleRegistry,
     });
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry: simpleRegistry,
+      client,
       concurrency: 1,
       processors: {
         main: {
@@ -313,11 +309,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       registry: simpleRegistry,
     });
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry: simpleRegistry,
+      client,
       concurrency: 1,
       processors: {
         main: {
@@ -368,11 +360,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       registry: continuationRegistry,
     });
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry: continuationRegistry,
+      client,
       concurrency: 1,
       processors: {
         step1: {
@@ -423,11 +411,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       registry: continuationNoFollowUpRegistry,
     });
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry: continuationNoFollowUpRegistry,
+      client,
       concurrency: 1,
       processors: {
         step1: {
@@ -569,11 +553,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       registry: continuationRegistry,
     });
     const worker = await createInProcessWorker({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      registry: continuationRegistry,
+      client,
       concurrency: 1,
       processors: {
         step2: {

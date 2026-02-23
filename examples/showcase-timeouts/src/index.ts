@@ -95,9 +95,7 @@ const client = await createClient({
 });
 
 const worker = await createInProcessWorker({
-  stateAdapter,
-  notifyAdapter,
-  registry: jobTypes,
+  client,
   processors: {
     "fetch-with-timeout": {
       attemptHandler: async ({ signal, job, complete }) => {

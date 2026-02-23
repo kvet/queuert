@@ -106,9 +106,7 @@ const client = await createClient({
 });
 
 const worker = await createInProcessWorker({
-  stateAdapter,
-  notifyAdapter,
-  registry: jobTypes,
+  client,
   processors: {
     "fetch-source": {
       attemptHandler: async ({ job, complete }) => {

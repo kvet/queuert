@@ -130,10 +130,7 @@ const client = await createClient({
 
 // Create worker with processors
 const worker = await createInProcessWorker({
-  stateAdapter,
-  notifyAdapter,
-  observabilityAdapter,
-  registry,
+  client,
   workerId: "worker-1",
   processors: {
     // Scenario 1: Simple job

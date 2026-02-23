@@ -60,14 +60,14 @@ The core `queuert` package exports these primary factory functions and types:
 
 Adapter packages use their domain-specific prefixes (not "Queuert"):
 
-| Package             | Factory Function                 | Type                 |
-| ------------------- | -------------------------------- | -------------------- |
-| `@queuert/postgres` | `createPgStateAdapter`           | `PgStateAdapter`     |
-| `@queuert/sqlite`   | `createSqliteStateAdapter`       | `SqliteStateAdapter` |
-| `@queuert/redis`    | `createRedisNotifyAdapter`       | -                    |
-| `@queuert/nats`     | `createNatsNotifyAdapter`        | -                    |
-| `@queuert/otel`     | `createOtelObservabilityAdapter` | -                    |
-| `@queuert/dashboard` | `createDashboard`               | -                    |
+| Package              | Factory Function                 | Type                 |
+| -------------------- | -------------------------------- | -------------------- |
+| `@queuert/postgres`  | `createPgStateAdapter`           | `PgStateAdapter`     |
+| `@queuert/sqlite`    | `createSqliteStateAdapter`       | `SqliteStateAdapter` |
+| `@queuert/redis`     | `createRedisNotifyAdapter`       | -                    |
+| `@queuert/nats`      | `createNatsNotifyAdapter`        | -                    |
+| `@queuert/otel`      | `createOtelObservabilityAdapter` | -                    |
+| `@queuert/dashboard` | `createDashboard`                | -                    |
 
 ## Design Documentation
 

@@ -100,9 +100,7 @@ const qrtClient = await createClient({
 });
 
 const qrtWorker = await createInProcessWorker({
-  stateAdapter,
-  notifyAdapter,
-  registry,
+  client: qrtClient,
   processors: {
     send_welcome_email: {
       attemptHandler: async ({ job, complete }) => {

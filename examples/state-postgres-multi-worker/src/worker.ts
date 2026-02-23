@@ -4,7 +4,7 @@ import {
   createPgStateAdapter,
 } from "@queuert/postgres";
 import { Pool, type PoolClient } from "pg";
-import { createInProcessWorker, defineJobTypes } from "queuert";
+import { createClient, createInProcessWorker, defineJobTypes } from "queuert";
 
 const registry = defineJobTypes<{
   process_order: {
@@ -117,10 +117,10 @@ const closeNotify = (): void => {
 
 const notifyAdapter = await createPgNotifyAdapter({ provider: notifyProvider });
 
+const client = await createClient({ stateAdapter, notifyAdapter, registry });
+
 const worker = await createInProcessWorker({
-  stateAdapter,
-  notifyAdapter,
-  registry,
+  client,
   workerId,
   concurrency: 2,
   processors: {
