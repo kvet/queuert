@@ -57,7 +57,25 @@ describe("createTransactionContext", () => {
     await ctx.resolve();
   });
 
-  // TODO: add async context propagation test when AsyncResource.bind support is restored
+  test("preserves async context from creation time across run calls", async () => {
+    const { AsyncLocalStorage } = await import("node:async_hooks");
+    const store = new AsyncLocalStorage<string>();
+
+    const mockRunInTransaction = async (callback: (txCtx: unknown) => Promise<void>) => {
+      await callback(undefined);
+    };
+
+    // Create transaction inside async context
+    const ctx = await store.run("creation-context", async () =>
+      createTransactionContext(mockRunInTransaction),
+    );
+
+    // Call ctx.run from outside the original async context
+    const value = await ctx.run(async () => store.getStore());
+    await ctx.resolve();
+
+    expect(value).toBe("creation-context");
+  });
 
   test("reject lifecycle: propagates errors and rolls back", async () => {
     let transactionError: unknown;

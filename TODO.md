@@ -18,7 +18,6 @@
 - [REF] Review OTEL tracing design - reconsider trace contexts stored in DB
 - [?,REF] Consider extracting a dedicated chain table at the DB level
 - [TASK,EASY] Reintroduce `withCommitHooks` runner overload (2-arg variant that composes transaction runner with CommitHooks). Removed due to tsgo higher-order generic inference limitation.
-- [TASK,EASY] Ensure no or minimal (and optional) use of async context in the library. Async context can cause subtle bugs and is not universally supported (e.g. bun). Use explicit context passing instead (e.g. pass observability handles directly to job processing functions instead of relying on async context). Don't forget about code style guide for it
 - [EPIC] Prepare 0.3 release
 
 # Medium term

@@ -116,7 +116,7 @@ A single worker can handle multiple job types. Slots poll all registered types a
 
 ### Attempt Middlewares
 
-Workers support middlewares that wrap each job attempt, enabling cross-cutting concerns like contextual logging with `AsyncLocalStorage`. Middlewares compose in order: first middleware's "before" runs first, last middleware's "after" runs first.
+Workers support middlewares that wrap each job attempt, enabling cross-cutting concerns like contextual logging. Middlewares compose in order: first middleware's "before" runs first, last middleware's "after" runs first. User-land middleware may use `AsyncLocalStorage` for implicit context propagation (see `log-pino` and `log-winston` examples).
 
 ## Summary
 
