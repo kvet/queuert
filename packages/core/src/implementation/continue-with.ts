@@ -2,7 +2,7 @@ import { type JobChain } from "../entities/job-chain.js";
 import { type BaseJobTypeDefinitions, type JobOf } from "../entities/job-type.js";
 import { mapStateJobToJob } from "../entities/job.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
-import { type CommitHooks } from "../commit-hooks.js";
+import { type TransactionHooks } from "../transaction-hooks.js";
 import { type Helpers } from "../setup-helpers.js";
 import { createStateJob } from "./create-state-job.js";
 
@@ -12,7 +12,7 @@ export const continueWith = async <TJobTypeName extends string, TInput>(
     typeName,
     input,
     txCtx,
-    commitHooks,
+    transactionHooks,
     schedule,
     blockers,
     chainId,
@@ -24,7 +24,7 @@ export const continueWith = async <TJobTypeName extends string, TInput>(
     typeName: TJobTypeName;
     input: TInput;
     txCtx: any;
-    commitHooks: CommitHooks;
+    transactionHooks: TransactionHooks;
     schedule?: ScheduleOptions;
     blockers?: JobChain<any, any, any, any>[];
     chainId: string;
@@ -40,7 +40,7 @@ export const continueWith = async <TJobTypeName extends string, TInput>(
     typeName,
     input,
     txCtx,
-    commitHooks,
+    transactionHooks,
     blockers,
     isChain: false,
     chainId,

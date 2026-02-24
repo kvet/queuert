@@ -1,6 +1,6 @@
 import { type JobChain, mapStateJobPairToJobChain } from "../entities/job-chain.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
-import { type CommitHooks } from "../commit-hooks.js";
+import { type TransactionHooks } from "../transaction-hooks.js";
 import { type Helpers } from "../setup-helpers.js";
 import { type DeduplicationOptions } from "../state-adapter/state-adapter.js";
 import { createStateJob } from "./create-state-job.js";
@@ -11,7 +11,7 @@ export const startJobChain = async <TChainTypeName extends string, TInput, TOutp
     typeName,
     input,
     txCtx,
-    commitHooks,
+    transactionHooks,
     deduplication,
     schedule,
     blockers,
@@ -19,7 +19,7 @@ export const startJobChain = async <TChainTypeName extends string, TInput, TOutp
     typeName: TChainTypeName;
     input: TInput;
     txCtx: any;
-    commitHooks: CommitHooks;
+    transactionHooks: TransactionHooks;
     deduplication?: DeduplicationOptions;
     schedule?: ScheduleOptions;
     blockers?: JobChain<any, any, any, any>[];
@@ -29,7 +29,7 @@ export const startJobChain = async <TChainTypeName extends string, TInput, TOutp
     typeName,
     input,
     txCtx,
-    commitHooks,
+    transactionHooks,
     blockers,
     isChain: true,
     chainIndex: 0,

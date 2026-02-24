@@ -8,15 +8,15 @@ The client is the public API for managing job chains. Created via `createClient(
 
 The client has two categories of methods: mutating and read-only.
 
-**Mutating** — `startJobChain`, `completeJobChain`, `deleteJobChains`. Require `commitHooks` and a transaction context. Side effects (notifications, observability) are buffered via hooks and only flushed after the caller's transaction commits.
+**Mutating** — `startJobChain`, `completeJobChain`, `deleteJobChains`. Require `transactionHooks` and a transaction context. Side effects (notifications, observability) are buffered via hooks and only flushed after the caller's transaction commits.
 
-**Read-only** — `getJobChain`, `getJob`, `listJobChains`, `listJobs`, `getBlockerJobChains`, `getBlockedJobs`, `awaitJobChain`. Do not require `commitHooks`. Accept an optional transaction context — when omitted, the adapter acquires its own connection.
+**Read-only** — `getJobChain`, `getJob`, `listJobChains`, `listJobs`, `getBlockerJobChains`, `getBlockedJobs`, `awaitJobChain`. Do not require `transactionHooks`. Accept an optional transaction context — when omitted, the adapter acquires its own connection.
 
 All methods accept a transaction context: required for mutations (rollback safety for side effects), optional for queries (standalone reads are fine).
 
 ### Mutation Methods
 
-All mutation methods require `commitHooks` and a transaction context. Side effects are buffered and flushed after the caller's transaction commits.
+All mutation methods require `transactionHooks` and a transaction context. Side effects are buffered and flushed after the caller's transaction commits.
 
 **`startJobChain`** — create a new job chain. Takes `typeName`, typed `input`, optional `blockers`, `deduplication`, and `schedule`. Returns the created `JobChain<...>` with a `deduplicated` flag. The return type narrows to the specified chain type.
 
@@ -46,14 +46,14 @@ All query methods accept an optional transaction context. Both pagination method
 
 ## Internal Hooks
 
-The client and worker register hooks on `CommitHooks` internally. These are not part of the public `CommitHooks` API.
+The client and worker register hooks on `TransactionHooks` internally. These are not part of the public `TransactionHooks` API.
 
 - **Notify hooks** — buffer notification calls (`notifyJobScheduled`, `notifyJobChainCompleted`, `notifyJobOwnershipLost`) and flush them after commit
 - **Observability hook** — buffer metric emissions, log calls, and span completions until after commit
 
 ## See Also
 
-- [Commit Hooks](commit-hooks.md) — CommitHooks mechanism for buffering side effects
+- [Transaction Hooks](transaction-hooks.md) — TransactionHooks mechanism for buffering side effects
 - [Job Chain Model](job-chain-model.md) — Chain structure, Promise analogy, terminology
 - [Job Processing](job-processing.md) — Prepare/complete pattern, transactional design
 - [Workerless Completion](workerless-completion.md) — Completing jobs without a worker

@@ -11,7 +11,7 @@
  * 5. Workerless Completion: Job completed externally → CONSUMER job span without attempt spans
  */
 
-import { createClient, createInProcessWorker, defineJobTypes, withCommitHooks } from "queuert";
+import { createClient, createInProcessWorker, defineJobTypes, withTransactionHooks } from "queuert";
 import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
 import { flush, observabilityAdapter, shutdown } from "./observability.js";
 
@@ -228,9 +228,9 @@ console.log("Optional: Run `pnpm tui` in another terminal to view traces\n");
 // Scenario 1: Single Job
 console.log("--- Scenario 1: Single Job ---");
 console.log("One chain, one job, one attempt. Simplest trace structure.\n");
-const greetJob = await withCommitHooks(async (commitHooks) =>
+const greetJob = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.runInTransaction(async (ctx) =>
-    client.startJobChain({ ...ctx, commitHooks, typeName: "greet", input: { name: "World" } }),
+    client.startJobChain({ ...ctx, transactionHooks, typeName: "greet", input: { name: "World" } }),
   ),
 );
 const greetResult = await client.waitForJobChainCompletion(greetJob, { timeoutMs: 5000 });
@@ -239,11 +239,11 @@ console.log("Result:", greetResult.output);
 // Scenario 2: Continuations
 console.log("\n--- Scenario 2: Continuations ---");
 console.log("validate → process → complete. Chain span contains 3 sequential job spans.\n");
-const orderJob = await withCommitHooks(async (commitHooks) =>
+const orderJob = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.runInTransaction(async (ctx) =>
     client.startJobChain({
       ...ctx,
-      commitHooks,
+      transactionHooks,
       typeName: "order:validate",
       input: { orderId: "ORD-123" },
     }),
@@ -255,23 +255,23 @@ console.log("Result:", orderResult.output);
 // Scenario 3: Blockers (fan-out/fan-in)
 console.log("\n--- Scenario 3: Blockers ---");
 console.log("Two blockers run in parallel, main job waits. Traces linked across chains.\n");
-const blockerJob = await withCommitHooks(async (commitHooks) =>
+const blockerJob = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.runInTransaction(async (ctx) => {
     const userBlocker = await client.startJobChain({
       ...ctx,
-      commitHooks,
+      transactionHooks,
       typeName: "fetch-user",
       input: { userId: "user-1" },
     });
     const permBlocker = await client.startJobChain({
       ...ctx,
-      commitHooks,
+      transactionHooks,
       typeName: "fetch-permissions",
       input: { userId: "user-1" },
     });
     return client.startJobChain({
       ...ctx,
-      commitHooks,
+      transactionHooks,
       typeName: "process-with-blockers",
       input: { taskId: "TASK-456" },
       blockers: [userBlocker, permBlocker],
@@ -284,11 +284,11 @@ console.log("Result:", blockerResult.output);
 // Scenario 4: Retries
 console.log("\n--- Scenario 4: Retries ---");
 console.log("First attempt fails, second succeeds. Job span shows multiple attempt spans.\n");
-const retryJob = await withCommitHooks(async (commitHooks) =>
+const retryJob = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.runInTransaction(async (ctx) =>
     client.startJobChain({
       ...ctx,
-      commitHooks,
+      transactionHooks,
       typeName: "might-fail",
       input: { shouldFail: true },
     }),
@@ -300,21 +300,21 @@ console.log("Result:", retryResult.output);
 // Scenario 5: Workerless Completion
 console.log("\n--- Scenario 5: Workerless Completion ---");
 console.log("Job completed externally without a worker. CONSUMER job span, no attempt spans.\n");
-const approvalJob = await withCommitHooks(async (commitHooks) =>
+const approvalJob = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.runInTransaction(async (ctx) =>
     client.startJobChain({
       ...ctx,
-      commitHooks,
+      transactionHooks,
       typeName: "awaiting-approval",
       input: { requestId: "REQ-789" },
     }),
   ),
 );
-const approvalResult = await withCommitHooks(async (commitHooks) =>
+const approvalResult = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.runInTransaction(async (ctx) =>
     client.completeJobChain({
       ...ctx,
-      commitHooks,
+      transactionHooks,
       typeName: "awaiting-approval",
       id: approvalJob.id,
       complete: async ({ job, complete }) =>

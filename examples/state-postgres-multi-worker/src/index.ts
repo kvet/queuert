@@ -8,7 +8,7 @@ import {
 } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import { Pool, type PoolClient } from "pg";
-import { createClient, defineJobTypes, withCommitHooks } from "queuert";
+import { createClient, defineJobTypes, withTransactionHooks } from "queuert";
 
 // ============================================================================
 // Multi-Worker Order Processing Example (with Child Processes)
@@ -206,7 +206,7 @@ await Promise.all(readyPromises);
 console.log(`\nQueueing ${JOBS_TO_PROCESS} orders...\n`);
 
 const products = ["Widget", "Gadget", "Gizmo", "Doohickey", "Thingamajig", "Contraption"];
-const jobChains = await withCommitHooks(async (commitHooks) =>
+const jobChains = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.runInTransaction(async (ctx) => {
     const chains = [];
     for (let i = 1; i <= JOBS_TO_PROCESS; i++) {
@@ -220,7 +220,7 @@ const jobChains = await withCommitHooks(async (commitHooks) =>
       chains.push(
         await qrtClient.startJobChain({
           ...ctx,
-          commitHooks,
+          transactionHooks,
           typeName: "process_order",
           input: { orderId: `ORD-${String(i).padStart(3, "0")}`, items, total },
         }),

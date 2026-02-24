@@ -1,13 +1,13 @@
 import { describe, expect, test, vi } from "vitest";
-import { createCommitHooks, withCommitHooks } from "./commit-hooks.js";
+import { createTransactionHooks, withTransactionHooks } from "./transaction-hooks.js";
 import { HookNotRegisteredError } from "./errors.js";
 
-describe("CommitHooks", () => {
+describe("TransactionHooks", () => {
   test("getOrInsert: lazily registers hook and returns state", async () => {
     const key = Symbol("test");
     const flush = vi.fn();
 
-    await withCommitHooks(async (hooks) => {
+    await withTransactionHooks(async (hooks) => {
       const state = hooks.getOrInsert(key, () => ({
         state: [] as string[],
         flush,
@@ -30,7 +30,7 @@ describe("CommitHooks", () => {
   test("set: sets hook, get: retrieves state", async () => {
     const key = Symbol("test");
 
-    await withCommitHooks(async (hooks) => {
+    await withTransactionHooks(async (hooks) => {
       hooks.set(key, {
         state: { count: 0 },
         flush: () => {},
@@ -46,16 +46,16 @@ describe("CommitHooks", () => {
   test("get: throws HookNotRegisteredError for missing key", async () => {
     const key = Symbol("missing");
 
-    await withCommitHooks(async (hooks) => {
+    await withTransactionHooks(async (hooks) => {
       expect(() => hooks.get(key)).toThrow(HookNotRegisteredError);
-      expect(() => hooks.get(key)).toThrow("CommitHooks hook not registered");
+      expect(() => hooks.get(key)).toThrow("TransactionHooks hook not registered");
     });
   });
 
   test("has: checks existence", async () => {
     const key = Symbol("test");
 
-    await withCommitHooks(async (hooks) => {
+    await withTransactionHooks(async (hooks) => {
       expect(hooks.has(key)).toBe(false);
       hooks.set(key, { state: null, flush: () => {} });
       expect(hooks.has(key)).toBe(true);
@@ -66,7 +66,7 @@ describe("CommitHooks", () => {
     const key = Symbol("test");
     const flush = vi.fn();
 
-    await withCommitHooks(async (hooks) => {
+    await withTransactionHooks(async (hooks) => {
       hooks.set(key, { state: "data", flush });
       expect(hooks.has(key)).toBe(true);
 
@@ -82,7 +82,7 @@ describe("CommitHooks", () => {
     const key1 = Symbol("first");
     const key2 = Symbol("second");
 
-    await withCommitHooks(async (hooks) => {
+    await withTransactionHooks(async (hooks) => {
       hooks.set(key1, {
         state: null,
         flush: () => {
@@ -104,7 +104,7 @@ describe("CommitHooks", () => {
     const key = Symbol("counter");
     const flush = vi.fn();
 
-    await withCommitHooks(async (hooks) => {
+    await withTransactionHooks(async (hooks) => {
       hooks.set(key, { state: new Set<string>(), flush });
       hooks.get<Set<string>>(key).add("a");
       hooks.get<Set<string>>(key).add("b");
@@ -119,7 +119,7 @@ describe("CommitHooks", () => {
     const key1 = Symbol("async1");
     const key2 = Symbol("async2");
 
-    await withCommitHooks(async (hooks) => {
+    await withTransactionHooks(async (hooks) => {
       hooks.set(key1, {
         state: null,
         flush: async () => {
@@ -139,13 +139,34 @@ describe("CommitHooks", () => {
     expect(order).toEqual(["first", "second"]);
   });
 
+  test("flush: runs all hooks even if one throws, then rethrows first error", async () => {
+    const flush2 = vi.fn();
+    const key1 = Symbol("first");
+    const key2 = Symbol("second");
+    const error = new Error("flush failed");
+
+    await expect(
+      withTransactionHooks(async (hooks) => {
+        hooks.set(key1, {
+          state: null,
+          flush: () => {
+            throw error;
+          },
+        });
+        hooks.set(key2, { state: null, flush: flush2 });
+      }),
+    ).rejects.toThrow(error);
+
+    expect(flush2).toHaveBeenCalledOnce();
+  });
+
   test("multiple getOrInsert calls with different keys", async () => {
     const key1 = Symbol("a");
     const key2 = Symbol("b");
     const flush1 = vi.fn();
     const flush2 = vi.fn();
 
-    await withCommitHooks(async (hooks) => {
+    await withTransactionHooks(async (hooks) => {
       const s1 = hooks.getOrInsert(key1, () => ({ state: [1], flush: flush1 }));
       const s2 = hooks.getOrInsert(key2, () => ({ state: [2], flush: flush2 }));
       s1.push(10);
@@ -157,16 +178,16 @@ describe("CommitHooks", () => {
   });
 });
 
-describe("withCommitHooks", () => {
+describe("withTransactionHooks", () => {
   test("returns callback result on success", async () => {
-    const result = await withCommitHooks(async () => 42);
+    const result = await withTransactionHooks(async () => 42);
     expect(result).toBe(42);
   });
 
   test("propagates callback error", async () => {
     const error = new Error("boom");
     await expect(
-      withCommitHooks(async () => {
+      withTransactionHooks(async () => {
         throw error;
       }),
     ).rejects.toThrow(error);
@@ -177,7 +198,7 @@ describe("withCommitHooks", () => {
     const key = Symbol("test");
 
     await expect(
-      withCommitHooks(async (hooks) => {
+      withTransactionHooks(async (hooks) => {
         hooks.set(key, { state: "data", flush });
         throw new Error("transaction failed");
       }),
@@ -185,15 +206,88 @@ describe("withCommitHooks", () => {
 
     expect(flush).not.toHaveBeenCalled();
   });
+
+  test("calls hook discard functions when callback throws", async () => {
+    const flush = vi.fn();
+    const discard = vi.fn();
+    const key = Symbol("test");
+
+    await expect(
+      withTransactionHooks(async (hooks) => {
+        hooks.set(key, { state: "data", flush, discard });
+        throw new Error("transaction failed");
+      }),
+    ).rejects.toThrow("transaction failed");
+
+    expect(flush).not.toHaveBeenCalled();
+    expect(discard).toHaveBeenCalledOnce();
+    expect(discard).toHaveBeenCalledWith("data");
+  });
+
+  test("calls async hook discard functions when callback throws", async () => {
+    const order: string[] = [];
+    const key1 = Symbol("first");
+    const key2 = Symbol("second");
+
+    await expect(
+      withTransactionHooks(async (hooks) => {
+        hooks.set(key1, {
+          state: "a",
+          flush: () => {},
+          discard: async (state) => {
+            await new Promise((r) => setTimeout(r, 10));
+            order.push(`discard-${state}`);
+          },
+        });
+        hooks.set(key2, {
+          state: "b",
+          flush: () => {},
+          discard: async (state) => {
+            order.push(`discard-${state}`);
+          },
+        });
+        throw new Error("transaction failed");
+      }),
+    ).rejects.toThrow("transaction failed");
+
+    expect(order).toEqual(["discard-a", "discard-b"]);
+  });
+
+  test("discard: runs all hooks even if one throws, then rethrows original error", async () => {
+    const discard2 = vi.fn();
+    const key1 = Symbol("first");
+    const key2 = Symbol("second");
+    const txError = new Error("transaction failed");
+
+    await expect(
+      withTransactionHooks(async (hooks) => {
+        hooks.set(key1, {
+          state: null,
+          flush: () => {},
+          discard: () => {
+            throw new Error("discard failed");
+          },
+        });
+        hooks.set(key2, {
+          state: null,
+          flush: () => {},
+          discard: discard2,
+        });
+        throw txError;
+      }),
+    ).rejects.toThrow(txError);
+
+    expect(discard2).toHaveBeenCalledOnce();
+  });
 });
 
-describe("createCommitHooks", () => {
+describe("createTransactionHooks", () => {
   test("manual lifecycle - flush on success", async () => {
     const key = Symbol("test");
     const flushFn = vi.fn();
 
-    const { commitHooks, flush } = createCommitHooks();
-    commitHooks.set(key, { state: "data", flush: flushFn });
+    const { transactionHooks, flush } = createTransactionHooks();
+    transactionHooks.set(key, { state: "data", flush: flushFn });
 
     await flush();
 
@@ -205,12 +299,27 @@ describe("createCommitHooks", () => {
     const key = Symbol("test");
     const flushFn = vi.fn();
 
-    const { commitHooks, discard } = createCommitHooks();
-    commitHooks.set(key, { state: "data", flush: flushFn });
+    const { transactionHooks, discard } = createTransactionHooks();
+    transactionHooks.set(key, { state: "data", flush: flushFn });
 
-    discard();
+    await discard();
 
     expect(flushFn).not.toHaveBeenCalled();
-    expect(commitHooks.has(key)).toBe(false);
+    expect(transactionHooks.has(key)).toBe(false);
+  });
+
+  test("manual lifecycle - discard calls hook discard functions", async () => {
+    const key = Symbol("test");
+    const flushFn = vi.fn();
+    const discardFn = vi.fn();
+
+    const { transactionHooks, discard } = createTransactionHooks();
+    transactionHooks.set(key, { state: "data", flush: flushFn, discard: discardFn });
+
+    await discard();
+
+    expect(flushFn).not.toHaveBeenCalled();
+    expect(discardFn).toHaveBeenCalledOnce();
+    expect(discardFn).toHaveBeenCalledWith("data");
   });
 });

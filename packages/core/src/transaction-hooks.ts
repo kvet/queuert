@@ -1,8 +1,12 @@
 import { HookNotRegisteredError } from "./errors.js";
 
-type HookDef<T> = { state: T; flush: (state: T) => void | Promise<void> };
+type HookDef<T> = {
+  state: T;
+  flush: (state: T) => void | Promise<void>;
+  discard?: (state: T) => void | Promise<void>;
+};
 
-export type CommitHooks = {
+export type TransactionHooks = {
   set<T>(key: symbol, hook: HookDef<T>): void;
   getOrInsert<T>(key: symbol, factory: () => HookDef<T>): T;
   get<T>(key: symbol): T;
@@ -10,10 +14,10 @@ export type CommitHooks = {
   delete(key: symbol): void;
 };
 
-export const createCommitHooks = () => {
+export const createTransactionHooks = () => {
   const hooks = new Map<symbol, HookDef<any>>();
 
-  const commitHooks: CommitHooks = {
+  const transactionHooks: TransactionHooks = {
     set: <T>(key: symbol, hook: HookDef<T>): void => {
       hooks.set(key, hook);
     },
@@ -39,28 +43,44 @@ export const createCommitHooks = () => {
   const flush = async (): Promise<void> => {
     const snapshot = [...hooks.values()];
     hooks.clear();
+    let firstError: unknown;
     for (const hook of snapshot) {
-      await hook.flush(hook.state);
+      try {
+        await hook.flush(hook.state);
+      } catch (error) {
+        firstError ??= error;
+      }
     }
+    if (firstError) throw firstError;
   };
 
-  const discard = (): void => {
+  const discard = async (): Promise<void> => {
+    const snapshot = [...hooks.values()];
     hooks.clear();
+    let firstError: unknown;
+    for (const hook of snapshot) {
+      try {
+        await hook.discard?.(hook.state);
+      } catch (error) {
+        firstError ??= error;
+      }
+    }
+    if (firstError) throw firstError;
   };
 
-  return { commitHooks, flush, discard };
+  return { transactionHooks, flush, discard };
 };
 
-export const withCommitHooks = async <T>(
-  cb: (commitHooks: CommitHooks) => Promise<T>,
+export const withTransactionHooks = async <T>(
+  cb: (transactionHooks: TransactionHooks) => Promise<T>,
 ): Promise<T> => {
-  const { commitHooks, flush, discard } = createCommitHooks();
+  const { transactionHooks, flush, discard } = createTransactionHooks();
   try {
-    const result = await cb(commitHooks);
+    const result = await cb(transactionHooks);
     await flush();
     return result;
   } catch (error) {
-    discard();
+    await discard().catch(() => {});
     throw error;
   }
 };

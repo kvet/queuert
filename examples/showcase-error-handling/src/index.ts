@@ -21,7 +21,7 @@ import {
   createInProcessWorker,
   defineJobTypes,
   rescheduleJob,
-  withCommitHooks,
+  withTransactionHooks,
 } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 
@@ -209,12 +209,12 @@ const stopWorker = await worker.start();
 console.log("\n--- Scenario 1: Discriminated Union Outputs ---");
 console.log("Payment results are typed as success | failure.\n");
 
-const payment1 = await withCommitHooks(async (commitHooks) =>
+const payment1 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     return client.startJobChain({
       sql: txSql,
-      commitHooks,
+      transactionHooks,
       typeName: "process-payment",
       input: { orderId: "order-1", amount: 500 },
     });
@@ -225,12 +225,12 @@ console.log(
   `Result: ${result1.output.success ? `SUCCESS (${result1.output.transactionId})` : `FAILED (${result1.output.error})`}`,
 );
 
-const payment2 = await withCommitHooks(async (commitHooks) =>
+const payment2 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     return client.startJobChain({
       sql: txSql,
-      commitHooks,
+      transactionHooks,
       typeName: "process-payment",
       input: { orderId: "order-2", amount: 1500 },
     });
@@ -246,12 +246,12 @@ console.log("\n--- Scenario 2a: Compensation Pattern (Success) ---");
 console.log("Charge -> Ship succeeds.\n");
 
 shipmentShouldFail = false;
-const order1 = await withCommitHooks(async (commitHooks) =>
+const order1 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     return client.startJobChain({
       sql: txSql,
-      commitHooks,
+      transactionHooks,
       typeName: "charge-card",
       input: { orderId: "order-3", amount: 100 },
     });
@@ -265,12 +265,12 @@ console.log("\n--- Scenario 2b: Compensation Pattern (Failure -> Refund) ---");
 console.log("Charge -> Ship fails -> Refund.\n");
 
 shipmentShouldFail = true;
-const order2 = await withCommitHooks(async (commitHooks) =>
+const order2 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     return client.startJobChain({
       sql: txSql,
-      commitHooks,
+      transactionHooks,
       typeName: "charge-card",
       input: { orderId: "order-4", amount: 100 },
     });
@@ -284,12 +284,12 @@ console.log("\n--- Scenario 3: Explicit Rescheduling ---");
 console.log("API is rate-limited, job reschedules itself.\n");
 
 apiRateLimited = true;
-const apiCall = await withCommitHooks(async (commitHooks) =>
+const apiCall = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     return client.startJobChain({
       sql: txSql,
-      commitHooks,
+      transactionHooks,
       typeName: "call-rate-limited-api",
       input: { endpoint: "/api/data" },
     });

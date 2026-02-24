@@ -6,7 +6,7 @@ import {
   createClient,
   createInProcessWorker,
   defineJobTypes,
-  withCommitHooks,
+  withTransactionHooks,
 } from "../index.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
@@ -57,11 +57,11 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       },
     });
 
-    const jobChain = await withCommitHooks(async (commitHooks) =>
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
-          commitHooks,
+          transactionHooks,
           typeName: "test",
           input: null,
         }),
@@ -170,11 +170,11 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       },
     });
 
-    const failJobChain = await withCommitHooks(async (commitHooks) =>
+    const failJobChain = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
-          commitHooks,
+          transactionHooks,
           typeName: "test",
           input: null,
         }),
@@ -185,11 +185,11 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       await jobStarted.promise;
       await sleep(10);
 
-      const successJobChain = await withCommitHooks(async (commitHooks) =>
+      const successJobChain = await withTransactionHooks(async (transactionHooks) =>
         runInTransaction(async (txCtx) =>
           client.startJobChain({
             ...txCtx,
-            commitHooks,
+            transactionHooks,
             typeName: "test",
             input: null,
           }),
@@ -307,11 +307,11 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       },
     });
 
-    const failJobChain = await withCommitHooks(async (commitHooks) =>
+    const failJobChain = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
-          commitHooks,
+          transactionHooks,
           typeName: "test",
           input: null,
         }),
@@ -322,11 +322,11 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       await jobStarted.promise;
       await sleep(10);
 
-      const successJobChain = await withCommitHooks(async (commitHooks) =>
+      const successJobChain = await withTransactionHooks(async (transactionHooks) =>
         runInTransaction(async (txCtx) =>
           client.startJobChain({
             ...txCtx,
-            commitHooks,
+            transactionHooks,
             typeName: "test",
             input: null,
           }),
@@ -402,11 +402,11 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       },
     });
 
-    const jobChain1 = await withCommitHooks(async (commitHooks) =>
+    const jobChain1 = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
-          commitHooks,
+          transactionHooks,
           typeName: "test",
           input: { id: 1 },
         }),
@@ -418,11 +418,11 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
       await sleep(leaseConfig.leaseMs * 5);
 
-      const jobChain2 = await withCommitHooks(async (commitHooks) =>
+      const jobChain2 = await withTransactionHooks(async (transactionHooks) =>
         runInTransaction(async (txCtx) =>
           client.startJobChain({
             ...txCtx,
-            commitHooks,
+            transactionHooks,
             typeName: "test",
             input: { id: 2 },
           }),

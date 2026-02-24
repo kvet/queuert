@@ -5,7 +5,7 @@ import {
   createClient,
   createInProcessWorker,
   defineJobTypes,
-  withCommitHooks,
+  withTransactionHooks,
 } from "../index.js";
 import { extendWithStateInProcess } from "../state-adapter/state-adapter.in-process.spec-helper.js";
 import { extendWithCommon, extendWithNotifyInProcess } from "../suites/spec-context.spec-helper.js";
@@ -87,11 +87,11 @@ describe("Logging", () => {
       },
     });
 
-    const jobChain = await withCommitHooks(async (commitHooks) =>
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
-          commitHooks,
+          transactionHooks,
           typeName: "test",
           input: { test: true },
         }),
@@ -196,11 +196,11 @@ describe("Logging", () => {
       },
     });
 
-    const job = await withCommitHooks(async (commitHooks) =>
+    const job = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
-          commitHooks,
+          transactionHooks,
           typeName: "test",
           input: null,
         }),
@@ -299,11 +299,11 @@ describe("Logging", () => {
       },
     });
 
-    const jobChain = await withCommitHooks(async (commitHooks) =>
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
-          commitHooks,
+          transactionHooks,
           typeName: "linear",
           input: { value: 1 },
         }),
@@ -412,11 +412,11 @@ describe("Logging", () => {
       },
     });
 
-    const jobChain = await withCommitHooks(async (commitHooks) =>
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) => {
         const dependencyJobChain = await client.startJobChain({
           ...txCtx,
-          commitHooks,
+          transactionHooks,
           typeName: "blocker",
           input: { value: 0 },
         });
@@ -424,7 +424,7 @@ describe("Logging", () => {
 
         const jobChain = await client.startJobChain({
           ...txCtx,
-          commitHooks,
+          transactionHooks,
           typeName: "main",
           input: { start: true },
           blockers: [dependencyJobChain],
@@ -523,22 +523,22 @@ describe("Logging", () => {
       registry,
     });
 
-    const jobChain = await withCommitHooks(async (commitHooks) =>
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
-          commitHooks,
+          transactionHooks,
           typeName: "test",
           input: { value: 42 },
         }),
       ),
     );
 
-    await withCommitHooks(async (commitHooks) =>
+    await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
         client.completeJobChain({
           ...txCtx,
-          commitHooks,
+          transactionHooks,
           typeName: "test",
           id: jobChain.id,
           complete: async ({ job, complete }) => {
@@ -592,9 +592,9 @@ describe("Logging", () => {
       },
     });
 
-    const jobChain = await withCommitHooks(async (commitHooks) =>
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, commitHooks, typeName: "test", input: null }),
+        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
@@ -651,9 +651,9 @@ describe("Logging", () => {
       },
     });
 
-    const jobChain = await withCommitHooks(async (commitHooks) =>
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, commitHooks, typeName: "test", input: null }),
+        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
@@ -746,9 +746,9 @@ describe("Logging", () => {
       },
     });
 
-    const jobChain = await withCommitHooks(async (commitHooks) =>
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, commitHooks, typeName: "test", input: null }),
+        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
@@ -756,9 +756,9 @@ describe("Logging", () => {
       await jobStarted.promise;
       await sleep(10);
 
-      const successJob = await withCommitHooks(async (commitHooks) =>
+      const successJob = await withTransactionHooks(async (transactionHooks) =>
         runInTransaction(async (txCtx) =>
-          client.startJobChain({ ...txCtx, commitHooks, typeName: "test", input: null }),
+          client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
         ),
       );
 
@@ -831,9 +831,9 @@ describe("Logging", () => {
       },
     });
 
-    const jobChain = await withCommitHooks(async (commitHooks) =>
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, commitHooks, typeName: "test", input: null }),
+        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
@@ -886,9 +886,9 @@ describe("Logging", () => {
       },
     });
 
-    const jobChain = await withCommitHooks(async (commitHooks) =>
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, commitHooks, typeName: "test", input: null }),
+        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 

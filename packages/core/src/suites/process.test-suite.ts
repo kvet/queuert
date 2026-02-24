@@ -1,6 +1,11 @@
 import { type TestAPI, expectTypeOf } from "vitest";
 import { sleep } from "../helpers/sleep.js";
-import { createClient, createInProcessWorker, defineJobTypes, withCommitHooks } from "../index.js";
+import {
+  createClient,
+  createInProcessWorker,
+  defineJobTypes,
+  withTransactionHooks,
+} from "../index.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -113,30 +118,30 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     });
 
     const [prepareJobChain, completeJobChain, prepareAfterAutoSetupJobChain, continueWithJobChain] =
-      await withCommitHooks(async (commitHooks) =>
+      await withTransactionHooks(async (transactionHooks) =>
         runInTransaction(async (txCtx) =>
           Promise.all([
             client.startJobChain({
               ...txCtx,
-              commitHooks,
+              transactionHooks,
               typeName: "test-prepare-twice",
               input: null,
             }),
             client.startJobChain({
               ...txCtx,
-              commitHooks,
+              transactionHooks,
               typeName: "test-complete-twice",
               input: null,
             }),
             client.startJobChain({
               ...txCtx,
-              commitHooks,
+              transactionHooks,
               typeName: "test-prepare-after-auto-setup",
               input: null,
             }),
             client.startJobChain({
               ...txCtx,
-              commitHooks,
+              transactionHooks,
               typeName: "test-continueWith-twice",
               input: null,
             }),
@@ -220,11 +225,11 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       },
     });
 
-    const jobChain = await withCommitHooks(async (commitHooks) =>
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
-          commitHooks,
+          transactionHooks,
           typeName: "test",
           input: null,
         }),
@@ -290,11 +295,11 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       },
     });
 
-    const job = await withCommitHooks(async (commitHooks) =>
+    const job = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
-          commitHooks,
+          transactionHooks,
           typeName: "test",
           input: null,
         }),
@@ -360,10 +365,10 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
             expect(result).toEqual("prepare");
 
             const completedJob = await complete(
-              async ({ continueWith: _, commitHooks, ...txCtx }) => {
+              async ({ continueWith: _, transactionHooks, ...txCtx }) => {
                 expectTypeOf(txCtx).toEqualTypeOf<{ $test: true }>();
                 expect(txCtx).toBeDefined();
-                expect(commitHooks).toBeDefined();
+                expect(transactionHooks).toBeDefined();
 
                 return { result: true };
               },
@@ -382,11 +387,11 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       },
     });
 
-    const jobChain = await withCommitHooks(async (commitHooks) =>
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
-          commitHooks,
+          transactionHooks,
           typeName: "test",
           input: { test: true },
         }),

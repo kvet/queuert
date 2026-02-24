@@ -1,6 +1,6 @@
 import { type Job } from "../entities/job.js";
 import { JobNotFoundError } from "../errors.js";
-import { type CommitHooks } from "../commit-hooks.js";
+import { type TransactionHooks } from "../transaction-hooks.js";
 import { bufferNotifyChainCompletion, bufferNotifyJobScheduled } from "../helpers/notify-hooks.js";
 import { type Helpers } from "../setup-helpers.js";
 import { type BaseTxContext, type StateJob } from "../state-adapter/state-adapter.js";
@@ -10,13 +10,13 @@ export const finishJob = async (
   {
     job,
     txCtx,
-    commitHooks,
+    transactionHooks,
     workerId,
     ...rest
   }: {
     job: StateJob;
     txCtx: BaseTxContext;
-    commitHooks: CommitHooks;
+    transactionHooks: TransactionHooks;
     workerId: string | null;
   } & (
     | { type: "completeChain"; output: unknown }
@@ -63,7 +63,7 @@ export const finishJob = async (
 
     helpers.observabilityHelper.jobChainCompleted(jobChainStartJob, { output });
     helpers.observabilityHelper.jobChainDuration(jobChainStartJob, job);
-    bufferNotifyChainCompletion(commitHooks, helpers.notifyAdapter, job);
+    bufferNotifyChainCompletion(transactionHooks, helpers.notifyAdapter, job);
 
     const { unblockedJobs, blockerTraceContexts } = await helpers.stateAdapter.scheduleBlockedJobs({
       txCtx,
@@ -78,7 +78,7 @@ export const finishJob = async (
 
     if (unblockedJobs.length > 0) {
       unblockedJobs.forEach((unblockedJob) => {
-        bufferNotifyJobScheduled(commitHooks, helpers.notifyAdapter, unblockedJob);
+        bufferNotifyJobScheduled(transactionHooks, helpers.notifyAdapter, unblockedJob);
         helpers.observabilityHelper.jobUnblocked(unblockedJob, {
           unblockedByChain: jobChainStartJob,
         });

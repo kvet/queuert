@@ -2,7 +2,7 @@ import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import { CompiledQuery, type Generated, Kysely, PostgresDialect } from "kysely";
 import { Pool } from "pg";
-import { createClient, createInProcessWorker, defineJobTypes, withCommitHooks } from "queuert";
+import { createClient, createInProcessWorker, defineJobTypes, withTransactionHooks } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 
 // 1. Start PostgreSQL using testcontainers
@@ -89,7 +89,7 @@ const qrtWorker = await createInProcessWorker({
 const stopWorker = await qrtWorker.start();
 
 // 8. Register a new user and queue welcome email atomically
-const jobChain = await withCommitHooks(async (commitHooks) =>
+const jobChain = await withTransactionHooks(async (transactionHooks) =>
   db.transaction().execute(async (db) => {
     const user = await db
       .insertInto("users")
@@ -100,7 +100,7 @@ const jobChain = await withCommitHooks(async (commitHooks) =>
     // Queue welcome email - if user creation fails, no email job is created
     return qrtClient.startJobChain({
       db,
-      commitHooks,
+      transactionHooks,
       typeName: "send_welcome_email",
       input: { userId: user.id, email: user.email, name: user.name },
     });

@@ -1,5 +1,5 @@
 import { type UUID } from "node:crypto";
-import { createClient, createInProcessWorker, defineJobTypes, withCommitHooks } from "queuert";
+import { createClient, createInProcessWorker, defineJobTypes, withTransactionHooks } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 import { withWorkers } from "queuert/testing";
 import { it as baseIt, expectTypeOf, vi } from "vitest";
@@ -62,11 +62,11 @@ it("should infer types correctly with custom ID", async ({ db }) => {
     }
   };
 
-  const jobChain = await withCommitHooks(async (commitHooks) =>
+  const jobChain = await withTransactionHooks(async (transactionHooks) =>
     runInTransaction(async (db) =>
       client.startJobChain({
         db,
-        commitHooks,
+        transactionHooks,
         typeName: "test",
         input: { foo: "hello" },
       }),

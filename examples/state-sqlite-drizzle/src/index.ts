@@ -7,7 +7,7 @@ import Database from "better-sqlite3";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
-import { createClient, createInProcessWorker, defineJobTypes, withCommitHooks } from "queuert";
+import { createClient, createInProcessWorker, defineJobTypes, withTransactionHooks } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 
 // 1. Create in-memory SQLite database
@@ -119,7 +119,7 @@ const qrtWorker = await createInProcessWorker({
 const stopWorker = await qrtWorker.start();
 
 // 8. Register a new user and queue welcome email atomically
-const jobChain = await withCommitHooks(async (commitHooks) => {
+const jobChain = await withTransactionHooks(async (transactionHooks) => {
   await lock.acquire();
   try {
     sqlite.exec("BEGIN IMMEDIATE");
@@ -134,7 +134,7 @@ const jobChain = await withCommitHooks(async (commitHooks) => {
     // Queue welcome email - if user creation fails, no email job is created
     const result = await qrtClient.startJobChain({
       db: sqlite,
-      commitHooks,
+      transactionHooks,
       typeName: "send_welcome_email",
       input: { userId: user.id, email: user.email, name: user.name },
     });

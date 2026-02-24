@@ -17,7 +17,7 @@ import postgres, {
   type Row,
   type TransactionSql as _TransactionSql,
 } from "postgres";
-import { createClient, createInProcessWorker, defineJobTypes, withCommitHooks } from "queuert";
+import { createClient, createInProcessWorker, defineJobTypes, withTransactionHooks } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 
 type TransactionSql = _TransactionSql & {
@@ -317,12 +317,12 @@ console.log("Linear -> Branched (convert) -> Loop (billing) -> Go-To (cancel)\n"
 
 userConverts = true;
 
-const chain1 = await withCommitHooks(async (commitHooks) =>
+const chain1 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     return client.startJobChain({
       sql: txSql,
-      commitHooks,
+      transactionHooks,
       typeName: "create-subscription",
       input: { userId: "user-123", planId: "pro-monthly" },
     });
@@ -355,12 +355,12 @@ console.log("Linear -> Branched (expire) -> Terminal\n");
 
 userConverts = false;
 
-const chain2 = await withCommitHooks(async (commitHooks) =>
+const chain2 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     return client.startJobChain({
       sql: txSql,
-      commitHooks,
+      transactionHooks,
       typeName: "create-subscription",
       input: { userId: "user-456", planId: "pro-monthly" },
     });

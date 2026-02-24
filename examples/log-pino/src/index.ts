@@ -5,7 +5,7 @@ import {
   createClient,
   createInProcessWorker,
   defineJobTypes,
-  withCommitHooks,
+  withTransactionHooks,
 } from "queuert";
 import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
 import { createPinoLog } from "./log.js";
@@ -130,11 +130,11 @@ const stopWorker = await qrtWorker.start();
 
 // 7. Run successful job
 logger.info("--- Running successful job ---");
-const successJob = await withCommitHooks(async (commitHooks) =>
+const successJob = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.runInTransaction(async (ctx) =>
     qrtClient.startJobChain({
       ...ctx,
-      commitHooks,
+      transactionHooks,
       typeName: "greet",
       input: { name: "World" },
     }),
@@ -148,11 +148,11 @@ logger.info({ output: successCompleted.output }, "Successful job completed");
 
 // 8. Run job that fails then succeeds (demonstrates error logging with stack trace)
 logger.info("--- Running job that fails first attempt ---");
-const failThenSucceedJob = await withCommitHooks(async (commitHooks) =>
+const failThenSucceedJob = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.runInTransaction(async (ctx) =>
     qrtClient.startJobChain({
       ...ctx,
-      commitHooks,
+      transactionHooks,
       typeName: "might-fail",
       input: { shouldFail: true },
     }),

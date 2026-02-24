@@ -8,7 +8,7 @@
  * Then open http://localhost:3333 to view results in the dashboard.
  */
 
-import { createInProcessWorker, withCommitHooks } from "queuert";
+import { createInProcessWorker, withTransactionHooks } from "queuert";
 import { client, db, stateAdapter } from "./client.js";
 
 const worker = await createInProcessWorker({
@@ -102,9 +102,9 @@ console.log("\n=== Dashboard Job Populator ===\n");
 
 // Scenario 1: Single Job
 console.log("--- Scenario 1: Single Job ---");
-const greetJob = await withCommitHooks(async (commitHooks) =>
+const greetJob = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.runInTransaction(async (ctx) =>
-    client.startJobChain({ ...ctx, commitHooks, typeName: "greet", input: { name: "World" } }),
+    client.startJobChain({ ...ctx, transactionHooks, typeName: "greet", input: { name: "World" } }),
   ),
 );
 const greetResult = await client.waitForJobChainCompletion(greetJob, { timeoutMs: 5000 });
@@ -112,11 +112,11 @@ console.log("Result:", greetResult.output);
 
 // Scenario 2: Continuations
 console.log("\n--- Scenario 2: Continuations ---");
-const orderJob = await withCommitHooks(async (commitHooks) =>
+const orderJob = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.runInTransaction(async (ctx) =>
     client.startJobChain({
       ...ctx,
-      commitHooks,
+      transactionHooks,
       typeName: "order:validate",
       input: { orderId: "ORD-123" },
     }),
@@ -127,23 +127,23 @@ console.log("Result:", orderResult.output);
 
 // Scenario 3: Blockers (fan-out/fan-in)
 console.log("\n--- Scenario 3: Blockers ---");
-const blockerJob = await withCommitHooks(async (commitHooks) =>
+const blockerJob = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.runInTransaction(async (ctx) => {
     const userBlocker = await client.startJobChain({
       ...ctx,
-      commitHooks,
+      transactionHooks,
       typeName: "fetch-user",
       input: { userId: "user-1" },
     });
     const permBlocker = await client.startJobChain({
       ...ctx,
-      commitHooks,
+      transactionHooks,
       typeName: "fetch-permissions",
       input: { userId: "user-1" },
     });
     return client.startJobChain({
       ...ctx,
-      commitHooks,
+      transactionHooks,
       typeName: "process-with-blockers",
       input: { taskId: "TASK-456" },
       blockers: [userBlocker, permBlocker],
@@ -155,11 +155,11 @@ console.log("Result:", blockerResult.output);
 
 // Scenario 4: Retries
 console.log("\n--- Scenario 4: Retries ---");
-const retryJob = await withCommitHooks(async (commitHooks) =>
+const retryJob = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.runInTransaction(async (ctx) =>
     client.startJobChain({
       ...ctx,
-      commitHooks,
+      transactionHooks,
       typeName: "might-fail",
       input: { shouldFail: true },
     }),

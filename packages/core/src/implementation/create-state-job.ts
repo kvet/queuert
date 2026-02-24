@@ -1,6 +1,6 @@
 import { type JobChain } from "../entities/job-chain.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
-import { type CommitHooks } from "../commit-hooks.js";
+import { type TransactionHooks } from "../transaction-hooks.js";
 import { bufferNotifyJobScheduled } from "../helpers/notify-hooks.js";
 import { type Helpers } from "../setup-helpers.js";
 import {
@@ -15,7 +15,7 @@ export const createStateJob = async (
     typeName,
     input,
     txCtx,
-    commitHooks,
+    transactionHooks,
     blockers,
     isChain,
     chainId,
@@ -28,7 +28,7 @@ export const createStateJob = async (
     typeName: string;
     input: unknown;
     txCtx: BaseTxContext;
-    commitHooks: CommitHooks;
+    transactionHooks: TransactionHooks;
     blockers?: JobChain<any, any, any, any>[];
     isChain: boolean;
     chainId?: string;
@@ -147,7 +147,7 @@ export const createStateJob = async (
     helpers.observabilityHelper.jobBlocked(job, { blockedByChains: incompleteBlockerChains });
   }
 
-  bufferNotifyJobScheduled(commitHooks, helpers.notifyAdapter, job);
+  bufferNotifyJobScheduled(transactionHooks, helpers.notifyAdapter, job);
 
   return { job, deduplicated };
 };

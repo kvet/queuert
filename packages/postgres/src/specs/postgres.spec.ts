@@ -1,7 +1,7 @@
 import { TESTCONTAINER_RESOURCE_TYPES, extendWithPostgres } from "@queuert/testcontainers";
 import { type UUID } from "node:crypto";
 import { Pool, type PoolClient } from "pg";
-import { createClient, createInProcessWorker, defineJobTypes, withCommitHooks } from "queuert";
+import { createClient, createInProcessWorker, defineJobTypes, withTransactionHooks } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 import { extendWithResourceLeakDetection, withWorkers } from "queuert/testing";
 import { it as baseIt, expectTypeOf, vi } from "vitest";
@@ -75,11 +75,11 @@ it("should infer types correctly with custom ID", async ({ postgresConnectionStr
       }
     };
 
-    const jobChain = await withCommitHooks(async (commitHooks) =>
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (poolClient) =>
         client.startJobChain({
           poolClient,
-          commitHooks,
+          transactionHooks,
           typeName: "test",
           input: { foo: "hello" },
         }),

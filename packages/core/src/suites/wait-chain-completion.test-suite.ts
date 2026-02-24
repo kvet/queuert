@@ -1,5 +1,10 @@
 import { type TestAPI } from "vitest";
-import { WaitChainTimeoutError, createClient, defineJobTypes, withCommitHooks } from "../index.js";
+import {
+  WaitChainTimeoutError,
+  createClient,
+  defineJobTypes,
+  withTransactionHooks,
+} from "../index.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -29,17 +34,17 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
       registry,
     });
 
-    const jobChain = await withCommitHooks(async (commitHooks) =>
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, commitHooks, typeName: "test", input: null }),
+        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
-    await withCommitHooks(async (commitHooks) =>
+    await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
         client.completeJobChain({
           ...txCtx,
-          commitHooks,
+          transactionHooks,
           ...jobChain,
           complete: async ({ job, complete }) => {
             return complete(job, async () => ({ result: "done" }));
@@ -83,9 +88,9 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
       registry,
     });
 
-    const jobChain = await withCommitHooks(async (commitHooks) =>
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, commitHooks, typeName: "test", input: null }),
+        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
@@ -125,9 +130,9 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
       registry,
     });
 
-    const jobChain = await withCommitHooks(async (commitHooks) =>
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, commitHooks, typeName: "test", input: null }),
+        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 

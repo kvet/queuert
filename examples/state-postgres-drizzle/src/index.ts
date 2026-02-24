@@ -4,7 +4,7 @@ import { type ExtractTablesWithRelations, sql } from "drizzle-orm";
 import { type NodePgQueryResultHKT, drizzle } from "drizzle-orm/node-postgres";
 import { type PgTransaction, pgTable, serial, text } from "drizzle-orm/pg-core";
 import { Pool } from "pg";
-import { createClient, createInProcessWorker, defineJobTypes, withCommitHooks } from "queuert";
+import { createClient, createInProcessWorker, defineJobTypes, withTransactionHooks } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 
 // 1. Start PostgreSQL using testcontainers
@@ -99,7 +99,7 @@ const qrtWorker = await createInProcessWorker({
 const stopWorker = await qrtWorker.start();
 
 // 8. Register a new user and queue welcome email atomically
-const jobChain = await withCommitHooks(async (commitHooks) =>
+const jobChain = await withTransactionHooks(async (transactionHooks) =>
   db.transaction(async (tx) => {
     const [user] = await tx
       .insert(users)
@@ -109,7 +109,7 @@ const jobChain = await withCommitHooks(async (commitHooks) =>
     // Queue welcome email - if user creation fails, no email job is created
     return qrtClient.startJobChain({
       tx,
-      commitHooks,
+      transactionHooks,
       typeName: "send_welcome_email",
       input: { userId: user.id, email: user.email, name: user.name },
     });

@@ -35,7 +35,7 @@ import {
 } from "./entities/job-chain.js";
 import { type Job } from "./entities/job.js";
 import { JobAlreadyCompletedError, JobNotFoundError, WaitChainTimeoutError } from "./errors.js";
-import { type CommitHooks } from "./commit-hooks.js";
+import { type TransactionHooks } from "./transaction-hooks.js";
 import { bufferNotifyJobOwnershipLost } from "./helpers/notify-hooks.js";
 import { raceWithSleep } from "./helpers/sleep.js";
 import { createHelpers } from "./setup-helpers.js";
@@ -138,7 +138,7 @@ export const createClient = async <
       options: {
         typeName: TChainTypeName;
         input: TJobTypeDefinitions[TChainTypeName]["input"];
-        commitHooks: CommitHooks;
+        transactionHooks: TransactionHooks;
         deduplication?: DeduplicationOptions;
         schedule?: ScheduleOptions;
       } & (HasBlockers<TJobTypeDefinitions, TChainTypeName> extends true
@@ -152,12 +152,13 @@ export const createClient = async <
         deduplicated: boolean;
       }
     > => {
-      const { input, typeName, deduplication, schedule, blockers, commitHooks, ...txCtx } = options;
+      const { input, typeName, deduplication, schedule, blockers, transactionHooks, ...txCtx } =
+        options;
       return (await startJobChain(helpers, {
         typeName,
         input,
         txCtx,
-        commitHooks,
+        transactionHooks,
         deduplication,
         schedule,
         blockers,
@@ -184,12 +185,12 @@ export const createClient = async <
         TChainTypeName
       > | null;
     },
-    // TODO: use commitHooks to buffer post-delete side effects (e.g., observability events)
+    // TODO: use transactionHooks to buffer post-delete side effects (e.g., observability events)
     deleteJobChains: async (
       options: {
         chainIds: TJobId[];
         cascade?: boolean;
-        commitHooks: CommitHooks;
+        transactionHooks: TransactionHooks;
       } & GetStateAdapterTxContext<TStateAdapter>,
     ): Promise<
       JobChainOf<
@@ -198,7 +199,7 @@ export const createClient = async <
         keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string
       >[]
     > => {
-      const { chainIds, cascade, commitHooks: _commitHooks, ...txCtx } = options;
+      const { chainIds, cascade, transactionHooks: _transactionHooks, ...txCtx } = options;
 
       const deletedChainPairs = await helpers.stateAdapter.deleteJobsByChainIds({
         txCtx,
@@ -223,7 +224,7 @@ export const createClient = async <
       options: {
         typeName: TChainTypeName;
         id: TJobId;
-        commitHooks: CommitHooks;
+        transactionHooks: TransactionHooks;
         complete: JobChainCompleteOptions<
           TStateAdapter,
           TJobTypeDefinitions,
@@ -234,7 +235,7 @@ export const createClient = async <
     ): Promise<
       CompleteJobChainResult<TStateAdapter, TJobTypeDefinitions, TChainTypeName, TCompleteReturn>
     > => {
-      const { id, typeName: _, complete: completeCallback, commitHooks, ...txCtx } = options;
+      const { id, typeName: _, complete: completeCallback, transactionHooks, ...txCtx } = options;
       const currentJob = await helpers.stateAdapter.getCurrentJobForUpdate({
         txCtx,
         chainId: id,
@@ -276,7 +277,7 @@ export const createClient = async <
               typeName,
               input,
               txCtx,
-              commitHooks,
+              transactionHooks,
               schedule,
               blockers: blockers as any,
               chainId: job.chainId,
@@ -296,12 +297,12 @@ export const createClient = async <
         await finishJob(
           helpers,
           continuedJob
-            ? { job, txCtx, commitHooks, workerId: null, type: "continueWith", continuedJob }
-            : { job, txCtx, commitHooks, workerId: null, type: "completeChain", output },
+            ? { job, txCtx, transactionHooks, workerId: null, type: "continueWith", continuedJob }
+            : { job, txCtx, transactionHooks, workerId: null, type: "completeChain", output },
         );
 
         if (wasRunning) {
-          bufferNotifyJobOwnershipLost(commitHooks, helpers.notifyAdapter, job.id);
+          bufferNotifyJobOwnershipLost(transactionHooks, helpers.notifyAdapter, job.id);
         }
 
         return continuedJob ?? output;

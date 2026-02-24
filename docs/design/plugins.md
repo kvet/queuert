@@ -22,7 +22,9 @@ The `name` is used for diagnostics. Plugin job type names should be prefixed to 
 ## Usage
 
 ```typescript
-const myPlugin = createMyPlugin({ /* plugin-specific options */ });
+const myPlugin = createMyPlugin({
+  /* plugin-specific options */
+});
 
 const client = createClient({
   stateAdapter,
@@ -32,7 +34,9 @@ const client = createClient({
 
 const worker = createInProcessWorker({
   client,
-  processors: { /* user processors */ },
+  processors: {
+    /* user processors */
+  },
   plugins: [myPlugin],
 });
 ```

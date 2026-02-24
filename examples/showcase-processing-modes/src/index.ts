@@ -16,7 +16,7 @@ import postgres, {
   type Row,
   type TransactionSql as _TransactionSql,
 } from "postgres";
-import { createClient, createInProcessWorker, defineJobTypes, withCommitHooks } from "queuert";
+import { createClient, createInProcessWorker, defineJobTypes, withTransactionHooks } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 
 type TransactionSql = _TransactionSql & {
@@ -202,7 +202,7 @@ const stopWorker = await worker.start();
 console.log("\n--- Processing Modes: Order Fulfillment Workflow ---");
 console.log("Atomic -> Staged -> Auto-setup processing modes.\n");
 
-const chain = await withCommitHooks(async (commitHooks) =>
+const chain = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     const [order] = await txSql<{ id: number }[]>`
@@ -214,7 +214,7 @@ const chain = await withCommitHooks(async (commitHooks) =>
 
     return client.startJobChain({
       sql: txSql,
-      commitHooks,
+      transactionHooks,
       typeName: "reserve-inventory",
       input: { orderId: order.id },
     });

@@ -1,4 +1,4 @@
-import { type CommitHooks } from "../commit-hooks.js";
+import { type TransactionHooks } from "../transaction-hooks.js";
 import { type NotifyAdapter } from "../notify-adapter/notify-adapter.js";
 import { type StateJob } from "../state-adapter/state-adapter.js";
 
@@ -7,11 +7,11 @@ const queuertNotifyChainCompleted = Symbol("queuertNotifyChainCompleted");
 const queuertNotifyJobOwnershipLost = Symbol("queuertNotifyJobOwnershipLost");
 
 export const bufferNotifyJobScheduled = (
-  commitHooks: CommitHooks,
+  transactionHooks: TransactionHooks,
   notifyAdapter: NotifyAdapter,
   job: StateJob,
 ): void => {
-  const state = commitHooks.getOrInsert(queuertNotifyJobScheduled, () => ({
+  const state = transactionHooks.getOrInsert(queuertNotifyJobScheduled, () => ({
     state: new Map<string, number>(),
     flush: async (state) => {
       await Promise.all(
@@ -27,11 +27,11 @@ export const bufferNotifyJobScheduled = (
 };
 
 export const bufferNotifyChainCompletion = (
-  commitHooks: CommitHooks,
+  transactionHooks: TransactionHooks,
   notifyAdapter: NotifyAdapter,
   job: StateJob,
 ): void => {
-  commitHooks
+  transactionHooks
     .getOrInsert(queuertNotifyChainCompleted, () => ({
       state: new Set<string>(),
       flush: async (state) => {
@@ -48,11 +48,11 @@ export const bufferNotifyChainCompletion = (
 };
 
 export const bufferNotifyJobOwnershipLost = (
-  commitHooks: CommitHooks,
+  transactionHooks: TransactionHooks,
   notifyAdapter: NotifyAdapter,
   jobId: string,
 ): void => {
-  commitHooks
+  transactionHooks
     .getOrInsert(queuertNotifyJobOwnershipLost, () => ({
       state: new Set<string>(),
       flush: async (state) => {

@@ -2,7 +2,7 @@
 
 ## Overview
 
-`deleteJobChains` removes entire chains (root job + all continuations) from the system. It is a mutating client method that requires `commitHooks` and a transaction context.
+`deleteJobChains` removes entire chains (root job + all continuations) from the system. It is a mutating client method that requires `transactionHooks` and a transaction context.
 
 ## What Gets Deleted
 
@@ -69,7 +69,7 @@ The blocker safety check still applies to the expanded set: if any chain in the 
 client.deleteJobChains({
   chainIds: [chainId],
   cascade: true,
-  commitHooks,
+  transactionHooks,
   ...txCtx,
 });
 ```

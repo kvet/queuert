@@ -56,8 +56,8 @@ import {
   createClient,
   createInProcessWorker,
   defineJobTypes,
-  withCommitHooks,
-  createCommitHooks,
+  withTransactionHooks,
+  createTransactionHooks,
 } from "queuert";
 import { createSqliteStateAdapter } from "@queuert/sqlite";
 
@@ -93,11 +93,11 @@ const worker = await createInProcessWorker({
 
 // Start a job chain (within your database transaction)
 // Use your database client's transaction mechanism and pass the context
-await withCommitHooks(async (commitHooks) =>
+await withTransactionHooks(async (transactionHooks) =>
   db.transaction(async (tx) =>
     client.startJobChain({
       tx, // Transaction context - matches your stateProvider's TTxContext
-      commitHooks,
+      transactionHooks,
       typeName: "send-email",
       input: { to: "user@example.com", subject: "Hello!" },
     }),
@@ -184,8 +184,8 @@ For production, integrate with your logging library (Pino, Winston, etc.) by imp
 - `createConsoleLog` - Simple console logger for development
 - `defineJobTypes` - Define job types with compile-time type safety
 - `createJobTypeRegistry` - Create a registry with runtime validation
-- `withCommitHooks` - Buffer side effects during a transaction, flush on success, discard on error
-- `createCommitHooks` - Manual commit hooks lifecycle (flush/discard) for advanced use cases
+- `withTransactionHooks` - Buffer side effects during a transaction, flush on success, discard on error
+- `createTransactionHooks` - Manual transaction hooks lifecycle (flush/discard) for advanced use cases
 
 **Types:**
 

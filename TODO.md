@@ -8,11 +8,7 @@
 - [TASK,COMPLEX] Job cleanup utility (see [Plugins](docs/design/plugins.md), [Cleanup Plugin](docs/design/cleanup-plugin.md))
 - [TASK,COMPLEX] Rework CommitHooks → TransactionHooks with transactional observability
   - See [Transaction Hooks](docs/design/transaction-hooks.md) for the new design (discard callback, awaitable discard)
-  - **Step 1**: Implement TransactionHooks (rename CommitHooks, add `discard` to hook definition, make `discard()` awaitable)
-    - `commit-hooks.ts` → `transaction-hooks.ts`
-    - Hook definition: `{ state, flush }` → `{ state, flush, discard }`
-    - `discard()` calls each hook's `discard(state)` instead of just clearing
-    - Update all consumers: client, worker, notify-hooks, observability
+  - ~~**Step 1**: Implement TransactionHooks (rename CommitHooks, add `discard` to hook definition, make `discard()` awaitable)~~
   - **Step 2**: Buffer observability events via transaction hooks (emit only after commit, run discard on rollback)
     - Problem: spans/logs/metrics emitted inside transactions become misleading if transaction rolls back
     - `createStateJob`: wrap span ends, `jobChainCreated`, `jobCreated`, `jobBlocked` in hook buffering
@@ -25,7 +21,7 @@
   - **Step 3**: Update design docs
     - `observability-adapter.md`: add "Transactional Guarantees" section
     - `job-processing.md`: note that observability in prepare/complete phases is transactional
-    - `client.md`: update CommitHooks references to TransactionHooks
+    - ~~`client.md`: update CommitHooks references to TransactionHooks~~
   - **Tests** (12 rollback tests):
     - `logging.spec.ts` (6 tests asserting via `log` mock):
       1. Creation rollback — `startJobChain` in transaction that throws → no `job_chain_created`, `job_created`

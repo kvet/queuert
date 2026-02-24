@@ -33,7 +33,7 @@ import { refetchJobForUpdate as refetchJobForUpdateImpl } from "../implementatio
 import { type Helpers } from "../setup-helpers.js";
 import { type TypedAbortController, type TypedAbortSignal } from "../helpers/abort.js";
 import { type BackoffConfig } from "../helpers/backoff.js";
-import { type CommitHooks, withCommitHooks } from "../commit-hooks.js";
+import { type TransactionHooks, withTransactionHooks } from "../transaction-hooks.js";
 import {
   type TransactionContext,
   createTransactionContext,
@@ -113,7 +113,7 @@ export type CompleteCallbackOptions<
       >
     >
   >;
-} & { commitHooks: CommitHooks } & GetStateAdapterTxContext<TStateAdapter>;
+} & { transactionHooks: TransactionHooks } & GetStateAdapterTxContext<TStateAdapter>;
 
 export type CompleteCallback<
   TStateAdapter extends StateAdapter<BaseTxContext, any>,
@@ -353,7 +353,7 @@ export const runJobProcess = async ({
     >[],
   } as RunningJob<JobOf<any, any, any, any>>;
 
-  const runJobAttempt = async (commitHooks: CommitHooks) => {
+  const runJobAttempt = async (transactionHooks: TransactionHooks) => {
     const attemptStartTime = Date.now();
 
     helpers.observabilityHelper.jobAttemptStarted(job, { workerId });
@@ -419,7 +419,7 @@ export const runJobProcess = async ({
               blockers?: JobChain<any, any, any, any>[];
             } & BaseTxContext,
           ) => Promise<unknown>;
-        } & { commitHooks: CommitHooks } & BaseTxContext,
+        } & { transactionHooks: TransactionHooks } & BaseTxContext,
       ) => unknown,
     ) => {
       if (autoPreparePromise) {
@@ -451,7 +451,7 @@ export const runJobProcess = async ({
               typeName,
               input,
               txCtx,
-              commitHooks,
+              transactionHooks,
               schedule,
               blockers: blockers as any,
               chainId: job.chainId,
@@ -462,7 +462,7 @@ export const runJobProcess = async ({
             });
             return continuedJob;
           },
-          commitHooks,
+          transactionHooks,
           ...txCtx,
         });
         helpers.observabilityHelper.jobAttemptCompleted(job, {
@@ -473,8 +473,8 @@ export const runJobProcess = async ({
         const completedStateJob = await finishJob(
           helpers,
           continuedJob
-            ? { job, txCtx, commitHooks, workerId, type: "continueWith", continuedJob }
-            : { job, txCtx, commitHooks, workerId, type: "completeChain", output },
+            ? { job, txCtx, transactionHooks, workerId, type: "continueWith", continuedJob }
+            : { job, txCtx, transactionHooks, workerId, type: "completeChain", output },
         );
         const jobResult = continuedJob ?? {
           ...mapStateJobToJob(completedStateJob),
@@ -565,8 +565,8 @@ export const runJobProcess = async ({
   await (attemptMiddlewares ?? []).reduceRight(
     (next, mw) => async () => mw({ job: runningJob, workerId }, next),
     async () =>
-      withCommitHooks(async (commitHooks) => {
-        await runJobAttempt(commitHooks);
+      withTransactionHooks(async (transactionHooks) => {
+        await runJobAttempt(transactionHooks);
       }),
   )();
 };

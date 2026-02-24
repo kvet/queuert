@@ -1,6 +1,11 @@
 import { type TestAPI } from "vitest";
 import { sleep } from "../helpers/sleep.js";
-import { createClient, createInProcessWorker, defineJobTypes, withCommitHooks } from "../index.js";
+import {
+  createClient,
+  createInProcessWorker,
+  defineJobTypes,
+  withTransactionHooks,
+} from "../index.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -42,11 +47,11 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     await withWorkers([await worker.start()], async () => {
-      const jobChain = await withCommitHooks(async (commitHooks) =>
+      const jobChain = await withTransactionHooks(async (transactionHooks) =>
         runInTransaction(async (txCtx) =>
           client.startJobChain({
             ...txCtx,
-            commitHooks,
+            transactionHooks,
             typeName: "test",
             input: { value: 1 },
           }),
@@ -103,13 +108,13 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     await withWorkers(
       await Promise.all(Array.from({ length: 5 }, async () => (await createWorker()).start())),
       async () => {
-        const jobChains = await withCommitHooks(async (commitHooks) =>
+        const jobChains = await withTransactionHooks(async (transactionHooks) =>
           runInTransaction(async (txCtx) =>
             Promise.all(
               Array.from({ length: 5 }, async (_, i) =>
                 client.startJobChain({
                   ...txCtx,
-                  commitHooks,
+                  transactionHooks,
                   typeName: "test",
                   input: { value: i },
                 }),
@@ -187,17 +192,17 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     await withWorkers([await worker1.start(), await worker2.start()], async () => {
-      const jobChain = await withCommitHooks(async (commitHooks) =>
+      const jobChain = await withTransactionHooks(async (transactionHooks) =>
         runInTransaction(async (txCtx) => {
           const blockerChain = await client.startJobChain({
             ...txCtx,
-            commitHooks,
+            transactionHooks,
             typeName: "blocker",
             input: null,
           });
           return client.startJobChain({
             ...txCtx,
-            commitHooks,
+            transactionHooks,
             typeName: "main",
             input: null,
             blockers: [blockerChain],
@@ -275,11 +280,11 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     await withWorkers([await worker1.start(), await worker2.start()], async () => {
-      const jobChain = await withCommitHooks(async (commitHooks) =>
+      const jobChain = await withTransactionHooks(async (transactionHooks) =>
         runInTransaction(async (txCtx) =>
           client.startJobChain({
             ...txCtx,
-            commitHooks,
+            transactionHooks,
             typeName: "step1",
             input: null,
           }),
@@ -347,11 +352,11 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     await withWorkers([await worker.start()], async () => {
-      const jobChain = await withCommitHooks(async (commitHooks) =>
+      const jobChain = await withTransactionHooks(async (transactionHooks) =>
         runInTransaction(async (txCtx) =>
           client.startJobChain({
             ...txCtx,
-            commitHooks,
+            transactionHooks,
             typeName: "test",
             input: null,
           }),
@@ -360,11 +365,11 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
       await jobStarted.promise;
 
-      await withCommitHooks(async (commitHooks) =>
+      await withTransactionHooks(async (transactionHooks) =>
         runInTransaction(async (txCtx) =>
           client.completeJobChain({
             ...txCtx,
-            commitHooks,
+            transactionHooks,
             typeName: "test",
             id: jobChain.id,
             complete: async ({ job, complete }) => {
@@ -437,11 +442,11 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       });
 
     await withWorkers([await (await createWorker()).start()], async () => {
-      const jobChain = await withCommitHooks(async (commitHooks) =>
+      const jobChain = await withTransactionHooks(async (transactionHooks) =>
         runInTransaction(async (txCtx) =>
           client.startJobChain({
             ...txCtx,
-            commitHooks,
+            transactionHooks,
             typeName: "test",
             input: null,
           }),

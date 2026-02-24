@@ -75,7 +75,7 @@ export class HookNotRegisteredError extends Error {
   readonly key: symbol;
 
   constructor(key: symbol) {
-    super(`CommitHooks hook not registered: ${String(key)}`);
+    super(`TransactionHooks hook not registered: ${String(key)}`);
     this.name = "HookNotRegisteredError";
     this.key = key;
   }

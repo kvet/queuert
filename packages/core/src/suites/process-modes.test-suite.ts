@@ -1,6 +1,11 @@
 import { type TestAPI } from "vitest";
 import { sleep } from "../helpers/sleep.js";
-import { createClient, createInProcessWorker, defineJobTypes, withCommitHooks } from "../index.js";
+import {
+  createClient,
+  createInProcessWorker,
+  defineJobTypes,
+  withTransactionHooks,
+} from "../index.js";
 import { createSpyStateAdapter } from "../state-adapter/state-adapter.spy.spec-helper.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
@@ -58,11 +63,11 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       },
     });
 
-    const jobChain = await withCommitHooks(async (commitHooks) =>
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
-          commitHooks,
+          transactionHooks,
           typeName: "atomic-complete",
           input: { value: 10 },
         }),
@@ -144,11 +149,11 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       },
     });
 
-    const jobChain = await withCommitHooks(async (commitHooks) =>
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
-          commitHooks,
+          transactionHooks,
           typeName: "staged-complete",
           input: { value: 10 },
         }),
@@ -240,11 +245,11 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       },
     });
 
-    const jobChain = await withCommitHooks(async (commitHooks) =>
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
-          commitHooks,
+          transactionHooks,
           typeName: "staged-with-callback",
           input: { value: 10 },
         }),
@@ -334,11 +339,11 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       },
     });
 
-    const jobChain = await withCommitHooks(async (commitHooks) =>
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
-          commitHooks,
+          transactionHooks,
           typeName: "staged-without-callback",
           input: { value: 10 },
         }),
@@ -430,11 +435,11 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       },
     });
 
-    const jobChain = await withCommitHooks(async (commitHooks) =>
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
-          commitHooks,
+          transactionHooks,
           typeName: "atomic-with-callback",
           input: { value: 10 },
         }),
@@ -517,11 +522,11 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       },
     });
 
-    const jobChain = await withCommitHooks(async (commitHooks) =>
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
-          commitHooks,
+          transactionHooks,
           typeName: "atomic-without-callback",
           input: { value: 10 },
         }),

@@ -16,7 +16,7 @@ import postgres, {
   type Row,
   type TransactionSql as _TransactionSql,
 } from "postgres";
-import { createClient, createInProcessWorker, defineJobTypes, withCommitHooks } from "queuert";
+import { createClient, createInProcessWorker, defineJobTypes, withTransactionHooks } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 
 type TransactionSql = _TransactionSql & {
@@ -234,12 +234,12 @@ console.log("Job loops to itself with scheduled delays - no cron needed!\n");
 
 userSubscribed = true;
 
-const digestChain = await withCommitHooks(async (commitHooks) =>
+const digestChain = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     return client.startJobChain({
       sql: txSql,
-      commitHooks,
+      transactionHooks,
       typeName: "daily-digest",
       input: { userId: "user-123", iteration: 1 },
     });
@@ -267,12 +267,12 @@ console.log("Deduplication prevents duplicate recurring job instances.\n");
 serviceRunning = true;
 
 // Start first health check with deduplication
-const healthChain1 = await withCommitHooks(async (commitHooks) =>
+const healthChain1 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     return client.startJobChain({
       sql: txSql,
-      commitHooks,
+      transactionHooks,
       typeName: "health-check",
       input: { serviceId: "api-server", checkNumber: 1 },
       deduplication: {
@@ -286,12 +286,12 @@ console.log(`Started health check chain: ${healthChain1.id}`);
 console.log(`Deduplicated: ${healthChain1.deduplicated}`);
 
 // Try to start another health check - should be deduplicated
-const healthChain2 = await withCommitHooks(async (commitHooks) =>
+const healthChain2 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     return client.startJobChain({
       sql: txSql,
-      commitHooks,
+      transactionHooks,
       typeName: "health-check",
       input: { serviceId: "api-server", checkNumber: 1 },
       deduplication: {
@@ -323,12 +323,12 @@ console.log("\n--- Scenario 3: Time-Windowed Deduplication ---");
 console.log(`Rate-limiting syncs with ${SYNC_WINDOW_MS}ms window.\n`);
 
 // First sync - should succeed
-const sync1 = await withCommitHooks(async (commitHooks) =>
+const sync1 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     return client.startJobChain({
       sql: txSql,
-      commitHooks,
+      transactionHooks,
       typeName: "sync-data",
       input: { sourceId: "db-primary" },
       deduplication: {
@@ -345,12 +345,12 @@ console.log(`Deduplicated: ${sync1.deduplicated}`);
 await client.waitForJobChainCompletion(sync1, { timeoutMs: 5000 });
 
 // Second sync immediately after - should be deduplicated (within window)
-const sync2 = await withCommitHooks(async (commitHooks) =>
+const sync2 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     return client.startJobChain({
       sql: txSql,
-      commitHooks,
+      transactionHooks,
       typeName: "sync-data",
       input: { sourceId: "db-primary" },
       deduplication: {
@@ -369,12 +369,12 @@ console.log(`\nWaiting ${SYNC_WINDOW_MS}ms for window to expire...`);
 await new Promise((r) => setTimeout(r, SYNC_WINDOW_MS + 100));
 
 // Third sync after window - should succeed
-const sync3 = await withCommitHooks(async (commitHooks) =>
+const sync3 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     return client.startJobChain({
       sql: txSql,
-      commitHooks,
+      transactionHooks,
       typeName: "sync-data",
       input: { sourceId: "db-primary" },
       deduplication: {

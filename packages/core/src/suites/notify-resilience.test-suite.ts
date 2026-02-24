@@ -4,7 +4,7 @@ import {
   createClient,
   createInProcessWorker,
   defineJobTypes,
-  withCommitHooks,
+  withTransactionHooks,
 } from "../index.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
@@ -68,13 +68,13 @@ export const notifyResilienceTestSuite = ({
 
     await withWorkers([await worker.start()], async () => {
       // at least one notify pushes worker to process jobs
-      const jobChains = await withCommitHooks(async (commitHooks) =>
+      const jobChains = await withTransactionHooks(async (transactionHooks) =>
         runInTransaction(async (txCtx) =>
           Promise.all(
             Array.from({ length: 20 }, async (_, i) =>
               client.startJobChain({
                 ...txCtx,
-                commitHooks,
+                transactionHooks,
                 typeName: "test",
                 input: { value: i, atomic: i % 2 === 0 },
               }),

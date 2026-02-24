@@ -5,7 +5,7 @@
 import { metrics } from "@opentelemetry/api";
 import { MeterProvider, PeriodicExportingMetricReader } from "@opentelemetry/sdk-metrics";
 import { createOtelObservabilityAdapter } from "@queuert/otel";
-import { createClient, createInProcessWorker, withCommitHooks } from "queuert";
+import { createClient, createInProcessWorker, withTransactionHooks } from "queuert";
 import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
 import {
   diffMemory,
@@ -79,11 +79,11 @@ console.log("\nProcessing 100 jobs...");
 const [beforeProcessing, afterProcessing] = await measureMemory(async () => {
   const promises = [];
   for (let i = 0; i < 100; i++) {
-    const chain = await withCommitHooks(async (commitHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       stateAdapter.runInTransaction(async (ctx) =>
         qrtClient.startJobChain({
           ...ctx,
-          commitHooks,
+          transactionHooks,
           typeName: "test-job",
           input: { message: `Test message ${i}` },
         }),

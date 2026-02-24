@@ -4,7 +4,7 @@ import {
   createClient,
   createInProcessWorker,
   createJobTypeRegistry,
-  withCommitHooks,
+  withTransactionHooks,
 } from "../index.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
@@ -139,11 +139,11 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       registry: simpleRegistry,
     });
 
-    const jobChain = await withCommitHooks(async (commitHooks) =>
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
-          commitHooks,
+          transactionHooks,
           typeName: "main",
           input: { value: 42 },
         }),
@@ -171,11 +171,11 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     await expect(
-      withCommitHooks(async (commitHooks) =>
+      withTransactionHooks(async (transactionHooks) =>
         runInTransaction(async (txCtx) =>
           client.startJobChain({
             ...txCtx,
-            commitHooks,
+            transactionHooks,
             // @ts-expect-error testing runtime validation
             typeName: "nonexistent",
             input: { value: 1 },
@@ -202,11 +202,11 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     await expect(
-      withCommitHooks(async (commitHooks) =>
+      withTransactionHooks(async (transactionHooks) =>
         runInTransaction(async (txCtx) =>
           client.startJobChain({
             ...txCtx,
-            commitHooks,
+            transactionHooks,
             typeName: "main",
             // @ts-expect-error testing runtime validation
             input: { value: "not-a-number" },
@@ -233,12 +233,12 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     await expect(
-      withCommitHooks(async (commitHooks) =>
+      withTransactionHooks(async (transactionHooks) =>
         runInTransaction(async (txCtx) =>
           // @ts-expect-error testing runtime validation - no blockers
           client.startJobChain({
             ...txCtx,
-            commitHooks,
+            transactionHooks,
             typeName: "main",
             input: { id: "main-1" },
           }),
@@ -273,11 +273,11 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       },
     });
 
-    const jobChain = await withCommitHooks(async (commitHooks) =>
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
-          commitHooks,
+          transactionHooks,
           typeName: "main",
           input: { value: 42 },
         }),
@@ -326,11 +326,11 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       },
     });
 
-    await withCommitHooks(async (commitHooks) =>
+    await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
-          commitHooks,
+          transactionHooks,
           typeName: "main",
           input: { value: 42 },
         }),
@@ -375,11 +375,11 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       },
     });
 
-    const jobChain = await withCommitHooks(async (commitHooks) =>
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
-          commitHooks,
+          transactionHooks,
           typeName: "step1",
           input: { value: 1 },
         }),
@@ -432,11 +432,11 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       },
     });
 
-    await withCommitHooks(async (commitHooks) =>
+    await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
-          commitHooks,
+          transactionHooks,
           typeName: "step1",
           input: { value: 1 },
         }),
@@ -465,22 +465,22 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       registry: simpleRegistry,
     });
 
-    const jobChain = await withCommitHooks(async (commitHooks) =>
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
-          commitHooks,
+          transactionHooks,
           typeName: "main",
           input: { value: 42 },
         }),
       ),
     );
 
-    const completedChain = await withCommitHooks(async (commitHooks) =>
+    const completedChain = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
         client.completeJobChain({
           ...txCtx,
-          commitHooks,
+          transactionHooks,
           typeName: "main",
           id: jobChain.id,
           complete: async ({ job, complete }) => complete(job, async () => ({ result: 84 })),
@@ -508,11 +508,11 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       registry: simpleRegistry,
     });
 
-    const jobChain = await withCommitHooks(async (commitHooks) =>
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
-          commitHooks,
+          transactionHooks,
           typeName: "main",
           input: { value: 42 },
         }),
@@ -520,11 +520,11 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     );
 
     await expect(
-      withCommitHooks(async (commitHooks) =>
+      withTransactionHooks(async (transactionHooks) =>
         runInTransaction(async (txCtx) =>
           client.completeJobChain({
             ...txCtx,
-            commitHooks,
+            transactionHooks,
             typeName: "main",
             id: jobChain.id,
             complete: async ({ job, complete }) =>
@@ -562,22 +562,22 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       },
     });
 
-    const jobChain = await withCommitHooks(async (commitHooks) =>
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
-          commitHooks,
+          transactionHooks,
           typeName: "step1",
           input: { value: 1 },
         }),
       ),
     );
 
-    const partialChain = await withCommitHooks(async (commitHooks) =>
+    const partialChain = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
         client.completeJobChain({
           ...txCtx,
-          commitHooks,
+          transactionHooks,
           typeName: "step1",
           id: jobChain.id,
           complete: async ({ job, complete }) => {
@@ -615,11 +615,11 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       registry: continuationNoFollowUpRegistry,
     });
 
-    const jobChain = await withCommitHooks(async (commitHooks) =>
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
-          commitHooks,
+          transactionHooks,
           typeName: "step1",
           input: { value: 1 },
         }),
@@ -627,11 +627,11 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     );
 
     await expect(
-      withCommitHooks(async (commitHooks) =>
+      withTransactionHooks(async (transactionHooks) =>
         runInTransaction(async (txCtx) =>
           client.completeJobChain({
             ...txCtx,
-            commitHooks,
+            transactionHooks,
             typeName: "step1",
             id: jobChain.id,
             complete: async ({ job, complete }) => {

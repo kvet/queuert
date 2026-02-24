@@ -9,7 +9,7 @@ import {
   createSqliteStateAdapter,
 } from "@queuert/sqlite";
 import { createInProcessNotifyAdapter } from "queuert/internal";
-import { createClient, createInProcessWorker, withCommitHooks } from "queuert";
+import { createClient, createInProcessWorker, withTransactionHooks } from "queuert";
 import {
   diffMemory,
   measureBaseline,
@@ -110,11 +110,11 @@ console.log("\nProcessing 100 jobs...");
 const [beforeProcessing, afterProcessing] = await measureMemory(async () => {
   const promises = [];
   for (let i = 0; i < 100; i++) {
-    const chain = await withCommitHooks(async (commitHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       stateProvider.runInTransaction(async (ctx) =>
         qrtClient.startJobChain({
           ...ctx,
-          commitHooks,
+          transactionHooks,
           typeName: "test-job",
           input: { message: `Test message ${i}` },
         }),

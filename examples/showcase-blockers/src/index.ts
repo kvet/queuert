@@ -15,7 +15,7 @@ import postgres, {
   type Row,
   type TransactionSql as _TransactionSql,
 } from "postgres";
-import { createClient, createInProcessWorker, defineJobTypes, withCommitHooks } from "queuert";
+import { createClient, createInProcessWorker, defineJobTypes, withTransactionHooks } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 
 type TransactionSql = _TransactionSql & {
@@ -171,32 +171,32 @@ const stopWorker = await worker.start();
 console.log("\n--- Scenario 1: Fan-out/Fan-in ---");
 console.log("Three fetch jobs run in parallel, aggregate waits for all.\n");
 
-const aggregateChain = await withCommitHooks(async (commitHooks) =>
+const aggregateChain = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     const fetchBlockers = await Promise.all([
       client.startJobChain({
         sql: txSql,
-        commitHooks,
+        transactionHooks,
         typeName: "fetch-source",
         input: { sourceId: "users", url: "/users" },
       }),
       client.startJobChain({
         sql: txSql,
-        commitHooks,
+        transactionHooks,
         typeName: "fetch-source",
         input: { sourceId: "orders", url: "/orders" },
       }),
       client.startJobChain({
         sql: txSql,
-        commitHooks,
+        transactionHooks,
         typeName: "fetch-source",
         input: { sourceId: "products", url: "/products" },
       }),
     ]);
     return client.startJobChain({
       sql: txSql,
-      commitHooks,
+      transactionHooks,
       typeName: "aggregate-data",
       input: { reportId: "report-001" },
       blockers: fetchBlockers,
@@ -211,24 +211,24 @@ console.log(`\nResult: ${result1.output.totalSources} sources → "${result1.out
 console.log("\n--- Scenario 2: Fixed Blocker Slots ---");
 console.log("Action requires exactly: validate-user + load-config.\n");
 
-const actionChain = await withCommitHooks(async (commitHooks) =>
+const actionChain = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     const userBlocker = await client.startJobChain({
       sql: txSql,
-      commitHooks,
+      transactionHooks,
       typeName: "validate-user",
       input: { userId: "user-123" },
     });
     const configBlocker = await client.startJobChain({
       sql: txSql,
-      commitHooks,
+      transactionHooks,
       typeName: "load-config",
       input: { configKey: "settings" },
     });
     return client.startJobChain({
       sql: txSql,
-      commitHooks,
+      transactionHooks,
       typeName: "perform-action",
       input: { actionId: "action-001" },
       blockers: [userBlocker, configBlocker],

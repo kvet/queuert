@@ -9,7 +9,7 @@
  */
 
 import { Type } from "@sinclair/typebox";
-import { createClient, createInProcessWorker, withCommitHooks } from "queuert";
+import { createClient, createInProcessWorker, withTransactionHooks } from "queuert";
 import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
 import { createTypeBoxJobTypeRegistry } from "./typebox-adapter.js";
 
@@ -134,11 +134,11 @@ const stopWorker = await qrtWorker.start();
 
 // 4. Run a chain
 console.log("\n=== Running fetch-data chain ===");
-const chain = await withCommitHooks(async (commitHooks) =>
+const chain = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.runInTransaction(async (ctx) =>
     qrtClient.startJobChain({
       ...ctx,
-      commitHooks,
+      transactionHooks,
       typeName: "fetch-data",
       input: { url: "https://api.example.com/data" },
     }),

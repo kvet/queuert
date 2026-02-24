@@ -15,7 +15,7 @@ import postgres, {
   type Row,
   type TransactionSql as _TransactionSql,
 } from "postgres";
-import { createClient, createInProcessWorker, defineJobTypes, withCommitHooks } from "queuert";
+import { createClient, createInProcessWorker, defineJobTypes, withTransactionHooks } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 
 type TransactionSql = _TransactionSql & {
@@ -133,12 +133,12 @@ const stopWorker = await worker.start();
 console.log("\n--- Scenario 1a: Approval Workflow (Approved) ---");
 console.log("Job is completed externally before worker timeout.\n");
 
-const approval1 = await withCommitHooks(async (commitHooks) =>
+const approval1 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     return client.startJobChain({
       sql: txSql,
-      commitHooks,
+      transactionHooks,
       typeName: "await-approval",
       input: { requestId: "req-001", requester: "alice" },
       schedule: { afterMs: 5000 }, // Would auto-reject after 5s
@@ -148,12 +148,12 @@ const approval1 = await withCommitHooks(async (commitHooks) =>
 console.log(`Created approval request: ${approval1.id} (scheduled for 5s timeout)`);
 
 console.log(`Approving externally...`);
-await withCommitHooks(async (commitHooks) =>
+await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     return client.completeJobChain({
       sql: txSql,
-      commitHooks,
+      transactionHooks,
       id: approval1.id,
       typeName: "await-approval",
       complete: async ({ job, complete }) => {
@@ -176,12 +176,12 @@ console.log(`Result: ${JSON.stringify(result1.output)}`);
 console.log("\n--- Scenario 1b: Approval Workflow (Rejected) ---");
 console.log("Job is rejected externally.\n");
 
-const approval2 = await withCommitHooks(async (commitHooks) =>
+const approval2 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     return client.startJobChain({
       sql: txSql,
-      commitHooks,
+      transactionHooks,
       typeName: "await-approval",
       input: { requestId: "req-002", requester: "bob" },
       schedule: { afterMs: 5000 },
@@ -191,12 +191,12 @@ const approval2 = await withCommitHooks(async (commitHooks) =>
 console.log(`Created approval request: ${approval2.id}`);
 
 console.log(`Rejecting externally...`);
-await withCommitHooks(async (commitHooks) =>
+await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     return client.completeJobChain({
       sql: txSql,
-      commitHooks,
+      transactionHooks,
       id: approval2.id,
       typeName: "await-approval",
       complete: async ({ job, complete }) => {
@@ -214,12 +214,12 @@ console.log(`Result: ${JSON.stringify(result2.output)}`);
 console.log("\n--- Scenario 2: Deferred Start with Early Completion ---");
 console.log("Job scheduled to expire, but completed early.\n");
 
-const action = await withCommitHooks(async (commitHooks) =>
+const action = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     return client.startJobChain({
       sql: txSql,
-      commitHooks,
+      transactionHooks,
       typeName: "pending-action",
       input: { actionId: "action-001", expiresInMs: 5000 },
       schedule: { afterMs: 5000 }, // Would expire after 5s
@@ -229,12 +229,12 @@ const action = await withCommitHooks(async (commitHooks) =>
 console.log(`Created pending action: ${action.id} (expires in 5s)`);
 
 console.log(`Completing early...`);
-await withCommitHooks(async (commitHooks) =>
+await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     return client.completeJobChain({
       sql: txSql,
-      commitHooks,
+      transactionHooks,
       id: action.id,
       typeName: "pending-action",
       complete: async ({ job, complete }) => {
