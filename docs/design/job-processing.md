@@ -39,6 +39,8 @@ The same transactional principle extends to job processing through the prepare/c
 
 This ensures that job outputs and continuations are also created atomically with any state changes they produce.
 
+Observability events (metrics, span ends, logs) emitted during the prepare and complete phases are transactional — they are buffered and only flushed after the transaction commits. If the transaction rolls back, no observability events leak out. See [Observability Adapter](observability-adapter.md#transactional-guarantees).
+
 ## Prepare/Complete Pattern
 
 Attempt handlers split processing into distinct phases to support both atomic (single-transaction) and staged (long-running) operations.

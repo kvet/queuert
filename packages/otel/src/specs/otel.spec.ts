@@ -1043,28 +1043,31 @@ describe("Spans", () => {
     await expectSpans([
       { name: "create chain.linear", kind: "PRODUCER" },
       { name: "create job.linear", kind: "PRODUCER", parentName: "create chain.linear" },
+      // Attempt 1: continuation PRODUCER span deferred to flush (after attempt CONSUMER)
       { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.linear" },
+      { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.linear" },
+      { name: "start job-attempt.linear", kind: "CONSUMER", parentName: "create job.linear" },
       {
         name: "create job.linear_next",
         kind: "PRODUCER",
         parentName: "create chain.linear",
         links: 1,
       },
-      { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.linear" },
-      { name: "start job-attempt.linear", kind: "CONSUMER", parentName: "create job.linear" },
+      // Attempt 2: same pattern
       { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.linear_next" },
-      {
-        name: "create job.linear_next_next",
-        kind: "PRODUCER",
-        parentName: "create chain.linear",
-        links: 1,
-      },
       { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.linear_next" },
       {
         name: "start job-attempt.linear_next",
         kind: "CONSUMER",
         parentName: "create job.linear_next",
       },
+      {
+        name: "create job.linear_next_next",
+        kind: "PRODUCER",
+        parentName: "create chain.linear",
+        links: 1,
+      },
+      // Attempt 3: no continuation, chain completes
       { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.linear_next_next" },
       { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.linear_next_next" },
       {
@@ -1169,23 +1172,22 @@ describe("Spans", () => {
       // Blocker chain created independently (no links yet)
       { name: "create chain.blocker", kind: "PRODUCER" },
       { name: "create job.blocker", kind: "PRODUCER", parentName: "create chain.blocker" },
-      // Main chain creation: blocker PRODUCER ends after addJobBlockers (before chain/job)
+      // Main chain creation: blocker and chain PRODUCER spans deferred to flush together
       { name: "await chain.blocker", kind: "PRODUCER", parentName: "create job.main", links: 1 },
       { name: "create chain.main", kind: "PRODUCER" },
       { name: "create job.main", kind: "PRODUCER", parentName: "create chain.main" },
-      // Processing blocker job 1: continueWith creates blocker job 2
+      // Processing blocker job 1: continuation PRODUCER span deferred to flush
       { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.blocker" },
+      { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.blocker" },
+      { name: "start job-attempt.blocker", kind: "CONSUMER", parentName: "create job.blocker" },
       {
         name: "create job.blocker",
         kind: "PRODUCER",
         parentName: "create chain.blocker",
         links: 1,
       },
-      { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.blocker" },
-      { name: "start job-attempt.blocker", kind: "CONSUMER", parentName: "create job.blocker" },
-      // Processing blocker job 2: chain completes, blocker CONSUMER span ends
+      // Processing blocker job 2: chain completes, completeBlockerSpan deferred to flush
       { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.blocker" },
-      { name: "resolve chain.blocker", kind: "CONSUMER", parentName: "await chain.blocker" },
       { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.blocker" },
       {
         name: "complete chain.blocker",
@@ -1194,6 +1196,7 @@ describe("Spans", () => {
         links: 1,
       },
       { name: "start job-attempt.blocker", kind: "CONSUMER", parentName: "create job.blocker" },
+      { name: "resolve chain.blocker", kind: "CONSUMER", parentName: "await chain.blocker" },
       // Processing main job: unblocked, completes
       { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.main" },
       { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.main" },
@@ -1374,10 +1377,7 @@ describe("Spans", () => {
     );
 
     await expectSpans([
-      // Chain 1: created normally
-      { name: "create chain.test", kind: "PRODUCER" },
-      { name: "create job.test", kind: "PRODUCER", parentName: "create chain.test" },
-      // Chain 2: deduplicated (same key)
+      // Chain 2: deduplicated (same key) — span ends are immediate (not buffered)
       {
         name: "create chain.test",
         kind: "PRODUCER",
@@ -1388,7 +1388,10 @@ describe("Spans", () => {
         kind: "PRODUCER",
         attributes: { "queuert.chain.deduplicated": true },
       },
-      // Chain 3: created normally (different key)
+      // Chain 1: created normally — span ends deferred to flush
+      { name: "create chain.test", kind: "PRODUCER" },
+      { name: "create job.test", kind: "PRODUCER", parentName: "create chain.test" },
+      // Chain 3: created normally (different key) — span ends deferred to flush
       { name: "create chain.test", kind: "PRODUCER" },
       { name: "create job.test", kind: "PRODUCER", parentName: "create chain.test" },
     ]);
@@ -1727,5 +1730,403 @@ describe("Gauges", () => {
       ],
       jobTypeProcessingChange: [],
     });
+  });
+});
+
+describe("Rollback", () => {
+  it("discards creation metrics and spans on rollback", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    observabilityAdapter,
+    log,
+    getMetricNames,
+    expectSpans,
+    expect,
+  }) => {
+    const registry = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+
+    await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) => {
+        await client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null });
+        throw new Error("simulated rollback");
+      }),
+    ).catch(() => {});
+
+    const metricNames = await getMetricNames();
+    expect(metricNames.size).toBe(0);
+    await expectSpans([]);
+  });
+
+  it("discards creation metrics and spans with blockers on rollback", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    observabilityAdapter,
+    log,
+    getMetricNames,
+    expectSpans,
+    expect,
+  }) => {
+    const registry = defineJobTypes<{
+      blocker: { entry: true; input: null; output: null };
+      main: {
+        entry: true;
+        input: null;
+        output: null;
+        blockers: [{ typeName: "blocker" }];
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+
+    await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) => {
+        const blocker = await client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "blocker",
+          input: null,
+        });
+        await client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "main",
+          input: null,
+          blockers: [blocker],
+        });
+        throw new Error("simulated rollback");
+      }),
+    ).catch(() => {});
+
+    const metricNames = await getMetricNames();
+    expect(metricNames.size).toBe(0);
+    await expectSpans([]);
+  });
+
+  it("discards workerless completion metrics and spans on rollback", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    observabilityAdapter,
+    log,
+    expectMetrics,
+    expectSpans,
+  }) => {
+    const registry = defineJobTypes<{
+      test: { entry: true; input: null; output: { result: number } };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+      ),
+    );
+
+    await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) => {
+        await client.completeJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          id: jobChain.id,
+          complete: async ({ job, complete }) => complete(job, async () => ({ result: 42 })),
+        });
+        throw new Error("simulated rollback");
+      }),
+    ).catch(() => {});
+
+    await expectMetrics([{ method: "jobChainCreated" }, { method: "jobCreated" }]);
+
+    await expectSpans([
+      { name: "create chain.test", kind: "PRODUCER" },
+      { name: "create job.test", kind: "PRODUCER", parentName: "create chain.test" },
+    ]);
+  });
+
+  it("discards completion metrics on worker complete rollback", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expectMetrics,
+  }) => {
+    const registry = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    let completeJobErrorThrown = false;
+    const erroringStateAdapter: typeof stateAdapter = {
+      ...stateAdapter,
+      completeJob: async (args) => {
+        if (!completeJobErrorThrown) {
+          completeJobErrorThrown = true;
+          throw new Error("simulated completeJob failure");
+        }
+        return stateAdapter.completeJob(args);
+      },
+    };
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+    const workerClient = await createClient({
+      stateAdapter: erroringStateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+    const worker = await createInProcessWorker({
+      client: workerClient,
+      concurrency: 1,
+      processDefaults: {
+        pollIntervalMs: 100,
+        retryConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+      },
+      processors: {
+        test: {
+          attemptHandler: async ({ complete }) => complete(async () => null),
+        },
+      },
+    });
+
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.waitForJobChainCompletion(jobChain, completionOptions);
+    });
+
+    await expectMetrics([
+      { method: "jobChainCreated" },
+      { method: "jobCreated" },
+      { method: "workerStarted" },
+      { method: "jobAttemptStarted" },
+      { method: "stateAdapterError" },
+      { method: "jobAttemptFailed" },
+      { method: "jobAttemptStarted" },
+      { method: "jobAttemptCompleted" },
+      { method: "jobCompleted" },
+      { method: "jobChainCompleted" },
+      { method: "workerStopping" },
+      { method: "workerStopped" },
+    ]);
+  });
+
+  it("discards error-handling metrics on reschedule rollback", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expectMetrics,
+  }) => {
+    const registry = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    let rescheduleErrorThrown = false;
+    let handlerFailed = false;
+    const erroringStateAdapter: typeof stateAdapter = {
+      ...stateAdapter,
+      rescheduleJob: async (args) => {
+        if (!rescheduleErrorThrown) {
+          rescheduleErrorThrown = true;
+          throw new Error("simulated rescheduleJob failure");
+        }
+        return stateAdapter.rescheduleJob(args);
+      },
+    };
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+    const workerClient = await createClient({
+      stateAdapter: erroringStateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+    const worker = await createInProcessWorker({
+      client: workerClient,
+      concurrency: 1,
+      processDefaults: {
+        leaseConfig: { leaseMs: 50, renewIntervalMs: 500 },
+        pollIntervalMs: 50,
+      },
+      processors: {
+        test: {
+          attemptHandler: async ({ complete }) => {
+            if (!handlerFailed) {
+              handlerFailed = true;
+              throw new Error("simulated handler failure");
+            }
+            return complete(async () => null);
+          },
+        },
+      },
+    });
+
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.waitForJobChainCompletion(jobChain, completionOptions);
+    });
+
+    await expectMetrics([
+      { method: "jobChainCreated" },
+      { method: "jobCreated" },
+      { method: "workerStarted" },
+      { method: "jobAttemptStarted" },
+      { method: "stateAdapterError" },
+      { method: "jobReaped" },
+      { method: "jobAttemptStarted" },
+      { method: "jobAttemptCompleted" },
+      { method: "jobCompleted" },
+      { method: "jobChainCompleted" },
+      { method: "workerStopping" },
+      { method: "workerStopped" },
+    ]);
+  });
+
+  it("discards continuation metrics on createJob rollback", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expectMetrics,
+  }) => {
+    const registry = defineJobTypes<{
+      linear: {
+        entry: true;
+        input: null;
+        continueWith: { typeName: "linear_next" };
+      };
+      linear_next: {
+        input: null;
+        output: null;
+      };
+    }>();
+
+    let createJobErrorThrown = false;
+    const erroringStateAdapter: typeof stateAdapter = {
+      ...stateAdapter,
+      createJob: async (args) => {
+        if (!createJobErrorThrown && args.chainIndex > 0) {
+          createJobErrorThrown = true;
+          throw new Error("simulated createJob failure");
+        }
+        return stateAdapter.createJob(args);
+      },
+    };
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+    const workerClient = await createClient({
+      stateAdapter: erroringStateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+    const worker = await createInProcessWorker({
+      client: workerClient,
+      concurrency: 1,
+      processDefaults: {
+        pollIntervalMs: 100,
+        retryConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+      },
+      processors: {
+        linear: {
+          attemptHandler: async ({ complete }) =>
+            complete(async ({ continueWith }) =>
+              continueWith({ typeName: "linear_next", input: null }),
+            ),
+        },
+        linear_next: {
+          attemptHandler: async ({ complete }) => complete(async () => null),
+        },
+      },
+    });
+
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({ ...txCtx, transactionHooks, typeName: "linear", input: null }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.waitForJobChainCompletion(jobChain, completionOptions);
+    });
+
+    await expectMetrics([
+      { method: "jobChainCreated" },
+      { method: "jobCreated" },
+      { method: "workerStarted" },
+      { method: "jobAttemptStarted" },
+      { method: "stateAdapterError" },
+      { method: "jobAttemptFailed" },
+      { method: "jobAttemptStarted" },
+      { method: "jobCreated" },
+      { method: "jobAttemptCompleted" },
+      { method: "jobCompleted" },
+      { method: "jobAttemptStarted" },
+      { method: "jobAttemptCompleted" },
+      { method: "jobCompleted" },
+      { method: "jobChainCompleted" },
+      { method: "workerStopping" },
+      { method: "workerStopped" },
+    ]);
   });
 });

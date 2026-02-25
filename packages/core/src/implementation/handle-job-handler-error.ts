@@ -6,8 +6,10 @@ import {
   RescheduleJobError,
 } from "../errors.js";
 import { type BackoffConfig, calculateBackoffMs } from "../helpers/backoff.js";
+import { bufferObservabilityEvent } from "../helpers/observability-hooks.js";
 import { type Helpers } from "../setup-helpers.js";
 import { type BaseTxContext, type StateJob } from "../state-adapter/state-adapter.js";
+import { type TransactionHooks } from "../transaction-hooks.js";
 
 export const handleJobHandlerError = async (
   helpers: Helpers,
@@ -15,12 +17,14 @@ export const handleJobHandlerError = async (
     job,
     error,
     txCtx,
+    transactionHooks,
     retryConfig,
     workerId,
   }: {
     job: StateJob;
     error: unknown;
     txCtx: BaseTxContext;
+    transactionHooks: TransactionHooks;
     retryConfig: BackoffConfig;
     workerId: string;
   },
@@ -41,10 +45,12 @@ export const handleJobHandlerError = async (
     : { afterMs: calculateBackoffMs(job.attempt, retryConfig) };
   const errorString = isRescheduled ? String(error.cause) : String(error);
 
-  helpers.observabilityHelper.jobAttemptFailed(job, {
-    workerId,
-    rescheduledSchedule: schedule,
-    error,
+  bufferObservabilityEvent(transactionHooks, () => {
+    helpers.observabilityHelper.jobAttemptFailed(job, {
+      workerId,
+      rescheduledSchedule: schedule,
+      error,
+    });
   });
 
   await helpers.stateAdapter.rescheduleJob({

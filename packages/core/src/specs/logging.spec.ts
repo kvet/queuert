@@ -914,3 +914,371 @@ describe("Logging", () => {
     );
   });
 });
+
+describe("Logging rollback", () => {
+  it("discards creation events on rollback", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const registry = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+
+    await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) => {
+        await client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null });
+        throw new Error("simulated rollback");
+      }),
+    ).catch(() => {});
+
+    const logTypes = log.mock.calls.map((call) => call[0].type);
+    expect(logTypes).not.toContain("job_chain_created");
+    expect(logTypes).not.toContain("job_created");
+  });
+
+  it("discards creation events with blockers on rollback", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const registry = defineJobTypes<{
+      blocker: { entry: true; input: null; output: null };
+      main: {
+        entry: true;
+        input: null;
+        output: null;
+        blockers: [{ typeName: "blocker" }];
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+
+    await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) => {
+        const blocker = await client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "blocker",
+          input: null,
+        });
+        await client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "main",
+          input: null,
+          blockers: [blocker],
+        });
+        throw new Error("simulated rollback");
+      }),
+    ).catch(() => {});
+
+    const logTypes = log.mock.calls.map((call) => call[0].type);
+    expect(logTypes).not.toContain("job_chain_created");
+    expect(logTypes).not.toContain("job_created");
+    expect(logTypes).not.toContain("job_blocked");
+  });
+
+  it("discards workerless completion events on rollback", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const registry = defineJobTypes<{
+      test: { entry: true; input: null; output: { result: number } };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+      ),
+    );
+
+    log.mockClear();
+
+    await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) => {
+        await client.completeJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          id: jobChain.id,
+          complete: async ({ job, complete }) => complete(job, async () => ({ result: 42 })),
+        });
+        throw new Error("simulated rollback");
+      }),
+    ).catch(() => {});
+
+    const logTypes = log.mock.calls.map((call) => call[0].type);
+    expect(logTypes).not.toContain("job_completed");
+    expect(logTypes).not.toContain("job_chain_completed");
+  });
+
+  it("discards completion events on worker complete rollback", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const registry = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    let completeJobErrorThrown = false;
+    const erroringStateAdapter: typeof stateAdapter = {
+      ...stateAdapter,
+      completeJob: async (args) => {
+        if (!completeJobErrorThrown) {
+          completeJobErrorThrown = true;
+          throw new Error("simulated completeJob failure");
+        }
+        return stateAdapter.completeJob(args);
+      },
+    };
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+    const workerClient = await createClient({
+      stateAdapter: erroringStateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+    const worker = await createInProcessWorker({
+      client: workerClient,
+      concurrency: 1,
+      processDefaults: {
+        pollIntervalMs: 100,
+        retryConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+      },
+      processors: {
+        test: {
+          attemptHandler: async ({ complete }) => complete(async () => null),
+        },
+      },
+    });
+
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.waitForJobChainCompletion(jobChain, completionOptions);
+    });
+
+    const logEntries = log.mock.calls.map((call) => call[0]);
+    const attemptCompletedCount = logEntries.filter(
+      (e) => e.type === "job_attempt_completed",
+    ).length;
+    const jobCompletedCount = logEntries.filter((e) => e.type === "job_completed").length;
+    const attemptFailedCount = logEntries.filter((e) => e.type === "job_attempt_failed").length;
+
+    expect(attemptCompletedCount).toBe(1);
+    expect(jobCompletedCount).toBe(1);
+    expect(attemptFailedCount).toBe(1);
+  });
+
+  it("discards error-handling events on reschedule rollback", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const registry = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    let rescheduleErrorThrown = false;
+    let handlerFailed = false;
+    const erroringStateAdapter: typeof stateAdapter = {
+      ...stateAdapter,
+      rescheduleJob: async (args) => {
+        if (!rescheduleErrorThrown) {
+          rescheduleErrorThrown = true;
+          throw new Error("simulated rescheduleJob failure");
+        }
+        return stateAdapter.rescheduleJob(args);
+      },
+    };
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+    const workerClient = await createClient({
+      stateAdapter: erroringStateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+    const worker = await createInProcessWorker({
+      client: workerClient,
+      concurrency: 1,
+      processDefaults: {
+        leaseConfig: { leaseMs: 50, renewIntervalMs: 500 },
+        pollIntervalMs: 50,
+      },
+      processors: {
+        test: {
+          attemptHandler: async ({ complete }) => {
+            if (!handlerFailed) {
+              handlerFailed = true;
+              throw new Error("simulated handler failure");
+            }
+            return complete(async () => null);
+          },
+        },
+      },
+    });
+
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.waitForJobChainCompletion(jobChain, completionOptions);
+    });
+
+    const logEntries = log.mock.calls.map((call) => call[0]);
+    const attemptFailedCount = logEntries.filter((e) => e.type === "job_attempt_failed").length;
+    expect(attemptFailedCount).toBe(0);
+  });
+
+  it("discards continuation events on createJob rollback", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const registry = defineJobTypes<{
+      linear: {
+        entry: true;
+        input: null;
+        continueWith: { typeName: "linear_next" };
+      };
+      linear_next: {
+        input: null;
+        output: null;
+      };
+    }>();
+
+    let createJobErrorThrown = false;
+    const erroringStateAdapter: typeof stateAdapter = {
+      ...stateAdapter,
+      createJob: async (args) => {
+        if (!createJobErrorThrown && args.chainIndex > 0) {
+          createJobErrorThrown = true;
+          throw new Error("simulated createJob failure");
+        }
+        return stateAdapter.createJob(args);
+      },
+    };
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+    const workerClient = await createClient({
+      stateAdapter: erroringStateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+    const worker = await createInProcessWorker({
+      client: workerClient,
+      concurrency: 1,
+      processDefaults: {
+        pollIntervalMs: 100,
+        retryConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+      },
+      processors: {
+        linear: {
+          attemptHandler: async ({ complete }) =>
+            complete(async ({ continueWith }) =>
+              continueWith({ typeName: "linear_next", input: null }),
+            ),
+        },
+        linear_next: {
+          attemptHandler: async ({ complete }) => complete(async () => null),
+        },
+      },
+    });
+
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({ ...txCtx, transactionHooks, typeName: "linear", input: null }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.waitForJobChainCompletion(jobChain, completionOptions);
+    });
+
+    const logEntries = log.mock.calls.map((call) => call[0]);
+    const continuationCreated = logEntries.filter(
+      (e) => e.type === "job_created" && e.data.typeName === "linear_next",
+    );
+    const attemptFailedCount = logEntries.filter((e) => e.type === "job_attempt_failed").length;
+
+    expect(continuationCreated).toHaveLength(1);
+    expect(attemptFailedCount).toBe(1);
+  });
+});

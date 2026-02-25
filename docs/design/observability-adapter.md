@@ -37,6 +37,33 @@ See:
 - [OTEL Metrics](otel-metrics.md) - Metric names, attributes, and conventions
 - [OTEL Tracing](otel-tracing.md) - Span hierarchy, attributes, and context propagation
 
+## Transactional Guarantees
+
+Observability events emitted inside database transactions are **buffered** and only flushed after the transaction commits. If the transaction rolls back, buffered events are discarded — no misleading metrics, spans, or logs leak out.
+
+### What Is Buffered
+
+Events that represent **write claims** inside transactions:
+
+- **Creation**: `jobChainCreated`, `jobCreated`, `jobBlocked`, and PRODUCER span ends from `createStateJob`
+- **Completion**: `jobCompleted`, `jobDuration`, `completeJobSpan` (workerless), `jobChainCompleted`, `jobChainDuration`, `completeBlockerSpan`, `jobUnblocked` from `finishJob`
+- **Worker complete**: `jobAttemptCompleted` and continuation PRODUCER span ends from the complete transaction in `job-process`
+- **Error handling**: `jobAttemptFailed` from the error-handling transaction in `job-process`
+
+### What Is NOT Buffered
+
+- **Span starts**: Need trace context immediately for DB writes that store trace IDs
+- **Events outside transactions**: `jobAttemptStarted`, `jobAttemptDuration`, `jobAttemptLeaseRenewed`, attempt span ends (these occur outside the guarded transaction)
+- **Read-only observations**: `refetchJobForUpdate` events observe state without making write claims
+
+### Self-Cleaning
+
+Both `createStateJob` and `finishJob` snapshot the observability buffer on entry and rollback on throw, ensuring partial events from a failed operation don't accumulate in the buffer.
+
+### Implementation
+
+Buffering uses `TransactionHooks` — the same mechanism that flushes side effects on commit and discards them on rollback. See [Transaction Hooks](transaction-hooks.md).
+
 ## Summary
 
 The ObservabilityAdapter interface provides:
