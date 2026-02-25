@@ -369,6 +369,7 @@ export const runJobProcess = async ({
       jobTypeName: job.typeName,
       attempt: job.attempt,
       workerId,
+      chainTraceContext: job.chainTraceContext,
       traceContext: job.traceContext,
     });
 
@@ -465,6 +466,8 @@ export const runJobProcess = async ({
                 chainId: job.chainId,
                 chainIndex: job.chainIndex + 1,
                 chainTypeName: job.chainTypeName,
+                originChainTraceContext:
+                  attemptSpanHandle?.getChainTraceContext() ?? job.chainTraceContext,
                 originTraceContext: attemptSpanHandle?.getTraceContext() ?? job.traceContext,
                 fromTypeName: job.typeName,
               });

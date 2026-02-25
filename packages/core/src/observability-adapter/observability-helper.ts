@@ -502,6 +502,7 @@ export const createObservabilityHelper = ({
   completeJobSpan: (job, options) => {
     try {
       adapter.completeJobSpan({
+        chainTraceContext: job.chainTraceContext,
         traceContext: job.traceContext,
         chainId: job.chainId,
         chainTypeName: job.chainTypeName,

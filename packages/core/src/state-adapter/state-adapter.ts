@@ -39,6 +39,7 @@ export type StateJob = {
 
   deduplicationKey: string | null;
 
+  chainTraceContext: unknown;
   traceContext: unknown;
 };
 
@@ -85,6 +86,7 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     input: unknown;
     deduplication?: DeduplicationOptions;
     schedule?: ScheduleOptions;
+    chainTraceContext?: unknown;
     traceContext?: unknown;
   }) => Promise<{ job: StateJob; deduplicated: boolean }>;
 

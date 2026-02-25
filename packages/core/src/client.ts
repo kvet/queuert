@@ -283,6 +283,7 @@ export const createClient = async <
               chainId: job.chainId,
               chainIndex: job.chainIndex + 1,
               chainTypeName: job.chainTypeName,
+              originChainTraceContext: job.chainTraceContext,
               originTraceContext: job.traceContext,
               fromTypeName: job.typeName,
             });

@@ -18,6 +18,7 @@ export const continueWith = async <TJobTypeName extends string, TInput>(
     chainId,
     chainIndex,
     chainTypeName,
+    originChainTraceContext,
     originTraceContext,
     fromTypeName,
   }: {
@@ -30,6 +31,7 @@ export const continueWith = async <TJobTypeName extends string, TInput>(
     chainId: string;
     chainIndex: number;
     chainTypeName: string;
+    originChainTraceContext: unknown;
     originTraceContext: unknown;
     fromTypeName: string;
   },
@@ -46,6 +48,7 @@ export const continueWith = async <TJobTypeName extends string, TInput>(
     chainId,
     chainIndex,
     chainTypeName,
+    originChainTraceContext,
     originTraceContext,
     schedule,
   });

@@ -66,6 +66,7 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
 
     deduplicationKey: dbJob.deduplication_key,
 
+    chainTraceContext: dbJob.chain_trace_context,
     traceContext: dbJob.trace_context,
   };
 };
@@ -156,6 +157,7 @@ export const createPgStateAdapter = async <
       chainId,
       deduplication,
       schedule,
+      chainTraceContext,
       traceContext,
     }) => {
       const [result] = await executeTypedSql({
@@ -171,6 +173,7 @@ export const createPgStateAdapter = async <
           deduplication?.windowMs ?? null,
           schedule?.at ?? null,
           schedule?.afterMs ?? null,
+          chainTraceContext ?? null,
           traceContext ?? null,
           chainIndex,
         ],

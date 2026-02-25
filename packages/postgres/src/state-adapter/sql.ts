@@ -26,6 +26,7 @@ export type DbJob = {
 
   deduplication_key: string | null;
 
+  chain_trace_context: unknown;
   trace_context: unknown;
 };
 
@@ -82,6 +83,7 @@ CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job (
   deduplication_key             text,
 
   -- tracing
+  chain_trace_context           jsonb,
   trace_context                 jsonb
 )`,
           false,
@@ -222,6 +224,7 @@ export const createJobSql: TypedSql<
     NamedParameter<"deduplication_window_ms", number | null | undefined>,
     NamedParameter<"scheduled_at", Date | null>,
     NamedParameter<"schedule_after_ms", number | null>,
+    NamedParameter<"chain_trace_context", unknown>,
     NamedParameter<"trace_context", unknown>,
     NamedParameter<"chain_index", number>,
   ],
@@ -234,7 +237,7 @@ existing_continuation AS (
   FROM {{schema}}.{{table_prefix}}job
   WHERE $2::{{id_type}} IS NOT NULL
     AND chain_id = $2::{{id_type}}
-    AND chain_index = $11::integer
+    AND chain_index = $12::integer
     AND id != chain_id
   LIMIT 1
 ),
@@ -258,12 +261,12 @@ existing_deduplicated AS (
   LIMIT 1
 ),
 inserted_job AS (
-  INSERT INTO {{schema}}.{{table_prefix}}job (id, type_name, chain_id, chain_type_name, chain_index, input, deduplication_key, scheduled_at, trace_context)
+  INSERT INTO {{schema}}.{{table_prefix}}job (id, type_name, chain_id, chain_type_name, chain_index, input, deduplication_key, scheduled_at, chain_trace_context, trace_context)
   SELECT id, $1, COALESCE($2, id), $3,
-    $11::integer,
+    $12::integer,
     $4, $5,
     COALESCE($8::timestamptz, now() + ($9::bigint || ' milliseconds')::interval, now()),
-    $10
+    $10, $11
   FROM new_id
   WHERE NOT EXISTS (SELECT 1 FROM existing_continuation)
     AND NOT EXISTS (SELECT 1 FROM existing_deduplicated)
@@ -338,7 +341,7 @@ final_job AS (
   LIMIT 1
 ),
 blocker_chain_contexts AS (
-  SELECT id2.blocked_by_chain_id, j.trace_context AS chain_trace_context, id2.ord
+  SELECT id2.blocked_by_chain_id, j.chain_trace_context, id2.ord
   FROM input_data id2
   JOIN {{schema}}.{{table_prefix}}job j ON j.id = id2.blocked_by_chain_id
 )

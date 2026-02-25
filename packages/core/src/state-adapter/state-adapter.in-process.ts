@@ -164,6 +164,7 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       chainId,
       deduplication,
       schedule,
+      chainTraceContext,
       traceContext,
     }) => {
       if (chainId) {
@@ -202,6 +203,7 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
         leasedBy: null,
         leasedUntil: null,
         deduplicationKey: deduplication?.key ?? null,
+        chainTraceContext: chainTraceContext ?? null,
         traceContext: traceContext ?? null,
       };
 
@@ -230,7 +232,7 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
           incompleteBlockerChainIds.push(blockerChainId);
         }
         const rootJob = store.jobs.get(blockerChainId);
-        blockerChainTraceContexts.push(rootJob?.traceContext ?? null);
+        blockerChainTraceContexts.push(rootJob?.chainTraceContext ?? null);
       }
 
       if (incompleteBlockerChainIds.length > 0 && job.status === "pending") {

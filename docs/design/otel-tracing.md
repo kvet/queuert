@@ -49,16 +49,16 @@ Span kinds use OpenTelemetry's PRODUCER/CONSUMER/INTERNAL semantics. The chain h
 
 ## Trace Context Propagation
 
-Trace context is stored in job state (`traceContext` field) to enable span linking across workers and processes. The structure is adapter-specific—the OTEL adapter uses W3C traceparent format while core treats it as opaque `unknown`.
+Each job stores two trace contexts: `chainTraceContext` (chain-level, for chain completion and blocker linking) and `traceContext` (job-level, for attempt spans and continuation linking). Blocker dependencies store a single trace context in the `job_blocker` table (the blocker PRODUCER span context). All context values are opaque `unknown` at the core level—the OTEL adapter uses W3C traceparent strings.
 
 Context flows through the system:
 
-- **Chain start**: Creates chain and job spans, stores context with job
-- **Blockers**: Creates blocker spans as children of job, stores context in `job_blocker` table
-- **Continuation**: Inherits chain context, creates new job span, links to origin
-- **Worker processing**: Creates attempt span as child of job, updates context
+- **Chain start**: Creates chain and job spans, stores `chainTraceContext` (chain span) and `traceContext` (job span) with the job
+- **Blockers**: Creates blocker PRODUCER spans as children of the job span, stores blocker span context in `job_blocker` table. Returns `blockerChainTraceContexts` (the `chainTraceContext` from each blocker chain's root job) for linking
+- **Continuation**: Inherits `chainTraceContext` from origin, creates new job span with its own `traceContext`, links to origin job
+- **Worker processing**: Creates attempt span as child of job using `traceContext`, chain completion uses `chainTraceContext`
 - **Blocker completion**: Ends blocker span using context from `job_blocker` table
-- **Chain completion**: Creates CONSUMER chain span linked to PRODUCER chain
+- **Chain completion**: Creates CONSUMER chain span linked to PRODUCER chain using `chainTraceContext`
 
 ## Deduplication
 

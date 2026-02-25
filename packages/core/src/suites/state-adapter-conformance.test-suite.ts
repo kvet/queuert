@@ -459,8 +459,12 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       expect(Math.abs(atJob.scheduledAt.getTime() - futureDate.getTime())).toBeLessThan(1000);
     });
 
-    it("stores and retrieves traceContext", async ({ stateAdapter, expect }) => {
-      const traceContext = { traceId: "abc123", spanId: "def456" };
+    it("stores and retrieves traceContext and chainTraceContext", async ({
+      stateAdapter,
+      expect,
+    }) => {
+      const chainTraceContext = { traceparent: "00-abc123-chain111-01" };
+      const traceContext = { traceparent: "00-abc123-job222-01" };
       const { job } = await stateAdapter.runInTransaction(async (txCtx) =>
         stateAdapter.createJob({
           txCtx,
@@ -469,11 +473,13 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainIndex: 0,
           chainTypeName: "trace-test",
           input: null,
+          chainTraceContext,
           traceContext,
         }),
       );
 
       const retrieved = await stateAdapter.getJobById({ jobId: job.id });
+      expect(retrieved!.chainTraceContext).toEqual(chainTraceContext);
       expect(retrieved!.traceContext).toEqual(traceContext);
     });
 
@@ -616,17 +622,22 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const { job: updatedMain, incompleteBlockerChainIds } = await stateAdapter.runInTransaction(
-        async (txCtx) =>
-          stateAdapter.addJobBlockers({
-            txCtx,
-            jobId: mainJob.id,
-            blockedByChainIds: [blockerJob.chainId],
-          }),
+      const {
+        job: updatedMain,
+        incompleteBlockerChainIds,
+        blockerChainTraceContexts,
+      } = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.addJobBlockers({
+          txCtx,
+          jobId: mainJob.id,
+          blockedByChainIds: [blockerJob.chainId],
+        }),
       );
 
       expect(updatedMain.status).toBe("blocked");
       expect(incompleteBlockerChainIds).toContain(blockerJob.chainId);
+      expect(blockerChainTraceContexts).toHaveLength(1);
+      expect(blockerChainTraceContexts[0]).toBeNull();
     });
 
     it("returns empty incompleteBlockerChainIds when all blockers are completed", async ({
@@ -664,17 +675,22 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const { job: updatedMain, incompleteBlockerChainIds } = await stateAdapter.runInTransaction(
-        async (txCtx) =>
-          stateAdapter.addJobBlockers({
-            txCtx,
-            jobId: mainJob.id,
-            blockedByChainIds: [blockerJob.chainId],
-          }),
+      const {
+        job: updatedMain,
+        incompleteBlockerChainIds,
+        blockerChainTraceContexts,
+      } = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.addJobBlockers({
+          txCtx,
+          jobId: mainJob.id,
+          blockedByChainIds: [blockerJob.chainId],
+        }),
       );
 
       expect(updatedMain.status).toBe("pending");
       expect(incompleteBlockerChainIds).toHaveLength(0);
+      expect(blockerChainTraceContexts).toHaveLength(1);
+      expect(blockerChainTraceContexts[0]).toBeNull();
     });
   });
 
@@ -946,7 +962,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       stateAdapter,
       expect,
     }) => {
-      const blockerTraceContext = { chain: "test-chain", job: "test-job" };
+      const blockerChainTraceContext = { traceparent: "00-test123-chain456-01" };
       const { job: blockerJob } = await stateAdapter.runInTransaction(async (txCtx) =>
         stateAdapter.createJob({
           txCtx,
@@ -955,7 +971,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainIndex: 0,
           chainTypeName: "blocker",
           input: null,
-          traceContext: blockerTraceContext,
+          chainTraceContext: blockerChainTraceContext,
         }),
       );
 
@@ -979,15 +995,15 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       );
 
       expect(blockerChainTraceContexts).toHaveLength(1);
-      expect(blockerChainTraceContexts[0]).toEqual(blockerTraceContext);
+      expect(blockerChainTraceContexts[0]).toEqual(blockerChainTraceContext);
     });
 
     it("returns blocker chain trace contexts in the same order as blockedByChainIds", async ({
       stateAdapter,
       expect,
     }) => {
-      const traceA = { chain: "chain-a", job: "job-a" };
-      const traceB = { chain: "chain-b", job: "job-b" };
+      const chainTraceA = { traceparent: "00-aaa111-chain-aaa-01" };
+      const chainTraceB = { traceparent: "00-bbb222-chain-bbb-01" };
 
       const { job: blockerA } = await stateAdapter.runInTransaction(async (txCtx) =>
         stateAdapter.createJob({
@@ -997,7 +1013,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainIndex: 0,
           chainTypeName: "blockerA",
           input: null,
-          traceContext: traceA,
+          chainTraceContext: chainTraceA,
         }),
       );
 
@@ -1009,7 +1025,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           chainIndex: 0,
           chainTypeName: "blockerB",
           input: null,
-          traceContext: traceB,
+          chainTraceContext: chainTraceB,
         }),
       );
 
@@ -1033,8 +1049,8 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       );
 
       expect(blockerChainTraceContexts).toHaveLength(2);
-      expect(blockerChainTraceContexts[0]).toEqual(traceA);
-      expect(blockerChainTraceContexts[1]).toEqual(traceB);
+      expect(blockerChainTraceContexts[0]).toEqual(chainTraceA);
+      expect(blockerChainTraceContexts[1]).toEqual(chainTraceB);
     });
   });
 

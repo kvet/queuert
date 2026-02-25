@@ -90,6 +90,7 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
 
     deduplicationKey: dbJob.deduplication_key,
 
+    chainTraceContext: parseJson(dbJob.chain_trace_context),
     traceContext: parseJson(dbJob.trace_context),
   };
 };
@@ -114,6 +115,7 @@ const parseDbJobChainRow = (row: DbJobChainRow): { rootJob: DbJob; lastChainJob:
     leased_by: row.leased_by,
     leased_until: row.leased_until,
     deduplication_key: row.deduplication_key,
+    chain_trace_context: row.chain_trace_context,
     trace_context: row.trace_context,
   };
 
@@ -137,6 +139,7 @@ const parseDbJobChainRow = (row: DbJobChainRow): { rootJob: DbJob; lastChainJob:
         leased_by: row.lc_leased_by,
         leased_until: row.lc_leased_until,
         deduplication_key: row.lc_deduplication_key,
+        chain_trace_context: row.lc_chain_trace_context,
         trace_context: row.lc_trace_context,
       }
     : null;
@@ -234,6 +237,7 @@ export const createSqliteStateAdapter = async <
       chainId,
       deduplication,
       schedule,
+      chainTraceContext,
       traceContext,
     }) => {
       const newId = idGenerator();
@@ -245,6 +249,8 @@ export const createSqliteStateAdapter = async <
       const chainIdOrNull = chainId ?? null;
       const scheduledAtIso = schedule?.at?.toISOString().replace("T", " ").replace("Z", "") ?? null;
       const scheduleAfterMsOrNull = schedule?.afterMs ?? null;
+      const chainTraceContextJson =
+        chainTraceContext !== undefined ? JSON.stringify(chainTraceContext) : null;
       const traceContextJson = traceContext !== undefined ? JSON.stringify(traceContext) : null;
 
       if (chainId) {
@@ -293,6 +299,7 @@ export const createSqliteStateAdapter = async <
           scheduledAtIso,
           scheduleAfterMsOrNull,
           scheduleAfterMsOrNull,
+          chainTraceContextJson,
           traceContextJson,
         ],
       });
@@ -326,7 +333,7 @@ export const createSqliteStateAdapter = async <
       const chainTraceContextMap = new Map(
         chainTraceContextRows.map((r) => [
           r.blocked_by_chain_id,
-          r.trace_context ? JSON.parse(r.trace_context) : null,
+          r.chain_trace_context ? JSON.parse(r.chain_trace_context) : null,
         ]),
       );
       const blockerChainTraceContexts = blockedByChainIds.map(

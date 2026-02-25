@@ -20,6 +20,7 @@ export const jobColumns = [
   "leased_by",
   "leased_until",
   "deduplication_key",
+  "chain_trace_context",
   "trace_context",
 ] as const;
 
@@ -53,6 +54,7 @@ export type DbJob = {
 
   deduplication_key: string | null;
 
+  chain_trace_context: string | null;
   trace_context: string | null;
 };
 
@@ -97,6 +99,7 @@ CREATE TABLE IF NOT EXISTS {{table_prefix}}job (
   deduplication_key             TEXT,
 
   -- tracing
+  chain_trace_context           TEXT,
   trace_context                 TEXT
 )`,
           false,
@@ -288,17 +291,18 @@ export const insertJobSql: TypedSql<
     NamedParameter<"scheduled_at", string | null>,
     NamedParameter<"schedule_after_ms_check", number | null>,
     NamedParameter<"schedule_after_ms", number | null>,
+    NamedParameter<"chain_trace_context", string | null>,
     NamedParameter<"trace_context", string | null>,
   ],
   [DbJob]
 > = sql(
   /* sql */ `
-INSERT INTO {{table_prefix}}job (id, type_name, chain_id, chain_type_name, chain_index, input, deduplication_key, scheduled_at, trace_context)
+INSERT INTO {{table_prefix}}job (id, type_name, chain_id, chain_type_name, chain_index, input, deduplication_key, scheduled_at, chain_trace_context, trace_context)
 VALUES (?, ?, COALESCE(?, ?), ?, ?, ?, ?,
   COALESCE(?,
     CASE WHEN ? IS NOT NULL THEN datetime('now', 'subsec', '+' || (? / 1000.0) || ' seconds') ELSE NULL END,
     datetime('now', 'subsec')),
-  ?)
+  ?, ?)
 ON CONFLICT (chain_id, chain_index) DO UPDATE SET id = {{table_prefix}}job.id
 RETURNING *
 `,
@@ -443,10 +447,10 @@ WHERE jb.blocked_by_chain_id = ?
 
 export const getBlockerChainTraceContextsSql: TypedSql<
   readonly [NamedParameter<"blocked_by_chain_ids_json", string>],
-  { blocked_by_chain_id: string; trace_context: string | null }[]
+  { blocked_by_chain_id: string; chain_trace_context: string | null }[]
 > = sql(
   /* sql */ `
-SELECT j.id AS blocked_by_chain_id, j.trace_context
+SELECT j.id AS blocked_by_chain_id, j.chain_trace_context
 FROM {{table_prefix}}job j
 WHERE j.id IN (SELECT value FROM json_each(?))
 ORDER BY j.id

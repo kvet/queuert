@@ -26,6 +26,7 @@ export const createStateJob = async (
     chainId,
     chainIndex,
     chainTypeName,
+    originChainTraceContext,
     originTraceContext,
     deduplication,
     schedule,
@@ -39,6 +40,7 @@ export const createStateJob = async (
     chainId?: string;
     chainIndex: number;
     chainTypeName?: string;
+    originChainTraceContext?: unknown;
     originTraceContext?: unknown;
     deduplication?: DeduplicationOptions;
     schedule?: ScheduleOptions;
@@ -56,6 +58,7 @@ export const createStateJob = async (
     chainTypeName: resolvedChainTypeName,
     jobTypeName: typeName,
     isChainStart: isChain,
+    originChainTraceContext: isChain ? undefined : originChainTraceContext,
     originTraceContext: isChain ? undefined : originTraceContext,
   });
 
@@ -70,6 +73,7 @@ export const createStateJob = async (
       chainId: isChain ? undefined : chainId,
       deduplication,
       schedule,
+      chainTraceContext: spanHandle?.getChainTraceContext(),
       traceContext: spanHandle?.getTraceContext(),
     });
   } catch (error) {
@@ -85,7 +89,7 @@ export const createStateJob = async (
       status: "deduplicated",
       chainId: job.chainId,
       jobId: job.id,
-      existingTraceContext: job.traceContext,
+      existingChainTraceContext: job.chainTraceContext,
     });
     return { job, deduplicated };
   }
@@ -124,7 +128,7 @@ export const createStateJob = async (
       blockerSpanHandles.forEach((handle, i) => {
         if (!handle) return;
         bufferObservabilityEvent(transactionHooks, () => {
-          handle.end({ blockerTraceContext: addBlockersResult.blockerChainTraceContexts[i] });
+          handle.end({ blockerChainTraceContext: addBlockersResult.blockerChainTraceContexts[i] });
         });
         if (!incompleteSet.has(blockerChainIds[i])) {
           bufferObservabilityEvent(transactionHooks, () => {
