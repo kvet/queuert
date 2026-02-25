@@ -25,7 +25,7 @@ export const finishJob = async (
     workerId: string | null;
   } & (
     | { type: "completeChain"; output: unknown }
-    | { type: "continueWith"; continuedJob: Job<any, any, any, any, any[]> }
+    | { type: "continueWith"; continuedJob: Job<any, any, any, any> }
   ),
 ): Promise<StateJob> => {
   const hasContinuedJob = rest.type === "continueWith";

@@ -33,7 +33,7 @@ import {
   type JobChain,
   mapStateJobPairToJobChain,
 } from "./entities/job-chain.js";
-import { type Job } from "./entities/job.js";
+import { type CreatedJob, type Job } from "./entities/job.js";
 import { JobAlreadyCompletedError, JobNotFoundError, WaitChainTimeoutError } from "./errors.js";
 import { type TransactionHooks } from "./transaction-hooks.js";
 import { bufferNotifyJobOwnershipLost } from "./helpers/notify-hooks.js";
@@ -92,7 +92,7 @@ export type CompleteJobChainResult<
   TCompleteReturn,
 > = [TCompleteReturn] extends [void]
   ? JobChainOf<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TChainTypeName>
-  : TCompleteReturn extends Job<any, any, any, any, any[]>
+  : TCompleteReturn extends CreatedJob<Job<any, any, any, any>>
     ? JobChainOf<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TChainTypeName>
     : CompletedJobChain<
         JobChain<
@@ -265,7 +265,7 @@ export const createClient = async <
           );
         }
 
-        let continuedJob: Job<any, any, any, any, any[]> | null = null;
+        let continuedJob: Job<any, any, any, any> | null = null;
 
         const output = await jobCompleteCallback({
           continueWith: async ({ typeName, input, schedule, blockers }) => {

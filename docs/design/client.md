@@ -10,7 +10,7 @@ The client has two categories of methods: mutating and read-only.
 
 **Mutating** — `startJobChain`, `completeJobChain`, `deleteJobChains`. Require `transactionHooks` and a transaction context. Side effects (notifications, observability) are buffered via hooks and only flushed after the caller's transaction commits.
 
-**Read-only** — `getJobChain`, `getJob`, `listJobChains`, `listJobs`, `getBlockerJobChains`, `getBlockedJobs`, `awaitJobChain`. Do not require `transactionHooks`. Accept an optional transaction context — when omitted, the adapter acquires its own connection.
+**Read-only** — `getJobChain`, `getJob`, `listJobChains`, `listJobs`, `listJobChainJobs`, `getJobBlockers`, `listBlockedJobs`, `awaitJobChain`. Do not require `transactionHooks`. Accept an optional transaction context — when omitted, the adapter acquires its own connection.
 
 All methods accept a transaction context: required for mutations (rollback safety for side effects), optional for queries (standalone reads are fine).
 
@@ -26,19 +26,51 @@ All mutation methods require `transactionHooks` and a transaction context. Side 
 
 ### Query Methods
 
+All query methods accept an optional transaction context. Paginated methods use cursor-based pagination (`Page<T>` with `nextCursor`) consistent with the state adapter.
+
+#### Single-entity lookups
+
 **`getJobChain`** — get a single chain by ID. Returns `JobChain<...> | null`. Takes `typeName` and `id` — the return type narrows to the specified chain type.
 
 **`getJob`** — get a single job by ID. Returns `Job<...> | null`. Takes `typeName` and `id` — the return type narrows to the specified job type.
 
-**`listJobChains`** — paginated list of chains. Returns `Page<JobChain<...>>`. Accepts filters: `typeName` (chain type names), `rootOnly` (exclude chains referenced as blockers), `id` (search by chain ID or find chain containing a job ID). When the `typeName` filter is a single value, the return type narrows to that chain type's `JobChain`; otherwise it's a union of all entry types.
+#### Paginated lists
 
-**`listJobs`** — paginated list of jobs. Returns `Page<Job<...>>`. Accepts filters: `status`, `typeName` (job type names), `jobChainId`, `id` (search by job ID or chain ID). Blockers are not populated — use `getBlockerJobChains` to fetch them for a specific job. When the `typeName` filter is a single value, the return type narrows to that job type.
+All paginated methods accept `cursor?: string` and `limit?: number` for cursor-based pagination. Date range bounds (`from`, `to`) accept either an absolute date (`{ at: Date }`) or a relative offset from now (`{ beforeMs: number }`). All `orderBy` and `orderDirection` parameters are optional — default to `orderBy: 'created'`, `orderDirection: 'desc'` (newest first) unless noted otherwise.
 
-**`getBlockerJobChains`** — blocker chains for a specific job. Takes `jobId` and an optional `typeName` for type narrowing. Returns `JobChain<...>[]`.
+**`listJobChains`** — paginated list of chains. Returns `Page<JobChain<...>>`. Filters:
 
-**`getBlockedJobs`** — jobs from other chains that are blocked by a given chain. Takes `jobChainId` and an optional `typeName` (chain type) for type narrowing — narrows the return to job types that declare this chain type as a blocker. Returns `Job<...>[]`. Useful for understanding downstream impact before deletion or for monitoring dependency graphs.
+- `typeName?: TChainTypeName[]` — chain type names
+- `id?: TJobId[]` — filter by chain IDs
+- `jobId?: TJobId[]` — find chains containing these job IDs. Not indexed — expensive on large datasets
+- `root?: boolean` — when true, excludes chains referenced as blockers by other jobs
+- `status?: JobChainStatus[]` — filter by chain status. Derived from last job — not indexed, slow on large datasets. May be deferred to a later release
+- `from?: DateBound` — lower bound on `createdAt`
+- `to?: DateBound` — upper bound on `createdAt`
+- `orderBy?: 'created'` — default `'created'`
+- `orderDirection?: 'asc' | 'desc'` — default `'desc'`
 
-All query methods accept an optional transaction context. Both pagination methods use cursor-based pagination (`Page<T>` with `nextCursor`) consistent with the state adapter.
+**`listJobs`** — paginated list of jobs. Returns `Page<Job<...>>`. Blockers are not populated — use `getJobBlockers` to fetch them for a specific job. Filters:
+
+- `typeName?: TJobTypeName[]` — job type names
+- `id?: TJobId[]` — filter by job IDs
+- `jobChainId?: TJobId[]` — filter by chain IDs
+- `status?: JobStatus[]` — filter by job status
+- `from?: DateBound` — lower bound on `createdAt`
+- `to?: DateBound` — upper bound on `createdAt`
+- `orderBy?: 'created'` — default `'created'`
+- `orderDirection?: 'asc' | 'desc'` — default `'desc'`
+
+**`listJobChainJobs`** — paginated jobs within a specific chain, ordered by `chainIndex`. Returns `Page<Job<...>>`. Takes `jobChainId`. Blockers are not populated.
+
+- `orderBy?: 'chainIndex'` — default `'chainIndex'`
+- `orderDirection?: 'asc' | 'desc'` — default `'asc'`
+
+#### Blocker queries
+
+**`getJobBlockers`** — blocker chains for a specific job. Takes `jobId` and an optional `typeName` for type narrowing. Returns `JobChain<...>[]`. Not paginated — blockers are declared at job creation and bounded by design.
+
+**`listBlockedJobs`** — paginated list of jobs from other chains that are blocked by a given chain. Takes `jobChainId` and an optional `typeName` (chain type) for type narrowing — narrows the return to job types that declare this chain type as a blocker. Returns `Page<Job<...>>`. Useful for understanding downstream impact before deletion or for monitoring dependency graphs.
 
 ### Awaiting
 

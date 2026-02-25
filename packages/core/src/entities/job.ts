@@ -1,11 +1,9 @@
 import { type StateJob } from "../state-adapter/state-adapter.js";
-import { type Job, type JobWithoutBlockers } from "./job.types.js";
+import { type Job } from "./job.types.js";
 
 export * from "./job.types.js";
 
-export const mapStateJobToJob = (
-  stateJob: StateJob,
-): JobWithoutBlockers<Job<any, any, any, any, any[]>> => {
+export const mapStateJobToJob = (stateJob: StateJob): Job<any, any, any, any> => {
   const base = {
     id: stateJob.id,
     chainId: stateJob.chainId,

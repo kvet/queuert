@@ -12,6 +12,7 @@ import {
   type EntryJobTypeDefinitions,
   type HasBlockers,
   type JobOf,
+  type JobWithBlockersOf,
 } from "../entities/job-type.js";
 import {
   type CompletedJob,
@@ -26,11 +27,6 @@ import {
   JobNotFoundError,
   JobTakenByAnotherWorkerError,
 } from "../errors.js";
-import { continueWith } from "../implementation/continue-with.js";
-import { finishJob } from "../implementation/finish-job.js";
-import { handleJobHandlerError } from "../implementation/handle-job-handler-error.js";
-import { refetchJobForUpdate as refetchJobForUpdateImpl } from "../implementation/refetch-job-for-update.js";
-import { type Helpers } from "../setup-helpers.js";
 import { type TypedAbortController, type TypedAbortSignal } from "../helpers/abort.js";
 import { type BackoffConfig } from "../helpers/backoff.js";
 import {
@@ -38,11 +34,15 @@ import {
   rollbackObservabilityBuffer,
   snapshotObservabilityBuffer,
 } from "../helpers/observability-hooks.js";
-import { type TransactionHooks, withTransactionHooks } from "../transaction-hooks.js";
 import {
   type TransactionContext,
   createTransactionContext,
 } from "../helpers/transaction-context.js";
+import { continueWith } from "../implementation/continue-with.js";
+import { finishJob } from "../implementation/finish-job.js";
+import { handleJobHandlerError } from "../implementation/handle-job-handler-error.js";
+import { refetchJobForUpdate as refetchJobForUpdateImpl } from "../implementation/refetch-job-for-update.js";
+import { type Helpers } from "../setup-helpers.js";
 import {
   type BaseTxContext,
   type GetStateAdapterJobId,
@@ -50,6 +50,7 @@ import {
   type StateAdapter,
   type StateJob,
 } from "../state-adapter/state-adapter.js";
+import { type TransactionHooks, withTransactionHooks } from "../transaction-hooks.js";
 import { type LeaseConfig, createLeaseManager } from "./lease.js";
 
 export type { BackoffConfig } from "../helpers/backoff.js";
@@ -61,7 +62,7 @@ export type JobAttemptMiddleware<
 > = <T>(
   context: {
     job: RunningJob<
-      JobOf<
+      JobWithBlockersOf<
         GetStateAdapterJobId<TStateAdapter>,
         TJobTypeDefinitions,
         keyof TJobTypeDefinitions & string,
@@ -159,7 +160,7 @@ export type CompleteFn<
 ) => Promise<
   TReturn extends TJobTypeDefinitions[TJobTypeName]["output"]
     ? CompletedJob<
-        JobOf<
+        JobWithBlockersOf<
           GetStateAdapterJobId<TStateAdapter>,
           TJobTypeDefinitions,
           TJobTypeName,
@@ -195,7 +196,7 @@ export type AttemptHandlerFn<
 > = (processOptions: {
   signal: TypedAbortSignal<JobAbortReason>;
   job: RunningJob<
-    JobOf<
+    JobWithBlockersOf<
       GetStateAdapterJobId<TStateAdapter>,
       TJobTypeDefinitions,
       TJobTypeName,
@@ -206,7 +207,7 @@ export type AttemptHandlerFn<
   complete: CompleteFn<TStateAdapter, TJobTypeDefinitions, TJobTypeName>;
 }) => Promise<
   | CompletedJob<
-      JobOf<
+      JobWithBlockersOf<
         GetStateAdapterJobId<TStateAdapter>,
         TJobTypeDefinitions,
         TJobTypeName,
@@ -356,7 +357,7 @@ export const runJobProcess = async ({
     blockers: blockerPairs.map(mapStateJobPairToJobChain) as CompletedJobChain<
       JobChain<any, any, any, any>
     >[],
-  } as RunningJob<JobOf<any, any, any, any>>;
+  } as RunningJob<JobWithBlockersOf<any, any, any, any>>;
 
   const runJobAttempt = async (transactionHooks: TransactionHooks) => {
     const attemptStartTime = Date.now();
@@ -450,7 +451,7 @@ export const runJobProcess = async ({
       let result;
       try {
         result = await runInGuardedTransaction(async (txCtx) => {
-          let continuedJob: Job<any, any, any, any, any[]> | null = null;
+          let continuedJob: Job<any, any, any, any> | null = null;
           const output = await completeCallback({
             continueWith: async ({ typeName, input, schedule, blockers }) => {
               if (continuedJob) {
@@ -495,8 +496,8 @@ export const runJobProcess = async ({
           };
           const continued = continuedJob
             ? {
-                jobId: (continuedJob as Job<any, any, any, any, any[]>).id,
-                jobTypeName: (continuedJob as Job<any, any, any, any, any[]>).typeName,
+                jobId: (continuedJob as Job<any, any, any, any>).id,
+                jobTypeName: (continuedJob as Job<any, any, any, any>).typeName,
               }
             : undefined;
           const chainCompleted = !continuedJob ? { output } : undefined;

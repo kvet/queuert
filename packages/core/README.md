@@ -199,7 +199,7 @@ For production, integrate with your logging library (Pino, Winston, etc.) by imp
 
 **Job types:**
 
-- `Job`, `JobWithoutBlockers` - Job entity types
+- `Job`, `JobWithBlockers` - Job entity types
 - `CompletedJob` - Status-narrowed job type for completed jobs
 - `JobChain`, `CompletedJobChain` - Job chain types
 

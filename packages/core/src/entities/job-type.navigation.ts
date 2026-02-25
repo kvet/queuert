@@ -5,7 +5,7 @@ import {
   type NominalReference,
   type StructuralReference,
 } from "./job-type.js";
-import { type CreatedJob, type Job, type JobWithoutBlockers } from "./job.js";
+import { type CreatedJob, type Job, type JobWithBlockers } from "./job.js";
 
 // Detect 'any' type (0 extends 1 & T is true only when T is any)
 type IsAny<T> = 0 extends 1 & T ? true : false;
@@ -95,11 +95,16 @@ export type JobOf<
   TJobTypeName extends keyof TJobTypeDefinitions,
   TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string =
     ChainTypesReaching<TJobTypeDefinitions, TJobTypeName>,
-> = Job<
+> = Job<TJobId, TJobTypeName, TChainTypeName, ExtractInputType<TJobTypeDefinitions[TJobTypeName]>>;
+
+export type JobWithBlockersOf<
   TJobId,
-  TJobTypeName,
-  TChainTypeName,
-  ExtractInputType<TJobTypeDefinitions[TJobTypeName]>,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TJobTypeName extends keyof TJobTypeDefinitions,
+  TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string =
+    ChainTypesReaching<TJobTypeDefinitions, TJobTypeName>,
+> = JobWithBlockers<
+  JobOf<TJobId, TJobTypeDefinitions, TJobTypeName, TChainTypeName>,
   CompletedBlockerChains<TJobId, TJobTypeDefinitions, TJobTypeName & string>
 >;
 
@@ -111,7 +116,7 @@ export type ContinuationJobs<
     ChainTypesReaching<TJobTypeDefinitions, TJobTypeName>,
 > = {
   [K in ContinuationJobTypes<TJobTypeDefinitions, TJobTypeName>]: CreatedJob<
-    JobWithoutBlockers<JobOf<TJobId, TJobTypeDefinitions, K, TChainTypeName>>
+    JobOf<TJobId, TJobTypeDefinitions, K, TChainTypeName>
   >;
 }[ContinuationJobTypes<TJobTypeDefinitions, TJobTypeName>];
 

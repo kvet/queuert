@@ -41,7 +41,7 @@ const mapJobChainToData = (chain: JobChain<any, any, any, any>): JobChainData =>
   typeName: chain.typeName,
 });
 
-const mapJobToJobBasicData = (job: Job<any, any, any, any, any[]>): JobBasicData => ({
+const mapJobToJobBasicData = (job: Job<any, any, any, any>): JobBasicData => ({
   id: job.id,
   typeName: job.typeName,
   chainId: job.chainId,
@@ -81,13 +81,13 @@ export type ObservabilityHelper = {
   ) => void;
   jobAttemptCompleted: (
     job: StateJob,
-    options: { output: unknown; continuedWith?: Job<any, any, any, any, any[]>; workerId: string },
+    options: { output: unknown; continuedWith?: Job<any, any, any, any>; workerId: string },
   ) => void;
   jobCompleted: (
     job: StateJob,
     options: {
       output: unknown;
-      continuedWith?: Job<any, any, any, any, any[]>;
+      continuedWith?: Job<any, any, any, any>;
       workerId: string | null;
     },
   ) => void;
@@ -116,7 +116,7 @@ export type ObservabilityHelper = {
   startAttemptSpan: (data: JobAttemptSpanInputData) => JobAttemptSpanHandle | undefined;
   completeJobSpan: (
     job: StateJob,
-    options: { continued?: Job<any, any, any, any, any[]>; chainCompleted: boolean },
+    options: { continued?: Job<any, any, any, any>; chainCompleted: boolean },
   ) => void;
   startBlockerSpan: (data: BlockerSpanInputData) => BlockerSpanHandle | undefined;
   completeBlockerSpan: (data: CompleteBlockerSpanData) => void;

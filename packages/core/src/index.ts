@@ -12,7 +12,7 @@ export {
   type DefineJobTypes,
 } from "./entities/job-type.js";
 export { type ValidatedJobTypeDefinitions } from "./entities/job-type.validation.js";
-export { type CompletedJob, type Job, type JobWithoutBlockers } from "./entities/job.js";
+export { type CompletedJob, type Job, type JobWithBlockers } from "./entities/job.js";
 export { type ScheduleOptions } from "./entities/schedule.js";
 export {
   type BlockerReference,
