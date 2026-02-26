@@ -88,7 +88,7 @@ it("should infer types correctly with custom ID", async ({ postgresConnectionStr
     expectTypeOf(jobChain.id).toEqualTypeOf<`job.${UUID}`>();
 
     await withWorkers([await worker.start()], async () => {
-      await client.waitForJobChainCompletion(jobChain, { timeoutMs: 1000 });
+      await client.awaitJobChain(jobChain, { timeoutMs: 1000 });
     });
   } finally {
     await pool.end();

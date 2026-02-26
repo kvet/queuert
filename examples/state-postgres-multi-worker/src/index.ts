@@ -231,7 +231,7 @@ const jobChains = await withTransactionHooks(async (transactionHooks) =>
 );
 
 await Promise.all(
-  jobChains.map(async (chain) => qrtClient.waitForJobChainCompletion(chain, { timeoutMs: 30000 })),
+  jobChains.map(async (chain) => qrtClient.awaitJobChain(chain, { timeoutMs: 30000 })),
 );
 
 console.log("\n" + "=".repeat(60));

@@ -8,6 +8,7 @@
 - [TASK,COMPLEX] Job cleanup utility (see [Plugins](docs/design/plugins.md), [Cleanup Plugin](docs/design/cleanup-plugin.md))
 - [REF] Review state adapter method naming for clarity and consistency
 - [?,REF] Consider extracting a dedicated chain table at the DB level
+- [?,REF] Prepared statements
 - [EPIC] Prepare 0.3 release
 
 # Medium term

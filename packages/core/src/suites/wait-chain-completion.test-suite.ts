@@ -54,7 +54,7 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
     );
 
     const signal = AbortSignal.timeout(100);
-    const completedChain = await client.waitForJobChainCompletion(jobChain, {
+    const completedChain = await client.awaitJobChain(jobChain, {
       signal,
       timeoutMs: 5000,
     });
@@ -97,7 +97,7 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
     const fastSignal = AbortSignal.timeout(1);
     const slowSignal = AbortSignal.timeout(100);
     await expect(
-      client.waitForJobChainCompletion(jobChain, {
+      client.awaitJobChain(jobChain, {
         signal: fastSignal,
         timeoutMs: 5000,
       }),
@@ -137,7 +137,7 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
     );
 
     await expect(
-      client.waitForJobChainCompletion(jobChain, {
+      client.awaitJobChain(jobChain, {
         timeoutMs: 1,
       }),
     ).rejects.toThrow(WaitChainTimeoutError);
@@ -168,10 +168,7 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
 
     const nonExistentId = crypto.randomUUID();
     await expect(
-      client.waitForJobChainCompletion(
-        { typeName: "test", id: nonExistentId },
-        { timeoutMs: 5000 },
-      ),
+      client.awaitJobChain({ typeName: "test", id: nonExistentId }, { timeoutMs: 5000 }),
     ).rejects.toThrow(`Job chain with id ${nonExistentId} not found`);
   });
 };

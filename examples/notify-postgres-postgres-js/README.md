@@ -6,7 +6,7 @@ This example demonstrates the PostgreSQL notify adapter with postgres-js.
 
 - PostgreSQL LISTEN/NOTIFY notifications via `@queuert/postgres`
 - Integration with postgres-js client
-- Background job processing with `waitForJobChainCompletion`
+- Background job processing with `awaitJobChain`
 - Main thread continues working while jobs process asynchronously
 
 ## postgres-js vs pg
@@ -27,7 +27,7 @@ The main differences when using postgres-js:
 5. Starts a worker that processes `generate_report` jobs
 6. Queues a report generation job
 7. **Main thread continues with other work** while the job processes
-8. Waits for the report to complete using `waitForJobChainCompletion`
+8. Waits for the report to complete using `awaitJobChain`
 9. Cleans up resources
 
 ## Running the example

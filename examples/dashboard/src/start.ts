@@ -107,7 +107,7 @@ const greetJob = await withTransactionHooks(async (transactionHooks) =>
     client.startJobChain({ ...ctx, transactionHooks, typeName: "greet", input: { name: "World" } }),
   ),
 );
-const greetResult = await client.waitForJobChainCompletion(greetJob, { timeoutMs: 5000 });
+const greetResult = await client.awaitJobChain(greetJob, { timeoutMs: 5000 });
 console.log("Result:", greetResult.output);
 
 // Scenario 2: Continuations
@@ -122,7 +122,7 @@ const orderJob = await withTransactionHooks(async (transactionHooks) =>
     }),
   ),
 );
-const orderResult = await client.waitForJobChainCompletion(orderJob, { timeoutMs: 10000 });
+const orderResult = await client.awaitJobChain(orderJob, { timeoutMs: 10000 });
 console.log("Result:", orderResult.output);
 
 // Scenario 3: Blockers (fan-out/fan-in)
@@ -150,7 +150,7 @@ const blockerJob = await withTransactionHooks(async (transactionHooks) =>
     });
   }),
 );
-const blockerResult = await client.waitForJobChainCompletion(blockerJob, { timeoutMs: 10000 });
+const blockerResult = await client.awaitJobChain(blockerJob, { timeoutMs: 10000 });
 console.log("Result:", blockerResult.output);
 
 // Scenario 4: Retries
@@ -165,7 +165,7 @@ const retryJob = await withTransactionHooks(async (transactionHooks) =>
     }),
   ),
 );
-const retryResult = await client.waitForJobChainCompletion(retryJob, { timeoutMs: 5000 });
+const retryResult = await client.awaitJobChain(retryJob, { timeoutMs: 5000 });
 console.log("Result:", retryResult.output);
 
 // Cleanup

@@ -155,7 +155,7 @@ const fetch1 = await withTransactionHooks(async (transactionHooks) =>
     });
   }),
 );
-const result1 = await client.waitForJobChainCompletion(fetch1, { timeoutMs: 5000 });
+const result1 = await client.awaitJobChain(fetch1, { timeoutMs: 5000 });
 console.log(`Result: ${JSON.stringify(result1.output)}`);
 
 // Scenario 1b: Cooperative timeout - times out
@@ -173,7 +173,7 @@ const fetch2 = await withTransactionHooks(async (transactionHooks) =>
     });
   }),
 );
-const result2 = await client.waitForJobChainCompletion(fetch2, { timeoutMs: 5000 });
+const result2 = await client.awaitJobChain(fetch2, { timeoutMs: 5000 });
 console.log(`Result: ${JSON.stringify(result2.output)}`);
 
 // Scenario 2: Hard timeout via lease (completes in time)
@@ -191,7 +191,7 @@ const longJob = await withTransactionHooks(async (transactionHooks) =>
     });
   }),
 );
-const result3 = await client.waitForJobChainCompletion(longJob, { timeoutMs: 5000 });
+const result3 = await client.awaitJobChain(longJob, { timeoutMs: 5000 });
 console.log(`Result: ${JSON.stringify(result3.output)}`);
 
 await stopWorker();

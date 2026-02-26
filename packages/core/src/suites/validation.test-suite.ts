@@ -285,7 +285,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     );
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.waitForJobChainCompletion(jobChain, completionOptions);
+      const completed = await client.awaitJobChain(jobChain, completionOptions);
       expect(completed.output).toEqual({ result: 84 });
     });
   });
@@ -387,7 +387,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     );
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.waitForJobChainCompletion(jobChain, completionOptions);
+      const completed = await client.awaitJobChain(jobChain, completionOptions);
       expect(completed.output).toEqual({ result: 42 });
     });
   });
@@ -594,7 +594,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     expect(partialChain.status).toBe("pending");
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.waitForJobChainCompletion(partialChain, completionOptions);
+      const completed = await client.awaitJobChain(partialChain, completionOptions);
       expect(completed.output).toEqual({ result: 42 });
     });
   });

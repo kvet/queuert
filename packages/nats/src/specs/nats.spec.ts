@@ -60,7 +60,7 @@ it("should work end-to-end with NATS notify adapter", async ({ natsConnectionOpt
   );
 
   await withWorkers([await worker.start()], async () => {
-    await client.waitForJobChainCompletion(jobChain, { timeoutMs: 5000 });
+    await client.awaitJobChain(jobChain, { timeoutMs: 5000 });
   });
 
   await nc.close();
@@ -114,7 +114,7 @@ it("should work end-to-end without JetStream KV", async ({ natsConnectionOptions
   );
 
   await withWorkers([await worker.start()], async () => {
-    await client.waitForJobChainCompletion(jobChain, { timeoutMs: 5000 });
+    await client.awaitJobChain(jobChain, { timeoutMs: 5000 });
   });
 
   await nc.close();

@@ -6,7 +6,7 @@ This example demonstrates the Redis notify adapter with node-redis.
 
 - Redis pub/sub notifications via `@queuert/redis`
 - Integration with node-redis client
-- Background job processing with `waitForJobChainCompletion`
+- Background job processing with `awaitJobChain`
 - Main thread continues working while jobs process asynchronously
 
 ## What it does
@@ -17,7 +17,7 @@ This example demonstrates the Redis notify adapter with node-redis.
 4. Starts a worker that processes `generate_report` jobs
 5. Queues a report generation job
 6. **Main thread continues with other work** while the job processes
-7. Waits for the report to complete using `waitForJobChainCompletion`
+7. Waits for the report to complete using `awaitJobChain`
 8. Cleans up resources
 
 ## Running the example

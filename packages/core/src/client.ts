@@ -328,7 +328,7 @@ export const createClient = async <
       >;
     },
     // TODO: should it handle typeName that is not correct for the given id?
-    waitForJobChainCompletion: async <
+    awaitJobChain: async <
       TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
     >(
       jobChain: {

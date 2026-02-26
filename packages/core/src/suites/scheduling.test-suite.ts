@@ -60,12 +60,10 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     );
 
     await withWorkers([await worker.start()], async () => {
-      await expect(
-        client.waitForJobChainCompletion(jobChain, { timeoutMs: 200 }),
-      ).rejects.toThrow();
+      await expect(client.awaitJobChain(jobChain, { timeoutMs: 200 })).rejects.toThrow();
 
       await expect(
-        client.waitForJobChainCompletion(jobChain, {
+        client.awaitJobChain(jobChain, {
           pollIntervalMs: 100,
           timeoutMs: 400,
         }),
@@ -124,12 +122,10 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     );
 
     await withWorkers([await worker.start()], async () => {
-      await expect(
-        client.waitForJobChainCompletion(jobChain, { timeoutMs: 200 }),
-      ).rejects.toThrow();
+      await expect(client.awaitJobChain(jobChain, { timeoutMs: 200 })).rejects.toThrow();
 
       await expect(
-        client.waitForJobChainCompletion(jobChain, {
+        client.awaitJobChain(jobChain, {
           pollIntervalMs: 100,
           timeoutMs: 400,
         }),
@@ -211,12 +207,10 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     await withWorkers([await worker.start()], async () => {
       await firstCompleted.promise;
 
-      await expect(
-        client.waitForJobChainCompletion(jobChain, { timeoutMs: 200 }),
-      ).rejects.toThrow();
+      await expect(client.awaitJobChain(jobChain, { timeoutMs: 200 })).rejects.toThrow();
 
       await expect(
-        client.waitForJobChainCompletion(jobChain, {
+        client.awaitJobChain(jobChain, {
           pollIntervalMs: 100,
           timeoutMs: 400,
         }),
@@ -298,12 +292,10 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     await withWorkers([await worker.start()], async () => {
       await firstCompleted.promise;
 
-      await expect(
-        client.waitForJobChainCompletion(jobChain, { timeoutMs: 200 }),
-      ).rejects.toThrow();
+      await expect(client.awaitJobChain(jobChain, { timeoutMs: 200 })).rejects.toThrow();
 
       await expect(
-        client.waitForJobChainCompletion(jobChain, {
+        client.awaitJobChain(jobChain, {
           pollIntervalMs: 100,
           timeoutMs: 400,
         }),
@@ -372,12 +364,10 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     await withWorkers([await worker.start()], async () => {
       await firstAttemptDone.promise;
 
-      await expect(
-        client.waitForJobChainCompletion(jobChain, { timeoutMs: 200 }),
-      ).rejects.toThrow();
+      await expect(client.awaitJobChain(jobChain, { timeoutMs: 200 })).rejects.toThrow();
 
       await expect(
-        client.waitForJobChainCompletion(jobChain, {
+        client.awaitJobChain(jobChain, {
           pollIntervalMs: 100,
           timeoutMs: 400,
         }),
@@ -448,12 +438,10 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     await withWorkers([await worker.start()], async () => {
       await firstAttemptDone.promise;
 
-      await expect(
-        client.waitForJobChainCompletion(jobChain, { timeoutMs: 200 }),
-      ).rejects.toThrow();
+      await expect(client.awaitJobChain(jobChain, { timeoutMs: 200 })).rejects.toThrow();
 
       await expect(
-        client.waitForJobChainCompletion(jobChain, {
+        client.awaitJobChain(jobChain, {
           pollIntervalMs: 100,
           timeoutMs: 400,
         }),

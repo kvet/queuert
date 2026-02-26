@@ -14,7 +14,7 @@ Redis notify adapter for [Queuert](https://github.com/kvet/queuert) - a TypeScri
 The notify adapter handles:
 
 - Broadcasting job scheduling events so workers wake up immediately
-- Signaling chain completion for `waitForJobChainCompletion`
+- Signaling chain completion for `awaitJobChain`
 - **Thundering herd optimization** - Uses Lua scripts to atomically limit how many workers query the database
 
 ## When to use Redis

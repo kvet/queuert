@@ -86,7 +86,7 @@ export const notifyResilienceTestSuite = ({
       await Promise.all(
         jobChains.map(async (chain) =>
           // we have to rely on polling here since notify adapter is flaky
-          client.waitForJobChainCompletion(chain, { pollIntervalMs: 1000, timeoutMs: 5000 }),
+          client.awaitJobChain(chain, { pollIntervalMs: 1000, timeoutMs: 5000 }),
         ),
       );
     });

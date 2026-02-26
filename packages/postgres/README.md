@@ -21,7 +21,7 @@ PostgreSQL state adapter and notify adapter for [Queuert](https://github.com/kve
 **Notify Adapter** - Coordinates workers via PostgreSQL LISTEN/NOTIFY:
 
 - Broadcasts job scheduling events so workers wake up immediately
-- Signals chain completion for `waitForJobChainCompletion`
+- Signals chain completion for `awaitJobChain`
 - Uses 3 fixed channels with payload-based filtering
 
 ## When to use PostgreSQL

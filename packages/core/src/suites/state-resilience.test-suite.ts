@@ -94,9 +94,7 @@ export const stateResilienceTestSuite = ({
 
     await withWorkers([await flakyWorker.start()], async () => {
       await Promise.all(
-        jobChains.map(async (chain) =>
-          client.waitForJobChainCompletion(chain, { timeoutMs: 2000 }),
-        ),
+        jobChains.map(async (chain) => client.awaitJobChain(chain, { timeoutMs: 2000 })),
       );
     });
   });
@@ -182,9 +180,7 @@ export const stateResilienceTestSuite = ({
 
       await withWorkers([await flakyWorker.start()], async () => {
         await Promise.all(
-          jobChains.map(async (chain) =>
-            client.waitForJobChainCompletion(chain, { timeoutMs: 2000 }),
-          ),
+          jobChains.map(async (chain) => client.awaitJobChain(chain, { timeoutMs: 2000 })),
         );
       });
     },
@@ -289,9 +285,7 @@ export const stateResilienceTestSuite = ({
 
       await withWorkers([await flakyWorker1.start(), await flakyWorker2.start()], async () => {
         await Promise.all(
-          jobChains.map(async (chain) =>
-            client.waitForJobChainCompletion(chain, { timeoutMs: 2000 }),
-          ),
+          jobChains.map(async (chain) => client.awaitJobChain(chain, { timeoutMs: 2000 })),
         );
       });
     },

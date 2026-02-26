@@ -151,10 +151,10 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
 
     await withWorkers([await worker.start()], async () => {
       await Promise.all([
-        client.waitForJobChainCompletion(prepareJobChain, completionOptions),
-        client.waitForJobChainCompletion(completeJobChain, completionOptions),
-        client.waitForJobChainCompletion(prepareAfterAutoSetupJobChain, completionOptions),
-        client.waitForJobChainCompletion(continueWithJobChain, completionOptions),
+        client.awaitJobChain(prepareJobChain, completionOptions),
+        client.awaitJobChain(completeJobChain, completionOptions),
+        client.awaitJobChain(prepareAfterAutoSetupJobChain, completionOptions),
+        client.awaitJobChain(continueWithJobChain, completionOptions),
       ]);
     });
   });
@@ -236,7 +236,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       ),
     );
     await withWorkers([await worker.start()], async () => {
-      await client.waitForJobChainCompletion(jobChain, completionOptions);
+      await client.awaitJobChain(jobChain, completionOptions);
     });
 
     expect(attempts).toEqual([1, 2, 3]);
@@ -307,7 +307,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.waitForJobChainCompletion(job, completionOptions);
+      await client.awaitJobChain(job, completionOptions);
     });
 
     expect(errors).toHaveLength(3);
@@ -403,7 +403,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     expect(jobChain.input).toEqual({ test: true });
 
     await withWorkers([await worker.start()], async () => {
-      const completedJobChain = await client.waitForJobChainCompletion(jobChain, completionOptions);
+      const completedJobChain = await client.awaitJobChain(jobChain, completionOptions);
       expectTypeOf<(typeof completedJobChain)["status"]>().toEqualTypeOf<"completed">();
       expectTypeOf<(typeof completedJobChain)["output"]>().toEqualTypeOf<{
         result: boolean;

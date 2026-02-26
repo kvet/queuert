@@ -75,7 +75,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     );
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.waitForJobChainCompletion(jobChain, completionOptions);
+      const completed = await client.awaitJobChain(jobChain, completionOptions);
       expect(completed.output).toEqual({ result: 20 });
     });
 
@@ -161,7 +161,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     );
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.waitForJobChainCompletion(jobChain, completionOptions);
+      const completed = await client.awaitJobChain(jobChain, completionOptions);
       expect(completed.output).toEqual({ result: 30 });
     });
 
@@ -257,7 +257,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     );
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.waitForJobChainCompletion(jobChain, completionOptions);
+      const completed = await client.awaitJobChain(jobChain, completionOptions);
       expect(completed.output).toEqual({ result: 40 });
     });
 
@@ -351,7 +351,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     );
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.waitForJobChainCompletion(jobChain, completionOptions);
+      const completed = await client.awaitJobChain(jobChain, completionOptions);
       expect(completed.output).toEqual({ result: 50 });
     });
 
@@ -447,7 +447,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     );
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.waitForJobChainCompletion(jobChain, completionOptions);
+      const completed = await client.awaitJobChain(jobChain, completionOptions);
       expect(completed.output).toEqual({ result: 60 });
     });
 
@@ -534,7 +534,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     );
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.waitForJobChainCompletion(jobChain, completionOptions);
+      const completed = await client.awaitJobChain(jobChain, completionOptions);
       expect(completed.output).toEqual({ result: 70 });
     });
 

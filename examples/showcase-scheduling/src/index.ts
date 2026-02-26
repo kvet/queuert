@@ -246,7 +246,7 @@ const digestChain = await withTransactionHooks(async (transactionHooks) =>
   }),
 );
 
-const digestResult = await client.waitForJobChainCompletion(digestChain, {
+const digestResult = await client.awaitJobChain(digestChain, {
   timeoutMs: 10000,
 });
 
@@ -304,7 +304,7 @@ const healthChain2 = await withTransactionHooks(async (transactionHooks) =>
 console.log(`\nAttempted duplicate health check: ${healthChain2.id}`);
 console.log(`Deduplicated: ${healthChain2.deduplicated} (returned existing chain)`);
 
-const healthResult = await client.waitForJobChainCompletion(healthChain1, {
+const healthResult = await client.awaitJobChain(healthChain1, {
   timeoutMs: 10000,
 });
 
@@ -342,7 +342,7 @@ const sync1 = await withTransactionHooks(async (transactionHooks) =>
 console.log(`First sync started: ${sync1.id}`);
 console.log(`Deduplicated: ${sync1.deduplicated}`);
 
-await client.waitForJobChainCompletion(sync1, { timeoutMs: 5000 });
+await client.awaitJobChain(sync1, { timeoutMs: 5000 });
 
 // Second sync immediately after - should be deduplicated (within window)
 const sync2 = await withTransactionHooks(async (transactionHooks) =>
@@ -388,7 +388,7 @@ const sync3 = await withTransactionHooks(async (transactionHooks) =>
 console.log(`\nThird sync (after window): ${sync3.id}`);
 console.log(`Deduplicated: ${sync3.deduplicated} (new chain created)`);
 
-await client.waitForJobChainCompletion(sync3, { timeoutMs: 5000 });
+await client.awaitJobChain(sync3, { timeoutMs: 5000 });
 
 const [syncCount] = await sql<{ count: string }[]>`
   SELECT COUNT(*) as count FROM sync_logs WHERE source_id = 'db-primary'

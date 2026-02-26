@@ -329,7 +329,7 @@ const chain1 = await withTransactionHooks(async (transactionHooks) =>
   }),
 );
 
-const result1 = await client.waitForJobChainCompletion(chain1, { timeoutMs: 10000 });
+const result1 = await client.awaitJobChain(chain1, { timeoutMs: 10000 });
 
 const [sub1] = await sql<
   {
@@ -367,7 +367,7 @@ const chain2 = await withTransactionHooks(async (transactionHooks) =>
   }),
 );
 
-const result2 = await client.waitForJobChainCompletion(chain2, { timeoutMs: 10000 });
+const result2 = await client.awaitJobChain(chain2, { timeoutMs: 10000 });
 
 const [sub2] = await sql<
   {

@@ -204,7 +204,7 @@ const aggregateChain = await withTransactionHooks(async (transactionHooks) =>
   }),
 );
 
-const result1 = await client.waitForJobChainCompletion(aggregateChain, { timeoutMs: 10000 });
+const result1 = await client.awaitJobChain(aggregateChain, { timeoutMs: 10000 });
 console.log(`\nResult: ${result1.output.totalSources} sources → "${result1.output.combinedData}"`);
 
 // Scenario 2: Fixed blocker slots
@@ -236,7 +236,7 @@ const actionChain = await withTransactionHooks(async (transactionHooks) =>
   }),
 );
 
-const result2 = await client.waitForJobChainCompletion(actionChain, { timeoutMs: 10000 });
+const result2 = await client.awaitJobChain(actionChain, { timeoutMs: 10000 });
 console.log(`\nResult: "${result2.output.result}"`);
 
 await stopWorker();

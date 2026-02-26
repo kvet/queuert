@@ -59,7 +59,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       );
 
       const signal = AbortSignal.timeout(200);
-      await client.waitForJobChainCompletion(jobChain, { timeoutMs: 200 });
+      await client.awaitJobChain(jobChain, { timeoutMs: 200 });
       if (signal.aborted) {
         expect.fail("Timed out waiting for job chain completion");
       }
@@ -125,9 +125,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
         const signal = AbortSignal.timeout(200);
         await Promise.all(
-          jobChains.map(async (chain) =>
-            client.waitForJobChainCompletion(chain, { timeoutMs: 200 }),
-          ),
+          jobChains.map(async (chain) => client.awaitJobChain(chain, { timeoutMs: 200 })),
         );
         if (signal.aborted) {
           expect.fail("Timed out waiting for job chain completions");
@@ -211,7 +209,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       );
 
       const signal = AbortSignal.timeout(100);
-      await client.waitForJobChainCompletion(jobChain, {
+      await client.awaitJobChain(jobChain, {
         signal,
         timeoutMs: 200,
       });
@@ -292,7 +290,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       );
 
       const signal = AbortSignal.timeout(100);
-      await client.waitForJobChainCompletion(jobChain, { timeoutMs: 200 });
+      await client.awaitJobChain(jobChain, { timeoutMs: 200 });
       if (signal.aborted) {
         expect.fail("Timed out waiting for job chain completion");
       }
@@ -457,7 +455,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       await sleep(10);
 
       await withWorkers([await (await createWorker()).start()], async () => {
-        await client.waitForJobChainCompletion(jobChain, { timeoutMs: 5000 });
+        await client.awaitJobChain(jobChain, { timeoutMs: 5000 });
       });
 
       await jobCompleted.promise;

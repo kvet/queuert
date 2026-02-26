@@ -69,7 +69,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.waitForJobChainCompletion(jobChain, completionOptions);
+      await client.awaitJobChain(jobChain, completionOptions);
     });
 
     expect(log).toHaveBeenCalledWith(
@@ -197,8 +197,8 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       );
 
       await Promise.all([
-        client.waitForJobChainCompletion(successJobChain, completionOptions),
-        client.waitForJobChainCompletion(failJobChain, completionOptions),
+        client.awaitJobChain(successJobChain, completionOptions),
+        client.awaitJobChain(failJobChain, completionOptions),
       ]);
 
       await jobCompleted.promise;
@@ -334,8 +334,8 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       );
 
       await Promise.all([
-        client.waitForJobChainCompletion(successJobChain, completionOptions),
-        client.waitForJobChainCompletion(failJobChain, completionOptions),
+        client.awaitJobChain(successJobChain, completionOptions),
+        client.awaitJobChain(failJobChain, completionOptions),
       ]);
 
       await jobCompleted.promise;
@@ -432,8 +432,8 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       jobsCanComplete.resolve();
 
       await Promise.all([
-        client.waitForJobChainCompletion(jobChain1, completionOptions),
-        client.waitForJobChainCompletion(jobChain2, completionOptions),
+        client.awaitJobChain(jobChain1, completionOptions),
+        client.awaitJobChain(jobChain2, completionOptions),
       ]);
     });
 

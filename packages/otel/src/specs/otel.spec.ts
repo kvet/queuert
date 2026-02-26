@@ -75,7 +75,7 @@ describe("Metrics", () => {
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.waitForJobChainCompletion(jobChain, completionOptions);
+      await client.awaitJobChain(jobChain, completionOptions);
     });
 
     await expectMetrics([
@@ -155,7 +155,7 @@ describe("Metrics", () => {
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.waitForJobChainCompletion(job, completionOptions);
+      await client.awaitJobChain(job, completionOptions);
     });
 
     await expectMetrics([
@@ -253,7 +253,7 @@ describe("Metrics", () => {
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.waitForJobChainCompletion(jobChain, completionOptions);
+      await client.awaitJobChain(jobChain, completionOptions);
     });
 
     await expectMetrics([
@@ -368,7 +368,7 @@ describe("Metrics", () => {
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.waitForJobChainCompletion(jobChain, completionOptions);
+      await client.awaitJobChain(jobChain, completionOptions);
     });
 
     await expectMetrics([
@@ -497,7 +497,7 @@ describe("Metrics", () => {
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.waitForJobChainCompletion(jobChain, completionOptions);
+      await client.awaitJobChain(jobChain, completionOptions);
     });
 
     const metricNames = await getMetricNames();
@@ -548,7 +548,7 @@ describe("Metrics", () => {
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.waitForJobChainCompletion(jobChain, completionOptions);
+      await client.awaitJobChain(jobChain, completionOptions);
     });
 
     const metricNames = await getMetricNames();
@@ -644,8 +644,8 @@ describe("Metrics", () => {
       );
 
       await Promise.all([
-        client.waitForJobChainCompletion(jobChain, completionOptions),
-        client.waitForJobChainCompletion(successJob, completionOptions),
+        client.awaitJobChain(jobChain, completionOptions),
+        client.awaitJobChain(successJob, completionOptions),
       ]);
       await jobCompleted.promise;
     });
@@ -721,7 +721,7 @@ describe("Metrics", () => {
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.waitForJobChainCompletion(jobChain, completionOptions);
+      await client.awaitJobChain(jobChain, completionOptions);
     });
 
     const metricNames = await getMetricNames();
@@ -779,7 +779,7 @@ describe("Metrics", () => {
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.waitForJobChainCompletion(jobChain, {
+      await client.awaitJobChain(jobChain, {
         pollIntervalMs: 100,
         timeoutMs: 5000,
       });
@@ -840,7 +840,7 @@ describe("Spans", () => {
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.waitForJobChainCompletion(jobChain, completionOptions);
+      await client.awaitJobChain(jobChain, completionOptions);
     });
 
     await expectSpans([
@@ -916,7 +916,7 @@ describe("Spans", () => {
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.waitForJobChainCompletion(job, completionOptions);
+      await client.awaitJobChain(job, completionOptions);
     });
 
     await expectSpans([
@@ -1037,7 +1037,7 @@ describe("Spans", () => {
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.waitForJobChainCompletion(jobChain, completionOptions);
+      await client.awaitJobChain(jobChain, completionOptions);
     });
 
     await expectSpans([
@@ -1165,7 +1165,7 @@ describe("Spans", () => {
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.waitForJobChainCompletion(jobChain, completionOptions);
+      await client.awaitJobChain(jobChain, completionOptions);
     });
 
     await expectSpans([
@@ -1275,7 +1275,7 @@ describe("Spans", () => {
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.waitForJobChainCompletion(dependencyJobChain, completionOptions);
+      await client.awaitJobChain(dependencyJobChain, completionOptions);
     });
 
     // Now create main chain with already-completed blocker
@@ -1292,7 +1292,7 @@ describe("Spans", () => {
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.waitForJobChainCompletion(jobChain, completionOptions);
+      await client.awaitJobChain(jobChain, completionOptions);
     });
 
     await expectSpans([
@@ -1604,7 +1604,7 @@ describe("Gauges", () => {
       jobTypeProcessingChange: [],
     });
     await withWorkers([await worker.start()], async () => {
-      await client.waitForJobChainCompletion(jobChain, completionOptions);
+      await client.awaitJobChain(jobChain, completionOptions);
 
       await sleep(100);
       await expectGauges({
@@ -1692,8 +1692,8 @@ describe("Gauges", () => {
 
     await withWorkers([await worker.start()], async () => {
       await Promise.all([
-        client.waitForJobChainCompletion(emailJob, completionOptions),
-        client.waitForJobChainCompletion(smsJob, completionOptions),
+        client.awaitJobChain(emailJob, completionOptions),
+        client.awaitJobChain(smsJob, completionOptions),
       ]);
 
       expect(processedTypes).toContain("email");
@@ -1928,7 +1928,7 @@ describe("Rollback", () => {
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.waitForJobChainCompletion(jobChain, completionOptions);
+      await client.awaitJobChain(jobChain, completionOptions);
     });
 
     await expectMetrics([
@@ -2014,7 +2014,7 @@ describe("Rollback", () => {
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.waitForJobChainCompletion(jobChain, completionOptions);
+      await client.awaitJobChain(jobChain, completionOptions);
     });
 
     await expectMetrics([
@@ -2107,7 +2107,7 @@ describe("Rollback", () => {
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.waitForJobChainCompletion(jobChain, completionOptions);
+      await client.awaitJobChain(jobChain, completionOptions);
     });
 
     await expectMetrics([

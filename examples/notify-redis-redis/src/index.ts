@@ -101,7 +101,7 @@ await new Promise((resolve) => setTimeout(resolve, 100));
 
 // 9. Now wait for the report to be ready
 console.log("Waiting for report...");
-const result = await qrtClient.waitForJobChainCompletion(jobChain, { timeoutMs: 5000 });
+const result = await qrtClient.awaitJobChain(jobChain, { timeoutMs: 5000 });
 console.log(`Report ready! ID: ${result.output.reportId}, Rows: ${result.output.rowCount}`);
 
 // 10. Cleanup

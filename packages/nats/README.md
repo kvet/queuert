@@ -17,7 +17,7 @@ NATS notify adapter for [Queuert](https://github.com/kvet/queuert) - a TypeScrip
 The notify adapter handles:
 
 - Broadcasting job scheduling events so workers wake up immediately
-- Signaling chain completion for `waitForJobChainCompletion`
+- Signaling chain completion for `awaitJobChain`
 - **Optional thundering herd optimization** - With JetStream KV, limits how many workers query the database
 
 ## When to use NATS

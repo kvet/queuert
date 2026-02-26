@@ -81,7 +81,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.waitForJobChainCompletion(jobChain, completionOptions);
+      const completed = await client.awaitJobChain(jobChain, completionOptions);
       expect(completed.output).toEqual({ result: 20 });
     });
 
@@ -168,7 +168,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.waitForJobChainCompletion(jobChain, completionOptions);
+      const completed = await client.awaitJobChain(jobChain, completionOptions);
       expect(completed.output).toEqual({ result: 20 });
     });
 
@@ -254,7 +254,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.waitForJobChainCompletion(jobChain, completionOptions);
+      const completed = await client.awaitJobChain(jobChain, completionOptions);
       expect(completed.output).toEqual({ result: 20 });
     });
 
@@ -341,7 +341,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.waitForJobChainCompletion(jobChain, completionOptions);
+      const completed = await client.awaitJobChain(jobChain, completionOptions);
       expect(completed.output).toEqual({ result: 20 });
     });
 
@@ -436,7 +436,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.waitForJobChainCompletion(jobChain, completionOptions);
+      const completed = await client.awaitJobChain(jobChain, completionOptions);
       expect(completed.output).toEqual({ result: 20 });
     });
 
@@ -525,7 +525,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.waitForJobChainCompletion(jobChain, completionOptions);
+      const completed = await client.awaitJobChain(jobChain, completionOptions);
       expect(completed.output).toEqual({ result: 20 });
     });
 
@@ -621,7 +621,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.waitForJobChainCompletion(jobChain, completionOptions);
+      const completed = await client.awaitJobChain(jobChain, completionOptions);
       expect(completed.output).toEqual({ result: 20 });
     });
 
@@ -717,7 +717,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.waitForJobChainCompletion(jobChain, completionOptions);
+      const completed = await client.awaitJobChain(jobChain, completionOptions);
       expect(completed.output).toEqual({ result: 20 });
     });
 

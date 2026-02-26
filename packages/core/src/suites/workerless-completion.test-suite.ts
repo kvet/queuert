@@ -216,10 +216,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
 
     await withWorkers([await worker.start()], async () => {
-      const succeededChain = await client.waitForJobChainCompletion(
-        partiallyCompletedChain,
-        completionOptions,
-      );
+      const succeededChain = await client.awaitJobChain(partiallyCompletedChain, completionOptions);
 
       expectTypeOf<(typeof succeededChain)["status"]>().toEqualTypeOf<"completed">();
       expect(succeededChain.output).toEqual({ done: true });

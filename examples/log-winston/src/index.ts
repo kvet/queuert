@@ -157,7 +157,7 @@ const successJob = await withTransactionHooks(async (transactionHooks) =>
   ),
 );
 
-const successCompleted = await qrtClient.waitForJobChainCompletion(successJob, {
+const successCompleted = await qrtClient.awaitJobChain(successJob, {
   timeoutMs: 5000,
 });
 logger.info("Successful job completed", { output: successCompleted.output });
@@ -175,7 +175,7 @@ const failThenSucceedJob = await withTransactionHooks(async (transactionHooks) =
   ),
 );
 
-const retryCompleted = await qrtClient.waitForJobChainCompletion(failThenSucceedJob, {
+const retryCompleted = await qrtClient.awaitJobChain(failThenSucceedJob, {
   timeoutMs: 5000,
 });
 logger.info("Retry job completed after failure", { output: retryCompleted.output });

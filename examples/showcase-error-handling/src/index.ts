@@ -220,7 +220,7 @@ const payment1 = await withTransactionHooks(async (transactionHooks) =>
     });
   }),
 );
-const result1 = await client.waitForJobChainCompletion(payment1, { timeoutMs: 5000 });
+const result1 = await client.awaitJobChain(payment1, { timeoutMs: 5000 });
 console.log(
   `Result: ${result1.output.success ? `SUCCESS (${result1.output.transactionId})` : `FAILED (${result1.output.error})`}`,
 );
@@ -236,7 +236,7 @@ const payment2 = await withTransactionHooks(async (transactionHooks) =>
     });
   }),
 );
-const result2 = await client.waitForJobChainCompletion(payment2, { timeoutMs: 5000 });
+const result2 = await client.awaitJobChain(payment2, { timeoutMs: 5000 });
 console.log(
   `Result: ${result2.output.success ? `SUCCESS (${result2.output.transactionId})` : `FAILED (${result2.output.error})`}`,
 );
@@ -257,7 +257,7 @@ const order1 = await withTransactionHooks(async (transactionHooks) =>
     });
   }),
 );
-const orderResult1 = await client.waitForJobChainCompletion(order1, { timeoutMs: 5000 });
+const orderResult1 = await client.awaitJobChain(order1, { timeoutMs: 5000 });
 console.log(`Final output: ${JSON.stringify(orderResult1.output)}`);
 
 // Scenario 2: Compensation pattern - failure path
@@ -276,7 +276,7 @@ const order2 = await withTransactionHooks(async (transactionHooks) =>
     });
   }),
 );
-const orderResult2 = await client.waitForJobChainCompletion(order2, { timeoutMs: 5000 });
+const orderResult2 = await client.awaitJobChain(order2, { timeoutMs: 5000 });
 console.log(`Final output: ${JSON.stringify(orderResult2.output)}`);
 
 // Scenario 3: Explicit rescheduling
@@ -295,7 +295,7 @@ const apiCall = await withTransactionHooks(async (transactionHooks) =>
     });
   }),
 );
-const apiResult = await client.waitForJobChainCompletion(apiCall, { timeoutMs: 5000 });
+const apiResult = await client.awaitJobChain(apiCall, { timeoutMs: 5000 });
 console.log(`Final output: ${JSON.stringify(apiResult.output)}`);
 
 await stopWorker();

@@ -62,7 +62,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.waitForJobChainCompletion(jobChain, completionOptions);
+      await client.awaitJobChain(jobChain, completionOptions);
     });
   });
 
@@ -131,8 +131,8 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
     await withWorkers([await worker.start()], async () => {
       await Promise.all([
-        client.waitForJobChainCompletion(emailJob, completionOptions),
-        client.waitForJobChainCompletion(smsJob, completionOptions),
+        client.awaitJobChain(emailJob, completionOptions),
+        client.awaitJobChain(smsJob, completionOptions),
       ]);
 
       expect(processedTypes).toContain("email");
@@ -191,7 +191,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         ),
       );
 
-      await client.waitForJobChainCompletion(jobChain, completionOptions);
+      await client.awaitJobChain(jobChain, completionOptions);
     });
   });
 
@@ -254,9 +254,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
     await withWorkers([await worker.start()], async () => {
       await Promise.all(
-        jobChains.map(async (jobChain) =>
-          client.waitForJobChainCompletion(jobChain, completionOptions),
-        ),
+        jobChains.map(async (jobChain) => client.awaitJobChain(jobChain, completionOptions)),
       );
     });
 
@@ -336,7 +334,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.waitForJobChainCompletion(jobChain, completionOptions);
+      await client.awaitJobChain(jobChain, completionOptions);
     });
 
     expect(order).toEqual(["mw1-before", "mw2-before", "process", "mw2-after", "mw1-after"]);

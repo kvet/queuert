@@ -221,7 +221,7 @@ const chain = await withTransactionHooks(async (transactionHooks) =>
   }),
 );
 
-const result = await client.waitForJobChainCompletion(chain, { timeoutMs: 10000 });
+const result = await client.awaitJobChain(chain, { timeoutMs: 10000 });
 
 console.log("\n" + "-".repeat(40));
 console.log("WORKFLOW COMPLETED");

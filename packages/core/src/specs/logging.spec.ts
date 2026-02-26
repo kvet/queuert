@@ -99,7 +99,7 @@ describe("Logging", () => {
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.waitForJobChainCompletion(jobChain, completionOptions);
+      await client.awaitJobChain(jobChain, completionOptions);
     });
 
     const workerArgs = { workerId: "worker" };
@@ -208,7 +208,7 @@ describe("Logging", () => {
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.waitForJobChainCompletion(job, completionOptions);
+      await client.awaitJobChain(job, completionOptions);
     });
 
     const failedLogs = log.mock.calls
@@ -311,7 +311,7 @@ describe("Logging", () => {
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.waitForJobChainCompletion(jobChain, completionOptions);
+      await client.awaitJobChain(jobChain, completionOptions);
     });
 
     expectLogs([
@@ -435,7 +435,7 @@ describe("Logging", () => {
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.waitForJobChainCompletion(jobChain, completionOptions);
+      await client.awaitJobChain(jobChain, completionOptions);
     });
 
     expectLogs([
@@ -599,7 +599,7 @@ describe("Logging", () => {
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.waitForJobChainCompletion(jobChain, completionOptions);
+      await client.awaitJobChain(jobChain, completionOptions);
     });
 
     const renewalLogs = log.mock.calls
@@ -658,7 +658,7 @@ describe("Logging", () => {
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.waitForJobChainCompletion(jobChain, completionOptions);
+      await client.awaitJobChain(jobChain, completionOptions);
     });
 
     const expiredLogs = log.mock.calls
@@ -763,8 +763,8 @@ describe("Logging", () => {
       );
 
       await Promise.all([
-        client.waitForJobChainCompletion(jobChain, completionOptions),
-        client.waitForJobChainCompletion(successJob, completionOptions),
+        client.awaitJobChain(jobChain, completionOptions),
+        client.awaitJobChain(successJob, completionOptions),
       ]);
       await jobCompleted.promise;
     });
@@ -838,7 +838,7 @@ describe("Logging", () => {
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.waitForJobChainCompletion(jobChain, completionOptions);
+      await client.awaitJobChain(jobChain, completionOptions);
     });
 
     const logTypes = new Set(log.mock.calls.map((call) => call[0].type));
@@ -893,7 +893,7 @@ describe("Logging", () => {
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.waitForJobChainCompletion(jobChain, {
+      await client.awaitJobChain(jobChain, {
         pollIntervalMs: 100,
         timeoutMs: 5000,
       });
@@ -1105,7 +1105,7 @@ describe("Logging rollback", () => {
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.waitForJobChainCompletion(jobChain, completionOptions);
+      await client.awaitJobChain(jobChain, completionOptions);
     });
 
     const logEntries = log.mock.calls.map((call) => call[0]);
@@ -1187,7 +1187,7 @@ describe("Logging rollback", () => {
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.waitForJobChainCompletion(jobChain, completionOptions);
+      await client.awaitJobChain(jobChain, completionOptions);
     });
 
     const logEntries = log.mock.calls.map((call) => call[0]);
@@ -1269,7 +1269,7 @@ describe("Logging rollback", () => {
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.waitForJobChainCompletion(jobChain, completionOptions);
+      await client.awaitJobChain(jobChain, completionOptions);
     });
 
     const logEntries = log.mock.calls.map((call) => call[0]);

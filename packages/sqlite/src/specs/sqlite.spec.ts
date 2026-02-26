@@ -75,6 +75,6 @@ it("should infer types correctly with custom ID", async ({ db }) => {
   expectTypeOf(jobChain.id).toEqualTypeOf<`job.${UUID}`>();
 
   await withWorkers([await worker.start()], async () => {
-    await client.waitForJobChainCompletion(jobChain, { timeoutMs: 1000 });
+    await client.awaitJobChain(jobChain, { timeoutMs: 1000 });
   });
 });

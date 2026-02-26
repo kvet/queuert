@@ -112,7 +112,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     );
 
     await withWorkers([await worker.start()], async () => {
-      const succeededJobChain = await client.waitForJobChainCompletion(jobChain, completionOptions);
+      const succeededJobChain = await client.awaitJobChain(jobChain, completionOptions);
 
       expect(succeededJobChain.output).toEqual({ finalResult: 2 });
     });
@@ -205,7 +205,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     );
 
     await withWorkers([await worker.start()], async () => {
-      const succeededJobChain = await client.waitForJobChainCompletion(jobChain, completionOptions);
+      const succeededJobChain = await client.awaitJobChain(jobChain, completionOptions);
 
       expect(succeededJobChain.output).toEqual({
         finalResult: completedBlockerJobChain.output.result,
@@ -314,12 +314,10 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.waitForJobChainCompletion(jobChain, completionOptions);
+      await client.awaitJobChain(jobChain, completionOptions);
 
       const succeededChildJobChains = await Promise.all(
-        childJobChains.map(async (chain) =>
-          client.waitForJobChainCompletion(chain, completionOptions),
-        ),
+        childJobChains.map(async (chain) => client.awaitJobChain(chain, completionOptions)),
       );
 
       expect(succeededChildJobChains).toHaveLength(3);
@@ -404,7 +402,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     );
 
     await withWorkers([await worker1.start(), await worker2.start()], async () => {
-      const finishedJobChain = await client.waitForJobChainCompletion(jobChain, completionOptions);
+      const finishedJobChain = await client.awaitJobChain(jobChain, completionOptions);
 
       expect(finishedJobChain.output).toEqual({ result: 3 });
     });
@@ -486,7 +484,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     );
 
     await withWorkers([await worker.start()], async () => {
-      const succeededJobChain = await client.waitForJobChainCompletion(jobChain, completionOptions);
+      const succeededJobChain = await client.awaitJobChain(jobChain, completionOptions);
 
       expect(succeededJobChain.output).toEqual({
         finalResult: Array.from({ length: 5 }, (_, i) => i + 1),
@@ -583,7 +581,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     );
 
     await withWorkers([await worker.start()], async () => {
-      const succeededJobChain = await client.waitForJobChainCompletion(jobChain, completionOptions);
+      const succeededJobChain = await client.awaitJobChain(jobChain, completionOptions);
 
       expect(succeededJobChain.output).toEqual({ finalResult: 50 });
     });

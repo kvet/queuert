@@ -169,7 +169,7 @@ await withTransactionHooks(async (transactionHooks) =>
   }),
 );
 
-const result1 = await client.waitForJobChainCompletion(approval1, { timeoutMs: 10000 });
+const result1 = await client.awaitJobChain(approval1, { timeoutMs: 10000 });
 console.log(`Result: ${JSON.stringify(result1.output)}`);
 
 // Scenario 1b: Approval workflow - rejected externally
@@ -207,7 +207,7 @@ await withTransactionHooks(async (transactionHooks) =>
   }),
 );
 
-const result2 = await client.waitForJobChainCompletion(approval2, { timeoutMs: 10000 });
+const result2 = await client.awaitJobChain(approval2, { timeoutMs: 10000 });
 console.log(`Result: ${JSON.stringify(result2.output)}`);
 
 // Scenario 2: Deferred start with early completion
@@ -245,7 +245,7 @@ await withTransactionHooks(async (transactionHooks) =>
   }),
 );
 
-const result3 = await client.waitForJobChainCompletion(action, { timeoutMs: 10000 });
+const result3 = await client.awaitJobChain(action, { timeoutMs: 10000 });
 console.log(`Result: ${JSON.stringify(result3.output)}`);
 
 await stopWorker();

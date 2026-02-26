@@ -130,7 +130,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     >().toEqualTypeOf<"linear">();
 
     await withWorkers([await worker.start()], async () => {
-      const finishedJobChain = await client.waitForJobChainCompletion(jobChain, completionOptions);
+      const finishedJobChain = await client.awaitJobChain(jobChain, completionOptions);
 
       expectTypeOf(finishedJobChain.output).toEqualTypeOf<{ result: number }>();
       expect(finishedJobChain.output).toEqual({ result: 3 });
@@ -236,8 +236,8 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
     await withWorkers([await worker.start()], async () => {
       const [succeededJobEven, succeededJobOdd] = await Promise.all([
-        client.waitForJobChainCompletion(evenJobChain, completionOptions),
-        client.waitForJobChainCompletion(oddJobChain, completionOptions),
+        client.awaitJobChain(evenJobChain, completionOptions),
+        client.awaitJobChain(oddJobChain, completionOptions),
       ]);
 
       expectTypeOf(succeededJobEven.output).toEqualTypeOf<
@@ -315,7 +315,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     }>();
 
     await withWorkers([await worker.start()], async () => {
-      const succeededJobChain = await client.waitForJobChainCompletion(jobChain, completionOptions);
+      const succeededJobChain = await client.awaitJobChain(jobChain, completionOptions);
       expect(succeededJobChain.output).toEqual({ done: true });
     });
   });
@@ -403,7 +403,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     }>();
 
     await withWorkers([await worker.start()], async () => {
-      const succeededJobChain = await client.waitForJobChainCompletion(jobChain, completionOptions);
+      const succeededJobChain = await client.awaitJobChain(jobChain, completionOptions);
 
       expectTypeOf(succeededJobChain.output).toEqualTypeOf<{ finalResult: number }>();
       expect(succeededJobChain.output).toEqual({ finalResult: 3 });
@@ -490,8 +490,8 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
     await withWorkers([await worker.start()], async () => {
       const [resultA, resultB] = await Promise.all([
-        client.waitForJobChainCompletion(chainA, { pollIntervalMs: 100, timeoutMs: 5000 }),
-        client.waitForJobChainCompletion(chainB, { pollIntervalMs: 100, timeoutMs: 5000 }),
+        client.awaitJobChain(chainA, { pollIntervalMs: 100, timeoutMs: 5000 }),
+        client.awaitJobChain(chainB, { pollIntervalMs: 100, timeoutMs: 5000 }),
       ]);
       expect(resultA.output).toEqual({ done: true });
       expect(resultB.output).toEqual({ done: true });
@@ -578,13 +578,13 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     await withWorkers([await worker.start()], async () => {
       // Wait for both chains to complete
       const [completedParent] = await Promise.all([
-        client.waitForJobChainCompletion(parentChain, completionOptions),
+        client.awaitJobChain(parentChain, completionOptions),
         // Wait for independent chain using a polling approach since we don't have its reference yet
         (async () => {
           while (!independentChainId) {
             await new Promise((resolve) => setTimeout(resolve, 50));
           }
-          return client.waitForJobChainCompletion(
+          return client.awaitJobChain(
             { id: independentChainId, typeName: "independent" },
             completionOptions,
           );

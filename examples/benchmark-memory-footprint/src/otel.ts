@@ -89,7 +89,7 @@ const [beforeProcessing, afterProcessing] = await measureMemory(async () => {
         }),
       ),
     );
-    promises.push(qrtClient.waitForJobChainCompletion(chain, { timeoutMs: 5000 }));
+    promises.push(qrtClient.awaitJobChain(chain, { timeoutMs: 5000 }));
   }
   await Promise.all(promises);
 });

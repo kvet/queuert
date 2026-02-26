@@ -140,7 +140,7 @@ const chain = await withTransactionHooks(async (transactionHooks) =>
   ),
 );
 
-const result = await qrtClient.waitForJobChainCompletion(chain, { timeoutMs: 5000 });
+const result = await qrtClient.awaitJobChain(chain, { timeoutMs: 5000 });
 console.log("Chain completed:", result.output);
 
 // 5. Cleanup
