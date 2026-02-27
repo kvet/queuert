@@ -2,6 +2,7 @@ import { TESTCONTAINER_RESOURCE_TYPES, extendWithPostgres } from "@queuert/testc
 import {
   blockerChainsTestSuite,
   chainsTestSuite,
+  clientQueriesTestSuite,
   deduplicationTestSuite,
   deletionTestSuite,
   extendWithCommon,
@@ -60,4 +61,8 @@ describe("Scheduling", () => {
 
 describe("Notify", () => {
   notifyTestSuite({ it: postgresInProcessIt });
+});
+
+describe("Client Queries", () => {
+  clientQueriesTestSuite({ it: postgresInProcessIt });
 });

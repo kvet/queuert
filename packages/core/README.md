@@ -202,11 +202,13 @@ For production, integrate with your logging library (Pino, Winston, etc.) by imp
 - `Job`, `JobWithBlockers` - Job entity types
 - `CompletedJob` - Status-narrowed job type for completed jobs
 - `JobChain`, `CompletedJobChain` - Job chain types
+- `JobStatus`, `JobChainStatus` - Status union types for jobs and chains
+- `Page`, `OrderDirection` - Pagination types for list methods
 
 **Configuration:**
 
 - `ScheduleOptions` - Deferred job scheduling (`{ at: Date }` or `{ afterMs: number }`)
-- `DeduplicationOptions`, `DeduplicationScope` - Chain deduplication
+- `DeduplicationOptions` - Chain deduplication
 - `LeaseConfig`, `RetryConfig`, `BackoffConfig` - Worker configuration
 - `TypedAbortSignal`, `JobAbortReason` - Typed abort signal for process functions
 - `JobAttemptMiddleware` - Middleware type for wrapping job attempt processing
@@ -218,6 +220,7 @@ For production, integrate with your logging library (Pino, Winston, etc.) by imp
 - `JobTakenByAnotherWorkerError` - Another worker took the job
 - `JobTypeValidationError` - Runtime validation failed (with `code` and `details`)
 - `JobTypeValidationErrorCode` - Error code type for `JobTypeValidationError`
+- `JobTypeMismatchError` - Chain/job type doesn't match expected `typeName`
 - `WaitChainTimeoutError` - Timeout waiting for chain
 - `RescheduleJobError` - Thrown by `rescheduleJob()` helper
 
@@ -235,9 +238,6 @@ These types are exported for advanced use cases like building custom adapters:
 - `JobTypeRegistryConfig` - Configuration type for `createJobTypeRegistry`
 - `BaseJobTypeDefinition`, `BaseJobTypeDefinitions`, `DefineJobTypes` - Base definition types
 - `ValidatedJobTypeDefinitions` - Compile-time validation phantom type
-- `BaseTxContext` - Transaction context base type
-- `GetStateAdapterJobId` - Type helper to extract job ID type from state adapter
-- `StateJob` - Internal state job representation
 - `InProcessWorkerProcessDefaults`, `InProcessWorkerProcessor`, `InProcessWorkerProcessors` - Worker configuration types
 - `AttemptHandlerFn` - Attempt handler function type
 

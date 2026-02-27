@@ -1,5 +1,6 @@
 import { describe, expectTypeOf, it } from "vitest";
 import {
+  type BlockedJobTypes,
   type BlockerChains,
   type ChainJobTypes,
   type ChainTypesReaching,
@@ -349,8 +350,8 @@ describe("BlockerChains", () => {
 
     type MainBlockers = BlockerChains<string, (typeof defs)["$definitions"], "main">;
 
-    // Should be a tuple with one blocker chain - verify it's an array type
-    expectTypeOf<MainBlockers>().toBeArray();
+    expectTypeOf<MainBlockers[0]["typeName"]>().toEqualTypeOf<"blocker">();
+    expectTypeOf<MainBlockers[0]["input"]>().toEqualTypeOf<{ value: number }>();
   });
 
   it("returns empty tuple for jobs without blockers", () => {
@@ -361,6 +362,67 @@ describe("BlockerChains", () => {
     type SimpleBlockers = BlockerChains<string, (typeof defs)["$definitions"], "simple">;
 
     expectTypeOf<SimpleBlockers>().toEqualTypeOf<[]>();
+  });
+});
+
+describe("BlockedJobTypes", () => {
+  it("resolves job types blocked by a given chain type", () => {
+    type Defs = {
+      dep: { entry: true; input: { v: number }; output: { ok: boolean } };
+      main: {
+        entry: true;
+        input: { start: boolean };
+        output: { result: string };
+        blockers: [{ typeName: "dep" }];
+      };
+    };
+
+    expectTypeOf<BlockedJobTypes<Defs, "dep">>().toEqualTypeOf<"main">();
+  });
+
+  it("returns never when no job types are blocked by the chain", () => {
+    type Defs = {
+      standalone: { entry: true; input: null; output: { done: true } };
+      other: { entry: true; input: { x: number }; output: { y: number } };
+    };
+
+    expectTypeOf<BlockedJobTypes<Defs, "standalone">>().toEqualTypeOf<never>();
+  });
+
+  it("resolves multiple job types blocked by the same chain", () => {
+    type Defs = {
+      auth: { entry: true; input: { token: string }; output: { userId: string } };
+      taskA: {
+        entry: true;
+        input: { a: true };
+        output: { done: true };
+        blockers: [{ typeName: "auth" }];
+      };
+      taskB: {
+        entry: true;
+        input: { b: true };
+        output: { done: true };
+        blockers: [{ typeName: "auth" }];
+      };
+    };
+
+    expectTypeOf<BlockedJobTypes<Defs, "auth">>().toEqualTypeOf<"taskA" | "taskB">();
+  });
+
+  it("handles multiple blockers on a single job type", () => {
+    type Defs = {
+      depA: { entry: true; input: { a: true }; output: { ok: true } };
+      depB: { entry: true; input: { b: true }; output: { ok: true } };
+      main: {
+        entry: true;
+        input: null;
+        output: { done: true };
+        blockers: [{ typeName: "depA" }, { typeName: "depB" }];
+      };
+    };
+
+    expectTypeOf<BlockedJobTypes<Defs, "depA">>().toEqualTypeOf<"main">();
+    expectTypeOf<BlockedJobTypes<Defs, "depB">>().toEqualTypeOf<"main">();
   });
 });
 

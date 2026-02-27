@@ -52,6 +52,21 @@ export class WaitChainTimeoutError extends Error {
   }
 }
 
+export class JobTypeMismatchError extends Error {
+  readonly expectedTypeName: string;
+  readonly actualTypeName: string;
+
+  constructor(
+    message: string,
+    options: { cause: { expectedTypeName: string; actualTypeName: string } },
+  ) {
+    super(message, options);
+    this.name = "JobTypeMismatchError";
+    this.expectedTypeName = options.cause.expectedTypeName;
+    this.actualTypeName = options.cause.actualTypeName;
+  }
+}
+
 export type BlockerReference = {
   chainId: string;
   referencedByJobId: string;

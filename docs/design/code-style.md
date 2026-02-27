@@ -33,6 +33,20 @@ import { createClient, createInProcessWorker, Client } from "queuert";
 import { createQueuertClient, createQueuertInProcessWorker, QueuertClient } from "queuert";
 ```
 
+### Prefer "jobChain" over "chain"
+
+In variable names, documentation, and comments, use `jobChain` (not `chain`) to be explicit about what's being referenced. The abbreviated form `chain` is acceptable only in compound API names where the `Job` prefix is already present (e.g., `listJobChainJobs`, `JobChain`, `startJobChain`).
+
+```typescript
+// Good
+const jobChain = await client.getJobChain({ id });
+const jobChains = await client.listJobChains({ filter });
+
+// Bad - ambiguous abbreviation
+const chain = await client.getJobChain({ id });
+const chains = await client.listJobChains({ filter });
+```
+
 ### Concise Error Names
 
 Error class names should be descriptive but not excessively long. Prefer shorter names that still clearly convey the error:

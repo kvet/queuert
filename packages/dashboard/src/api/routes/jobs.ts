@@ -14,7 +14,13 @@ export const handleJobsList = async (
   const limit = parseLimit(url.searchParams.get("limit") ?? undefined);
 
   const result = await stateAdapter.listJobs({
-    filter: { status, typeName, chainId, id },
+    filter: {
+      status,
+      typeName,
+      chainId: chainId ? [chainId] : undefined,
+      id: id ? [id] : undefined,
+    },
+    orderDirection: "desc",
     page: { cursor, limit },
   });
 
@@ -37,7 +43,8 @@ export const handleJobDetail = async (
   const [blockers, chainJobs] = await Promise.all([
     stateAdapter.getJobBlockers({ jobId }),
     stateAdapter.listJobs({
-      filter: { chainId: job.chainId },
+      filter: { chainId: [job.chainId] },
+      orderDirection: "asc",
       page: { limit: 1000 },
     }),
   ]);

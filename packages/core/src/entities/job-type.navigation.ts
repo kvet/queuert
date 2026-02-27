@@ -176,6 +176,24 @@ export type HasBlockers<
   TJobTypeName extends keyof TJobTypeDefinitions,
 > = BlockerChains<string, TJobTypeDefinitions, TJobTypeName> extends [] ? false : true;
 
+type BlockerRefChainNames<TJobTypeDefinitions extends BaseJobTypeDefinitions, T> = T extends {
+  blockers: readonly (infer TRef)[];
+}
+  ? ResolveReference<TJobTypeDefinitions, TRef>
+  : never;
+
+export type BlockedJobTypes<
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TBlockerChainTypeName extends string,
+> = {
+  [K in keyof TJobTypeDefinitions & string]: TBlockerChainTypeName extends BlockerRefChainNames<
+    TJobTypeDefinitions,
+    TJobTypeDefinitions[K]
+  >
+    ? K
+    : never;
+}[keyof TJobTypeDefinitions & string];
+
 type MapToCompletedChains<TBlockers> = TBlockers extends [
   infer First extends JobChain<string, string, unknown, unknown>,
   ...infer Rest,

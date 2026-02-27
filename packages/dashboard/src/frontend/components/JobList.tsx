@@ -11,6 +11,7 @@ export function JobList() {
   const status = () => (searchParams.status ?? "") as string;
   const typeName = () => (searchParams.typeName ?? "") as string;
   const id = () => (searchParams.id ?? "") as string;
+  const chainId = () => (searchParams.chainId ?? "") as string;
 
   const [items, setItems] = createSignal<Job[]>([]);
   const [cursor, setCursor] = createSignal<string | null>(null);
@@ -20,6 +21,7 @@ export function JobList() {
       status: status(),
       typeName: typeName(),
       id: id(),
+      chainId: chainId(),
     }),
     async (params) => {
       const result = await listJobs({ ...params, limit: 25 });
@@ -36,6 +38,7 @@ export function JobList() {
       status: status(),
       typeName: typeName(),
       id: id(),
+      chainId: chainId(),
       cursor: c,
       limit: 25,
     });
@@ -54,10 +57,18 @@ export function JobList() {
       <div class="filter-bar">
         <input
           type="text"
-          placeholder="Job or chain ID"
+          placeholder="Job ID"
           value={id()}
           onChange={(e) => {
             setSearchParams({ id: e.target.value.trim() || undefined });
+          }}
+        />
+        <input
+          type="text"
+          placeholder="Chain ID"
+          value={chainId()}
+          onChange={(e) => {
+            setSearchParams({ chainId: e.target.value.trim() || undefined });
           }}
         />
         <input

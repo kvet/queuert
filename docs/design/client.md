@@ -20,7 +20,7 @@ All mutation methods require `transactionHooks` and a transaction context. Side 
 
 **`startJobChain`** — create a new job chain. Takes `typeName`, typed `input`, optional `blockers`, `deduplication`, and `schedule`. Returns the created `JobChain<...>` with a `deduplicated` flag. The return type narrows to the specified chain type.
 
-**`completeJobChain`** — complete a chain from outside a worker. Takes `typeName`, `id`, and a `complete` callback. The caller receives the current job and a `complete` function, which can optionally call `continueWith` to extend the chain. This is the same prepare/complete pattern used by the worker (see [Job Processing](job-processing.md)), but driven by the caller instead. See [Workerless Completion](workerless-completion.md).
+**`completeJobChain`** — complete a chain from outside a worker. Takes `typeName`, `id`, and a `complete` callback. Validates that the chain matches the specified `typeName`, throwing `JobTypeMismatchError` on mismatch. The caller receives the current job and a `complete` function, which can optionally call `continueWith` to extend the chain. This is the same prepare/complete pattern used by the worker (see [Job Processing](job-processing.md)), but driven by the caller instead. See [Workerless Completion](workerless-completion.md).
 
 **`deleteJobChains`** — delete chains by ID. Takes `ids` and optional `cascade`. Returns the deleted `JobChain<...>[]`. Throws if external jobs depend on them as blockers. When `cascade` is true, expands the set to include transitive dependencies before deleting. See [Deletion](deletion.md).
 
@@ -30,13 +30,13 @@ All query methods accept an optional transaction context. Paginated methods use 
 
 #### Single-entity lookups
 
-**`getJobChain`** — get a single chain by ID. Returns `JobChain<...> | null`. Takes `typeName` and `id` — the return type narrows to the specified chain type.
+**`getJobChain`** — get a single chain by ID. Returns `JobChain<...> | null`. Takes `id` and an optional `typeName` for type narrowing — the return type narrows to the specified chain type. Throws `JobTypeMismatchError` if the chain exists but has a different type.
 
-**`getJob`** — get a single job by ID. Returns `Job<...> | null`. Takes `typeName` and `id` — the return type narrows to the specified job type.
+**`getJob`** — get a single job by ID. Returns `Job<...> | null`. Takes `id` and an optional `typeName` for type narrowing — the return type narrows to the specified job type. Throws `JobTypeMismatchError` if the job exists but has a different type.
 
 #### Paginated lists
 
-All paginated methods accept `cursor?: string` and `limit?: number` for cursor-based pagination. Date range bounds (`from`, `to`) accept either an absolute date (`{ at: Date }`) or a relative offset from now (`{ beforeMs: number }`). All `orderBy` and `orderDirection` parameters are optional — default to `orderBy: 'created'`, `orderDirection: 'desc'` (newest first) unless noted otherwise.
+All paginated methods accept `cursor?: string` and `limit?: number` for cursor-based pagination. All `orderBy` and `orderDirection` parameters are optional — default to `orderBy: 'created'`, `orderDirection: 'desc'` (newest first) unless noted otherwise.
 
 **`listJobChains`** — paginated list of chains. Returns `Page<JobChain<...>>`. Filters:
 
@@ -45,8 +45,8 @@ All paginated methods accept `cursor?: string` and `limit?: number` for cursor-b
 - `jobId?: TJobId[]` — find chains containing these job IDs. Not indexed — expensive on large datasets
 - `root?: boolean` — when true, excludes chains referenced as blockers by other jobs
 - `status?: JobChainStatus[]` — filter by chain status. Derived from last job — not indexed, slow on large datasets. May be deferred to a later release
-- `from?: DateBound` — lower bound on `createdAt`
-- `to?: DateBound` — upper bound on `createdAt`
+- `from?: Date` — lower bound on `createdAt`
+- `to?: Date` — upper bound on `createdAt`
 - `orderBy?: 'created'` — default `'created'`
 - `orderDirection?: 'asc' | 'desc'` — default `'desc'`
 
@@ -56,8 +56,8 @@ All paginated methods accept `cursor?: string` and `limit?: number` for cursor-b
 - `id?: TJobId[]` — filter by job IDs
 - `jobChainId?: TJobId[]` — filter by chain IDs
 - `status?: JobStatus[]` — filter by job status
-- `from?: DateBound` — lower bound on `createdAt`
-- `to?: DateBound` — upper bound on `createdAt`
+- `from?: Date` — lower bound on `createdAt`
+- `to?: Date` — upper bound on `createdAt`
 - `orderBy?: 'created'` — default `'created'`
 - `orderDirection?: 'asc' | 'desc'` — default `'desc'`
 
@@ -68,13 +68,13 @@ All paginated methods accept `cursor?: string` and `limit?: number` for cursor-b
 
 #### Blocker queries
 
-**`getJobBlockers`** — blocker chains for a specific job. Takes `jobId` and an optional `typeName` for type narrowing. Returns `JobChain<...>[]`. Not paginated — blockers are declared at job creation and bounded by design.
+**`getJobBlockers`** — blocker chains for a specific job. Takes `jobId` and an optional `typeName` (the job type) for type narrowing — resolves the return to the exact blocker chain types declared for that job type. Throws `JobTypeMismatchError` if the job exists but has a different type. Returns `BlockerChains<...>`. Not paginated — blockers are declared at job creation and bounded by design.
 
-**`listBlockedJobs`** — paginated list of jobs from other chains that are blocked by a given chain. Takes `jobChainId` and an optional `typeName` (chain type) for type narrowing — narrows the return to job types that declare this chain type as a blocker. Returns `Page<Job<...>>`. Useful for understanding downstream impact before deletion or for monitoring dependency graphs.
+**`listBlockedJobs`** — paginated list of jobs from other chains that are blocked by a given chain. Takes `jobChainId` and an optional `typeName` (chain type) for type narrowing — narrows the return to job types that declare this chain type as a blocker. Throws `JobTypeMismatchError` if the chain exists but has a different type. Returns `Page<Job<...>>`. Useful for understanding downstream impact before deletion or for monitoring dependency graphs.
 
 ### Awaiting
 
-**`awaitJobChain`** — wait for a chain to complete. Takes `typeName`, `id`, `timeoutMs`, optional `pollIntervalMs` and `signal`. Returns `CompletedJobChain<...>`. Combines polling with notify adapter events — between polls, it listens for completion notifications to react immediately. Throws on timeout or abort.
+**`awaitJobChain`** — wait for a chain to complete. Takes `id`, optional `typeName` for type narrowing, `timeoutMs`, optional `pollIntervalMs` and `signal`. Throws `JobTypeMismatchError` on first check if the chain exists but has a different type. Returns `CompletedJobChain<...>`. Combines polling with notify adapter events — between polls, it listens for completion notifications to react immediately. Throws on timeout or abort.
 
 ## Internal Hooks
 

@@ -1,5 +1,5 @@
 import { type Migration, type NamedParameter, type TypedSql, sql } from "@queuert/typed-sql";
-import { type DeduplicationScope } from "queuert";
+import { type DeduplicationScope } from "queuert/internal";
 
 export type DbJob = {
   id: string;
@@ -669,19 +669,6 @@ LEFT JOIN LATERAL (
   ORDER BY chain_index DESC
   LIMIT 1
 ) AS lc ON TRUE
-`,
-  true,
-);
-
-export const getJobsBlockedByChainSql: TypedSql<
-  readonly [NamedParameter<"blocked_by_chain_id", string>],
-  DbJob[]
-> = sql(
-  /* sql */ `
-SELECT j.*
-FROM {{schema}}.{{table_prefix}}job_blocker jb
-JOIN {{schema}}.{{table_prefix}}job j ON j.id = jb.job_id
-WHERE jb.blocked_by_chain_id = $1
 `,
   true,
 );

@@ -1,5 +1,6 @@
 // Test Suites
 export { blockerChainsTestSuite } from "./suites/blocker-chains.test-suite.js";
+export { clientQueriesTestSuite } from "./suites/client-queries.test-suite.js";
 export { deduplicationTestSuite } from "./suites/deduplication.test-suite.js";
 export { deletionTestSuite } from "./suites/deletion.test-suite.js";
 export { notifyResilienceTestSuite } from "./suites/notify-resilience.test-suite.js";

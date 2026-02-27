@@ -1,6 +1,7 @@
 import { type TestAPI, expectTypeOf, vi } from "vitest";
 import { sleep } from "../helpers/sleep.js";
 import {
+  JobTypeMismatchError,
   createClient,
   createInProcessWorker,
   defineJobTypes,
@@ -472,7 +473,6 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           typeName: "entryA",
           id: jobChain.id,
           complete: async ({ job, complete }) => {
-            // In completeJobChain with typeName: "entryA", chainTypeName should be narrowed
             expectTypeOf(job.chainTypeName).toEqualTypeOf<"entryA">();
             expect(job.chainTypeName).toBe("entryA");
 
@@ -482,7 +482,6 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
               );
             }
 
-            // After continuing, job is now "shared" but chainTypeName is still "entryA"
             expectTypeOf(job.chainTypeName).toEqualTypeOf<"entryA">();
             expect(job.chainTypeName).toBe("entryA");
 
@@ -491,5 +490,89 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         }),
       ),
     );
+  });
+
+  it("completeJobChain throws on typeName mismatch", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const registry = defineJobTypes<{
+      order: { entry: true; input: { amount: number }; output: { receipt: string } };
+      notification: { entry: true; input: { message: string }; output: { sent: boolean } };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+
+    const chain = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "order",
+          input: { amount: 42 },
+        }),
+      ),
+    );
+
+    await expect(
+      withTransactionHooks(async (transactionHooks) =>
+        runInTransaction(async (txCtx) =>
+          client.completeJobChain({
+            ...txCtx,
+            transactionHooks,
+            typeName: "notification",
+            id: chain.id,
+            complete: async ({ job, complete }) => complete(job, async () => ({ sent: true })),
+          }),
+        ),
+      ),
+    ).rejects.toThrow(JobTypeMismatchError);
+  });
+
+  it("awaitJobChain throws on typeName mismatch", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const registry = defineJobTypes<{
+      order: { entry: true; input: { amount: number }; output: { receipt: string } };
+      notification: { entry: true; input: { message: string }; output: { sent: boolean } };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+
+    const chain = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "order",
+          input: { amount: 42 },
+        }),
+      ),
+    );
+
+    await expect(
+      client.awaitJobChain({ typeName: "notification", id: chain.id }, { timeoutMs: 1000 }),
+    ).rejects.toThrow(JobTypeMismatchError);
   });
 };

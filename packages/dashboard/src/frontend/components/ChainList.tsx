@@ -9,7 +9,9 @@ export function ChainList() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const typeName = () => (searchParams.typeName ?? "") as string;
+  const status = () => (searchParams.status ?? "") as string;
   const id = () => (searchParams.id ?? "") as string;
+  const jobId = () => (searchParams.jobId ?? "") as string;
   const rootOnly = () => searchParams.rootOnly !== "false";
 
   const [items, setItems] = createSignal<[Job, Job | null][]>([]);
@@ -18,7 +20,9 @@ export function ChainList() {
   const [page] = createResource(
     () => ({
       typeName: typeName(),
+      status: status(),
       id: id(),
+      jobId: jobId(),
       rootOnly: rootOnly(),
     }),
     async (params) => {
@@ -34,7 +38,9 @@ export function ChainList() {
     if (!c) return;
     const result = await listChains({
       typeName: typeName(),
+      status: status(),
       id: id(),
+      jobId: jobId(),
       rootOnly: rootOnly(),
       cursor: c,
       limit: 25,
@@ -54,10 +60,18 @@ export function ChainList() {
       <div class="filter-bar">
         <input
           type="text"
-          placeholder="Chain or job ID"
+          placeholder="Chain ID"
           value={id()}
           onChange={(e) => {
             setSearchParams({ id: e.target.value.trim() || undefined });
+          }}
+        />
+        <input
+          type="text"
+          placeholder="Job ID"
+          value={jobId()}
+          onChange={(e) => {
+            setSearchParams({ jobId: e.target.value.trim() || undefined });
           }}
         />
         <input
@@ -68,6 +82,18 @@ export function ChainList() {
             setSearchParams({ typeName: e.target.value.trim() || undefined });
           }}
         />
+        <select
+          value={status()}
+          onChange={(e) => {
+            setSearchParams({ status: e.target.value || undefined });
+          }}
+        >
+          <option value="">All statuses</option>
+          <option value="pending">Pending</option>
+          <option value="running">Running</option>
+          <option value="completed">Completed</option>
+          <option value="blocked">Blocked</option>
+        </select>
         <label class="checkbox-label">
           <input
             type="checkbox"
@@ -122,9 +148,7 @@ export function ChainList() {
               </div>
               <div class="card-meta">
                 <StatusBadge status={chainStatus} />
-                <Show when={lastJob}>
-                  <span>{lastJob!.typeName} (last)</span>
-                </Show>
+                <Show when={lastJob}>{(lj) => <span>{lj().typeName} (last)</span>}</Show>
                 <Show when={chainStatus === "blocked" && (lastJob ?? rootJob).attempt > 0}>
                   <span>attempt #{(lastJob ?? rootJob).attempt}</span>
                 </Show>

@@ -125,9 +125,9 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     expectTypeOf<
       Parameters<(typeof client)["startJobChain"]>[0]["typeName"]
     >().toEqualTypeOf<"linear">();
-    expectTypeOf<
-      Parameters<(typeof client)["getJobChain"]>[0]["typeName"]
-    >().toEqualTypeOf<"linear">();
+    expectTypeOf<Parameters<(typeof client)["getJobChain"]>[0]["typeName"]>().toEqualTypeOf<
+      "linear" | undefined
+    >();
 
     await withWorkers([await worker.start()], async () => {
       const finishedJobChain = await client.awaitJobChain(jobChain, completionOptions);

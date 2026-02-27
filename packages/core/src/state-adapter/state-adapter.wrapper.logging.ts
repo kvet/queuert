@@ -46,6 +46,7 @@ export const wrapStateAdapterWithLogging = <
     getCurrentJobForUpdate: wrap("getCurrentJobForUpdate", stateAdapter.getCurrentJobForUpdate),
     listChains: wrap("listChains", stateAdapter.listChains),
     listJobs: wrap("listJobs", stateAdapter.listJobs),
-    getJobsBlockedByChain: wrap("getJobsBlockedByChain", stateAdapter.getJobsBlockedByChain),
+    listJobChainJobs: wrap("listJobChainJobs", stateAdapter.listJobChainJobs),
+    listBlockedJobs: wrap("listBlockedJobs", stateAdapter.listBlockedJobs),
   };
 };

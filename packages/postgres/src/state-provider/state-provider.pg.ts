@@ -1,4 +1,4 @@
-import { type BaseTxContext } from "queuert";
+import { type BaseTxContext } from "queuert/internal";
 
 /**
  * PostgreSQL state provider interface.

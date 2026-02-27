@@ -1,16 +1,14 @@
 import { type DeduplicationOptions, type DeduplicationScope } from "../entities/deduplication.js";
+import { type OrderDirection, type Page, type PageParams } from "../pagination.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
 
-export type { DeduplicationOptions, DeduplicationScope, ScheduleOptions };
-
-export type PageParams = {
-  cursor?: string;
-  limit: number;
-};
-
-export type Page<T> = {
-  items: T[];
-  nextCursor: string | null;
+export type {
+  DeduplicationOptions,
+  DeduplicationScope,
+  OrderDirection,
+  Page,
+  PageParams,
+  ScheduleOptions,
 };
 
 export type StateJobStatus = "blocked" | "pending" | "running" | "completed";
@@ -178,9 +176,14 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     txCtx?: TTxContext;
     filter?: {
       typeName?: string[];
+      status?: StateJobStatus[];
       rootOnly?: boolean;
-      id?: string;
+      id?: string[];
+      jobId?: string[];
+      from?: Date;
+      to?: Date;
     };
+    orderDirection: OrderDirection;
     page: PageParams;
   }) => Promise<Page<[StateJob, StateJob | undefined]>>;
 
@@ -190,14 +193,30 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     filter?: {
       status?: StateJobStatus[];
       typeName?: string[];
-      chainId?: string;
-      id?: string;
+      chainId?: string[];
+      id?: string[];
+      from?: Date;
+      to?: Date;
     };
+    orderDirection: OrderDirection;
     page: PageParams;
   }) => Promise<Page<StateJob>>;
 
-  /** Gets jobs that depend on the given chain as a blocker. */
-  getJobsBlockedByChain: (params: { txCtx?: TTxContext; chainId: TJobId }) => Promise<StateJob[]>;
+  /** Lists jobs within a specific chain, ordered by chain index. */
+  listJobChainJobs: (params: {
+    txCtx?: TTxContext;
+    chainId: TJobId;
+    orderDirection: OrderDirection;
+    page: PageParams;
+  }) => Promise<Page<StateJob>>;
+
+  /** Lists jobs that depend on the given chain as a blocker. */
+  listBlockedJobs: (params: {
+    txCtx?: TTxContext;
+    chainId: TJobId;
+    orderDirection: OrderDirection;
+    page: PageParams;
+  }) => Promise<Page<StateJob>>;
 };
 
 export type GetStateAdapterTxContext<TStateAdapter> =

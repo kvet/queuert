@@ -1,10 +1,9 @@
 import { type BlockerReference, BlockerReferenceError } from "../errors.js";
 import { createAsyncLock } from "../helpers/async-lock.js";
-import { decodeCursor, encodeCursor } from "./cursor.js";
+import { decodeChainIndexCursor, decodeCreatedAtCursor, encodeCursor } from "./cursor.js";
+import { type OrderDirection, type Page, type PageParams } from "../pagination.js";
 import {
   type DeduplicationOptions,
-  type Page,
-  type PageParams,
   type StateAdapter,
   type StateJob,
   type StateJobStatus,
@@ -29,6 +28,108 @@ const deepCloneStore = (store: InProcessStore): InProcessStore => ({
   ),
 });
 
+const paginateByCreatedAt = <T extends StateJob | [StateJob, StateJob | undefined]>(
+  items: T[],
+  page: PageParams,
+  orderDirection: OrderDirection,
+): Page<T> => {
+  const getId = (item: T): string => (Array.isArray(item) ? item[0].id : item.id);
+  const getCreatedAt = (item: T): Date =>
+    Array.isArray(item) ? item[0].createdAt : item.createdAt;
+
+  const dir = orderDirection === "desc" ? -1 : 1;
+  const sorted = items.toSorted((a, b) => {
+    const d = getCreatedAt(a).getTime() - getCreatedAt(b).getTime();
+    if (d !== 0) return d * dir;
+    const idA = getId(a);
+    const idB = getId(b);
+    return idA < idB ? -dir : idA > idB ? dir : 0;
+  });
+
+  let startIndex = 0;
+  if (page.cursor) {
+    const cursor = decodeCreatedAtCursor(page.cursor);
+    startIndex = sorted.findIndex((item) => {
+      const sv = getCreatedAt(item).toISOString();
+      const id = getId(item);
+      if (orderDirection === "desc") {
+        return sv < cursor.createdAt || (sv === cursor.createdAt && id < cursor.id);
+      }
+      return sv > cursor.createdAt || (sv === cursor.createdAt && id > cursor.id);
+    });
+    if (startIndex === -1) startIndex = sorted.length;
+  }
+
+  const pageItems = sorted.slice(startIndex, startIndex + page.limit);
+  const hasMore = startIndex + page.limit < sorted.length;
+  const lastItem = pageItems[pageItems.length - 1];
+
+  return {
+    items: pageItems,
+    nextCursor:
+      hasMore && lastItem
+        ? encodeCursor({
+            type: "createdAt",
+            id: getId(lastItem),
+            createdAt: getCreatedAt(lastItem).toISOString(),
+          })
+        : null,
+  };
+};
+
+const paginateByChainIndex = (
+  items: StateJob[],
+  page: PageParams,
+  orderDirection: OrderDirection,
+): Page<StateJob> => {
+  const dir = orderDirection === "asc" ? 1 : -1;
+  const sorted = items.toSorted((a, b) => {
+    const d = a.chainIndex - b.chainIndex;
+    if (d !== 0) return d * dir;
+    return a.id < b.id ? -dir : a.id > b.id ? dir : 0;
+  });
+
+  let startIndex = 0;
+  if (page.cursor) {
+    const cursor = decodeChainIndexCursor(page.cursor);
+    startIndex = sorted.findIndex((item) => {
+      if (orderDirection === "asc") {
+        return (
+          item.chainIndex > cursor.chainIndex ||
+          (item.chainIndex === cursor.chainIndex && item.id > cursor.id)
+        );
+      }
+      return (
+        item.chainIndex < cursor.chainIndex ||
+        (item.chainIndex === cursor.chainIndex && item.id < cursor.id)
+      );
+    });
+    if (startIndex === -1) startIndex = sorted.length;
+  }
+
+  const pageItems = sorted.slice(startIndex, startIndex + page.limit);
+  const hasMore = startIndex + page.limit < sorted.length;
+  const lastItem = pageItems[pageItems.length - 1];
+
+  return {
+    items: pageItems,
+    nextCursor:
+      hasMore && lastItem
+        ? encodeCursor({
+            type: "chainIndex",
+            id: lastItem.id,
+            chainIndex: lastItem.chainIndex,
+          })
+        : null,
+  };
+};
+
+const matchesDateRange = (createdAt: Date, from?: Date, to?: Date): boolean => {
+  if (from && createdAt < from) return false;
+  if (to && createdAt > to) return false;
+  return true;
+};
+
 export type InProcessStateAdapter = StateAdapter<InProcessContext, string>;
 
 export const createInProcessStateAdapter = (): InProcessStateAdapter => {
@@ -38,36 +139,6 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
   };
 
   const lock = createAsyncLock();
-
-  const paginate = <T extends StateJob>(items: T[], page: PageParams): Page<T> => {
-    const sorted = items.toSorted((a, b) => {
-      const d = b.createdAt.getTime() - a.createdAt.getTime();
-      if (d !== 0) return d;
-      return b.id < a.id ? -1 : b.id > a.id ? 1 : 0;
-    });
-
-    let startIndex = 0;
-    if (page.cursor) {
-      const cursor = decodeCursor(page.cursor);
-      startIndex = sorted.findIndex((item) => {
-        const sv = item.createdAt.toISOString();
-        return sv < cursor.createdAt || (sv === cursor.createdAt && item.id < cursor.id);
-      });
-      if (startIndex === -1) startIndex = sorted.length;
-    }
-
-    const pageItems = sorted.slice(startIndex, startIndex + page.limit);
-    const hasMore = startIndex + page.limit < sorted.length;
-    const lastItem = pageItems[pageItems.length - 1];
-
-    return {
-      items: pageItems,
-      nextCursor:
-        hasMore && lastItem
-          ? encodeCursor({ id: lastItem.id, createdAt: lastItem.createdAt.toISOString() })
-          : null,
-    };
-  };
 
   const matchesStatusFilter = (job: StateJob, statuses?: StateJobStatus[]): boolean =>
     !statuses || statuses.length === 0 || statuses.includes(job.status);
@@ -508,19 +579,19 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       return getLastJobInChain(chainId);
     },
 
-    listChains: async ({ filter, page }) => {
-      // Pre-compute chain ID lookup for id filter (find chain containing a job with that ID)
-      let idMatchChainIds: Set<string> | undefined;
-      if (filter?.id) {
-        idMatchChainIds = new Set<string>();
+    listChains: async ({ filter, orderDirection, page }) => {
+      const idMatchChainIds = filter?.id ? new Set<string>(filter.id) : undefined;
+
+      let jobIdMatchChainIds: Set<string> | undefined;
+      if (filter?.jobId) {
+        jobIdMatchChainIds = new Set<string>();
         for (const j of store.jobs.values()) {
-          if (j.chainId === filter.id || j.id === filter.id) {
-            idMatchChainIds.add(j.chainId);
+          if (filter.jobId.includes(j.id)) {
+            jobIdMatchChainIds.add(j.chainId);
           }
         }
       }
 
-      // Pre-compute blocker chain IDs for rootOnly filter
       let blockerChainIds: Set<string> | undefined;
       if (filter?.rootOnly) {
         blockerChainIds = new Set<string>();
@@ -538,65 +609,48 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
         const lastJob = getLastJobInChain(job.id);
 
         if (idMatchChainIds && !idMatchChainIds.has(job.chainId)) continue;
+        if (jobIdMatchChainIds && !jobIdMatchChainIds.has(job.chainId)) continue;
         if (blockerChainIds && blockerChainIds.has(job.chainId)) continue;
         if (!matchesTypeNameFilter(job, filter?.typeName)) continue;
+        if (!matchesStatusFilter(lastJob ?? job, filter?.status)) continue;
+        if (!matchesDateRange(job.createdAt, filter?.from, filter?.to)) continue;
 
         chains.push([job, lastJob?.id !== job.id ? lastJob : undefined]);
       }
 
-      const sorted = chains.sort((a, b) => {
-        const d = b[0].createdAt.getTime() - a[0].createdAt.getTime();
-        if (d !== 0) return d;
-        return b[0].id < a[0].id ? -1 : b[0].id > a[0].id ? 1 : 0;
-      });
-
-      let startIndex = 0;
-      if (page.cursor) {
-        const cursor = decodeCursor(page.cursor);
-        startIndex = sorted.findIndex((item) => {
-          const sv = item[0].createdAt.toISOString();
-          return sv < cursor.createdAt || (sv === cursor.createdAt && item[0].id < cursor.id);
-        });
-        if (startIndex === -1) startIndex = sorted.length;
-      }
-
-      const pageItems = sorted.slice(startIndex, startIndex + page.limit);
-      const hasMore = startIndex + page.limit < sorted.length;
-      const lastItem = pageItems[pageItems.length - 1];
-
-      return {
-        items: pageItems,
-        nextCursor:
-          hasMore && lastItem
-            ? encodeCursor({
-                id: lastItem[0].id,
-                createdAt: lastItem[0].createdAt.toISOString(),
-              })
-            : null,
-      };
+      return paginateByCreatedAt(chains, page, orderDirection);
     },
 
-    listJobs: async ({ filter, page }) => {
+    listJobs: async ({ filter, orderDirection, page }) => {
       const jobs: StateJob[] = [];
       for (const job of store.jobs.values()) {
-        if (filter?.id && job.id !== filter.id && job.chainId !== filter.id) continue;
+        if (filter?.id && !filter.id.includes(job.id)) continue;
         if (!matchesStatusFilter(job, filter?.status)) continue;
         if (!matchesTypeNameFilter(job, filter?.typeName)) continue;
-        if (filter?.chainId && job.chainId !== filter.chainId) continue;
+        if (filter?.chainId && !filter.chainId.includes(job.chainId)) continue;
+        if (!matchesDateRange(job.createdAt, filter?.from, filter?.to)) continue;
         jobs.push(job);
       }
 
-      return paginate(jobs, page);
+      return paginateByCreatedAt(jobs, page, orderDirection);
     },
 
-    getJobsBlockedByChain: async ({ chainId }) => {
-      const result: StateJob[] = [];
+    listJobChainJobs: async ({ chainId, orderDirection, page }) => {
+      const jobs: StateJob[] = [];
+      for (const job of store.jobs.values()) {
+        if (job.chainId === chainId) jobs.push(job);
+      }
+      return paginateByChainIndex(jobs, page, orderDirection);
+    },
+
+    listBlockedJobs: async ({ chainId, orderDirection, page }) => {
+      const jobs: StateJob[] = [];
       for (const [jobId, blockerMap] of store.jobBlockers) {
         if (!blockerMap.has(chainId)) continue;
         const job = store.jobs.get(jobId);
-        if (job) result.push(job);
+        if (job) jobs.push(job);
       }
-      return result;
+      return paginateByCreatedAt(jobs, page, orderDirection);
     },
   };
 };

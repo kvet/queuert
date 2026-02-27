@@ -1,5 +1,5 @@
 import { type Migration, type NamedParameter, type TypedSql, sql } from "@queuert/typed-sql";
-import { type DeduplicationScope } from "queuert";
+import { type DeduplicationScope } from "queuert/internal";
 
 export const jobColumns = [
   "id",
@@ -710,19 +710,6 @@ DELETE FROM {{table_prefix}}job
 WHERE chain_id IN (SELECT value FROM json_each(?))
 `,
   false,
-);
-
-export const getJobsBlockedByChainSql: TypedSql<
-  readonly [NamedParameter<"blocked_by_chain_id", string>],
-  DbJob[]
-> = sql(
-  /* sql */ `
-SELECT j.*
-FROM {{table_prefix}}job_blocker jb
-JOIN {{table_prefix}}job j ON j.id = jb.job_id
-WHERE jb.blocked_by_chain_id = ?
-`,
-  true,
 );
 
 export const getJobForUpdateSql: TypedSql<

@@ -7,13 +7,14 @@ import {
   executeMigrations,
 } from "@queuert/typed-sql";
 import { type UUID } from "node:crypto";
+import { BlockerReferenceError, type StateAdapter } from "queuert";
 import {
   type BaseTxContext,
-  BlockerReferenceError,
-  type StateAdapter,
   type StateJob,
-} from "queuert";
-import { decodeCursor, encodeCursor } from "queuert/internal";
+  decodeChainIndexCursor,
+  decodeCreatedAtCursor,
+  encodeCursor,
+} from "queuert/internal";
 import { type SqliteStateProvider } from "../state-provider/state-provider.sqlite.js";
 import {
   type DbJob,
@@ -39,7 +40,6 @@ import {
   getJobChainByIdSql,
   getJobChainsByChainIdsSql,
   getJobForUpdateSql,
-  getJobsBlockedByChainSql,
   getNextJobAvailableInMsSql,
   insertJobBlockersSql,
   insertJobSql,
@@ -548,8 +548,8 @@ export const createSqliteStateAdapter = async <
       return job ? mapDbJobToStateJob(job) : undefined;
     },
 
-    listChains: async ({ txCtx, filter, page }) => {
-      const cursor = page.cursor ? decodeCursor(page.cursor) : null;
+    listChains: async ({ txCtx, filter, orderDirection, page }) => {
+      const cursor = page.cursor ? decodeCreatedAtCursor(page.cursor) : null;
       const conditions: string[] = ["j.chain_index = 0"];
       const params: unknown[] = [];
 
@@ -562,20 +562,41 @@ export const createSqliteStateAdapter = async <
           `NOT EXISTS (SELECT 1 FROM ${tablePrefix}job_blocker jb WHERE jb.blocked_by_chain_id = j.chain_id)`,
         );
       }
-      if (filter?.id) {
+      if (filter?.id?.length) {
+        conditions.push("j.chain_id IN (SELECT value FROM json_each(?))");
+        params.push(JSON.stringify(filter.id));
+      }
+      if (filter?.jobId?.length) {
         conditions.push(
-          `(j.chain_id = ? OR j.chain_id IN (SELECT chain_id FROM ${tablePrefix}job WHERE id = ?))`,
+          `j.chain_id IN (SELECT chain_id FROM ${tablePrefix}job WHERE id IN (SELECT value FROM json_each(?)))`,
         );
-        params.push(filter.id, filter.id);
+        params.push(JSON.stringify(filter.jobId));
+      }
+      if (filter?.status?.length) {
+        conditions.push("lc.status IN (SELECT value FROM json_each(?))");
+        params.push(JSON.stringify(filter.status));
+      }
+      if (filter?.from) {
+        conditions.push("j.created_at >= ?");
+        params.push(isoToSqlite(filter.from.toISOString()));
+      }
+      if (filter?.to) {
+        conditions.push("j.created_at <= ?");
+        params.push(isoToSqlite(filter.to.toISOString()));
       }
       if (cursor) {
-        conditions.push("(j.created_at < ? OR (j.created_at = ? AND j.id < ?))");
         const cursorCreatedAt = isoToSqlite(cursor.createdAt);
+        if (orderDirection === "desc") {
+          conditions.push("(j.created_at < ? OR (j.created_at = ? AND j.id < ?))");
+        } else {
+          conditions.push("(j.created_at > ? OR (j.created_at = ? AND j.id > ?))");
+        }
         params.push(cursorCreatedAt, cursorCreatedAt, cursor.id);
       }
       params.push(page.limit + 1);
 
-      const sqlStr = `SELECT ${jobColumnsSelect("j")}, ${jobColumnsPrefixedSelect("lc", "lc_")} FROM ${tablePrefix}job AS j LEFT JOIN ${tablePrefix}job AS lc ON lc.chain_id = j.id AND lc.rowid = (SELECT lj.rowid FROM ${tablePrefix}job lj WHERE lj.chain_id = j.id ORDER BY lj.created_at DESC, lj.rowid DESC LIMIT 1) WHERE ${conditions.join(" AND ")} ORDER BY j.created_at DESC, j.id DESC LIMIT ?`;
+      const orderDir = orderDirection === "desc" ? "DESC" : "ASC";
+      const sqlStr = `SELECT ${jobColumnsSelect("j")}, ${jobColumnsPrefixedSelect("lc", "lc_")} FROM ${tablePrefix}job AS j LEFT JOIN ${tablePrefix}job AS lc ON lc.chain_id = j.id AND lc.rowid = (SELECT lj.rowid FROM ${tablePrefix}job lj WHERE lj.chain_id = j.id ORDER BY lj.chain_index DESC LIMIT 1) WHERE ${conditions.join(" AND ")} ORDER BY j.created_at ${orderDir}, j.id ${orderDir} LIMIT ?`;
 
       const rows = (await stateProvider.executeSql({
         txCtx,
@@ -602,6 +623,7 @@ export const createSqliteStateAdapter = async <
       if (hasMore && lastRow) {
         const { rootJob } = parseDbJobChainRow(lastRow);
         nextCursor = encodeCursor({
+          type: "createdAt",
           id: rootJob.id,
           createdAt: new Date(rootJob.created_at + "Z").toISOString(),
         });
@@ -610,8 +632,8 @@ export const createSqliteStateAdapter = async <
       return { items, nextCursor };
     },
 
-    listJobs: async ({ txCtx, filter, page }) => {
-      const cursor = page.cursor ? decodeCursor(page.cursor) : null;
+    listJobs: async ({ txCtx, filter, orderDirection, page }) => {
+      const cursor = page.cursor ? decodeCreatedAtCursor(page.cursor) : null;
       const conditions: string[] = [];
       const params: unknown[] = [];
 
@@ -623,23 +645,36 @@ export const createSqliteStateAdapter = async <
         conditions.push("j.type_name IN (SELECT value FROM json_each(?))");
         params.push(JSON.stringify(filter.typeName));
       }
-      if (filter?.chainId) {
-        conditions.push("j.chain_id = ?");
-        params.push(filter.chainId);
+      if (filter?.chainId?.length) {
+        conditions.push("j.chain_id IN (SELECT value FROM json_each(?))");
+        params.push(JSON.stringify(filter.chainId));
       }
-      if (filter?.id) {
-        conditions.push("(j.id = ? OR j.chain_id = ?)");
-        params.push(filter.id, filter.id);
+      if (filter?.id?.length) {
+        conditions.push("j.id IN (SELECT value FROM json_each(?))");
+        params.push(JSON.stringify(filter.id));
+      }
+      if (filter?.from) {
+        conditions.push("j.created_at >= ?");
+        params.push(isoToSqlite(filter.from.toISOString()));
+      }
+      if (filter?.to) {
+        conditions.push("j.created_at <= ?");
+        params.push(isoToSqlite(filter.to.toISOString()));
       }
       if (cursor) {
-        conditions.push("(j.created_at < ? OR (j.created_at = ? AND j.id < ?))");
         const cursorCreatedAt = isoToSqlite(cursor.createdAt);
+        if (orderDirection === "desc") {
+          conditions.push("(j.created_at < ? OR (j.created_at = ? AND j.id < ?))");
+        } else {
+          conditions.push("(j.created_at > ? OR (j.created_at = ? AND j.id > ?))");
+        }
         params.push(cursorCreatedAt, cursorCreatedAt, cursor.id);
       }
       params.push(page.limit + 1);
 
+      const orderDir = orderDirection === "desc" ? "DESC" : "ASC";
       const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-      const sqlStr = `SELECT * FROM ${tablePrefix}job j ${where} ORDER BY j.created_at DESC, j.id DESC LIMIT ?`;
+      const sqlStr = `SELECT * FROM ${tablePrefix}job j ${where} ORDER BY j.created_at ${orderDir}, j.id ${orderDir} LIMIT ?`;
 
       const rows = (await stateProvider.executeSql({
         txCtx,
@@ -656,6 +691,7 @@ export const createSqliteStateAdapter = async <
       let nextCursor: string | null = null;
       if (hasMore && lastRow) {
         nextCursor = encodeCursor({
+          type: "createdAt",
           id: lastRow.id,
           createdAt: new Date(lastRow.created_at + "Z").toISOString(),
         });
@@ -664,13 +700,91 @@ export const createSqliteStateAdapter = async <
       return { items, nextCursor };
     },
 
-    getJobsBlockedByChain: async ({ txCtx, chainId }) => {
-      const jobs = await executeTypedSql({
+    listJobChainJobs: async ({ txCtx, chainId, orderDirection, page }) => {
+      const cursor = page.cursor ? decodeChainIndexCursor(page.cursor) : null;
+      const conditions: string[] = ["j.chain_id = ?"];
+      const params: unknown[] = [chainId];
+
+      if (cursor) {
+        if (orderDirection === "asc") {
+          conditions.push("(j.chain_index > ? OR (j.chain_index = ? AND j.id > ?))");
+        } else {
+          conditions.push("(j.chain_index < ? OR (j.chain_index = ? AND j.id < ?))");
+        }
+        params.push(cursor.chainIndex, cursor.chainIndex, cursor.id);
+      }
+      params.push(page.limit + 1);
+
+      const orderDir = orderDirection === "asc" ? "ASC" : "DESC";
+      const sqlStr = `SELECT * FROM ${tablePrefix}job j WHERE ${conditions.join(" AND ")} ORDER BY j.chain_index ${orderDir}, j.id ${orderDir} LIMIT ?`;
+
+      const rows = (await stateProvider.executeSql({
         txCtx,
-        sql: getJobsBlockedByChainSql,
-        params: [chainId],
-      });
-      return jobs.map(mapDbJobToStateJob);
+        sql: sqlStr,
+        params,
+        returns: true,
+      })) as DbJob[];
+
+      const hasMore = rows.length > page.limit;
+      const pageRows = hasMore ? rows.slice(0, page.limit) : rows;
+      const items = pageRows.map(mapDbJobToStateJob);
+
+      const lastRow = pageRows[pageRows.length - 1];
+      let nextCursor: string | null = null;
+      if (hasMore && lastRow) {
+        nextCursor = encodeCursor({
+          type: "chainIndex",
+          id: lastRow.id,
+          chainIndex: lastRow.chain_index,
+        });
+      }
+
+      return { items, nextCursor };
+    },
+
+    listBlockedJobs: async ({ txCtx, chainId, orderDirection, page }) => {
+      const cursor = page.cursor ? decodeCreatedAtCursor(page.cursor) : null;
+      const conditions: string[] = [
+        `j.id IN (SELECT jb.job_id FROM ${tablePrefix}job_blocker jb WHERE jb.blocked_by_chain_id = ?)`,
+      ];
+      const params: unknown[] = [chainId];
+
+      if (cursor) {
+        const cursorCreatedAt = isoToSqlite(cursor.createdAt);
+        if (orderDirection === "desc") {
+          conditions.push("(j.created_at < ? OR (j.created_at = ? AND j.id < ?))");
+        } else {
+          conditions.push("(j.created_at > ? OR (j.created_at = ? AND j.id > ?))");
+        }
+        params.push(cursorCreatedAt, cursorCreatedAt, cursor.id);
+      }
+      params.push(page.limit + 1);
+
+      const orderDir = orderDirection === "desc" ? "DESC" : "ASC";
+      const sqlStr = `SELECT * FROM ${tablePrefix}job j WHERE ${conditions.join(" AND ")} ORDER BY j.created_at ${orderDir}, j.id ${orderDir} LIMIT ?`;
+
+      const rows = (await stateProvider.executeSql({
+        txCtx,
+        sql: sqlStr,
+        params,
+        returns: true,
+      })) as DbJob[];
+
+      const hasMore = rows.length > page.limit;
+      const pageRows = hasMore ? rows.slice(0, page.limit) : rows;
+      const items = pageRows.map(mapDbJobToStateJob);
+
+      const lastRow = pageRows[pageRows.length - 1];
+      let nextCursor: string | null = null;
+      if (hasMore && lastRow) {
+        nextCursor = encodeCursor({
+          type: "createdAt",
+          id: lastRow.id,
+          createdAt: new Date(lastRow.created_at + "Z").toISOString(),
+        });
+      }
+
+      return { items, nextCursor };
     },
   };
 

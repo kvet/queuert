@@ -1,19 +1,28 @@
 import { type StateAdapter } from "queuert";
 import { serializeJob } from "../../shared/job.js";
-import { parseCursor, parseLimit, parseTypeNameFilter } from "./params.js";
+import { parseCursor, parseLimit, parseStatusFilter, parseTypeNameFilter } from "./params.js";
 
 export const handleChainsList = async (
   url: URL,
   stateAdapter: StateAdapter<any, any>,
 ): Promise<Response> => {
   const typeName = parseTypeNameFilter(url.searchParams.get("typeName") ?? undefined);
+  const status = parseStatusFilter(url.searchParams.get("status") ?? undefined);
   const rootOnly = url.searchParams.get("rootOnly") !== "false";
   const id = url.searchParams.get("id") ?? undefined;
+  const jobId = url.searchParams.get("jobId") ?? undefined;
   const cursor = parseCursor(url.searchParams.get("cursor") ?? undefined);
   const limit = parseLimit(url.searchParams.get("limit") ?? undefined);
 
   const result = await stateAdapter.listChains({
-    filter: { typeName, rootOnly, id },
+    filter: {
+      typeName,
+      status,
+      rootOnly,
+      id: id ? [id] : undefined,
+      jobId: jobId ? [jobId] : undefined,
+    },
+    orderDirection: "desc",
     page: { cursor, limit },
   });
 
@@ -36,8 +45,9 @@ export const handleChainDetail = async (
     return Response.json({ error: "Chain not found" }, { status: 404 });
   }
 
-  const jobs = await stateAdapter.listJobs({
-    filter: { chainId },
+  const jobs = await stateAdapter.listJobChainJobs({
+    chainId,
+    orderDirection: "asc",
     page: { limit: 1000 },
   });
 
@@ -67,9 +77,13 @@ export const handleChainBlocking = async (
   stateAdapter: StateAdapter<any, any>,
   chainId: string,
 ): Promise<Response> => {
-  const jobs = await stateAdapter.getJobsBlockedByChain({ chainId });
+  const result = await stateAdapter.listBlockedJobs({
+    chainId,
+    orderDirection: "desc",
+    page: { limit: 1000 },
+  });
 
   return Response.json({
-    items: jobs.map(serializeJob),
+    items: result.items.map(serializeJob),
   });
 };

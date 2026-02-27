@@ -14,8 +14,10 @@ Run your application logic as a series of background jobs that are started along
 - [Why Queuert?](#why-queuert)
 - [Installation](#installation)
 - [Core Concepts](#core-concepts)
-- [Horizontal Scaling](#horizontal-scaling)
+- [Transaction Hooks](#transaction-hooks)
 - [Job Processing Modes](#job-processing-modes)
+- [Type Safety](#type-safety)
+- [Runtime Validation](#runtime-validation)
 - [Job Chain Patterns](#job-chain-patterns)
 - [Job Blockers](#job-blockers)
 - [Error Handling](#error-handling)
@@ -23,12 +25,12 @@ Run your application logic as a series of background jobs that are started along
 - [Deduplication](#deduplication)
 - [Workerless Completion](#workerless-completion)
 - [Chain Deletion](#chain-deletion)
-- [Transaction Hooks](#transaction-hooks)
-- [Complete Type Safety](#complete-type-safety)
-- [Runtime Validation](#runtime-validation)
+- [Job & Chain Queries](#job--chain-queries)
+- [Job Chain Awaiting](#job-chain-awaiting)
+- [Horizontal Scaling](#horizontal-scaling)
 - [Timeouts](#timeouts)
+- [Dashboard](#dashboard)
 - [Observability](#observability)
-- [Testing & Resilience](#testing--resilience)
 - [Benchmarks](#benchmarks)
 - [License](#license)
 
@@ -131,6 +133,9 @@ npm install @queuert/redis     # Redis pub/sub - recommended for production
 npm install @queuert/nats      # NATS pub/sub (experimental)
 # Or use PostgreSQL LISTEN/NOTIFY via @queuert/postgres (no extra infra)
 
+# Dashboard (optional)
+npm install @queuert/dashboard  # Embeddable web UI for job observation
+
 # Observability (optional)
 npm install @queuert/otel      # OpenTelemetry metrics and histograms
 ```
@@ -181,31 +186,43 @@ Bridges your pub/sub client (Redis, PostgreSQL, etc.) with the notify adapter. S
 
 Processes jobs by polling for available work. Workers automatically renew leases during long-running operations and handle retries with configurable backoff.
 
-## Horizontal Scaling
+## Transaction Hooks
 
-Deploy multiple worker processes sharing the same database for horizontal scaling. Workers coordinate via database-level locking (`FOR UPDATE SKIP LOCKED`) — no external coordination required.
+`withTransactionHooks` buffers side effects (like notify events) during a transaction and flushes them only after the callback returns successfully. On error, all buffered side effects are discarded.
 
 ```ts
-// Process A (e.g., machine-1)
-const worker = await createInProcessWorker({
-  client,
-  workerId: "worker-a",
-  concurrency: 10,
-  processors: { ... },
-});
-
-// Process B (e.g., machine-2)
-const worker = await createInProcessWorker({
-  client,
-  workerId: "worker-b",
-  concurrency: 10,
-  processors: { ... },
-});
+await withTransactionHooks(async (transactionHooks) =>
+  db.transaction(async (tx) => {
+    await client.startJobChain({ tx, transactionHooks, typeName: "send-email", input });
+    // If the transaction rolls back, no notifications are sent
+  }),
+);
 ```
 
-Each worker needs a unique `workerId`. Workers compete for available jobs — when one acquires a job, others skip it. The notify adapter (Redis, PostgreSQL LISTEN/NOTIFY, etc.) ensures workers wake up immediately when new jobs are queued.
+For manual control over the flush/discard lifecycle, use `createTransactionHooks` directly. This is useful when your database client uses explicit `BEGIN`/`COMMIT`/`ROLLBACK` rather than a callback-style transaction:
 
-See [examples/state-postgres-multi-worker](./examples/state-postgres-multi-worker) for a complete example spawning multiple worker processes sharing a PostgreSQL database.
+```ts
+const { transactionHooks, flush, discard } = createTransactionHooks();
+const connection = await db.connect();
+try {
+  await connection.query("BEGIN");
+  const result = await client.startJobChain({
+    connection,
+    transactionHooks,
+    typeName: "send-email",
+    input,
+  });
+  await connection.query("COMMIT");
+  await flush(); // Side effects fire only after commit
+  return result;
+} catch (error) {
+  await connection.query("ROLLBACK").catch(() => {});
+  await discard(); // Side effects discarded on error
+  throw error;
+} finally {
+  connection.release();
+}
+```
 
 ## Job Processing Modes
 
@@ -267,6 +284,25 @@ If you don't call `prepare`, auto-setup runs based on when you call `complete`:
 - Call `complete` after async work → staged mode (lease renewal active)
 
 See [examples/showcase-processing-modes](./examples/showcase-processing-modes) for a complete working example demonstrating all three modes through an order fulfillment workflow.
+
+## Type Safety
+
+Queuert provides end-to-end type safety with full type inference. Define your job types once, and TypeScript ensures correctness throughout your entire codebase:
+
+- **Job inputs and outputs** are inferred and validated at compile time
+- **Continuations** are type-checked — `continueWith` only accepts valid target job types with matching inputs
+- **Blockers** are fully typed — access `job.blockers` with correct output types for each blocker
+- **Internal job types** without `entry: true` cannot be started directly via `startJobChain`
+
+No runtime type errors. No mismatched job names. Your workflow logic is verified before your code ever runs.
+
+## Runtime Validation
+
+For production APIs accepting external input, you can add runtime validation using any schema library (Zod, Valibot, TypeBox, etc.). The core is minimal — schema-specific adapters are implemented in user-land.
+
+Both `defineJobTypes` (compile-time only) and `createJobTypeRegistry` (runtime validation) provide the same compile-time type safety. Runtime validation adds protection against invalid external data.
+
+See complete adapter examples: [Zod](./examples/validation-zod), [Valibot](./examples/validation-valibot), [TypeBox](./examples/validation-typebox), [ArkType](./examples/validation-arktype).
 
 ## Job Chain Patterns
 
@@ -760,62 +796,81 @@ Cascade follows dependencies downward — it deletes the specified chains and ev
 
 If a worker is currently processing a job in a deleted chain, the worker's `signal` is aborted with reason `"not_found"`, allowing graceful cleanup.
 
-## Transaction Hooks
+## Job & Chain Queries
 
-`withTransactionHooks` buffers side effects (like notify events) during a transaction and flushes them only after the callback returns successfully. On error, all buffered side effects are discarded.
+The client provides read-only methods for inspecting job chains and jobs. All query methods accept an optional transaction context and don't require `transactionHooks`.
 
 ```ts
-await withTransactionHooks(async (transactionHooks) =>
-  db.transaction(async (tx) => {
-    await client.startJobChain({ tx, transactionHooks, typeName: "send-email", input });
-    // If the transaction rolls back, no notifications are sent
-  }),
+// Look up a single job chain or job by ID
+const jobChain = await client.getJobChain({ id: jobChainId });
+const job = await client.getJob({ id: jobId });
+
+// Paginated lists with filters
+const jobChains = await client.listJobChains({
+  filter: { typeName: ["send-email"], status: ["running"] },
+  limit: 20,
+});
+
+const jobs = await client.listJobs({
+  filter: { jobChainId: [jobChainId], status: ["completed"] },
+});
+
+// Cursor-based pagination
+const nextPage = await client.listJobChains({
+  filter: { typeName: ["send-email"] },
+  cursor: jobChains.nextCursor,
+});
+
+// Jobs within a specific job chain, ordered by chain index
+const jobChainJobs = await client.listJobChainJobs({ jobChainId });
+
+// Blocker relationships
+const blockers = await client.getJobBlockers({ jobId });
+const blockedJobs = await client.listBlockedJobs({ jobChainId });
+```
+
+All lookup methods accept an optional `typeName` for type narrowing — the return type narrows to the specified type. If the entity exists but has a different type, `JobTypeMismatchError` is thrown.
+
+## Job Chain Awaiting
+
+`awaitJobChain` waits for a job chain to complete by combining polling with notify adapter events. Between polls, it listens for completion notifications to react immediately.
+
+```ts
+const completedJobChain = await client.awaitJobChain(
+  { id: jobChainId },
+  { timeoutMs: 30_000, pollIntervalMs: 5_000 },
 );
+
+console.log(completedJobChain.output); // Typed output from the final job
 ```
 
-For manual control over the flush/discard lifecycle, use `createTransactionHooks` directly. This is useful when your database client uses explicit `BEGIN`/`COMMIT`/`ROLLBACK` rather than a callback-style transaction:
+Throws `WaitChainTimeoutError` on timeout. Supports an `AbortSignal` for cancellation.
+
+## Horizontal Scaling
+
+Deploy multiple worker processes sharing the same database for horizontal scaling. Workers coordinate via database-level locking (`FOR UPDATE SKIP LOCKED`) — no external coordination required.
 
 ```ts
-const { transactionHooks, flush, discard } = createTransactionHooks();
-const connection = await db.connect();
-try {
-  await connection.query("BEGIN");
-  const result = await client.startJobChain({
-    connection,
-    transactionHooks,
-    typeName: "send-email",
-    input,
-  });
-  await connection.query("COMMIT");
-  await flush(); // Side effects fire only after commit
-  return result;
-} catch (error) {
-  await connection.query("ROLLBACK").catch(() => {});
-  await discard(); // Side effects discarded on error
-  throw error;
-} finally {
-  connection.release();
-}
+// Process A (e.g., machine-1)
+const worker = await createInProcessWorker({
+  client,
+  workerId: "worker-a",
+  concurrency: 10,
+  processors: { ... },
+});
+
+// Process B (e.g., machine-2)
+const worker = await createInProcessWorker({
+  client,
+  workerId: "worker-b",
+  concurrency: 10,
+  processors: { ... },
+});
 ```
 
-## Complete Type Safety
+Each worker needs a unique `workerId`. Workers compete for available jobs — when one acquires a job, others skip it. The notify adapter (Redis, PostgreSQL LISTEN/NOTIFY, etc.) ensures workers wake up immediately when new jobs are queued.
 
-Queuert provides end-to-end type safety with full type inference. Define your job types once, and TypeScript ensures correctness throughout your entire codebase:
-
-- **Job inputs and outputs** are inferred and validated at compile time
-- **Continuations** are type-checked — `continueWith` only accepts valid target job types with matching inputs
-- **Blockers** are fully typed — access `job.blockers` with correct output types for each blocker
-- **Internal job types** without `entry: true` cannot be started directly via `startJobChain`
-
-No runtime type errors. No mismatched job names. Your workflow logic is verified before your code ever runs.
-
-## Runtime Validation
-
-For production APIs accepting external input, you can add runtime validation using any schema library (Zod, Valibot, TypeBox, etc.). The core is minimal — schema-specific adapters are implemented in user-land.
-
-Both `defineJobTypes` (compile-time only) and `createJobTypeRegistry` (runtime validation) provide the same compile-time type safety. Runtime validation adds protection against invalid external data.
-
-See complete adapter examples: [Zod](./examples/validation-zod), [Valibot](./examples/validation-valibot), [TypeBox](./examples/validation-typebox), [ArkType](./examples/validation-arktype).
+See [examples/state-postgres-multi-worker](./examples/state-postgres-multi-worker) for a complete example spawning multiple worker processes sharing a PostgreSQL database.
 
 ## Timeouts
 
@@ -859,6 +914,32 @@ const worker = await createInProcessWorker({
 
 See [examples/showcase-timeouts](./examples/showcase-timeouts) for a complete working example demonstrating cooperative timeouts and hard timeouts via lease.
 
+## Dashboard
+
+`@queuert/dashboard` provides an embeddable web UI for observing job chains and jobs. It mounts as a single `fetch` handler on your existing server — no external build steps or runtime dependencies beyond `queuert`.
+
+```ts
+import { createDashboard } from "@queuert/dashboard";
+
+const dashboard = createDashboard({ client });
+
+// Use with any server that accepts a fetch handler
+serve({ fetch: dashboard.fetch, port: 3000 });
+```
+
+The dashboard provides:
+
+- **Chain list** — Browse chains with status badges, type filtering, and ID search
+- **Chain detail** — Full job sequence, blocker relationships, and blocking chains
+- **Job list** — Cross-chain job view with status/type filtering
+- **Job detail** — Input/output data, error messages, lease info, continuation links
+
+Read-only — no mutations. Add authentication middleware before the dashboard handler to restrict access.
+
+> **Experimental** — API may change between minor versions.
+
+See [examples/dashboard](./examples/dashboard) for a complete example.
+
 ## Observability
 
 Queuert provides an OpenTelemetry adapter for metrics collection. Configure your OTEL SDK with desired exporters (Prometheus, OTLP, Jaeger, etc.) before using this adapter.
@@ -884,28 +965,6 @@ The adapter emits:
 - **Gauges:** idle workers per job type, jobs being processed
 
 See [examples/observability-otel](./examples/observability-otel) for a complete example.
-
-## Testing & Resilience
-
-Queuert includes comprehensive test suites that verify job execution guarantees under various failure conditions. The resilience tests simulate transient database errors to ensure jobs complete successfully even when infrastructure is unreliable.
-
-Test suites available in [`packages/core/src/suites/`](./packages/core/src/suites/):
-
-- [`process.test-suite.ts`](./packages/core/src/suites/process.test-suite.ts) — Atomic/staged modes, prepare/complete patterns
-- [`chains.test-suite.ts`](./packages/core/src/suites/chains.test-suite.ts) — Linear, branched, loop, go-to patterns
-- [`blocker-chains.test-suite.ts`](./packages/core/src/suites/blocker-chains.test-suite.ts) — Job dependencies and blocking
-- [`workerless-completion.test-suite.ts`](./packages/core/src/suites/workerless-completion.test-suite.ts) — External job completion
-- [`scheduling.test-suite.ts`](./packages/core/src/suites/scheduling.test-suite.ts) — Scheduled job execution and rescheduling
-- [`deduplication.test-suite.ts`](./packages/core/src/suites/deduplication.test-suite.ts) — Duplicate job prevention
-- [`deletion.test-suite.ts`](./packages/core/src/suites/deletion.test-suite.ts) — Job chain deletion
-- [`wait-chain-completion.test-suite.ts`](./packages/core/src/suites/wait-chain-completion.test-suite.ts) — Waiting for chain completion
-- [`notify.test-suite.ts`](./packages/core/src/suites/notify.test-suite.ts) — Notification adapter tests
-- [`notify-resilience.test-suite.ts`](./packages/core/src/suites/notify-resilience.test-suite.ts) — Notification resilience under failures
-- [`state-resilience.test-suite.ts`](./packages/core/src/suites/state-resilience.test-suite.ts) — Transient error handling
-- [`reaper.test-suite.ts`](./packages/core/src/suites/reaper.test-suite.ts) — Expired lease reclamation
-- [`worker.test-suite.ts`](./packages/core/src/suites/worker.test-suite.ts) — Worker lifecycle and polling
-
-These suites run against all supported adapters (PostgreSQL, SQLite, in-memory) to ensure consistent behavior across databases.
 
 ## Benchmarks
 

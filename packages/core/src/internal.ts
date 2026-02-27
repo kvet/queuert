@@ -2,7 +2,20 @@ export { createAsyncLock, type AsyncLock } from "./helpers/async-lock.js";
 export { withRetry } from "./helpers/retry.js";
 export { sleep } from "./helpers/sleep.js";
 
-export { decodeCursor, encodeCursor } from "./state-adapter/cursor.js";
+export { type OrderDirection, type PageParams } from "./pagination.js";
+export {
+  decodeChainIndexCursor,
+  decodeCreatedAtCursor,
+  encodeCursor,
+  type ChainIndexCursor,
+  type CreatedAtCursor,
+} from "./state-adapter/cursor.js";
+export {
+  type BaseTxContext,
+  type DeduplicationScope,
+  type StateJob,
+  type StateJobStatus,
+} from "./state-adapter/state-adapter.js";
 
 export { helpersSymbol } from "./client.js";
 

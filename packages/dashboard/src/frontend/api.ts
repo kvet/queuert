@@ -21,16 +21,20 @@ export type PageResult<T> = {
 export const listChains = async (
   params: {
     typeName?: string;
+    status?: string;
     rootOnly?: boolean;
     id?: string;
+    jobId?: string;
     cursor?: string;
     limit?: number;
   } = {},
 ): Promise<PageResult<[Job, Job | null]>> => {
   const qs = new URLSearchParams();
   if (params.typeName) qs.set("typeName", params.typeName);
+  if (params.status) qs.set("status", params.status);
   if (params.rootOnly === false) qs.set("rootOnly", "false");
   if (params.id) qs.set("id", params.id);
+  if (params.jobId) qs.set("jobId", params.jobId);
   if (params.cursor) qs.set("cursor", params.cursor);
   if (params.limit) qs.set("limit", String(params.limit));
   const q = qs.toString();

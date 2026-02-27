@@ -1,6 +1,7 @@
 import {
   blockerChainsTestSuite,
   chainsTestSuite,
+  clientQueriesTestSuite,
   deduplicationTestSuite,
   deletionTestSuite,
   extendWithCommon,
@@ -56,4 +57,8 @@ describe("Scheduling", () => {
 
 describe("Notify", () => {
   notifyTestSuite({ it: sqliteInProcessIt });
+});
+
+describe("Client Queries", () => {
+  clientQueriesTestSuite({ it: sqliteInProcessIt });
 });
