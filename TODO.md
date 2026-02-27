@@ -14,7 +14,6 @@
 - [?,REF] Prepared statements
 - [TASK] Review all public methods and types for naming, consistency, and clarity; add inline docs
 - [TASK] Inline docs for public methods and types
-- [TASK] Get rid of AsyncResource.bind
 - [EPIC] Prepare 0.3 release
 
 # Medium term
