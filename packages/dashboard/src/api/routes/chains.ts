@@ -14,12 +14,12 @@ export const handleChainsList = async (
   const cursor = parseCursor(url.searchParams.get("cursor") ?? undefined);
   const limit = parseLimit(url.searchParams.get("limit") ?? undefined);
 
-  const result = await stateAdapter.listChains({
+  const result = await stateAdapter.listJobChains({
     filter: {
       typeName,
       status,
       rootOnly,
-      id: id ? [id] : undefined,
+      chainId: id ? [id] : undefined,
       jobId: jobId ? [jobId] : undefined,
     },
     orderDirection: "desc",
@@ -40,7 +40,7 @@ export const handleChainDetail = async (
   stateAdapter: StateAdapter<any, any>,
   chainId: string,
 ): Promise<Response> => {
-  const chain = await stateAdapter.getJobChainById({ jobId: chainId });
+  const chain = await stateAdapter.getJobChainById({ chainId });
   if (!chain) {
     return Response.json({ error: "Chain not found" }, { status: 404 });
   }

@@ -41,7 +41,7 @@ All StateAdapter methods must complete in a **single database round-trip**, wher
 
 - **O(1) round trips**: Each method—regardless of how many jobs it affects—executes exactly one database operation
 - **O(n) is incorrect**: If an adapter implementation requires multiple round trips proportional to input size, the implementation is wrong
-- **Batch operations**: Methods accepting arrays (e.g., `createJobs`, `markJobsAsCompleted`) must use batch SQL (multi-row INSERT, UPDATE with IN clause, CTEs) rather than loops
+- **Batch operations**: Methods accepting arrays (e.g., `deleteJobChains`, `addJobBlockers`) must use batch SQL (multi-row INSERT, UPDATE with IN clause, CTEs) rather than loops
 
 This principle ensures predictable performance and proper atomicity. Use batch SQL (multi-row INSERT, UPDATE with IN/ANY clause, CTEs) rather than loops.
 
@@ -103,7 +103,7 @@ The provider maintains a dedicated connection for subscriptions and acquires/rel
 
 ### Reaper Support
 
-The `removeExpiredJobLease` method supports an `ignoredJobIds` parameter to prevent race conditions when a worker runs with multiple concurrent slots (`concurrency > 1`). Without it, a worker could reap its own in-progress job if the lease expires before renewal, causing corrupted state. Custom adapter implementations must filter out these job IDs when selecting expired leases.
+The `reapExpiredJobLease` method supports an `ignoredJobIds` parameter to prevent race conditions when a worker runs with multiple concurrent slots (`concurrency > 1`). Without it, a worker could reap its own in-progress job if the lease expires before renewal, causing corrupted state. Custom adapter implementations must filter out these job IDs when selecting expired leases.
 
 ### Internal Type Design
 

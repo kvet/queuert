@@ -65,10 +65,10 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
    */
   runInTransaction: <T>(fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
 
-  /** Gets a job chain by its root job ID. Returns [rootJob, lastJob] or undefined. */
+  /** Gets a job chain by its chain ID. Returns [rootJob, lastJob] or undefined. */
   getJobChainById: (params: {
     txCtx?: TTxContext;
-    jobId: TJobId;
+    chainId: TJobId;
   }) => Promise<[StateJob, StateJob | undefined] | undefined>;
 
   /** Gets a job by its ID. */
@@ -100,8 +100,8 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     blockerChainTraceContexts: unknown[];
   }>;
 
-  /** Schedules blocked jobs when a blocker chain completes. */
-  scheduleBlockedJobs: (params: {
+  /** Unblocks jobs when a blocker chain completes, transitioning them from blocked to pending. */
+  unblockJobs: (params: {
     txCtx?: TTxContext;
     blockedByChainId: TJobId;
   }) => Promise<{ unblockedJobs: StateJob[]; blockerTraceContexts: unknown[] }>;
@@ -149,14 +149,14 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
   }) => Promise<StateJob>;
 
   /** Removes an expired lease and resets the job to pending. */
-  removeExpiredJobLease: (params: {
+  reapExpiredJobLease: (params: {
     txCtx?: TTxContext;
     typeNames: string[];
     ignoredJobIds?: TJobId[];
   }) => Promise<StateJob | undefined>;
 
   /** Deletes all jobs in the given chains. Throws if external jobs depend on them as blockers. When `cascade` is true, expands `chainIds` to include transitive dependencies (downward only) before deleting. */
-  deleteJobsByChainIds: (params: {
+  deleteJobChains: (params: {
     txCtx?: TTxContext;
     chainIds: TJobId[];
     cascade?: boolean;
@@ -165,20 +165,20 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
   /** Gets a job by ID with a FOR UPDATE lock. */
   getJobForUpdate: (params: { txCtx?: TTxContext; jobId: TJobId }) => Promise<StateJob | undefined>;
 
-  /** Gets the current (latest) job in a chain with a FOR UPDATE lock. */
-  getCurrentJobForUpdate: (params: {
+  /** Gets the latest job in a chain with a FOR UPDATE lock. */
+  getLatestChainJobForUpdate: (params: {
     txCtx?: TTxContext;
     chainId: TJobId;
   }) => Promise<StateJob | undefined>;
 
   /** Lists chains with pagination and filtering. */
-  listChains: (params: {
+  listJobChains: (params: {
     txCtx?: TTxContext;
     filter?: {
       typeName?: string[];
       status?: StateJobStatus[];
       rootOnly?: boolean;
-      id?: string[];
+      chainId?: string[];
       jobId?: string[];
       from?: Date;
       to?: Date;
@@ -194,7 +194,7 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
       status?: StateJobStatus[];
       typeName?: string[];
       chainId?: string[];
-      id?: string[];
+      jobId?: string[];
       from?: Date;
       to?: Date;
     };

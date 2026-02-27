@@ -270,7 +270,7 @@ export const createInProcessWorker = async <
             }
 
             if (executor.idleSlots() > 0) {
-              const reaped = await stateAdapter.removeExpiredJobLease({
+              const reaped = await stateAdapter.reapExpiredJobLease({
                 typeNames,
                 ignoredJobIds: Array.from(jobIdsInProgress),
               });

@@ -215,11 +215,11 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       }
     },
 
-    getJobChainById: async ({ jobId }) => {
-      const rootJob = store.jobs.get(jobId);
+    getJobChainById: async ({ chainId }) => {
+      const rootJob = store.jobs.get(chainId);
       if (!rootJob) return undefined;
 
-      const lastJob = getLastJobInChain(jobId);
+      const lastJob = getLastJobInChain(chainId);
       return [rootJob, lastJob?.id !== rootJob.id ? lastJob : undefined];
     },
 
@@ -315,7 +315,7 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       return { job, incompleteBlockerChainIds: [], blockerChainTraceContexts };
     },
 
-    scheduleBlockedJobs: async ({ blockedByChainId }) => {
+    unblockJobs: async ({ blockedByChainId }) => {
       const unblockedJobs: StateJob[] = [];
       const blockerTraceContexts: unknown[] = [];
       const now = new Date();
@@ -472,7 +472,7 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       return updatedJob;
     },
 
-    removeExpiredJobLease: async ({ typeNames, ignoredJobIds }) => {
+    reapExpiredJobLease: async ({ typeNames, ignoredJobIds }) => {
       const now = new Date();
       let candidateJob: StateJob | undefined;
       const ignoredSet = ignoredJobIds ? new Set(ignoredJobIds) : undefined;
@@ -503,7 +503,7 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       return updatedJob;
     },
 
-    deleteJobsByChainIds: async ({ chainIds, cascade }) => {
+    deleteJobChains: async ({ chainIds, cascade }) => {
       let effectiveChainIds = chainIds;
 
       if (cascade) {
@@ -575,12 +575,12 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       return store.jobs.get(jobId);
     },
 
-    getCurrentJobForUpdate: async ({ chainId }) => {
+    getLatestChainJobForUpdate: async ({ chainId }) => {
       return getLastJobInChain(chainId);
     },
 
-    listChains: async ({ filter, orderDirection, page }) => {
-      const idMatchChainIds = filter?.id ? new Set<string>(filter.id) : undefined;
+    listJobChains: async ({ filter, orderDirection, page }) => {
+      const idMatchChainIds = filter?.chainId ? new Set<string>(filter.chainId) : undefined;
 
       let jobIdMatchChainIds: Set<string> | undefined;
       if (filter?.jobId) {
@@ -624,7 +624,7 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
     listJobs: async ({ filter, orderDirection, page }) => {
       const jobs: StateJob[] = [];
       for (const job of store.jobs.values()) {
-        if (filter?.id && !filter.id.includes(job.id)) continue;
+        if (filter?.jobId && !filter.jobId.includes(job.id)) continue;
         if (!matchesStatusFilter(job, filter?.status)) continue;
         if (!matchesTypeNameFilter(job, filter?.typeName)) continue;
         if (filter?.chainId && !filter.chainId.includes(job.chainId)) continue;

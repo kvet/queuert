@@ -375,7 +375,7 @@ RETURNING *
   true,
 );
 
-export const scheduleBlockedJobsSql: TypedSql<
+export const unblockJobsSql: TypedSql<
   readonly [NamedParameter<"blocked_by_chain_id", string>],
   [{ unblocked_jobs: DbJob[]; blocker_trace_contexts: unknown[] }]
 > = sql(
@@ -572,7 +572,7 @@ FOR UPDATE SKIP LOCKED
   true,
 );
 
-export const removeExpiredJobLeaseSql: TypedSql<
+export const reapExpiredJobLeaseSql: TypedSql<
   readonly [NamedParameter<"type_names", string[]>, NamedParameter<"ignored_job_ids", string[]>],
   [DbJob | undefined]
 > = sql(
@@ -642,7 +642,7 @@ WHERE jb.blocked_by_chain_id = ANY($1::{{id_type}}[])
   true,
 );
 
-export const deleteJobsByChainIdsSql: TypedSql<
+export const deleteJobChainsSql: TypedSql<
   readonly [NamedParameter<"chain_ids", string[]>],
   { root_job: DbJob; last_chain_job: DbJob | null }[]
 > = sql(
@@ -686,7 +686,7 @@ FOR UPDATE
   true,
 );
 
-export const getCurrentJobForUpdateSql: TypedSql<
+export const getLatestChainJobForUpdateSql: TypedSql<
   readonly [NamedParameter<"chain_id", string>],
   [DbJob | undefined]
 > = sql(

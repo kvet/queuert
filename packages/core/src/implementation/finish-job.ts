@@ -78,11 +78,10 @@ export const finishJob = async (
       });
       bufferNotifyChainCompletion(transactionHooks, helpers.notifyAdapter, job);
 
-      const { unblockedJobs, blockerTraceContexts } =
-        await helpers.stateAdapter.scheduleBlockedJobs({
-          txCtx,
-          blockedByChainId: jobChainStartJob.id,
-        });
+      const { unblockedJobs, blockerTraceContexts } = await helpers.stateAdapter.unblockJobs({
+        txCtx,
+        blockedByChainId: jobChainStartJob.id,
+      });
       for (const traceContext of blockerTraceContexts) {
         bufferObservabilityEvent(transactionHooks, () => {
           helpers.observabilityHelper.completeBlockerSpan({

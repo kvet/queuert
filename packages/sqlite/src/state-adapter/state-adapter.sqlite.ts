@@ -25,14 +25,13 @@ import {
   completeJobSql,
   createMigrationTableSql,
   deleteBlockersByChainIdsSql,
-  deleteJobsByChainIdsSql,
+  deleteJobChainsSql,
   findDeduplicatedJobSql,
   findExistingContinuationSql,
   findReadyJobsSql,
   getAppliedMigrationsSql,
   getBlockerChainTraceContextsSql,
   getConnectedChainIdsSql,
-  getCurrentJobForUpdateSql,
   getJobBlockerTraceContextsSql,
   getJobBlockersSql,
   getJobByIdForBlockersSql,
@@ -40,14 +39,15 @@ import {
   getJobChainByIdSql,
   getJobChainsByChainIdsSql,
   getJobForUpdateSql,
+  getLatestChainJobForUpdateSql,
   getNextJobAvailableInMsSql,
   insertJobBlockersSql,
   insertJobSql,
   jobColumnsPrefixedSelect,
   jobColumnsSelect,
   migrations,
+  reapExpiredJobLeaseSql,
   recordMigrationSql,
-  removeExpiredJobLeaseSql,
   renewJobLeaseSql,
   rescheduleJobSql,
   scheduleBlockedJobSql,
@@ -200,11 +200,11 @@ export const createSqliteStateAdapter = async <
   const rawAdapter: StateAdapter<TTxContext, TIdType> = {
     runInTransaction: stateProvider.runInTransaction,
 
-    getJobChainById: async ({ txCtx, jobId }) => {
+    getJobChainById: async ({ txCtx, chainId }) => {
       const [row] = await executeTypedSql({
         txCtx,
         sql: getJobChainByIdSql,
-        params: [jobId, jobId],
+        params: [chainId, chainId],
       });
 
       if (!row) return undefined;
@@ -370,7 +370,7 @@ export const createSqliteStateAdapter = async <
         blockerChainTraceContexts,
       };
     },
-    scheduleBlockedJobs: async ({ txCtx, blockedByChainId }) => {
+    unblockJobs: async ({ txCtx, blockedByChainId }) => {
       const readyJobs = await executeTypedSql({
         txCtx,
         sql: findReadyJobsSql,
@@ -473,15 +473,15 @@ export const createSqliteStateAdapter = async <
 
       return mapDbJobToStateJob(job);
     },
-    removeExpiredJobLease: async ({ txCtx, typeNames, ignoredJobIds }) => {
+    reapExpiredJobLease: async ({ txCtx, typeNames, ignoredJobIds }) => {
       const [job] = await executeTypedSql({
         txCtx,
-        sql: removeExpiredJobLeaseSql,
+        sql: reapExpiredJobLeaseSql,
         params: [JSON.stringify(typeNames), JSON.stringify(ignoredJobIds ?? [])],
       });
       return job ? mapDbJobToStateJob(job) : undefined;
     },
-    deleteJobsByChainIds: async ({ txCtx, chainIds, cascade }) => {
+    deleteJobChains: async ({ txCtx, chainIds, cascade }) => {
       let effectiveChainIds = chainIds;
       if (cascade) {
         const connected = await executeTypedSql({
@@ -518,7 +518,7 @@ export const createSqliteStateAdapter = async <
       });
       await executeTypedSql({
         txCtx,
-        sql: deleteJobsByChainIdsSql,
+        sql: deleteJobChainsSql,
         params: [chainIdsJson],
       });
       return rows.map((row) => {
@@ -539,16 +539,16 @@ export const createSqliteStateAdapter = async <
       });
       return job ? mapDbJobToStateJob(job) : undefined;
     },
-    getCurrentJobForUpdate: async ({ txCtx, chainId }) => {
+    getLatestChainJobForUpdate: async ({ txCtx, chainId }) => {
       const [job] = await executeTypedSql({
         txCtx,
-        sql: getCurrentJobForUpdateSql,
+        sql: getLatestChainJobForUpdateSql,
         params: [chainId],
       });
       return job ? mapDbJobToStateJob(job) : undefined;
     },
 
-    listChains: async ({ txCtx, filter, orderDirection, page }) => {
+    listJobChains: async ({ txCtx, filter, orderDirection, page }) => {
       const cursor = page.cursor ? decodeCreatedAtCursor(page.cursor) : null;
       const conditions: string[] = ["j.chain_index = 0"];
       const params: unknown[] = [];
@@ -562,9 +562,9 @@ export const createSqliteStateAdapter = async <
           `NOT EXISTS (SELECT 1 FROM ${tablePrefix}job_blocker jb WHERE jb.blocked_by_chain_id = j.chain_id)`,
         );
       }
-      if (filter?.id?.length) {
+      if (filter?.chainId?.length) {
         conditions.push("j.chain_id IN (SELECT value FROM json_each(?))");
-        params.push(JSON.stringify(filter.id));
+        params.push(JSON.stringify(filter.chainId));
       }
       if (filter?.jobId?.length) {
         conditions.push(
@@ -649,9 +649,9 @@ export const createSqliteStateAdapter = async <
         conditions.push("j.chain_id IN (SELECT value FROM json_each(?))");
         params.push(JSON.stringify(filter.chainId));
       }
-      if (filter?.id?.length) {
+      if (filter?.jobId?.length) {
         conditions.push("j.id IN (SELECT value FROM json_each(?))");
-        params.push(JSON.stringify(filter.id));
+        params.push(JSON.stringify(filter.jobId));
       }
       if (filter?.from) {
         conditions.push("j.created_at >= ?");

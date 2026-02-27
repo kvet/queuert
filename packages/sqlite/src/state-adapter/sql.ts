@@ -607,7 +607,7 @@ LIMIT 1
   true,
 );
 
-export const removeExpiredJobLeaseSql: TypedSql<
+export const reapExpiredJobLeaseSql: TypedSql<
   readonly [
     NamedParameter<"type_names_json", string>,
     NamedParameter<"ignored_job_ids_json", string>,
@@ -701,16 +701,14 @@ WHERE j.id = j.chain_id
   true,
 );
 
-export const deleteJobsByChainIdsSql: TypedSql<
-  readonly [NamedParameter<"chain_ids_json", string>],
-  []
-> = sql(
-  /* sql */ `
+export const deleteJobChainsSql: TypedSql<readonly [NamedParameter<"chain_ids_json", string>], []> =
+  sql(
+    /* sql */ `
 DELETE FROM {{table_prefix}}job
 WHERE chain_id IN (SELECT value FROM json_each(?))
 `,
-  false,
-);
+    false,
+  );
 
 export const getJobForUpdateSql: TypedSql<
   readonly [NamedParameter<"id", string>],
@@ -724,7 +722,7 @@ WHERE id = ?
   true,
 );
 
-export const getCurrentJobForUpdateSql: TypedSql<
+export const getLatestChainJobForUpdateSql: TypedSql<
   readonly [NamedParameter<"chain_id", string>],
   [DbJob | undefined]
 > = sql(

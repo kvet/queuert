@@ -18,7 +18,7 @@ export const handleJobsList = async (
       status,
       typeName,
       chainId: chainId ? [chainId] : undefined,
-      id: id ? [id] : undefined,
+      jobId: id ? [id] : undefined,
     },
     orderDirection: "desc",
     page: { cursor, limit },

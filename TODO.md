@@ -9,7 +9,6 @@
   - [REF] Fix job detail: fetches all chain jobs to find continuation — use targeted query
   - [REF] Fix stale cursor race condition on filter change in ChainList/JobList
 - [TASK,COMPLEX] Job cleanup utility (see [Plugins](docs/design/plugins.md), [Cleanup Plugin](docs/design/cleanup-plugin.md))
-- [REF] Review state adapter method naming for clarity and consistency
 - [TASK] Review all public methods and types for naming, consistency, and clarity; add inline docs
 - [EPIC] Prepare 0.3 release
 

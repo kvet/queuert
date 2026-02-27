@@ -26,7 +26,7 @@ const worker = createInProcessWorker({ ..., plugins: [cleanup] });
 A standalone function that performs one full cleanup pass:
 
 1. Query up to `batchSize` completed chains where `completedAt` is older than the threshold
-2. Delete the batch via `deleteJobsByChainIds`
+2. Delete the batch via `deleteJobChains`
 3. Repeat until no matching chains remain
 4. Return summary (total chains deleted, total jobs deleted)
 
@@ -34,7 +34,7 @@ This utility is usable independently of the plugin system — it can be called d
 
 **Batching rationale**: Deleting all matching chains in one transaction would hold locks for too long and risk timeouts. Iterating in fixed-size batches keeps each transaction short and predictable.
 
-**Blocker safety**: Only chains where all jobs are `completed` are eligible. The existing blocker safety check in `deleteJobsByChainIds` ensures chains still referenced as blockers by surviving incomplete chains are skipped, not deleted.
+**Blocker safety**: Only chains where all jobs are `completed` are eligible. The existing blocker safety check in `deleteJobChains` ensures chains still referenced as blockers by surviving incomplete chains are skipped, not deleted.
 
 ### Self-Scheduling Job Chain
 

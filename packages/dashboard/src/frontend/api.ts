@@ -18,7 +18,7 @@ export type PageResult<T> = {
   nextCursor: string | null;
 };
 
-export const listChains = async (
+export const listJobChains = async (
   params: {
     typeName?: string;
     status?: string;

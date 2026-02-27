@@ -1,6 +1,6 @@
 import { For, Show, createResource, createSignal } from "solid-js";
 import { useNavigate, useSearchParams } from "@solidjs/router";
-import { type Job, listChains } from "../api.js";
+import { type Job, listJobChains } from "../api.js";
 import { StatusBadge } from "./StatusBadge.js";
 import { TimeAgo } from "./TimeAgo.js";
 
@@ -26,7 +26,7 @@ export function ChainList() {
       rootOnly: rootOnly(),
     }),
     async (params) => {
-      const result = await listChains({ ...params, limit: 25 });
+      const result = await listJobChains({ ...params, limit: 25 });
       setItems(result.items);
       setCursor(result.nextCursor);
       return result;
@@ -36,7 +36,7 @@ export function ChainList() {
   const loadMore = async () => {
     const c = cursor();
     if (!c) return;
-    const result = await listChains({
+    const result = await listJobChains({
       typeName: typeName(),
       status: status(),
       id: id(),

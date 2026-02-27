@@ -141,7 +141,7 @@ EXTERNAL span (e.g., HTTP request)
 
 1. **PRODUCER created and ended** in `startJobChain` when the job has blockers — one PRODUCER span per blocker, as a child of the job's PRODUCER span, with a link to the blocker chain's trace context
 2. **Persisted** — the PRODUCER span context is stored in the `job_blocker` table (`trace_context` column) so the CONSUMER can be created by another process
-3. **CONSUMER created** when `scheduleBlockedJobs` detects the blocker chain has completed — the PRODUCER span context is read from `job_blocker` and a CONSUMER span is created as its child
+3. **CONSUMER created** when `unblockJobs` detects the blocker chain has completed — the PRODUCER span context is read from `job_blocker` and a CONSUMER span is created as its child
 
 ## Continuation Relationships
 

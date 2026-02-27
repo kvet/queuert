@@ -24,21 +24,21 @@ import {
   completeJobSql,
   createJobSql,
   createMigrationTableSql,
-  deleteJobsByChainIdsSql,
+  deleteJobChainsSql,
   getAppliedMigrationsSql,
   getConnectedChainIdsSql,
-  getCurrentJobForUpdateSql,
   getJobBlockersSql,
   getJobByIdSql,
   getJobChainByIdSql,
   getJobForUpdateSql,
+  getLatestChainJobForUpdateSql,
   getNextJobAvailableInMsSql,
   migrations,
+  reapExpiredJobLeaseSql,
   recordMigrationSql,
-  removeExpiredJobLeaseSql,
   renewJobLeaseSql,
   rescheduleJobSql,
-  scheduleBlockedJobsSql,
+  unblockJobsSql,
 } from "./sql.js";
 
 const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
@@ -124,11 +124,11 @@ export const createPgStateAdapter = async <
   const rawAdapter: StateAdapter<TTxContext, TIdType> = {
     runInTransaction: stateProvider.runInTransaction,
 
-    getJobChainById: async ({ txCtx, jobId }) => {
+    getJobChainById: async ({ txCtx, chainId }) => {
       const [jobChain] = await executeTypedSql({
         txCtx,
         sql: getJobChainByIdSql,
-        params: [jobId],
+        params: [chainId],
       });
 
       return jobChain
@@ -199,10 +199,10 @@ export const createPgStateAdapter = async <
         blockerChainTraceContexts: result.blocker_chain_trace_contexts,
       };
     },
-    scheduleBlockedJobs: async ({ txCtx, blockedByChainId }) => {
+    unblockJobs: async ({ txCtx, blockedByChainId }) => {
       const [result] = await executeTypedSql({
         txCtx,
-        sql: scheduleBlockedJobsSql,
+        sql: unblockJobsSql,
         params: [blockedByChainId],
       });
       return {
@@ -269,15 +269,15 @@ export const createPgStateAdapter = async <
 
       return mapDbJobToStateJob(job);
     },
-    removeExpiredJobLease: async ({ txCtx, typeNames, ignoredJobIds }) => {
+    reapExpiredJobLease: async ({ txCtx, typeNames, ignoredJobIds }) => {
       const [job] = await executeTypedSql({
         txCtx,
-        sql: removeExpiredJobLeaseSql,
+        sql: reapExpiredJobLeaseSql,
         params: [typeNames, ignoredJobIds ?? []],
       });
       return job ? mapDbJobToStateJob(job) : undefined;
     },
-    deleteJobsByChainIds: async ({ txCtx, chainIds, cascade }) => {
+    deleteJobChains: async ({ txCtx, chainIds, cascade }) => {
       let effectiveChainIds = chainIds;
       if (cascade) {
         const connected = await executeTypedSql({
@@ -303,7 +303,7 @@ export const createPgStateAdapter = async <
       }
       const rows = await executeTypedSql({
         txCtx,
-        sql: deleteJobsByChainIdsSql,
+        sql: deleteJobChainsSql,
         params: [effectiveChainIds],
       });
       return rows.map((row) => [
@@ -321,16 +321,16 @@ export const createPgStateAdapter = async <
       });
       return job ? mapDbJobToStateJob(job) : undefined;
     },
-    getCurrentJobForUpdate: async ({ txCtx, chainId }) => {
+    getLatestChainJobForUpdate: async ({ txCtx, chainId }) => {
       const [job] = await executeTypedSql({
         txCtx,
-        sql: getCurrentJobForUpdateSql,
+        sql: getLatestChainJobForUpdateSql,
         params: [chainId],
       });
       return job ? mapDbJobToStateJob(job) : undefined;
     },
 
-    listChains: async ({ txCtx, filter, orderDirection, page }) => {
+    listJobChains: async ({ txCtx, filter, orderDirection, page }) => {
       const cursor = page.cursor ? decodeCreatedAtCursor(page.cursor) : null;
       const conditions: string[] = ["root_job.chain_index = 0"];
       const params: unknown[] = [];
@@ -346,9 +346,9 @@ export const createPgStateAdapter = async <
           `NOT EXISTS (SELECT 1 FROM ${schema}.${tablePrefix}job_blocker jb WHERE jb.blocked_by_chain_id = root_job.chain_id)`,
         );
       }
-      if (filter?.id?.length) {
+      if (filter?.chainId?.length) {
         conditions.push(`root_job.chain_id = ANY($${p}::${idType}[])`);
-        params.push(filter.id);
+        params.push(filter.chainId);
         p++;
       }
       if (filter?.jobId?.length) {
@@ -438,9 +438,9 @@ export const createPgStateAdapter = async <
         params.push(filter.chainId);
         p++;
       }
-      if (filter?.id?.length) {
+      if (filter?.jobId?.length) {
         conditions.push(`j.id = ANY($${p}::${idType}[])`);
-        params.push(filter.id);
+        params.push(filter.jobId);
         p++;
       }
       if (filter?.from) {

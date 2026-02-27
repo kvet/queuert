@@ -32,7 +32,7 @@ npm install @queuert/dashboard
 
 **Peer dependencies:** `queuert`
 
-The state adapter must implement the dashboard listing methods (`listChains`, `listJobs`, `listBlockedJobs`). The PostgreSQL, SQLite, and in-memory adapters all support these.
+The state adapter must implement the dashboard listing methods (`listJobChains`, `listJobs`, `listBlockedJobs`). The PostgreSQL, SQLite, and in-memory adapters all support these.
 
 ## Quick Start
 

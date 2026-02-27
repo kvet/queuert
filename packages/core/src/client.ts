@@ -191,7 +191,7 @@ export const createClient = async <
     > => {
       const { chainIds, cascade, transactionHooks: _transactionHooks, ...txCtx } = options;
 
-      const deletedChainPairs = await helpers.stateAdapter.deleteJobsByChainIds({
+      const deletedChainPairs = await helpers.stateAdapter.deleteJobChains({
         txCtx,
         chainIds,
         cascade,
@@ -226,7 +226,7 @@ export const createClient = async <
       CompleteJobChainResult<TStateAdapter, TJobTypeDefinitions, TChainTypeName, TCompleteReturn>
     > => {
       const { id, typeName, complete: completeCallback, transactionHooks, ...txCtx } = options;
-      const currentJob = await helpers.stateAdapter.getCurrentJobForUpdate({
+      const currentJob = await helpers.stateAdapter.getLatestChainJobForUpdate({
         txCtx,
         chainId: id,
       });
@@ -310,7 +310,7 @@ export const createClient = async <
 
       const updatedChain = await helpers.stateAdapter.getJobChainById({
         txCtx,
-        jobId: id,
+        chainId: id,
       });
 
       if (!updatedChain) {
@@ -345,7 +345,7 @@ export const createClient = async <
       let typeValidated = !typeName;
 
       const checkChain = async () => {
-        const chain = await helpers.stateAdapter.getJobChainById({ jobId: id });
+        const chain = await helpers.stateAdapter.getJobChainById({ chainId: id });
         if (!chain) {
           throw new JobNotFoundError(`Job chain with id ${id} not found`);
         }
@@ -429,7 +429,7 @@ export const createClient = async <
       const txCtx = normalizeTxCtx(rest);
       const jobChainPair = await helpers.stateAdapter.getJobChainById({
         txCtx,
-        jobId: id,
+        chainId: id,
       });
 
       if (!jobChainPair) return null;
@@ -491,13 +491,13 @@ export const createClient = async <
     ): Promise<Page<JobChainOf<TJobId, TJobTypeDefinitions, TChainTypeName>>> => {
       const { filter, orderDirection = "desc", cursor, limit = 50, ...rest } = options;
       const txCtx = normalizeTxCtx(rest);
-      const result = await helpers.stateAdapter.listChains({
+      const result = await helpers.stateAdapter.listJobChains({
         txCtx,
         filter: {
           typeName: filter?.typeName,
           status: filter?.status,
           rootOnly: filter?.root,
-          id: filter?.id,
+          chainId: filter?.id,
           jobId: filter?.jobId,
           from: filter?.from,
           to: filter?.to,
@@ -539,7 +539,7 @@ export const createClient = async <
         txCtx,
         filter: {
           typeName: filter?.typeName,
-          id: filter?.id,
+          jobId: filter?.id,
           chainId: filter?.jobChainId,
           status: filter?.status,
           from: filter?.from,
@@ -572,7 +572,7 @@ export const createClient = async <
       const txCtx = normalizeTxCtx(rest);
 
       if (typeName) {
-        const chain = await helpers.stateAdapter.getJobChainById({ txCtx, jobId: jobChainId });
+        const chain = await helpers.stateAdapter.getJobChainById({ txCtx, chainId: jobChainId });
         if (chain && chain[0].chainTypeName !== typeName) {
           throw new JobTypeMismatchError(
             `Expected chain ${String(jobChainId)} to have type "${typeName}" but found "${chain[0].chainTypeName}"`,
@@ -655,7 +655,7 @@ export const createClient = async <
       const txCtx = normalizeTxCtx(rest);
 
       if (typeName) {
-        const chain = await helpers.stateAdapter.getJobChainById({ txCtx, jobId: jobChainId });
+        const chain = await helpers.stateAdapter.getJobChainById({ txCtx, chainId: jobChainId });
         if (chain && chain[0].chainTypeName !== typeName) {
           throw new JobTypeMismatchError(
             `Expected chain ${String(jobChainId)} to have type "${typeName}" but found "${chain[0].chainTypeName}"`,

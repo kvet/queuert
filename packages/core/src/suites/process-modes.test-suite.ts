@@ -90,7 +90,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
           expect.objectContaining({ name: "user-completion" }),
           expect.objectContaining({ name: "completeJob" }),
           expect.objectContaining({ name: "getJobById" }), // TODO: why do we need it?
-          expect.objectContaining({ name: "scheduleBlockedJobs" }), // TODO: shouldn't it be the part of completeJob?
+          expect.objectContaining({ name: "unblockJobs" }), // TODO: shouldn't it be the part of completeJob?
         ],
       }),
       expect.objectContaining({
@@ -186,7 +186,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
           expect.objectContaining({ name: "user-completion" }),
           expect.objectContaining({ name: "completeJob" }),
           expect.objectContaining({ name: "getJobById" }), // TODO: why do we need it?
-          expect.objectContaining({ name: "scheduleBlockedJobs" }), // TODO: shouldn't it be the part of completeJob?
+          expect.objectContaining({ name: "unblockJobs" }), // TODO: shouldn't it be the part of completeJob?
         ],
       }),
     ];
@@ -283,7 +283,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
           expect.objectContaining({ name: "user-completion" }),
           expect.objectContaining({ name: "completeJob" }),
           expect.objectContaining({ name: "getJobById" }), // TODO: why do we need it?
-          expect.objectContaining({ name: "scheduleBlockedJobs" }), // TODO: shouldn't it be the part of completeJob?
+          expect.objectContaining({ name: "unblockJobs" }), // TODO: shouldn't it be the part of completeJob?
         ],
       }),
     ];
@@ -376,7 +376,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
           expect.objectContaining({ name: "user-completion" }),
           expect.objectContaining({ name: "completeJob" }),
           expect.objectContaining({ name: "getJobById" }), // TODO: why do we need it?
-          expect.objectContaining({ name: "scheduleBlockedJobs" }), // TODO: shouldn't it be the part of completeJob?
+          expect.objectContaining({ name: "unblockJobs" }), // TODO: shouldn't it be the part of completeJob?
         ],
       }),
     ];
@@ -463,7 +463,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
           expect.objectContaining({ name: "user-completion" }),
           expect.objectContaining({ name: "completeJob" }),
           expect.objectContaining({ name: "getJobById" }), // TODO: why do we need it?
-          expect.objectContaining({ name: "scheduleBlockedJobs" }), // TODO: shouldn't it be the part of completeJob?
+          expect.objectContaining({ name: "unblockJobs" }), // TODO: shouldn't it be the part of completeJob?
         ],
       }),
       expect.objectContaining({
@@ -549,7 +549,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
           expect.objectContaining({ name: "user-completion" }),
           expect.objectContaining({ name: "completeJob" }),
           expect.objectContaining({ name: "getJobById" }), // TODO: why do we need it?
-          expect.objectContaining({ name: "scheduleBlockedJobs" }), // TODO: shouldn't it be the part of completeJob?
+          expect.objectContaining({ name: "unblockJobs" }), // TODO: shouldn't it be the part of completeJob?
         ],
       }),
       expect.objectContaining({
