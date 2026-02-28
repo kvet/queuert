@@ -45,6 +45,8 @@ All StateAdapter methods must complete in a **single database round-trip**, wher
 
 This principle ensures predictable performance and proper atomicity. Use batch SQL (multi-row INSERT, UPDATE with IN/ANY clause, CTEs) rather than loops.
 
+**SQLite exception**: SQLite does not support writeable CTEs with RETURNING in the same way as PostgreSQL. Operations like `addJobBlockers` and `deleteJobChains` use multiple sequential queries within a single transaction instead of a single CTE. This is safe under SQLite's exclusive transaction locking model (which serializes all writes), but results in more round-trips per operation. This is an accepted trade-off for SQLite support.
+
 ### Context Architecture
 
 The `StateAdapter` type accepts two generic parameters:

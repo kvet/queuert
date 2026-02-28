@@ -92,7 +92,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
   };
 
   describe("getJobChain", () => {
-    it("getJobChain returns null for nonexistent chain", async ({
+    it("getJobChain returns undefined for nonexistent chain", async ({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -113,7 +113,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         id: "00000000-0000-0000-0000-000000000000",
       });
 
-      expect(chain).toBeNull();
+      expect(chain).toBeUndefined();
     });
 
     it("getJobChain returns chain by id", async ({
@@ -212,7 +212,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
   });
 
   describe("getJob", () => {
-    it("getJob returns null for nonexistent job", async ({
+    it("getJob returns undefined for nonexistent job", async ({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -233,7 +233,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         id: "00000000-0000-0000-0000-000000000000",
       });
 
-      expect(job).toBeNull();
+      expect(job).toBeUndefined();
     });
 
     it("getJob returns job by id", async ({

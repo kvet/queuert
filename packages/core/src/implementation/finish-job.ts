@@ -1,5 +1,5 @@
 import { type Job } from "../entities/job.js";
-import { JobNotFoundError } from "../errors.js";
+import { JobChainNotFoundError } from "../errors.js";
 import { type TransactionHooks } from "../transaction-hooks.js";
 import { bufferNotifyChainCompletion, bufferNotifyJobScheduled } from "../helpers/notify-hooks.js";
 import {
@@ -69,7 +69,9 @@ export const finishJob = async (
       });
 
       if (!jobChainStartJob) {
-        throw new JobNotFoundError(`Job chain with id ${job.chainId} not found`);
+        throw new JobChainNotFoundError(`Job chain with id ${job.chainId} not found`, {
+          chainId: job.chainId,
+        });
       }
 
       bufferObservabilityEvent(transactionHooks, () => {

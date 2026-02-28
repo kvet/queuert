@@ -254,13 +254,18 @@ export const runJobProcess = async ({
   const refetchJobForUpdate = async (txCtx: BaseTxContext) => {
     if (abortController.signal.aborted && abortController.signal.reason) {
       if (abortController.signal.reason === "already_completed") {
-        throw new JobAlreadyCompletedError("Job already completed (signal aborted)");
+        throw new JobAlreadyCompletedError("Job already completed (signal aborted)", {
+          jobId: job.id,
+        });
       }
       if (abortController.signal.reason === "not_found") {
-        throw new JobNotFoundError("Job not found (signal aborted)");
+        throw new JobNotFoundError("Job not found (signal aborted)", { jobId: job.id });
       }
       if (abortController.signal.reason === "taken_by_another_worker") {
-        throw new JobTakenByAnotherWorkerError("Job taken by another worker (signal aborted)");
+        throw new JobTakenByAnotherWorkerError("Job taken by another worker (signal aborted)", {
+          jobId: job.id,
+          workerId,
+        });
       }
       throw new Error(`Job processing aborted: ${abortController.signal.reason}`);
     }
@@ -290,13 +295,18 @@ export const runJobProcess = async ({
   ): Promise<T> => {
     if (abortController.signal.aborted && abortController.signal.reason) {
       if (abortController.signal.reason === "already_completed") {
-        throw new JobAlreadyCompletedError("Job already completed (signal aborted)");
+        throw new JobAlreadyCompletedError("Job already completed (signal aborted)", {
+          jobId: job.id,
+        });
       }
       if (abortController.signal.reason === "not_found") {
-        throw new JobNotFoundError("Job not found (signal aborted)");
+        throw new JobNotFoundError("Job not found (signal aborted)", { jobId: job.id });
       }
       if (abortController.signal.reason === "taken_by_another_worker") {
-        throw new JobTakenByAnotherWorkerError("Job taken by another worker (signal aborted)");
+        throw new JobTakenByAnotherWorkerError("Job taken by another worker (signal aborted)", {
+          jobId: job.id,
+          workerId,
+        });
       }
       throw new Error(`Job processing aborted: ${abortController.signal.reason}`);
     }

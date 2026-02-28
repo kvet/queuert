@@ -770,15 +770,15 @@ Job chains can be deleted using `deleteJobChains`. All jobs in the chain (entry 
 
 ```ts
 await client.deleteJobChains({
-  chainIds: [chain.id],
+  ids: [chain.id],
 });
 ```
 
 If a chain is referenced as a blocker by another chain, deletion is rejected unless both chains are deleted together:
 
 ```ts
-await client.deleteJobChains({ chainIds: [blockerChain.id] }); // throws
-await client.deleteJobChains({ chainIds: [mainChain.id, blockerChain.id] }); // ok
+await client.deleteJobChains({ ids: [blockerChain.id] }); // throws
+await client.deleteJobChains({ ids: [mainChain.id, blockerChain.id] }); // ok
 ```
 
 ### Cascade Deletion
@@ -787,7 +787,7 @@ Use `cascade: true` to automatically resolve and delete transitive dependencies 
 
 ```ts
 await client.deleteJobChains({
-  chainIds: [mainChain.id],
+  ids: [mainChain.id],
   cascade: true,
 });
 ```

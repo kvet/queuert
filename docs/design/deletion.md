@@ -6,7 +6,7 @@
 
 ## What Gets Deleted
 
-Given a list of `chainIds`, the operation deletes:
+Given a list of `ids`, the operation deletes:
 
 1. **All jobs in each chain** — every job where `job.chainId` matches a provided ID (root + continuations)
 2. **Blocker references to those chains** — blocker entries pointing at deleted chains are cleaned up from surviving jobs
@@ -18,8 +18,8 @@ Before deleting, the system checks whether any **external** chain depends on the
 ```
 Chain A (blocker) ──→ Chain B (blocked)
 
-deleteJobChains({ chainIds: [A] })    // ❌ BlockerReferenceError — B depends on A
-deleteJobChains({ chainIds: [A, B] }) // ✅ Both in deletion set — no external refs
+deleteJobChains({ ids: [A] })    // ❌ BlockerReferenceError — B depends on A
+deleteJobChains({ ids: [A, B] }) // ✅ Both in deletion set — no external refs
 ```
 
 This prevents orphaning blocked chains that would never unblock.
@@ -57,8 +57,8 @@ Cascade resolves dependencies **downward only** — from a chain, it finds all c
 ```
 A ← B ← C   (C depends on B, B depends on A)
 
-deleteJobChains({ chainIds: [C], cascade: true })  // ✅ Deletes C, B, A
-deleteJobChains({ chainIds: [A], cascade: true })  // ❌ BlockerReferenceError — B depends on A
+deleteJobChains({ ids: [C], cascade: true })  // ✅ Deletes C, B, A
+deleteJobChains({ ids: [A], cascade: true })  // ❌ BlockerReferenceError — B depends on A
 ```
 
 The blocker safety check still applies to the expanded set: if any chain in the resolved set is referenced as a blocker by an external chain, the operation throws `BlockerReferenceError`.
@@ -67,14 +67,14 @@ The blocker safety check still applies to the expanded set: if any chain in the 
 
 ```typescript
 client.deleteJobChains({
-  chainIds: [chainId],
+  ids: [chainId],
   cascade: true,
   transactionHooks,
   ...txCtx,
 });
 ```
 
-- `cascade: true` — expand `chainIds` to include transitive dependencies (downward), then delete all. The blocker safety check runs on the expanded set.
+- `cascade: true` — expand `ids` to include transitive dependencies (downward), then delete all. The blocker safety check runs on the expanded set.
 - `cascade: false` (default) — current behavior unchanged.
 
 ### Considerations

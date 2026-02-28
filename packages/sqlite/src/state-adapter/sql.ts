@@ -418,15 +418,15 @@ HAVING MIN(CASE WHEN blocker_status = 'completed' THEN 1 ELSE 0 END) = 1
   true,
 );
 
-export const scheduleBlockedJobSql: TypedSql<
-  readonly [NamedParameter<"job_id", string>],
-  [DbJob | undefined]
+export const scheduleBlockedJobsSql: TypedSql<
+  readonly [NamedParameter<"job_ids_json", string>],
+  DbJob[]
 > = sql(
   /* sql */ `
 UPDATE {{table_prefix}}job
 SET scheduled_at = datetime('now', 'subsec'),
     status = 'pending'
-WHERE id = ? AND status = 'blocked'
+WHERE id IN (SELECT value FROM json_each(?)) AND status = 'blocked'
 RETURNING *
 `,
   true,

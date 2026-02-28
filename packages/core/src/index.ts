@@ -28,6 +28,7 @@ export {
   BlockerReferenceError,
   HookNotRegisteredError,
   JobAlreadyCompletedError,
+  JobChainNotFoundError,
   JobNotFoundError,
   JobTakenByAnotherWorkerError,
   JobTypeMismatchError,

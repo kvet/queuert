@@ -38,7 +38,7 @@ import {
 import { type CreatedJob, type Job, type JobStatus, mapStateJobToJob } from "./entities/job.js";
 import {
   JobAlreadyCompletedError,
-  JobNotFoundError,
+  JobChainNotFoundError,
   JobTypeMismatchError,
   WaitChainTimeoutError,
 } from "./errors.js";
@@ -178,7 +178,7 @@ export const createClient = async <
     // TODO: use transactionHooks to buffer post-delete side effects (e.g., observability events)
     deleteJobChains: async (
       options: {
-        chainIds: TJobId[];
+        ids: TJobId[];
         cascade?: boolean;
         transactionHooks: TransactionHooks;
       } & GetStateAdapterTxContext<TStateAdapter>,
@@ -189,11 +189,11 @@ export const createClient = async <
         keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string
       >[]
     > => {
-      const { chainIds, cascade, transactionHooks: _transactionHooks, ...txCtx } = options;
+      const { ids, cascade, transactionHooks: _transactionHooks, ...txCtx } = options;
 
       const deletedChainPairs = await helpers.stateAdapter.deleteJobChains({
         txCtx,
-        chainIds,
+        chainIds: ids,
         cascade,
       });
 
@@ -232,13 +232,15 @@ export const createClient = async <
       });
 
       if (!currentJob) {
-        throw new JobNotFoundError(`Job chain with id ${id} not found`);
+        throw new JobChainNotFoundError(`Job chain with id ${id} not found`, {
+          chainId: id as string,
+        });
       }
 
       if (currentJob.chainTypeName !== typeName) {
         throw new JobTypeMismatchError(
           `Expected chain ${String(id)} to have type "${typeName}" but found "${currentJob.chainTypeName}"`,
-          { cause: { expectedTypeName: typeName, actualTypeName: currentJob.chainTypeName } },
+          { expectedTypeName: typeName, actualTypeName: currentJob.chainTypeName },
         );
       }
 
@@ -258,7 +260,7 @@ export const createClient = async <
         if (job.status === "completed") {
           throw new JobAlreadyCompletedError(
             `Cannot complete job ${job.id}: job is already completed`,
-            { cause: { jobId: job.id } },
+            { jobId: job.id },
           );
         }
 
@@ -314,7 +316,9 @@ export const createClient = async <
       });
 
       if (!updatedChain) {
-        throw new JobNotFoundError(`Job chain with id ${id} not found after complete`);
+        throw new JobChainNotFoundError(`Job chain with id ${id} not found after complete`, {
+          chainId: id as string,
+        });
       }
 
       return mapStateJobPairToJobChain(updatedChain) as CompleteJobChainResult<
@@ -347,19 +351,16 @@ export const createClient = async <
       const checkChain = async () => {
         const chain = await helpers.stateAdapter.getJobChainById({ chainId: id });
         if (!chain) {
-          throw new JobNotFoundError(`Job chain with id ${id} not found`);
+          throw new JobChainNotFoundError(`Job chain with id ${id} not found`, {
+            chainId: id as string,
+          });
         }
 
         if (!typeValidated) {
           if (chain[0].chainTypeName !== typeName) {
             throw new JobTypeMismatchError(
               `Expected chain ${String(id)} to have type "${typeName}" but found "${chain[0].chainTypeName}"`,
-              {
-                cause: {
-                  expectedTypeName: typeName!,
-                  actualTypeName: chain[0].chainTypeName,
-                },
-              },
+              { expectedTypeName: typeName!, actualTypeName: chain[0].chainTypeName },
             );
           }
           typeValidated = true;
@@ -409,7 +410,7 @@ export const createClient = async <
           signal?.aborted
             ? `Wait for job chain ${id} was aborted`
             : `Timeout waiting for job chain ${id} to complete after ${timeoutMs}ms`,
-          { cause: { chainId: id, timeoutMs } },
+          { chainId: id as string, timeoutMs, cause: signal?.reason },
         );
       } finally {
         await dispose();
@@ -424,7 +425,7 @@ export const createClient = async <
         typeName?: TChainTypeName;
         id: TJobId;
       } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
-    ): Promise<JobChainOf<TJobId, TJobTypeDefinitions, TChainTypeName> | null> => {
+    ): Promise<JobChainOf<TJobId, TJobTypeDefinitions, TChainTypeName> | undefined> => {
       const { id, typeName, ...rest } = options;
       const txCtx = normalizeTxCtx(rest);
       const jobChainPair = await helpers.stateAdapter.getJobChainById({
@@ -432,12 +433,12 @@ export const createClient = async <
         chainId: id,
       });
 
-      if (!jobChainPair) return null;
+      if (!jobChainPair) return undefined;
 
       if (typeName && jobChainPair[0].chainTypeName !== typeName) {
         throw new JobTypeMismatchError(
           `Expected chain ${String(id)} to have type "${typeName}" but found "${jobChainPair[0].chainTypeName}"`,
-          { cause: { expectedTypeName: typeName, actualTypeName: jobChainPair[0].chainTypeName } },
+          { expectedTypeName: typeName, actualTypeName: jobChainPair[0].chainTypeName },
         );
       }
 
@@ -455,17 +456,17 @@ export const createClient = async <
         typeName?: TJobTypeName;
         id: TJobId;
       } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
-    ): Promise<JobOf<TJobId, TJobTypeDefinitions, TJobTypeName> | null> => {
+    ): Promise<JobOf<TJobId, TJobTypeDefinitions, TJobTypeName> | undefined> => {
       const { id, typeName, ...rest } = options;
       const txCtx = normalizeTxCtx(rest);
       const job = await helpers.stateAdapter.getJobById({ txCtx, jobId: id });
 
-      if (!job) return null;
+      if (!job) return undefined;
 
       if (typeName && job.typeName !== typeName) {
         throw new JobTypeMismatchError(
           `Expected job ${String(id)} to have type "${typeName}" but found "${job.typeName}"`,
-          { cause: { expectedTypeName: typeName, actualTypeName: job.typeName } },
+          { expectedTypeName: typeName, actualTypeName: job.typeName },
         );
       }
 
@@ -576,7 +577,7 @@ export const createClient = async <
         if (chain && chain[0].chainTypeName !== typeName) {
           throw new JobTypeMismatchError(
             `Expected chain ${String(jobChainId)} to have type "${typeName}" but found "${chain[0].chainTypeName}"`,
-            { cause: { expectedTypeName: typeName, actualTypeName: chain[0].chainTypeName } },
+            { expectedTypeName: typeName, actualTypeName: chain[0].chainTypeName },
           );
         }
       }
@@ -611,7 +612,7 @@ export const createClient = async <
         if (job && job.typeName !== typeName) {
           throw new JobTypeMismatchError(
             `Expected job ${String(jobId)} to have type "${typeName}" but found "${job.typeName}"`,
-            { cause: { expectedTypeName: typeName, actualTypeName: job.typeName } },
+            { expectedTypeName: typeName, actualTypeName: job.typeName },
           );
         }
       }
@@ -659,7 +660,7 @@ export const createClient = async <
         if (chain && chain[0].chainTypeName !== typeName) {
           throw new JobTypeMismatchError(
             `Expected chain ${String(jobChainId)} to have type "${typeName}" but found "${chain[0].chainTypeName}"`,
-            { cause: { expectedTypeName: typeName, actualTypeName: chain[0].chainTypeName } },
+            { expectedTypeName: typeName, actualTypeName: chain[0].chainTypeName },
           );
         }
       }

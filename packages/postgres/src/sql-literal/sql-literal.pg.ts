@@ -36,7 +36,7 @@
  *
  * @throws {Error} If string contains null bytes (PostgreSQL rejects them in text types)
  */
-export function pgLiteral(value: unknown): string {
+export const pgLiteral = (value: unknown): string => {
   // 1. Handle null/undefined
   if (value === null || value === undefined) {
     return "NULL";
@@ -105,7 +105,7 @@ export function pgLiteral(value: unknown): string {
   }
 
   throw new Error("Unable to convert value to PostgreSQL literal");
-}
+};
 
 /**
  * Escapes a string value for PostgreSQL.
@@ -113,7 +113,7 @@ export function pgLiteral(value: unknown): string {
  * - If backslashes present, doubles them and prefixes with E
  * - Rejects null bytes (PostgreSQL cannot store them in text types)
  */
-function escapeString(str: string): string {
+const escapeString = (str: string): string => {
   // Check for null bytes (PostgreSQL rejects them)
   if (str.includes("\0")) {
     throw new Error(
@@ -144,15 +144,15 @@ function escapeString(str: string): string {
   }
 
   return result;
-}
+};
 
 /**
  * Converts a Uint8Array to a lowercase hex string.
  */
-function bufferToHex(buffer: Uint8Array): string {
+const bufferToHex = (buffer: Uint8Array): string => {
   let hex = "";
   for (const byte of buffer) {
     hex += byte.toString(16).padStart(2, "0");
   }
   return hex;
-}
+};

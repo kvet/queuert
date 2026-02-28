@@ -67,11 +67,10 @@ queuert.{component}.{operation}[.{suboperation}]
 
 ### Adapter Health
 
-| Metric                                   | Description                                | Attributes                  |
-| ---------------------------------------- | ------------------------------------------ | --------------------------- |
-| `queuert.state_adapter.error`            | State adapter operation failed             | `operation`                 |
-| `queuert.notify_adapter.error`           | Notify adapter operation failed            | `operation`                 |
-| `queuert.notify_adapter.context_absence` | Missing notify context during job creation | `typeName`, `chainTypeName` |
+| Metric                         | Description                     | Attributes  |
+| ------------------------------ | ------------------------------- | ----------- |
+| `queuert.state_adapter.error`  | State adapter operation failed  | `operation` |
+| `queuert.notify_adapter.error` | Notify adapter operation failed | `operation` |
 
 ## Histograms
 

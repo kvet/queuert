@@ -12,7 +12,7 @@ SQLite state adapter for [Queuert](https://github.com/kvet/queuert) - a TypeScri
 
 ## What does this do?
 
-[Queuert](https://github.com/kvet/queuert) stores job state in your database. This adapter lets you use **SQLite** as your job storage backend, using [better-sqlite3](https://github.com/WiseLibs/better-sqlite3) under the hood.
+[Queuert](https://github.com/kvet/queuert) stores job state in your database. This adapter lets you use **SQLite** as your job storage backend. You provide a `SqliteStateProvider` implementation for your chosen SQLite client library (better-sqlite3, sqlite3, Drizzle, Prisma, Kysely, etc.).
 
 The state adapter handles:
 

@@ -51,7 +51,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
         client.deleteJobChains({
           ...txCtx,
           transactionHooks,
-          chainIds: [jobChain.id],
+          ids: [jobChain.id],
         }),
       ),
     );
@@ -70,7 +70,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
         id: jobChain.id,
         typeName: "test",
       });
-      expect(fetchedJobChain).toBeNull();
+      expect(fetchedJobChain).toBeUndefined();
     });
   });
 
@@ -136,7 +136,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
         client.deleteJobChains({
           ...txCtx,
           transactionHooks,
-          chainIds: [jobChain.id],
+          ids: [jobChain.id],
         }),
       ),
     );
@@ -217,7 +217,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
           client.deleteJobChains({
             ...txCtx,
             transactionHooks,
-            chainIds: [jobChain.id],
+            ids: [jobChain.id],
           }),
         ),
       );
@@ -292,7 +292,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
           client.deleteJobChains({
             ...txCtx,
             transactionHooks,
-            chainIds: [blockerChain!.id],
+            ids: [blockerChain!.id],
           }),
         ),
       ),
@@ -304,7 +304,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
         client.deleteJobChains({
           ...txCtx,
           transactionHooks,
-          chainIds: [mainChain.id, blockerChain!.id],
+          ids: [mainChain.id, blockerChain!.id],
         }),
       ),
     );
@@ -336,8 +336,8 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
         typeName: "main",
       });
 
-      expect(fetchedBlocker).toBeNull();
-      expect(fetchedMain).toBeNull();
+      expect(fetchedBlocker).toBeUndefined();
+      expect(fetchedMain).toBeUndefined();
     });
   });
 
@@ -398,7 +398,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
           client.deleteJobChains({
             ...txCtx,
             transactionHooks,
-            chainIds: [blockerChain!.id],
+            ids: [blockerChain!.id],
             cascade: true,
           }),
         ),
@@ -462,7 +462,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
         client.deleteJobChains({
           ...txCtx,
           transactionHooks,
-          chainIds: [mainChain!.id],
+          ids: [mainChain!.id],
           cascade: true,
         }),
       ),
@@ -535,7 +535,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
         client.deleteJobChains({
           ...txCtx,
           transactionHooks,
-          chainIds: [chainC.id],
+          ids: [chainC.id],
           cascade: true,
         }),
       ),
@@ -629,7 +629,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
         client.deleteJobChains({
           ...txCtx,
           transactionHooks,
-          chainIds: [chainD.id],
+          ids: [chainD.id],
           cascade: true,
         }),
       ),
@@ -683,7 +683,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
         client.deleteJobChains({
           ...txCtx,
           transactionHooks,
-          chainIds: [jobChain.id],
+          ids: [jobChain.id],
           cascade: true,
         }),
       ),
@@ -758,7 +758,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
           client.deleteJobChains({
             ...txCtx,
             transactionHooks,
-            chainIds: [consumerA!.id],
+            ids: [consumerA!.id],
             cascade: true,
           }),
         ),
@@ -834,7 +834,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
           client.deleteJobChains({
             ...txCtx,
             transactionHooks,
-            chainIds: [jobChain.id],
+            ids: [jobChain.id],
           }),
         ),
       );

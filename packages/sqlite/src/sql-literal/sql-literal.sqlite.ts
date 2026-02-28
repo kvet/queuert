@@ -35,7 +35,7 @@
  *
  * @throws {Error} If string contains null bytes (causes undefined behavior in SQLite TEXT)
  */
-export function sqliteLiteral(value: unknown): string {
+export const sqliteLiteral = (value: unknown): string => {
   // 1. Handle null/undefined
   if (value === null || value === undefined) {
     return "NULL";
@@ -97,14 +97,14 @@ export function sqliteLiteral(value: unknown): string {
   }
 
   throw new Error("Unable to convert value to SQLite literal");
-}
+};
 
 /**
  * Escapes a string value for SQLite.
  * - Only doubles single quotes (backslashes are NOT special in SQLite)
  * - Rejects null bytes (undefined behavior in SQLite TEXT columns)
  */
-function escapeString(str: string): string {
+const escapeString = (str: string): string => {
   // Check for null bytes (undefined behavior in SQLite TEXT)
   if (str.includes("\0")) {
     throw new Error(
@@ -115,15 +115,15 @@ function escapeString(str: string): string {
 
   // SQLite only needs single quotes doubled - backslashes are literal
   return "'" + str.replace(/'/g, "''") + "'";
-}
+};
 
 /**
  * Converts a Uint8Array to an uppercase hex string (SQLite convention).
  */
-function bufferToHex(buffer: Uint8Array): string {
+const bufferToHex = (buffer: Uint8Array): string => {
   let hex = "";
   for (const byte of buffer) {
     hex += byte.toString(16).padStart(2, "0").toUpperCase();
   }
   return hex;
-}
+};

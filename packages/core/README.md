@@ -215,7 +215,8 @@ For production, integrate with your logging library (Pino, Winston, etc.) by imp
 
 **Error classes:**
 
-- `JobNotFoundError` - Job or chain not found
+- `JobNotFoundError` - Job not found
+- `JobChainNotFoundError` - Job chain not found
 - `JobAlreadyCompletedError` - Job was already completed
 - `JobTakenByAnotherWorkerError` - Another worker took the job
 - `JobTypeValidationError` - Runtime validation failed (with `code` and `details`)

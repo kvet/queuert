@@ -27,16 +27,14 @@ export const refetchJobForUpdate = async (
 
   if (!fetchedJob) {
     throw new JobNotFoundError(`Job not found`, {
-      cause: {
-        jobId: job.id,
-      },
+      jobId: job.id,
     });
   }
 
   if (fetchedJob.status === "completed") {
     helpers.observabilityHelper.jobAttemptAlreadyCompleted(fetchedJob, { workerId });
     throw new JobAlreadyCompletedError("Job is already completed", {
-      cause: { jobId: fetchedJob.id },
+      jobId: fetchedJob.id,
     });
   }
 
@@ -46,11 +44,9 @@ export const refetchJobForUpdate = async (
   ) {
     helpers.observabilityHelper.jobAttemptTakenByAnotherWorker(fetchedJob, { workerId });
     throw new JobTakenByAnotherWorkerError(`Job taken by another worker`, {
-      cause: {
-        jobId: fetchedJob.id,
-        workerId,
-        leasedBy: fetchedJob.leasedBy,
-      },
+      jobId: fetchedJob.id,
+      workerId,
+      leasedBy: fetchedJob.leasedBy,
     });
   }
 

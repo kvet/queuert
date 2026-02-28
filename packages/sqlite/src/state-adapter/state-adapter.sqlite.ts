@@ -50,7 +50,7 @@ import {
   recordMigrationSql,
   renewJobLeaseSql,
   rescheduleJobSql,
-  scheduleBlockedJobSql,
+  scheduleBlockedJobsSql,
   updateJobToBlockedSql,
 } from "./sql.js";
 
@@ -155,11 +155,13 @@ export const createSqliteStateAdapter = async <
   tablePrefix = "queuert_",
   idType = "TEXT",
   idGenerator = () => crypto.randomUUID() as TIdType,
+  checkForeignKeys = true,
 }: {
   stateProvider: SqliteStateProvider<TTxContext>;
   tablePrefix?: string;
   idType?: string;
   idGenerator?: () => TIdType;
+  checkForeignKeys?: boolean;
 }): Promise<
   StateAdapter<TTxContext, TIdType> & {
     migrateToLatest: () => Promise<MigrationResult>;
@@ -377,16 +379,17 @@ export const createSqliteStateAdapter = async <
         params: [blockedByChainId],
       });
 
-      const unblockedJobs: StateJob[] = [];
-      for (const { job_id } of readyJobs) {
-        const [job] = await executeTypedSql({
+      const readyJobIds = readyJobs.map((r) => r.job_id);
+      let unblockedJobs: StateJob[];
+      if (readyJobIds.length > 0) {
+        const updatedJobs = await executeTypedSql({
           txCtx,
-          sql: scheduleBlockedJobSql,
-          params: [job_id],
+          sql: scheduleBlockedJobsSql,
+          params: [JSON.stringify(readyJobIds)],
         });
-        if (job) {
-          unblockedJobs.push(mapDbJobToStateJob(job));
-        }
+        unblockedJobs = updatedJobs.map(mapDbJobToStateJob);
+      } else {
+        unblockedJobs = [];
       }
 
       const traceContextResults = await executeTypedSql({
@@ -791,6 +794,23 @@ export const createSqliteStateAdapter = async <
   return {
     ...rawAdapter,
     migrateToLatest: async () => {
+      if (checkForeignKeys) {
+        await stateProvider.runInTransaction(async (txCtx) => {
+          const [fkResult] = (await stateProvider.executeSql({
+            txCtx,
+            sql: "PRAGMA foreign_keys",
+            returns: true,
+          })) as { foreign_keys: number }[];
+          if (!fkResult || fkResult.foreign_keys !== 1) {
+            throw new Error(
+              "SQLite foreign_keys pragma is not enabled. " +
+                "Enable it with PRAGMA foreign_keys = ON before using the adapter. " +
+                "Foreign key enforcement is required for blocker relationship integrity.",
+            );
+          }
+        });
+      }
+
       const runMigrations = await executeMigrations<TTxContext>({
         migrations,
         getAppliedMigrationNames: async (txCtx) => {

@@ -44,7 +44,7 @@ npm install @queuert/redis
 import { createClient, createConsoleLog, defineJobTypes } from "queuert";
 import { createPgStateAdapter } from "@queuert/postgres";
 import { createRedisNotifyAdapter } from "@queuert/redis";
-import { createClient } from "redis";
+import { createClient as createRedisClient } from "redis";
 
 const jobTypes = defineJobTypes<{
   "send-email": { entry: true; input: { to: string }; output: { sent: true } };
@@ -53,8 +53,8 @@ const jobTypes = defineJobTypes<{
 const stateAdapter = await createPgStateAdapter({ stateProvider: myPgProvider });
 
 // Redis requires two separate connections (subscribe mode is exclusive)
-const redis = createClient();
-const redisSubscription = createClient();
+const redis = createRedisClient();
+const redisSubscription = createRedisClient();
 await redis.connect();
 await redisSubscription.connect();
 

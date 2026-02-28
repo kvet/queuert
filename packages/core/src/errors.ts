@@ -5,37 +5,45 @@ export class JobTakenByAnotherWorkerError extends Error {
   readonly workerId: string | undefined;
   readonly leasedBy: string | null | undefined;
 
-  constructor(message: string, options?: { cause?: unknown }) {
-    super(message, options);
+  constructor(
+    message: string,
+    options?: { jobId?: string; workerId?: string; leasedBy?: string | null; cause?: unknown },
+  ) {
+    super(message, options?.cause != null ? { cause: options.cause } : undefined);
     this.name = "JobTakenByAnotherWorkerError";
-    const causeObj = options?.cause as
-      | { jobId?: string; workerId?: string; leasedBy?: string | null }
-      | undefined;
-    this.jobId = causeObj?.jobId;
-    this.workerId = causeObj?.workerId;
-    this.leasedBy = causeObj?.leasedBy;
+    this.jobId = options?.jobId;
+    this.workerId = options?.workerId;
+    this.leasedBy = options?.leasedBy;
   }
 }
 
 export class JobNotFoundError extends Error {
   readonly jobId: string | undefined;
 
-  constructor(message: string, options?: { cause?: unknown }) {
-    super(message, options);
+  constructor(message: string, options?: { jobId?: string; cause?: unknown }) {
+    super(message, options?.cause != null ? { cause: options.cause } : undefined);
     this.name = "JobNotFoundError";
-    const causeObj = options?.cause as { jobId?: string } | undefined;
-    this.jobId = causeObj?.jobId;
+    this.jobId = options?.jobId;
+  }
+}
+
+export class JobChainNotFoundError extends Error {
+  readonly chainId: string | undefined;
+
+  constructor(message: string, options?: { chainId?: string; cause?: unknown }) {
+    super(message, options?.cause != null ? { cause: options.cause } : undefined);
+    this.name = "JobChainNotFoundError";
+    this.chainId = options?.chainId;
   }
 }
 
 export class JobAlreadyCompletedError extends Error {
   readonly jobId: string | undefined;
 
-  constructor(message: string, options?: { cause?: unknown }) {
-    super(message, options);
+  constructor(message: string, options?: { jobId?: string; cause?: unknown }) {
+    super(message, options?.cause != null ? { cause: options.cause } : undefined);
     this.name = "JobAlreadyCompletedError";
-    const causeObj = options?.cause as { jobId?: string } | undefined;
-    this.jobId = causeObj?.jobId;
+    this.jobId = options?.jobId;
   }
 }
 
@@ -43,12 +51,14 @@ export class WaitChainTimeoutError extends Error {
   readonly chainId: string | undefined;
   readonly timeoutMs: number | undefined;
 
-  constructor(message: string, options?: { cause?: unknown }) {
-    super(message, options);
+  constructor(
+    message: string,
+    options?: { chainId?: string; timeoutMs?: number; cause?: unknown },
+  ) {
+    super(message, options?.cause != null ? { cause: options.cause } : undefined);
     this.name = "WaitChainTimeoutError";
-    const causeObj = options?.cause as { chainId?: string; timeoutMs?: number } | undefined;
-    this.chainId = causeObj?.chainId;
-    this.timeoutMs = causeObj?.timeoutMs;
+    this.chainId = options?.chainId;
+    this.timeoutMs = options?.timeoutMs;
   }
 }
 
@@ -58,12 +68,12 @@ export class JobTypeMismatchError extends Error {
 
   constructor(
     message: string,
-    options: { cause: { expectedTypeName: string; actualTypeName: string } },
+    options: { expectedTypeName: string; actualTypeName: string; cause?: unknown },
   ) {
-    super(message, options);
+    super(message, options.cause != null ? { cause: options.cause } : undefined);
     this.name = "JobTypeMismatchError";
-    this.expectedTypeName = options.cause.expectedTypeName;
-    this.actualTypeName = options.cause.actualTypeName;
+    this.expectedTypeName = options.expectedTypeName;
+    this.actualTypeName = options.actualTypeName;
   }
 }
 
