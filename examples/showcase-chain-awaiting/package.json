@@ -1,0 +1,21 @@
+{
+  "name": "example-showcase-chain-awaiting",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "typecheck": "tsgo --noEmit"
+  },
+  "dependencies": {
+    "@queuert/postgres": "workspace:*",
+    "postgres": "^3.4.8",
+    "queuert": "workspace:*"
+  },
+  "devDependencies": {
+    "@queuert/tsconfig": "workspace:*",
+    "@testcontainers/postgresql": "^11.11.0",
+    "@types/node": "^22.19.11",
+    "tsx": "^4.21.0"
+  }
+}

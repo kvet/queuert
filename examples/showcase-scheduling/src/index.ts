@@ -4,7 +4,7 @@
  * Demonstrates recurring job patterns without external cron.
  *
  * Scenarios:
- * 1. Recurring Jobs: Loop chains with scheduled delays
+ * 1. Recurring Jobs: Independent chains with scheduled delays
  * 2. Deduplication: Prevent duplicate recurring job instances
  * 3. Time-Windowed: Rate-limit job creation with windowMs
  */
@@ -31,24 +31,20 @@ type DbContext = { sql: TransactionSql };
 const jobTypes = defineJobTypes<{
   /*
    * Workflow (daily-digest, health-check):
-   *   job <---+
-   *    |      |
-   *    +------+ (loop with schedule.afterMs)
-   *    |
-   *    v (when condition met)
-   *   output
+   *   chain₁ --> output  (starts new chain if condition met)
+   *   chain₂ --> output  (starts new chain if condition met)
+   *   ...
+   *   chainₙ --> output  (condition not met, stops)
    */
   "daily-digest": {
     entry: true;
     input: { userId: string; iteration: number };
-    output: { unsubscribedAt: string; totalSent: number };
-    continueWith: { typeName: "daily-digest" };
+    output: { sentAt: string };
   };
   "health-check": {
     entry: true;
     input: { serviceId: string; checkNumber: number };
-    output: { stoppedAt: string; totalChecks: number };
-    continueWith: { typeName: "health-check" };
+    output: { status: string; checkedAt: string };
   };
 
   /*
@@ -146,7 +142,7 @@ const worker = await createInProcessWorker({
 
         await new Promise((r) => setTimeout(r, 50));
 
-        return complete(async ({ sql: txSql, continueWith }) => {
+        return complete(async ({ sql: txSql, transactionHooks }) => {
           await txSql`
             INSERT INTO digest_logs (user_id) VALUES (${job.input.userId})
           `;
@@ -155,18 +151,18 @@ const worker = await createInProcessWorker({
 
           if (shouldContinue) {
             console.log(`  Scheduling next digest in ${DIGEST_INTERVAL_MS}ms...`);
-            return continueWith({
+            await client.startJobChain({
+              sql: txSql,
+              transactionHooks,
               typeName: "daily-digest",
               input: { userId: job.input.userId, iteration: job.input.iteration + 1 },
               schedule: { afterMs: DIGEST_INTERVAL_MS },
             });
+          } else {
+            console.log(`  User unsubscribed or max iterations reached. Stopping.`);
           }
 
-          console.log(`  User unsubscribed or max iterations reached. Stopping.`);
-          return {
-            unsubscribedAt: new Date().toISOString(),
-            totalSent: job.input.iteration,
-          };
+          return { sentAt: new Date().toISOString() };
         });
       },
     },
@@ -178,7 +174,7 @@ const worker = await createInProcessWorker({
         const status = serviceRunning ? "healthy" : "stopped";
         console.log(`  Status: ${status}`);
 
-        return complete(async ({ sql: txSql, continueWith }) => {
+        return complete(async ({ sql: txSql, transactionHooks }) => {
           await txSql`
             INSERT INTO health_logs (service_id, status)
             VALUES (${job.input.serviceId}, ${status})
@@ -188,7 +184,9 @@ const worker = await createInProcessWorker({
 
           if (shouldContinue) {
             console.log(`  Scheduling next check in ${HEALTH_CHECK_INTERVAL_MS}ms...`);
-            return continueWith({
+            await client.startJobChain({
+              sql: txSql,
+              transactionHooks,
               typeName: "health-check",
               input: {
                 serviceId: job.input.serviceId,
@@ -196,13 +194,11 @@ const worker = await createInProcessWorker({
               },
               schedule: { afterMs: HEALTH_CHECK_INTERVAL_MS },
             });
+          } else {
+            console.log(`  Service stopped or max checks reached. Stopping.`);
           }
 
-          console.log(`  Service stopped or max checks reached. Stopping.`);
-          return {
-            stoppedAt: new Date().toISOString(),
-            totalChecks: job.input.checkNumber,
-          };
+          return { status, checkedAt: new Date().toISOString() };
         });
       },
     },
@@ -228,13 +224,27 @@ const worker = await createInProcessWorker({
 
 const stopWorker = await worker.start();
 
+const waitForRows = async (
+  countQuery: () => Promise<{ count: string }[]>,
+  expected: number,
+  timeoutMs = 10000,
+) => {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const [{ count }] = await countQuery();
+    if (Number(count) >= expected) return;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  throw new Error(`Timed out waiting for ${expected} rows`);
+};
+
 // Scenario 1: Recurring Daily Digest
 console.log("\n--- Scenario 1: Recurring Daily Digest ---");
-console.log("Job loops to itself with scheduled delays - no cron needed!\n");
+console.log("Each execution starts a new independent chain - no cron needed!\n");
 
 userSubscribed = true;
 
-const digestChain = await withTransactionHooks(async (transactionHooks) =>
+await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     return client.startJobChain({
@@ -246,9 +256,11 @@ const digestChain = await withTransactionHooks(async (transactionHooks) =>
   }),
 );
 
-const digestResult = await client.awaitJobChain(digestChain, {
-  timeoutMs: 10000,
-});
+await waitForRows(
+  () =>
+    sql<{ count: string }[]>`SELECT COUNT(*) as count FROM digest_logs WHERE user_id = 'user-123'`,
+  MAX_DIGEST_ITERATIONS,
+);
 
 const [digestCount] = await sql<{ count: string }[]>`
   SELECT COUNT(*) as count FROM digest_logs WHERE user_id = 'user-123'
@@ -258,7 +270,6 @@ console.log("\n" + "-".repeat(40));
 console.log("SCENARIO 1 COMPLETED");
 console.log("-".repeat(40));
 console.log(`Total digests sent: ${digestCount.count}`);
-console.log(`Final result: ${JSON.stringify(digestResult.output)}`);
 
 // Scenario 2: Health Check with Deduplication
 console.log("\n--- Scenario 2: Health Check with Deduplication ---");
@@ -304,9 +315,13 @@ const healthChain2 = await withTransactionHooks(async (transactionHooks) =>
 console.log(`\nAttempted duplicate health check: ${healthChain2.id}`);
 console.log(`Deduplicated: ${healthChain2.deduplicated} (returned existing chain)`);
 
-const healthResult = await client.awaitJobChain(healthChain1, {
-  timeoutMs: 10000,
-});
+await waitForRows(
+  () =>
+    sql<
+      { count: string }[]
+    >`SELECT COUNT(*) as count FROM health_logs WHERE service_id = 'api-server'`,
+  MAX_HEALTH_CHECKS,
+);
 
 const [healthCount] = await sql<{ count: string }[]>`
   SELECT COUNT(*) as count FROM health_logs WHERE service_id = 'api-server'
@@ -316,7 +331,6 @@ console.log("\n" + "-".repeat(40));
 console.log("SCENARIO 2 COMPLETED");
 console.log("-".repeat(40));
 console.log(`Total health checks: ${healthCount.count}`);
-console.log(`Final result: ${JSON.stringify(healthResult.output)}`);
 
 // Scenario 3: Time-Windowed Deduplication
 console.log("\n--- Scenario 3: Time-Windowed Deduplication ---");

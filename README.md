@@ -600,32 +600,33 @@ return complete(async ({ continueWith }) =>
 
 ### Recurring Jobs
 
-For periodic tasks like daily digests, health checks, or billing cycles, use loop chains with scheduled continuations. The job continues to itself with a delay — no external cron job needed.
+For periodic tasks like daily digests, health checks, or billing cycles, start a new independent job chain from within the handler instead of using `continueWith`. This keeps each execution as its own short-lived chain rather than building an ever-growing chain history.
 
 ```ts
 type Definitions = {
   'daily-digest': {
     entry: true;
     input: { userId: string };
-    output: { unsubscribedAt: string };
-    continueWith: { typeName: 'daily-digest' };  // Self-reference for looping
+    output: { sentAt: string };
   };
 };
 
-// In processor — loop with scheduled delay
+// In processor — start a new chain with a scheduled delay
 'daily-digest': {
   attemptHandler: async ({ job, complete }) => {
     await sendDigestEmail(job.input.userId);
 
-    return complete(async ({ continueWith }) => {
+    return complete(async ({ sql, transactionHooks }) => {
       if (userStillSubscribed) {
-        return continueWith({
+        await client.startJobChain({
+          sql,
+          transactionHooks,
           typeName: 'daily-digest',
           input: { userId: job.input.userId },
           schedule: { afterMs: 24 * 60 * 60 * 1000 }, // Run again tomorrow
         });
       }
-      return { unsubscribedAt: new Date().toISOString() };
+      return { sentAt: new Date().toISOString() };
     });
   },
 }
@@ -796,6 +797,8 @@ Cascade follows dependencies downward — it deletes the specified chains and ev
 
 If a worker is currently processing a job in a deleted chain, the worker's `signal` is aborted with reason `"not_found"`, allowing graceful cleanup.
 
+See [examples/showcase-chain-deletion](./examples/showcase-chain-deletion) for a complete working example demonstrating simple deletion, blocker safety, co-deletion, and cascade deletion.
+
 ## Job & Chain Queries
 
 The client provides read-only methods for inspecting job chains and jobs. All query methods accept an optional transaction context and don't require `transactionHooks`.
@@ -831,6 +834,8 @@ const blockedJobs = await client.listBlockedJobs({ jobChainId });
 
 All lookup methods accept an optional `typeName` for type narrowing — the return type narrows to the specified type. If the entity exists but has a different type, `JobTypeMismatchError` is thrown.
 
+See [examples/showcase-queries](./examples/showcase-queries) for a complete working example demonstrating single lookups, paginated lists, chain job listing, and blocker queries.
+
 ## Job Chain Awaiting
 
 `awaitJobChain` waits for a job chain to complete by combining polling with notify adapter events. Between polls, it listens for completion notifications to react immediately.
@@ -845,6 +850,8 @@ console.log(completedJobChain.output); // Typed output from the final job
 ```
 
 Throws `WaitChainTimeoutError` on timeout. Supports an `AbortSignal` for cancellation.
+
+See [examples/showcase-chain-awaiting](./examples/showcase-chain-awaiting) for a complete working example demonstrating basic awaiting, parallel awaiting, timeout handling, and abort signals.
 
 ## Horizontal Scaling
 
