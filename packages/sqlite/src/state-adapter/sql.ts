@@ -72,7 +72,7 @@ export const migrations: Migration[] = [
 CREATE TABLE IF NOT EXISTS {{table_prefix}}job (
   id                            {{id_type}} PRIMARY KEY,
   type_name                     TEXT NOT NULL,
-  chain_id                      {{id_type}} REFERENCES {{table_prefix}}job(id),
+  chain_id                      {{id_type}} NOT NULL REFERENCES {{table_prefix}}job(id),
   chain_type_name               TEXT NOT NULL,
   chain_index                   INTEGER NOT NULL,
 

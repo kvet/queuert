@@ -56,7 +56,7 @@ END$$`,
 CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job (
   id                            {{id_type}} PRIMARY KEY DEFAULT {{id_default}},
   type_name                     text NOT NULL,
-  chain_id                      {{id_type}} REFERENCES {{schema}}.{{table_prefix}}job(id),
+  chain_id                      {{id_type}} NOT NULL REFERENCES {{schema}}.{{table_prefix}}job(id),
   chain_type_name               text NOT NULL,
   chain_index                   integer NOT NULL,
 
