@@ -2,6 +2,11 @@
 
 - [EPIC] Prepare 0.3 release
 - [TASK] Re-introduce ts isolatedDeclarations for public libs
+- [REF] Plugins
+  - Attempt middleware plugin
+  - Client amend
+  - Job definition amend
+  - Job processors amend
 - [EPIC] Dashboard
   - [TASK,COMPLEX] Better UI
   - [?,REF] Filter by status in chains view
@@ -10,14 +15,12 @@
   - [REF] Migrate dashboard routes from StateAdapter to client API
   - [REF] Fix job detail: fetches all chain jobs to find continuation — use targeted query
   - [REF] Fix stale cursor race condition on filter change in ChainList/JobList
-- [REF] Plugins
-  - Attempt middleware plugin
-  - Client amend
-  - Job definition amend
-  - Job processors amend
 - [TASK] Use transactionHooks in `deleteJobChains` to buffer post-delete side effects (e.g., observability events)
 - [?,TASK] Review `allowEmptyWorker` flag in job-process.ts staged mode — currently set when `prepareTransactionContext.status === "pending"`, may be removable
 - [TASK,COMPLEX] Job cleanup utility
+- [EPIC] Docs website enhancements
+  - [TASK] Add interactive examples / live demos
+  - [TASK] Custom branding and styling
 - [EPIC] Prepare 0.4 release
 
 # Medium term
@@ -34,10 +37,6 @@
 - [?,TASK] test against bun and its built-in sqlite, postgres clients
 - [?,TASK,MEDIUM] update lease in one operation (currently two: getForUpdate + update)
 - [?,REF] Skip unnecessary state adapter calls per processing mode (atomic: no renewJobLease; staged: no getJobForUpdate before complete). Processor-level change, no adapter interface changes needed. See: `process-modes.test-suite.ts` TODOs
-- [EPIC] Docs website enhancements
-  - [TASK] Add interactive examples / live demos
-  - [TASK] Custom branding and styling
-  - [TASK] Publish API reference docs (starlight-typedoc)
 
 # Long term
 
