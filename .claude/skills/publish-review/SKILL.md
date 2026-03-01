@@ -31,17 +31,18 @@ prompt: |
   First, read the detailed instructions in .claude/agents/publish-review/docs-coherence.md
 
   Then review all documentation for coherence and consistency:
+  - TSDoc on all public exports in packages/*/src/**/*.ts (primary API documentation)
   - README.md - User-facing overview
-  - CLAUDE.md - Index to design docs and packages
-  - docs/design/*.md - Design documents (design decisions)
+  - CLAUDE.md - Session instructions (workflow requirements, high-level links)
+  - docs/src/content/docs/reference/*.md - Reference documents (architectural, defer to TSDoc for API signatures)
   - packages/*/README.md - Package READMEs (API documentation)
 
   Check for:
   1. Terminology consistency across all docs
-  2. Feature parity between design docs and package READMEs
+  2. Feature parity between design docs, TSDoc, and package READMEs
   3. Code example accuracy (syntax, current API)
   4. Cross-reference integrity (valid links/paths)
-  5. Completeness gaps (exports not documented in package READMEs)
+  5. Completeness gaps (exports missing TSDoc or not documented in package READMEs)
 
   Categorize findings as CRITICAL, WARNING, or SUGGESTION.
   Return a structured report with specific file locations.
@@ -147,7 +148,7 @@ prompt: |
 
   First, read the detailed instructions in .claude/agents/publish-review/code-style.md
 
-  Then verify the codebase follows conventions from docs/design/code-style.md by
+  Then verify the codebase follows conventions from code-style.md by
   following the checks described in the instructions file: function declaration style,
   unnecessary async wrapping, redundant types, comment quality, nullable conventions,
   error class usage, and naming conventions.

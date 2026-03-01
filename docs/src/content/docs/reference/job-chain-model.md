@@ -1,4 +1,9 @@
-# Job Chain Model Design
+---
+title: Job Chain Model
+description: Promise-like chain model, identity, and execution patterns.
+sidebar:
+  order: 3
+---
 
 ## Overview
 
@@ -60,8 +65,8 @@ This isn't redundant—it's a meaningful signal that identifies the chain starte
 │ Chain (id: "abc-123")                                       │
 ├─────────────────────────────────────────────────────────────┤
 │  Job A              Job B              Job C                │
-│  id: "abc-123"  →   id: "def-456"  →   id: "ghi-789"       │
-│  chainId: "abc-123" chainId: "abc-123" chainId: "abc-123"  │
+│  id: "abc-123"  →   id: "def-456"  →   id: "ghi-789"        │
+│  chainId: "abc-123" chainId: "abc-123" chainId: "abc-123"   │
 │  ↑                                                          │
 │  First job IS the chain                                     │
 └─────────────────────────────────────────────────────────────┘

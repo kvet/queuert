@@ -1,4 +1,9 @@
-# In-Process Worker
+---
+title: In-Process Worker
+description: In-process worker lifecycle, concurrency, and lease management.
+sidebar:
+  order: 2
+---
 
 ## Overview
 
@@ -8,13 +13,7 @@ A **worker** runs a main loop that coordinates job processing across multiple **
 
 ## Concurrency Model
 
-Workers process jobs in parallel using slots. Configure concurrency via the `concurrency` option:
-
-```typescript
-concurrency: 10;
-```
-
-Default: single slot (`concurrency: 1`).
+Workers process jobs in parallel using slots. See `createInProcessWorker` TSDoc for configuration options. Default: single slot (`concurrency: 1`).
 
 ### Architecture
 
@@ -66,6 +65,8 @@ The worker runs a single coordinating loop:
 
 ### Shutdown
 
+On startup, the worker emits a `workerStarted` observability event.
+
 Calling `stop()` triggers graceful shutdown:
 
 1. Signal abort controller
@@ -106,11 +107,11 @@ delay = min(initialDelayMs * multiplier^(attempt-1), maxDelayMs)
 
 Example with defaults: 10s → 20s → 40s → 80s → 160s → 300s → 300s...
 
-See [Job Processing](job-processing.md) for details on error handling and abort signals.
+See [Job Processing](../job-processing/) for details on error handling and abort signals.
 
 ## Client-Based Construction
 
-`createInProcessWorker` accepts a `client` instance and extracts infrastructure (`stateAdapter`, `notifyAdapter`, `observabilityAdapter`, `registry`, `log`) from it internally. Worker-specific options (`processors`, `concurrency`, etc.) remain separate parameters.
+`createInProcessWorker` accepts a `client` instance and extracts infrastructure (`stateAdapter`, `notifyAdapter`, `observabilityAdapter`, `registry`, `log`) from it internally. Worker-specific options (`processors`, `concurrency`, `backoffConfig`, etc.) remain separate parameters. The top-level `backoffConfig` controls the worker's own main loop retry behavior (e.g., recovery from database connection errors), separate from the per-job `processDefaults.backoffConfig` that controls job attempt backoff.
 
 This is purely a construction convenience — no lifecycle coupling is introduced. The client and worker remain independent after construction.
 
@@ -122,7 +123,7 @@ A single worker can handle multiple job types. Slots poll all registered types a
 
 ### Attempt Middlewares
 
-Workers support middlewares that wrap each job attempt, enabling cross-cutting concerns like contextual logging. Middlewares compose in order: first middleware's "before" runs first, last middleware's "after" runs first. User-land middleware may use `AsyncLocalStorage` for implicit context propagation (see `log-pino` and `log-winston` examples).
+Workers support middlewares that wrap each job attempt, enabling cross-cutting concerns like contextual logging. Middlewares compose in order: first middleware's "before" runs first, last middleware's "after" runs first. User-land middleware may use `AsyncLocalStorage` for implicit context propagation.
 
 ## Summary
 
@@ -134,7 +135,7 @@ The worker design emphasizes:
 4. **Flexibility**: Per-type configuration, multi-type workers
 5. **Extensibility**: Middlewares enable cross-cutting concerns
 
-See also:
+## See Also
 
-- [Job Processing](job-processing.md) - prepare/complete pattern, abort signals, timeouts
-- [Adapters](adapters.md) - notification optimization, state provider design
+- [Job Processing](../job-processing/) — Prepare/complete pattern, abort signals, timeouts
+- [Adapters](../adapters/) — Notification optimization, state provider design

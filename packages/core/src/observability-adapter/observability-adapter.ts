@@ -2,6 +2,7 @@ import { type NotifyAdapter } from "../notify-adapter/notify-adapter.js";
 import { type StateAdapter } from "../state-adapter/state-adapter.js";
 import { type JobBasicData, type JobChainData, type JobProcessingData } from "./log.js";
 
+/** Input data for creating a job span. */
 export type JobSpanInputData = {
   chainTypeName: string;
   jobTypeName: string;
@@ -13,6 +14,7 @@ export type JobSpanInputData = {
   originTraceContext?: unknown;
 };
 
+/** Result of a job span — created, deduplicated, or error. */
 export type JobSpanResult =
   | {
       status: "created";
@@ -30,12 +32,14 @@ export type JobSpanResult =
       error: unknown;
     };
 
+/** Handle for managing a job span's lifecycle and trace context. */
 export type JobSpanHandle = {
   getChainTraceContext: () => unknown;
   getTraceContext: () => unknown;
   end: (result: JobSpanResult) => void;
 };
 
+/** Input data for creating a job attempt span. */
 export type JobAttemptSpanInputData = {
   chainTraceContext: unknown;
   traceContext: unknown;
@@ -47,6 +51,7 @@ export type JobAttemptSpanInputData = {
   workerId: string;
 };
 
+/** Result of a job attempt span — completed or failed. */
 export type JobAttemptSpanResult =
   | {
       status: "completed";
@@ -60,10 +65,12 @@ export type JobAttemptSpanResult =
       rescheduledAfterMs?: number;
     };
 
+/** Handle for ending a span. */
 export type SpanHandle = {
   end: () => void;
 };
 
+/** Handle for managing a job attempt span, including prepare/complete sub-spans. */
 export type JobAttemptSpanHandle = {
   getChainTraceContext: () => unknown;
   getTraceContext: () => unknown;
@@ -72,6 +79,7 @@ export type JobAttemptSpanHandle = {
   end: (result: JobAttemptSpanResult) => void;
 };
 
+/** Input data for completing a job span after all attempts. */
 export type CompleteJobSpanInputData = {
   chainTraceContext: unknown;
   traceContext: unknown;
@@ -83,6 +91,7 @@ export type CompleteJobSpanInputData = {
   chainCompleted: boolean;
 };
 
+/** Input data for creating a blocker dependency span. */
 export type BlockerSpanInputData = {
   chainId: string;
   chainTypeName: string;
@@ -94,16 +103,19 @@ export type BlockerSpanInputData = {
   blockerIndex: number;
 };
 
+/** Handle for managing a blocker dependency span. */
 export type BlockerSpanHandle = {
   getTraceContext: () => unknown;
   end: (data?: { blockerChainTraceContext?: unknown }) => void;
 };
 
+/** Data for completing a blocker span when the blocker chain completes. */
 export type CompleteBlockerSpanData = {
   traceContext: unknown;
   blockerChainTypeName: string;
 };
 
+/** Adapter for structured logging, metrics, and distributed tracing. All methods are synchronous — side effects are buffered via transaction hooks and flushed after commit. */
 export type ObservabilityAdapter = {
   // worker
   workerStarted: (data: { workerId: string; jobTypeNames: string[] }) => void;

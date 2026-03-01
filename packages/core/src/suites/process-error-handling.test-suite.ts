@@ -53,7 +53,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       concurrency: 1,
       processors: {
         test: {
-          retryConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+          backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
           attemptHandler: async ({ job, prepare, complete }) => {
             if (job.attempt > 1) {
               expect(job.lastAttemptError).toBe("Error: Simulated prepare error");
@@ -140,7 +140,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       concurrency: 1,
       processors: {
         test: {
-          retryConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+          backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
           attemptHandler: async ({ job, prepare, complete }) => {
             if (job.attempt > 1) {
               expect(job.lastAttemptError).toBe("Error: Simulated prepare error");
@@ -227,7 +227,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       concurrency: 1,
       processors: {
         test: {
-          retryConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+          backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
           attemptHandler: async ({ job, prepare, complete }) => {
             if (job.attempt > 1) {
               expect(job.lastAttemptError).toBe("Error: Simulated process error");
@@ -313,7 +313,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       concurrency: 1,
       processors: {
         test: {
-          retryConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+          backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
           attemptHandler: async ({ job, prepare, complete }) => {
             if (job.attempt > 1) {
               expect(job.lastAttemptError).toBe("Error: Simulated process error");
@@ -407,7 +407,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       concurrency: 1,
       processors: {
         test: {
-          retryConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+          backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
           attemptHandler: async ({ job, prepare, complete }) => {
             if (job.attempt > 1) {
               expect(job.lastAttemptError).toBe("Error: Simulated complete error");
@@ -495,7 +495,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       concurrency: 1,
       processors: {
         test: {
-          retryConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+          backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
           attemptHandler: async ({ job, prepare, complete }) => {
             if (job.attempt > 1) {
               expect(job.lastAttemptError).toBe("Error: Simulated complete error");
@@ -592,7 +592,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       concurrency: 1,
       processors: {
         test: {
-          retryConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+          backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
           attemptHandler: async ({ job, prepare, complete }) => {
             attempts++;
             if (job.attempt > 1) {
@@ -687,7 +687,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       concurrency: 1,
       processors: {
         test: {
-          retryConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+          backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
           attemptHandler: async ({ job, prepare, complete }) => {
             attempts++;
             if (job.attempt > 1) {

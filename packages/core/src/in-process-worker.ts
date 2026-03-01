@@ -23,20 +23,22 @@ import {
   runJobProcess,
 } from "./worker/job-process.js";
 
+/** Default configuration applied to all job types unless overridden per-processor. */
 export type InProcessWorkerProcessDefaults<
   TStateAdapter extends StateAdapter<any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
 > = {
   /** How often to poll for new jobs in milliseconds */
   pollIntervalMs?: number;
-  /** Retry configuration for failed job attempts */
-  retryConfig?: BackoffConfig;
+  /** Backoff configuration for failed job attempts */
+  backoffConfig?: BackoffConfig;
   /** Lease configuration for job ownership */
   leaseConfig?: LeaseConfig;
   /** Middlewares that wrap each job attempt */
   attemptMiddlewares?: JobAttemptMiddleware<TStateAdapter, TJobTypeDefinitions>[];
 };
 
+/** Configuration for processing a single job type. */
 export type InProcessWorkerProcessor<
   TStateAdapter extends StateAdapter<any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
@@ -44,12 +46,13 @@ export type InProcessWorkerProcessor<
 > = {
   /** Handler function called for each job attempt */
   attemptHandler: AttemptHandlerFn<TStateAdapter, TJobTypeDefinitions, TJobTypeName>;
-  /** Per-job-type retry configuration (overrides processDefaults) */
-  retryConfig?: BackoffConfig;
+  /** Per-job-type backoff configuration (overrides processDefaults) */
+  backoffConfig?: BackoffConfig;
   /** Per-job-type lease configuration (overrides processDefaults) */
   leaseConfig?: LeaseConfig;
 };
 
+/** Map of job type names to their processor configurations. Only registered types will be processed. */
 export type InProcessWorkerProcessors<
   TStateAdapter extends StateAdapter<any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
@@ -113,7 +116,7 @@ const performJob = async ({
   helpers,
   typeNames,
   processors,
-  defaultRetryConfig,
+  defaultBackoffConfig,
   defaultLeaseConfig,
   workerId,
   attemptMiddlewares,
@@ -121,7 +124,7 @@ const performJob = async ({
   helpers: Helpers;
   typeNames: string[];
   processors: InProcessWorkerProcessors<any, any>;
-  defaultRetryConfig: BackoffConfig;
+  defaultBackoffConfig: BackoffConfig;
   defaultLeaseConfig: LeaseConfig;
   workerId: string;
   attemptMiddlewares: JobAttemptMiddleware<any, any>[] | undefined;
@@ -168,7 +171,7 @@ const performJob = async ({
           attemptHandler: processor.attemptHandler as any,
           job,
           prepareTransactionContext: prepareTransactionContext as TransactionContext<BaseTxContext>,
-          retryConfig: processor.retryConfig ?? defaultRetryConfig,
+          backoffConfig: processor.backoffConfig ?? defaultBackoffConfig,
           leaseConfig: processor.leaseConfig ?? defaultLeaseConfig,
           workerId,
           attemptMiddlewares: attemptMiddlewares as any[],
@@ -181,6 +184,16 @@ const performJob = async ({
   };
 };
 
+/**
+ * Create an in-process worker for processing jobs.
+ *
+ * @param options.client - The Queuert client to process jobs for.
+ * @param options.workerId - Unique worker identifier. Defaults to a random UUID.
+ * @param options.concurrency - Maximum number of jobs to process in parallel. Defaults to 1.
+ * @param options.backoffConfig - Backoff configuration for the worker loop itself (not job retries).
+ * @param options.processDefaults - Default configuration applied to all job types unless overridden per-processor.
+ * @param options.processors - Map of job type names to their processor configurations.
+ */
 export const createInProcessWorker = async <
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TStateAdapter extends StateAdapter<any, any>,
@@ -188,21 +201,21 @@ export const createInProcessWorker = async <
   client,
   workerId = randomUUID(),
   concurrency,
-  retryConfig,
+  backoffConfig,
   processDefaults,
   processors,
 }: {
   client: Client<TJobTypeDefinitions, TStateAdapter>;
   workerId?: string;
   concurrency?: number;
-  retryConfig?: BackoffConfig;
+  backoffConfig?: BackoffConfig;
   processDefaults?: InProcessWorkerProcessDefaults<TStateAdapter, TJobTypeDefinitions>;
   processors: InProcessWorkerProcessors<TStateAdapter, TJobTypeDefinitions>;
-}) => {
+}): Promise<InProcessWorker> => {
   const typeNames = Array.from(Object.keys(processors));
 
   const pollIntervalMs = processDefaults?.pollIntervalMs ?? 60_000;
-  const defaultRetryConfig = processDefaults?.retryConfig ?? {
+  const defaultBackoffConfig = processDefaults?.backoffConfig ?? {
     initialDelayMs: 10_000,
     multiplier: 2.0,
     maxDelayMs: 300_000,
@@ -211,7 +224,7 @@ export const createInProcessWorker = async <
     leaseMs: 60_000,
     renewIntervalMs: 30_000,
   };
-  const workerRetryConfig = retryConfig ?? {
+  const workerBackoffConfig = backoffConfig ?? {
     initialDelayMs: 10_000,
     multiplier: 2.0,
     maxDelayMs: 300_000,
@@ -238,7 +251,7 @@ export const createInProcessWorker = async <
                 helpers,
                 typeNames,
                 processors,
-                defaultRetryConfig,
+                defaultBackoffConfig,
                 defaultLeaseConfig,
                 workerId,
                 attemptMiddlewares,
@@ -312,7 +325,7 @@ export const createInProcessWorker = async <
         }
       };
 
-      const runWorkerLoopPromise = withRetry(async () => runWorkerLoop(), workerRetryConfig, {
+      const runWorkerLoopPromise = withRetry(async () => runWorkerLoop(), workerBackoffConfig, {
         signal: stopController.signal,
       }).catch(() => {});
 
@@ -328,4 +341,12 @@ export const createInProcessWorker = async <
   };
 };
 
-export type InProcessWorker = ReturnType<typeof createInProcessWorker>;
+/**
+ * A worker that processes jobs in the current process. Created via {@link createInProcessWorker}.
+ *
+ * Call `start()` to begin processing. It returns a `stop` function — call it to gracefully shut down.
+ */
+export type InProcessWorker = {
+  /** Start the worker loop. Returns a function that stops the worker and drains in-flight jobs. */
+  start: () => Promise<() => Promise<void>>;
+};

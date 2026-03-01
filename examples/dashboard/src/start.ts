@@ -91,7 +91,7 @@ const worker = await createInProcessWorker({
         }
         return complete(async () => ({ success: true as const }));
       },
-      retryConfig: { initialDelayMs: 100, maxDelayMs: 100 },
+      backoffConfig: { initialDelayMs: 100, maxDelayMs: 100 },
     },
   },
 });

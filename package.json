@@ -16,6 +16,9 @@
     "modules:clean": "rm -rf $(find . -name node_modules -type d)",
     "changeset": "changeset",
     "version": "changeset version",
+    "docs:dev": "pnpm --filter @queuert/docs dev",
+    "docs:build": "pnpm --filter @queuert/docs build",
+    "docs:preview": "pnpm --filter @queuert/docs preview",
     "release": "pnpm build && changeset publish"
   },
   "devDependencies": {

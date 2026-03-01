@@ -83,25 +83,9 @@ Adapter packages use their domain-specific prefixes (not "Queuert"):
 | `@queuert/otel`      | `createOtelObservabilityAdapter` | -                    |
 | `@queuert/dashboard` | `createDashboard`                | -                    |
 
-## Design Documentation
+## Reference Documentation
 
-Design docs in `docs/design/` capture architectural decisions and API contracts, not implementation code.
-
-**Content guidelines:**
-
-- **Design decisions**: Explain why the architecture works this way
-- **API contracts**: Show interfaces, type definitions, and public APIs
-- **Usage examples**: Demonstrate how users interact with the system
-- **Avoid implementation details**: Don't include internal code that shows how things are built
-
-**Unimplemented features:**
-
-For features that are designed but not yet implemented, create a separate `{feature}.implementation.md` file alongside the main design doc:
-
-- `observability-tracing.md` - Design decisions and API contracts
-- `observability-tracing.implementation.md` - Implementation details for future development
-
-Once a feature is implemented, the `.implementation.md` file should be removed—the actual code becomes the source of truth for implementation details.
+Reference docs in `docs/src/content/docs/reference/` capture architectural decisions and API contracts as part of the documentation site.
 
 ## Testing Patterns
 
@@ -274,7 +258,7 @@ Examples should follow these conventions for clarity and readability:
 When making changes:
 
 - Update `README.md` if there were changes to public API
-- Update `CLAUDE.md` only to add/remove links to design docs or packages (it's an index, not a knowledge base)
-- Update `docs/design/*.md` if there were architectural changes or naming convention updates
+- Update `CLAUDE.md` only to modify session instructions (commands, workflow requirements, high-level links)
+- Update `docs/src/content/docs/` if there were architectural changes or naming convention updates
 - Update package READMEs (`packages/*/README.md`) if there were changes to adapter exports or configuration
 - Update `TODO.md` if any items were addressed

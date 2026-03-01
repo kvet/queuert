@@ -1,0 +1,54 @@
+---
+title: Core Concepts
+description: Jobs, chains, types, adapters, and workers.
+sidebar:
+  order: 3
+---
+
+### Job
+
+An individual unit of work. Jobs have a lifecycle: `blocked` → `pending` → `running` → `completed`. Each job belongs to a Job Type and contains typed input/output. Jobs start as `blocked` when they depend on other chains (see [Job Blockers](/queuert/guides/job-blockers/)); otherwise they start as `pending`.
+
+### Job Chain
+
+A chain of linked jobs where each job can `continueWith` to the next - just like a Promise chain. In fact, a chain IS its first job, the same way a Promise chain IS the first promise. When you call `startJobChain`, the returned `chain.id` is the first job's ID. Continuation jobs share this `chainId` but have their own unique `id`. The chain completes when its final job completes without continuing.
+
+### Job Type
+
+Defines a named job type with its input/output types and attempt handler function. Job types are registered with workers via the `processors` configuration. The attempt handler receives the job and context for completing or continuing the chain.
+
+### State Adapter
+
+Abstracts database operations for job persistence. Queuert provides adapters for PostgreSQL and SQLite. The adapter handles job creation, status transitions, leasing, and queries. See [State Adapters](/queuert/integrations/state-adapters/).
+
+**Available adapters:**
+
+- `@queuert/postgres` - PostgreSQL state adapter (recommended for production)
+- `@queuert/sqlite` - SQLite state adapter _(experimental)_
+
+### State Provider
+
+Bridges your database client (Kysely, Drizzle, Prisma, raw pg, etc.) with the state adapter. You implement a simple interface that provides transaction handling and SQL execution. See [Adapter Architecture](/queuert/reference/adapters/).
+
+### Notify Adapter
+
+Handles pub/sub notifications for efficient job scheduling. When a job is created, workers are notified immediately instead of polling. This reduces latency from seconds to milliseconds. See [Notify Adapters](/queuert/integrations/notify-adapters/).
+
+**Available adapters:**
+
+- `@queuert/redis` - Redis notify adapter (recommended for production)
+- `@queuert/nats` - NATS notify adapter _(experimental)_
+- `@queuert/postgres` - PostgreSQL notify adapter (uses LISTEN/NOTIFY, no additional infrastructure)
+- None (default) - polling only, no real-time notifications
+
+### Notify Provider
+
+Bridges your pub/sub client (Redis, PostgreSQL, etc.) with the notify adapter. Similar to state providers, you implement an interface for publishing messages and subscribing to channels. See [Adapter Architecture](/queuert/reference/adapters/).
+
+### Worker
+
+Processes jobs by polling for available work. Workers automatically renew leases during long-running operations and handle retries with configurable backoff. See [In-Process Worker](/queuert/reference/in-process-worker/) and [Job Processing](/queuert/reference/job-processing/).
+
+### Logging
+
+By default, Queuert operates silently. Enable logging with `createConsoleLog()` for development, or implement a custom `Log` function for production (Pino, Winston, etc.). See the [log-console](https://github.com/kvet/queuert/tree/main/examples/log-console), [log-pino](https://github.com/kvet/queuert/tree/main/examples/log-pino), and [log-winston](https://github.com/kvet/queuert/tree/main/examples/log-winston) examples.

@@ -48,7 +48,7 @@ describe("createJobTypeRegistry", () => {
         const validationError = error as JobTypeValidationError;
         expect(validationError.code).toBe("not_entry_point");
         expect(validationError.typeName).toBe("myJob");
-        expect(validationError.details.cause).toBe(originalError);
+        expect(validationError.cause).toBe(originalError);
       }
     });
   });
@@ -82,7 +82,7 @@ describe("createJobTypeRegistry", () => {
         expect(validationError.code).toBe("invalid_input");
         expect(validationError.typeName).toBe("myJob");
         expect(validationError.details.input).toEqual({ bad: "input" });
-        expect(validationError.details.cause).toBe(originalError);
+        expect(validationError.cause).toBe(originalError);
       }
     });
   });
@@ -118,7 +118,7 @@ describe("createJobTypeRegistry", () => {
         expect(validationError.code).toBe("invalid_output");
         expect(validationError.typeName).toBe("myJob");
         expect(validationError.details.output).toEqual({ bad: "output" });
-        expect(validationError.details.cause).toBe(originalError);
+        expect(validationError.cause).toBe(originalError);
       }
     });
   });
@@ -197,7 +197,7 @@ describe("createJobTypeRegistry", () => {
         expect(validationError.message).toContain("fromJob");
         expect(validationError.message).toContain("toJob");
         expect(validationError.details.target).toEqual({ typeName: "toJob", input: {} });
-        expect(validationError.details.cause).toBe(originalError);
+        expect(validationError.cause).toBe(originalError);
       }
     });
   });
@@ -275,7 +275,7 @@ describe("createJobTypeRegistry", () => {
         expect(validationError.code).toBe("invalid_blockers");
         expect(validationError.typeName).toBe("main");
         expect(validationError.details.blockers).toEqual(blockers);
-        expect(validationError.details.cause).toBe(originalError);
+        expect(validationError.cause).toBe(originalError);
       }
     });
   });

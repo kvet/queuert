@@ -1,11 +1,11 @@
 ---
 name: docs-check
-description: Check if documentation is up to date with code changes. Analyzes git changes and identifies documentation that may need updating, comparing code modifications against design docs and package READMEs.
+description: Check if documentation is up to date with code changes. Analyzes git changes and identifies documentation that may need updating, comparing code modifications against reference docs and package READMEs.
 ---
 
 # Documentation Sync Check
 
-Analyze git changes to identify documentation that may need updating. This skill compares code modifications against design docs, package READMEs, and CLAUDE.md to ensure documentation stays in sync with the codebase.
+Analyze git changes to identify documentation that may need updating. This skill compares code modifications against reference docs (`docs/src/content/docs/reference/`) and package READMEs to ensure documentation stays in sync with the codebase.
 
 ## Instructions
 
@@ -43,13 +43,13 @@ Also run `git diff --name-only` (with appropriate flags) to get the list of chan
 
 Group changes by their documentation relevance:
 
-| File Pattern        | Related Documentation                                  |
-| ------------------- | ------------------------------------------------------ |
-| `packages/*/src/**` | Package README, relevant design docs in `docs/design/` |
-| `examples/**`       | Package READMEs, `CLAUDE.md`                           |
-| Exports/public API  | Package README, `CLAUDE.md`                            |
+| File Pattern        | Related Documentation                                                                           |
+| ------------------- | ----------------------------------------------------------------------------------------------- |
+| `packages/*/src/**` | TSDoc on exports, package README, relevant reference docs in `docs/src/content/docs/reference/` |
+| `examples/**`       | Package READMEs, `CLAUDE.md`                                                                    |
+| Exports/public API  | TSDoc on exports, package README, `CLAUDE.md`                                                   |
 
-Use CLAUDE.md to identify which design docs are relevant for a given package or subsystem.
+Look in `docs/src/content/docs/reference/` to identify which reference docs are relevant for a given package or subsystem.
 
 ### Step 3: Analyze Documentation Impact
 

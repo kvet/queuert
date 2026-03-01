@@ -125,7 +125,7 @@ describe("Metrics", () => {
       client,
       concurrency: 1,
       processDefaults: {
-        retryConfig: {
+        backoffConfig: {
           initialDelayMs: 10,
           multiplier: 2.0,
           maxDelayMs: 100,
@@ -704,7 +704,7 @@ describe("Metrics", () => {
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      retryConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+      backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
       processors: {
         test: {
           attemptHandler: async ({ complete }) => {
@@ -886,7 +886,7 @@ describe("Spans", () => {
       client,
       concurrency: 1,
       processDefaults: {
-        retryConfig: {
+        backoffConfig: {
           initialDelayMs: 10,
           multiplier: 2.0,
           maxDelayMs: 100,
@@ -1912,7 +1912,7 @@ describe("Rollback", () => {
       concurrency: 1,
       processDefaults: {
         pollIntervalMs: 100,
-        retryConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+        backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
       },
       processors: {
         test: {
@@ -2085,7 +2085,7 @@ describe("Rollback", () => {
       concurrency: 1,
       processDefaults: {
         pollIntervalMs: 100,
-        retryConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+        backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
       },
       processors: {
         linear: {

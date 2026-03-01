@@ -71,6 +71,7 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
   };
 };
 
+/** Create a state adapter backed by PostgreSQL. Returns the adapter with a `migrateToLatest()` method for schema migrations. */
 export const createPgStateAdapter = async <
   TTxContext extends BaseTxContext,
   TIdType extends string = UUID,
@@ -295,10 +296,12 @@ export const createPgStateAdapter = async <
       if (refs.length > 0) {
         throw new BlockerReferenceError(
           `Cannot delete chains: ${[...new Set(refs.map((r) => r.blocked_by_chain_id))].join(", ")} referenced as blockers`,
-          refs.map((r) => ({
-            chainId: r.blocked_by_chain_id,
-            referencedByJobId: r.job_id,
-          })),
+          {
+            references: refs.map((r) => ({
+              chainId: r.blocked_by_chain_id,
+              referencedByJobId: r.job_id,
+            })),
+          },
         );
       }
       const rows = await executeTypedSql({
@@ -615,6 +618,7 @@ export const createPgStateAdapter = async <
   };
 };
 
+/** PostgreSQL state adapter type. Alias for `StateAdapter` with PostgreSQL-specific type parameters. */
 export type PgStateAdapter<TTxContext extends BaseTxContext, TJobId extends string> = StateAdapter<
   TTxContext,
   TJobId

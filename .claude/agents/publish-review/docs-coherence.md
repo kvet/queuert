@@ -9,9 +9,11 @@ Read and analyze these files:
 **Main documentation:**
 
 - `README.md` - User-facing overview
-- `CLAUDE.md` - Index to design docs and packages (minimal content)
+- `CLAUDE.md` - Session instructions (workflow requirements, high-level links)
 
-**Design docs:** All files in `docs/design/` (see CLAUDE.md for the indexed list)
+**Reference docs:** All files in `docs/src/content/docs/reference/` (architectural — these defer to TSDoc for API signatures)
+
+**TSDoc:** All public exports in `packages/*/src/**/*.ts` have TSDoc comments (primary API documentation)
 
 **Package READMEs:** All `packages/*/README.md` files
 
@@ -32,7 +34,8 @@ Read and analyze these files:
 
 ### 2. Feature Parity
 
-- Design docs should cover all major features
+- Design docs should cover architectural context for all major features (not API signatures — those are in TSDoc)
+- TSDoc should exist on all public exports with accurate descriptions
 - Package READMEs should document all exports and configuration options
 - README.md should give accurate overview matching design docs
 
@@ -63,7 +66,7 @@ Read and analyze these files:
 
 **Example issues to find:**
 
-- Link to `docs/design/old-doc.md` that doesn't exist
+- Link to a reference doc that doesn't exist
 - Reference to `process.test-suite.ts` but file is `process.test-suite.spec.ts`
 
 ### 5. Completeness Gaps

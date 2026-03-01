@@ -60,7 +60,7 @@ const stateAdapter = await createPgStateAdapter({
 });
 
 const notifyAdapter = await createPgNotifyAdapter({
-  notifyProvider: myPgNotifyProvider, // You provide this - see below
+  provider: myPgNotifyProvider, // You provide this - see below
 });
 
 const client = await createClient({
@@ -89,7 +89,7 @@ const stateAdapter = await createPgStateAdapter({
 
 ```typescript
 const notifyAdapter = await createPgNotifyAdapter({
-  notifyProvider: myPgNotifyProvider,
+  provider: myPgNotifyProvider,
   channelPrefix: "queuert", // Channel prefix (default: "queuert")
 });
 ```
@@ -119,4 +119,4 @@ You need to implement a state provider that bridges your PostgreSQL client (raw 
 
 ## Documentation
 
-For full documentation, examples, and API reference, see the [main Queuert README](https://github.com/kvet/queuert#readme).
+For full documentation, examples, and API reference, see the [Queuert documentation](https://kvet.github.io/queuert/).

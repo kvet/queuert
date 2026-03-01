@@ -36,7 +36,6 @@ export {
   RescheduleJobError,
   WaitChainTimeoutError,
   rescheduleJob,
-  type BlockerReference,
   type JobTypeValidationErrorCode,
 } from "./errors.js";
 export { type TypedAbortSignal } from "./helpers/abort.js";
@@ -59,6 +58,7 @@ export {
   createTransactionHooks,
   withTransactionHooks,
   type TransactionHooks,
+  type TransactionHooksHandle,
 } from "./transaction-hooks.js";
 export {
   type AttemptHandlerFn,

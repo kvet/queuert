@@ -542,7 +542,7 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       if (refs.length > 0) {
         throw new BlockerReferenceError(
           `Cannot delete chains: ${refs.map((r) => r.chainId).join(", ")} referenced as blockers`,
-          refs,
+          { references: refs },
         );
       }
 

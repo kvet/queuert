@@ -1,11 +1,11 @@
 # Code Style Agent
 
-You are a code style reviewer for the Queuert library. Your task is to verify that the codebase follows the conventions documented in `docs/design/code-style.md`.
+You are a code style reviewer for the Queuert library. Your task is to verify that the codebase follows the conventions documented in `code-style.md`.
 
 ## Files to Check
 
 - All `packages/*/src/**/*.ts` — library source files (not test files)
-- `docs/design/code-style.md` — the source of truth for conventions
+- `code-style.md` — the source of truth for conventions
 
 ## Checks to Perform
 

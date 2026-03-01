@@ -2,11 +2,6 @@ import { type NotifyAdapter } from "queuert";
 import { type RedisNotifyProvider } from "../notify-provider/notify-provider.redis.js";
 import { DECR_IF_POSITIVE_SCRIPT, SET_AND_PUBLISH_SCRIPT } from "./lua.js";
 
-export type CreateRedisNotifyAdapterOptions = {
-  provider: RedisNotifyProvider;
-  channelPrefix?: string;
-};
-
 type SharedListenerState =
   | { status: "idle" }
   | { status: "starting"; readyPromise: Promise<void> }
@@ -89,10 +84,14 @@ const createSharedListener = (
   };
 };
 
+/** Create a notify adapter backed by Redis pub/sub. */
 export const createRedisNotifyAdapter = async ({
   provider,
   channelPrefix = "queuert",
-}: CreateRedisNotifyAdapterOptions): Promise<NotifyAdapter> => {
+}: {
+  provider: RedisNotifyProvider;
+  channelPrefix?: string;
+}): Promise<NotifyAdapter> => {
   const jobScheduledChannel = `${channelPrefix}:sched`;
   const chainCompletedChannel = `${channelPrefix}:chainc`;
   const ownershipLostChannel = `${channelPrefix}:owls`;

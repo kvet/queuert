@@ -49,7 +49,7 @@ export const stateResilienceTestSuite = ({
     const flakyWorker = await createInProcessWorker({
       client: flakyWorkerClient,
       concurrency: 1,
-      retryConfig: {
+      backoffConfig: {
         initialDelayMs: 1,
         multiplier: 1,
         maxDelayMs: 1,
@@ -61,7 +61,7 @@ export const stateResilienceTestSuite = ({
           leaseMs: 10,
           renewIntervalMs: 5,
         },
-        retryConfig: {
+        backoffConfig: {
           initialDelayMs: 1,
           multiplier: 1,
           maxDelayMs: 1,
@@ -135,7 +135,7 @@ export const stateResilienceTestSuite = ({
       const flakyWorker = await createInProcessWorker({
         client: flakyWorkerClient,
         concurrency: 5,
-        retryConfig: {
+        backoffConfig: {
           initialDelayMs: 1,
           multiplier: 1,
           maxDelayMs: 1,
@@ -147,7 +147,7 @@ export const stateResilienceTestSuite = ({
             leaseMs: 10,
             renewIntervalMs: 5,
           },
-          retryConfig: {
+          backoffConfig: {
             initialDelayMs: 1,
             multiplier: 1,
             maxDelayMs: 1,
@@ -222,7 +222,7 @@ export const stateResilienceTestSuite = ({
       const workerConfig = {
         client: flakyWorkerClient,
         concurrency: 5,
-        retryConfig: {
+        backoffConfig: {
           initialDelayMs: 1,
           multiplier: 1,
           maxDelayMs: 1,
@@ -238,7 +238,7 @@ export const stateResilienceTestSuite = ({
             leaseMs: 10,
             renewIntervalMs: 5,
           },
-          retryConfig: {
+          backoffConfig: {
             initialDelayMs: 1,
             multiplier: 1,
             maxDelayMs: 1,

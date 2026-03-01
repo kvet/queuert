@@ -189,7 +189,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       client,
       concurrency: 1,
       processDefaults: {
-        retryConfig: {
+        backoffConfig: {
           initialDelayMs: 1,
           multiplier: 1,
           maxDelayMs: 1,
@@ -272,7 +272,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       client,
       concurrency: 1,
       processDefaults: {
-        retryConfig: {
+        backoffConfig: {
           initialDelayMs: 10,
           multiplier: 2.0,
           maxDelayMs: 100,

@@ -115,8 +115,8 @@ const worker = await createInProcessWorker({
   processDefaults: {
     pollIntervalMs: 60_000, // How often to poll for new jobs (default: 60s)
 
-    // Retry configuration for failed job attempts
-    retryConfig: {
+    // Backoff configuration for failed job attempts
+    backoffConfig: {
       initialDelayMs: 10_000, // Initial retry delay (default: 10s)
       multiplier: 2.0, // Exponential backoff multiplier
       maxDelayMs: 300_000, // Maximum retry delay (default: 5min)
@@ -150,7 +150,7 @@ const worker = await createInProcessWorker({
   client,
   processors: {
     'long-running-job': {
-      retryConfig: { initialDelayMs: 30_000, multiplier: 2.0, maxDelayMs: 600_000 },
+      backoffConfig: { initialDelayMs: 30_000, multiplier: 2.0, maxDelayMs: 600_000 },
       leaseConfig: { leaseMs: 300_000, renewIntervalMs: 60_000 },
       attemptHandler: async ({ job, complete }) => { ... },
     },
@@ -171,7 +171,7 @@ const client = await createClient({ stateAdapter, registry, log });
 const worker = await createInProcessWorker({ client, processors });
 ```
 
-For production, integrate with your logging library (Pino, Winston, etc.) by implementing a custom `Log` function. See the `log-console`, `log-pino`, and `log-winston` examples.
+For production, integrate with your logging library (Pino, Winston, etc.) by implementing a custom `Log` function. See the [log-console](https://github.com/kvet/queuert/tree/main/examples/log-console), [log-pino](https://github.com/kvet/queuert/tree/main/examples/log-pino), and [log-winston](https://github.com/kvet/queuert/tree/main/examples/log-winston) examples.
 
 ## Exports
 
@@ -190,6 +190,8 @@ For production, integrate with your logging library (Pino, Winston, etc.) by imp
 **Types:**
 
 - `Log` - Logger interface for custom logging implementations
+- `TransactionHooks` - Transaction hooks instance type
+- `JobTypeRegistry` - Registry instance type
 
 **Adapter interfaces:**
 
@@ -224,6 +226,8 @@ For production, integrate with your logging library (Pino, Winston, etc.) by imp
 - `JobTypeMismatchError` - Chain/job type doesn't match expected `typeName`
 - `WaitChainTimeoutError` - Timeout waiting for chain
 - `RescheduleJobError` - Thrown by `rescheduleJob()` helper
+- `BlockerReferenceError` - External chains depend on deletion targets as blockers
+- `HookNotRegisteredError` - Transaction hook accessed before registration
 
 **Helpers:**
 
@@ -244,4 +248,4 @@ These types are exported for advanced use cases like building custom adapters:
 
 ## Documentation
 
-For full documentation, examples, and API reference, see the [main Queuert README](https://github.com/kvet/queuert#readme).
+For full documentation, examples, and API reference, see the [Queuert documentation](https://kvet.github.io/queuert/).

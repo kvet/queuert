@@ -43,12 +43,14 @@ type WorkerStoppedLogEntry = LogEntry<
   WorkerBasicData
 >;
 
+/** Basic job identification data included in log entries. */
 export type JobBasicData = {
   id: string;
   typeName: string;
   chainId: string;
   chainTypeName: string;
 };
+/** Job data with processing status, included in attempt-related log entries. */
 export type JobProcessingData = JobBasicData & { status: StateJob["status"]; attempt: number };
 type JobCreatedLogEntry = LogEntry<
   "job_created",
@@ -117,6 +119,7 @@ type JobCompletedLogEntry = LogEntry<
   { output?: unknown; continuedWith?: JobBasicData } & JobProcessingData & WorkerBasicData
 >;
 
+/** Job chain identification data included in log entries. */
 export type JobChainData = {
   id: string;
   typeName: string;
@@ -201,4 +204,5 @@ type TypedLogEntry =
   // job type validation
   | JobTypeValidationErrorLogEntry;
 
+/** Structured log function. Accepts typed log entries with level, type, message, and data. */
 export type Log = (options: TypedLogEntry) => void;

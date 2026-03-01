@@ -1,5 +1,6 @@
 import { type ScheduleOptions } from "./entities/schedule.js";
 
+/** Thrown when a job's lease is held by another worker. */
 export class JobTakenByAnotherWorkerError extends Error {
   readonly jobId: string | undefined;
   readonly workerId: string | undefined;
@@ -9,7 +10,7 @@ export class JobTakenByAnotherWorkerError extends Error {
     message: string,
     options?: { jobId?: string; workerId?: string; leasedBy?: string | null; cause?: unknown },
   ) {
-    super(message, options?.cause != null ? { cause: options.cause } : undefined);
+    super(message, options?.cause !== undefined ? { cause: options.cause } : undefined);
     this.name = "JobTakenByAnotherWorkerError";
     this.jobId = options?.jobId;
     this.workerId = options?.workerId;
@@ -17,36 +18,40 @@ export class JobTakenByAnotherWorkerError extends Error {
   }
 }
 
+/** Thrown when a job does not exist. */
 export class JobNotFoundError extends Error {
   readonly jobId: string | undefined;
 
   constructor(message: string, options?: { jobId?: string; cause?: unknown }) {
-    super(message, options?.cause != null ? { cause: options.cause } : undefined);
+    super(message, options?.cause !== undefined ? { cause: options.cause } : undefined);
     this.name = "JobNotFoundError";
     this.jobId = options?.jobId;
   }
 }
 
+/** Thrown when a job chain does not exist. */
 export class JobChainNotFoundError extends Error {
   readonly chainId: string | undefined;
 
   constructor(message: string, options?: { chainId?: string; cause?: unknown }) {
-    super(message, options?.cause != null ? { cause: options.cause } : undefined);
+    super(message, options?.cause !== undefined ? { cause: options.cause } : undefined);
     this.name = "JobChainNotFoundError";
     this.chainId = options?.chainId;
   }
 }
 
+/** Thrown when attempting to complete an already-completed job. */
 export class JobAlreadyCompletedError extends Error {
   readonly jobId: string | undefined;
 
   constructor(message: string, options?: { jobId?: string; cause?: unknown }) {
-    super(message, options?.cause != null ? { cause: options.cause } : undefined);
+    super(message, options?.cause !== undefined ? { cause: options.cause } : undefined);
     this.name = "JobAlreadyCompletedError";
     this.jobId = options?.jobId;
   }
 }
 
+/** Thrown when {@link Client.awaitJobChain | awaitJobChain} exceeds its timeout or is aborted. */
 export class WaitChainTimeoutError extends Error {
   readonly chainId: string | undefined;
   readonly timeoutMs: number | undefined;
@@ -55,13 +60,14 @@ export class WaitChainTimeoutError extends Error {
     message: string,
     options?: { chainId?: string; timeoutMs?: number; cause?: unknown },
   ) {
-    super(message, options?.cause != null ? { cause: options.cause } : undefined);
+    super(message, options?.cause !== undefined ? { cause: options.cause } : undefined);
     this.name = "WaitChainTimeoutError";
     this.chainId = options?.chainId;
     this.timeoutMs = options?.timeoutMs;
   }
 }
 
+/** Thrown when a job or chain's actual type does not match the expected `typeName`. */
 export class JobTypeMismatchError extends Error {
   readonly expectedTypeName: string;
   readonly actualTypeName: string;
@@ -70,42 +76,45 @@ export class JobTypeMismatchError extends Error {
     message: string,
     options: { expectedTypeName: string; actualTypeName: string; cause?: unknown },
   ) {
-    super(message, options.cause != null ? { cause: options.cause } : undefined);
+    super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
     this.name = "JobTypeMismatchError";
     this.expectedTypeName = options.expectedTypeName;
     this.actualTypeName = options.actualTypeName;
   }
 }
 
+/** Describes a single blocker reference: which chain is referenced by which job. */
 export type BlockerReference = {
   chainId: string;
   referencedByJobId: string;
 };
 
+/** Thrown when deleting chains that are still referenced as blockers by other jobs. */
 export class BlockerReferenceError extends Error {
   readonly references: readonly BlockerReference[];
 
   constructor(
     message: string,
-    references: readonly BlockerReference[],
-    options?: { cause?: unknown },
+    options: { references: readonly BlockerReference[]; cause?: unknown },
   ) {
-    super(message, options);
+    super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
     this.name = "BlockerReferenceError";
-    this.references = references;
+    this.references = options.references;
   }
 }
 
+/** Thrown when accessing a transaction hook that has not been registered. */
 export class HookNotRegisteredError extends Error {
   readonly key: symbol;
 
-  constructor(key: symbol) {
-    super(`TransactionHooks hook not registered: ${String(key)}`);
+  constructor(message: string, options: { key: symbol }) {
+    super(message);
     this.name = "HookNotRegisteredError";
-    this.key = key;
+    this.key = options.key;
   }
 }
 
+/** Thrown (internally or via {@link rescheduleJob}) to reschedule a job for later processing. */
 export class RescheduleJobError extends Error {
   public readonly schedule: ScheduleOptions;
   constructor(
@@ -121,6 +130,12 @@ export class RescheduleJobError extends Error {
   }
 }
 
+/**
+ * Throw a {@link RescheduleJobError} to reschedule the current job.
+ *
+ * @param schedule - When to retry (absolute date or relative delay).
+ * @param cause - Optional underlying error.
+ */
 export const rescheduleJob = (schedule: ScheduleOptions, cause?: unknown): never => {
   throw new RescheduleJobError(`Reschedule job`, {
     schedule,
@@ -128,6 +143,7 @@ export const rescheduleJob = (schedule: ScheduleOptions, cause?: unknown): never
   });
 };
 
+/** Error codes for job type validation failures. */
 export type JobTypeValidationErrorCode =
   | "not_entry_point"
   | "invalid_continuation"
@@ -135,18 +151,25 @@ export type JobTypeValidationErrorCode =
   | "invalid_input"
   | "invalid_output";
 
+/** Thrown when runtime job type validation fails (via {@link createJobTypeRegistry}). */
 export class JobTypeValidationError extends Error {
+  /** The specific validation failure code. */
   readonly code: JobTypeValidationErrorCode;
+  /** The job type name that failed validation. */
   readonly typeName: string;
+  /** Additional context about the failure. */
   readonly details: Record<string, unknown>;
 
-  constructor(options: {
-    code: JobTypeValidationErrorCode;
-    message: string;
-    typeName: string;
-    details?: Record<string, unknown>;
-  }) {
-    super(options.message);
+  constructor(
+    message: string,
+    options: {
+      code: JobTypeValidationErrorCode;
+      typeName: string;
+      details?: Record<string, unknown>;
+      cause?: unknown;
+    },
+  ) {
+    super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
     this.name = "JobTypeValidationError";
     this.code = options.code;
     this.typeName = options.typeName;

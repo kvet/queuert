@@ -147,6 +147,10 @@ const parseDbJobChainRow = (row: DbJobChainRow): { rootJob: DbJob; lastChainJob:
   return { rootJob, lastChainJob };
 };
 
+/**
+ * Create a state adapter backed by SQLite. Returns the adapter with a `migrateToLatest()` method for schema migrations.
+ * @experimental
+ */
 export const createSqliteStateAdapter = async <
   TTxContext extends BaseTxContext,
   TIdType extends string = UUID,
@@ -503,10 +507,12 @@ export const createSqliteStateAdapter = async <
       if (refs.length > 0) {
         throw new BlockerReferenceError(
           `Cannot delete chains: ${[...new Set(refs.map((r) => r.blocked_by_chain_id))].join(", ")} referenced as blockers`,
-          refs.map((r) => ({
-            chainId: r.blocked_by_chain_id,
-            referencedByJobId: r.job_id,
-          })),
+          {
+            references: refs.map((r) => ({
+              chainId: r.blocked_by_chain_id,
+              referencedByJobId: r.job_id,
+            })),
+          },
         );
       }
       const rows = await executeTypedSql({
@@ -850,6 +856,10 @@ export const createSqliteStateAdapter = async <
   };
 };
 
+/**
+ * SQLite state adapter type. Alias for `StateAdapter` with SQLite-specific type parameters.
+ * @experimental
+ */
 export type SqliteStateAdapter<
   TTxContext extends BaseTxContext,
   TJobId extends string,

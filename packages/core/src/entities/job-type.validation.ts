@@ -93,6 +93,7 @@ type ValidateJobType<TJobType, TValidKeys extends string, T extends BaseJobTypeD
 } & OutputProperty<TJobType> &
   BlockersProperty<TJobType, T>;
 
+/** Marker type for compile-time validated job type definitions. Applied by {@link defineJobTypes}. */
 export type ValidatedJobTypeDefinitions<T extends BaseJobTypeDefinitions> = {
   [K in keyof T]: ValidateJobType<T[K], keyof T & string, T>;
 };

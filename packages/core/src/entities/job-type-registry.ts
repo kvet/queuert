@@ -93,11 +93,10 @@ export const createJobTypeRegistry = <TJobTypeDefinitions>(
     try {
       config.validateEntry(typeName);
     } catch (cause) {
-      throw new JobTypeValidationError({
+      throw new JobTypeValidationError(`Job type "${typeName}" is not an entry point`, {
         code: "not_entry_point",
-        message: `Job type "${typeName}" is not an entry point`,
         typeName,
-        details: { cause },
+        cause,
       });
     }
   },
@@ -105,11 +104,11 @@ export const createJobTypeRegistry = <TJobTypeDefinitions>(
     try {
       return config.parseInput(typeName, input);
     } catch (cause) {
-      throw new JobTypeValidationError({
+      throw new JobTypeValidationError(`Invalid input for job type "${typeName}"`, {
         code: "invalid_input",
-        message: `Invalid input for job type "${typeName}"`,
         typeName,
-        details: { input, cause },
+        details: { input },
+        cause,
       });
     }
   },
@@ -117,11 +116,11 @@ export const createJobTypeRegistry = <TJobTypeDefinitions>(
     try {
       return config.parseOutput(typeName, output);
     } catch (cause) {
-      throw new JobTypeValidationError({
+      throw new JobTypeValidationError(`Invalid output for job type "${typeName}"`, {
         code: "invalid_output",
-        message: `Invalid output for job type "${typeName}"`,
         typeName,
-        details: { output, cause },
+        details: { output },
+        cause,
       });
     }
   },
@@ -129,23 +128,21 @@ export const createJobTypeRegistry = <TJobTypeDefinitions>(
     try {
       config.validateContinueWith(typeName, target);
     } catch (cause) {
-      throw new JobTypeValidationError({
-        code: "invalid_continuation",
-        message: `Job type "${typeName}" cannot continue to "${target.typeName}"`,
-        typeName,
-        details: { target, cause },
-      });
+      throw new JobTypeValidationError(
+        `Job type "${typeName}" cannot continue to "${target.typeName}"`,
+        { code: "invalid_continuation", typeName, details: { target }, cause },
+      );
     }
   },
   validateBlockers: (typeName, blockers) => {
     try {
       config.validateBlockers(typeName, blockers);
     } catch (cause) {
-      throw new JobTypeValidationError({
+      throw new JobTypeValidationError(`Invalid blockers for job type "${typeName}"`, {
         code: "invalid_blockers",
-        message: `Invalid blockers for job type "${typeName}"`,
         typeName,
-        details: { blockers, cause },
+        details: { blockers },
+        cause,
       });
     }
   },

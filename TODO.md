@@ -1,5 +1,7 @@
 # Short term
 
+- [EPIC] Prepare 0.3 release
+- [TASK] Re-introduce ts isolatedDeclarations for public libs
 - [EPIC] Dashboard
   - [TASK,COMPLEX] Better UI
   - [?,REF] Filter by status in chains view
@@ -8,9 +10,15 @@
   - [REF] Migrate dashboard routes from StateAdapter to client API
   - [REF] Fix job detail: fetches all chain jobs to find continuation — use targeted query
   - [REF] Fix stale cursor race condition on filter change in ChainList/JobList
-- [TASK,COMPLEX] Job cleanup utility (see [Plugins](docs/design/plugins.md), [Cleanup Plugin](docs/design/cleanup-plugin.md))
-- [TASK] Review all public methods and types for naming, consistency, and clarity; add inline docs
-- [EPIC] Prepare 0.3 release
+- [REF] Plugins
+  - Attempt middleware plugin
+  - Client amend
+  - Job definition amend
+  - Job processors amend
+- [TASK] Use transactionHooks in `deleteJobChains` to buffer post-delete side effects (e.g., observability events)
+- [?,TASK] Review `allowEmptyWorker` flag in job-process.ts staged mode — currently set when `prepareTransactionContext.status === "pending"`, may be removable
+- [TASK,COMPLEX] Job cleanup utility
+- [EPIC] Prepare 0.4 release
 
 # Medium term
 
@@ -23,10 +31,13 @@
   - [TASK,EASY] Validate `PRAGMA foreign_keys = ON` at adapter init (FK on `job_blocker.blocked_by_chain_id` requires it)
   - [TASK,EASY] get rid of skipConcurrencyTests flag in resilience tests (separate test suite?)
 - [EPIC] MySQL/MariaDB adapter
-- [?,TASK] test against bun and it's built-in sqlite, postgres clients
+- [?,TASK] test against bun and its built-in sqlite, postgres clients
 - [?,TASK,MEDIUM] update lease in one operation (currently two: getForUpdate + update)
 - [?,REF] Skip unnecessary state adapter calls per processing mode (atomic: no renewJobLease; staged: no getJobForUpdate before complete). Processor-level change, no adapter interface changes needed. See: `process-modes.test-suite.ts` TODOs
-- [EPIC] Website for docs, examples, dashboard, etc (currently in monorepo README)
+- [EPIC] Docs website enhancements
+  - [TASK] Add interactive examples / live demos
+  - [TASK] Custom branding and styling
+  - [TASK] Publish API reference docs (starlight-typedoc)
 
 # Long term
 

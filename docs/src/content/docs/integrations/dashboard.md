@@ -1,0 +1,99 @@
+---
+title: Dashboard
+description: Embeddable web UI for observing job chains and jobs.
+sidebar:
+  order: 3
+---
+
+`@queuert/dashboard` provides an embeddable web UI for observing job chains and jobs. It mounts as a single `fetch` handler on your existing server -- no external build steps or runtime dependencies beyond `queuert`.
+
+```bash
+npm install @queuert/dashboard
+```
+
+> **Experimental** -- API may change between minor versions.
+
+## Quick start
+
+```ts
+import { createDashboard } from "@queuert/dashboard";
+
+const dashboard = createDashboard({ client });
+
+// Use with any server that accepts a fetch handler
+serve({ fetch: dashboard.fetch, port: 3000 });
+```
+
+`createDashboard` accepts a Queuert `client` (created via `createClient`) and returns `{ fetch }` -- a standard web `fetch` handler. Pass it to any server runtime (Node.js, Bun, Deno, etc.). The handler serves both API routes and the pre-built frontend.
+
+The dashboard provides:
+
+- **Chain list** -- Browse chains with status badges, type filtering, and ID search
+- **Chain detail** -- Full job sequence, blocker relationships, and blocking chains
+- **Job list** -- Cross-chain job view with status/type filtering
+- **Job detail** -- Input/output data, error messages, lease info, continuation links
+
+Read-only -- no mutations. Add authentication middleware before the dashboard handler to restrict access.
+
+## UI views
+
+### Chain list
+
+The primary view. Lists chains ordered by creation time (newest first) with inline previews. Each row shows the chain type name, chain ID, status badge, last job type (if the chain has continuations), attempt count (for blocked chains), creation time, and input preview.
+
+Filtering supports searching by chain or job ID and by type name. Filter buttons next to type names and IDs let you quickly narrow results. A "Hide blockers" toggle filters out chains that are blockers for other chains. Pagination is cursor-based with a "Load more" button.
+
+Clicking a row navigates to the chain detail view.
+
+### Chain detail
+
+Shows a specific chain with its full job sequence and blocker relationships.
+
+- **Jobs section**: All jobs in the chain, ordered by creation. Each job is a clickable card. Completed jobs show input and output. Running jobs show lease info and the worker processing them. Failed attempts show the error.
+- **Blockers**: Shown per-job -- only jobs that have blockers display a blockers subsection with chain links and status.
+- **Blocking section**: Lists jobs from other chains that depend on this chain as a blocker.
+
+### Job list
+
+A cross-chain job view with the same layout as the chain list, but each row represents an individual job with a link to its parent chain. Supports filtering by job or chain ID, type name, and status.
+
+### Job detail
+
+Full job inspection. Shown as a dedicated view when navigating from the job list, or inline-expanded in the chain detail view. Sections appear conditionally based on job state:
+
+- **Info** -- Status, attempt count, created/scheduled/completed timestamps, worker ID, and lease expiry.
+- **Blockers** -- Only when the job has blockers. Shows each blocker chain with its status.
+- **Input** -- The job's input data as JSON.
+- **Output** or **Continued with** (mutually exclusive) -- Output shows the result JSON for terminal jobs. Continued with shows a link to the next job in the chain with its status.
+- **Error** -- When the job has a `lastAttemptError` from a previous failed attempt.
+
+## Architecture
+
+The dashboard is a self-contained package with two layers:
+
+- **Backend**: A standard `fetch` handler powered by Hono (bundled internally). Serves API routes that query the Queuert client's state adapter directly.
+- **Frontend**: A SolidJS single-page application, pre-built as static JS/CSS and shipped within the package. No external build steps required at deploy time.
+
+The dashboard works with all state adapters (PostgreSQL, SQLite, in-memory) since it queries through the client's existing query methods.
+
+## Authentication
+
+The dashboard does not include authentication or authorization. To restrict access, add middleware before the dashboard handler:
+
+```ts
+const server = serve({
+  fetch: (request) => {
+    if (!isAuthenticated(request)) {
+      return new Response("Unauthorized", { status: 401 });
+    }
+    return dashboard.fetch(request);
+  },
+  port: 3000,
+});
+```
+
+See [dashboard](https://github.com/kvet/queuert/tree/main/examples/dashboard) for a complete example.
+
+## See Also
+
+- [Job & Chain Queries](/queuert/guides/queries/) — Client query methods used by the dashboard

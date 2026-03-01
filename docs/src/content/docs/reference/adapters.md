@@ -1,4 +1,9 @@
-# Adapter Design
+---
+title: Adapter Architecture
+description: State, notify, and observability adapter design.
+sidebar:
+  order: 5
+---
 
 ## Overview
 
@@ -6,26 +11,7 @@ This document describes the design philosophy behind Queuert's adapter system, i
 
 ## Async Factory Pattern
 
-Public-facing adapter factories that may perform I/O are async for consistency:
-
-```typescript
-// Public adapters - async (may perform I/O)
-createClient → Promise<Client>
-createInProcessWorker → Promise<InProcessWorker>
-createPgStateAdapter → Promise<StateAdapter>
-createSqliteStateAdapter → Promise<StateAdapter>
-createPgNotifyAdapter → Promise<NotifyAdapter>
-createRedisNotifyAdapter → Promise<NotifyAdapter>
-createNatsNotifyAdapter → Promise<NotifyAdapter>
-```
-
-In-process and internal-only factories remain sync since they have no I/O:
-
-```typescript
-// Internal adapters - sync (no I/O)
-createInProcessStateAdapter → StateAdapter
-createInProcessNotifyAdapter → NotifyAdapter
-```
+Public-facing adapter factories that may perform I/O are async for consistency. In-process and internal-only factories remain sync since they have no I/O.
 
 ### Rationale
 
@@ -49,14 +35,7 @@ This principle ensures predictable performance and proper atomicity. Use batch S
 
 ### Context Architecture
 
-The `StateAdapter` type accepts two generic parameters:
-
-```typescript
-StateAdapter<TTxContext, TJobId>;
-```
-
-- `TTxContext extends BaseTxContext`: Transaction context type containing database client/session info
-- `TJobId extends string`: The job ID type for input parameters
+The `StateAdapter` type accepts two generic parameters: `TTxContext` (transaction context containing database client/session info) and `TJobId` (the job ID type for input parameters).
 
 The context is named `TTxContext` (transaction context) because it's exclusively used within transactions. When you call `runInTransaction`, the callback receives a context that represents an active transaction.
 
@@ -109,27 +88,13 @@ The `reapExpiredJobLease` method supports an `ignoredJobIds` parameter to preven
 
 ### Internal Type Design
 
-`StateJob` is a non-generic type with `string` for all ID fields:
-
-```typescript
-interface StateJob {
-  id: string;
-  chainId: string;
-  // ... other fields
-}
-```
-
-The `StateAdapter` methods accept `TJobId` for input parameters but return plain `StateJob`. This simplifies internal code while allowing adapters to expose typed IDs to consumers via type helpers like `GetStateAdapterJobId<TStateAdapter>`.
+`StateJob` is a non-generic type with `string` for all ID fields. The `StateAdapter` methods accept `TJobId` for input parameters but return plain `StateJob`. This simplifies internal code while allowing adapters to expose typed IDs to consumers via type helpers like `GetStateAdapterJobId<TStateAdapter>`.
 
 ## NotifyAdapter Design
 
 ### Broadcast Semantics
 
-All notifications use broadcast (pub/sub) semantics:
-
-- `notifyJobScheduled(typeName, count)`: Broadcasts to all workers listening for this job type
-- `listenJobChainCompleted(chainId, callback)`: Receives notification when chain completes
-- `listenJobOwnershipLost(jobId, callback)`: Receives notification when job ownership is lost
+All notifications use broadcast (pub/sub) semantics with three notify/listen pairs: job scheduling, chain completion, and ownership loss. See the `NotifyAdapter` type TSDoc for method details.
 
 ### Hint-Based Optimization
 
@@ -158,4 +123,32 @@ The `ObservabilityAdapter` provides two observability mechanisms:
 
 2. **Tracing**: `startJobSpan` and `startAttemptSpan` methods return handles for managing span lifecycle. Spans follow OpenTelemetry messaging conventions with PRODUCER spans for job creation and CONSUMER spans for processing.
 
-When no adapter is provided, a noop implementation is used automatically, making observability opt-in. See [ObservabilityAdapter Design](observability-adapter.md) for the full interface, [OTEL Tracing](otel-tracing.md) for span hierarchy, and [OTEL Metrics](otel-metrics.md) for available metrics.
+When no adapter is provided, a noop implementation is used automatically, making observability opt-in. See [OTEL Tracing](../otel-tracing/) for span hierarchy and [OTEL Metrics](../otel-metrics/) for available metrics.
+
+### Transactional Buffering
+
+Observability events emitted inside database transactions are buffered and only flushed after the transaction commits. If the transaction rolls back, buffered events are discarded -- no misleading metrics or spans leak out. Buffering uses `TransactionHooks` -- the same mechanism that flushes notify events on commit.
+
+**Buffered** -- events that represent write claims inside transactions:
+
+- **Creation**: `jobChainCreated`, `jobCreated`, `jobBlocked`, and PRODUCER span ends from `createStateJob`
+- **Completion**: `jobCompleted`, `jobDuration`, `completeJobSpan` (workerless), `jobChainCompleted`, `jobChainDuration`, `completeBlockerSpan`, `jobUnblocked` from `finishJob`
+- **Worker complete**: `jobAttemptCompleted` and continuation PRODUCER span ends from the complete transaction in `job-process`
+- **Error handling**: `jobAttemptFailed` from the error-handling transaction in `job-process`
+
+**Not buffered** -- events that either need immediate context or occur outside transactions:
+
+- **Span starts**: Need trace context immediately for DB writes that store trace IDs
+- **Events outside transactions**: `jobAttemptStarted`, `jobAttemptDuration`, `jobAttemptLeaseRenewed`, attempt span ends (these occur outside the guarded transaction)
+- **Read-only observations**: `refetchJobForUpdate` events observe state without making write claims
+
+### Self-Cleaning
+
+Both `createStateJob` and `finishJob` snapshot the observability buffer on entry and rollback on throw, ensuring partial events from a failed operation don't accumulate in the buffer.
+
+## See Also
+
+- [OTEL Tracing](../otel-tracing/) — Span hierarchy and messaging conventions
+- [OTEL Metrics](../otel-metrics/) — Counters, histograms, and gauges
+- [Client API](../client-api/) — Mutation and query methods
+- [In-Process Worker](../in-process-worker/) — Worker lifecycle and lease management

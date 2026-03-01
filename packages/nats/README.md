@@ -39,7 +39,7 @@ This is a notify adapter only. You still need a state adapter ([PostgreSQL](http
 npm install @queuert/nats
 ```
 
-**Peer dependencies:** `queuert`, `nats` (requires ^2.28.0)
+**Peer dependencies:** `queuert`, `nats` (requires ^2.8.0)
 
 ## Quick Start
 
@@ -102,4 +102,4 @@ Unlike Redis and PostgreSQL, no provider type is exported because NATS accepts t
 
 ## Documentation
 
-For full documentation, examples, and API reference, see the [main Queuert README](https://github.com/kvet/queuert#readme).
+For full documentation, examples, and API reference, see the [Queuert documentation](https://kvet.github.io/queuert/).

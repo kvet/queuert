@@ -56,6 +56,7 @@ import { type LeaseConfig, createLeaseManager } from "./lease.js";
 export type { BackoffConfig } from "../helpers/backoff.js";
 export type { LeaseConfig } from "./lease.js";
 
+/** Middleware that wraps each job attempt. Receives the running job context and a `next` function to invoke the inner handler. */
 export type JobAttemptMiddleware<
   TStateAdapter extends StateAdapter<any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
@@ -74,6 +75,7 @@ export type JobAttemptMiddleware<
   next: () => Promise<T>,
 ) => Promise<T>;
 
+/** Reasons a job attempt's signal can be aborted. */
 export type JobAbortReason =
   | "taken_by_another_worker"
   | "error"
@@ -82,6 +84,7 @@ export type JobAbortReason =
 
 export { RescheduleJobError, rescheduleJob } from "../errors.js";
 
+/** Options passed to the completion callback, including `continueWith` and the transaction context. */
 export type CompleteCallbackOptions<
   TStateAdapter extends StateAdapter<BaseTxContext, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
@@ -121,6 +124,7 @@ export type CompleteCallbackOptions<
   >;
 } & { transactionHooks: TransactionHooks } & GetStateAdapterTxContext<TStateAdapter>;
 
+/** Completion callback type. Receives {@link CompleteCallbackOptions} and returns the result. */
 export type CompleteCallback<
   TStateAdapter extends StateAdapter<BaseTxContext, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
@@ -135,6 +139,7 @@ export type CompleteCallback<
   >,
 ) => Promise<TResult>;
 
+/** Typed completion function provided to the {@link AttemptHandlerFn | attemptHandler}. Call it to finalize the job — either return the output to complete the chain, or call `continueWith` to extend it. */
 export type CompleteFn<
   TStateAdapter extends StateAdapter<BaseTxContext, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
@@ -175,12 +180,20 @@ export type CompleteFn<
       >
 >;
 
+/**
+ * Configuration for the prepare phase.
+ *
+ * - `"atomic"` — prepare and complete run in the same transaction.
+ * - `"staged"` — prepare commits first, then complete runs in a new transaction with lease renewal.
+ */
 export type PrepareConfig = { mode: "atomic" | "staged" };
 
+/** Callback executed during the prepare phase within the transaction. */
 export type PrepareCallback<TStateAdapter extends StateAdapter<BaseTxContext, any>, T> = (
   prepareCallbackOptions: GetStateAdapterTxContext<TStateAdapter>,
 ) => T | Promise<T>;
 
+/** Typed prepare function provided to the {@link AttemptHandlerFn | attemptHandler}. Controls the processing mode and optionally runs a callback within the prepare transaction. */
 export type PrepareFn<TStateAdapter extends StateAdapter<BaseTxContext, any>> = {
   (config: PrepareConfig): Promise<void>;
   <T>(
@@ -189,6 +202,12 @@ export type PrepareFn<TStateAdapter extends StateAdapter<BaseTxContext, any>> = 
   ): Promise<Awaited<T>>;
 };
 
+/**
+ * Handler function called for each job attempt.
+ *
+ * Receives `signal` (abort signal), `job` (the running job with blockers), `prepare` (transaction setup), and `complete` (finalization).
+ * If `prepare` is not called, the worker auto-calls `prepare({ mode: "staged" })`.
+ */
 export type AttemptHandlerFn<
   TStateAdapter extends StateAdapter<BaseTxContext, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
@@ -227,7 +246,7 @@ export const runJobProcess = async ({
   attemptHandler,
   prepareTransactionContext,
   job,
-  retryConfig,
+  backoffConfig,
   leaseConfig,
   workerId,
   attemptMiddlewares,
@@ -240,7 +259,7 @@ export const runJobProcess = async ({
   >;
   prepareTransactionContext: TransactionContext<BaseTxContext>;
   job: StateJob;
-  retryConfig: BackoffConfig;
+  backoffConfig: BackoffConfig;
   leaseConfig: LeaseConfig;
   workerId: string;
   attemptMiddlewares?: JobAttemptMiddleware<
@@ -273,7 +292,7 @@ export const runJobProcess = async ({
     await refetchJobForUpdateImpl(helpers, {
       txCtx,
       job,
-      allowEmptyWorker: prepareTransactionContext.status === "pending", // TODO!!!: remove?
+      allowEmptyWorker: prepareTransactionContext.status === "pending",
       workerId,
     }).catch((error: unknown) => {
       if (!abortController.signal.aborted) {
@@ -571,7 +590,7 @@ export const runJobProcess = async ({
             error,
             txCtx,
             transactionHooks,
-            retryConfig,
+            backoffConfig,
             workerId,
           }),
         );

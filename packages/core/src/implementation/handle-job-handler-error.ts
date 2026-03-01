@@ -18,14 +18,14 @@ export const handleJobHandlerError = async (
     error,
     txCtx,
     transactionHooks,
-    retryConfig,
+    backoffConfig,
     workerId,
   }: {
     job: StateJob;
     error: unknown;
     txCtx: BaseTxContext;
     transactionHooks: TransactionHooks;
-    retryConfig: BackoffConfig;
+    backoffConfig: BackoffConfig;
     workerId: string;
   },
 ): Promise<{
@@ -42,7 +42,7 @@ export const handleJobHandlerError = async (
   const isRescheduled = error instanceof RescheduleJobError;
   const schedule: ScheduleOptions = isRescheduled
     ? error.schedule
-    : { afterMs: calculateBackoffMs(job.attempt, retryConfig) };
+    : { afterMs: calculateBackoffMs(job.attempt, backoffConfig) };
   const errorString = isRescheduled ? String(error.cause) : String(error);
 
   bufferObservabilityEvent(transactionHooks, () => {

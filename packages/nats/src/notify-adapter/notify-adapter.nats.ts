@@ -1,6 +1,9 @@
 import { type KV, type NatsConnection } from "nats";
 import { type NotifyAdapter } from "queuert";
 
+const decoder = new TextDecoder();
+const encoder = new TextEncoder();
+
 type SharedListenerState =
   | { status: "idle" }
   | { status: "starting"; readyPromise: Promise<void> }
@@ -30,7 +33,7 @@ const createSharedListener = (
         const subscription = nc.subscribe(subject, {
           callback: (_err, msg) => {
             if (state.status === "running") {
-              const payload = new TextDecoder().decode(msg.data);
+              const payload = decoder.decode(msg.data);
               for (const cb of state.callbacks) {
                 cb(payload);
               }
@@ -97,11 +100,11 @@ const tryDecrementHint = async (kv: KV, key: string): Promise<boolean> => {
       const entry = await kv.get(key);
       if (!entry) return false;
 
-      const current = parseInt(new TextDecoder().decode(entry.value), 10);
+      const current = parseInt(decoder.decode(entry.value), 10);
       if (current <= 0) return false;
 
       const newValue = current - 1;
-      await kv.update(key, new TextEncoder().encode(String(newValue)), entry.revision);
+      await kv.update(key, encoder.encode(String(newValue)), entry.revision);
       return true;
     } catch (err) {
       if (err instanceof Error && err.message.includes("wrong last sequence")) {
@@ -113,6 +116,10 @@ const tryDecrementHint = async (kv: KV, key: string): Promise<boolean> => {
   return false;
 };
 
+/**
+ * Create a notify adapter backed by NATS.
+ * @experimental
+ */
 export const createNatsNotifyAdapter = async ({
   nc,
   kv,
@@ -138,10 +145,10 @@ export const createNatsNotifyAdapter = async ({
 
       if (kv) {
         const hintKey = `${hintKeyPrefix}${hintId}`;
-        await kv.put(hintKey, new TextEncoder().encode(String(count)));
+        await kv.put(hintKey, encoder.encode(String(count)));
       }
 
-      nc.publish(jobScheduledSubject, new TextEncoder().encode(payload));
+      nc.publish(jobScheduledSubject, encoder.encode(payload));
     },
 
     listenJobScheduled: async (typeNames, onNotification) => {
@@ -170,7 +177,7 @@ export const createNatsNotifyAdapter = async ({
     },
 
     notifyJobChainCompleted: async (chainId) => {
-      nc.publish(chainCompletedSubject, new TextEncoder().encode(chainId));
+      nc.publish(chainCompletedSubject, encoder.encode(chainId));
     },
 
     listenJobChainCompleted: async (chainId, onNotification) => {
@@ -182,7 +189,7 @@ export const createNatsNotifyAdapter = async ({
     },
 
     notifyJobOwnershipLost: async (jobId) => {
-      nc.publish(ownershipLostSubject, new TextEncoder().encode(jobId));
+      nc.publish(ownershipLostSubject, encoder.encode(jobId));
     },
 
     listenJobOwnershipLost: async (jobId, onNotification) => {

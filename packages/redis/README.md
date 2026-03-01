@@ -111,4 +111,4 @@ const notifyAdapter = await createRedisNotifyAdapter({
 
 ## Documentation
 
-For full documentation, examples, and API reference, see the [main Queuert README](https://github.com/kvet/queuert#readme).
+For full documentation, examples, and API reference, see the [Queuert documentation](https://kvet.github.io/queuert/).

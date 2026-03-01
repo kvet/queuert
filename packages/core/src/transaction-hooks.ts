@@ -6,15 +6,41 @@ type HookDef<T> = {
   discard?: (state: T) => void | Promise<void>;
 };
 
+/**
+ * A key-value store for transaction-scoped hooks.
+ *
+ * Side effects (notifications, observability) are buffered via hooks and
+ * only flushed after the caller's transaction commits.
+ */
 export type TransactionHooks = {
+  /** Register a hook with the given key. */
   set<T>(key: symbol, hook: HookDef<T>): void;
+  /** Get the hook state for the given key, creating it with `factory` if absent. */
   getOrInsert<T>(key: symbol, factory: () => HookDef<T>): T;
+  /** Get the hook state for the given key. Throws {@link HookNotRegisteredError} if not found. */
   get<T>(key: symbol): T;
+  /** Check whether a hook is registered for the given key. */
   has(key: symbol): boolean;
+  /** Remove the hook for the given key. */
   delete(key: symbol): void;
 };
 
-export const createTransactionHooks = () => {
+/**
+ * A {@link TransactionHooks} instance with `flush` and `discard` lifecycle methods.
+ *
+ * - Call `flush()` after the transaction commits to execute all buffered side effects.
+ * - Call `discard()` on rollback to clean up without executing side effects.
+ */
+export type TransactionHooksHandle = {
+  transactionHooks: TransactionHooks;
+  /** Execute all buffered hooks (call after commit). */
+  flush: () => Promise<void>;
+  /** Discard all buffered hooks without executing (call on rollback). */
+  discard: () => Promise<void>;
+};
+
+/** Create a new {@link TransactionHooksHandle}. */
+export const createTransactionHooks = (): TransactionHooksHandle => {
   const hooks = new Map<symbol, HookDef<any>>();
 
   const transactionHooks: TransactionHooks = {
@@ -30,7 +56,9 @@ export const createTransactionHooks = () => {
     get: <T>(key: symbol): T => {
       const hook = hooks.get(key);
       if (!hook) {
-        throw new HookNotRegisteredError(key);
+        throw new HookNotRegisteredError(`TransactionHooks hook not registered: ${String(key)}`, {
+          key,
+        });
       }
       return hook.state as T;
     },
@@ -71,6 +99,7 @@ export const createTransactionHooks = () => {
   return { transactionHooks, flush, discard };
 };
 
+/** Execute a callback with auto-managed transaction hooks. Flushes on success, discards on error. */
 export const withTransactionHooks = async <T>(
   cb: (transactionHooks: TransactionHooks) => Promise<T>,
 ): Promise<T> => {

@@ -18,7 +18,7 @@ A self-contained dashboard that mounts as a single `fetch` handler on your exist
 - **Job list** - Cross-chain job view with status/type filtering
 - **Job detail** - Input/output data, error messages, lease info, continuation links
 
-Read-only only - no mutations (retry, cancel, delete).
+Read-only — no mutations (retry, cancel, delete).
 
 ## Requirements
 
@@ -83,6 +83,4 @@ const server = serve({
 
 ## Documentation
 
-For full documentation, examples, and API reference, see the [main Queuert README](https://github.com/kvet/queuert#readme).
-
-See also: [Dashboard Design](https://github.com/kvet/queuert/blob/main/docs/design/dashboard.md)
+For full documentation, examples, and API reference, see the [Queuert documentation](https://kvet.github.io/queuert/integrations/dashboard/).

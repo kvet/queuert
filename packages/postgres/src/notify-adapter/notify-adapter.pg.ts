@@ -87,6 +87,7 @@ const createSharedListener = (
   };
 };
 
+/** Create a notify adapter backed by PostgreSQL LISTEN/NOTIFY. */
 export const createPgNotifyAdapter = async ({
   provider,
   channelPrefix = "queuert",

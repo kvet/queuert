@@ -18,6 +18,10 @@ const loadAssets = async (): Promise<Assets | null> => {
   return cachedAssets;
 };
 
+/**
+ * Create an embeddable dashboard request handler. Returns a `{ fetch }` object compatible with standard `Request`/`Response`.
+ * @experimental
+ */
 export const createDashboard = <
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TStateAdapter extends StateAdapter<any, any>,

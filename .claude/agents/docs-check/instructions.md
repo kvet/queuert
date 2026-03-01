@@ -13,9 +13,13 @@ You are an expert technical writer and code reviewer. Your goal is to ensure doc
 
 This project has multiple documentation layers:
 
-### Design Documents (`docs/design/`)
+### TSDoc (Source Code)
 
-High-level architectural documentation. See the **Design Documentation** section in CLAUDE.md for the complete indexed list of all design docs and what they cover.
+The primary API documentation lives as TSDoc comments on all public exports in `packages/*/src/**/*.ts`. This includes type descriptions, parameter documentation, `@experimental` tags, and `{@link}` cross-references. Reference docs and READMEs defer to TSDoc for API-level details.
+
+### Reference Documents (`docs/src/content/docs/reference/`)
+
+Architectural documentation published as part of the docs site. These cover design philosophy, patterns, and conceptual explanations — not API signatures (which are in TSDoc).
 
 ### Package READMEs
 
@@ -28,7 +32,7 @@ Each package has a README documenting:
 
 ### Project Root
 
-- `CLAUDE.md` - Session instructions, package list, design doc index
+- `CLAUDE.md` - Session instructions (workflow requirements, high-level links)
 - `README.md` - Project overview (if exists)
 
 ## Analysis Framework
@@ -60,17 +64,17 @@ Each package has a README documenting:
 
 For each changed file, identify relevant documentation:
 
-- **Package source** (`packages/*/src/**`) → that package's README + relevant design docs in `docs/design/`
+- **Package source** (`packages/*/src/**`) → that package's README + relevant reference docs in `docs/src/content/docs/reference/`
 - **Package exports** (`packages/*/src/index.ts`) → package README + CLAUDE.md
 - **Examples** (`examples/**`) → relevant package READMEs
 
-Use CLAUDE.md to identify which design docs are relevant for a given subsystem.
+Look in `docs/src/content/docs/reference/` to identify which reference docs are relevant for a given subsystem.
 
 ### 3. Check for Sync Issues
 
 **API Signature Mismatches**:
 
-- Compare function signatures in code vs documentation
+- Compare function signatures in code vs documentation (TSDoc is the primary source for API signatures; reference docs are architectural)
 - Check constructor parameters
 - Verify option object shapes
 - Look for renamed parameters
@@ -122,7 +126,7 @@ Use CLAUDE.md to identify which design docs are relevant for a given subsystem.
 ### Be Specific
 
 Bad: "The adapters documentation may need updating"
-Good: "In docs/design/adapters.md, the StateAdapter interface example at line 45 uses `createJob()` but the method was renamed to `enqueueJob()` in packages/core/src/state-adapter/state-adapter.ts:123"
+Good: "In docs/src/content/docs/reference/adapters.md, the StateAdapter interface example at line 45 uses `createJob()` but the method was renamed to `enqueueJob()` in packages/core/src/state-adapter/state-adapter.ts:123"
 
 ### Provide Context
 
@@ -158,7 +162,7 @@ When `packages/*/src/index.ts` changes:
 
 When adapter interfaces, worker logic, job processing, or other core subsystems change:
 
-- Identify the relevant design doc(s) in `docs/design/` via CLAUDE.md
+- Identify the relevant reference doc(s) in `docs/src/content/docs/reference/`
 - Check all package READMEs that implement or expose the subsystem
 - Check examples that use the subsystem
 

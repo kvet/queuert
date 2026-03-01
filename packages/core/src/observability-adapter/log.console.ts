@@ -1,5 +1,6 @@
 import { type Log } from "./log.js";
 
+/** Create a {@link Log} implementation that writes to `console`. */
 export const createConsoleLog = (): Log => {
   return (entry) => {
     const { type, level, message, data } = entry;

@@ -39,7 +39,7 @@ export const notifyResilienceTestSuite = ({
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      retryConfig: {
+      backoffConfig: {
         initialDelayMs: 1,
         multiplier: 1,
         maxDelayMs: 1,
@@ -50,7 +50,7 @@ export const notifyResilienceTestSuite = ({
           leaseMs: 10,
           renewIntervalMs: 5,
         },
-        retryConfig: {
+        backoffConfig: {
           initialDelayMs: 1,
           multiplier: 1,
           maxDelayMs: 1,
