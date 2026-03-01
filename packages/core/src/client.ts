@@ -1,5 +1,6 @@
 export const helpersSymbol = Symbol("queuert.helpers");
 
+import { type DeduplicationOptions } from "./entities/deduplication.js";
 import { type JobTypeRegistry } from "./entities/job-type-registry.js";
 import {
   type BaseJobTypeDefinitions,
@@ -23,7 +24,6 @@ import { type ObservabilityAdapter } from "./observability-adapter/observability
 import { type OrderDirection, type Page } from "./pagination.js";
 import {
   type BaseTxContext,
-  type DeduplicationOptions,
   type GetStateAdapterJobId,
   type GetStateAdapterTxContext,
   type StateAdapter,

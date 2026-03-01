@@ -1,5 +1,67 @@
 # @queuert/redis
 
+## 0.3.0
+
+### Minor Changes
+
+- ### Breaking Changes
+  - Redesigned worker to use parallel slot-based execution model
+  - Simplified API naming by removing redundant `Queuert` prefix (`createClient`, `createInProcessWorker`)
+  - Simplified worker config API by reducing property verbosity
+  - Renamed deduplication API from strategy to scope
+  - Replaced `withNotify` with `CommitHooks` for explicit side-effect buffering
+  - Renamed `CommitHooks` to `TransactionHooks` and added discard support
+  - Accept client instance in `createInProcessWorker` instead of individual adapters
+  - Replaced `startBlockers` callback with `blockers` array
+  - Removed `originId` from job model, use deduplication key for continuations
+  - Removed `rootChainId` from job model, unified chain deletion
+  - Removed `updatedAt` from `StateJob` and database schema
+  - Removed state adapter retry wrapper
+  - Split trace context into separate chain and job fields
+  - Moved blockers from `Job` base type to separate `JobWithBlockers` wrapper
+  - Renamed `waitForJobChainCompletion` to `awaitJobChain`
+  - Renamed state adapter methods for clarity and consistency
+  - Improved error classes and client API consistency
+  - Added `chain_index` for deterministic chain ordering and continuation dedup
+  - Changed `deleteJobChains` to return deleted chains
+  - Added distributed tracing to `ObservabilityAdapter`
+  - Hardcoded `queuert` metric prefix and removed messaging semantic convention attributes in OTEL adapter
+  - Cleaned up type exports and renamed reference types
+
+  ### New Features
+  - **Dashboard**: New `@queuert/dashboard` package with job and chain listing UI
+  - **Client query API**: Pagination and type narrowing for `queryJobs` and `queryJobChains`
+  - **Distributed tracing**: OTEL blocker spans with trace context persistence across job chains
+  - **Cascade deletion**: `cascade` option on `deleteJobChains` for transitive dependency deletion
+  - **`awaitJobChain`**: Await chain completion with configurable polling
+  - **Table prefix**: PostgreSQL adapter `tablePrefix` configuration option
+  - **Migration tracking**: Migration version tracking for PostgreSQL and SQLite adapters
+  - **Transaction hooks**: `createTransactionHooks` for manual flush/discard lifecycle
+  - **Documentation site**: Astro-based docs with TSDoc API reference generation
+
+  ### Improvements
+  - Parallel slot-based worker execution for better throughput
+  - Workers only subscribe to job notifications when idle slots are available
+  - Buffered observability events via transaction hooks
+  - State and notify adapter conformance test suites for adapter authors
+  - Comprehensive examples: query, chain-awaiting, chain-deletion, blockers, error-handling, timeouts, workerless, scheduling, deduplication, processing modes, NATS, multi-worker, ArkType validation, memory footprint benchmark
+  - Shared TypeScript configuration via `@queuert/tsconfig` package
+  - Redesigned dashboard to use standard Web APIs instead of Hono
+
+  ### Bug Fixes
+  - Fixed workers reaping their own in-progress jobs with concurrent slots
+  - Scoped deduplication key by chain type name
+  - Fixed context leakage to independent chains during job processing
+  - Fixed orphaned timers blocking process exit
+  - Removed notification listeners before releasing PostgreSQL pool client
+  - Only subscribe to job notifications when worker has idle slots
+  - Added NOT NULL constraint to `chain_id` column in PostgreSQL and SQLite schemas
+
+### Patch Changes
+
+- Updated dependencies
+  - queuert@1.0.0
+
 ## 0.2.0
 
 ### Minor Changes

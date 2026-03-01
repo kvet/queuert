@@ -1,6 +1,5 @@
-import { type DeduplicationOptions } from "../entities/deduplication.js";
-import { type OrderDirection, type Page, type PageParams } from "../pagination.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
+import { type OrderDirection, type Page, type PageParams } from "../pagination.js";
 
 export type StateJobStatus = "blocked" | "pending" | "running" | "completed";
 
@@ -73,7 +72,7 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     chainTypeName: string;
     chainIndex: number;
     input: unknown;
-    deduplication?: DeduplicationOptions;
+    deduplication?: { key: string; scope?: "incomplete" | "any"; windowMs?: number };
     schedule?: ScheduleOptions;
     chainTraceContext?: unknown;
     traceContext?: unknown;

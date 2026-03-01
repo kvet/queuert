@@ -1,6 +1,5 @@
 # Short term
 
-- [EPIC] Prepare 0.3 release
 - [TASK] Re-introduce ts isolatedDeclarations for public libs
 - [REF] Plugins
   - Attempt middleware plugin
