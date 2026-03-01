@@ -2,7 +2,7 @@ import { type JobChain, mapStateJobPairToJobChain } from "../entities/job-chain.
 import { type ScheduleOptions } from "../entities/schedule.js";
 import { type TransactionHooks } from "../transaction-hooks.js";
 import { type Helpers } from "../setup-helpers.js";
-import { type DeduplicationOptions } from "../state-adapter/state-adapter.js";
+import { type DeduplicationOptions } from "../entities/deduplication.js";
 import { createStateJob } from "./create-state-job.js";
 
 export const startJobChain = async <TChainTypeName extends string, TInput, TOutput>(

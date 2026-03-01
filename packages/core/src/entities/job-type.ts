@@ -1,9 +1,9 @@
 /** Reference to a job type by its type name. */
-export type NominalReference<T extends string = string> = { typeName: T };
+export type NominalJobTypeReference<T extends string = string> = { typeName: T };
 /** Reference to a job type by its input shape. */
-export type StructuralReference<T = unknown> = { input: T };
+export type StructuralJobTypeReference<T = unknown> = { input: T };
 /** Reference to another job type — either nominal (by name) or structural (by input shape). */
-export type JobTypeReference = NominalReference | StructuralReference;
+export type JobTypeReference = NominalJobTypeReference | StructuralJobTypeReference;
 
 /**
  * Base shape for a single job type definition.

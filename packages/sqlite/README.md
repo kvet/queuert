@@ -54,6 +54,7 @@ const jobTypes = defineJobTypes<{
 const stateAdapter = await createSqliteStateAdapter({
   stateProvider: mySqliteStateProvider, // You provide this - see below
 });
+await stateAdapter.migrateToLatest();
 
 const client = await createClient({
   stateAdapter,
@@ -70,6 +71,7 @@ const stateAdapter = await createSqliteStateAdapter({
   tablePrefix: "queuert_", // Prefix for table names (default: "queuert_")
   idType: "TEXT", // SQL type for job IDs (default: "TEXT")
   idGenerator: () => crypto.randomUUID(), // ID generator function
+  checkForeignKeys: true, // Enable PRAGMA foreign_keys (default: true)
 });
 ```
 
@@ -88,10 +90,6 @@ You need to implement a state provider that bridges your SQLite client with this
 - `createAsyncLock` - Re-exported from `queuert/internal`
 - `AsyncLock` - Type for the async lock returned by `createAsyncLock`
 - `MigrationResult` - Return type from `stateAdapter.migrateToLatest()` containing `applied`, `skipped`, and `unrecognized` migration names
-
-### Testing (`./testing`)
-
-- `extendWithStateSqlite` - Test context helper for SQLite state adapter
 
 ### Why `createAsyncLock`?
 

@@ -2,8 +2,8 @@ import { type CompletedJobChain, type JobChain } from "./job-chain.types.js";
 import {
   type BaseJobTypeDefinitions,
   type JobTypeReference,
-  type NominalReference,
-  type StructuralReference,
+  type NominalJobTypeReference,
+  type StructuralJobTypeReference,
 } from "./job-type.js";
 import { type CreatedJob, type Job, type JobWithBlockers } from "./job.js";
 
@@ -48,9 +48,9 @@ type MatchingJobTypesByInput<TDefs extends BaseJobTypeDefinitions, TInput> = {
 
 // Resolve reference to job type name(s)
 type ResolveReference<TDefs extends BaseJobTypeDefinitions, TRef> =
-  TRef extends NominalReference<infer TN>
+  TRef extends NominalJobTypeReference<infer TN>
     ? TN & keyof TDefs
-    : TRef extends StructuralReference<infer TI>
+    : TRef extends StructuralJobTypeReference<infer TI>
       ? MatchingJobTypesByInput<TDefs, TI>
       : never;
 

@@ -17,6 +17,7 @@ This document describes code style conventions, testing patterns, and project or
 - **Arrow functions over function declarations**: Use `export const fn = () => {}` instead of `export function fn() {}`. This applies to all exports — named functions, factories, helpers, etc.
 - **Async factory functions**: Factory functions that perform I/O (database setup, network connections) should be async. Pure configuration factories like `createConsoleLog` or `createJobTypeRegistry` should be sync. Note: `createOtelObservabilityAdapter` is async for future-proofing even though current OTEL instrument creation is synchronous.
 - **No barrel files**: Do not create `index.ts` barrel re-export files within subdirectories. The only barrel file is each package's top-level `index.ts` (the package entry point). Internal modules import directly from the source file they need.
+- **No type re-exports from non-owning modules**: A module should only export types it defines. Do not import a type from its source module just to re-export it — consumers should import directly from the module that owns the type. The only exception is each package's top-level `index.ts` entry point.
 - **Symbol descriptions prefixed with `queuert.`**: All internal `Symbol()` instances must use a `"queuert."` prefix in their description string, e.g. `Symbol("queuert.helpers")`. This makes symbols identifiable in debugging and avoids collisions.
 
 ## Naming Conventions
@@ -77,6 +78,7 @@ Adapter packages use their domain-specific prefixes (not "Queuert"):
 | Package              | Factory Function                 | Type                 |
 | -------------------- | -------------------------------- | -------------------- |
 | `@queuert/postgres`  | `createPgStateAdapter`           | `PgStateAdapter`     |
+| `@queuert/postgres`  | `createPgNotifyAdapter`          | -                    |
 | `@queuert/sqlite`    | `createSqliteStateAdapter`       | `SqliteStateAdapter` |
 | `@queuert/redis`     | `createRedisNotifyAdapter`       | -                    |
 | `@queuert/nats`      | `createNatsNotifyAdapter`        | -                    |

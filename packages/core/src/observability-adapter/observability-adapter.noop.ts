@@ -1,13 +1,11 @@
 import { type ObservabilityAdapter } from "./observability-adapter.js";
 
 export const createNoopObservabilityAdapter = (): ObservabilityAdapter => ({
-  // worker
   workerStarted: () => {},
   workerError: () => {},
   workerStopping: () => {},
   workerStopped: () => {},
 
-  // job
   jobCreated: () => {},
   jobAttemptStarted: () => {},
   jobAttemptTakenByAnotherWorker: () => {},
@@ -19,30 +17,23 @@ export const createNoopObservabilityAdapter = (): ObservabilityAdapter => ({
   jobCompleted: () => {},
   jobReaped: () => {},
 
-  // job chain
   jobChainCreated: () => {},
   jobChainCompleted: () => {},
 
-  // blockers
   jobBlocked: () => {},
   jobUnblocked: () => {},
 
-  // notify adapter
   notifyAdapterError: () => {},
 
-  // state adapter
   stateAdapterError: () => {},
 
-  // histograms
   jobChainDuration: () => {},
   jobDuration: () => {},
   jobAttemptDuration: () => {},
 
-  // gauges
   jobTypeIdleChange: () => {},
   jobTypeProcessingChange: () => {},
 
-  // tracing
   startJobSpan: () => undefined,
   startBlockerSpan: () => undefined,
   completeBlockerSpan: () => undefined,

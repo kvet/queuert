@@ -58,6 +58,7 @@ const jobTypes = defineJobTypes<{
 const stateAdapter = await createPgStateAdapter({
   stateProvider: myPgStateProvider, // You provide this - see below
 });
+await stateAdapter.migrateToLatest();
 
 const notifyAdapter = await createPgNotifyAdapter({
   provider: myPgNotifyProvider, // You provide this - see below
@@ -109,13 +110,8 @@ You need to implement a state provider that bridges your PostgreSQL client (raw 
 - `PgStateProvider` - Type for the state provider interface (you implement this)
 - `createPgNotifyAdapter` - Factory to create PostgreSQL notify adapter
 - `PgNotifyProvider` - Type for the notify provider interface (you implement this)
-- `pgLiteral` - SQL literal escaping utility for ORM compatibility (e.g., Prisma's `$queryRawUnsafe`)
+- `pgLiteral` - Tagged template for SQL literal escaping — use when ORMs require raw SQL strings (e.g., Prisma's `$queryRawUnsafe`, Drizzle's `sql.raw()`)
 - `MigrationResult` - Return type from `stateAdapter.migrateToLatest()` containing `applied`, `skipped`, and `unrecognized` migration names
-
-### Testing (`./testing`)
-
-- `extendWithStatePostgres` - Test context helper for PostgreSQL state adapter
-- `extendWithNotifyPostgres` - Test context helper for PostgreSQL notify adapter
 
 ## Documentation
 

@@ -23,6 +23,8 @@
 /**
  * Escapes a JavaScript value as a PostgreSQL literal string.
  *
+ * @experimental
+ *
  * Escaping rules (following `quote_literal()` behavior):
  * - `null`/`undefined`: Returns `NULL` (unquoted keyword)
  * - `boolean`: Returns `'t'` or `'f'`

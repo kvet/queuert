@@ -7,7 +7,7 @@ sidebar:
 
 ## Overview
 
-This document describes the model for how job types reference each other. Instead of referencing other job types by name only, the system supports two reference modes that can be combined flexibly. See `JobTypeReference`, `NominalReference`, and `StructuralReference` TSDoc for type details.
+This document describes the model for how job types reference each other. Instead of referencing other job types by name only, the system supports two reference modes that can be combined flexibly. See `JobTypeReference`, `NominalJobTypeReference`, and `StructuralJobTypeReference` TSDoc for type details.
 
 ## Reference Modes
 

@@ -105,10 +105,6 @@ const notifyAdapter = await createRedisNotifyAdapter({
 - `createRedisNotifyAdapter` - Factory to create Redis notify adapter
 - `RedisNotifyProvider` - Type for the Redis notify provider
 
-### Testing (`./testing`)
-
-- `extendWithNotifyRedis` - Test context helper for Redis notify adapter
-
 ## Documentation
 
 For full documentation, examples, and API reference, see the [Queuert documentation](https://kvet.github.io/queuert/).

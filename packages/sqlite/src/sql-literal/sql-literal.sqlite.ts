@@ -34,6 +34,7 @@
  * - `object`: Returns JSON string
  *
  * @throws {Error} If string contains null bytes (causes undefined behavior in SQLite TEXT)
+ * @experimental
  */
 export const sqliteLiteral = (value: unknown): string => {
   // 1. Handle null/undefined

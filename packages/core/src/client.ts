@@ -538,24 +538,24 @@ export const createClient = async <
       let typeValidated = !typeName;
 
       const checkChain = async () => {
-        const chain = await helpers.stateAdapter.getJobChainById({ chainId: id });
-        if (!chain) {
+        const jobChain = await helpers.stateAdapter.getJobChainById({ chainId: id });
+        if (!jobChain) {
           throw new JobChainNotFoundError(`Job chain with id ${id} not found`, {
             chainId: id as string,
           });
         }
 
         if (!typeValidated) {
-          if (chain[0].chainTypeName !== typeName) {
+          if (jobChain[0].chainTypeName !== typeName) {
             throw new JobTypeMismatchError(
-              `Expected chain ${String(id)} to have type "${typeName}" but found "${chain[0].chainTypeName}"`,
-              { expectedTypeName: typeName!, actualTypeName: chain[0].chainTypeName },
+              `Expected chain ${String(id)} to have type "${typeName}" but found "${jobChain[0].chainTypeName}"`,
+              { expectedTypeName: typeName!, actualTypeName: jobChain[0].chainTypeName },
             );
           }
           typeValidated = true;
         }
 
-        const mapped = mapStateJobPairToJobChain(chain);
+        const mapped = mapStateJobPairToJobChain(jobChain);
         return mapped.status === "completed"
           ? (mapped as CompletedJobChain<JobChainOf<TJobId, TJobTypeDefinitions, TChainTypeName>>)
           : null;
@@ -589,8 +589,8 @@ export const createClient = async <
           await raceWithSleep(notificationPromise, pollIntervalMs, { signal: combinedSignal });
           resetNotificationPromise();
 
-          const chain = await checkChain();
-          if (chain) return chain;
+          const jobChain = await checkChain();
+          if (jobChain) return jobChain;
 
           if (combinedSignal.aborted) break;
         }
@@ -762,11 +762,11 @@ export const createClient = async <
       const txCtx = normalizeTxCtx(rest);
 
       if (typeName) {
-        const chain = await helpers.stateAdapter.getJobChainById({ txCtx, chainId: jobChainId });
-        if (chain && chain[0].chainTypeName !== typeName) {
+        const jobChain = await helpers.stateAdapter.getJobChainById({ txCtx, chainId: jobChainId });
+        if (jobChain && jobChain[0].chainTypeName !== typeName) {
           throw new JobTypeMismatchError(
-            `Expected chain ${String(jobChainId)} to have type "${typeName}" but found "${chain[0].chainTypeName}"`,
-            { expectedTypeName: typeName, actualTypeName: chain[0].chainTypeName },
+            `Expected chain ${String(jobChainId)} to have type "${typeName}" but found "${jobChain[0].chainTypeName}"`,
+            { expectedTypeName: typeName, actualTypeName: jobChain[0].chainTypeName },
           );
         }
       }
@@ -845,11 +845,11 @@ export const createClient = async <
       const txCtx = normalizeTxCtx(rest);
 
       if (typeName) {
-        const chain = await helpers.stateAdapter.getJobChainById({ txCtx, chainId: jobChainId });
-        if (chain && chain[0].chainTypeName !== typeName) {
+        const jobChain = await helpers.stateAdapter.getJobChainById({ txCtx, chainId: jobChainId });
+        if (jobChain && jobChain[0].chainTypeName !== typeName) {
           throw new JobTypeMismatchError(
-            `Expected chain ${String(jobChainId)} to have type "${typeName}" but found "${chain[0].chainTypeName}"`,
-            { expectedTypeName: typeName, actualTypeName: chain[0].chainTypeName },
+            `Expected chain ${String(jobChainId)} to have type "${typeName}" but found "${jobChain[0].chainTypeName}"`,
+            { expectedTypeName: typeName, actualTypeName: jobChain[0].chainTypeName },
           );
         }
       }

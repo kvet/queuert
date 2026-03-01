@@ -112,6 +112,12 @@ const worker = await createInProcessWorker({
   client,
   workerId: "worker-1", // Unique worker identifier (optional)
   concurrency: 10, // Number of jobs to process in parallel (default: 1)
+  // Worker loop recovery backoff (separate from per-job backoff below)
+  backoffConfig: {
+    initialDelayMs: 1_000,
+    multiplier: 2.0,
+    maxDelayMs: 30_000,
+  },
   processDefaults: {
     pollIntervalMs: 60_000, // How often to poll for new jobs (default: 60s)
 
@@ -191,6 +197,7 @@ For production, integrate with your logging library (Pino, Winston, etc.) by imp
 
 - `Log` - Logger interface for custom logging implementations
 - `TransactionHooks` - Transaction hooks instance type
+- `TransactionHooksHandle` - Return type of `createTransactionHooks` with flush/discard lifecycle methods
 - `JobTypeRegistry` - Registry instance type
 
 **Adapter interfaces:**
@@ -239,7 +246,6 @@ These types are exported for advanced use cases like building custom adapters:
 
 - `Client` - Client instance type
 - `InProcessWorker` - Worker instance type
-- `JobTypeReference` - Type for nominal/structural job type references
 - `JobTypeRegistryConfig` - Configuration type for `createJobTypeRegistry`
 - `BaseJobTypeDefinition`, `BaseJobTypeDefinitions`, `DefineJobTypes` - Base definition types
 - `ValidatedJobTypeDefinitions` - Compile-time validation phantom type

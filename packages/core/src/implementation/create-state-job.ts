@@ -8,11 +8,8 @@ import {
   snapshotObservabilityBuffer,
 } from "../helpers/observability-hooks.js";
 import { type Helpers } from "../setup-helpers.js";
-import {
-  type BaseTxContext,
-  type DeduplicationOptions,
-  type StateJob,
-} from "../state-adapter/state-adapter.js";
+import { type DeduplicationOptions } from "../entities/deduplication.js";
+import { type BaseTxContext, type StateJob } from "../state-adapter/state-adapter.js";
 
 export const createStateJob = async (
   helpers: Helpers,

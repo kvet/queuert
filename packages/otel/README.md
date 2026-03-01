@@ -84,10 +84,6 @@ See [OTEL Tracing](https://kvet.github.io/queuert/reference/otel-tracing/) for t
 
 - `createOtelObservabilityAdapter` - Factory to create OpenTelemetry observability adapter
 
-### Testing (`./testing`)
-
-- `extendWithObservabilityOtel` - Test context helper for OpenTelemetry observability adapter
-
 ## Documentation
 
 For full documentation, examples, and API reference, see the [Queuert documentation](https://kvet.github.io/queuert/).

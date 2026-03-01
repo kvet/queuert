@@ -1,8 +1,8 @@
 import {
   type BaseJobTypeDefinitions,
   type JobTypeReference,
-  type NominalReference,
-  type StructuralReference,
+  type NominalJobTypeReference,
+  type StructuralJobTypeReference,
 } from "./job-type.js";
 
 type NoVoid<T> = [T] extends [void] ? never : T;
@@ -31,11 +31,11 @@ type ValidateOutput<TJobType> =
       : never;
 
 type ValidateReference<TRef, TDefs extends BaseJobTypeDefinitions, TValidKeys extends string> =
-  TRef extends NominalReference<infer TN>
+  TRef extends NominalJobTypeReference<infer TN>
     ? TN extends TValidKeys
       ? TRef
-      : NominalReference<TValidKeys>
-    : TRef extends StructuralReference<infer TI>
+      : NominalJobTypeReference<TValidKeys>
+    : TRef extends StructuralJobTypeReference<infer TI>
       ? [MatchingJobTypesByInput<TDefs, TI>] extends [never]
         ? never
         : TRef

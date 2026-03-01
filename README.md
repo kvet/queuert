@@ -68,7 +68,7 @@ const worker = await createInProcessWorker({
   },
 });
 
-await worker.start();
+const stop = await worker.start(); // Call stop() for graceful shutdown
 ```
 
 ## Why Queuert?

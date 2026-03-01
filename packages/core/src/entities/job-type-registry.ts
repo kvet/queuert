@@ -5,7 +5,7 @@ import { type BaseJobTypeDefinitions } from "./job-type.js";
  * Reference object for continuation and blocker validation.
  * Contains both typeName (for nominal validation) and input (for structural validation).
  */
-export type JobTypeReference = {
+export type ResolvedJobTypeReference = {
   readonly typeName: string;
   readonly input: unknown;
 };
@@ -23,9 +23,9 @@ export type JobTypeRegistryConfig = {
   /** Parse and validate output. Return transformed value or throw on failure. */
   parseOutput: (typeName: string, output: unknown) => unknown;
   /** Validate continuation target. Receives { typeName, input } for nominal/structural validation. Throw on failure. */
-  validateContinueWith: (typeName: string, target: JobTypeReference) => void;
+  validateContinueWith: (typeName: string, target: ResolvedJobTypeReference) => void;
   /** Validate blocker references. Receives array of { typeName, input } objects. Throw on failure. */
-  validateBlockers: (typeName: string, blockers: readonly JobTypeReference[]) => void;
+  validateBlockers: (typeName: string, blockers: readonly ResolvedJobTypeReference[]) => void;
 };
 
 /**
@@ -46,10 +46,10 @@ export type JobTypeRegistry<TJobTypeDefinitions = unknown> = {
   parseOutput: (typeName: string, output: unknown) => unknown;
 
   /** Validate continuation target. Throws JobTypeValidationError on failure. */
-  validateContinueWith: (typeName: string, target: JobTypeReference) => void;
+  validateContinueWith: (typeName: string, target: ResolvedJobTypeReference) => void;
 
   /** Validate blocker references. Throws JobTypeValidationError on failure. */
-  validateBlockers: (typeName: string, blockers: readonly JobTypeReference[]) => void;
+  validateBlockers: (typeName: string, blockers: readonly ResolvedJobTypeReference[]) => void;
 
   /** Phantom property for TypeScript type inference. */
   readonly $definitions: TJobTypeDefinitions;

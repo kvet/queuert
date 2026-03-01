@@ -16,8 +16,6 @@ import {
   type ObservabilityAdapter,
 } from "./observability-adapter.js";
 
-// Mapper functions
-
 const mapStateJobToJobBasicData = (job: StateJob): JobBasicData => ({
   id: job.id,
   typeName: job.typeName,

@@ -40,8 +40,8 @@ export const handleChainDetail = async (
   stateAdapter: StateAdapter<any, any>,
   chainId: string,
 ): Promise<Response> => {
-  const chain = await stateAdapter.getJobChainById({ chainId });
-  if (!chain) {
+  const jobChain = await stateAdapter.getJobChainById({ chainId });
+  if (!jobChain) {
     return Response.json({ error: "Chain not found" }, { status: 404 });
   }
 
@@ -65,8 +65,8 @@ export const handleChainDetail = async (
   );
 
   return Response.json({
-    rootJob: serializeJob(chain[0]),
-    lastJob: chain[1] ? serializeJob(chain[1]) : null,
+    rootJob: serializeJob(jobChain[0]),
+    lastJob: jobChain[1] ? serializeJob(jobChain[1]) : null,
     jobs: jobs.items.map(serializeJob),
     jobBlockers: Object.fromEntries(jobBlockers),
   });

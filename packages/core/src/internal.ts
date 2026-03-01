@@ -12,7 +12,6 @@ export {
 } from "./state-adapter/cursor.js";
 export {
   type BaseTxContext,
-  type DeduplicationScope,
   type StateJob,
   type StateJobStatus,
 } from "./state-adapter/state-adapter.js";

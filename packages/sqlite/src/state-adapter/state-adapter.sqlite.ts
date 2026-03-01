@@ -857,10 +857,12 @@ export const createSqliteStateAdapter = async <
 };
 
 /**
- * SQLite state adapter type. Alias for `StateAdapter` with SQLite-specific type parameters.
+ * SQLite state adapter type. Includes `migrateToLatest` for schema migrations.
  * @experimental
  */
 export type SqliteStateAdapter<
   TTxContext extends BaseTxContext,
-  TJobId extends string,
-> = StateAdapter<TTxContext, TJobId>;
+  TJobId extends string = string,
+> = StateAdapter<TTxContext, TJobId> & {
+  migrateToLatest: () => Promise<MigrationResult>;
+};

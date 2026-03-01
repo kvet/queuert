@@ -2,9 +2,9 @@ import { type TransactionHooks } from "../transaction-hooks.js";
 import { type NotifyAdapter } from "../notify-adapter/notify-adapter.js";
 import { type StateJob } from "../state-adapter/state-adapter.js";
 
-const queuertNotifyJobScheduled = Symbol("queuertNotifyJobScheduled");
-const queuertNotifyChainCompleted = Symbol("queuertNotifyChainCompleted");
-const queuertNotifyJobOwnershipLost = Symbol("queuertNotifyJobOwnershipLost");
+const queuertNotifyJobScheduled = Symbol("queuert.notifyJobScheduled");
+const queuertNotifyChainCompleted = Symbol("queuert.notifyChainCompleted");
+const queuertNotifyJobOwnershipLost = Symbol("queuert.notifyJobOwnershipLost");
 
 export const bufferNotifyJobScheduled = (
   transactionHooks: TransactionHooks,

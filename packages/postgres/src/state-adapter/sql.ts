@@ -1,5 +1,4 @@
 import { type Migration, type NamedParameter, type TypedSql, sql } from "@queuert/typed-sql";
-import { type DeduplicationScope } from "queuert/internal";
 
 export type DbJob = {
   id: string;
@@ -220,7 +219,7 @@ export const createJobSql: TypedSql<
     NamedParameter<"chain_type_name", string>,
     NamedParameter<"input", unknown>,
     NamedParameter<"deduplication_key", string | null | undefined>,
-    NamedParameter<"deduplication_scope", DeduplicationScope | null | undefined>,
+    NamedParameter<"deduplication_scope", "incomplete" | "any" | null | undefined>,
     NamedParameter<"deduplication_window_ms", number | null | undefined>,
     NamedParameter<"scheduled_at", Date | null>,
     NamedParameter<"schedule_after_ms", number | null>,
@@ -246,7 +245,7 @@ existing_deduplicated AS (
   FROM {{schema}}.{{table_prefix}}job j
   WHERE $5::text IS NOT NULL
     AND j.deduplication_key = $5
-    AND j.id = j.chain_id
+    AND j.chain_index = 0
     AND j.chain_type_name = $3
     AND (
       $6::text IS NULL

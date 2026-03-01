@@ -23,8 +23,8 @@ Workers process jobs in parallel using slots. See `createInProcessWorker` TSDoc 
 │                                                             │
 │  Main Loop                                                  │
 │  ┌───────────────────────────────────────────────────────┐ │
-│  │ 1. Reap expired lease                                 │ │
-│  │ 2. Fill available slots                               │ │
+│  │ 1. Fill available slots                               │ │
+│  │ 2. Reap expired lease (if idle)                       │ │
 │  │ 3. Wait for notification, timeout, or slot completion │ │
 │  └───────────────────────────────────────────────────────┘ │
 │                           │                                 │
@@ -58,8 +58,8 @@ Workers process jobs in parallel using slots. See `createInProcessWorker` TSDoc 
 
 The worker runs a single coordinating loop:
 
-1. **Reap**: Reclaim one expired lease (if any)
-2. **Fill**: Spawn slots up to `concurrency`
+1. **Fill**: Spawn slots up to `concurrency`
+2. **Reap**: Reclaim one expired lease (if any idle slots remain)
 3. **Wait**: Listen for notification, poll timeout, or slot completion
 4. **Repeat**
 
@@ -82,7 +82,7 @@ Each worker has a unique identity stored in `leasedBy`. The worker tracks active
 
 The reaper reclaims jobs with expired leases, making them available for retry.
 
-At the start of each main loop iteration:
+When idle slots remain in the main loop:
 
 1. Find oldest `running` job where `leasedUntil < now()` and type matches registered types
 2. Transition job: `running` → `pending`, clear `leasedBy` and `leasedUntil`

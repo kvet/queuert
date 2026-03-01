@@ -1,5 +1,4 @@
 import { type Migration, type NamedParameter, type TypedSql, sql } from "@queuert/typed-sql";
-import { type DeduplicationScope } from "queuert/internal";
 
 export const jobColumns = [
   "id",
@@ -248,9 +247,9 @@ export const findDeduplicatedJobSql: TypedSql<
     NamedParameter<"deduplication_key_1", string | null>,
     NamedParameter<"deduplication_key_2", string | null>,
     NamedParameter<"chain_type_name", string>,
-    NamedParameter<"deduplication_scope_1", DeduplicationScope | null>,
-    NamedParameter<"deduplication_scope_2", DeduplicationScope | null>,
-    NamedParameter<"deduplication_scope_3", DeduplicationScope | null>,
+    NamedParameter<"deduplication_scope_1", "incomplete" | "any" | null>,
+    NamedParameter<"deduplication_scope_2", "incomplete" | "any" | null>,
+    NamedParameter<"deduplication_scope_3", "incomplete" | "any" | null>,
     NamedParameter<"deduplication_window_ms_1", number | null>,
     NamedParameter<"deduplication_window_ms_2", number | null>,
   ],

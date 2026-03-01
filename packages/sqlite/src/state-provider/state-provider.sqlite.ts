@@ -8,6 +8,7 @@ import { type BaseTxContext } from "queuert/internal";
  * SQLite client (better-sqlite3, etc.).
  *
  * @typeParam TTxContext - The transaction context type containing database client/connection info
+ * @experimental
  */
 export type SqliteStateProvider<TTxContext extends BaseTxContext> = {
   /**

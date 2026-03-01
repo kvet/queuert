@@ -1,6 +1,6 @@
 import { type TransactionHooks } from "../transaction-hooks.js";
 
-const queuertObservabilityBuffer = Symbol("queuertObservabilityBuffer");
+const queuertObservabilityBuffer = Symbol("queuert.observabilityBuffer");
 
 type ObservabilityBuffer = (() => void)[];
 
