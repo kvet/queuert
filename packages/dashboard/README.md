@@ -75,12 +75,10 @@ const server = serve({
 });
 ```
 
-## Exports
+## API Reference
 
-### Main (`.`)
-
-- `createDashboard` - Factory to create the dashboard fetch handler
+For the full API reference with types and signatures, see the [@queuert/dashboard reference](https://kvet.github.io/queuert/reference/dashboard/).
 
 ## Documentation
 
-For full documentation, examples, and API reference, see the [Queuert documentation](https://kvet.github.io/queuert/integrations/dashboard/).
+For full documentation and examples, see the [Queuert documentation](https://kvet.github.io/queuert/).

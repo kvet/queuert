@@ -98,13 +98,10 @@ const notifyAdapter = await createRedisNotifyAdapter({
 - When N jobs are scheduled, only N workers query the database (via atomic Lua script decrements)
 - Requires two Redis connections because Redis clients in subscribe mode can't run other commands
 
-## Exports
+## API Reference
 
-### Main (`.`)
-
-- `createRedisNotifyAdapter` - Factory to create Redis notify adapter
-- `RedisNotifyProvider` - Type for the Redis notify provider
+For the full API reference with types and signatures, see the [@queuert/redis reference](https://kvet.github.io/queuert/reference/redis/).
 
 ## Documentation
 
-For full documentation, examples, and API reference, see the [Queuert documentation](https://kvet.github.io/queuert/).
+For full documentation and examples, see the [Queuert documentation](https://kvet.github.io/queuert/).

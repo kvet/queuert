@@ -179,79 +179,10 @@ const worker = await createInProcessWorker({ client, processors });
 
 For production, integrate with your logging library (Pino, Winston, etc.) by implementing a custom `Log` function. See the [log-console](https://github.com/kvet/queuert/tree/main/examples/log-console), [log-pino](https://github.com/kvet/queuert/tree/main/examples/log-pino), and [log-winston](https://github.com/kvet/queuert/tree/main/examples/log-winston) examples.
 
-## Exports
+## API Reference
 
-### Main (`.`)
-
-**Factories:**
-
-- `createClient` - Create a Queuert client for job chain management
-- `createInProcessWorker` - Create an in-process worker for job processing
-- `createConsoleLog` - Simple console logger for development
-- `defineJobTypes` - Define job types with compile-time type safety
-- `createJobTypeRegistry` - Create a registry with runtime validation
-- `withTransactionHooks` - Buffer side effects during a transaction, flush on success, discard on error
-- `createTransactionHooks` - Manual transaction hooks lifecycle (flush/discard) for advanced use cases
-
-**Types:**
-
-- `Log` - Logger interface for custom logging implementations
-- `TransactionHooks` - Transaction hooks instance type
-- `TransactionHooksHandle` - Return type of `createTransactionHooks` with flush/discard lifecycle methods
-- `JobTypeRegistry` - Registry instance type
-
-**Adapter interfaces:**
-
-- `StateAdapter` - Database operations for job persistence
-- `NotifyAdapter` - Pub/sub notifications for job scheduling
-- `ObservabilityAdapter` - Metrics and distributed tracing
-
-**Job types:**
-
-- `Job`, `JobWithBlockers` - Job entity types
-- `CompletedJob` - Status-narrowed job type for completed jobs
-- `JobChain`, `CompletedJobChain` - Job chain types
-- `JobStatus`, `JobChainStatus` - Status union types for jobs and chains
-- `Page`, `OrderDirection` - Pagination types for list methods
-
-**Configuration:**
-
-- `ScheduleOptions` - Deferred job scheduling (`{ at: Date }` or `{ afterMs: number }`)
-- `DeduplicationOptions` - Chain deduplication
-- `LeaseConfig`, `RetryConfig`, `BackoffConfig` - Worker configuration
-- `TypedAbortSignal`, `JobAbortReason` - Typed abort signal for process functions
-- `JobAttemptMiddleware` - Middleware type for wrapping job attempt processing
-
-**Error classes:**
-
-- `JobNotFoundError` - Job not found
-- `JobChainNotFoundError` - Job chain not found
-- `JobAlreadyCompletedError` - Job was already completed
-- `JobTakenByAnotherWorkerError` - Another worker took the job
-- `JobTypeValidationError` - Runtime validation failed (with `code` and `details`)
-- `JobTypeValidationErrorCode` - Error code type for `JobTypeValidationError`
-- `JobTypeMismatchError` - Chain/job type doesn't match expected `typeName`
-- `WaitChainTimeoutError` - Timeout waiting for chain
-- `RescheduleJobError` - Thrown by `rescheduleJob()` helper
-- `BlockerReferenceError` - External chains depend on deletion targets as blockers
-- `HookNotRegisteredError` - Transaction hook accessed before registration
-
-**Helpers:**
-
-- `rescheduleJob` - Reschedule a job from within a process function
-
-**Types (Advanced):**
-
-These types are exported for advanced use cases like building custom adapters:
-
-- `Client` - Client instance type
-- `InProcessWorker` - Worker instance type
-- `JobTypeRegistryConfig` - Configuration type for `createJobTypeRegistry`
-- `BaseJobTypeDefinition`, `BaseJobTypeDefinitions`, `DefineJobTypes` - Base definition types
-- `ValidatedJobTypeDefinitions` - Compile-time validation phantom type
-- `InProcessWorkerProcessDefaults`, `InProcessWorkerProcessor`, `InProcessWorkerProcessors` - Worker configuration types
-- `AttemptHandlerFn` - Attempt handler function type
+For the full API reference with types and signatures, see the [queuert reference](https://kvet.github.io/queuert/reference/queuert/client/).
 
 ## Documentation
 
-For full documentation, examples, and API reference, see the [Queuert documentation](https://kvet.github.io/queuert/).
+For full documentation and examples, see the [Queuert documentation](https://kvet.github.io/queuert/).

@@ -78,12 +78,10 @@ Spans include links for continuations, retries, and blocker relationships.
 
 See [OTEL Tracing](https://kvet.github.io/queuert/advanced/otel-tracing/) for the full span hierarchy and attributes.
 
-## Exports
+## API Reference
 
-### Main (`.`)
-
-- `createOtelObservabilityAdapter` - Factory to create OpenTelemetry observability adapter
+For the full API reference with types and signatures, see the [@queuert/otel reference](https://kvet.github.io/queuert/reference/otel/).
 
 ## Documentation
 
-For full documentation, examples, and API reference, see the [Queuert documentation](https://kvet.github.io/queuert/).
+For full documentation and examples, see the [Queuert documentation](https://kvet.github.io/queuert/).

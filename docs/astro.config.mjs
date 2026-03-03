@@ -47,6 +47,44 @@ export default defineConfig({
           autogenerate: { directory: "integrations" },
         },
         {
+          label: "Reference",
+          items: [
+            {
+              label: "queuert",
+              items: [
+                { label: "Client", slug: "reference/queuert/client" },
+                { label: "Worker", slug: "reference/queuert/worker" },
+                { label: "Types", slug: "reference/queuert/types" },
+                { label: "Errors", slug: "reference/queuert/errors" },
+              ],
+            },
+            {
+              label: "@queuert/postgres",
+              slug: "reference/postgres",
+            },
+            {
+              label: "@queuert/sqlite",
+              slug: "reference/sqlite",
+            },
+            {
+              label: "@queuert/redis",
+              slug: "reference/redis",
+            },
+            {
+              label: "@queuert/nats",
+              slug: "reference/nats",
+            },
+            {
+              label: "@queuert/otel",
+              slug: "reference/otel",
+            },
+            {
+              label: "@queuert/dashboard",
+              slug: "reference/dashboard",
+            },
+          ],
+        },
+        {
           label: "Advanced",
           collapsed: true,
           autogenerate: { directory: "advanced" },

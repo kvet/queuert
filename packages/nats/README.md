@@ -87,14 +87,10 @@ const notifyAdapter = await createNatsNotifyAdapter({
 - Without JetStream KV: all listeners query database (same as PostgreSQL LISTEN/NOTIFY)
 - With JetStream KV: uses revision-based CAS operations to limit database queries
 
-## Exports
+## API Reference
 
-### Main (`.`)
-
-- `createNatsNotifyAdapter` - Factory to create NATS notify adapter
-
-Unlike Redis and PostgreSQL, no provider type is exported because NATS accepts the `NatsConnection` directly from the `nats` package. There's only one NATS client in the Node.js ecosystem, so no adapter layer is needed.
+For the full API reference with types and signatures, see the [@queuert/nats reference](https://kvet.github.io/queuert/reference/nats/).
 
 ## Documentation
 
-For full documentation, examples, and API reference, see the [Queuert documentation](https://kvet.github.io/queuert/).
+For full documentation and examples, see the [Queuert documentation](https://kvet.github.io/queuert/).

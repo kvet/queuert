@@ -101,18 +101,10 @@ The notify adapter uses LISTEN/NOTIFY which is fire-and-forget. Workers have bui
 
 You need to implement a state provider that bridges your PostgreSQL client (raw `pg`, Drizzle, Prisma, etc.) with this adapter. The provider handles transaction management and SQL execution. See the [examples](https://github.com/kvet/queuert/tree/main/examples) for complete implementations.
 
-## Exports
+## API Reference
 
-### Main (`.`)
-
-- `createPgStateAdapter` - Factory to create PostgreSQL state adapter
-- `PgStateAdapter` - Type for the PostgreSQL state adapter
-- `PgStateProvider` - Type for the state provider interface (you implement this)
-- `createPgNotifyAdapter` - Factory to create PostgreSQL notify adapter
-- `PgNotifyProvider` - Type for the notify provider interface (you implement this)
-- `pgLiteral` - Tagged template for SQL literal escaping — use when ORMs require raw SQL strings (e.g., Prisma's `$queryRawUnsafe`, Drizzle's `sql.raw()`)
-- `MigrationResult` - Return type from `stateAdapter.migrateToLatest()` containing `applied`, `skipped`, and `unrecognized` migration names
+For the full API reference with types and signatures, see the [@queuert/postgres reference](https://kvet.github.io/queuert/reference/postgres/).
 
 ## Documentation
 
-For full documentation, examples, and API reference, see the [Queuert documentation](https://kvet.github.io/queuert/).
+For full documentation and examples, see the [Queuert documentation](https://kvet.github.io/queuert/).

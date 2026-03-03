@@ -79,33 +79,10 @@ const stateAdapter = await createSqliteStateAdapter({
 
 You need to implement a state provider that bridges your SQLite client with this adapter. The provider handles transaction management and SQL execution. See the [examples](https://github.com/kvet/queuert/tree/main/examples) for complete implementations.
 
-## Exports
+## API Reference
 
-### Main (`.`)
-
-- `createSqliteStateAdapter` - Factory to create SQLite state adapter
-- `SqliteStateAdapter` - Type for the SQLite state adapter
-- `SqliteStateProvider` - Type for the state provider interface (you implement this)
-- `sqliteLiteral` - SQL literal escaping utility for ORM compatibility
-- `createAsyncLock` - Re-exported from `queuert/internal`
-- `AsyncLock` - Type for the async lock returned by `createAsyncLock`
-- `MigrationResult` - Return type from `stateAdapter.migrateToLatest()` containing `applied`, `skipped`, and `unrecognized` migration names
-
-### Why `createAsyncLock`?
-
-SQLite requires serialized write access. If your application performs writes outside of Queuert (e.g., in your state provider), use `createAsyncLock` to coordinate access:
-
-```typescript
-import { createAsyncLock } from "@queuert/sqlite";
-
-const lock = createAsyncLock();
-
-// Use the same lock in your state provider and application code
-await lock(async () => {
-  // Serialized database access
-});
-```
+For the full API reference with types and signatures, see the [@queuert/sqlite reference](https://kvet.github.io/queuert/reference/sqlite/).
 
 ## Documentation
 
-For full documentation, examples, and API reference, see the [Queuert documentation](https://kvet.github.io/queuert/).
+For full documentation and examples, see the [Queuert documentation](https://kvet.github.io/queuert/).
