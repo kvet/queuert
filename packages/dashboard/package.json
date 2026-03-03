@@ -1,6 +1,6 @@
 {
   "name": "@queuert/dashboard",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Embeddable web dashboard for Queuert job queue observation",
   "keywords": [
     "background-jobs",

@@ -1,5 +1,13 @@
 # @queuert/otel
 
+## 0.3.1
+
+### Patch Changes
+
+- Fix dashboard sub-path asset loading and CSP nonce support. Update documentation with API reference section.
+- Updated dependencies
+  - queuert@0.3.1
+
 ## 0.3.0
 
 ### Minor Changes
@@ -60,7 +68,7 @@
 ### Patch Changes
 
 - Updated dependencies
-  - queuert@1.0.0
+  - queuert@0.3.0
 
 ## 0.2.0
 
@@ -95,4 +103,4 @@
 ### Patch Changes
 
 - Updated dependencies
-  - queuert@1.0.0
+  - queuert@0.2.0
