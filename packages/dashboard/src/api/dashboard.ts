@@ -1,5 +1,6 @@
 import { type BaseJobTypeDefinitions, type Client, type StateAdapter } from "queuert";
 import { helpersSymbol } from "queuert/internal";
+import { normalizeMountPath, renderHtml } from "./html.js";
 import { handleChainBlocking, handleChainDetail, handleChainsList } from "./routes/chains.js";
 import { handleJobDetail, handleJobsList } from "./routes/jobs.js";
 
@@ -27,10 +28,13 @@ export const createDashboard = <
   TStateAdapter extends StateAdapter<any, any>,
 >(options: {
   client: Client<TJobTypeDefinitions, TStateAdapter>;
-}): { fetch: (request: Request) => Response | Promise<Response> } => {
+}): { fetch: (request: Request, options?: { nonce?: string }) => Response | Promise<Response> } => {
   const { stateAdapter } = options.client[helpersSymbol];
 
-  const handleRequest = async (request: Request): Promise<Response> => {
+  const handleRequest = async (
+    request: Request,
+    fetchOptions?: { nonce?: string },
+  ): Promise<Response> => {
     const url = new URL(request.url);
     const { pathname } = url;
     let match: RegExpMatchArray | null;
@@ -70,13 +74,8 @@ export const createDashboard = <
     // SPA fallback — serve index.html with <base> tag for correct relative URLs
     const html = assets["/index.html"];
     if (!html) return new Response("Not Found", { status: 404 });
-    const mountPath = pathname
-      .replace(/\/(?:chains|jobs)\/.*$/, "/")
-      .replace(/\/+$/, "/")
-      .replace(/[^a-zA-Z0-9/_.-]/g, "");
-    return new Response(html.content.replace("<head>", `<head><base href="${mountPath}" />`), {
-      headers: { "Content-Type": "text/html" },
-    });
+    const content = renderHtml(html.content, normalizeMountPath(pathname), fetchOptions?.nonce);
+    return new Response(content, { headers: { "Content-Type": "text/html" } });
   };
 
   return { fetch: handleRequest };

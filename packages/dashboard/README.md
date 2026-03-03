@@ -59,7 +59,18 @@ const dashboard = createDashboard({ client });
 serve({ fetch: dashboard.fetch, port: 3000 });
 ```
 
-The dashboard serves both the API and pre-built SolidJS frontend from the same `fetch` handler. Mount it at any path - the frontend adapts to the mount point automatically.
+The dashboard serves both the API and pre-built SolidJS frontend from the same `fetch` handler. Mount it at any path -- the frontend adapts to the mount point automatically via a `<base>` tag with a trailing-slash-normalized mount path.
+
+## Content Security Policy (CSP)
+
+If your app sets a `Content-Security-Policy` header with `script-src 'nonce-...'`, pass the per-request nonce as the second argument to `fetch`:
+
+```typescript
+const nonce = crypto.randomUUID();
+const response = await dashboard.fetch(request, { nonce });
+```
+
+The nonce is added to all `<script>`, `<link>`, and `<style>` tags in the dashboard HTML, making it compatible with strict CSP policies that use nonces for both `script-src` and `style-src`.
 
 ## Authentication
 

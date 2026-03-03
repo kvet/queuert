@@ -76,6 +76,17 @@ The dashboard is a self-contained package with two layers:
 
 The dashboard works with all state adapters (PostgreSQL, SQLite, in-memory) since it queries through the client's existing query methods.
 
+## Content Security Policy (CSP)
+
+If your app sets a `Content-Security-Policy` header with `script-src 'nonce-...'`, pass the per-request nonce as the second argument to `fetch`:
+
+```ts
+const nonce = crypto.randomUUID();
+const response = await dashboard.fetch(request, { nonce });
+```
+
+The nonce is added to all `<script>`, `<link>`, and `<style>` tags in the dashboard HTML. This covers both `script-src` and `style-src` directives that use nonces. Policies that use `'unsafe-inline'` or `'self'` for styles work without a nonce -- the extra attribute is ignored.
+
 ## Authentication
 
 The dashboard does not include authentication or authorization. To restrict access, add middleware before the dashboard handler:
