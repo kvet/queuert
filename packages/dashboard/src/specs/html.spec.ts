@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeMountPath, renderHtml } from "../api/html.js";
+import { renderHtml } from "../api/html.js";
 
 const MOCK_HTML = [
   "<!DOCTYPE html><html>",
@@ -8,50 +8,16 @@ const MOCK_HTML = [
   "</html>",
 ].join("");
 
-describe("normalizeMountPath", () => {
-  it("adds trailing slash to sub-path without slash", () => {
-    expect(normalizeMountPath("/internal/queuert")).toBe("/internal/queuert/");
-  });
-
-  it("preserves trailing slash", () => {
-    expect(normalizeMountPath("/internal/queuert/")).toBe("/internal/queuert/");
-  });
-
-  it("normalizes root path", () => {
-    expect(normalizeMountPath("/")).toBe("/");
-  });
-
-  it("strips SPA route segments and keeps trailing slash", () => {
-    expect(normalizeMountPath("/dash/chains/abc-123")).toBe("/dash/");
-    expect(normalizeMountPath("/dash/jobs/xyz-789/detail")).toBe("/dash/");
-  });
-
-  it("sanitizes invalid characters", () => {
-    expect(normalizeMountPath("/valid/<script>")).toBe("/valid/script/");
-  });
-});
-
 describe("renderHtml", () => {
-  it("injects base href", () => {
-    const result = renderHtml(MOCK_HTML, "/app/");
-    expect(result).toContain('<base href="/app/" />');
+  it("injects base href for sub-path", () => {
+    const result = renderHtml(MOCK_HTML, "/internal/queuert");
+    expect(result).toContain('<base href="/internal/queuert/" />');
+    expect(result).not.toContain("__QUEUERT_BASE__");
   });
 
-  it("injects nonce into script, link, and style tags when provided", () => {
-    const html = MOCK_HTML.replace("</head>", "<style>body{}</style></head>");
-    const result = renderHtml(html, "/", "abc123");
-    expect(result).toContain('<script nonce="abc123"');
-    expect(result).toContain('<link nonce="abc123"');
-    expect(result).toContain('<style nonce="abc123"');
-    expect(result).not.toMatch(/<script(?! nonce=)/);
-    expect(result).not.toMatch(/<link(?! nonce=)/);
-    expect(result).not.toMatch(/<style(?! nonce=)/);
-  });
-
-  it("does not inject nonce when not provided", () => {
-    const result = renderHtml(MOCK_HTML, "/");
-    expect(result).toContain('<script type="module"');
-    expect(result).toContain("<link rel=");
-    expect(result).not.toContain("nonce");
+  it("injects root base href when basePath is empty", () => {
+    const result = renderHtml(MOCK_HTML, "");
+    expect(result).toContain('<base href="/" />');
+    expect(result).not.toContain("__QUEUERT_BASE__");
   });
 });

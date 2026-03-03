@@ -26,6 +26,15 @@ serve({ fetch: dashboard.fetch, port: 3000 });
 
 `createDashboard` accepts a Queuert `client` (created via `createClient`) and returns `{ fetch }` -- a standard web `fetch` handler. Pass it to any server runtime (Node.js, Bun, Deno, etc.). The handler serves both API routes and the pre-built frontend.
 
+When mounting at a sub-path, set `basePath`:
+
+```ts
+const dashboard = createDashboard({
+  client,
+  basePath: "/internal/queuert",
+});
+```
+
 The dashboard provides:
 
 - **Chain list** -- Browse chains with status badges, type filtering, and ID search
@@ -75,17 +84,6 @@ The dashboard is a self-contained package with two layers:
 - **Frontend**: A SolidJS single-page application, pre-built as static JS/CSS and shipped within the package. No external build steps required at deploy time.
 
 The dashboard works with all state adapters (PostgreSQL, SQLite, in-memory) since it queries through the client's existing query methods.
-
-## Content Security Policy (CSP)
-
-If your app sets a `Content-Security-Policy` header with `script-src 'nonce-...'`, pass the per-request nonce as the second argument to `fetch`:
-
-```ts
-const nonce = crypto.randomUUID();
-const response = await dashboard.fetch(request, { nonce });
-```
-
-The nonce is added to all `<script>`, `<link>`, and `<style>` tags in the dashboard HTML. This covers both `script-src` and `style-src` directives that use nonces. Policies that use `'unsafe-inline'` or `'self'` for styles work without a nonce -- the extra attribute is ignored.
 
 ## Authentication
 

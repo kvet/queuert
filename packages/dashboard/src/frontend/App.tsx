@@ -1,10 +1,13 @@
 import { A, useLocation } from "@solidjs/router";
 import { type ParentProps } from "solid-js";
+import { basePath } from "./base.js";
 
 export function App(props: ParentProps) {
   const location = useLocation();
-  const isActive = (path: string) =>
-    path === "/" ? location.pathname === "/" : location.pathname.startsWith(path);
+  const isActive = (path: string) => {
+    const fullPath = basePath + path;
+    return path === "/" ? location.pathname === fullPath : location.pathname.startsWith(fullPath);
+  };
 
   return (
     <div class="layout">

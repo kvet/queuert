@@ -7,10 +7,11 @@ import { ChainDetail } from "./components/ChainDetail.js";
 import { JobList } from "./components/JobList.js";
 import { JobDetail } from "./components/JobDetail.js";
 import "./styles/index.css";
+import { basePath } from "./base.js";
 
 render(
   () => (
-    <Router root={App}>
+    <Router base={basePath} root={App}>
       <Route path="/" component={ChainList} />
       <Route path="/chains/:id" component={ChainDetail} />
       <Route path="/jobs" component={JobList} />

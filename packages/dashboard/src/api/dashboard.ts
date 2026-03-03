@@ -1,6 +1,6 @@
 import { type BaseJobTypeDefinitions, type Client, type StateAdapter } from "queuert";
 import { helpersSymbol } from "queuert/internal";
-import { normalizeMountPath, renderHtml } from "./html.js";
+import { renderHtml } from "./html.js";
 import { handleChainBlocking, handleChainDetail, handleChainsList } from "./routes/chains.js";
 import { handleJobDetail, handleJobsList } from "./routes/jobs.js";
 
@@ -21,6 +21,15 @@ const loadAssets = async (): Promise<Assets | null> => {
 
 /**
  * Create an embeddable dashboard request handler. Returns a `{ fetch }` object compatible with standard `Request`/`Response`.
+ *
+ * When mounting the dashboard at a sub-path (e.g. behind a reverse proxy or framework router),
+ * set `basePath` to the mount prefix so that routing and asset loading work correctly.
+ *
+ * @example
+ * ```ts
+ * const dashboard = createDashboard({ client, basePath: '/internal/queuert' });
+ * ```
+ *
  * @experimental
  */
 export const createDashboard = <
@@ -28,37 +37,43 @@ export const createDashboard = <
   TStateAdapter extends StateAdapter<any, any>,
 >(options: {
   client: Client<TJobTypeDefinitions, TStateAdapter>;
-}): { fetch: (request: Request, options?: { nonce?: string }) => Response | Promise<Response> } => {
+  /** Mount prefix without trailing slash (e.g. `'/internal/queuert'`). Defaults to `''` (root). */
+  basePath?: string;
+}): { fetch: (request: Request) => Response | Promise<Response> } => {
   const { stateAdapter } = options.client[helpersSymbol];
+  const basePath = options.basePath?.replace(/\/+$/, "") ?? "";
 
-  const handleRequest = async (
-    request: Request,
-    fetchOptions?: { nonce?: string },
-  ): Promise<Response> => {
+  const handleRequest = async (request: Request): Promise<Response> => {
     const url = new URL(request.url);
     const { pathname } = url;
+
+    // Strip basePath prefix to get the local route path
+    if (basePath && !pathname.startsWith(basePath + "/") && pathname !== basePath) {
+      return new Response("Not Found", { status: 404 });
+    }
+    const localPath = basePath ? pathname.slice(basePath.length) || "/" : pathname;
     let match: RegExpMatchArray | null;
 
     // API routes
-    match = pathname.match(/^\/api\/chains\/([^/]+)\/blocking$/);
+    match = localPath.match(/^\/api\/chains\/([^/]+)\/blocking$/);
     if (match) return handleChainBlocking(url, stateAdapter, match[1]);
 
-    match = pathname.match(/^\/api\/chains\/([^/]+)$/);
+    match = localPath.match(/^\/api\/chains\/([^/]+)$/);
     if (match) return handleChainDetail(url, stateAdapter, match[1]);
 
-    if (pathname === "/api/chains") return handleChainsList(url, stateAdapter);
+    if (localPath === "/api/chains") return handleChainsList(url, stateAdapter);
 
-    match = pathname.match(/^\/api\/jobs\/([^/]+)$/);
+    match = localPath.match(/^\/api\/jobs\/([^/]+)$/);
     if (match) return handleJobDetail(url, stateAdapter, match[1]);
 
-    if (pathname === "/api/jobs") return handleJobsList(url, stateAdapter);
+    if (localPath === "/api/jobs") return handleJobsList(url, stateAdapter);
 
     // Static assets + SPA fallback
     const assets = await loadAssets();
     if (!assets)
       return new Response("Dashboard assets not built. Run `pnpm build` first.", { status: 503 });
 
-    const assetMatch = pathname.match(/\/(assets\/.+)$/);
+    const assetMatch = localPath.match(/^\/(assets\/.+)$/);
     if (assetMatch) {
       const assetPath = "/" + assetMatch[1];
       const asset = assets[assetPath];
@@ -74,8 +89,9 @@ export const createDashboard = <
     // SPA fallback — serve index.html with <base> tag for correct relative URLs
     const html = assets["/index.html"];
     if (!html) return new Response("Not Found", { status: 404 });
-    const content = renderHtml(html.content, normalizeMountPath(pathname), fetchOptions?.nonce);
-    return new Response(content, { headers: { "Content-Type": "text/html" } });
+    return new Response(renderHtml(html.content, basePath), {
+      headers: { "Content-Type": "text/html" },
+    });
   };
 
   return { fetch: handleRequest };

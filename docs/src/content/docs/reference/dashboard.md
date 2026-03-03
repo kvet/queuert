@@ -14,11 +14,11 @@ This package is experimental and may change without notice.
 ```typescript
 const dashboard = createDashboard({
   client: Client, // Queuert client from createClient()
+  basePath?: string, // Mount prefix without trailing slash (e.g. '/internal/queuert')
 });
 // Returns:
 // {
-//   fetch: (request: Request, options?: { nonce?: string }) =>
-//     Response | Promise<Response>
+//   fetch: (request: Request) => Response | Promise<Response>
 // }
 ```
 
@@ -26,12 +26,15 @@ The `fetch` handler serves both API routes and the pre-built SolidJS frontend. M
 
 The state adapter must implement dashboard listing methods (`listJobChains`, `listJobs`, `listBlockedJobs`). PostgreSQL, SQLite, and in-memory adapters all support these.
 
-### options.nonce
+### options.basePath
 
-An optional CSP nonce to inject into `<script>`, `<link>`, and `<style>` tags in the dashboard HTML. Pass this when your app sets a `Content-Security-Policy` header with `script-src 'nonce-...'` or `style-src 'nonce-...'`.
+Mount prefix for sub-path deployments. Set this when the dashboard is served behind a reverse proxy or framework router at a path other than `/`. The value should not include a trailing slash.
 
 ```typescript
-const response = await dashboard.fetch(request, { nonce: cspNonce });
+const dashboard = createDashboard({
+  client,
+  basePath: "/internal/queuert",
+});
 ```
 
 ## See Also

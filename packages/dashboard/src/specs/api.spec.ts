@@ -3,11 +3,13 @@ import { createInProcessStateAdapter } from "queuert/internal";
 import { describe, expect, it } from "vitest";
 import { createDashboard } from "../api/dashboard.js";
 
-const createTestDashboard = async () => {
+const createTestDashboard = async (basePath?: string) => {
   const stateAdapter = createInProcessStateAdapter();
   const client = await createClient({ stateAdapter, registry: defineJobTypes() });
-  const dashboard = createDashboard({ client });
-  const request = async (path: string) => dashboard.fetch(new Request(`http://test${path}`));
+  const dashboard = createDashboard({ client, basePath });
+  const prefix = basePath ?? "";
+  const request = async (path: string) =>
+    dashboard.fetch(new Request(`http://test${prefix}${path}`));
   return { request, stateAdapter };
 };
 
@@ -219,6 +221,52 @@ describe("Dashboard API", () => {
     it("returns 404 for missing job", async () => {
       const { request } = await createTestDashboard();
       const res = await request("/api/jobs/nonexistent");
+      expect(res.status).toBe(404);
+    });
+  });
+
+  describe("sub-path mounting", () => {
+    it("routes API calls correctly with basePath", async () => {
+      const { request, stateAdapter } = await createTestDashboard("/internal/queuert");
+      const job = await createJob(stateAdapter, "test-type", { key: "value" });
+
+      const chainsRes = await request("/api/chains");
+      expect(chainsRes.status).toBe(200);
+
+      const chainDetailRes = await request(`/api/chains/${job.chainId}`);
+      expect(chainDetailRes.status).toBe(200);
+
+      const blockingRes = await request(`/api/chains/${job.chainId}/blocking`);
+      expect(blockingRes.status).toBe(200);
+
+      const jobsRes = await request("/api/jobs");
+      expect(jobsRes.status).toBe(200);
+
+      const jobDetailRes = await request(`/api/jobs/${job.id}`);
+      expect(jobDetailRes.status).toBe(200);
+    });
+
+    it("returns 404 for requests outside basePath", async () => {
+      const dashboard = createDashboard({
+        client: await createClient({
+          stateAdapter: createInProcessStateAdapter(),
+          registry: defineJobTypes(),
+        }),
+        basePath: "/internal/queuert",
+      });
+      const res = await dashboard.fetch(new Request("http://test/api/chains"));
+      expect(res.status).toBe(404);
+    });
+
+    it("returns 404 for paths that share a prefix with basePath", async () => {
+      const dashboard = createDashboard({
+        client: await createClient({
+          stateAdapter: createInProcessStateAdapter(),
+          registry: defineJobTypes(),
+        }),
+        basePath: "/app",
+      });
+      const res = await dashboard.fetch(new Request("http://test/application/api/chains"));
       expect(res.status).toBe(404);
     });
   });

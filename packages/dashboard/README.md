@@ -59,18 +59,20 @@ const dashboard = createDashboard({ client });
 serve({ fetch: dashboard.fetch, port: 3000 });
 ```
 
-The dashboard serves both the API and pre-built SolidJS frontend from the same `fetch` handler. Mount it at any path -- the frontend adapts to the mount point automatically via a `<base>` tag with a trailing-slash-normalized mount path.
+The dashboard serves both the API and pre-built SolidJS frontend from the same `fetch` handler.
 
-## Content Security Policy (CSP)
+## Sub-path mounting
 
-If your app sets a `Content-Security-Policy` header with `script-src 'nonce-...'`, pass the per-request nonce as the second argument to `fetch`:
+When mounting the dashboard behind a reverse proxy or framework router at a sub-path, set `basePath` to the mount prefix:
 
 ```typescript
-const nonce = crypto.randomUUID();
-const response = await dashboard.fetch(request, { nonce });
+const dashboard = createDashboard({
+  client,
+  basePath: "/internal/queuert",
+});
 ```
 
-The nonce is added to all `<script>`, `<link>`, and `<style>` tags in the dashboard HTML, making it compatible with strict CSP policies that use nonces for both `script-src` and `style-src`.
+All routing, asset loading, and client-side navigation will use the configured base path. Omit `basePath` (or pass `''`) when mounting at the root.
 
 ## Authentication
 
