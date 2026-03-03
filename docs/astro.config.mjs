@@ -7,9 +7,7 @@ export default defineConfig({
   base: "/queuert",
   integrations: [
     starlight({
-      plugins: [
-        starlightLlmsTxt(),
-      ],
+      plugins: [starlightLlmsTxt()],
       title: "Queuert",
       description: "Control flow library for your persistence-layer-driven applications",
       social: [
@@ -49,9 +47,9 @@ export default defineConfig({
           autogenerate: { directory: "integrations" },
         },
         {
-          label: "Reference",
+          label: "Advanced",
           collapsed: true,
-          autogenerate: { directory: "reference" },
+          autogenerate: { directory: "advanced" },
         },
       ],
       customCss: ["./src/styles/custom.css"],

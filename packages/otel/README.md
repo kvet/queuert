@@ -64,7 +64,7 @@ const client = await createClient({
 
 When a `meter` is provided, the adapter emits counters, histograms, and gauges for worker lifecycle, job events, chain completion, and adapter health.
 
-See [OTEL Metrics](https://kvet.github.io/queuert/reference/otel-metrics/) for the full list of metrics and attributes.
+See [OTEL Metrics](https://kvet.github.io/queuert/advanced/otel-metrics/) for the full list of metrics and attributes.
 
 ## Traces
 
@@ -76,7 +76,7 @@ When a `tracer` is provided, the adapter creates spans following OpenTelemetry m
 
 Spans include links for continuations, retries, and blocker relationships.
 
-See [OTEL Tracing](https://kvet.github.io/queuert/reference/otel-tracing/) for the full span hierarchy and attributes.
+See [OTEL Tracing](https://kvet.github.io/queuert/advanced/otel-tracing/) for the full span hierarchy and attributes.
 
 ## Exports
 

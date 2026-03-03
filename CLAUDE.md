@@ -2,7 +2,7 @@
 
 ## Session Requirements
 
-- **Consult [reference docs](docs/src/content/docs/reference/) before changes**: When modifying adapters, job processing, workers, or other core systems, read the corresponding reference doc first to understand architectural decisions that must be preserved
+- **Consult [reference docs](docs/src/content/docs/advanced/) before changes**: When modifying adapters, job processing, workers, or other core systems, read the corresponding reference doc first to understand architectural decisions that must be preserved
 - No obvious comments
 - Run `pnpm fmt` before running checks to fix formatting issues
 - Run individual tests during development (e.g., `pnpm vitest run packages/core/src/specs/some.spec.ts`)

@@ -62,4 +62,4 @@ If you don't call `prepare`, auto-setup runs based on when you call `complete`:
 - Call `complete` synchronously -- atomic mode
 - Call `complete` after async work -- staged mode (lease renewal active)
 
-See [examples/showcase-processing-modes](https://github.com/kvet/queuert/tree/main/examples/showcase-processing-modes) for a complete working example demonstrating all three modes through an order fulfillment workflow. See also [Error Handling](../error-handling/), [Timeouts](../timeouts/), and [Job Processing](/queuert/reference/job-processing/) reference.
+See [examples/showcase-processing-modes](https://github.com/kvet/queuert/tree/main/examples/showcase-processing-modes) for a complete working example demonstrating all three modes through an order fulfillment workflow. See also [Error Handling](../error-handling/), [Timeouts](../timeouts/), and [Job Processing](/queuert/advanced/job-processing/) reference.

@@ -70,5 +70,5 @@ The provider maintains a dedicated connection for subscriptions and acquires/rel
 
 ## See Also
 
-- [Adapter Architecture](/queuert/reference/adapters/) — NotifyAdapter design and broadcast semantics
+- [Adapter Architecture](/queuert/advanced/adapters/) — NotifyAdapter design and broadcast semantics
 - [Horizontal Scaling](/queuert/guides/horizontal-scaling/) — Multi-worker coordination via notifications

@@ -87,7 +87,7 @@ Adapter packages use their domain-specific prefixes (not "Queuert"):
 
 ## Reference Documentation
 
-Reference docs in `docs/src/content/docs/reference/` capture architectural decisions and API contracts as part of the documentation site.
+Reference docs in `docs/src/content/docs/advanced/` capture architectural decisions and API contracts as part of the documentation site.
 
 ## Testing Patterns
 

@@ -49,6 +49,6 @@ See [observability-otel](https://github.com/kvet/queuert/tree/main/examples/obse
 
 ## See Also
 
-- [OTEL Metrics](/queuert/reference/otel-metrics/) — Full list of counters, histograms, and gauges
-- [OTEL Tracing](/queuert/reference/otel-tracing/) — Span hierarchy and attributes
+- [OTEL Metrics](/queuert/advanced/otel-metrics/) — Full list of counters, histograms, and gauges
+- [OTEL Tracing](/queuert/advanced/otel-tracing/) — Span hierarchy and attributes
 - [Transaction Hooks](/queuert/guides/transaction-hooks/) — How buffering works

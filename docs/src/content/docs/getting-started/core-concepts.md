@@ -28,7 +28,7 @@ Abstracts database operations for job persistence. Queuert provides adapters for
 
 ### State Provider
 
-Bridges your database client (Kysely, Drizzle, Prisma, raw pg, etc.) with the state adapter. You implement a simple interface that provides transaction handling and SQL execution. See [Adapter Architecture](/queuert/reference/adapters/).
+Bridges your database client (Kysely, Drizzle, Prisma, raw pg, etc.) with the state adapter. You implement a simple interface that provides transaction handling and SQL execution. See [Adapter Architecture](/queuert/advanced/adapters/).
 
 ### Notify Adapter
 
@@ -43,11 +43,11 @@ Handles pub/sub notifications for efficient job scheduling. When a job is create
 
 ### Notify Provider
 
-Bridges your pub/sub client (Redis, PostgreSQL, etc.) with the notify adapter. Similar to state providers, you implement an interface for publishing messages and subscribing to channels. See [Adapter Architecture](/queuert/reference/adapters/).
+Bridges your pub/sub client (Redis, PostgreSQL, etc.) with the notify adapter. Similar to state providers, you implement an interface for publishing messages and subscribing to channels. See [Adapter Architecture](/queuert/advanced/adapters/).
 
 ### Worker
 
-Processes jobs by polling for available work. Workers automatically renew leases during long-running operations and handle retries with configurable backoff. See [In-Process Worker](/queuert/reference/in-process-worker/) and [Job Processing](/queuert/reference/job-processing/).
+Processes jobs by polling for available work. Workers automatically renew leases during long-running operations and handle retries with configurable backoff. See [In-Process Worker](/queuert/advanced/in-process-worker/) and [Job Processing](/queuert/advanced/job-processing/).
 
 ### Logging
 

@@ -11,7 +11,7 @@ Read and analyze these files:
 - `README.md` - User-facing overview
 - `CLAUDE.md` - Session instructions (workflow requirements, high-level links)
 
-**Reference docs:** All files in `docs/src/content/docs/reference/` (architectural — these defer to TSDoc for API signatures)
+**Reference docs:** All files in `docs/src/content/docs/advanced/` (architectural — these defer to TSDoc for API signatures)
 
 **TSDoc:** All public exports in `packages/*/src/**/*.ts` have TSDoc comments (primary API documentation)
 

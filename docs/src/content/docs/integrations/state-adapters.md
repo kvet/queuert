@@ -64,5 +64,5 @@ See [state-postgres-multi-worker](https://github.com/kvet/queuert/tree/main/exam
 
 ## See Also
 
-- [Adapter Architecture](/queuert/reference/adapters/) — StateAdapter design, context architecture, and provider interfaces
+- [Adapter Architecture](/queuert/advanced/adapters/) — StateAdapter design, context architecture, and provider interfaces
 - [Horizontal Scaling](/queuert/guides/horizontal-scaling/) — Multi-worker deployment guide

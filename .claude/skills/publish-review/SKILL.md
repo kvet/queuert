@@ -34,7 +34,7 @@ prompt: |
   - TSDoc on all public exports in packages/*/src/**/*.ts (primary API documentation)
   - README.md - User-facing overview
   - CLAUDE.md - Session instructions (workflow requirements, high-level links)
-  - docs/src/content/docs/reference/*.md - Reference documents (architectural, defer to TSDoc for API signatures)
+  - docs/src/content/docs/advanced/*.md - Reference documents (architectural, defer to TSDoc for API signatures)
   - packages/*/README.md - Package READMEs (API documentation)
 
   Check for:

@@ -17,7 +17,7 @@ This project has multiple documentation layers:
 
 The primary API documentation lives as TSDoc comments on all public exports in `packages/*/src/**/*.ts`. This includes type descriptions, parameter documentation, `@experimental` tags, and `{@link}` cross-references. Reference docs and READMEs defer to TSDoc for API-level details.
 
-### Reference Documents (`docs/src/content/docs/reference/`)
+### Reference Documents (`docs/src/content/docs/advanced/`)
 
 Architectural documentation published as part of the docs site. These cover design philosophy, patterns, and conceptual explanations — not API signatures (which are in TSDoc).
 
@@ -64,11 +64,11 @@ Each package has a README documenting:
 
 For each changed file, identify relevant documentation:
 
-- **Package source** (`packages/*/src/**`) → that package's README + relevant reference docs in `docs/src/content/docs/reference/`
+- **Package source** (`packages/*/src/**`) → that package's README + relevant reference docs in `docs/src/content/docs/advanced/`
 - **Package exports** (`packages/*/src/index.ts`) → package README + CLAUDE.md
 - **Examples** (`examples/**`) → relevant package READMEs
 
-Look in `docs/src/content/docs/reference/` to identify which reference docs are relevant for a given subsystem.
+Look in `docs/src/content/docs/advanced/` to identify which reference docs are relevant for a given subsystem.
 
 ### 3. Check for Sync Issues
 
@@ -126,7 +126,7 @@ Look in `docs/src/content/docs/reference/` to identify which reference docs are 
 ### Be Specific
 
 Bad: "The adapters documentation may need updating"
-Good: "In docs/src/content/docs/reference/adapters.md, the StateAdapter interface example at line 45 uses `createJob()` but the method was renamed to `enqueueJob()` in packages/core/src/state-adapter/state-adapter.ts:123"
+Good: "In docs/src/content/docs/advanced/adapters.md, the StateAdapter interface example at line 45 uses `createJob()` but the method was renamed to `enqueueJob()` in packages/core/src/state-adapter/state-adapter.ts:123"
 
 ### Provide Context
 
@@ -162,7 +162,7 @@ When `packages/*/src/index.ts` changes:
 
 When adapter interfaces, worker logic, job processing, or other core subsystems change:
 
-- Identify the relevant reference doc(s) in `docs/src/content/docs/reference/`
+- Identify the relevant reference doc(s) in `docs/src/content/docs/advanced/`
 - Check all package READMEs that implement or expose the subsystem
 - Check examples that use the subsystem
 

@@ -5,7 +5,7 @@
 
 Control flow library for your persistency layer driven applications.
 
-[**Documentation**](https://kvet.github.io/queuert/) | [**Getting Started**](https://kvet.github.io/queuert/getting-started/introduction/) | [**API Reference**](https://kvet.github.io/queuert/reference/client-api/)
+[**Documentation**](https://kvet.github.io/queuert/) | [**Getting Started**](https://kvet.github.io/queuert/getting-started/introduction/)
 
 Run your application logic as a series of background jobs that are started alongside state change transactions in your persistency layer. Perform long-running tasks with side-effects reliably in the background and keep track of their progress in your database. Own your stack and avoid vendor lock-in by using the tools you trust.
 

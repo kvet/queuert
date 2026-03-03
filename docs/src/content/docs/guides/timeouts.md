@@ -43,4 +43,4 @@ const worker = await createInProcessWorker({
 });
 ```
 
-See [examples/showcase-timeouts](https://github.com/kvet/queuert/tree/main/examples/showcase-timeouts) for a complete working example demonstrating cooperative timeouts and hard timeouts via lease. See also [Error Handling](../error-handling/) and [In-Process Worker](/queuert/reference/in-process-worker/) reference.
+See [examples/showcase-timeouts](https://github.com/kvet/queuert/tree/main/examples/showcase-timeouts) for a complete working example demonstrating cooperative timeouts and hard timeouts via lease. See also [Error Handling](../error-handling/) and [In-Process Worker](/queuert/advanced/in-process-worker/) reference.

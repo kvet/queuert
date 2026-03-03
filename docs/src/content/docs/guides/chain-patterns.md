@@ -128,4 +128,4 @@ type Definitions = {
 },
 ```
 
-See [examples/showcase-chain-patterns](https://github.com/kvet/queuert/tree/main/examples/showcase-chain-patterns) for a complete working example demonstrating all four patterns through a subscription lifecycle workflow. See also [Job Blockers](../job-blockers/) for parallel dependencies and [Job Chain Model](/queuert/reference/job-chain-model/) reference.
+See [examples/showcase-chain-patterns](https://github.com/kvet/queuert/tree/main/examples/showcase-chain-patterns) for a complete working example demonstrating all four patterns through a subscription lifecycle workflow. See also [Job Blockers](../job-blockers/) for parallel dependencies and [Job Chain Model](/queuert/advanced/job-chain-model/) reference.

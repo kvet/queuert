@@ -27,4 +27,4 @@ const worker = await createInProcessWorker({
 
 Each worker needs a unique `workerId`. Workers compete for available jobs -- when one acquires a job, others skip it. The notify adapter (Redis, PostgreSQL LISTEN/NOTIFY, etc.) ensures workers wake up immediately when new jobs are queued.
 
-See [examples/state-postgres-multi-worker](https://github.com/kvet/queuert/tree/main/examples/state-postgres-multi-worker) for a complete example spawning multiple worker processes sharing a PostgreSQL database. See also [In-Process Worker](/queuert/reference/in-process-worker/) reference and [State Adapters](/queuert/integrations/state-adapters/).
+See [examples/state-postgres-multi-worker](https://github.com/kvet/queuert/tree/main/examples/state-postgres-multi-worker) for a complete example spawning multiple worker processes sharing a PostgreSQL database. See also [In-Process Worker](/queuert/advanced/in-process-worker/) reference and [State Adapters](/queuert/integrations/state-adapters/).

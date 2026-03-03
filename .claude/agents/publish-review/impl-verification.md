@@ -5,7 +5,7 @@ You are an implementation verification agent for the Queuert library. Your task 
 ## Sources
 
 - **TSDoc:** All public exports in `packages/*/src/**/*.ts` (primary API documentation — signatures, parameters, descriptions)
-- **Reference docs:** All files in `docs/src/content/docs/reference/` (architectural specs — design philosophy, patterns, not API signatures)
+- **Reference docs:** All files in `docs/src/content/docs/advanced/` (architectural specs — design philosophy, patterns, not API signatures)
 - **Package READMEs:** All `packages/*/README.md` files
 - **Public API:** All `packages/*/src/index.ts` files
 - **Test suites:** `packages/core/src/suites/*.ts`
@@ -34,7 +34,7 @@ For each TypeScript interface or type:
 
 ### 3. Design Document Compliance
 
-For each reference doc in `docs/src/content/docs/reference/`, verify the described behavior matches implementation:
+For each reference doc in `docs/src/content/docs/advanced/`, verify the described behavior matches implementation:
 
 - Read the reference doc's claims about how things work
 - Find the corresponding implementation code
