@@ -32,7 +32,6 @@ dist
 
 # astro
 .astro/
-docs/src/content/docs/api/
 
 # ide
 .idea/

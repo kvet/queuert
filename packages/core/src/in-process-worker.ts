@@ -211,7 +211,7 @@ export const createInProcessWorker = async <
   backoffConfig?: BackoffConfig;
   processDefaults?: InProcessWorkerProcessDefaults<TStateAdapter, TJobTypeDefinitions>;
   processors: InProcessWorkerProcessors<TStateAdapter, TJobTypeDefinitions>;
-}): Promise<InProcessWorker> => {
+}) => {
   const typeNames = Array.from(Object.keys(processors));
 
   const pollIntervalMs = processDefaults?.pollIntervalMs ?? 60_000;
@@ -346,7 +346,4 @@ export const createInProcessWorker = async <
  *
  * Call `start()` to begin processing. It returns a `stop` function — call it to gracefully shut down.
  */
-export type InProcessWorker = {
-  /** Start the worker loop. Returns a function that stops the worker and drains in-flight jobs. */
-  start: () => Promise<() => Promise<void>>;
-};
+export type InProcessWorker = ReturnType<typeof createInProcessWorker>;
