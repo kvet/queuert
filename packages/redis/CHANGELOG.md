@@ -1,5 +1,13 @@
 # @queuert/redis
 
+## 0.3.2
+
+### Patch Changes
+
+- Replace the per-request CSP `nonce` option with a new `basePath` option on `createDashboard()`. Set `basePath` to your mount prefix when serving the dashboard at a sub-path. The `fetch` handler no longer accepts a second argument. The frontend now derives its base URL from the `<base>` tag, making sub-path routing and asset loading reliable across reverse-proxy setups.
+- Updated dependencies
+  - queuert@0.3.2
+
 ## 0.3.1
 
 ### Patch Changes

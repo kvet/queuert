@@ -1,6 +1,6 @@
 {
   "name": "@queuert/redis",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Redis notify adapter for Queuert job queue system",
   "keywords": [
     "background-jobs",
