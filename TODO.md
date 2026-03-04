@@ -1,6 +1,5 @@
 # Short term
 
-- [TASK] Re-introduce ts isolatedDeclarations for public libs
 - [REF] Plugins
   - Attempt middleware plugin
   - Client amend
