@@ -25,8 +25,8 @@ export type DbJob = {
 
   deduplication_key: string | null;
 
-  chain_trace_context: unknown;
-  trace_context: unknown;
+  chain_trace_context: string | null;
+  trace_context: string | null;
 };
 
 export type DbJobWithIncompleteBlockers = DbJob & {
@@ -82,8 +82,8 @@ CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job (
   deduplication_key             text,
 
   -- tracing
-  chain_trace_context           jsonb,
-  trace_context                 jsonb
+  chain_trace_context           text,
+  trace_context                 text
 )`,
           false,
         ),
@@ -95,7 +95,7 @@ CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job_blocker (
   job_id                        {{id_type}} NOT NULL REFERENCES {{schema}}.{{table_prefix}}job(id),
   blocked_by_chain_id           {{id_type}} NOT NULL REFERENCES {{schema}}.{{table_prefix}}job(id),
   index                         integer NOT NULL,
-  trace_context                 jsonb,
+  trace_context                 text,
   PRIMARY KEY (job_id, blocked_by_chain_id)
 )`,
           false,
@@ -223,8 +223,8 @@ export const createJobSql: TypedSql<
     NamedParameter<"deduplication_window_ms", number | null | undefined>,
     NamedParameter<"scheduled_at", Date | null>,
     NamedParameter<"schedule_after_ms", number | null>,
-    NamedParameter<"chain_trace_context", unknown>,
-    NamedParameter<"trace_context", unknown>,
+    NamedParameter<"chain_trace_context", string | null>,
+    NamedParameter<"trace_context", string | null>,
     NamedParameter<"chain_index", number>,
   ],
   [DbJob & { deduplicated: boolean }]
@@ -286,14 +286,14 @@ export const addJobBlockersSql: TypedSql<
   readonly [
     NamedParameter<"job_id", string[]>,
     NamedParameter<"blocked_by_chain_id", string[]>,
-    NamedParameter<"trace_context", unknown[]>,
+    NamedParameter<"trace_context", (string | null)[]>,
   ],
-  [DbJobWithIncompleteBlockers & { blocker_chain_trace_contexts: unknown[] }]
+  [DbJobWithIncompleteBlockers & { blocker_chain_trace_contexts: (string | null)[] }]
 > = sql(
   /* sql */ `
 WITH input_data AS (
   SELECT job_id, blocked_by_chain_id, trace_context, ord - 1 AS "index", ord
-  FROM unnest($1::{{id_type}}[], $2::{{id_type}}[], $3::jsonb[]) WITH ORDINALITY AS t(job_id, blocked_by_chain_id, trace_context, ord)
+  FROM unnest($1::{{id_type}}[], $2::{{id_type}}[], $3::text[]) WITH ORDINALITY AS t(job_id, blocked_by_chain_id, trace_context, ord)
 ),
 inserted_blockers AS (
   INSERT INTO {{schema}}.{{table_prefix}}job_blocker (job_id, blocked_by_chain_id, "index", trace_context)
@@ -376,7 +376,7 @@ RETURNING *
 
 export const unblockJobsSql: TypedSql<
   readonly [NamedParameter<"blocked_by_chain_id", string>],
-  [{ unblocked_jobs: DbJob[]; blocker_trace_contexts: unknown[] }]
+  [{ unblocked_jobs: DbJob[]; blocker_trace_contexts: (string | null)[] }]
 > = sql(
   /* sql */ `
 WITH direct_blocked AS (

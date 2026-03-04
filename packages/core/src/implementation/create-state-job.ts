@@ -37,8 +37,8 @@ export const createStateJob = async (
     chainId?: string;
     chainIndex: number;
     chainTypeName?: string;
-    originChainTraceContext?: unknown;
-    originTraceContext?: unknown;
+    originChainTraceContext?: string | null;
+    originTraceContext?: string | null;
     deduplication?: DeduplicationOptions;
     schedule?: ScheduleOptions;
   },
@@ -70,8 +70,8 @@ export const createStateJob = async (
       chainId: isChain ? undefined : chainId,
       deduplication,
       schedule,
-      chainTraceContext: spanHandle?.getChainTraceContext(),
-      traceContext: spanHandle?.getTraceContext(),
+      chainTraceContext: spanHandle?.getChainTraceContext() ?? null,
+      traceContext: spanHandle?.getTraceContext() ?? null,
     });
   } catch (error) {
     spanHandle?.end({ status: "error", error });
@@ -99,18 +99,20 @@ export const createStateJob = async (
       blockerChains = blockers;
       const blockerChainIds = blockerChains.map((b) => b.id);
 
-      const blockerSpanHandles = blockerChains.map((blocker, i) =>
-        helpers.observabilityHelper.startBlockerSpan({
-          chainId: job.chainId,
-          chainTypeName: resolvedChainTypeName,
-          jobId: job.id,
-          jobTypeName: typeName,
-          jobTraceContext: spanHandle?.getTraceContext(),
-          blockerChainId: blocker.id,
-          blockerChainTypeName: blocker.typeName,
-          blockerIndex: i,
-        }),
-      );
+      const blockerSpanHandles = spanHandle
+        ? blockerChains.map((blocker, i) =>
+            helpers.observabilityHelper.startBlockerSpan({
+              chainId: job.chainId,
+              chainTypeName: resolvedChainTypeName,
+              jobId: job.id,
+              jobTypeName: typeName,
+              jobTraceContext: spanHandle.getTraceContext(),
+              blockerChainId: blocker.id,
+              blockerChainTypeName: blocker.typeName,
+              blockerIndex: i,
+            }),
+          )
+        : [];
 
       const addBlockersResult = await helpers.stateAdapter.addJobBlockers({
         txCtx,
@@ -125,7 +127,9 @@ export const createStateJob = async (
       blockerSpanHandles.forEach((handle, i) => {
         if (!handle) return;
         bufferObservabilityEvent(transactionHooks, () => {
-          handle.end({ blockerChainTraceContext: addBlockersResult.blockerChainTraceContexts[i] });
+          handle.end({
+            blockerChainTraceContext: addBlockersResult.blockerChainTraceContexts[i],
+          });
         });
         if (!incompleteSet.has(blockerChainIds[i])) {
           bufferObservabilityEvent(transactionHooks, () => {

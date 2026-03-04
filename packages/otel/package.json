@@ -15,11 +15,11 @@
     "typescript"
   ],
   "homepage": "https://kvet.github.io/queuert/",
-  "license": "MIT",
-  "author": "kvet",
   "bugs": {
     "url": "https://github.com/kvet/queuert/issues"
   },
+  "license": "MIT",
+  "author": "kvet",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/kvet/queuert.git"
@@ -66,6 +66,6 @@
   "engines": {
     "node": ">=22"
   },
-  "x-llms-txt": "https://kvet.github.io/queuert/llms-full.txt",
-  "x-examples": "https://github.com/kvet/queuert/tree/main/examples"
+  "x-examples": "https://github.com/kvet/queuert/tree/main/examples",
+  "x-llms-txt": "https://kvet.github.io/queuert/llms-full.txt"
 }

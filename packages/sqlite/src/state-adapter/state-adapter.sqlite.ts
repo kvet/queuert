@@ -90,8 +90,8 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
 
     deduplicationKey: dbJob.deduplication_key,
 
-    chainTraceContext: parseJson(dbJob.chain_trace_context),
-    traceContext: parseJson(dbJob.trace_context),
+    chainTraceContext: dbJob.chain_trace_context,
+    traceContext: dbJob.trace_context,
   };
 };
 
@@ -255,9 +255,8 @@ export const createSqliteStateAdapter = async <
       const chainIdOrNull = chainId ?? null;
       const scheduledAtIso = schedule?.at?.toISOString().replace("T", " ").replace("Z", "") ?? null;
       const scheduleAfterMsOrNull = schedule?.afterMs ?? null;
-      const chainTraceContextJson =
-        chainTraceContext !== undefined ? JSON.stringify(chainTraceContext) : null;
-      const traceContextJson = traceContext !== undefined ? JSON.stringify(traceContext) : null;
+      const chainTraceContextOrNull = chainTraceContext ?? null;
+      const traceContextOrNull = traceContext ?? null;
 
       if (chainId) {
         const [existingContinuation] = await executeTypedSql({
@@ -305,8 +304,8 @@ export const createSqliteStateAdapter = async <
           scheduledAtIso,
           scheduleAfterMsOrNull,
           scheduleAfterMsOrNull,
-          chainTraceContextJson,
-          traceContextJson,
+          chainTraceContextOrNull,
+          traceContextOrNull,
         ],
       });
 
@@ -314,9 +313,7 @@ export const createSqliteStateAdapter = async <
     },
 
     addJobBlockers: async ({ txCtx, jobId, blockedByChainIds, blockerTraceContexts }) => {
-      const traceContextsJson = JSON.stringify(
-        (blockerTraceContexts ?? []).map((tc) => (tc != null ? JSON.stringify(tc) : null)),
-      );
+      const traceContextsJson = JSON.stringify(blockerTraceContexts ?? []);
 
       await executeTypedSql({
         txCtx,
@@ -337,10 +334,7 @@ export const createSqliteStateAdapter = async <
       });
 
       const chainTraceContextMap = new Map(
-        chainTraceContextRows.map((r) => [
-          r.blocked_by_chain_id,
-          r.chain_trace_context ? JSON.parse(r.chain_trace_context) : null,
-        ]),
+        chainTraceContextRows.map((r) => [r.blocked_by_chain_id, r.chain_trace_context]),
       );
       const blockerChainTraceContexts = blockedByChainIds.map(
         (id) => chainTraceContextMap.get(id) ?? null,
@@ -401,9 +395,7 @@ export const createSqliteStateAdapter = async <
         sql: getJobBlockerTraceContextsSql,
         params: [blockedByChainId],
       });
-      const blockerTraceContexts = traceContextResults.map((r) =>
-        r.trace_context ? JSON.parse(r.trace_context) : null,
-      );
+      const blockerTraceContexts = traceContextResults.map((r) => r.trace_context);
 
       return { unblockedJobs, blockerTraceContexts };
     },

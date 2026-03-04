@@ -27,8 +27,8 @@ export type StateJob = {
 
   deduplicationKey: string | null;
 
-  chainTraceContext: unknown;
-  traceContext: unknown;
+  chainTraceContext: string | null;
+  traceContext: string | null;
 };
 
 /** Base type for state adapter contexts. */
@@ -74,8 +74,8 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     input: unknown;
     deduplication?: { key: string; scope?: "incomplete" | "any"; windowMs?: number };
     schedule?: ScheduleOptions;
-    chainTraceContext?: unknown;
-    traceContext?: unknown;
+    chainTraceContext?: string | null;
+    traceContext?: string | null;
   }) => Promise<{ job: StateJob; deduplicated: boolean }>;
 
   /** Adds blocker dependencies to a job. Returns `blockerChainTraceContexts` in the same order as `blockedByChainIds`. */
@@ -83,18 +83,18 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     txCtx?: TTxContext;
     jobId: TJobId;
     blockedByChainIds: TJobId[];
-    blockerTraceContexts?: unknown[];
+    blockerTraceContexts?: (string | null)[];
   }) => Promise<{
     job: StateJob;
     incompleteBlockerChainIds: string[];
-    blockerChainTraceContexts: unknown[];
+    blockerChainTraceContexts: (string | null)[];
   }>;
 
   /** Unblocks jobs when a blocker chain completes, transitioning them from blocked to pending. */
   unblockJobs: (params: {
     txCtx?: TTxContext;
     blockedByChainId: TJobId;
-  }) => Promise<{ unblockedJobs: StateJob[]; blockerTraceContexts: unknown[] }>;
+  }) => Promise<{ unblockedJobs: StateJob[]; blockerTraceContexts: (string | null)[] }>;
 
   /** Gets the blocker chains for a job. */
   getJobBlockers: (params: {

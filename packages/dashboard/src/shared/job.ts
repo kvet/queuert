@@ -17,8 +17,8 @@ export type SerializedJob = {
   leasedBy: string | null;
   leasedUntil: string | null;
   deduplicationKey: string | null;
-  chainTraceContext: unknown;
-  traceContext: unknown;
+  chainTraceContext: string | null;
+  traceContext: string | null;
 };
 
 export type Job = Omit<

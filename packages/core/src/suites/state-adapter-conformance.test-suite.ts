@@ -463,8 +463,8 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       stateAdapter,
       expect,
     }) => {
-      const chainTraceContext = { traceparent: "00-abc123-chain111-01" };
-      const traceContext = { traceparent: "00-abc123-job222-01" };
+      const chainTraceContext = "00-abc123-chain111-01";
+      const traceContext = "00-abc123-job222-01";
       const { job } = await stateAdapter.runInTransaction(async (txCtx) =>
         stateAdapter.createJob({
           txCtx,
@@ -865,7 +865,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const traceContext = { spanId: "test-span-123" };
+      const traceContext = "00-test-span-123-01";
 
       await stateAdapter.runInTransaction(async (txCtx) =>
         stateAdapter.addJobBlockers({
@@ -962,7 +962,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       stateAdapter,
       expect,
     }) => {
-      const blockerChainTraceContext = { traceparent: "00-test123-chain456-01" };
+      const blockerChainTraceContext = "00-test123-chain456-01";
       const { job: blockerJob } = await stateAdapter.runInTransaction(async (txCtx) =>
         stateAdapter.createJob({
           txCtx,
@@ -1002,8 +1002,8 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       stateAdapter,
       expect,
     }) => {
-      const chainTraceA = { traceparent: "00-aaa111-chain-aaa-01" };
-      const chainTraceB = { traceparent: "00-bbb222-chain-bbb-01" };
+      const chainTraceA = "00-aaa111-chain-aaa-01";
+      const chainTraceB = "00-bbb222-chain-bbb-01";
 
       const { job: blockerA } = await stateAdapter.runInTransaction(async (txCtx) =>
         stateAdapter.createJob({

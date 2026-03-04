@@ -316,9 +316,13 @@ export const createOtelObservabilityAdapter = async ({
       if (!tracer) return undefined;
 
       // Validate trace context format (may be from a different adapter)
-      if (!isValidTraceparent(data.traceContext)) return undefined;
+      // Both must be valid: a job always belongs to a chain
+      if (!isValidTraceparent(data.traceContext) || !isValidTraceparent(data.chainTraceContext))
+        return undefined;
+      const traceContext = data.traceContext;
+      const chainTraceContext = data.chainTraceContext;
 
-      const parentCtx = deserializeSpanContext(data.traceContext);
+      const parentCtx = deserializeSpanContext(traceContext);
       const ctx = trace.setSpanContext(context.active(), parentCtx);
 
       const attemptSpan = tracer.startSpan(
@@ -340,8 +344,8 @@ export const createOtelObservabilityAdapter = async ({
       const attemptCtx = trace.setSpan(context.active(), attemptSpan);
 
       return {
-        getChainTraceContext: () => data.chainTraceContext,
-        getTraceContext: () => data.traceContext,
+        getChainTraceContext: () => chainTraceContext,
+        getTraceContext: () => traceContext,
 
         startPrepare() {
           const span = tracer.startSpan("prepare", { kind: SpanKind.INTERNAL }, attemptCtx);
@@ -387,10 +391,10 @@ export const createOtelObservabilityAdapter = async ({
               );
             }
 
-            if (result.chainCompleted && isValidTraceparent(data.chainTraceContext)) {
+            if (result.chainCompleted) {
               createChainConsumerSpan(
                 tracer,
-                data.chainTraceContext,
+                chainTraceContext,
                 data.chainTypeName,
                 data.chainId,
                 attemptCtx,
@@ -405,7 +409,6 @@ export const createOtelObservabilityAdapter = async ({
 
     startBlockerSpan(data) {
       if (!tracer) return undefined;
-      if (!isValidTraceparent(data.jobTraceContext)) return undefined;
 
       const jobParentCtx = trace.setSpanContext(
         context.active(),
@@ -434,8 +437,8 @@ export const createOtelObservabilityAdapter = async ({
 
       return {
         getTraceContext: () => producerTraceparent,
-        end: (endData?: { blockerChainTraceContext?: unknown }) => {
-          if (isValidTraceparent(endData?.blockerChainTraceContext)) {
+        end: (endData: { blockerChainTraceContext: string | null }) => {
+          if (isValidTraceparent(endData.blockerChainTraceContext)) {
             producerSpan.addLink({
               context: deserializeSpanContext(endData.blockerChainTraceContext),
             });
@@ -466,7 +469,9 @@ export const createOtelObservabilityAdapter = async ({
 
     completeJobSpan(data) {
       if (!tracer) return;
-      if (!isValidTraceparent(data.traceContext)) return;
+      // Both must be valid: a job always belongs to a chain
+      if (!isValidTraceparent(data.traceContext) || !isValidTraceparent(data.chainTraceContext))
+        return;
 
       const jobParentCtx = trace.setSpanContext(
         context.active(),
@@ -494,7 +499,7 @@ export const createOtelObservabilityAdapter = async ({
 
       const jobConsumerCtx = trace.setSpan(context.active(), jobSpan);
 
-      if (data.chainCompleted && isValidTraceparent(data.chainTraceContext)) {
+      if (data.chainCompleted) {
         createChainConsumerSpan(
           tracer,
           data.chainTraceContext,

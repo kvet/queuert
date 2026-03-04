@@ -7,7 +7,7 @@ import { type StateAdapter, type StateJob, type StateJobStatus } from "./state-a
 
 export type InProcessContext = { inTransaction?: boolean };
 
-type BlockerEntry = { index: number; traceContext: unknown };
+type BlockerEntry = { index: number; traceContext: string | null };
 
 type InProcessStore = {
   jobs: Map<string, StateJob>;
@@ -292,7 +292,7 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       store.jobBlockers.set(jobId, blockerMap);
 
       const incompleteBlockerChainIds: string[] = [];
-      const blockerChainTraceContexts: unknown[] = [];
+      const blockerChainTraceContexts: (string | null)[] = [];
       for (const blockerChainId of blockedByChainIds) {
         const lastJob = getLastJobInChain(blockerChainId);
         if (!lastJob || lastJob.status !== "completed") {
@@ -313,7 +313,7 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
 
     unblockJobs: async ({ blockedByChainId }) => {
       const unblockedJobs: StateJob[] = [];
-      const blockerTraceContexts: unknown[] = [];
+      const blockerTraceContexts: (string | null)[] = [];
       const now = new Date();
 
       for (const [jobId, blockerMap] of store.jobBlockers) {

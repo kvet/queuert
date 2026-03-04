@@ -31,8 +31,8 @@ export const continueWith = async <TJobTypeName extends string, TInput>(
     chainId: string;
     chainIndex: number;
     chainTypeName: string;
-    originChainTraceContext: unknown;
-    originTraceContext: unknown;
+    originChainTraceContext: string | null;
+    originTraceContext: string | null;
     fromTypeName: string;
   },
 ): Promise<JobOf<string, BaseJobTypeDefinitions, TJobTypeName, string>> => {

@@ -9,9 +9,9 @@ export type JobSpanInputData = {
   isChainStart: boolean;
 
   /** For continuation jobs: chain trace context of the origin job */
-  originChainTraceContext?: unknown;
+  originChainTraceContext?: string | null;
   /** For continuation jobs: job trace context of the origin job */
-  originTraceContext?: unknown;
+  originTraceContext?: string | null;
 };
 
 /** Result of a job span — created, deduplicated, or error. */
@@ -25,7 +25,7 @@ export type JobSpanResult =
       status: "deduplicated";
       jobId: string;
       chainId: string;
-      existingChainTraceContext?: unknown;
+      existingChainTraceContext?: string | null;
     }
   | {
       status: "error";
@@ -34,15 +34,15 @@ export type JobSpanResult =
 
 /** Handle for managing a job span's lifecycle and trace context. */
 export type JobSpanHandle = {
-  getChainTraceContext: () => unknown;
-  getTraceContext: () => unknown;
+  getChainTraceContext: () => string;
+  getTraceContext: () => string;
   end: (result: JobSpanResult) => void;
 };
 
 /** Input data for creating a job attempt span. */
 export type JobAttemptSpanInputData = {
-  chainTraceContext: unknown;
-  traceContext: unknown;
+  chainTraceContext: string | null;
+  traceContext: string | null;
   chainId: string;
   chainTypeName: string;
   jobId: string;
@@ -72,8 +72,8 @@ export type SpanHandle = {
 
 /** Handle for managing a job attempt span, including prepare/complete sub-spans. */
 export type JobAttemptSpanHandle = {
-  getChainTraceContext: () => unknown;
-  getTraceContext: () => unknown;
+  getChainTraceContext: () => string;
+  getTraceContext: () => string;
   startPrepare: () => SpanHandle;
   startComplete: () => SpanHandle;
   end: (result: JobAttemptSpanResult) => void;
@@ -81,8 +81,8 @@ export type JobAttemptSpanHandle = {
 
 /** Input data for completing a job span after all attempts. */
 export type CompleteJobSpanInputData = {
-  chainTraceContext: unknown;
-  traceContext: unknown;
+  chainTraceContext: string | null;
+  traceContext: string | null;
   chainId: string;
   chainTypeName: string;
   jobId: string;
@@ -97,7 +97,7 @@ export type BlockerSpanInputData = {
   chainTypeName: string;
   jobId: string;
   jobTypeName: string;
-  jobTraceContext: unknown;
+  jobTraceContext: string;
   blockerChainId: string;
   blockerChainTypeName: string;
   blockerIndex: number;
@@ -105,13 +105,13 @@ export type BlockerSpanInputData = {
 
 /** Handle for managing a blocker dependency span. */
 export type BlockerSpanHandle = {
-  getTraceContext: () => unknown;
-  end: (data?: { blockerChainTraceContext?: unknown }) => void;
+  getTraceContext: () => string;
+  end: (data: { blockerChainTraceContext: string | null }) => void;
 };
 
 /** Data for completing a blocker span when the blocker chain completes. */
 export type CompleteBlockerSpanData = {
-  traceContext: unknown;
+  traceContext: string | null;
   blockerChainTypeName: string;
 };
 
