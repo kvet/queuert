@@ -1,5 +1,6 @@
 # Short term
 
+- [REF] Sliced client and processor definition
 - [REF] Plugins
   - Attempt middleware plugin
   - Client amend
