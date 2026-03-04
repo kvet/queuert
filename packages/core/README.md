@@ -85,7 +85,7 @@ const worker = await createInProcessWorker({
     "send-email": {
       attemptHandler: async ({ job, complete }) => {
         await sendEmail(job.input.to, job.input.subject);
-        return complete(() => ({ sent: true }));
+        return complete(async () => ({ sent: true }));
       },
     },
   },

@@ -54,7 +54,7 @@ Span kinds use OpenTelemetry's PRODUCER/CONSUMER/INTERNAL semantics. The chain h
 
 ## Trace Context Propagation
 
-Each job stores two trace contexts: `chainTraceContext` (chain-level, for chain completion and blocker linking) and `traceContext` (job-level, for attempt spans and continuation linking). Blocker dependencies store a single trace context in the `job_blocker` table (the blocker PRODUCER span context). All context values are opaque `unknown` at the core level—the OTEL adapter uses W3C traceparent strings.
+Each job stores two trace contexts: `chainTraceContext` (chain-level, for chain completion and blocker linking) and `traceContext` (job-level, for attempt spans and continuation linking). Blocker dependencies store a single trace context in the `job_blocker` table (the blocker PRODUCER span context). All context values are `string | null` at the core level—the OTEL adapter uses W3C traceparent strings.
 
 Context flows through the system:
 
