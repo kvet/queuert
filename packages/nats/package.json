@@ -11,8 +11,12 @@
     "task-queue",
     "typescript"
   ],
+  "homepage": "https://kvet.github.io/queuert/",
   "license": "MIT",
   "author": "kvet",
+  "bugs": {
+    "url": "https://github.com/kvet/queuert/issues"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/kvet/queuert.git"
@@ -21,7 +25,8 @@
     "dist",
     "!dist/testing*",
     "package.json",
-    "README.md"
+    "README.md",
+    "AGENTS.md"
   ],
   "type": "module",
   "types": "./dist/index.d.mts",
@@ -56,5 +61,7 @@
   },
   "engines": {
     "node": ">=22"
-  }
+  },
+  "x-llms-txt": "https://kvet.github.io/queuert/llms-full.txt",
+  "x-examples": "https://github.com/kvet/queuert/tree/main/examples"
 }

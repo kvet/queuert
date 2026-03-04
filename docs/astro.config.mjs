@@ -47,6 +47,15 @@ export default defineConfig({
           autogenerate: { directory: "integrations" },
         },
         {
+          label: "Examples",
+          items: [
+            {
+              label: "Overview",
+              slug: "examples",
+            },
+          ],
+        },
+        {
           label: "Reference",
           items: [
             {
