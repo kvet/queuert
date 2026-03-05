@@ -1,8 +1,8 @@
 ---
-title: Chain Awaiting
+title: Awaiting Chains
 description: Wait for job chains to complete with polling and notifications.
 sidebar:
-  order: 13
+  order: 11
 ---
 
 `awaitJobChain` waits for a job chain to complete by combining polling with notify adapter events. Between polls, it listens for completion notifications to react immediately.

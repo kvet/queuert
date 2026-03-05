@@ -4,6 +4,17 @@ import * as v from "valibot";
 import { createValibotJobTypeRegistry } from "./valibot-adapter.js";
 
 describe("createValibotJobTypeRegistry", () => {
+  describe("getTypeNames", () => {
+    it("returns all registered type names", () => {
+      const registry = createValibotJobTypeRegistry({
+        "job-a": { entry: true, input: v.object({ id: v.string() }) },
+        "job-b": { input: v.object({ count: v.number() }) },
+      });
+
+      expect(registry.getTypeNames()).toEqual(["job-a", "job-b"]);
+    });
+  });
+
   describe("validateEntry", () => {
     it("passes for entry types", () => {
       const registry = createValibotJobTypeRegistry({

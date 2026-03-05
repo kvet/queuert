@@ -4,6 +4,17 @@ import { Type } from "@sinclair/typebox";
 import { createTypeBoxJobTypeRegistry } from "./typebox-adapter.js";
 
 describe("createTypeBoxJobTypeRegistry", () => {
+  describe("getTypeNames", () => {
+    it("returns all registered type names", () => {
+      const registry = createTypeBoxJobTypeRegistry({
+        "job-a": { entry: true, input: Type.Object({ id: Type.String() }) },
+        "job-b": { input: Type.Object({ count: Type.Number() }) },
+      });
+
+      expect(registry.getTypeNames()).toEqual(["job-a", "job-b"]);
+    });
+  });
+
   describe("validateEntry", () => {
     it("passes for entry types", () => {
       const registry = createTypeBoxJobTypeRegistry({

@@ -2,7 +2,7 @@
 title: Chain Deletion
 description: Delete job chains with blocker safety and cascade support.
 sidebar:
-  order: 11
+  order: 13
 ---
 
 Job chains can be deleted using `deleteJobChains`. All jobs in the chain (entry job and continuations) are removed together.

@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import pino from "pino";
 import {
   type JobAttemptMiddleware,
+  type JobTypeRegistryDefinitions,
   createClient,
   createInProcessWorker,
   defineJobTypes,
@@ -71,7 +72,7 @@ const qrtClient = await createClient({
 // 5. Create middleware that sets job context for the duration of job processing
 const contextualLoggingMiddleware: JobAttemptMiddleware<
   typeof stateAdapter,
-  (typeof registry)["$definitions"]
+  JobTypeRegistryDefinitions<typeof registry>
 > = async ({ job, workerId }, next) => {
   // Run the job processing within the AsyncLocalStorage context
   return jobContextStore.run(

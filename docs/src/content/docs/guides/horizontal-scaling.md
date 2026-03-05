@@ -2,7 +2,7 @@
 title: Horizontal Scaling
 description: Deploy multiple workers sharing the same database.
 sidebar:
-  order: 14
+  order: 16
 ---
 
 Deploy multiple worker processes sharing the same database for horizontal scaling. Workers coordinate via database-level locking (`FOR UPDATE SKIP LOCKED`) -- no external coordination required.

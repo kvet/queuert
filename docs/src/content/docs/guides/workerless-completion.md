@@ -1,8 +1,8 @@
 ---
-title: Workerless Completion
+title: Completing Without a Worker
 description: Complete jobs without a worker for approval workflows.
 sidebar:
-  order: 10
+  order: 12
 ---
 
 Jobs can be completed without a worker using `completeJobChain`. This enables approval workflows, webhook-triggered completions, and patterns where jobs wait for external events. Deferred start pairs well with this -- schedule a job to auto-reject after a timeout, but allow early completion based on user action.

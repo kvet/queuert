@@ -51,7 +51,7 @@ Observability events (metrics, span ends, logs) emitted during the prepare and c
 
 ## Prepare/Complete Pattern
 
-Attempt handlers split processing into distinct phases to support both atomic (single-transaction) and staged (long-running) operations. See `AttemptHandlerFn` TSDoc for the full handler signature and `PrepareConfig` for mode details.
+Attempt handlers split processing into distinct phases to support both atomic (single-transaction) and staged (long-running) operations. See `AttemptHandler` TSDoc for the full handler signature and `AttemptPrepareOptions` for mode details.
 
 ### Modes
 

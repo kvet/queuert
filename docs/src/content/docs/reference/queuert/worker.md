@@ -2,7 +2,7 @@
 title: Worker
 description: Worker configuration and job processing for the queuert core package.
 sidebar:
-  order: 2
+  order: 3
 ---
 
 ## createInProcessWorker
@@ -61,22 +61,22 @@ Configuration for processing a single job type. Overrides `processDefaults` for 
 
 ```typescript
 type InProcessWorkerProcessor = {
-  attemptHandler: AttemptHandlerFn;
+  attemptHandler: AttemptHandler;
   backoffConfig?: BackoffConfig;
   leaseConfig?: LeaseConfig;
 };
 ```
 
-## AttemptHandlerFn
+## AttemptHandler
 
 The core function called for each job attempt.
 
 ```typescript
-type AttemptHandlerFn = (options: {
+type AttemptHandler = (options: {
   signal: TypedAbortSignal<JobAbortReason>;
   job: RunningJob<JobWithBlockers>;
-  prepare: PrepareFn;
-  complete: CompleteFn;
+  prepare: AttemptPrepare;
+  complete: AttemptComplete;
 }) => Promise<CompletedJob | ContinuationJobs>;
 ```
 
@@ -142,20 +142,24 @@ const loggingMiddleware: JobAttemptMiddleware = async ({ job, workerId }, next) 
 
 ## rescheduleJob
 
-Helper that throws `RescheduleJobError` from within an attempt handler to reschedule the job.
+Helper that throws `RescheduleJobError` from within an attempt handler to reschedule the job. See [Utilities](/queuert/reference/queuert/utilities/#reschedulejob) for details.
 
-```typescript
-function rescheduleJob(schedule: ScheduleOptions, cause?: unknown): never;
-```
+## mergeJobTypeProcessors
 
-```typescript
-attemptHandler: async ({ job, complete }) => {
-  if (!isReady()) {
-    rescheduleJob({ afterMs: 30_000 });
-  }
-  return complete(async () => ({ done: true }));
-},
-```
+Merges processor maps from multiple slices into a single processors object. See [Utilities](/queuert/reference/queuert/utilities/#mergejobtypeprocessors) for details.
+
+## Handler Types
+
+The following types are exported for use in type annotations and `satisfies` expressions:
+
+- **AttemptComplete** -- the typed `complete` function in `attemptHandler`
+- **AttemptCompleteCallback** -- the callback passed to `complete()`
+- **AttemptCompleteOptions** -- options received by the complete callback (`continueWith`, `transactionHooks`, tx context)
+- **AttemptPrepare** -- the typed `prepare` function in `attemptHandler`
+- **AttemptPrepareCallback** -- the callback passed to `prepare(options, callback)`
+- **AttemptPrepareOptions** -- `{ mode: "atomic" | "staged" }`
+
+These are generic types parameterized over the state adapter and job type definitions. They're needed when defining processors in separate files with `satisfies InProcessWorkerProcessors`.
 
 ## Configuration Types
 
@@ -182,6 +186,7 @@ type LeaseConfig = {
 
 - [Client](/queuert/reference/queuert/client/) -- Client API reference
 - [Types](/queuert/reference/queuert/types/) -- Job, JobChain, and configuration types
+- [Utilities](/queuert/reference/queuert/utilities/) -- Composition helpers and utility functions
 - [Errors](/queuert/reference/queuert/errors/) -- Error classes reference
 - [In-Process Worker](/queuert/advanced/in-process-worker/) -- Worker lifecycle and concurrency model
 - [Job Processing](/queuert/advanced/job-processing/) -- Transactional design and prepare/complete pattern

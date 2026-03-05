@@ -2,7 +2,7 @@
 title: Job & Chain Queries
 description: Read-only methods for inspecting jobs and chains.
 sidebar:
-  order: 12
+  order: 14
 ---
 
 The client provides read-only methods for inspecting job chains and jobs. All query methods accept an optional transaction context and don't require `transactionHooks`.

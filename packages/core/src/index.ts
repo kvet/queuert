@@ -8,6 +8,7 @@ export {
   createJobTypeRegistry,
   type JobTypeRegistry,
   type JobTypeRegistryConfig,
+  type JobTypeRegistryDefinitions,
 } from "./entities/job-type-registry.js";
 export {
   defineJobTypes,
@@ -23,8 +24,10 @@ export {
   type JobWithBlockers,
 } from "./entities/job.js";
 export { type ScheduleOptions } from "./entities/schedule.js";
+export { mergeJobTypeRegistries } from "./entities/merge-job-type-registries.js";
 export {
   BlockerReferenceError,
+  DuplicateJobTypeError,
   HookNotRegisteredError,
   JobAlreadyCompletedError,
   JobChainNotFoundError,
@@ -40,6 +43,7 @@ export {
 export { type TypedAbortSignal } from "./helpers/abort.js";
 export { type BackoffConfig } from "./helpers/backoff.js";
 export { type RetryConfig } from "./helpers/retry.js";
+export { mergeJobTypeProcessors } from "./worker/merge-job-type-processors.js";
 export {
   createInProcessWorker,
   type InProcessWorker,
@@ -61,7 +65,13 @@ export {
   type TransactionHooksHandle,
 } from "./transaction-hooks.js";
 export {
-  type AttemptHandlerFn,
+  type AttemptComplete,
+  type AttemptCompleteCallback,
+  type AttemptCompleteOptions,
+  type AttemptHandler,
+  type AttemptPrepare,
+  type AttemptPrepareCallback,
+  type AttemptPrepareOptions,
   type JobAbortReason,
   type JobAttemptMiddleware,
   type LeaseConfig,

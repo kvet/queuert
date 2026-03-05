@@ -4,6 +4,17 @@ import { type } from "arktype";
 import { createArkTypeJobTypeRegistry } from "./arktype-adapter.js";
 
 describe("createArkTypeJobTypeRegistry", () => {
+  describe("getTypeNames", () => {
+    it("returns all registered type names", () => {
+      const registry = createArkTypeJobTypeRegistry({
+        "job-a": { entry: true, input: type({ id: "string" }) },
+        "job-b": { input: type({ count: "number" }) },
+      });
+
+      expect(registry.getTypeNames()).toEqual(["job-a", "job-b"]);
+    });
+  });
+
   describe("validateEntry", () => {
     it("passes for entry types", () => {
       const registry = createArkTypeJobTypeRegistry({

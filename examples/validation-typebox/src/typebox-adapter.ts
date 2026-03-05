@@ -148,6 +148,7 @@ export const createTypeBoxJobTypeRegistry = <T extends Record<string, TypeBoxJob
   };
 
   return createJobTypeRegistry<InferTypeBoxJobTypes<T>>({
+    getTypeNames: () => Object.keys(schemas),
     validateEntry: (typeName) => {
       const schema = getSchema(typeName);
       if (schema.entry !== true) {

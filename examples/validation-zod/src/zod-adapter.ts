@@ -113,6 +113,7 @@ export const createZodJobTypeRegistry = <T extends Record<string, ZodJobTypeSche
   };
 
   return createJobTypeRegistry<InferZodJobTypes<T>>({
+    getTypeNames: () => Object.keys(schemas),
     validateEntry: (typeName) => {
       const schema = getSchema(typeName);
       if (schema.entry !== true) {

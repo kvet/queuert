@@ -143,6 +143,20 @@ export const rescheduleJob = (schedule: ScheduleOptions, cause?: unknown): never
   });
 };
 
+/** Thrown when merging registries that contain overlapping job type names. */
+export class DuplicateJobTypeError extends Error {
+  readonly duplicateTypeNames: readonly string[];
+
+  constructor(
+    message: string,
+    options: { duplicateTypeNames: readonly string[]; cause?: unknown },
+  ) {
+    super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
+    this.name = "DuplicateJobTypeError";
+    this.duplicateTypeNames = options.duplicateTypeNames;
+  }
+}
+
 /** Error codes for job type validation failures. */
 export type JobTypeValidationErrorCode =
   | "not_entry_point"

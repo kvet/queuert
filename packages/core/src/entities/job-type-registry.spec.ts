@@ -10,12 +10,39 @@ describe("createJobTypeRegistry", () => {
   const createMockConfig = (
     overrides: Partial<JobTypeRegistryConfig> = {},
   ): JobTypeRegistryConfig => ({
+    getTypeNames: () => [],
     validateEntry: vi.fn(),
     parseInput: vi.fn((_, input) => input),
     parseOutput: vi.fn((_, output) => output),
     validateContinueWith: vi.fn(),
     validateBlockers: vi.fn(),
     ...overrides,
+  });
+
+  describe("getTypeNames", () => {
+    it("returns type names from config", () => {
+      const config = createMockConfig({ getTypeNames: () => ["job-a", "job-b"] });
+      const registry = createJobTypeRegistry(config);
+
+      expect(registry.getTypeNames()).toEqual(["job-a", "job-b"]);
+    });
+
+    it("delegates to config.getTypeNames", () => {
+      const typeNames = ["x", "y", "z"];
+      const getTypeNames = vi.fn(() => typeNames);
+      const config = createMockConfig({ getTypeNames });
+      const registry = createJobTypeRegistry(config);
+
+      registry.getTypeNames();
+      expect(getTypeNames).toHaveBeenCalled();
+    });
+
+    it("returns empty array when config provides none", () => {
+      const config = createMockConfig();
+      const registry = createJobTypeRegistry(config);
+
+      expect(registry.getTypeNames()).toEqual([]);
+    });
   });
 
   describe("validateEntry", () => {
@@ -282,6 +309,11 @@ describe("createJobTypeRegistry", () => {
 });
 
 describe("createNoopJobTypeRegistry", () => {
+  it("getTypeNames returns empty array", () => {
+    const registry = createNoopJobTypeRegistry();
+    expect(registry.getTypeNames()).toEqual([]);
+  });
+
   it("validateEntry does nothing", () => {
     const registry = createNoopJobTypeRegistry();
     expect(() => {

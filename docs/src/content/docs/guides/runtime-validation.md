@@ -31,13 +31,14 @@ Each adapter:
 
 The registry validates at each boundary:
 
-| Job Type Definition        | Registry Method        | Purpose                              |
-| -------------------------- | ---------------------- | ------------------------------------ |
-| `entry?: boolean`          | `validateEntry`        | Validates job type can start a chain |
-| `input: unknown`           | `parseInput`           | Parses and validates job input       |
-| `output?: unknown`         | `parseOutput`          | Parses and validates job output      |
-| `continueWith?: Reference` | `validateContinueWith` | Validates continuation target        |
-| `blockers?: Reference[]`   | `validateBlockers`     | Validates blocker references         |
+| Job Type Definition        | Registry Method        | Purpose                                      |
+| -------------------------- | ---------------------- | -------------------------------------------- |
+| _(all)_                    | `getTypeNames`         | Returns known type names (for merge/routing) |
+| `entry?: boolean`          | `validateEntry`        | Validates job type can start a chain         |
+| `input: unknown`           | `parseInput`           | Parses and validates job input               |
+| `output?: unknown`         | `parseOutput`          | Parses and validates job output              |
+| `continueWith?: Reference` | `validateContinueWith` | Validates continuation target                |
+| `blockers?: Reference[]`   | `validateBlockers`     | Validates blocker references                 |
 
 ### Error Handling
 

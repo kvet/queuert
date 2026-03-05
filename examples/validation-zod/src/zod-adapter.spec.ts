@@ -4,6 +4,17 @@ import { z } from "zod";
 import { createZodJobTypeRegistry } from "./zod-adapter.js";
 
 describe("createZodJobTypeRegistry", () => {
+  describe("getTypeNames", () => {
+    it("returns all registered type names", () => {
+      const registry = createZodJobTypeRegistry({
+        "job-a": { entry: true, input: z.object({ id: z.string() }) },
+        "job-b": { input: z.object({ count: z.number() }) },
+      });
+
+      expect(registry.getTypeNames()).toEqual(["job-a", "job-b"]);
+    });
+  });
+
   describe("validateEntry", () => {
     it("passes for entry types", () => {
       const registry = createZodJobTypeRegistry({

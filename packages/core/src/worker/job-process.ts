@@ -85,7 +85,7 @@ export type JobAbortReason =
 export { RescheduleJobError, rescheduleJob } from "../errors.js";
 
 /** Options passed to the completion callback, including `continueWith` and the transaction context. */
-export type CompleteCallbackOptions<
+export type AttemptCompleteOptions<
   TStateAdapter extends StateAdapter<BaseTxContext, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions & string,
@@ -124,14 +124,14 @@ export type CompleteCallbackOptions<
   >;
 } & { transactionHooks: TransactionHooks } & GetStateAdapterTxContext<TStateAdapter>;
 
-/** Completion callback type. Receives {@link CompleteCallbackOptions} and returns the result. */
-export type CompleteCallback<
+/** Completion callback type. Receives {@link AttemptCompleteOptions} and returns the result. */
+export type AttemptCompleteCallback<
   TStateAdapter extends StateAdapter<BaseTxContext, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions & string,
   TResult,
 > = (
-  completeOptions: CompleteCallbackOptions<
+  completeOptions: AttemptCompleteOptions<
     TStateAdapter,
     TJobTypeDefinitions,
     TJobTypeName,
@@ -139,8 +139,8 @@ export type CompleteCallback<
   >,
 ) => Promise<TResult>;
 
-/** Typed completion function provided to the {@link AttemptHandlerFn | attemptHandler}. Call it to finalize the job — either return the output to complete the chain, or call `continueWith` to extend it. */
-export type CompleteFn<
+/** Typed completion function provided to the {@link AttemptHandler | attemptHandler}. Call it to finalize the job — either return the output to complete the chain, or call `continueWith` to extend it. */
+export type AttemptComplete<
   TStateAdapter extends StateAdapter<BaseTxContext, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions & string,
@@ -155,7 +155,7 @@ export type CompleteFn<
       >,
 >(
   completeCallback: (
-    completeOptions: CompleteCallbackOptions<
+    completeOptions: AttemptCompleteOptions<
       TStateAdapter,
       TJobTypeDefinitions,
       TJobTypeName,
@@ -186,19 +186,19 @@ export type CompleteFn<
  * - `"atomic"` — prepare and complete run in the same transaction.
  * - `"staged"` — prepare commits first, then complete runs in a new transaction with lease renewal.
  */
-export type PrepareConfig = { mode: "atomic" | "staged" };
+export type AttemptPrepareOptions = { mode: "atomic" | "staged" };
 
 /** Callback executed during the prepare phase within the transaction. */
-export type PrepareCallback<TStateAdapter extends StateAdapter<BaseTxContext, any>, T> = (
+export type AttemptPrepareCallback<TStateAdapter extends StateAdapter<BaseTxContext, any>, T> = (
   prepareCallbackOptions: GetStateAdapterTxContext<TStateAdapter>,
 ) => T | Promise<T>;
 
-/** Typed prepare function provided to the {@link AttemptHandlerFn | attemptHandler}. Controls the processing mode and optionally runs a callback within the prepare transaction. */
-export type PrepareFn<TStateAdapter extends StateAdapter<BaseTxContext, any>> = {
-  (config: PrepareConfig): Promise<void>;
+/** Typed prepare function provided to the {@link AttemptHandler | attemptHandler}. Controls the processing mode and optionally runs a callback within the prepare transaction. */
+export type AttemptPrepare<TStateAdapter extends StateAdapter<BaseTxContext, any>> = {
+  (config: AttemptPrepareOptions): Promise<void>;
   <T>(
-    config: PrepareConfig,
-    prepareCallback: PrepareCallback<TStateAdapter, T>,
+    config: AttemptPrepareOptions,
+    prepareCallback: AttemptPrepareCallback<TStateAdapter, T>,
   ): Promise<Awaited<T>>;
 };
 
@@ -208,7 +208,7 @@ export type PrepareFn<TStateAdapter extends StateAdapter<BaseTxContext, any>> = 
  * Receives `signal` (abort signal), `job` (the running job with blockers), `prepare` (transaction setup), and `complete` (finalization).
  * If `prepare` is not called, the worker auto-calls `prepare({ mode: "staged" })`.
  */
-export type AttemptHandlerFn<
+export type AttemptHandler<
   TStateAdapter extends StateAdapter<BaseTxContext, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions & string,
@@ -222,8 +222,8 @@ export type AttemptHandlerFn<
       ChainTypesReaching<TJobTypeDefinitions, TJobTypeName>
     >
   >;
-  prepare: PrepareFn<TStateAdapter>;
-  complete: CompleteFn<TStateAdapter, TJobTypeDefinitions, TJobTypeName>;
+  prepare: AttemptPrepare<TStateAdapter>;
+  complete: AttemptComplete<TStateAdapter, TJobTypeDefinitions, TJobTypeName>;
 }) => Promise<
   | CompletedJob<
       JobWithBlockersOf<
@@ -252,11 +252,7 @@ export const runJobProcess = async ({
   attemptMiddlewares,
 }: {
   helpers: Helpers;
-  attemptHandler: AttemptHandlerFn<
-    StateAdapter<BaseTxContext, any>,
-    BaseJobTypeDefinitions,
-    string
-  >;
+  attemptHandler: AttemptHandler<StateAdapter<BaseTxContext, any>, BaseJobTypeDefinitions, string>;
   prepareTransactionContext: TransactionContext<BaseTxContext>;
   job: StateJob;
   backoffConfig: BackoffConfig;
@@ -441,7 +437,7 @@ export const runJobProcess = async ({
       }
 
       return callbackOutput;
-    }) as PrepareFn<StateAdapter<BaseTxContext, any>>;
+    }) as AttemptPrepare<StateAdapter<BaseTxContext, any>>;
 
     let completeCalled = false;
     const complete = (async (
@@ -551,7 +547,7 @@ export const runJobProcess = async ({
         chainCompleted: result.chainCompleted,
       });
       return result.result;
-    }) as CompleteFn<StateAdapter<BaseTxContext, any>, BaseJobTypeDefinitions, string>;
+    }) as AttemptComplete<StateAdapter<BaseTxContext, any>, BaseJobTypeDefinitions, string>;
 
     let autoSetupDone = false;
     let autoPreparePromise: Promise<void> | null = null;

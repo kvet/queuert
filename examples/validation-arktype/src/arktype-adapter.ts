@@ -110,6 +110,7 @@ export const createArkTypeJobTypeRegistry = <T extends Record<string, ArkTypeJob
   };
 
   return createJobTypeRegistry<InferArkTypeJobTypes<T>>({
+    getTypeNames: () => Object.keys(schemas),
     validateEntry: (typeName) => {
       const schema = getSchema(typeName);
       if (schema.entry !== true) {

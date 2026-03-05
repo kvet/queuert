@@ -1,6 +1,15 @@
 import { JobTypeValidationError } from "../errors.js";
 import { type BaseJobTypeDefinitions } from "./job-type.js";
 
+/** Symbol used to carry phantom job type definitions on a registry. */
+export const definitionsSymbol: unique symbol = Symbol("queuert.definitions");
+
+/** Extract the job type definitions from a {@link JobTypeRegistry}. */
+export type JobTypeRegistryDefinitions<T extends JobTypeRegistry<any>> =
+  T[typeof definitionsSymbol];
+
+export const noopRegistries = new WeakSet<JobTypeRegistry<any>>();
+
 /**
  * Reference object for continuation and blocker validation.
  * Contains both typeName (for nominal validation) and input (for structural validation).
@@ -16,6 +25,8 @@ export type ResolvedJobTypeReference = {
  * Functions should throw on validation failure (any error type).
  */
 export type JobTypeRegistryConfig = {
+  /** Returns the known job type names. Used for runtime duplicate detection in {@link mergeJobTypeRegistries}. */
+  getTypeNames: () => readonly string[];
   /** Validate that a job type can start a chain. Throw on failure. */
   validateEntry: (typeName: string) => void;
   /** Parse and validate input. Return transformed value or throw on failure. */
@@ -51,8 +62,11 @@ export type JobTypeRegistry<TJobTypeDefinitions = unknown> = {
   /** Validate blocker references. Throws JobTypeValidationError on failure. */
   validateBlockers: (typeName: string, blockers: readonly ResolvedJobTypeReference[]) => void;
 
+  /** Known type names. Returns the type names registered with this registry. */
+  readonly getTypeNames: () => readonly string[];
+
   /** Phantom property for TypeScript type inference. */
-  readonly $definitions: TJobTypeDefinitions;
+  readonly [definitionsSymbol]: TJobTypeDefinitions;
 };
 
 /**
@@ -61,14 +75,19 @@ export type JobTypeRegistry<TJobTypeDefinitions = unknown> = {
  */
 export const createNoopJobTypeRegistry = <
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
->(): JobTypeRegistry<TJobTypeDefinitions> => ({
-  validateEntry: () => {},
-  parseInput: (_, input) => input,
-  parseOutput: (_, output) => output,
-  validateContinueWith: () => {},
-  validateBlockers: () => {},
-  $definitions: undefined as unknown as TJobTypeDefinitions,
-});
+>(): JobTypeRegistry<TJobTypeDefinitions> => {
+  const registry: JobTypeRegistry<TJobTypeDefinitions> = {
+    validateEntry: () => {},
+    parseInput: (_, input) => input,
+    parseOutput: (_, output) => output,
+    validateContinueWith: () => {},
+    getTypeNames: () => [],
+    validateBlockers: () => {},
+    [definitionsSymbol]: undefined as unknown as TJobTypeDefinitions,
+  };
+  noopRegistries.add(registry);
+  return registry;
+};
 
 /**
  * Create a job type registry with runtime validation.
@@ -77,6 +96,7 @@ export const createNoopJobTypeRegistry = <
  * @example
  * // Adapters throw their native errors (e.g., ZodError)
  * const registry = createJobTypeRegistry<MyJobTypes>({
+ *   getTypeNames: () => Object.keys(schemas),
  *   validateEntry: (typeName) => {
  *     if (!entryTypes.has(typeName)) throw new Error('Not an entry point');
  *   },
@@ -89,6 +109,7 @@ export const createNoopJobTypeRegistry = <
 export const createJobTypeRegistry = <TJobTypeDefinitions>(
   config: JobTypeRegistryConfig,
 ): JobTypeRegistry<TJobTypeDefinitions> => ({
+  getTypeNames: () => config.getTypeNames(),
   validateEntry: (typeName) => {
     try {
       config.validateEntry(typeName);
@@ -146,5 +167,5 @@ export const createJobTypeRegistry = <TJobTypeDefinitions>(
       });
     }
   },
-  $definitions: undefined as unknown as TJobTypeDefinitions,
+  [definitionsSymbol]: undefined as unknown as TJobTypeDefinitions,
 });

@@ -36,6 +36,7 @@ const validateFields = (schema: FieldSchema, data: unknown, label: string): void
 
 const createTestSchemaRegistry = <T>(schemas: Record<string, TestJobTypeSchema>) =>
   createJobTypeRegistry<T>({
+    getTypeNames: () => Object.keys(schemas),
     validateEntry: (typeName) => {
       const schema = schemas[typeName];
       if (!schema) throw new Error(`Unknown job type: "${typeName}"`);
@@ -123,6 +124,12 @@ const completionOptions = {
 };
 
 export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
+  it("getTypeNames returns registered type names", ({ expect }) => {
+    expect(simpleRegistry.getTypeNames()).toEqual(["main"]);
+    expect(continuationRegistry.getTypeNames()).toEqual(expect.arrayContaining(["step1", "step2"]));
+    expect(blockerRegistry.getTypeNames()).toEqual(expect.arrayContaining(["main", "auth"]));
+  });
+
   it("accepts valid input at chain start", async ({
     stateAdapter,
     notifyAdapter,

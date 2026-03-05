@@ -50,18 +50,19 @@ How to set up real-time job notifications between client and workers.
 
 Job chain patterns, error handling, scheduling, and other core features.
 
-| Example                   | What it demonstrates                                | Source                                                                                              |
-| ------------------------- | --------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| showcase-chain-patterns   | Linear, branched, looped, and go-to chain execution | [source](https://github.com/kvet/queuert/blob/main/examples/showcase-chain-patterns/src/index.ts)   |
-| showcase-error-handling   | Discriminated unions, compensation, rescheduling    | [source](https://github.com/kvet/queuert/blob/main/examples/showcase-error-handling/src/index.ts)   |
-| showcase-scheduling       | Delayed and time-scheduled jobs                     | [source](https://github.com/kvet/queuert/blob/main/examples/showcase-scheduling/src/index.ts)       |
-| showcase-blockers         | Cross-chain job dependencies                        | [source](https://github.com/kvet/queuert/blob/main/examples/showcase-blockers/src/index.ts)         |
-| showcase-chain-awaiting   | Awaiting chain completion programmatically          | [source](https://github.com/kvet/queuert/blob/main/examples/showcase-chain-awaiting/src/index.ts)   |
-| showcase-chain-deletion   | Deleting job chains                                 | [source](https://github.com/kvet/queuert/blob/main/examples/showcase-chain-deletion/src/index.ts)   |
-| showcase-processing-modes | Atomic vs staged processing modes                   | [source](https://github.com/kvet/queuert/blob/main/examples/showcase-processing-modes/src/index.ts) |
-| showcase-queries          | Querying jobs and chains                            | [source](https://github.com/kvet/queuert/blob/main/examples/showcase-queries/src/index.ts)          |
-| showcase-timeouts         | Job and chain timeouts                              | [source](https://github.com/kvet/queuert/blob/main/examples/showcase-timeouts/src/index.ts)         |
-| showcase-workerless       | Running without a worker (polling only)             | [source](https://github.com/kvet/queuert/blob/main/examples/showcase-workerless/src/index.ts)       |
+| Example                   | What it demonstrates                                 | Source                                                                                              |
+| ------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| showcase-chain-patterns   | Linear, branched, looped, and go-to chain execution  | [source](https://github.com/kvet/queuert/blob/main/examples/showcase-chain-patterns/src/index.ts)   |
+| showcase-error-handling   | Discriminated unions, compensation, rescheduling     | [source](https://github.com/kvet/queuert/blob/main/examples/showcase-error-handling/src/index.ts)   |
+| showcase-scheduling       | Delayed and time-scheduled jobs                      | [source](https://github.com/kvet/queuert/blob/main/examples/showcase-scheduling/src/index.ts)       |
+| showcase-blockers         | Cross-chain job dependencies                         | [source](https://github.com/kvet/queuert/blob/main/examples/showcase-blockers/src/index.ts)         |
+| showcase-chain-awaiting   | Awaiting chain completion programmatically           | [source](https://github.com/kvet/queuert/blob/main/examples/showcase-chain-awaiting/src/index.ts)   |
+| showcase-chain-deletion   | Deleting job chains                                  | [source](https://github.com/kvet/queuert/blob/main/examples/showcase-chain-deletion/src/index.ts)   |
+| showcase-processing-modes | Atomic vs staged processing modes                    | [source](https://github.com/kvet/queuert/blob/main/examples/showcase-processing-modes/src/index.ts) |
+| showcase-queries          | Querying jobs and chains                             | [source](https://github.com/kvet/queuert/blob/main/examples/showcase-queries/src/index.ts)          |
+| showcase-timeouts         | Job and chain timeouts                               | [source](https://github.com/kvet/queuert/blob/main/examples/showcase-timeouts/src/index.ts)         |
+| showcase-slices           | Feature slices with merged registries and processors | [source](https://github.com/kvet/queuert/blob/main/examples/showcase-slices/src/index.ts)           |
+| showcase-workerless       | Running without a worker (polling only)              | [source](https://github.com/kvet/queuert/blob/main/examples/showcase-workerless/src/index.ts)       |
 
 ## Logging
 

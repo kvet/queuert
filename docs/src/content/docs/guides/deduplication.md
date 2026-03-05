@@ -2,7 +2,7 @@
 title: Deduplication
 description: Prevent duplicate job chains with deduplication keys.
 sidebar:
-  order: 9
+  order: 10
 ---
 
 Deduplication prevents duplicate job chains from being created. When you start a job chain with a deduplication key, Queuert checks if a chain with that key already exists and returns the existing chain instead of creating a new one.

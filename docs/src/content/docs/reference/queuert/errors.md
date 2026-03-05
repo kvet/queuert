@@ -2,7 +2,7 @@
 title: Errors
 description: Error classes for the queuert core package.
 sidebar:
-  order: 4
+  order: 5
 ---
 
 All error classes extend `Error`. Properties listed are `readonly`.
@@ -119,6 +119,16 @@ type BlockerReference = {
 
 Thrown by `deleteJobChains` when external chains depend on the deletion targets as blockers. **references** lists each dependency, pairing the blocker **chainId** with the **referencedByJobId** that depends on it.
 
+## DuplicateJobTypeError
+
+```typescript
+class DuplicateJobTypeError extends Error {
+  readonly duplicateTypeNames: readonly string[];
+}
+```
+
+Thrown by `mergeJobTypeRegistries` when validated registries (from `createJobTypeRegistry`) have overlapping type names. **duplicateTypeNames** lists the conflicting keys.
+
 ## HookNotRegisteredError
 
 ```typescript
@@ -134,4 +144,5 @@ Thrown when a transaction hook is accessed before being registered.
 - [Client](/queuert/reference/queuert/client/) — Client API reference
 - [Worker](/queuert/reference/queuert/worker/) — Worker and job processing reference
 - [Types](/queuert/reference/queuert/types/) — Job, JobChain, and configuration types
+- [Utilities](/queuert/reference/queuert/utilities/) — Composition helpers and utility functions
 - [Error Handling](/queuert/guides/error-handling/) — Error handling patterns guide

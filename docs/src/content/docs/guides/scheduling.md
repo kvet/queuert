@@ -2,7 +2,7 @@
 title: Scheduling
 description: Deferred start and recurring job patterns.
 sidebar:
-  order: 8
+  order: 9
 ---
 
 ## Deferred Start

@@ -17,7 +17,7 @@ import {
   type StateJob,
 } from "./state-adapter/state-adapter.js";
 import {
-  type AttemptHandlerFn,
+  type AttemptHandler,
   type JobAttemptMiddleware,
   type LeaseConfig,
   runJobProcess,
@@ -45,7 +45,7 @@ export type InProcessWorkerProcessor<
   TJobTypeName extends keyof TJobTypeDefinitions & string,
 > = {
   /** Handler function called for each job attempt */
-  attemptHandler: AttemptHandlerFn<TStateAdapter, TJobTypeDefinitions, TJobTypeName>;
+  attemptHandler: AttemptHandler<TStateAdapter, TJobTypeDefinitions, TJobTypeName>;
   /** Per-job-type backoff configuration (overrides processDefaults) */
   backoffConfig?: BackoffConfig;
   /** Per-job-type lease configuration (overrides processDefaults) */

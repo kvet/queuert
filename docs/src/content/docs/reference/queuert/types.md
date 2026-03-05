@@ -2,7 +2,7 @@
 title: Types
 description: Job type system, entity types, and configuration types for the queuert core package.
 sidebar:
-  order: 3
+  order: 4
 ---
 
 ## Job Type System
@@ -30,6 +30,7 @@ Creates a compile-time-only type registry. No runtime validation is performed. T
 
 ```typescript
 const registry = createJobTypeRegistry<MyJobTypes>({
+  getTypeNames: () => Object.keys(schemas),
   validateEntry: (typeName) => { ... },
   parseInput: (typeName, input) => { ... },
   parseOutput: (typeName, output) => { ... },
@@ -40,21 +41,25 @@ const registry = createJobTypeRegistry<MyJobTypes>({
 
 Creates a registry with runtime validation for input/output parsing. Each callback is invoked at the appropriate lifecycle point. Use this when you need schema validation (e.g. with Zod) beyond compile-time checks.
 
+- **getTypeNames** -- returns the known job type names; used by `mergeJobTypeRegistries` for runtime duplicate detection and deterministic routing
+
 ### JobTypeRegistry
 
 ```typescript
 type JobTypeRegistry<TJobTypeDefinitions> = {
+  getTypeNames: () => readonly string[];
   validateEntry: (typeName: string) => void;
   parseInput: (typeName: string, input: unknown) => unknown;
   parseOutput: (typeName: string, output: unknown) => unknown;
   validateContinueWith: (typeName: string, target: ResolvedJobTypeReference) => void;
   validateBlockers: (typeName: string, blockers: readonly ResolvedJobTypeReference[]) => void;
-  readonly $definitions: TJobTypeDefinitions;
+  readonly [definitionsSymbol]: TJobTypeDefinitions;
 };
 ```
 
 The registry object accepted by `createClient` and `createInProcessWorker`.
 
+- **getTypeNames** -- returns the known type names; noop registries return `[]`, validated registries delegate to the config
 - **validateEntry** -- throws if the type name is not marked as an entry point
 - **parseInput** / **parseOutput** -- parse and return validated data, throwing on invalid shapes
 - **validateContinueWith** / **validateBlockers** -- verify chain-flow references at runtime
@@ -78,6 +83,59 @@ The shape of each job type in the type map passed to `defineJobTypes` or `create
 - **output** -- present on terminal jobs that produce a result
 - **continueWith** -- names the next job type in the chain
 - **blockers** -- declares external chain dependencies that must complete before the job runs
+
+### JobTypeRegistryDefinitions
+
+```typescript
+type JobTypeRegistryDefinitions<T extends JobTypeRegistry<any>> = T[typeof definitionsSymbol];
+```
+
+Utility type that extracts the phantom job type definitions from a `JobTypeRegistry`. Use this instead of indexing the symbol property directly.
+
+```typescript
+const jobTypes = defineJobTypes<{
+  "send-email": { entry: true; input: { to: string }; output: { sent: true } };
+}>();
+
+type MyDefs = JobTypeRegistryDefinitions<typeof jobTypes>;
+// { "send-email": { entry: true; input: { to: string }; output: { sent: true } } }
+```
+
+## Attempt Handler Types
+
+These types describe the attempt handler function and its `prepare`/`complete` parameters. They are generic over the state adapter and job type definitions. Exported for use in type annotations and `satisfies` expressions when defining processors in separate files.
+
+### AttemptHandler
+
+The core function called for each job attempt. Receives `signal`, `job`, `prepare`, and `complete`.
+
+### AttemptComplete
+
+The typed `complete` function provided to the attempt handler. Call it to finalize the job — either return the output to complete the chain, or call `continueWith` to extend it.
+
+### AttemptCompleteCallback
+
+The callback passed to `complete()`. Receives `AttemptCompleteOptions` and returns the result.
+
+### AttemptCompleteOptions
+
+Options received by the complete callback: `continueWith` (to extend the chain), `transactionHooks`, and the transaction context.
+
+### AttemptPrepare
+
+The typed `prepare` function provided to the attempt handler. Controls the processing mode and optionally runs a callback within the prepare transaction.
+
+### AttemptPrepareCallback
+
+The callback passed to `prepare(options, callback)`. Receives the transaction context.
+
+### AttemptPrepareOptions
+
+```typescript
+type AttemptPrepareOptions = { mode: "atomic" | "staged" };
+```
+
+Configuration for the prepare phase. `"atomic"` runs prepare and complete in the same transaction. `"staged"` commits prepare first, then runs complete in a new transaction with lease renewal.
 
 ## Entity Types
 
@@ -305,6 +363,7 @@ See [Adapter Architecture](/queuert/advanced/adapters/) for full interface defin
 
 - [Client](/queuert/reference/queuert/client/) — Client API reference
 - [Worker](/queuert/reference/queuert/worker/) — Worker and job processing reference
+- [Utilities](/queuert/reference/queuert/utilities/) — Composition helpers and utility functions
 - [Errors](/queuert/reference/queuert/errors/) — Error classes reference
 - [Core Concepts](/queuert/getting-started/core-concepts/) — Job chain model introduction
 - [Type Safety](/queuert/guides/type-safety/) — Type safety features guide

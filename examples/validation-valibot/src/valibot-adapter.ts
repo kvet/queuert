@@ -113,6 +113,7 @@ export const createValibotJobTypeRegistry = <T extends Record<string, ValibotJob
   };
 
   return createJobTypeRegistry<InferValibotJobTypes<T>>({
+    getTypeNames: () => Object.keys(schemas),
     validateEntry: (typeName) => {
       const schema = getSchema(typeName);
       if (schema.entry !== true) {

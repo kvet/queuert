@@ -1,7 +1,10 @@
 export const helpersSymbol = Symbol("queuert.helpers");
 
 import { type DeduplicationOptions } from "./entities/deduplication.js";
-import { type JobTypeRegistry } from "./entities/job-type-registry.js";
+import {
+  type JobTypeRegistry,
+  type JobTypeRegistryDefinitions,
+} from "./entities/job-type-registry.js";
 import {
   type BaseJobTypeDefinitions,
   type BlockedJobTypes,
@@ -46,7 +49,7 @@ import { bufferNotifyJobOwnershipLost } from "./helpers/notify-hooks.js";
 import { raceWithSleep } from "./helpers/sleep.js";
 import { createHelpers } from "./setup-helpers.js";
 import { type TransactionHooks } from "./transaction-hooks.js";
-import { type CompleteCallbackOptions } from "./worker/job-process.js";
+import { type AttemptCompleteOptions } from "./worker/job-process.js";
 
 const normalizeTxCtx = <T extends Record<string, unknown>>(rest: T): T | undefined =>
   Object.keys(rest).length > 0 ? rest : undefined;
@@ -86,7 +89,7 @@ export type JobChainCompleteOptions<
       TChainTypeName
     >,
     completeCallback: (
-      completeOptions: CompleteCallbackOptions<
+      completeOptions: AttemptCompleteOptions<
         TStateAdapter,
         TJobTypeDefinitions,
         TJobTypeName,
@@ -140,7 +143,7 @@ export const createClient = async <
   registry: TJobTypeRegistry;
   log?: Log;
 }) => {
-  type TJobTypeDefinitions = TJobTypeRegistry["$definitions"];
+  type TJobTypeDefinitions = JobTypeRegistryDefinitions<TJobTypeRegistry>;
   type TJobId = GetStateAdapterJobId<TStateAdapter>;
 
   const helpers = createHelpers({

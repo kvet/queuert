@@ -2,7 +2,7 @@
 title: Timeouts
 description: Cooperative and hard timeouts for job processing.
 sidebar:
-  order: 15
+  order: 8
 ---
 
 For cooperative timeouts, combine `AbortSignal.timeout()` with the provided `signal`:

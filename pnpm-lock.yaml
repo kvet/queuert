@@ -571,6 +571,31 @@ importers:
         specifier: ^4.21.0
         version: 4.21.0
 
+  examples/showcase-slices:
+    dependencies:
+      '@queuert/postgres':
+        specifier: workspace:*
+        version: link:../../packages/postgres
+      postgres:
+        specifier: ^3.4.8
+        version: 3.4.8
+      queuert:
+        specifier: workspace:*
+        version: link:../../packages/core
+    devDependencies:
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages-internal/tsconfig
+      '@testcontainers/postgresql':
+        specifier: ^11.11.0
+        version: 11.11.0
+      '@types/node':
+        specifier: ^22.19.11
+        version: 22.19.11
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
+
   examples/showcase-timeouts:
     dependencies:
       '@queuert/postgres':
