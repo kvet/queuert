@@ -7,46 +7,10 @@ sidebar:
 
 ## Job Type System
 
-### defineJobTypes
-
-```typescript
-const jobTypes = defineJobTypes<{
-  "send-email": {
-    entry: true;
-    input: { to: string; subject: string };
-    output: { sent: true };
-  };
-  "process-attachment": {
-    input: { fileUrl: string };
-    output: { processedUrl: string };
-    continueWith: { typeName: "send-email" };
-  };
-}>();
-```
-
-Creates a compile-time-only type registry. No runtime validation is performed. The returned object carries type information used by `createClient` and `createWorker` to infer input, output, and chain-flow types.
-
-### createJobTypeRegistry
-
-```typescript
-const registry = createJobTypeRegistry<MyJobTypes>({
-  getTypeNames: () => Object.keys(schemas),
-  validateEntry: (typeName) => { ... },
-  parseInput: (typeName, input) => { ... },
-  parseOutput: (typeName, output) => { ... },
-  validateContinueWith: (typeName, target) => { ... },
-  validateBlockers: (typeName, blockers) => { ... },
-});
-```
-
-Creates a registry with runtime validation for input/output parsing. Each callback is invoked at the appropriate lifecycle point. Use this when you need schema validation (e.g. with Zod) beyond compile-time checks.
-
-- **getTypeNames** -- returns the known job type names; used by `mergeJobTypeRegistries` for runtime duplicate detection and deterministic routing
-
 ### JobTypeRegistry
 
 ```typescript
-type JobTypeRegistry<TJobTypeDefinitions> = {
+type JobTypeRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions = Record<never, never>> = {
   getTypeNames: () => readonly string[];
   validateEntry: (typeName: string) => void;
   parseInput: (typeName: string, input: unknown) => unknown;
@@ -54,6 +18,7 @@ type JobTypeRegistry<TJobTypeDefinitions> = {
   validateContinueWith: (typeName: string, target: ResolvedJobTypeReference) => void;
   validateBlockers: (typeName: string, blockers: readonly ResolvedJobTypeReference[]) => void;
   readonly [definitionsSymbol]: TJobTypeDefinitions;
+  readonly [externalDefinitionsSymbol]: TExternalJobTypeDefinitions;
 };
 ```
 
@@ -99,6 +64,42 @@ const jobTypes = defineJobTypes<{
 
 type MyDefs = JobTypeRegistryDefinitions<typeof jobTypes>;
 // { "send-email": { entry: true; input: { to: string }; output: { sent: true } } }
+```
+
+### ExternalJobTypeRegistryDefinitions
+
+```typescript
+type ExternalJobTypeRegistryDefinitions<T extends JobTypeRegistry<any>> =
+  T[typeof externalDefinitionsSymbol];
+```
+
+Utility type that extracts the external (cross-slice) phantom definitions from a `JobTypeRegistry`. Returns `Record<never, never>` when no external types were declared.
+
+```typescript
+const orderJobTypes = defineJobTypes<
+  {
+    "orders.confirm": {
+      entry: true;
+      input: { id: string };
+      output: { ok: boolean };
+      blockers: [{ typeName: "notifications.send" }];
+    };
+  },
+  JobTypeRegistryDefinitions<typeof notificationJobTypes>
+>();
+
+type ExtDefs = ExternalJobTypeRegistryDefinitions<typeof orderJobTypes>;
+// { "notifications.send": { ... } }
+```
+
+Used with `InProcessWorkerProcessors` to give slice processors visibility into external types:
+
+```typescript
+satisfies InProcessWorkerProcessors<
+  typeof stateAdapter,
+  JobTypeRegistryDefinitions<typeof orderJobTypes>,
+  ExternalJobTypeRegistryDefinitions<typeof orderJobTypes>
+>
 ```
 
 ## Attempt Handler Types

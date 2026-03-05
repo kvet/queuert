@@ -16,7 +16,7 @@ export {
   type StateJobStatus,
 } from "./state-adapter/state-adapter.js";
 
-export { helpersSymbol } from "./client.js";
+export { clientHelpersMap } from "./helpers/client-helpers-map.js";
 
 export { createInProcessNotifyAdapter } from "./notify-adapter/notify-adapter.in-process.js";
 export {

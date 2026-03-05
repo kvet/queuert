@@ -80,6 +80,61 @@ Both merge functions detect overlapping keys at compile time and at runtime:
 - **Compile-time** — overlapping type names or processor keys produce a TypeScript error
 - **Runtime** — validated registries with overlapping `getTypeNames()` throw `DuplicateJobTypeError`
 
+## Cross-Slice References
+
+When a slice needs to reference job types from another slice — for example, declaring a blocker from the notifications domain — use the optional `TExternal` type parameter on `defineJobTypes`:
+
+```ts
+// slice-orders-definitions.ts
+import { type JobTypeRegistryDefinitions, defineJobTypes } from "queuert";
+import { type notificationJobTypes } from "./slice-notifications-definitions.js";
+
+export const orderJobTypes = defineJobTypes<
+  {
+    "orders.place": {
+      entry: true;
+      input: { userId: string };
+      continueWith: { typeName: "orders.confirm" };
+    };
+    "orders.confirm": {
+      input: { orderId: string };
+      output: { confirmed: boolean };
+      blockers: [{ typeName: "notifications.send" }];
+    };
+  },
+  // External types — available for reference validation, not owned by this slice
+  JobTypeRegistryDefinitions<typeof notificationJobTypes>
+>();
+```
+
+- `T` (first parameter) = owned definitions — these become the registry's phantom type
+- `TExternal` (second parameter) = read-only reference context, defaults to `Record<never, never>`
+- `continueWith` validates against `T & TExternal`; `blockers` validates against entry types in `T & TExternal`
+- The registry's phantom type remains `T` only — `TExternal` types are not included
+
+This eliminates the need for "workflow slices" that duplicate type definitions just to make blocker references type-check. After merging with `mergeJobTypeRegistries`, all references resolve against the full set of definitions.
+
+When writing processors for a slice with external references, use `ExternalJobTypeRegistryDefinitions` to extract the external types and pass them to `InProcessWorkerProcessors`:
+
+```ts
+// slice-orders-processors.ts
+import {
+  type ExternalJobTypeRegistryDefinitions,
+  type InProcessWorkerProcessors,
+  type JobTypeRegistryDefinitions,
+} from "queuert";
+import { type stateAdapter } from "./adapters.js";
+import { type orderJobTypes } from "./slice-orders-definitions.js";
+
+const orderProcessors = {
+  // ...
+} satisfies InProcessWorkerProcessors<
+  typeof stateAdapter,
+  JobTypeRegistryDefinitions<typeof orderJobTypes>,
+  ExternalJobTypeRegistryDefinitions<typeof orderJobTypes>
+>;
+```
+
 ## Naming Convention
 
 Prefix job type names with the slice name to avoid collisions:
@@ -94,7 +149,7 @@ This also makes logs and dashboards easy to scan by feature.
 
 ## See Also
 
-- [Utilities — mergeJobTypeRegistries](/queuert/reference/queuert/utilities/#mergejobttyperegistries) — API reference
+- [Utilities — mergeJobTypeRegistries](/queuert/reference/queuert/utilities/#mergejobtyperegistries) — API reference
 - [Utilities — mergeJobTypeProcessors](/queuert/reference/queuert/utilities/#mergejobtypeprocessors) — API reference
 - [Type Safety](../type-safety/) — how Queuert enforces types end-to-end
 - [showcase-slices example](https://github.com/kvet/queuert/blob/main/examples/showcase-slices/src/index.ts) — full runnable example

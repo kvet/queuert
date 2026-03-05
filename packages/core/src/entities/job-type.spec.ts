@@ -1,14 +1,17 @@
 import { describe, expectTypeOf, it } from "vitest";
-import { type JobTypeRegistryDefinitions } from "./job-type-registry.js";
 import {
-  type BlockedJobTypes,
+  type ExternalJobTypeRegistryDefinitions,
+  type JobTypeRegistryDefinitions,
+} from "./job-type-registry.js";
+import {
+  type BlockedJobTypeNames,
   type BlockerChains,
-  type ChainJobTypes,
+  type ChainJobTypeNames,
   type ChainTypesReaching,
   type ContinuationJobTypes,
   type EntryJobTypeDefinitions,
-  type JobChainOf,
-  type JobOf,
+  type ResolvedJob,
+  type ResolvedJobChain,
   defineJobTypes,
 } from "./job-type.js";
 
@@ -149,6 +152,184 @@ describe("defineJobTypes", () => {
   });
 });
 
+describe("external references (TExternal)", () => {
+  it("allows nominal continueWith referencing an external type", () => {
+    const notificationJobTypes = defineJobTypes<{
+      "notifications.send": {
+        entry: true;
+        input: { userId: string; message: string };
+        output: { sentAt: string };
+      };
+    }>();
+
+    const orderJobTypes = defineJobTypes<
+      {
+        "orders.create": {
+          entry: true;
+          input: { userId: string };
+          continueWith: { typeName: "notifications.send" };
+        };
+      },
+      JobTypeRegistryDefinitions<typeof notificationJobTypes>
+    >();
+
+    expectTypeOf<JobTypeRegistryDefinitions<typeof orderJobTypes>>().toHaveProperty(
+      "orders.create",
+    );
+    // Phantom type only includes T, not TExternal
+    expectTypeOf<
+      keyof JobTypeRegistryDefinitions<typeof orderJobTypes>
+    >().toEqualTypeOf<"orders.create">();
+  });
+
+  it("allows nominal blockers referencing an external entry type", () => {
+    const notificationJobTypes = defineJobTypes<{
+      "notifications.send": {
+        entry: true;
+        input: { userId: string; message: string };
+        output: { sentAt: string };
+      };
+    }>();
+
+    const orderJobTypes = defineJobTypes<
+      {
+        "orders.create": {
+          entry: true;
+          input: { userId: string };
+          output: { orderId: string };
+          blockers: [{ typeName: "notifications.send" }];
+        };
+      },
+      JobTypeRegistryDefinitions<typeof notificationJobTypes>
+    >();
+
+    expectTypeOf<JobTypeRegistryDefinitions<typeof orderJobTypes>>().toHaveProperty(
+      "orders.create",
+    );
+  });
+
+  it("allows structural blockers referencing an external type", () => {
+    const notificationJobTypes = defineJobTypes<{
+      "notifications.send": {
+        entry: true;
+        input: { userId: string; message: string };
+        output: { sentAt: string };
+      };
+    }>();
+
+    const orderJobTypes = defineJobTypes<
+      {
+        "orders.create": {
+          entry: true;
+          input: { userId: string };
+          output: { orderId: string };
+          blockers: [{ input: { userId: string; message: string } }];
+        };
+      },
+      JobTypeRegistryDefinitions<typeof notificationJobTypes>
+    >();
+
+    expectTypeOf<JobTypeRegistryDefinitions<typeof orderJobTypes>>().toHaveProperty(
+      "orders.create",
+    );
+  });
+
+  it("rejects external reference that doesn't match any external type", () => {
+    const notificationJobTypes = defineJobTypes<{
+      "notifications.send": {
+        entry: true;
+        input: { userId: string; message: string };
+        output: { sentAt: string };
+      };
+    }>();
+
+    defineJobTypes<
+      // @ts-expect-error "nonexistent" is not in T or TExternal
+      {
+        "orders.create": {
+          entry: true;
+          input: { userId: string };
+          continueWith: { typeName: "nonexistent" };
+        };
+      },
+      JobTypeRegistryDefinitions<typeof notificationJobTypes>
+    >();
+  });
+
+  it("phantom type only includes T, not TExternal", () => {
+    const externalTypes = defineJobTypes<{
+      "external.task": {
+        entry: true;
+        input: { data: string };
+        output: { result: string };
+      };
+    }>();
+
+    const localTypes = defineJobTypes<
+      {
+        "local.process": {
+          entry: true;
+          input: { id: string };
+          output: { done: boolean };
+          blockers: [{ typeName: "external.task" }];
+        };
+      },
+      JobTypeRegistryDefinitions<typeof externalTypes>
+    >();
+
+    type Defs = JobTypeRegistryDefinitions<typeof localTypes>;
+    expectTypeOf<keyof Defs>().toEqualTypeOf<"local.process">();
+  });
+
+  it("ExternalJobTypeRegistryDefinitions extracts TExternal from registry", () => {
+    const externalTypes = defineJobTypes<{
+      "external.task": {
+        entry: true;
+        input: { data: string };
+        output: { result: string };
+      };
+    }>();
+
+    const localTypes = defineJobTypes<
+      {
+        "local.process": {
+          entry: true;
+          input: { id: string };
+          output: { done: boolean };
+          blockers: [{ typeName: "external.task" }];
+        };
+      },
+      JobTypeRegistryDefinitions<typeof externalTypes>
+    >();
+
+    type ExtDefs = ExternalJobTypeRegistryDefinitions<typeof localTypes>;
+    expectTypeOf<keyof ExtDefs>().toEqualTypeOf<"external.task">();
+    expectTypeOf<ExtDefs["external.task"]["input"]>().toEqualTypeOf<{ data: string }>();
+  });
+
+  it("rejects overlapping keys between T and TExternal", () => {
+    const externalTypes = defineJobTypes<{
+      "shared.task": {
+        entry: true;
+        input: { data: string };
+        output: { result: string };
+      };
+    }>();
+
+    defineJobTypes<
+      // @ts-expect-error "shared.task" exists in both T and TExternal
+      {
+        "shared.task": {
+          entry: true;
+          input: { id: string };
+          output: { done: boolean };
+        };
+      },
+      JobTypeRegistryDefinitions<typeof externalTypes>
+    >();
+  });
+});
+
 describe("continuation-only jobs (default behavior)", () => {
   it("supports null as input type", () => {
     const defs = defineJobTypes<{
@@ -156,7 +337,7 @@ describe("continuation-only jobs (default behavior)", () => {
       second: { input: null; output: { done: true } };
     }>();
 
-    type SecondJob = JobOf<string, JobTypeRegistryDefinitions<typeof defs>, "second">;
+    type SecondJob = ResolvedJob<string, JobTypeRegistryDefinitions<typeof defs>, "second">;
     expectTypeOf<SecondJob["input"]>().toEqualTypeOf<null>();
   });
 
@@ -169,7 +350,7 @@ describe("continuation-only jobs (default behavior)", () => {
       };
     }>();
 
-    type SecondJob = JobOf<string, JobTypeRegistryDefinitions<typeof defs>, "second">;
+    type SecondJob = ResolvedJob<string, JobTypeRegistryDefinitions<typeof defs>, "second">;
     expectTypeOf<SecondJob["input"]>().toEqualTypeOf<{ value: number; name: string }>();
   });
 
@@ -179,7 +360,7 @@ describe("continuation-only jobs (default behavior)", () => {
       second: { input: number; output: { done: true } };
     }>();
 
-    type SecondJob = JobOf<string, JobTypeRegistryDefinitions<typeof defs>, "second">;
+    type SecondJob = ResolvedJob<string, JobTypeRegistryDefinitions<typeof defs>, "second">;
     expectTypeOf<SecondJob["input"]>().toEqualTypeOf<number>();
   });
 
@@ -189,7 +370,7 @@ describe("continuation-only jobs (default behavior)", () => {
       second: { input: string[]; output: { done: true } };
     }>();
 
-    type SecondJob = JobOf<string, JobTypeRegistryDefinitions<typeof defs>, "second">;
+    type SecondJob = ResolvedJob<string, JobTypeRegistryDefinitions<typeof defs>, "second">;
     expectTypeOf<SecondJob["input"]>().toEqualTypeOf<string[]>();
   });
 
@@ -235,7 +416,7 @@ describe("EntryJobTypeDefinitions", () => {
   });
 });
 
-describe("JobOf", () => {
+describe("ResolvedJob", () => {
   it("extracts input type correctly for continuation jobs", () => {
     const defs = defineJobTypes<{
       first: { entry: true; input: { value: number }; continueWith: { typeName: "second" } };
@@ -245,8 +426,8 @@ describe("JobOf", () => {
       };
     }>();
 
-    type FirstJob = JobOf<string, JobTypeRegistryDefinitions<typeof defs>, "first">;
-    type SecondJob = JobOf<string, JobTypeRegistryDefinitions<typeof defs>, "second">;
+    type FirstJob = ResolvedJob<string, JobTypeRegistryDefinitions<typeof defs>, "first">;
+    type SecondJob = ResolvedJob<string, JobTypeRegistryDefinitions<typeof defs>, "second">;
 
     expectTypeOf<FirstJob["input"]>().toEqualTypeOf<{ value: number }>();
     expectTypeOf<SecondJob["input"]>().toEqualTypeOf<{ continued: boolean }>();
@@ -257,7 +438,7 @@ describe("JobOf", () => {
       test: { entry: true; input: { id: string }; output: { result: number } };
     }>();
 
-    type TestJob = JobOf<string, JobTypeRegistryDefinitions<typeof defs>, "test">;
+    type TestJob = ResolvedJob<string, JobTypeRegistryDefinitions<typeof defs>, "test">;
 
     expectTypeOf<TestJob["id"]>().toEqualTypeOf<string>();
     expectTypeOf<TestJob["chainId"]>().toEqualTypeOf<string>();
@@ -310,7 +491,7 @@ describe("ContinuationJobTypes", () => {
   });
 });
 
-describe("ChainJobTypes", () => {
+describe("ChainJobTypeNames", () => {
   it("collects all job types in a chain", () => {
     const defs = defineJobTypes<{
       first: { entry: true; input: null; continueWith: { typeName: "second" } };
@@ -319,7 +500,7 @@ describe("ChainJobTypes", () => {
       unrelated: { entry: true; input: { other: true }; output: { other: true } };
     }>();
 
-    type ChainTypes = ChainJobTypes<JobTypeRegistryDefinitions<typeof defs>, "first">;
+    type ChainTypes = ChainJobTypeNames<JobTypeRegistryDefinitions<typeof defs>, "first">;
 
     expectTypeOf<ChainTypes>().toEqualTypeOf<"first" | "second" | "third">();
   });
@@ -334,7 +515,7 @@ describe("ChainJobTypes", () => {
       };
     }>();
 
-    type ChainTypes = ChainJobTypes<JobTypeRegistryDefinitions<typeof defs>, "loop">;
+    type ChainTypes = ChainJobTypeNames<JobTypeRegistryDefinitions<typeof defs>, "loop">;
 
     expectTypeOf<ChainTypes>().toEqualTypeOf<"loop">();
   });
@@ -369,7 +550,7 @@ describe("BlockerChains", () => {
   });
 });
 
-describe("BlockedJobTypes", () => {
+describe("BlockedJobTypeNames", () => {
   it("resolves job types blocked by a given chain type", () => {
     type Defs = {
       dep: { entry: true; input: { v: number }; output: { ok: boolean } };
@@ -381,7 +562,7 @@ describe("BlockedJobTypes", () => {
       };
     };
 
-    expectTypeOf<BlockedJobTypes<Defs, "dep">>().toEqualTypeOf<"main">();
+    expectTypeOf<BlockedJobTypeNames<Defs, "dep">>().toEqualTypeOf<"main">();
   });
 
   it("returns never when no job types are blocked by the chain", () => {
@@ -390,7 +571,7 @@ describe("BlockedJobTypes", () => {
       other: { entry: true; input: { x: number }; output: { y: number } };
     };
 
-    expectTypeOf<BlockedJobTypes<Defs, "standalone">>().toEqualTypeOf<never>();
+    expectTypeOf<BlockedJobTypeNames<Defs, "standalone">>().toEqualTypeOf<never>();
   });
 
   it("resolves multiple job types blocked by the same chain", () => {
@@ -410,7 +591,7 @@ describe("BlockedJobTypes", () => {
       };
     };
 
-    expectTypeOf<BlockedJobTypes<Defs, "auth">>().toEqualTypeOf<"taskA" | "taskB">();
+    expectTypeOf<BlockedJobTypeNames<Defs, "auth">>().toEqualTypeOf<"taskA" | "taskB">();
   });
 
   it("handles multiple blockers on a single job type", () => {
@@ -425,12 +606,12 @@ describe("BlockedJobTypes", () => {
       };
     };
 
-    expectTypeOf<BlockedJobTypes<Defs, "depA">>().toEqualTypeOf<"main">();
-    expectTypeOf<BlockedJobTypes<Defs, "depB">>().toEqualTypeOf<"main">();
+    expectTypeOf<BlockedJobTypeNames<Defs, "depA">>().toEqualTypeOf<"main">();
+    expectTypeOf<BlockedJobTypeNames<Defs, "depB">>().toEqualTypeOf<"main">();
   });
 });
 
-describe("JobChainOf", () => {
+describe("ResolvedJobChain", () => {
   it("extracts input types correctly for chains", () => {
     const defs = defineJobTypes<{
       first: { entry: true; input: { start: number }; continueWith: { typeName: "second" } };
@@ -440,7 +621,7 @@ describe("JobChainOf", () => {
       };
     }>();
 
-    type Chain = JobChainOf<string, JobTypeRegistryDefinitions<typeof defs>, "first">;
+    type Chain = ResolvedJobChain<string, JobTypeRegistryDefinitions<typeof defs>, "first">;
 
     // The chain input should be the type from each job in the chain
     type ChainInput = Chain extends { input: infer I } ? I : never;
@@ -604,15 +785,23 @@ describe("ChainTypesReaching", () => {
       ChainTypesReaching<JobTypeRegistryDefinitions<typeof defs>, "convergencePoint">
     >().toEqualTypeOf<"entryE">();
 
-    // JobOf uses the computed chain type by default
-    type SharedStep1Job = JobOf<string, JobTypeRegistryDefinitions<typeof defs>, "sharedStep1">;
+    // ResolvedJob uses the computed chain type by default
+    type SharedStep1Job = ResolvedJob<
+      string,
+      JobTypeRegistryDefinitions<typeof defs>,
+      "sharedStep1"
+    >;
     expectTypeOf<SharedStep1Job["chainTypeName"]>().toEqualTypeOf<"entryA" | "entryB">();
 
-    type FinalSharedJob = JobOf<string, JobTypeRegistryDefinitions<typeof defs>, "finalShared">;
+    type FinalSharedJob = ResolvedJob<
+      string,
+      JobTypeRegistryDefinitions<typeof defs>,
+      "finalShared"
+    >;
     expectTypeOf<FinalSharedJob["chainTypeName"]>().toEqualTypeOf<"entryA" | "entryB" | "entryC">();
 
     // Can narrow with explicit 4th param
-    type FinalSharedFromA = JobOf<
+    type FinalSharedFromA = ResolvedJob<
       string,
       JobTypeRegistryDefinitions<typeof defs>,
       "finalShared",

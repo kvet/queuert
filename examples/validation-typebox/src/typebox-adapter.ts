@@ -6,19 +6,20 @@
  * or any other validation library.
  */
 
-import { createJobTypeRegistry } from "queuert";
+import {
+  type BaseJobTypeDefinitions,
+  type JobTypeReference,
+  type JobTypeRegistry,
+  createJobTypeRegistry,
+} from "queuert";
 import { type Static, type TSchema } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 
 /**
- * Partial reference for validation schemas.
- * Allows validating by typeName (nominal), input (structural), or both.
- */
-type PartialJobTypeReference = { typeName?: string; input?: unknown };
-
-/**
  * Schema definition for a single job type using TypeBox.
  */
+type TypeBoxSchemaFor<T> = TSchema & { static: T };
+
 export type TypeBoxJobTypeSchema = {
   /** Whether this job type can start a chain (entry point). Default: false */
   entry?: boolean;
@@ -41,7 +42,7 @@ export type TypeBoxJobTypeSchema = {
    * // Both: validate type name and input shape
    * continueWith: Type.Object({ typeName: Type.Literal("step2"), input: Type.Object({ data: Type.String() }) })
    */
-  continueWith?: TSchema;
+  continueWith?: TypeBoxSchemaFor<JobTypeReference>;
   /**
    * TypeBox schema for validating blocker references.
    * Receives array of { typeName, input } objects at runtime.
@@ -60,7 +61,7 @@ export type TypeBoxJobTypeSchema = {
    * // Structural validation: any blocker with matching input shape
    * blockers: Type.Array(Type.Object({ input: Type.Object({ token: Type.String() }) }))
    */
-  blockers?: TSchema;
+  blockers?: TypeBoxSchemaFor<readonly JobTypeReference[]>;
 };
 
 /**
@@ -73,10 +74,14 @@ type InferTypeBoxJobTypes<T extends Record<string, TypeBoxJobTypeSchema>> = {
     input: Static<T[K]["input"]>;
     output: T[K]["output"] extends TSchema ? Static<T[K]["output"]> : undefined;
     continueWith: T[K]["continueWith"] extends TSchema
-      ? Static<T[K]["continueWith"]> & PartialJobTypeReference
+      ? Static<T[K]["continueWith"]> extends infer U extends JobTypeReference
+        ? U
+        : JobTypeReference
       : undefined;
     blockers: T[K]["blockers"] extends TSchema
-      ? Static<T[K]["blockers"]> & readonly PartialJobTypeReference[]
+      ? Static<T[K]["blockers"]> extends infer U extends readonly JobTypeReference[]
+        ? U
+        : readonly JobTypeReference[]
       : undefined;
   };
 };
@@ -136,8 +141,12 @@ const parse = <T extends TSchema>(schema: T, data: unknown): Static<T> => {
  *   },
  * });
  */
-export const createTypeBoxJobTypeRegistry = <T extends Record<string, TypeBoxJobTypeSchema>>(
+export const createTypeBoxJobTypeRegistry = <
+  T extends Record<string, TypeBoxJobTypeSchema>,
+  TExternal extends BaseJobTypeDefinitions = Record<never, never>,
+>(
   schemas: T,
+  _externalDefinitions?: JobTypeRegistry<TExternal>,
 ) => {
   const getSchema = (typeName: string): TypeBoxJobTypeSchema => {
     const schema = schemas[typeName];
@@ -147,7 +156,7 @@ export const createTypeBoxJobTypeRegistry = <T extends Record<string, TypeBoxJob
     return schema;
   };
 
-  return createJobTypeRegistry<InferTypeBoxJobTypes<T>>({
+  return createJobTypeRegistry<InferTypeBoxJobTypes<T>, TExternal>({
     getTypeNames: () => Object.keys(schemas),
     validateEntry: (typeName) => {
       const schema = getSchema(typeName);

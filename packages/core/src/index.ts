@@ -1,4 +1,9 @@
-export { createClient, type Client } from "./client.js";
+export {
+  createClient,
+  type Client,
+  type CompleteJobChainResult,
+  type JobChainCompleteOptions,
+} from "./client.js";
 export {
   type CompletedJobChain,
   type JobChain,
@@ -6,6 +11,7 @@ export {
 } from "./entities/job-chain.js";
 export {
   createJobTypeRegistry,
+  type ExternalJobTypeRegistryDefinitions,
   type JobTypeRegistry,
   type JobTypeRegistryConfig,
   type JobTypeRegistryDefinitions,
@@ -14,7 +20,19 @@ export {
   defineJobTypes,
   type BaseJobTypeDefinition,
   type BaseJobTypeDefinitions,
+  type BlockedJobTypeNames,
+  type BlockerChains,
+  type ChainJobTypeNames,
+  type ResolvedChainJobs,
+  type ContinuationJobs,
   type DefineJobTypes,
+  type EntryJobTypeDefinitions,
+  type JobTypeHasBlockers,
+  type JobTypeReference,
+  type NominalJobTypeReference,
+  type ResolvedJobChain,
+  type ResolvedJob,
+  type StructuralJobTypeReference,
 } from "./entities/job-type.js";
 export { type ValidatedJobTypeDefinitions } from "./entities/job-type.validation.js";
 export {

@@ -10,9 +10,9 @@ import {
   type ContinuationJobTypes,
   type ContinuationJobs,
   type EntryJobTypeDefinitions,
-  type HasBlockers,
-  type JobOf,
-  type JobWithBlockersOf,
+  type JobTypeHasBlockers,
+  type ResolvedJob,
+  type ResolvedJobWithBlockers,
 } from "../entities/job-type.js";
 import {
   type CompletedJob,
@@ -63,7 +63,7 @@ export type JobAttemptMiddleware<
 > = <T>(
   context: {
     job: RunningJob<
-      JobWithBlockersOf<
+      ResolvedJobWithBlockers<
         GetStateAdapterJobId<TStateAdapter>,
         TJobTypeDefinitions,
         keyof TJobTypeDefinitions & string,
@@ -96,14 +96,14 @@ export type AttemptCompleteOptions<
   >(
     options: {
       typeName: TContinueJobTypeName;
-      input: JobOf<
+      input: ResolvedJob<
         GetStateAdapterJobId<TStateAdapter>,
         TJobTypeDefinitions,
         TContinueJobTypeName,
         TChainTypeName
       >["input"];
       schedule?: ScheduleOptions;
-    } & (HasBlockers<TJobTypeDefinitions, TContinueJobTypeName> extends true
+    } & (JobTypeHasBlockers<TJobTypeDefinitions, TContinueJobTypeName> extends true
       ? {
           blockers: BlockerChains<
             GetStateAdapterJobId<TStateAdapter>,
@@ -114,7 +114,7 @@ export type AttemptCompleteOptions<
       : { blockers?: never }),
   ) => Promise<
     CreatedJob<
-      JobOf<
+      ResolvedJob<
         GetStateAdapterJobId<TStateAdapter>,
         TJobTypeDefinitions,
         TContinueJobTypeName,
@@ -165,7 +165,7 @@ export type AttemptComplete<
 ) => Promise<
   TReturn extends TJobTypeDefinitions[TJobTypeName]["output"]
     ? CompletedJob<
-        JobWithBlockersOf<
+        ResolvedJobWithBlockers<
           GetStateAdapterJobId<TStateAdapter>,
           TJobTypeDefinitions,
           TJobTypeName,
@@ -215,7 +215,7 @@ export type AttemptHandler<
 > = (processOptions: {
   signal: TypedAbortSignal<JobAbortReason>;
   job: RunningJob<
-    JobWithBlockersOf<
+    ResolvedJobWithBlockers<
       GetStateAdapterJobId<TStateAdapter>,
       TJobTypeDefinitions,
       TJobTypeName,
@@ -226,7 +226,7 @@ export type AttemptHandler<
   complete: AttemptComplete<TStateAdapter, TJobTypeDefinitions, TJobTypeName>;
 }) => Promise<
   | CompletedJob<
-      JobWithBlockersOf<
+      ResolvedJobWithBlockers<
         GetStateAdapterJobId<TStateAdapter>,
         TJobTypeDefinitions,
         TJobTypeName,
@@ -382,7 +382,7 @@ export const runJobProcess = async ({
     blockers: blockerPairs.map(mapStateJobPairToJobChain) as CompletedJobChain<
       JobChain<any, any, any, any>
     >[],
-  } as RunningJob<JobWithBlockersOf<any, any, any, any>>;
+  } as RunningJob<ResolvedJobWithBlockers<any, any, any, any>>;
 
   const runJobAttempt = async (transactionHooks: TransactionHooks) => {
     const attemptStartTime = Date.now();

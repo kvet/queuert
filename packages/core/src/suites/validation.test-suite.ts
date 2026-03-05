@@ -1,5 +1,6 @@
 import { type TestAPI } from "vitest";
 import {
+  type BaseJobTypeDefinitions,
   JobTypeValidationError,
   createClient,
   createInProcessWorker,
@@ -34,7 +35,9 @@ const validateFields = (schema: FieldSchema, data: unknown, label: string): void
   }
 };
 
-const createTestSchemaRegistry = <T>(schemas: Record<string, TestJobTypeSchema>) =>
+const createTestSchemaRegistry = <T extends BaseJobTypeDefinitions>(
+  schemas: Record<string, TestJobTypeSchema>,
+) =>
   createJobTypeRegistry<T>({
     getTypeNames: () => Object.keys(schemas),
     validateEntry: (typeName) => {

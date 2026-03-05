@@ -6,14 +6,13 @@
  * or any other validation library.
  */
 
-import { createJobTypeRegistry } from "queuert";
+import {
+  type BaseJobTypeDefinitions,
+  type JobTypeReference,
+  type JobTypeRegistry,
+  createJobTypeRegistry,
+} from "queuert";
 import * as v from "valibot";
-
-/**
- * Partial reference for validation schemas.
- * Allows validating by typeName (nominal), input (structural), or both.
- */
-type PartialJobTypeReference = { typeName?: string; input?: unknown };
 
 /**
  * Schema definition for a single job type using Valibot.
@@ -40,7 +39,7 @@ export type ValibotJobTypeSchema = {
    * // Both: validate type name and input shape
    * continueWith: v.object({ typeName: v.literal("step2"), input: v.object({ data: v.string() }) })
    */
-  continueWith?: v.GenericSchema<PartialJobTypeReference>;
+  continueWith?: v.GenericSchema<JobTypeReference>;
   /**
    * Valibot schema for validating blocker references.
    * Receives array of { typeName, input } objects at runtime.
@@ -59,7 +58,7 @@ export type ValibotJobTypeSchema = {
    * // Structural validation: any blocker with matching input shape
    * blockers: v.array(v.object({ input: v.object({ token: v.string() }) }))
    */
-  blockers?: v.GenericSchema<readonly PartialJobTypeReference[]>;
+  blockers?: v.GenericSchema<readonly JobTypeReference[]>;
 };
 
 /**
@@ -71,8 +70,16 @@ type InferValibotJobTypes<T extends Record<string, ValibotJobTypeSchema>> = {
     entry: T[K]["entry"] extends true ? true : false;
     input: v.InferOutput<T[K]["input"]>;
     output: T[K]["output"] extends v.GenericSchema ? v.InferOutput<T[K]["output"]> : undefined;
-    continueWith: T[K]["continueWith"] extends v.GenericSchema<infer U> ? U : undefined;
-    blockers: T[K]["blockers"] extends v.GenericSchema<infer U> ? U : undefined;
+    continueWith: T[K]["continueWith"] extends v.GenericSchema<infer U>
+      ? U extends JobTypeReference
+        ? U
+        : JobTypeReference
+      : undefined;
+    blockers: T[K]["blockers"] extends v.GenericSchema<infer U>
+      ? U extends readonly JobTypeReference[]
+        ? U
+        : readonly JobTypeReference[]
+      : undefined;
   };
 };
 
@@ -101,8 +108,12 @@ type InferValibotJobTypes<T extends Record<string, ValibotJobTypeSchema>> = {
  *   },
  * });
  */
-export const createValibotJobTypeRegistry = <T extends Record<string, ValibotJobTypeSchema>>(
+export const createValibotJobTypeRegistry = <
+  T extends Record<string, ValibotJobTypeSchema>,
+  TExternal extends BaseJobTypeDefinitions = Record<never, never>,
+>(
   schemas: T,
+  _externalDefinitions?: JobTypeRegistry<TExternal>,
 ) => {
   const getSchema = (typeName: string): ValibotJobTypeSchema => {
     const schema = schemas[typeName];
@@ -112,7 +123,7 @@ export const createValibotJobTypeRegistry = <T extends Record<string, ValibotJob
     return schema;
   };
 
-  return createJobTypeRegistry<InferValibotJobTypes<T>>({
+  return createJobTypeRegistry<InferValibotJobTypes<T>, TExternal>({
     getTypeNames: () => Object.keys(schemas),
     validateEntry: (typeName) => {
       const schema = getSchema(typeName);

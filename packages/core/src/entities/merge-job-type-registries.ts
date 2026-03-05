@@ -3,6 +3,7 @@ import {
   type JobTypeRegistry,
   createNoopJobTypeRegistry,
   definitionsSymbol,
+  externalDefinitionsSymbol,
   noopRegistries,
 } from "./job-type-registry.js";
 import { type BaseJobTypeDefinitions } from "./job-type.js";
@@ -150,5 +151,6 @@ export const mergeJobTypeRegistries = <
       );
     },
     [definitionsSymbol]: undefined as unknown as MergeDefinitions<TRegistries>,
+    [externalDefinitionsSymbol]: undefined as unknown as Record<never, never>,
   };
 };

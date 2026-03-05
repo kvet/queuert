@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { type Client, helpersSymbol } from "./client.js";
+import { type Client } from "./client.js";
+import { clientHelpersMap } from "./helpers/client-helpers-map.js";
 import { type BaseJobTypeDefinitions } from "./entities/job-type.js";
 import { type BackoffConfig } from "./helpers/backoff.js";
 import { type ParallelExecutor, createParallelExecutor } from "./helpers/parallel-executor.js";
@@ -56,10 +57,11 @@ export type InProcessWorkerProcessor<
 export type InProcessWorkerProcessors<
   TStateAdapter extends StateAdapter<any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TExternalJobTypeDefinitions extends BaseJobTypeDefinitions = Record<never, never>,
 > = {
   [K in keyof TJobTypeDefinitions & string]?: InProcessWorkerProcessor<
     TStateAdapter,
-    TJobTypeDefinitions,
+    TJobTypeDefinitions & TExternalJobTypeDefinitions,
     K
   >;
 };
@@ -197,6 +199,7 @@ const performJob = async ({
 export const createInProcessWorker = async <
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TStateAdapter extends StateAdapter<any, any>,
+  const TProcessors extends InProcessWorkerProcessors<TStateAdapter, TJobTypeDefinitions>,
 >({
   client,
   workerId = randomUUID(),
@@ -210,7 +213,8 @@ export const createInProcessWorker = async <
   concurrency?: number;
   backoffConfig?: BackoffConfig;
   processDefaults?: InProcessWorkerProcessDefaults<TStateAdapter, TJobTypeDefinitions>;
-  processors: InProcessWorkerProcessors<TStateAdapter, TJobTypeDefinitions>;
+  processors: TProcessors &
+    Record<Exclude<keyof TProcessors & string, keyof TJobTypeDefinitions & string>, never>;
 }) => {
   const typeNames = Array.from(Object.keys(processors));
 
@@ -233,7 +237,7 @@ export const createInProcessWorker = async <
 
   return {
     start: async (): Promise<() => Promise<void>> => {
-      const helpers = client[helpersSymbol];
+      const helpers = clientHelpersMap.get(client)!;
       const { stateAdapter, notifyAdapter, observabilityHelper } = helpers;
 
       observabilityHelper.workerStarted({ workerId, jobTypeNames: typeNames });

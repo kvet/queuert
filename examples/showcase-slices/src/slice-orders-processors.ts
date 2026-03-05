@@ -1,5 +1,10 @@
-import { type InProcessWorkerProcessors, type JobTypeRegistryDefinitions } from "queuert";
+import {
+  type ExternalJobTypeRegistryDefinitions,
+  type InProcessWorkerProcessors,
+  type JobTypeRegistryDefinitions,
+} from "queuert";
 import { type stateAdapter } from "./adapters.js";
+import { client } from "./client.js";
 import { type orderJobTypes } from "./slice-orders-definitions.js";
 
 export const orderProcessors = {
@@ -10,12 +15,23 @@ export const orderProcessors = {
         `[orders.create-order] User ${job.input.userId} ordered ${job.input.items.length} items ($${totalAmount.toFixed(2)})`,
       );
 
-      return complete(async ({ continueWith }) =>
-        continueWith({
+      return complete(async ({ continueWith, sql, transactionHooks }) => {
+        await client.startJobChain({
+          sql,
+          transactionHooks,
+          typeName: "notifications.send-notification",
+          input: {
+            userId: job.input.userId,
+            channel: "email",
+            message: `Order received: ${job.input.items.length} items ($${totalAmount.toFixed(2)})`,
+          },
+        });
+
+        return continueWith({
           typeName: "orders.fulfill-order",
           input: { orderId: 1001, totalAmount },
-        }),
-      );
+        });
+      });
     },
   },
 
@@ -31,7 +47,50 @@ export const orderProcessors = {
       }));
     },
   },
+
+  "orders.place-order": {
+    attemptHandler: async ({ job, complete }) => {
+      const totalAmount = job.input.items.reduce((sum, item) => sum + item.price, 0);
+      console.log(
+        `[orders.place-order] User ${job.input.userId} placed order ($${totalAmount.toFixed(2)})`,
+      );
+
+      return complete(async ({ continueWith, sql, transactionHooks }) => {
+        const notifyChain = await client.startJobChain({
+          sql,
+          transactionHooks,
+          typeName: "notifications.send-notification",
+          input: {
+            userId: job.input.userId,
+            channel: "email",
+            message: `Your order ($${totalAmount.toFixed(2)}) is being processed`,
+          },
+        });
+
+        return continueWith({
+          typeName: "orders.confirm-order",
+          input: { orderId: 2001, totalAmount },
+          blockers: [notifyChain],
+        });
+      });
+    },
+  },
+
+  "orders.confirm-order": {
+    attemptHandler: async ({ job, complete }) => {
+      const notificationResult = job.blockers[0].output;
+      console.log(
+        `[orders.confirm-order] Notification sent at ${notificationResult.sentAt}, confirming order #${job.input.orderId}`,
+      );
+
+      return complete(async () => ({
+        orderId: job.input.orderId,
+        confirmedAt: new Date().toISOString(),
+      }));
+    },
+  },
 } satisfies InProcessWorkerProcessors<
   typeof stateAdapter,
-  JobTypeRegistryDefinitions<typeof orderJobTypes>
+  JobTypeRegistryDefinitions<typeof orderJobTypes>,
+  ExternalJobTypeRegistryDefinitions<typeof orderJobTypes>
 >;

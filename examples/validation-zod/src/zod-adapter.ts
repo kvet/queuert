@@ -6,14 +6,13 @@
  * or any other validation library.
  */
 
-import { createJobTypeRegistry } from "queuert";
+import {
+  type BaseJobTypeDefinitions,
+  type JobTypeReference,
+  type JobTypeRegistry,
+  createJobTypeRegistry,
+} from "queuert";
 import { type z } from "zod";
-
-/**
- * Partial reference for validation schemas.
- * Allows validating by typeName (nominal), input (structural), or both.
- */
-type PartialJobTypeReference = { typeName?: string; input?: unknown };
 
 /**
  * Schema definition for a single job type using Zod.
@@ -40,7 +39,7 @@ export type ZodJobTypeSchema = {
    * // Both: validate type name and input shape
    * continueWith: z.object({ typeName: z.literal("step2"), input: z.object({ data: z.string() }) })
    */
-  continueWith?: z.ZodType<PartialJobTypeReference>;
+  continueWith?: z.ZodType<JobTypeReference>;
   /**
    * Zod schema for validating blocker references.
    * Receives array of { typeName, input } objects at runtime.
@@ -59,7 +58,7 @@ export type ZodJobTypeSchema = {
    * // Structural validation: any blocker with matching input shape
    * blockers: z.array(z.object({ input: z.object({ token: z.string() }) }))
    */
-  blockers?: z.ZodType<readonly PartialJobTypeReference[]>;
+  blockers?: z.ZodType<readonly JobTypeReference[]>;
 };
 
 /**
@@ -71,8 +70,16 @@ type InferZodJobTypes<T extends Record<string, ZodJobTypeSchema>> = {
     entry: T[K]["entry"] extends true ? true : false;
     input: z.infer<T[K]["input"]>;
     output: T[K]["output"] extends z.ZodType ? z.infer<T[K]["output"]> : undefined;
-    continueWith: T[K]["continueWith"] extends z.ZodType<infer U> ? U : undefined;
-    blockers: T[K]["blockers"] extends z.ZodType<infer U> ? U : undefined;
+    continueWith: T[K]["continueWith"] extends z.ZodType<infer U>
+      ? U extends JobTypeReference
+        ? U
+        : JobTypeReference
+      : undefined;
+    blockers: T[K]["blockers"] extends z.ZodType<infer U>
+      ? U extends readonly JobTypeReference[]
+        ? U
+        : readonly JobTypeReference[]
+      : undefined;
   };
 };
 
@@ -101,8 +108,12 @@ type InferZodJobTypes<T extends Record<string, ZodJobTypeSchema>> = {
  *   },
  * });
  */
-export const createZodJobTypeRegistry = <T extends Record<string, ZodJobTypeSchema>>(
+export const createZodJobTypeRegistry = <
+  T extends Record<string, ZodJobTypeSchema>,
+  TExternal extends BaseJobTypeDefinitions = Record<never, never>,
+>(
   schemas: T,
+  _externalDefinitions?: JobTypeRegistry<TExternal>,
 ) => {
   const getSchema = (typeName: string): ZodJobTypeSchema => {
     const schema = schemas[typeName];
@@ -112,7 +123,7 @@ export const createZodJobTypeRegistry = <T extends Record<string, ZodJobTypeSche
     return schema;
   };
 
-  return createJobTypeRegistry<InferZodJobTypes<T>>({
+  return createJobTypeRegistry<InferZodJobTypes<T>, TExternal>({
     getTypeNames: () => Object.keys(schemas),
     validateEntry: (typeName) => {
       const schema = getSchema(typeName);

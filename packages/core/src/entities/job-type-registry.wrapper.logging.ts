@@ -1,6 +1,10 @@
 import { JobTypeValidationError } from "../errors.js";
 import { type ObservabilityHelper } from "../observability-adapter/observability-helper.js";
-import { type JobTypeRegistry, definitionsSymbol } from "./job-type-registry.js";
+import {
+  type JobTypeRegistry,
+  definitionsSymbol,
+  externalDefinitionsSymbol,
+} from "./job-type-registry.js";
 
 export const wrapJobTypeRegistryWithLogging = <TJobTypeDefinitions>({
   registry,
@@ -29,5 +33,6 @@ export const wrapJobTypeRegistryWithLogging = <TJobTypeDefinitions>({
     validateContinueWith: wrap(registry.validateContinueWith),
     validateBlockers: wrap(registry.validateBlockers),
     [definitionsSymbol]: registry[definitionsSymbol],
+    [externalDefinitionsSymbol]: registry[externalDefinitionsSymbol],
   };
 };

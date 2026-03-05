@@ -1,5 +1,3 @@
-export const helpersSymbol = Symbol("queuert.helpers");
-
 import { type DeduplicationOptions } from "./entities/deduplication.js";
 import {
   type JobTypeRegistry,
@@ -7,15 +5,15 @@ import {
 } from "./entities/job-type-registry.js";
 import {
   type BaseJobTypeDefinitions,
-  type BlockedJobTypes,
+  type BlockedJobTypeNames,
   type BlockerChains,
-  type ChainJobTypes,
-  type ChainJobs,
+  type ChainJobTypeNames,
   type ContinuationJobs,
   type EntryJobTypeDefinitions,
-  type HasBlockers,
-  type JobChainOf,
-  type JobOf,
+  type JobTypeHasBlockers,
+  type ResolvedChainJobs,
+  type ResolvedJob,
+  type ResolvedJobChain,
 } from "./entities/job-type.js";
 import { type ScheduleOptions } from "./entities/schedule.js";
 import { continueWith } from "./implementation/continue-with.js";
@@ -48,6 +46,7 @@ import {
 import { bufferNotifyJobOwnershipLost } from "./helpers/notify-hooks.js";
 import { raceWithSleep } from "./helpers/sleep.js";
 import { createHelpers } from "./setup-helpers.js";
+import { clientHelpersMap } from "./helpers/client-helpers-map.js";
 import { type TransactionHooks } from "./transaction-hooks.js";
 import { type AttemptCompleteOptions } from "./worker/job-process.js";
 
@@ -61,9 +60,9 @@ export type JobChainCompleteOptions<
   TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
   TCompleteReturn,
 > = (options: {
-  job: ChainJobs<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TChainTypeName>;
+  job: ResolvedChainJobs<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TChainTypeName>;
   complete: <
-    TJobTypeName extends ChainJobTypes<TJobTypeDefinitions, TChainTypeName> & string,
+    TJobTypeName extends ChainJobTypeNames<TJobTypeDefinitions, TChainTypeName> & string,
     TReturn extends
       | TJobTypeDefinitions[TJobTypeName]["output"]
       | ContinuationJobs<
@@ -82,7 +81,7 @@ export type JobChainCompleteOptions<
           >
         >,
   >(
-    job: JobOf<
+    job: ResolvedJob<
       GetStateAdapterJobId<TStateAdapter>,
       TJobTypeDefinitions,
       TJobTypeName,
@@ -106,9 +105,9 @@ export type CompleteJobChainResult<
   TChainTypeName extends keyof TJobTypeDefinitions & string,
   TCompleteReturn,
 > = [TCompleteReturn] extends [void]
-  ? JobChainOf<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TChainTypeName>
+  ? ResolvedJobChain<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TChainTypeName>
   : TCompleteReturn extends CreatedJob<Job<any, any, any, any>>
-    ? JobChainOf<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TChainTypeName>
+    ? ResolvedJobChain<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TChainTypeName>
     : CompletedJobChain<
         JobChain<
           GetStateAdapterJobId<TStateAdapter>,
@@ -153,9 +152,7 @@ export const createClient = async <
     registry: registryOption,
     log,
   });
-  return {
-    [helpersSymbol]: helpers,
-
+  const client = {
     /** Create a new job chain. Returns the created chain with a `deduplicated` flag. */
     startJobChain: async <
       TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
@@ -166,14 +163,14 @@ export const createClient = async <
         transactionHooks: TransactionHooks;
         deduplication?: DeduplicationOptions;
         schedule?: ScheduleOptions;
-      } & (HasBlockers<TJobTypeDefinitions, TChainTypeName> extends true
+      } & (JobTypeHasBlockers<TJobTypeDefinitions, TChainTypeName> extends true
         ? {
             blockers: BlockerChains<TJobId, TJobTypeDefinitions, TChainTypeName>;
           }
         : { blockers?: never }) &
         GetStateAdapterTxContext<TStateAdapter>,
     ): Promise<
-      JobChainOf<TJobId, TJobTypeDefinitions, TChainTypeName> & {
+      ResolvedJobChain<TJobId, TJobTypeDefinitions, TChainTypeName> & {
         deduplicated: boolean;
       }
     > => {
@@ -187,7 +184,9 @@ export const createClient = async <
         deduplication,
         schedule,
         blockers,
-      })) as JobChainOf<TJobId, TJobTypeDefinitions, TChainTypeName> & { deduplicated: boolean };
+      })) as ResolvedJobChain<TJobId, TJobTypeDefinitions, TChainTypeName> & {
+        deduplicated: boolean;
+      };
     },
 
     /** Delete job chains by ID. Throws {@link BlockerReferenceError} if external jobs depend on them. When `cascade` is true, includes transitive dependencies. */
@@ -198,7 +197,7 @@ export const createClient = async <
         transactionHooks: TransactionHooks;
       } & GetStateAdapterTxContext<TStateAdapter>,
     ): Promise<
-      JobChainOf<
+      ResolvedJobChain<
         TJobId,
         TJobTypeDefinitions,
         keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string
@@ -214,7 +213,7 @@ export const createClient = async <
 
       return deletedChainPairs.map(
         (pair) =>
-          mapStateJobPairToJobChain(pair) as JobChainOf<
+          mapStateJobPairToJobChain(pair) as ResolvedJobChain<
             TJobId,
             TJobTypeDefinitions,
             keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string
@@ -359,7 +358,9 @@ export const createClient = async <
         pollIntervalMs?: number;
         signal?: AbortSignal;
       },
-    ): Promise<CompletedJobChain<JobChainOf<TJobId, TJobTypeDefinitions, TChainTypeName>>> => {
+    ): Promise<
+      CompletedJobChain<ResolvedJobChain<TJobId, TJobTypeDefinitions, TChainTypeName>>
+    > => {
       const { id, typeName } = jobChain;
       const { timeoutMs, pollIntervalMs = 15_000, signal } = options;
 
@@ -385,7 +386,9 @@ export const createClient = async <
 
         const mapped = mapStateJobPairToJobChain(jobChain);
         return mapped.status === "completed"
-          ? (mapped as CompletedJobChain<JobChainOf<TJobId, TJobTypeDefinitions, TChainTypeName>>)
+          ? (mapped as CompletedJobChain<
+              ResolvedJobChain<TJobId, TJobTypeDefinitions, TChainTypeName>
+            >)
           : null;
       };
 
@@ -443,7 +446,7 @@ export const createClient = async <
         typeName?: TChainTypeName;
         id: TJobId;
       } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
-    ): Promise<JobChainOf<TJobId, TJobTypeDefinitions, TChainTypeName> | undefined> => {
+    ): Promise<ResolvedJobChain<TJobId, TJobTypeDefinitions, TChainTypeName> | undefined> => {
       const { id, typeName, ...rest } = options;
       const txCtx = normalizeTxCtx(rest);
       const jobChainPair = await helpers.stateAdapter.getJobChainById({
@@ -460,7 +463,7 @@ export const createClient = async <
         );
       }
 
-      return mapStateJobPairToJobChain(jobChainPair) as JobChainOf<
+      return mapStateJobPairToJobChain(jobChainPair) as ResolvedJobChain<
         TJobId,
         TJobTypeDefinitions,
         TChainTypeName
@@ -475,7 +478,7 @@ export const createClient = async <
         typeName?: TJobTypeName;
         id: TJobId;
       } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
-    ): Promise<JobOf<TJobId, TJobTypeDefinitions, TJobTypeName> | undefined> => {
+    ): Promise<ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName> | undefined> => {
       const { id, typeName, ...rest } = options;
       const txCtx = normalizeTxCtx(rest);
       const job = await helpers.stateAdapter.getJobById({ txCtx, jobId: id });
@@ -489,7 +492,7 @@ export const createClient = async <
         );
       }
 
-      return mapStateJobToJob(job) as JobOf<TJobId, TJobTypeDefinitions, TJobTypeName>;
+      return mapStateJobToJob(job) as ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>;
     },
     /** List job chains with filtering and cursor-based pagination. Defaults to newest first. */
     listJobChains: async <
@@ -509,7 +512,7 @@ export const createClient = async <
         cursor?: string;
         limit?: number;
       } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
-    ): Promise<Page<JobChainOf<TJobId, TJobTypeDefinitions, TChainTypeName>>> => {
+    ): Promise<Page<ResolvedJobChain<TJobId, TJobTypeDefinitions, TChainTypeName>>> => {
       const { filter, orderDirection = "desc", cursor, limit = 50, ...rest } = options;
       const txCtx = normalizeTxCtx(rest);
       const result = await helpers.stateAdapter.listJobChains({
@@ -529,7 +532,7 @@ export const createClient = async <
       return {
         items: result.items.map(
           (pair) =>
-            mapStateJobPairToJobChain(pair) as JobChainOf<
+            mapStateJobPairToJobChain(pair) as ResolvedJobChain<
               TJobId,
               TJobTypeDefinitions,
               TChainTypeName
@@ -554,7 +557,7 @@ export const createClient = async <
         cursor?: string;
         limit?: number;
       } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
-    ): Promise<Page<JobOf<TJobId, TJobTypeDefinitions, TJobTypeName>>> => {
+    ): Promise<Page<ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>>> => {
       const { filter, orderDirection = "desc", cursor, limit = 50, ...rest } = options;
       const txCtx = normalizeTxCtx(rest);
       const result = await helpers.stateAdapter.listJobs({
@@ -572,7 +575,7 @@ export const createClient = async <
       });
       return {
         items: result.items.map(
-          (job) => mapStateJobToJob(job) as JobOf<TJobId, TJobTypeDefinitions, TJobTypeName>,
+          (job) => mapStateJobToJob(job) as ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>,
         ),
         nextCursor: result.nextCursor,
       };
@@ -590,7 +593,7 @@ export const createClient = async <
         cursor?: string;
         limit?: number;
       } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
-    ): Promise<Page<ChainJobs<TJobId, TJobTypeDefinitions, TChainTypeName>>> => {
+    ): Promise<Page<ResolvedChainJobs<TJobId, TJobTypeDefinitions, TChainTypeName>>> => {
       const { jobChainId, typeName, orderDirection = "asc", cursor, limit = 50, ...rest } = options;
       const txCtx = normalizeTxCtx(rest);
 
@@ -612,7 +615,8 @@ export const createClient = async <
       });
       return {
         items: result.items.map(
-          (job) => mapStateJobToJob(job) as ChainJobs<TJobId, TJobTypeDefinitions, TChainTypeName>,
+          (job) =>
+            mapStateJobToJob(job) as ResolvedChainJobs<TJobId, TJobTypeDefinitions, TChainTypeName>,
         ),
         nextCursor: result.nextCursor,
       };
@@ -662,10 +666,12 @@ export const createClient = async <
       } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
     ): Promise<
       Page<
-        JobOf<
+        ResolvedJob<
           TJobId,
           TJobTypeDefinitions,
-          BlockedJobTypes<TJobTypeDefinitions, TChainTypeName> & keyof TJobTypeDefinitions & string
+          BlockedJobTypeNames<TJobTypeDefinitions, TChainTypeName> &
+            keyof TJobTypeDefinitions &
+            string
         >
       >
     > => {
@@ -698,10 +704,10 @@ export const createClient = async <
       return {
         items: result.items.map(
           (job) =>
-            mapStateJobToJob(job) as JobOf<
+            mapStateJobToJob(job) as ResolvedJob<
               TJobId,
               TJobTypeDefinitions,
-              BlockedJobTypes<TJobTypeDefinitions, TChainTypeName> &
+              BlockedJobTypeNames<TJobTypeDefinitions, TChainTypeName> &
                 keyof TJobTypeDefinitions &
                 string
             >,
@@ -710,6 +716,8 @@ export const createClient = async <
       };
     },
   };
+  clientHelpersMap.set(client, helpers);
+  return client;
 };
 
 /**

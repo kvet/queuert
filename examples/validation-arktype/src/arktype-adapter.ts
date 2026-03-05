@@ -6,14 +6,13 @@
  * or any other validation library.
  */
 
-import { createJobTypeRegistry } from "queuert";
+import {
+  type BaseJobTypeDefinitions,
+  type JobTypeReference,
+  type JobTypeRegistry,
+  createJobTypeRegistry,
+} from "queuert";
 import { type Type } from "arktype";
-
-/**
- * Partial reference for validation schemas.
- * Allows validating by typeName (nominal), input (structural), or both.
- */
-type PartialJobTypeReference = { typeName?: string; input?: unknown };
 
 /**
  * Schema definition for a single job type using ArkType.
@@ -40,7 +39,7 @@ export type ArkTypeJobTypeSchema = {
    * // Both: validate type name and input shape
    * continueWith: type({ typeName: "'step2'", input: { data: "string" } })
    */
-  continueWith?: Type<PartialJobTypeReference>;
+  continueWith?: Type<JobTypeReference>;
   /**
    * ArkType schema for validating blocker references.
    * Receives array of { typeName, input } objects at runtime.
@@ -56,7 +55,7 @@ export type ArkTypeJobTypeSchema = {
    * // Structural validation: any blocker with matching input shape
    * blockers: type({ input: { token: "string" } }).array())
    */
-  blockers?: Type<readonly PartialJobTypeReference[]>;
+  blockers?: Type<readonly JobTypeReference[]>;
 };
 
 /**
@@ -68,8 +67,16 @@ type InferArkTypeJobTypes<T extends Record<string, ArkTypeJobTypeSchema>> = {
     entry: T[K]["entry"] extends true ? true : false;
     input: T[K]["input"]["infer"];
     output: T[K]["output"] extends Type ? T[K]["output"]["infer"] : undefined;
-    continueWith: T[K]["continueWith"] extends Type<infer U> ? U : undefined;
-    blockers: T[K]["blockers"] extends Type<infer U> ? U : undefined;
+    continueWith: T[K]["continueWith"] extends Type<infer U>
+      ? U extends JobTypeReference
+        ? U
+        : JobTypeReference
+      : undefined;
+    blockers: T[K]["blockers"] extends Type<infer U>
+      ? U extends readonly JobTypeReference[]
+        ? U
+        : readonly JobTypeReference[]
+      : undefined;
   };
 };
 
@@ -98,8 +105,12 @@ type InferArkTypeJobTypes<T extends Record<string, ArkTypeJobTypeSchema>> = {
  *   },
  * });
  */
-export const createArkTypeJobTypeRegistry = <T extends Record<string, ArkTypeJobTypeSchema>>(
+export const createArkTypeJobTypeRegistry = <
+  T extends Record<string, ArkTypeJobTypeSchema>,
+  TExternal extends BaseJobTypeDefinitions = Record<never, never>,
+>(
   schemas: T,
+  _externalDefinitions?: JobTypeRegistry<TExternal>,
 ) => {
   const getSchema = (typeName: string): ArkTypeJobTypeSchema => {
     const schema = schemas[typeName];
@@ -109,7 +120,7 @@ export const createArkTypeJobTypeRegistry = <T extends Record<string, ArkTypeJob
     return schema;
   };
 
-  return createJobTypeRegistry<InferArkTypeJobTypes<T>>({
+  return createJobTypeRegistry<InferArkTypeJobTypes<T>, TExternal>({
     getTypeNames: () => Object.keys(schemas),
     validateEntry: (typeName) => {
       const schema = getSchema(typeName);

@@ -1,5 +1,5 @@
 import { type BaseJobTypeDefinitions, type Client, type StateAdapter } from "queuert";
-import { helpersSymbol } from "queuert/internal";
+import { clientHelpersMap } from "queuert/internal";
 import { renderHtml } from "./html.js";
 import { handleChainBlocking, handleChainDetail, handleChainsList } from "./routes/chains.js";
 import { handleJobDetail, handleJobsList } from "./routes/jobs.js";
@@ -40,7 +40,7 @@ export const createDashboard = <
   /** Mount prefix without trailing slash (e.g. `'/internal/queuert'`). Defaults to `''` (root). */
   basePath?: string;
 }): { fetch: (request: Request) => Response | Promise<Response> } => {
-  const { stateAdapter } = options.client[helpersSymbol];
+  const { stateAdapter } = clientHelpersMap.get(options.client)!;
   const basePath = options.basePath?.replace(/\/+$/, "") ?? "";
 
   const handleRequest = async (request: Request): Promise<Response> => {

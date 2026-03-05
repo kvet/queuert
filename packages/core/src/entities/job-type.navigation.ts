@@ -61,7 +61,7 @@ export type ContinuationJobTypes<
   ? ResolveReference<TJobTypeDefinitions, CT>
   : never;
 
-export type ChainJobTypes<
+export type ChainJobTypeNames<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions,
   Visited extends keyof TJobTypeDefinitions = never,
@@ -70,7 +70,7 @@ export type ChainJobTypes<
   :
       | TJobTypeName
       | {
-          [K in ContinuationJobTypes<TJobTypeDefinitions, TJobTypeName>]: ChainJobTypes<
+          [K in ContinuationJobTypes<TJobTypeDefinitions, TJobTypeName>]: ChainJobTypeNames<
             TJobTypeDefinitions,
             K,
             Visited | TJobTypeName
@@ -81,7 +81,7 @@ export type ChainTypesReaching<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions,
 > = {
-  [K in keyof EntryJobTypeDefinitions<TJobTypeDefinitions>]: TJobTypeName extends ChainJobTypes<
+  [K in keyof EntryJobTypeDefinitions<TJobTypeDefinitions>]: TJobTypeName extends ChainJobTypeNames<
     TJobTypeDefinitions,
     K
   >
@@ -89,7 +89,7 @@ export type ChainTypesReaching<
     : never;
 }[keyof EntryJobTypeDefinitions<TJobTypeDefinitions>];
 
-export type JobOf<
+export type ResolvedJob<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions,
@@ -97,14 +97,14 @@ export type JobOf<
     ChainTypesReaching<TJobTypeDefinitions, TJobTypeName>,
 > = Job<TJobId, TJobTypeName, TChainTypeName, ExtractInputType<TJobTypeDefinitions[TJobTypeName]>>;
 
-export type JobWithBlockersOf<
+export type ResolvedJobWithBlockers<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions,
   TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string =
     ChainTypesReaching<TJobTypeDefinitions, TJobTypeName>,
 > = JobWithBlockers<
-  JobOf<TJobId, TJobTypeDefinitions, TJobTypeName, TChainTypeName>,
+  ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName, TChainTypeName>,
   CompletedBlockerChains<TJobId, TJobTypeDefinitions, TJobTypeName & string>
 >;
 
@@ -116,23 +116,24 @@ export type ContinuationJobs<
     ChainTypesReaching<TJobTypeDefinitions, TJobTypeName>,
 > = {
   [K in ContinuationJobTypes<TJobTypeDefinitions, TJobTypeName>]: CreatedJob<
-    JobOf<TJobId, TJobTypeDefinitions, K, TChainTypeName>
+    ResolvedJob<TJobId, TJobTypeDefinitions, K, TChainTypeName>
   >;
 }[ContinuationJobTypes<TJobTypeDefinitions, TJobTypeName>];
 
-export type JobChainOf<
+export type ResolvedJobChain<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName,
 > = TJobTypeName extends keyof TJobTypeDefinitions
   ? {
-      [K in ChainJobTypes<TJobTypeDefinitions, TJobTypeName> & keyof TJobTypeDefinitions]: JobChain<
+      [K in ChainJobTypeNames<TJobTypeDefinitions, TJobTypeName> &
+        keyof TJobTypeDefinitions]: JobChain<
         TJobId,
         TJobTypeName & string,
         ExtractInputType<TJobTypeDefinitions[K]>,
         ExtractOutputType<TJobTypeDefinitions[K]>
       >;
-    }[ChainJobTypes<TJobTypeDefinitions, TJobTypeName> & keyof TJobTypeDefinitions]
+    }[ChainJobTypeNames<TJobTypeDefinitions, TJobTypeName> & keyof TJobTypeDefinitions]
   : never;
 
 type GetBlockersProperty<T> = T extends { blockers: infer B } ? B : never;
@@ -142,7 +143,7 @@ type ReferenceToChain<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TRef,
-> = JobChainOf<TJobId, TJobTypeDefinitions, ResolveReference<TJobTypeDefinitions, TRef>>;
+> = ResolvedJobChain<TJobId, TJobTypeDefinitions, ResolveReference<TJobTypeDefinitions, TRef>>;
 
 // Updated to handle references (replaces MapStringBlockersToChains)
 type MapBlockersToChains<
@@ -171,7 +172,7 @@ export type BlockerChains<
         : []
     : [];
 
-export type HasBlockers<
+export type JobTypeHasBlockers<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions,
 > = BlockerChains<string, TJobTypeDefinitions, TJobTypeName> extends [] ? false : true;
@@ -182,7 +183,7 @@ type BlockerRefChainNames<TJobTypeDefinitions extends BaseJobTypeDefinitions, T>
   ? ResolveReference<TJobTypeDefinitions, TRef>
   : never;
 
-export type BlockedJobTypes<
+export type BlockedJobTypeNames<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TBlockerChainTypeName extends string,
 > = {
@@ -209,15 +210,11 @@ export type CompletedBlockerChains<
   TJobTypeName extends keyof TJobTypeDefinitions,
 > = MapToCompletedChains<BlockerChains<TJobId, TJobTypeDefinitions, TJobTypeName>>;
 
-export type ChainJobs<
+export type ResolvedChainJobs<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
 > = {
-  [K in ChainJobTypes<TJobTypeDefinitions, TChainTypeName> & keyof TJobTypeDefinitions]: JobOf<
-    TJobId,
-    TJobTypeDefinitions,
-    K,
-    TChainTypeName
-  >;
-}[ChainJobTypes<TJobTypeDefinitions, TChainTypeName> & keyof TJobTypeDefinitions];
+  [K in ChainJobTypeNames<TJobTypeDefinitions, TChainTypeName> &
+    keyof TJobTypeDefinitions]: ResolvedJob<TJobId, TJobTypeDefinitions, K, TChainTypeName>;
+}[ChainJobTypeNames<TJobTypeDefinitions, TChainTypeName> & keyof TJobTypeDefinitions];

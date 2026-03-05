@@ -1,5 +1,12 @@
-import { JobTypeValidationError } from "queuert";
-import { describe, expect, it } from "vitest";
+import {
+  type ExternalJobTypeRegistryDefinitions,
+  type InProcessWorkerProcessors,
+  type JobTypeRegistryDefinitions,
+  JobTypeValidationError,
+  mergeJobTypeProcessors,
+  mergeJobTypeRegistries,
+} from "queuert";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { Type } from "@sinclair/typebox";
 import { createTypeBoxJobTypeRegistry } from "./typebox-adapter.js";
 
@@ -315,6 +322,117 @@ describe("createTypeBoxJobTypeRegistry", () => {
       expect(() => {
         registry.validateBlockers("main", [{ typeName: "auth", input: {} }]);
       }).toThrow(JobTypeValidationError);
+    });
+  });
+
+  describe("external definitions (cross-slice)", () => {
+    const notificationJobTypes = createTypeBoxJobTypeRegistry({
+      "notifications.send-notification": {
+        entry: true,
+        input: Type.Object({ userId: Type.String(), message: Type.String() }),
+        output: Type.Object({ sentAt: Type.String() }),
+      },
+    });
+
+    const orderJobTypes = createTypeBoxJobTypeRegistry(
+      {
+        "orders.place-order": {
+          entry: true,
+          input: Type.Object({ userId: Type.String() }),
+          continueWith: Type.Object({ typeName: Type.Literal("orders.confirm-order") }),
+        },
+        "orders.confirm-order": {
+          input: Type.Object({ orderId: Type.Number() }),
+          output: Type.Object({ confirmedAt: Type.String() }),
+          blockers: Type.Array(
+            Type.Object({ typeName: Type.Literal("notifications.send-notification") }),
+          ),
+        },
+      },
+      notificationJobTypes,
+    );
+
+    it("merges registries and validates across slices", () => {
+      const merged = mergeJobTypeRegistries(orderJobTypes, notificationJobTypes);
+
+      expect(merged.getTypeNames()).toEqual([
+        "orders.place-order",
+        "orders.confirm-order",
+        "notifications.send-notification",
+      ]);
+
+      expect(() => {
+        merged.validateEntry("orders.place-order");
+      }).not.toThrow();
+
+      expect(() => {
+        merged.validateEntry("notifications.send-notification");
+      }).not.toThrow();
+    });
+
+    it("validates cross-slice blocker references", () => {
+      const merged = mergeJobTypeRegistries(orderJobTypes, notificationJobTypes);
+
+      expect(() => {
+        merged.validateBlockers("orders.confirm-order", [
+          { typeName: "notifications.send-notification", input: { userId: "u1", message: "hi" } },
+        ]);
+      }).not.toThrow();
+
+      expect(() => {
+        merged.validateBlockers("orders.confirm-order", [{ typeName: "unknown-type", input: {} }]);
+      }).toThrow(JobTypeValidationError);
+    });
+
+    it("exposes external definitions via ExternalJobTypeRegistryDefinitions", () => {
+      type OrderDefs = JobTypeRegistryDefinitions<typeof orderJobTypes>;
+      type ExternalDefs = ExternalJobTypeRegistryDefinitions<typeof orderJobTypes>;
+
+      expectTypeOf<ExternalDefs>().toHaveProperty("notifications.send-notification");
+      expectTypeOf<OrderDefs>().toHaveProperty("orders.place-order");
+      expectTypeOf<OrderDefs>().toHaveProperty("orders.confirm-order");
+    });
+
+    it("merges processors from typed slices", () => {
+      const notificationProcessors = {
+        "notifications.send-notification": {
+          attemptHandler: async ({ complete }) => complete(async () => ({ sentAt: "now" })),
+        },
+      } satisfies InProcessWorkerProcessors<
+        any,
+        JobTypeRegistryDefinitions<typeof notificationJobTypes>
+      >;
+
+      const orderProcessors = {
+        "orders.place-order": {
+          attemptHandler: async ({ complete }) =>
+            complete(async ({ continueWith }) =>
+              continueWith({
+                typeName: "orders.confirm-order",
+                input: { orderId: 1 },
+                blockers: [] as never,
+              }),
+            ),
+        },
+        "orders.confirm-order": {
+          attemptHandler: async ({ job, complete }) => {
+            expectTypeOf(job.blockers[0].output).toEqualTypeOf<{ sentAt: string }>();
+            return complete(async () => ({ confirmedAt: "now" }));
+          },
+        },
+      } satisfies InProcessWorkerProcessors<
+        any,
+        JobTypeRegistryDefinitions<typeof orderJobTypes>,
+        ExternalJobTypeRegistryDefinitions<typeof orderJobTypes>
+      >;
+
+      const merged = mergeJobTypeProcessors(orderProcessors, notificationProcessors);
+
+      expect(Object.keys(merged)).toEqual([
+        "orders.place-order",
+        "orders.confirm-order",
+        "notifications.send-notification",
+      ]);
     });
   });
 });

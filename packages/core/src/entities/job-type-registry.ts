@@ -4,9 +4,16 @@ import { type BaseJobTypeDefinitions } from "./job-type.js";
 /** Symbol used to carry phantom job type definitions on a registry. */
 export const definitionsSymbol: unique symbol = Symbol("queuert.definitions");
 
+/** Symbol used to carry phantom external job type definitions on a registry. */
+export const externalDefinitionsSymbol: unique symbol = Symbol("queuert.externalDefinitions");
+
 /** Extract the job type definitions from a {@link JobTypeRegistry}. */
 export type JobTypeRegistryDefinitions<T extends JobTypeRegistry<any>> =
   T[typeof definitionsSymbol];
+
+/** Extract the external job type definitions from a {@link JobTypeRegistry}. */
+export type ExternalJobTypeRegistryDefinitions<T extends JobTypeRegistry<any>> =
+  T[typeof externalDefinitionsSymbol];
 
 export const noopRegistries = new WeakSet<JobTypeRegistry<any>>();
 
@@ -46,7 +53,10 @@ export type JobTypeRegistryConfig = {
  * - validate* → throws JobTypeValidationError or returns void (pure validation)
  * - parse* → throws JobTypeValidationError or returns transformed value (validation + transformation)
  */
-export type JobTypeRegistry<TJobTypeDefinitions = unknown> = {
+export type JobTypeRegistry<
+  TJobTypeDefinitions = unknown,
+  TExternalJobTypeDefinitions = Record<never, never>,
+> = {
   /** Validate that a job type can start a chain (is an entry point). Throws JobTypeValidationError on failure. */
   validateEntry: (typeName: string) => void;
 
@@ -67,6 +77,9 @@ export type JobTypeRegistry<TJobTypeDefinitions = unknown> = {
 
   /** Phantom property for TypeScript type inference. */
   readonly [definitionsSymbol]: TJobTypeDefinitions;
+
+  /** Phantom property for external (cross-slice) type inference. */
+  readonly [externalDefinitionsSymbol]: TExternalJobTypeDefinitions;
 };
 
 /**
@@ -75,8 +88,9 @@ export type JobTypeRegistry<TJobTypeDefinitions = unknown> = {
  */
 export const createNoopJobTypeRegistry = <
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
->(): JobTypeRegistry<TJobTypeDefinitions> => {
-  const registry: JobTypeRegistry<TJobTypeDefinitions> = {
+  TExternalJobTypeDefinitions extends BaseJobTypeDefinitions = Record<never, never>,
+>(): JobTypeRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions> => {
+  const registry: JobTypeRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions> = {
     validateEntry: () => {},
     parseInput: (_, input) => input,
     parseOutput: (_, output) => output,
@@ -84,6 +98,7 @@ export const createNoopJobTypeRegistry = <
     getTypeNames: () => [],
     validateBlockers: () => {},
     [definitionsSymbol]: undefined as unknown as TJobTypeDefinitions,
+    [externalDefinitionsSymbol]: undefined as unknown as TExternalJobTypeDefinitions,
   };
   noopRegistries.add(registry);
   return registry;
@@ -106,9 +121,12 @@ export const createNoopJobTypeRegistry = <
  *   validateBlockers: (typeName, blockers) => schemas[typeName].blockers.parse(blockers),
  * });
  */
-export const createJobTypeRegistry = <TJobTypeDefinitions>(
+export const createJobTypeRegistry = <
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TExternalJobTypeDefinitions extends BaseJobTypeDefinitions = Record<never, never>,
+>(
   config: JobTypeRegistryConfig,
-): JobTypeRegistry<TJobTypeDefinitions> => ({
+): JobTypeRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions> => ({
   getTypeNames: () => config.getTypeNames(),
   validateEntry: (typeName) => {
     try {
@@ -168,4 +186,5 @@ export const createJobTypeRegistry = <TJobTypeDefinitions>(
     }
   },
   [definitionsSymbol]: undefined as unknown as TJobTypeDefinitions,
+  [externalDefinitionsSymbol]: undefined as unknown as TExternalJobTypeDefinitions,
 });

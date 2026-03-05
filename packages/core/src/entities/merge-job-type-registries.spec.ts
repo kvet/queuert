@@ -1,14 +1,14 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import { DuplicateJobTypeError, JobTypeValidationError } from "../errors.js";
 import {
   type JobTypeRegistryConfig,
   type JobTypeRegistryDefinitions,
   createJobTypeRegistry,
 } from "./job-type-registry.js";
+import { type BaseJobTypeDefinitions, defineJobTypes } from "./job-type.js";
 import { mergeJobTypeRegistries } from "./merge-job-type-registries.js";
-import { defineJobTypes } from "./job-type.js";
 
-const createValidatedRegistry = <T>(typeNames: string[]) => {
+const createValidatedRegistry = <T extends BaseJobTypeDefinitions>(typeNames: string[]) => {
   const knownTypes = new Set(typeNames);
   return createJobTypeRegistry<T>({
     getTypeNames: () => typeNames,
@@ -127,13 +127,8 @@ describe("mergeJobTypeRegistries", () => {
       const merged = mergeJobTypeRegistries(a, b);
 
       type MergedDefs = JobTypeRegistryDefinitions<typeof merged>;
-      type _AssertOrder = MergedDefs["create-order"]["input"] extends { userId: string }
-        ? true
-        : never;
-      type _AssertEmail = MergedDefs["send-email"]["input"] extends { to: string } ? true : never;
-
-      const _check: [_AssertOrder, _AssertEmail] = [true, true];
-      void _check;
+      expectTypeOf<MergedDefs["create-order"]["input"]>().toExtend<{ userId: string }>();
+      expectTypeOf<MergedDefs["send-email"]["input"]>().toExtend<{ to: string }>();
     });
   });
 
@@ -298,6 +293,39 @@ describe("mergeJobTypeRegistries", () => {
       expect(() => {
         merged.parseInput("job-a", { id: 123 });
       }).toThrow(JobTypeValidationError);
+    });
+  });
+
+  describe("cross-slice external references", () => {
+    it("allows cross-slice blocker references after merging", () => {
+      const notifications = defineJobTypes<{
+        "notifications.send": {
+          entry: true;
+          input: { userId: string; message: string };
+          output: { sentAt: string };
+        };
+      }>();
+
+      const orders = defineJobTypes<
+        {
+          "orders.create": {
+            entry: true;
+            input: { userId: string };
+            output: { orderId: string };
+            blockers: [{ typeName: "notifications.send" }];
+          };
+        },
+        JobTypeRegistryDefinitions<typeof notifications>
+      >();
+
+      const merged = mergeJobTypeRegistries(notifications, orders);
+
+      type MergedDefs = JobTypeRegistryDefinitions<typeof merged>;
+      expectTypeOf<MergedDefs["notifications.send"]["input"]>().toExtend<{ userId: string }>();
+      expectTypeOf<MergedDefs["orders.create"]["input"]>().toExtend<{ userId: string }>();
+
+      merged.validateEntry("notifications.send");
+      merged.validateEntry("orders.create");
     });
   });
 
