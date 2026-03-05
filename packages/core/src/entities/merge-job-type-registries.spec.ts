@@ -301,6 +301,48 @@ describe("mergeJobTypeRegistries", () => {
     });
   });
 
+  describe("cross-slice external references", () => {
+    it("allows cross-slice blocker references after merging", () => {
+      const notifications = defineJobTypes<{
+        "notifications.send": {
+          entry: true;
+          input: { userId: string; message: string };
+          output: { sentAt: string };
+        };
+      }>();
+
+      const orders = defineJobTypes<
+        {
+          "orders.create": {
+            entry: true;
+            input: { userId: string };
+            output: { orderId: string };
+            blockers: [{ typeName: "notifications.send" }];
+          };
+        },
+        JobTypeRegistryDefinitions<typeof notifications>
+      >();
+
+      const merged = mergeJobTypeRegistries(notifications, orders);
+
+      type MergedDefs = JobTypeRegistryDefinitions<typeof merged>;
+      type _AssertNotification = MergedDefs["notifications.send"]["input"] extends {
+        userId: string;
+      }
+        ? true
+        : never;
+      type _AssertOrder = MergedDefs["orders.create"]["input"] extends { userId: string }
+        ? true
+        : never;
+
+      const _check: [_AssertNotification, _AssertOrder] = [true, true];
+      void _check;
+
+      merged.validateEntry("notifications.send");
+      merged.validateEntry("orders.create");
+    });
+  });
+
   describe("mixed noop + validated registries", () => {
     it("validates types from validated registry, passes through noop types", () => {
       const noop = defineJobTypes<{

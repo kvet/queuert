@@ -149,6 +149,136 @@ describe("defineJobTypes", () => {
   });
 });
 
+describe("external references (TExternal)", () => {
+  it("allows nominal continueWith referencing an external type", () => {
+    const notificationJobTypes = defineJobTypes<{
+      "notifications.send": {
+        entry: true;
+        input: { userId: string; message: string };
+        output: { sentAt: string };
+      };
+    }>();
+
+    const orderJobTypes = defineJobTypes<
+      {
+        "orders.create": {
+          entry: true;
+          input: { userId: string };
+          continueWith: { typeName: "notifications.send" };
+        };
+      },
+      JobTypeRegistryDefinitions<typeof notificationJobTypes>
+    >();
+
+    expectTypeOf<JobTypeRegistryDefinitions<typeof orderJobTypes>>().toHaveProperty(
+      "orders.create",
+    );
+    // Phantom type only includes T, not TExternal
+    expectTypeOf<
+      keyof JobTypeRegistryDefinitions<typeof orderJobTypes>
+    >().toEqualTypeOf<"orders.create">();
+  });
+
+  it("allows nominal blockers referencing an external entry type", () => {
+    const notificationJobTypes = defineJobTypes<{
+      "notifications.send": {
+        entry: true;
+        input: { userId: string; message: string };
+        output: { sentAt: string };
+      };
+    }>();
+
+    const orderJobTypes = defineJobTypes<
+      {
+        "orders.create": {
+          entry: true;
+          input: { userId: string };
+          output: { orderId: string };
+          blockers: [{ typeName: "notifications.send" }];
+        };
+      },
+      JobTypeRegistryDefinitions<typeof notificationJobTypes>
+    >();
+
+    expectTypeOf<JobTypeRegistryDefinitions<typeof orderJobTypes>>().toHaveProperty(
+      "orders.create",
+    );
+  });
+
+  it("allows structural blockers referencing an external type", () => {
+    const notificationJobTypes = defineJobTypes<{
+      "notifications.send": {
+        entry: true;
+        input: { userId: string; message: string };
+        output: { sentAt: string };
+      };
+    }>();
+
+    const orderJobTypes = defineJobTypes<
+      {
+        "orders.create": {
+          entry: true;
+          input: { userId: string };
+          output: { orderId: string };
+          blockers: [{ input: { userId: string; message: string } }];
+        };
+      },
+      JobTypeRegistryDefinitions<typeof notificationJobTypes>
+    >();
+
+    expectTypeOf<JobTypeRegistryDefinitions<typeof orderJobTypes>>().toHaveProperty(
+      "orders.create",
+    );
+  });
+
+  it("rejects external reference that doesn't match any external type", () => {
+    const notificationJobTypes = defineJobTypes<{
+      "notifications.send": {
+        entry: true;
+        input: { userId: string; message: string };
+        output: { sentAt: string };
+      };
+    }>();
+
+    defineJobTypes<
+      // @ts-expect-error "nonexistent" is not in T or TExternal
+      {
+        "orders.create": {
+          entry: true;
+          input: { userId: string };
+          continueWith: { typeName: "nonexistent" };
+        };
+      },
+      JobTypeRegistryDefinitions<typeof notificationJobTypes>
+    >();
+  });
+
+  it("phantom type only includes T, not TExternal", () => {
+    const externalTypes = defineJobTypes<{
+      "external.task": {
+        entry: true;
+        input: { data: string };
+        output: { result: string };
+      };
+    }>();
+
+    const localTypes = defineJobTypes<
+      {
+        "local.process": {
+          entry: true;
+          input: { id: string };
+          output: { done: boolean };
+          blockers: [{ typeName: "external.task" }];
+        };
+      },
+      JobTypeRegistryDefinitions<typeof externalTypes>
+    >();
+
+    type Defs = JobTypeRegistryDefinitions<typeof localTypes>;
+    expectTypeOf<keyof Defs>().toEqualTypeOf<"local.process">();
+  });
+});
+
 describe("continuation-only jobs (default behavior)", () => {
   it("supports null as input type", () => {
     const defs = defineJobTypes<{

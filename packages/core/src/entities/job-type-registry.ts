@@ -106,7 +106,10 @@ export const createNoopJobTypeRegistry = <
  *   validateBlockers: (typeName, blockers) => schemas[typeName].blockers.parse(blockers),
  * });
  */
-export const createJobTypeRegistry = <TJobTypeDefinitions>(
+export const createJobTypeRegistry = <
+  TJobTypeDefinitions,
+  _TExternal extends BaseJobTypeDefinitions = Record<never, never>,
+>(
   config: JobTypeRegistryConfig,
 ): JobTypeRegistry<TJobTypeDefinitions> => ({
   getTypeNames: () => config.getTypeNames(),

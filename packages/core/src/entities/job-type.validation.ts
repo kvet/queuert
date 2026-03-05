@@ -76,24 +76,27 @@ type OutputProperty<TJobType> =
       : { output: ValidateOutput<TJobType> }
     : { output: ValidateOutput<TJobType> };
 
-type BlockersProperty<TJobType, T extends BaseJobTypeDefinitions> = [
+type BlockersProperty<TJobType, TAll extends BaseJobTypeDefinitions> = [
   ExtractBlockers<TJobType>,
 ] extends [undefined]
   ? { blockers?: undefined }
-  : { blockers: ValidateBlockers<ExtractBlockers<TJobType>, T, EntryTypeKeys<T>> };
+  : { blockers: ValidateBlockers<ExtractBlockers<TJobType>, TAll, EntryTypeKeys<TAll>> };
 
-type ValidateJobType<TJobType, TValidKeys extends string, T extends BaseJobTypeDefinitions> = {
+type ValidateJobType<TJobType, TValidKeys extends string, TAll extends BaseJobTypeDefinitions> = {
   entry?: TJobType extends { entry: infer E extends boolean } ? E : never;
   input: NoVoidOrUndefined<TJobType extends { input: infer I } ? I : never>;
   continueWith?: ValidateContinueWith<
     TJobType extends { continueWith: infer CT } ? CT : undefined,
-    T,
+    TAll,
     TValidKeys
   >;
 } & OutputProperty<TJobType> &
-  BlockersProperty<TJobType, T>;
+  BlockersProperty<TJobType, TAll>;
 
 /** Marker type for compile-time validated job type definitions. Applied by {@link defineJobTypes}. */
-export type ValidatedJobTypeDefinitions<T extends BaseJobTypeDefinitions> = {
-  [K in keyof T]: ValidateJobType<T[K], keyof T & string, T>;
+export type ValidatedJobTypeDefinitions<
+  T extends BaseJobTypeDefinitions,
+  TExternal extends BaseJobTypeDefinitions = Record<never, never>,
+> = {
+  [K in keyof T]: ValidateJobType<T[K], keyof (T & TExternal) & string, T & TExternal>;
 };

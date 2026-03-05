@@ -68,7 +68,8 @@ import { type ValidatedJobTypeDefinitions } from "./job-type.validation.js";
  * const jobTypes = defineJobTypes<MyJobDefinitions>();
  */
 export const defineJobTypes = <
-  T extends BaseJobTypeDefinitions & ValidatedJobTypeDefinitions<T>,
+  T extends BaseJobTypeDefinitions & ValidatedJobTypeDefinitions<T, TExternal>,
+  TExternal extends BaseJobTypeDefinitions = Record<never, never>,
 >(): JobTypeRegistry<T> => {
   return createNoopJobTypeRegistry<T>();
 };
