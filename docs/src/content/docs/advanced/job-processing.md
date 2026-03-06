@@ -53,27 +53,22 @@ Observability events (metrics, span ends, logs) emitted during the prepare and c
 
 Attempt handlers split processing into distinct phases to support both atomic (single-transaction) and staged (long-running) operations. See `AttemptHandler` TSDoc for the full handler signature and `AttemptPrepareOptions` for mode details.
 
-### Modes
+### Auto-Setup (Default)
 
-- **Atomic mode**: Prepare and complete run in the same transaction. Suitable for quick operations.
-- **Staged mode**: Prepare runs in one transaction, long-running work happens outside, then complete runs in another transaction. The worker automatically renews the job lease between phases. Implement the processing phase idempotently as it may retry if the worker crashes.
+Most jobs don't need `prepare`. Call `complete` directly and auto-setup infers the mode:
 
-### Auto-Setup
-
-If you don't call `prepare`, auto-setup runs based on when you call `complete`:
-
-- If `prepare` is not accessed and `complete` is not called synchronously, auto-setup runs in staged mode
-- If `complete` is called before `prepare`, auto-setup runs in atomic mode (no lease renewal between prepare and complete)
+- **Synchronous `complete`** (called immediately, no prior `await`): atomic mode — single transaction wraps everything
+- **Async work before `complete`**: staged mode — lease renewal active between async work and complete
 - Accessing `prepare` after auto-setup throws: "Prepare cannot be accessed after auto-setup"
 
-This means simple attempt handlers default to staged mode:
+See [Processing Modes](../../guides/processing-modes/) for examples and a decision flowchart.
 
-```typescript
-attemptHandler: async ({ job, complete }) => {
-  // Transaction already closed, lease renewal running
-  return complete(() => output);
-};
-```
+### Explicit Modes
+
+For more control, call `prepare` explicitly:
+
+- **Atomic mode**: Prepare and complete run in the same transaction. Rarely needed since calling `complete` directly achieves the same result with less ceremony.
+- **Staged mode**: Prepare runs in one transaction, long-running work happens outside, then complete runs in another transaction. The worker automatically renews the job lease between phases. Implement the processing phase idempotently as it may retry if the worker crashes.
 
 ## Timeouts
 

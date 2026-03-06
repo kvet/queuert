@@ -1,12 +1,12 @@
 # Processing Modes Showcase
 
-Demonstrates the three processing modes through an order fulfillment workflow.
+Demonstrates processing modes through an order fulfillment workflow.
 
 ## Scenarios
 
-1. **Atomic Mode**: Prepare and complete run in ONE transaction
-2. **Staged Mode**: Prepare and complete run in SEPARATE transactions
-3. **Auto-Setup Mode**: Just call `complete()` without `prepare()`
+1. **Auto-Setup Atomic**: Just call `complete()` directly — simplest path, single transaction
+2. **Staged Mode**: Use `prepare()` when external API calls happen between transactions
+3. **Auto-Setup Staged**: Async work before `complete()` without explicit `prepare()`
 
 ## Running
 

@@ -1,12 +1,12 @@
 /**
  * Processing Modes Showcase
  *
- * Demonstrates the three processing modes through an order fulfillment workflow.
+ * Demonstrates processing modes through an order fulfillment workflow.
  *
  * Scenarios:
- * 1. Atomic Mode: Prepare and complete run in ONE transaction
- * 2. Staged Mode: Prepare and complete run in SEPARATE transactions
- * 3. Auto-Setup Mode: Just call complete() without prepare()
+ * 1. Auto-Setup Atomic: Just call complete() directly — simplest path
+ * 2. Staged Mode: Use prepare() when external API calls happen between transactions
+ * 3. Auto-Setup Staged: Async work before complete() without explicit prepare()
  */
 
 import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
@@ -31,13 +31,13 @@ type DbContext = { sql: TransactionSql };
 const jobTypes = defineJobTypes<{
   /*
    * Workflow:
-   *   reserve-inventory (atomic)
+   *   reserve-inventory (auto-setup atomic)
    *          |
    *          v
    *   charge-payment (staged)
    *          |
    *          v
-   *   send-confirmation (auto-setup)
+   *   send-confirmation (auto-setup staged)
    */
   "reserve-inventory": {
     entry: true;
@@ -121,24 +121,19 @@ const worker = await createInProcessWorker({
   client,
   processors: {
     "reserve-inventory": {
-      attemptHandler: async ({ job, prepare, complete }) => {
-        console.log(`\n[reserve-inventory] ATOMIC mode`);
+      attemptHandler: async ({ job, complete }) => {
+        console.log(`\n[reserve-inventory] AUTO-SETUP ATOMIC mode`);
 
-        const order = await prepare({ mode: "atomic" }, async ({ sql: txSql }) => {
-          console.log(`  Reading order and checking stock...`);
-          const [row] = await txSql<{ quantity: number; stock: number; price: number }[]>`
+        return complete(async ({ sql: txSql, continueWith }) => {
+          console.log(`  Reading order, checking stock, and reserving...`);
+          const [order] = await txSql<{ quantity: number; stock: number; price: number }[]>`
             SELECT o.quantity, p.stock, p.price
             FROM orders o JOIN products p ON p.id = o.product_id
             WHERE o.id = ${job.input.orderId}
           `;
-          if (row.stock < row.quantity) {
-            throw new Error(`Insufficient stock: ${row.stock} < ${row.quantity}`);
+          if (order.stock < order.quantity) {
+            throw new Error(`Insufficient stock: ${order.stock} < ${order.quantity}`);
           }
-          return row;
-        });
-
-        return complete(async ({ sql: txSql, continueWith }) => {
-          console.log(`  Decrementing stock and updating order...`);
           await txSql`UPDATE products SET stock = stock - ${order.quantity} WHERE id = (SELECT product_id FROM orders WHERE id = ${job.input.orderId})`;
           await txSql`UPDATE orders SET status = 'reserved' WHERE id = ${job.input.orderId}`;
           console.log(`  Transaction committed!`);
@@ -183,7 +178,7 @@ const worker = await createInProcessWorker({
 
     "send-confirmation": {
       attemptHandler: async ({ job, complete }) => {
-        console.log(`\n[send-confirmation] AUTO-SETUP mode`);
+        console.log(`\n[send-confirmation] AUTO-SETUP STAGED mode`);
         console.log(`  Sending confirmation for order ${job.input.orderId}...`);
 
         await new Promise((r) => setTimeout(r, 100));
@@ -200,7 +195,7 @@ const worker = await createInProcessWorker({
 const stopWorker = await worker.start();
 
 console.log("\n--- Processing Modes: Order Fulfillment Workflow ---");
-console.log("Atomic -> Staged -> Auto-setup processing modes.\n");
+console.log("Auto-setup atomic -> Staged -> Auto-setup staged processing modes.\n");
 
 const chain = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (_sql) => {
