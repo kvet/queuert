@@ -1,6 +1,6 @@
 {
   "name": "queuert",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "description": "Core package for Queuert job queue system",
   "keywords": [
     "background-jobs",

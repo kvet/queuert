@@ -1,6 +1,5 @@
 # Short term
 
-- [EPIC] Prepare 0.4 release
 - [REF] Plugins
   - Attempt middleware plugin
   - Client amend

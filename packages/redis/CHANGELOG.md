@@ -1,5 +1,27 @@
 # @queuert/redis
 
+## 0.4.0
+
+### Minor Changes
+
+- Add feature slices with `mergeJobTypeRegistries` and `mergeJobTypeProcessors`
+
+  Split job type definitions and processors into independent feature modules (slices), then merge them at the application level. Duplicate job types are detected at both compile time and runtime.
+
+  `defineJobTypes` now accepts an optional `TExternal` type parameter for compile-time validation of cross-slice blocker and continueWith references.
+
+  Other changes:
+  - Trace context types narrowed from `unknown` to `string | null` across `ObservabilityAdapter`, `StateAdapter`, and all storage backends. Postgres trace columns changed from `jsonb` to `text` (migration required).
+  - Navigation utility types renamed for clarity: `JobOf` -> `ResolvedJob`, `JobChainOf` -> `ResolvedJobChain`, `ChainJobTypes` -> `ChainJobTypeNames`, and others.
+  - Handler/callback types renamed: `AttemptHandlerFn` -> `AttemptHandler`, `PrepareFn` -> `AttemptPrepare`, `CompleteFn` -> `AttemptComplete`, `CompleteCallbackOptions` -> `AttemptCompleteOptions`, `PrepareConfig` -> `AttemptPrepareOptions`.
+  - Registry phantom property replaced with symbol; use `JobTypeRegistryDefinitions<T>` utility type. `PartialJobTypeReference` replaced by `JobTypeReference` union.
+  - `JobTypeRegistryConfig` now requires `getTypeNames` callback.
+
+### Patch Changes
+
+- Updated dependencies
+  - queuert@0.4.0
+
 ## 0.3.2
 
 ### Patch Changes
