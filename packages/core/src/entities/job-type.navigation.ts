@@ -36,7 +36,6 @@ type ExtractOutputType<TJobType> = TJobType extends { output: infer Out }
     : Out
   : never;
 
-// Find job types matching an input structure
 type MatchingJobTypesByInput<TDefs extends BaseJobTypeDefinitions, TInput> = {
   [K in keyof TDefs]: TDefs[K] extends { input: infer I }
     ? [TInput] extends [I]
@@ -46,7 +45,6 @@ type MatchingJobTypesByInput<TDefs extends BaseJobTypeDefinitions, TInput> = {
 }[keyof TDefs] &
   string;
 
-// Resolve reference to job type name(s)
 type ResolveReference<TDefs extends BaseJobTypeDefinitions, TRef> =
   TRef extends NominalJobTypeReference<infer TN>
     ? TN & keyof TDefs
@@ -138,14 +136,12 @@ export type ResolvedJobChain<
 
 type GetBlockersProperty<T> = T extends { blockers: infer B } ? B : never;
 
-// Map reference to chain type
 type ReferenceToChain<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TRef,
 > = ResolvedJobChain<TJobId, TJobTypeDefinitions, ResolveReference<TJobTypeDefinitions, TRef>>;
 
-// Updated to handle references (replaces MapStringBlockersToChains)
 type MapBlockersToChains<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,

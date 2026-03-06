@@ -53,9 +53,6 @@ import {
 import { type TransactionHooks, withTransactionHooks } from "../transaction-hooks.js";
 import { type LeaseConfig, createLeaseManager } from "./lease.js";
 
-export type { BackoffConfig } from "../helpers/backoff.js";
-export type { LeaseConfig } from "./lease.js";
-
 /** Middleware that wraps each job attempt. Receives the running job context and a `next` function to invoke the inner handler. */
 export type JobAttemptMiddleware<
   TStateAdapter extends StateAdapter<any, any>,
@@ -81,8 +78,6 @@ export type JobAbortReason =
   | "error"
   | "not_found"
   | "already_completed";
-
-export { RescheduleJobError, rescheduleJob } from "../errors.js";
 
 /** Options passed to the completion callback, including `continueWith` and the transaction context. */
 export type AttemptCompleteOptions<

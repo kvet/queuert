@@ -164,21 +164,6 @@ const worker = await createInProcessWorker({
 });
 ```
 
-## Logging
-
-By default, Queuert operates silently with no logging. For visibility into job processing, you can enable logging:
-
-```typescript
-import { createConsoleLog, createClient, createInProcessWorker } from "queuert";
-
-const log = createConsoleLog();
-
-const client = await createClient({ stateAdapter, registry, log });
-const worker = await createInProcessWorker({ client, processors });
-```
-
-For production, integrate with your logging library (Pino, Winston, etc.) by implementing a custom `Log` function. See the [log-console](https://github.com/kvet/queuert/tree/main/examples/log-console), [log-pino](https://github.com/kvet/queuert/tree/main/examples/log-pino), and [log-winston](https://github.com/kvet/queuert/tree/main/examples/log-winston) examples.
-
 ## API Reference
 
 For the full API reference with types and signatures, see the [queuert reference](https://kvet.github.io/queuert/reference/queuert/client/).

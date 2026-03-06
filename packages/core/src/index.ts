@@ -4,6 +4,7 @@ export {
   type CompleteJobChainResult,
   type JobChainCompleteOptions,
 } from "./client.js";
+export { type DeduplicationOptions } from "./entities/deduplication.js";
 export {
   type CompletedJobChain,
   type JobChain,
@@ -23,15 +24,15 @@ export {
   type BlockedJobTypeNames,
   type BlockerChains,
   type ChainJobTypeNames,
-  type ResolvedChainJobs,
   type ContinuationJobs,
   type DefineJobTypes,
   type EntryJobTypeDefinitions,
   type JobTypeHasBlockers,
   type JobTypeReference,
   type NominalJobTypeReference,
-  type ResolvedJobChain,
+  type ResolvedChainJobs,
   type ResolvedJob,
+  type ResolvedJobChain,
   type StructuralJobTypeReference,
 } from "./entities/job-type.js";
 export { type ValidatedJobTypeDefinitions } from "./entities/job-type.validation.js";
@@ -41,8 +42,8 @@ export {
   type JobStatus,
   type JobWithBlockers,
 } from "./entities/job.js";
-export { type ScheduleOptions } from "./entities/schedule.js";
 export { mergeJobTypeRegistries } from "./entities/merge-job-type-registries.js";
+export { type ScheduleOptions } from "./entities/schedule.js";
 export {
   BlockerReferenceError,
   DuplicateJobTypeError,
@@ -61,7 +62,6 @@ export {
 export { type TypedAbortSignal } from "./helpers/abort.js";
 export { type BackoffConfig } from "./helpers/backoff.js";
 export { type RetryConfig } from "./helpers/retry.js";
-export { mergeJobTypeProcessors } from "./worker/merge-job-type-processors.js";
 export {
   createInProcessWorker,
   type InProcessWorker,
@@ -74,7 +74,6 @@ export { createConsoleLog } from "./observability-adapter/log.console.js";
 export { type Log } from "./observability-adapter/log.js";
 export { type ObservabilityAdapter } from "./observability-adapter/observability-adapter.js";
 export { type OrderDirection, type Page } from "./pagination.js";
-export { type DeduplicationOptions } from "./entities/deduplication.js";
 export { type StateAdapter } from "./state-adapter/state-adapter.js";
 export {
   createTransactionHooks,
@@ -92,5 +91,6 @@ export {
   type AttemptPrepareOptions,
   type JobAbortReason,
   type JobAttemptMiddleware,
-  type LeaseConfig,
 } from "./worker/job-process.js";
+export { type LeaseConfig } from "./worker/lease.js";
+export { mergeJobTypeProcessors } from "./worker/merge-job-type-processors.js";

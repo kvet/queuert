@@ -20,9 +20,9 @@ import {
 import {
   type AttemptHandler,
   type JobAttemptMiddleware,
-  type LeaseConfig,
   runJobProcess,
 } from "./worker/job-process.js";
+import { type LeaseConfig } from "./worker/lease.js";
 
 /** Default configuration applied to all job types unless overridden per-processor. */
 export type InProcessWorkerProcessDefaults<

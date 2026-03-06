@@ -37,6 +37,9 @@ const toException = (error: unknown): Error | string =>
  *
  * Users must configure their OTEL SDK with desired exporters (Prometheus, OTLP, Jaeger, etc.)
  * before using this adapter.
+ *
+ * @param meter - OTEL Meter instance for creating counters, histograms, and gauges. Omit to disable metrics.
+ * @param tracer - OTEL Tracer instance for creating spans. Omit to disable tracing.
  */
 export const createOtelObservabilityAdapter = async ({
   meter,

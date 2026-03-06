@@ -113,6 +113,7 @@ Visit the [documentation site](https://kvet.github.io/queuert/) for guides on:
 - [Error Handling](https://kvet.github.io/queuert/guides/error-handling/)
 - [Scheduling & Recurring Jobs](https://kvet.github.io/queuert/guides/scheduling/)
 - [Deduplication](https://kvet.github.io/queuert/guides/deduplication/)
+- [Feature Slices](https://kvet.github.io/queuert/guides/slices/)
 - [Horizontal Scaling](https://kvet.github.io/queuert/guides/horizontal-scaling/)
 - [Dashboard](https://kvet.github.io/queuert/integrations/dashboard/)
 - [Observability](https://kvet.github.io/queuert/integrations/observability/)

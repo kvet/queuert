@@ -1,7 +1,5 @@
 import { type Job, type SerializedJob, deserializeJob } from "../shared/job.js";
 
-export type { Job } from "../shared/job.js";
-
 const BASE = "./api";
 
 const fetchJson = async <T>(path: string): Promise<T> => {

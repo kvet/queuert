@@ -140,7 +140,7 @@ Source files are organized by domain:
 
 - `job-type.ts`: Base type definitions (`BaseJobTypeDefinition`) and `defineJobTypes` factory
 - `job-type-registry.ts`: Runtime validation types (`JobTypeRegistry`, `JobTypeRegistryConfig`) and factories
-- `job-type.navigation.ts`: Type-level navigation logic (`JobOf`, `ChainJobTypes`, `ContinuationJobTypes`)
+- `job-type.navigation.ts`: Type-level navigation logic (`ResolvedJob`, `ChainJobTypeNames`, `ContinuationJobs`)
 - `job-type.validation.ts`: Compile-time validation types (`ValidatedJobTypeDefinitions`)
 - `job-chain.types.ts`: Core entity types (`JobChain`, `CompletedJobChain`, `JobChainStatus`)
 - `job.types.ts`: Core job entity types (`Job`, `JobWithBlockers`) and status narrowing types
