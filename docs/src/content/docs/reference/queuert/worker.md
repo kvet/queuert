@@ -148,9 +148,13 @@ Helper that throws `RescheduleJobError` from within an attempt handler to resche
 
 Merges processor maps from multiple slices into a single processors object. See [Utilities](/queuert/reference/queuert/utilities/#mergejobtypeprocessors) for details.
 
+## defineJobTypeProcessors
+
+Defines processors for a job type slice with full type inference and a widened return type. See [Utilities](/queuert/reference/queuert/utilities/#defineprocessors) for details.
+
 ## Handler Types
 
-The following types are exported for use in type annotations and `satisfies` expressions:
+The following types are exported for use in type annotations:
 
 - **AttemptComplete** -- the typed `complete` function in `attemptHandler`
 - **AttemptCompleteCallback** -- the callback passed to `complete()`
@@ -159,7 +163,7 @@ The following types are exported for use in type annotations and `satisfies` exp
 - **AttemptPrepareCallback** -- the callback passed to `prepare(options, callback)`
 - **AttemptPrepareOptions** -- `{ mode: "atomic" | "staged" }`
 
-These are generic types parameterized over the state adapter and job type definitions. They're needed when defining processors in separate files with `satisfies InProcessWorkerProcessors`.
+These are generic types parameterized over the state adapter and job type definitions.
 
 ## Configuration Types
 

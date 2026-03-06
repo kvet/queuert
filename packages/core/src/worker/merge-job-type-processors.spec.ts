@@ -1,11 +1,11 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
+import { defineJobTypes } from "../entities/job-type.js";
 import { DuplicateJobTypeError } from "../errors.js";
 import {
   type InProcessWorkerProcessors,
-  type JobTypeRegistryDefinitions,
   type StateAdapter,
+  defineJobTypeProcessors,
 } from "../index.js";
-import { defineJobTypes } from "../entities/job-type.js";
 import { mergeJobTypeProcessors } from "./merge-job-type-processors.js";
 
 type OrderDefs = {
@@ -20,26 +20,73 @@ type NotificationDefs = {
 const orderJobTypes = defineJobTypes<OrderDefs>();
 const notificationJobTypes = defineJobTypes<NotificationDefs>();
 
-const orderProcessors = {
+const orderProcessors = defineJobTypeProcessors(orderJobTypes, {
   "orders.create": {
     attemptHandler: async ({ complete }) => complete(async () => ({ orderId: "1" })),
   },
   "orders.fulfill": {
     attemptHandler: async ({ complete }) => complete(async () => ({ fulfilled: true })),
   },
-} satisfies InProcessWorkerProcessors<
-  StateAdapter<any, any>,
-  JobTypeRegistryDefinitions<typeof orderJobTypes>
->;
+});
 
-const notificationProcessors = {
+const notificationProcessors = defineJobTypeProcessors(notificationJobTypes, {
   "notifications.send": {
     attemptHandler: async ({ complete }) => complete(async () => ({ sent: true })),
   },
-} satisfies InProcessWorkerProcessors<
-  StateAdapter<any, any>,
-  JobTypeRegistryDefinitions<typeof notificationJobTypes>
->;
+});
+
+describe("defineJobTypeProcessors", () => {
+  it("rejects unknown keys at compile time", () => {
+    defineJobTypeProcessors(orderJobTypes, {
+      // @ts-expect-error — "orders.craete" is not a key of OrderDefs
+      "orders.craete": {
+        attemptHandler: async ({ complete }: any) => complete(async () => ({ orderId: "1" })),
+      },
+    });
+  });
+
+  it("rejects a mix of valid and unknown keys at compile time", () => {
+    defineJobTypeProcessors(orderJobTypes, {
+      "orders.create": {
+        attemptHandler: async ({ complete }) => complete(async () => ({ orderId: "1" })),
+      },
+      // @ts-expect-error — "orders.unknown" is not a key of OrderDefs
+      "orders.unknown": {
+        attemptHandler: async ({ complete }: any) => complete(async () => ({})),
+      },
+    });
+  });
+
+  it("allows partial subsets of definitions", () => {
+    const processors = defineJobTypeProcessors(orderJobTypes, {
+      "orders.create": {
+        attemptHandler: async ({ complete }) => complete(async () => ({ orderId: "1" })),
+      },
+    });
+    expectTypeOf(processors).toHaveProperty("orders.create");
+    expectTypeOf(processors).not.toHaveProperty("orders.fulfill");
+  });
+});
+
+describe("partial processors for merged registries", () => {
+  type MergedProcessors = InProcessWorkerProcessors<
+    StateAdapter<any, any>,
+    OrderDefs & NotificationDefs
+  >;
+
+  it("accepts pre-typed subset processors from one slice", () => {
+    expectTypeOf(orderProcessors).toExtend<MergedProcessors>();
+  });
+
+  it("accepts pre-typed subset processors from another slice", () => {
+    expectTypeOf(notificationProcessors).toExtend<MergedProcessors>();
+  });
+
+  it("accepts merged processors via mergeJobTypeProcessors", () => {
+    const merged = mergeJobTypeProcessors(orderProcessors, notificationProcessors);
+    expectTypeOf(merged).toExtend<MergedProcessors>();
+  });
+});
 
 describe("mergeJobTypeProcessors", () => {
   it("merges two processor slices into a single object", () => {
@@ -55,14 +102,11 @@ describe("mergeJobTypeProcessors", () => {
       "billing.charge": { entry: true; input: { amount: number }; output: { charged: boolean } };
     }>();
 
-    const billingProcessors = {
+    const billingProcessors = defineJobTypeProcessors(billingJobTypes, {
       "billing.charge": {
         attemptHandler: async ({ complete }) => complete(async () => ({ charged: true })),
       },
-    } satisfies InProcessWorkerProcessors<
-      StateAdapter<any, any>,
-      JobTypeRegistryDefinitions<typeof billingJobTypes>
-    >;
+    });
 
     const merged = mergeJobTypeProcessors(
       orderProcessors,
@@ -91,14 +135,11 @@ describe("mergeJobTypeProcessors", () => {
   });
 
   it("throws DuplicateJobTypeError for duplicate keys at runtime", () => {
-    const altOrderProcessors = {
+    const altOrderProcessors = defineJobTypeProcessors(orderJobTypes, {
       "orders.create": {
         attemptHandler: async ({ complete }) => complete(async () => ({ orderId: "alt" })),
       },
-    } satisfies InProcessWorkerProcessors<
-      StateAdapter<any, any>,
-      JobTypeRegistryDefinitions<typeof orderJobTypes>
-    >;
+    });
 
     expect(() => {
       // @ts-expect-error — duplicate "orders.create" detected at compile time
@@ -109,14 +150,11 @@ describe("mergeJobTypeProcessors", () => {
   it("includes duplicate keys in the error", () => {
     expect.assertions(2);
 
-    const altOrderProcessors = {
+    const altOrderProcessors = defineJobTypeProcessors(orderJobTypes, {
       "orders.create": {
         attemptHandler: async ({ complete }) => complete(async () => ({ orderId: "alt" })),
       },
-    } satisfies InProcessWorkerProcessors<
-      StateAdapter<any, any>,
-      JobTypeRegistryDefinitions<typeof orderJobTypes>
-    >;
+    });
 
     try {
       // @ts-expect-error — duplicate "orders.create"
@@ -128,14 +166,11 @@ describe("mergeJobTypeProcessors", () => {
   });
 
   it("detects duplicate processor keys at compile time", () => {
-    const duplicateProcessors = {
+    const duplicateProcessors = defineJobTypeProcessors(orderJobTypes, {
       "orders.create": {
         attemptHandler: async ({ complete }) => complete(async () => ({ orderId: "dup" })),
       },
-    } satisfies InProcessWorkerProcessors<
-      StateAdapter<any, any>,
-      JobTypeRegistryDefinitions<typeof orderJobTypes>
-    >;
+    });
 
     expect(() => {
       // @ts-expect-error — "orders.create" appears in both slices
@@ -144,14 +179,11 @@ describe("mergeJobTypeProcessors", () => {
   });
 
   it("detects duplicates across three slices at compile time", () => {
-    const conflictProcessors = {
+    const conflictProcessors = defineJobTypeProcessors(orderJobTypes, {
       "orders.fulfill": {
         attemptHandler: async ({ complete }) => complete(async () => ({ fulfilled: false })),
       },
-    } satisfies InProcessWorkerProcessors<
-      StateAdapter<any, any>,
-      JobTypeRegistryDefinitions<typeof orderJobTypes>
-    >;
+    });
 
     expect(() => {
       // @ts-expect-error — "orders.fulfill" duplicated between first and third slice

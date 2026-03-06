@@ -86,6 +86,24 @@ const registry = mergeJobTypeRegistries(ordersRegistry, notificationsRegistry);
 const client = await createClient({ registry, stateAdapter });
 ```
 
+## defineJobTypeProcessors
+
+```typescript
+const orderProcessors = defineJobTypeProcessors(orderJobTypes, {
+  "orders.create": {
+    attemptHandler: async ({ job, complete }) => complete(async () => ({ orderId: "123" })),
+  },
+});
+```
+
+Defines processors for a job type slice with full type inference. Handlers are type-checked against the slice's definitions (including external references from `TExternal`), then the return type is widened so it is assignable to any `InProcessWorkerProcessors` whose definitions include the slice's types.
+
+- **First argument** -- a `JobTypeRegistry` (from `defineJobTypes` or `createJobTypeRegistry`), used for type inference only
+- **Second argument** -- the processor map, typed against the registry's definitions
+- **Return type** -- preserves the specific keys but widens the handler types, making it compatible with `createInProcessWorker` and `mergeJobTypeProcessors`
+
+This replaces the `satisfies InProcessWorkerProcessors<...>` pattern, which required manually specifying `JobTypeRegistryDefinitions` and `ExternalJobTypeRegistryDefinitions` type parameters.
+
 ## mergeJobTypeProcessors
 
 ```typescript
@@ -98,7 +116,7 @@ Merges processor maps from multiple slices into a single processors object. Acce
 - **Runtime duplicate detection** -- overlapping processor keys throw `DuplicateJobTypeError`
 - **Widened return type** -- the result is assignable to `InProcessWorkerProcessors` expected by `createInProcessWorker`
 
-Each slice defines processors typed against its own job type definitions using `satisfies InProcessWorkerProcessors`. This allows co-locating job type definitions and processor handlers per feature module.
+Each slice defines processors using `defineJobTypeProcessors`, typed against its own job type definitions. This allows co-locating job type definitions and processor handlers per feature module.
 
 ```typescript
 const worker = await createInProcessWorker({

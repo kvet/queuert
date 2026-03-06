@@ -1,13 +1,8 @@
-import {
-  type ExternalJobTypeRegistryDefinitions,
-  type InProcessWorkerProcessors,
-  type JobTypeRegistryDefinitions,
-} from "queuert";
-import { type stateAdapter } from "./adapters.js";
+import { defineJobTypeProcessors } from "queuert";
 import { client } from "./client.js";
-import { type orderJobTypes } from "./slice-orders-definitions.js";
+import { orderJobTypes } from "./slice-orders-definitions.js";
 
-export const orderProcessors = {
+export const orderProcessors = defineJobTypeProcessors(orderJobTypes, {
   "orders.create-order": {
     attemptHandler: async ({ job, complete }) => {
       const totalAmount = job.input.items.reduce((sum, item) => sum + item.price, 0);
@@ -89,8 +84,4 @@ export const orderProcessors = {
       }));
     },
   },
-} satisfies InProcessWorkerProcessors<
-  typeof stateAdapter,
-  JobTypeRegistryDefinitions<typeof orderJobTypes>,
-  ExternalJobTypeRegistryDefinitions<typeof orderJobTypes>
->;
+});

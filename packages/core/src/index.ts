@@ -64,6 +64,7 @@ export { type BackoffConfig } from "./helpers/backoff.js";
 export { type RetryConfig } from "./helpers/retry.js";
 export {
   createInProcessWorker,
+  defineJobTypeProcessors,
   type InProcessWorker,
   type InProcessWorkerProcessDefaults,
   type InProcessWorkerProcessor,

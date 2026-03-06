@@ -27,11 +27,10 @@ export const orderJobTypes = defineJobTypes<{
 
 ```ts
 // slice-orders-processors.ts
-import { type InProcessWorkerProcessors, type JobTypeRegistryDefinitions } from "queuert";
-import { type stateAdapter } from "./adapters.js";
-import { type orderJobTypes } from "./slice-orders-definitions.js";
+import { defineJobTypeProcessors } from "queuert";
+import { orderJobTypes } from "./slice-orders-definitions.js";
 
-export const orderProcessors = {
+export const orderProcessors = defineJobTypeProcessors(orderJobTypes, {
   "orders.create": {
     attemptHandler: async ({ job, complete }) =>
       complete(async ({ continueWith }) =>
@@ -41,13 +40,10 @@ export const orderProcessors = {
   "orders.fulfill": {
     attemptHandler: async ({ job, complete }) => complete(async () => ({ fulfilled: true })),
   },
-} satisfies InProcessWorkerProcessors<
-  typeof stateAdapter,
-  JobTypeRegistryDefinitions<typeof orderJobTypes>
->;
+});
 ```
 
-Using `satisfies` ensures each processor is type-checked against its own slice's definitions without widening the type.
+`defineJobTypeProcessors` type-checks each handler against the slice's own definitions, then returns a widened type that is assignable to any `InProcessWorkerProcessors` whose definitions include the slice's types. This lets you define processors per-slice and freely pass them to `createInProcessWorker` or `mergeJobTypeProcessors` without type conflicts.
 
 ## Composing Slices
 
@@ -114,25 +110,16 @@ export const orderJobTypes = defineJobTypes<
 
 This eliminates the need for "workflow slices" that duplicate type definitions just to make blocker references type-check. After merging with `mergeJobTypeRegistries`, all references resolve against the full set of definitions.
 
-When writing processors for a slice with external references, use `ExternalJobTypeRegistryDefinitions` to extract the external types and pass them to `InProcessWorkerProcessors`:
+When writing processors for a slice with external references, `defineJobTypeProcessors` automatically extracts both owned and external definitions from the registry:
 
 ```ts
 // slice-orders-processors.ts
-import {
-  type ExternalJobTypeRegistryDefinitions,
-  type InProcessWorkerProcessors,
-  type JobTypeRegistryDefinitions,
-} from "queuert";
-import { type stateAdapter } from "./adapters.js";
-import { type orderJobTypes } from "./slice-orders-definitions.js";
+import { defineJobTypeProcessors } from "queuert";
+import { orderJobTypes } from "./slice-orders-definitions.js";
 
-const orderProcessors = {
-  // ...
-} satisfies InProcessWorkerProcessors<
-  typeof stateAdapter,
-  JobTypeRegistryDefinitions<typeof orderJobTypes>,
-  ExternalJobTypeRegistryDefinitions<typeof orderJobTypes>
->;
+const orderProcessors = defineJobTypeProcessors(orderJobTypes, {
+  // handlers have full type inference for continueWith, blockers, etc.
+});
 ```
 
 ## Naming Convention

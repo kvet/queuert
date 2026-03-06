@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { type Client } from "./client.js";
-import { clientHelpersMap } from "./helpers/client-helpers-map.js";
+import { type JobTypeRegistry } from "./entities/job-type-registry.js";
 import { type BaseJobTypeDefinitions } from "./entities/job-type.js";
 import { type BackoffConfig } from "./helpers/backoff.js";
+import { clientHelpersMap } from "./helpers/client-helpers-map.js";
 import { type ParallelExecutor, createParallelExecutor } from "./helpers/parallel-executor.js";
 import { raceWithSleep } from "./helpers/sleep.js";
 import {
@@ -64,6 +65,35 @@ export type InProcessWorkerProcessors<
     TJobTypeDefinitions & TExternalJobTypeDefinitions,
     K
   >;
+};
+
+/**
+ * Define processors for a job type slice with full type inference, returning a
+ * widened type that is assignable to any `InProcessWorkerProcessors` whose
+ * definitions include the slice's job types.
+ *
+ * @example
+ * const orderProcessors = defineJobTypeProcessors(orderJobTypes, {
+ *   "orders.create": {
+ *     attemptHandler: async ({ complete }) => complete(async () => ({ orderId: "1" })),
+ *   },
+ * });
+ */
+export const defineJobTypeProcessors = <
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TExternalJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TKeys extends keyof TJobTypeDefinitions & string,
+>(
+  _jobTypeRegistry: JobTypeRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions>,
+  processors: {
+    [K in TKeys]: InProcessWorkerProcessor<
+      StateAdapter<any, any>,
+      TJobTypeDefinitions & TExternalJobTypeDefinitions,
+      K
+    >;
+  } & Record<Exclude<TKeys, keyof TJobTypeDefinitions & string>, never>,
+): { [K in TKeys]: InProcessWorkerProcessor<StateAdapter<any, any>, any, K> } => {
+  return processors as { [K in TKeys]: InProcessWorkerProcessor<StateAdapter<any, any>, any, K> };
 };
 
 const waitForNextJob = async ({
@@ -199,7 +229,7 @@ const performJob = async ({
 export const createInProcessWorker = async <
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TStateAdapter extends StateAdapter<any, any>,
-  const TProcessors extends InProcessWorkerProcessors<TStateAdapter, TJobTypeDefinitions>,
+  const TJobTypeProcessors extends InProcessWorkerProcessors<TStateAdapter, TJobTypeDefinitions>,
 >({
   client,
   workerId = randomUUID(),
@@ -213,8 +243,8 @@ export const createInProcessWorker = async <
   concurrency?: number;
   backoffConfig?: BackoffConfig;
   processDefaults?: InProcessWorkerProcessDefaults<TStateAdapter, TJobTypeDefinitions>;
-  processors: TProcessors &
-    Record<Exclude<keyof TProcessors & string, keyof TJobTypeDefinitions & string>, never>;
+  processors: TJobTypeProcessors &
+    Record<Exclude<keyof TJobTypeProcessors & string, keyof TJobTypeDefinitions & string>, never>;
 }) => {
   const typeNames = Array.from(Object.keys(processors));
 

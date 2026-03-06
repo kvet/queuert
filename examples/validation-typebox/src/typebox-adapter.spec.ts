@@ -1,8 +1,8 @@
 import {
   type ExternalJobTypeRegistryDefinitions,
-  type InProcessWorkerProcessors,
   type JobTypeRegistryDefinitions,
   JobTypeValidationError,
+  defineJobTypeProcessors,
   mergeJobTypeProcessors,
   mergeJobTypeRegistries,
 } from "queuert";
@@ -394,16 +394,13 @@ describe("createTypeBoxJobTypeRegistry", () => {
     });
 
     it("merges processors from typed slices", () => {
-      const notificationProcessors = {
+      const notificationProcessors = defineJobTypeProcessors(notificationJobTypes, {
         "notifications.send-notification": {
           attemptHandler: async ({ complete }) => complete(async () => ({ sentAt: "now" })),
         },
-      } satisfies InProcessWorkerProcessors<
-        any,
-        JobTypeRegistryDefinitions<typeof notificationJobTypes>
-      >;
+      });
 
-      const orderProcessors = {
+      const orderProcessors = defineJobTypeProcessors(orderJobTypes, {
         "orders.place-order": {
           attemptHandler: async ({ complete }) =>
             complete(async ({ continueWith }) =>
@@ -420,11 +417,7 @@ describe("createTypeBoxJobTypeRegistry", () => {
             return complete(async () => ({ confirmedAt: "now" }));
           },
         },
-      } satisfies InProcessWorkerProcessors<
-        any,
-        JobTypeRegistryDefinitions<typeof orderJobTypes>,
-        ExternalJobTypeRegistryDefinitions<typeof orderJobTypes>
-      >;
+      });
 
       const merged = mergeJobTypeProcessors(orderProcessors, notificationProcessors);
 

@@ -1,8 +1,7 @@
-import { type InProcessWorkerProcessors, type JobTypeRegistryDefinitions } from "queuert";
-import { type stateAdapter } from "./adapters.js";
-import { type notificationJobTypes } from "./slice-notifications-definitions.js";
+import { defineJobTypeProcessors } from "queuert";
+import { notificationJobTypes } from "./slice-notifications-definitions.js";
 
-export const notificationProcessors = {
+export const notificationProcessors = defineJobTypeProcessors(notificationJobTypes, {
   "notifications.send-notification": {
     attemptHandler: async ({ job, complete }) => {
       console.log(
@@ -14,7 +13,4 @@ export const notificationProcessors = {
       }));
     },
   },
-} satisfies InProcessWorkerProcessors<
-  typeof stateAdapter,
-  JobTypeRegistryDefinitions<typeof notificationJobTypes>
->;
+});

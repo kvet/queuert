@@ -30,10 +30,9 @@ type MergedKeys<T extends readonly object[]> = T extends readonly [
 /**
  * Merge processor maps from multiple slices into a single processors object.
  *
- * Each slice defines processors typed against its own job type definitions
- * (via `satisfies InProcessWorkerProcessors`). This function merges
- * them with compile-time duplicate detection — overlapping processor keys
- * produce a type error.
+ * Each slice defines processors using {@link defineJobTypeProcessors}, typed against
+ * its own job type definitions. This function merges them with compile-time
+ * duplicate detection — overlapping processor keys produce a type error.
  *
  * The return type preserves the specific processor keys from each slice while
  * widening the handler types so the result is assignable to
