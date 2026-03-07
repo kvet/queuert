@@ -1,6 +1,7 @@
 export {
   createClient,
   type Client,
+  type ClientBrand,
   type CompleteJobChainResult,
   type JobChainCompleteOptions,
 } from "./client.js";

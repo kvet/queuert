@@ -50,6 +50,17 @@ import { clientHelpersMap } from "./helpers/client-helpers-map.js";
 import { type TransactionHooks } from "./transaction-hooks.js";
 import { type AttemptCompleteOptions } from "./worker/job-process.js";
 
+declare const clientDefinitions: unique symbol;
+declare const clientStateAdapter: unique symbol;
+
+export type ClientBrand<
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TStateAdapter extends StateAdapter<any, any>,
+> = {
+  [clientDefinitions]: TJobTypeDefinitions;
+  [clientStateAdapter]: TStateAdapter;
+};
+
 const normalizeTxCtx = <T extends Record<string, unknown>>(rest: T): T | undefined =>
   Object.keys(rest).length > 0 ? rest : undefined;
 
@@ -717,7 +728,7 @@ export const createClient = async <
     },
   };
   clientHelpersMap.set(client, helpers);
-  return client;
+  return client as typeof client & ClientBrand<TJobTypeDefinitions, TStateAdapter>;
 };
 
 /**
@@ -731,3 +742,8 @@ export type Client<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TStateAdapter extends StateAdapter<any, any>,
 > = Awaited<ReturnType<typeof createClient<JobTypeRegistry<TJobTypeDefinitions>, TStateAdapter>>>;
+
+export type InferClientDefinitions<T> =
+  T extends ClientBrand<infer D, any> ? D : BaseJobTypeDefinitions;
+export type InferClientStateAdapter<T> =
+  T extends ClientBrand<any, infer S> ? S : StateAdapter<any, any>;

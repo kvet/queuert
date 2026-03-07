@@ -11,13 +11,37 @@ import { type BaseJobTypeDefinitions } from "./job-type.js";
 /** Extract the definitions phantom type from a registry. */
 type ExtractDefinitions<T> = T extends JobTypeRegistry<infer D> ? D : never;
 
-/** Recursively merge definitions from a tuple of registries. */
+/** Recursively merge definitions from a tuple of registries. Processes 10 at a time to avoid TS depth limits. */
 type MergeDefinitions<T extends readonly JobTypeRegistry<any>[]> = T extends readonly [
-  infer First extends JobTypeRegistry<any>,
+  infer T0 extends JobTypeRegistry<any>,
+  infer T1 extends JobTypeRegistry<any>,
+  infer T2 extends JobTypeRegistry<any>,
+  infer T3 extends JobTypeRegistry<any>,
+  infer T4 extends JobTypeRegistry<any>,
+  infer T5 extends JobTypeRegistry<any>,
+  infer T6 extends JobTypeRegistry<any>,
+  infer T7 extends JobTypeRegistry<any>,
+  infer T8 extends JobTypeRegistry<any>,
+  infer T9 extends JobTypeRegistry<any>,
   ...infer Rest extends readonly JobTypeRegistry<any>[],
 ]
-  ? ExtractDefinitions<First> & MergeDefinitions<Rest>
-  : unknown;
+  ? ExtractDefinitions<T0> &
+      ExtractDefinitions<T1> &
+      ExtractDefinitions<T2> &
+      ExtractDefinitions<T3> &
+      ExtractDefinitions<T4> &
+      ExtractDefinitions<T5> &
+      ExtractDefinitions<T6> &
+      ExtractDefinitions<T7> &
+      ExtractDefinitions<T8> &
+      ExtractDefinitions<T9> &
+      MergeDefinitions<Rest>
+  : T extends readonly [
+        infer First extends JobTypeRegistry<any>,
+        ...infer Rest extends readonly JobTypeRegistry<any>[],
+      ]
+    ? ExtractDefinitions<First> & MergeDefinitions<Rest>
+    : unknown;
 
 /** Identity when no duplicates; error string when duplicates exist. */
 type AssertNoDuplicates<Existing, New, Success> = [keyof Existing & keyof New & string] extends [
@@ -26,19 +50,129 @@ type AssertNoDuplicates<Existing, New, Success> = [keyof Existing & keyof New & 
   ? Success
   : `Duplicate job type: ${keyof Existing & keyof New & string}`;
 
-/** Recursively validate each registry against accumulated definitions. */
+/** Recursively validate each registry against accumulated definitions. Processes 10 at a time to avoid TS depth limits. */
 type ValidatedRegistries<
   T extends readonly JobTypeRegistry<any>[],
   Acc = Record<never, never>,
 > = T extends readonly [
-  infer First extends JobTypeRegistry<any>,
+  infer T0 extends JobTypeRegistry<any>,
+  infer T1 extends JobTypeRegistry<any>,
+  infer T2 extends JobTypeRegistry<any>,
+  infer T3 extends JobTypeRegistry<any>,
+  infer T4 extends JobTypeRegistry<any>,
+  infer T5 extends JobTypeRegistry<any>,
+  infer T6 extends JobTypeRegistry<any>,
+  infer T7 extends JobTypeRegistry<any>,
+  infer T8 extends JobTypeRegistry<any>,
+  infer T9 extends JobTypeRegistry<any>,
   ...infer Rest extends readonly JobTypeRegistry<any>[],
 ]
   ? readonly [
-      AssertNoDuplicates<Acc, ExtractDefinitions<First>, First>,
-      ...ValidatedRegistries<Rest, Acc & ExtractDefinitions<First>>,
+      AssertNoDuplicates<Acc, ExtractDefinitions<T0>, T0>,
+      AssertNoDuplicates<Acc & ExtractDefinitions<T0>, ExtractDefinitions<T1>, T1>,
+      AssertNoDuplicates<
+        Acc & ExtractDefinitions<T0> & ExtractDefinitions<T1>,
+        ExtractDefinitions<T2>,
+        T2
+      >,
+      AssertNoDuplicates<
+        Acc & ExtractDefinitions<T0> & ExtractDefinitions<T1> & ExtractDefinitions<T2>,
+        ExtractDefinitions<T3>,
+        T3
+      >,
+      AssertNoDuplicates<
+        Acc &
+          ExtractDefinitions<T0> &
+          ExtractDefinitions<T1> &
+          ExtractDefinitions<T2> &
+          ExtractDefinitions<T3>,
+        ExtractDefinitions<T4>,
+        T4
+      >,
+      AssertNoDuplicates<
+        Acc &
+          ExtractDefinitions<T0> &
+          ExtractDefinitions<T1> &
+          ExtractDefinitions<T2> &
+          ExtractDefinitions<T3> &
+          ExtractDefinitions<T4>,
+        ExtractDefinitions<T5>,
+        T5
+      >,
+      AssertNoDuplicates<
+        Acc &
+          ExtractDefinitions<T0> &
+          ExtractDefinitions<T1> &
+          ExtractDefinitions<T2> &
+          ExtractDefinitions<T3> &
+          ExtractDefinitions<T4> &
+          ExtractDefinitions<T5>,
+        ExtractDefinitions<T6>,
+        T6
+      >,
+      AssertNoDuplicates<
+        Acc &
+          ExtractDefinitions<T0> &
+          ExtractDefinitions<T1> &
+          ExtractDefinitions<T2> &
+          ExtractDefinitions<T3> &
+          ExtractDefinitions<T4> &
+          ExtractDefinitions<T5> &
+          ExtractDefinitions<T6>,
+        ExtractDefinitions<T7>,
+        T7
+      >,
+      AssertNoDuplicates<
+        Acc &
+          ExtractDefinitions<T0> &
+          ExtractDefinitions<T1> &
+          ExtractDefinitions<T2> &
+          ExtractDefinitions<T3> &
+          ExtractDefinitions<T4> &
+          ExtractDefinitions<T5> &
+          ExtractDefinitions<T6> &
+          ExtractDefinitions<T7>,
+        ExtractDefinitions<T8>,
+        T8
+      >,
+      AssertNoDuplicates<
+        Acc &
+          ExtractDefinitions<T0> &
+          ExtractDefinitions<T1> &
+          ExtractDefinitions<T2> &
+          ExtractDefinitions<T3> &
+          ExtractDefinitions<T4> &
+          ExtractDefinitions<T5> &
+          ExtractDefinitions<T6> &
+          ExtractDefinitions<T7> &
+          ExtractDefinitions<T8>,
+        ExtractDefinitions<T9>,
+        T9
+      >,
+      ...ValidatedRegistries<
+        Rest,
+        Acc &
+          ExtractDefinitions<T0> &
+          ExtractDefinitions<T1> &
+          ExtractDefinitions<T2> &
+          ExtractDefinitions<T3> &
+          ExtractDefinitions<T4> &
+          ExtractDefinitions<T5> &
+          ExtractDefinitions<T6> &
+          ExtractDefinitions<T7> &
+          ExtractDefinitions<T8> &
+          ExtractDefinitions<T9>
+      >,
     ]
-  : readonly [];
+  : T extends readonly [
+        infer First extends JobTypeRegistry<any>,
+        ...infer Rest extends readonly JobTypeRegistry<any>[],
+      ]
+    ? readonly [
+        AssertNoDuplicates<Acc, ExtractDefinitions<First>, First>,
+        ...ValidatedRegistries<Rest, Acc & ExtractDefinitions<First>>,
+      ]
+    : readonly [];
 
 /**
  * Merge multiple job type registries into one.

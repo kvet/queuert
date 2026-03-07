@@ -1,5 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { type Client } from "./client.js";
+import {
+  type ClientBrand,
+  type InferClientDefinitions,
+  type InferClientStateAdapter,
+} from "./client.js";
 import { type JobTypeRegistry } from "./entities/job-type-registry.js";
 import { type BaseJobTypeDefinitions } from "./entities/job-type.js";
 import { type BackoffConfig } from "./helpers/backoff.js";
@@ -66,7 +70,6 @@ export type InProcessWorkerProcessors<
     K
   >;
 };
-
 /**
  * Define processors for a job type slice with full type inference, returning a
  * widened type that is assignable to any `InProcessWorkerProcessors` whose
@@ -227,9 +230,11 @@ const performJob = async ({
  * @param options.processors - Map of job type names to their processor configurations.
  */
 export const createInProcessWorker = async <
-  TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TStateAdapter extends StateAdapter<any, any>,
-  const TJobTypeProcessors extends InProcessWorkerProcessors<TStateAdapter, TJobTypeDefinitions>,
+  TClient extends ClientBrand<any, any>,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions = InferClientDefinitions<TClient>,
+  TStateAdapter extends StateAdapter<any, any> = InferClientStateAdapter<TClient>,
+  const TJobTypeProcessors extends InProcessWorkerProcessors<TStateAdapter, TJobTypeDefinitions> =
+    InProcessWorkerProcessors<TStateAdapter, TJobTypeDefinitions>,
 >({
   client,
   workerId = randomUUID(),
@@ -238,7 +243,7 @@ export const createInProcessWorker = async <
   processDefaults,
   processors,
 }: {
-  client: Client<TJobTypeDefinitions, TStateAdapter>;
+  client: TClient;
   workerId?: string;
   concurrency?: number;
   backoffConfig?: BackoffConfig;
