@@ -75,14 +75,24 @@ export type ChainJobTypeNames<
         _Acc | TJobTypeName
       >;
 
+type SameSlice<A, B> = A extends { __slice: infer S1 }
+  ? B extends { __slice: infer S2 }
+    ? S1 extends S2
+      ? true
+      : false
+    : unknown
+  : unknown;
+
 type ChainReachMap<TJobTypeDefinitions extends BaseJobTypeDefinitions> = {
   [TypeName in keyof TJobTypeDefinitions]: {
-    [K in keyof EntryJobTypeDefinitions<TJobTypeDefinitions>]: TypeName extends ChainJobTypeNames<
-      TJobTypeDefinitions,
-      K
-    >
-      ? K
-      : never;
+    [K in keyof EntryJobTypeDefinitions<TJobTypeDefinitions>]: SameSlice<
+      TJobTypeDefinitions[TypeName],
+      TJobTypeDefinitions[K]
+    > extends false
+      ? never
+      : TypeName extends ChainJobTypeNames<TJobTypeDefinitions, K>
+        ? K
+        : never;
   }[keyof EntryJobTypeDefinitions<TJobTypeDefinitions>];
 };
 

@@ -11,12 +11,20 @@ import { type BaseJobTypeDefinitions } from "./job-type.js";
 /** Extract the definitions phantom type from a registry. */
 type ExtractDefinitions<T> = T extends JobTypeRegistry<infer D> ? D : never;
 
-/** Recursively merge definitions from a tuple of registries. */
-type MergeDefinitions<T extends readonly JobTypeRegistry<any>[]> = T extends readonly [
+/** Tag each definition in a record with a `__slice` discriminant for fast navigation short-circuiting. Strips any prior tag so nested merges re-tag correctly. */
+type TagSlice<TDefs, TTag> = {
+  [K in keyof TDefs]: Omit<TDefs[K], "__slice"> & { readonly __slice: TTag };
+};
+
+/** Recursively merge definitions from a tuple of registries, tagging each slice with its tuple position. */
+type MergeDefinitions<
+  T extends readonly JobTypeRegistry<any>[],
+  _Pos extends unknown[] = [],
+> = T extends readonly [
   infer First extends JobTypeRegistry<any>,
   ...infer Rest extends readonly JobTypeRegistry<any>[],
 ]
-  ? ExtractDefinitions<First> & MergeDefinitions<Rest>
+  ? TagSlice<ExtractDefinitions<First>, _Pos["length"]> & MergeDefinitions<Rest, [..._Pos, unknown]>
   : unknown;
 
 /** Identity when no duplicates; error string when duplicates exist. */

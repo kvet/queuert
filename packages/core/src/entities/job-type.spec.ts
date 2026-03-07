@@ -153,7 +153,7 @@ describe("defineJobTypes", () => {
 });
 
 describe("external references (TExternal)", () => {
-  it("allows nominal continueWith referencing an external type", () => {
+  it("rejects nominal continueWith referencing an external type", () => {
     const notificationJobTypes = defineJobTypes<{
       "notifications.send": {
         entry: true;
@@ -162,7 +162,8 @@ describe("external references (TExternal)", () => {
       };
     }>();
 
-    const orderJobTypes = defineJobTypes<
+    defineJobTypes<
+      // @ts-expect-error continueWith can only reference local types, not external
       {
         "orders.create": {
           entry: true;
@@ -172,14 +173,6 @@ describe("external references (TExternal)", () => {
       },
       JobTypeRegistryDefinitions<typeof notificationJobTypes>
     >();
-
-    expectTypeOf<JobTypeRegistryDefinitions<typeof orderJobTypes>>().toHaveProperty(
-      "orders.create",
-    );
-    // Phantom type only includes T, not TExternal
-    expectTypeOf<
-      keyof JobTypeRegistryDefinitions<typeof orderJobTypes>
-    >().toEqualTypeOf<"orders.create">();
   });
 
   it("allows nominal blockers referencing an external entry type", () => {
