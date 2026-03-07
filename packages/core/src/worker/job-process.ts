@@ -9,7 +9,6 @@ import {
   type ChainTypesReaching,
   type ContinuationJobTypes,
   type ContinuationJobs,
-  type EntryJobTypeDefinitions,
   type JobTypeHasBlockers,
   type ResolvedJob,
   type ResolvedJobWithBlockers,
@@ -18,6 +17,7 @@ import {
   type CompletedJob,
   type CreatedJob,
   type Job,
+  type JobWithBlockers,
   type RunningJob,
   mapStateJobToJob,
 } from "../entities/job.js";
@@ -56,15 +56,13 @@ import { type LeaseConfig, createLeaseManager } from "./lease.js";
 /** Middleware that wraps each job attempt. Receives the running job context and a `next` function to invoke the inner handler. */
 export type JobAttemptMiddleware<
   TStateAdapter extends StateAdapter<any, any>,
-  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  _TJobTypeDefinitions extends BaseJobTypeDefinitions = BaseJobTypeDefinitions,
 > = <T>(
   context: {
     job: RunningJob<
-      ResolvedJobWithBlockers<
-        GetStateAdapterJobId<TStateAdapter>,
-        TJobTypeDefinitions,
-        keyof TJobTypeDefinitions & string,
-        keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string
+      JobWithBlockers<
+        Job<GetStateAdapterJobId<TStateAdapter>, string, string, unknown>,
+        CompletedJobChain<JobChain<GetStateAdapterJobId<TStateAdapter>, string, unknown, unknown>>[]
       >
     >;
     workerId: string;
@@ -84,7 +82,7 @@ export type AttemptCompleteOptions<
   TStateAdapter extends StateAdapter<BaseTxContext, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions & string,
-  TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
+  TChainTypeName extends string,
 > = {
   continueWith: <
     TContinueJobTypeName extends ContinuationJobTypes<TJobTypeDefinitions, TJobTypeName> & string,
@@ -125,12 +123,13 @@ export type AttemptCompleteCallback<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions & string,
   TResult,
+  TChainTypeName extends string = ChainTypesReaching<TJobTypeDefinitions, TJobTypeName>,
 > = (
   completeOptions: AttemptCompleteOptions<
     TStateAdapter,
     TJobTypeDefinitions,
     TJobTypeName,
-    ChainTypesReaching<TJobTypeDefinitions, TJobTypeName>
+    TChainTypeName
   >,
 ) => Promise<TResult>;
 
@@ -139,6 +138,7 @@ export type AttemptComplete<
   TStateAdapter extends StateAdapter<BaseTxContext, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions & string,
+  TChainTypeName extends string = ChainTypesReaching<TJobTypeDefinitions, TJobTypeName>,
 > = <
   TReturn extends
     | TJobTypeDefinitions[TJobTypeName]["output"]
@@ -146,7 +146,7 @@ export type AttemptComplete<
         GetStateAdapterJobId<TStateAdapter>,
         TJobTypeDefinitions,
         TJobTypeName,
-        ChainTypesReaching<TJobTypeDefinitions, TJobTypeName>
+        TChainTypeName
       >,
 >(
   completeCallback: (
@@ -154,7 +154,7 @@ export type AttemptComplete<
       TStateAdapter,
       TJobTypeDefinitions,
       TJobTypeName,
-      ChainTypesReaching<TJobTypeDefinitions, TJobTypeName>
+      TChainTypeName
     >,
   ) => Promise<TReturn>,
 ) => Promise<
@@ -164,14 +164,14 @@ export type AttemptComplete<
           GetStateAdapterJobId<TStateAdapter>,
           TJobTypeDefinitions,
           TJobTypeName,
-          ChainTypesReaching<TJobTypeDefinitions, TJobTypeName>
+          TChainTypeName
         >
       >
     : ContinuationJobs<
         GetStateAdapterJobId<TStateAdapter>,
         TJobTypeDefinitions,
         TJobTypeName,
-        ChainTypesReaching<TJobTypeDefinitions, TJobTypeName>
+        TChainTypeName
       >
 >;
 
@@ -207,6 +207,7 @@ export type AttemptHandler<
   TStateAdapter extends StateAdapter<BaseTxContext, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions & string,
+  TChainTypeName extends string = ChainTypesReaching<TJobTypeDefinitions, TJobTypeName>,
 > = (processOptions: {
   signal: TypedAbortSignal<JobAbortReason>;
   job: RunningJob<
@@ -214,25 +215,25 @@ export type AttemptHandler<
       GetStateAdapterJobId<TStateAdapter>,
       TJobTypeDefinitions,
       TJobTypeName,
-      ChainTypesReaching<TJobTypeDefinitions, TJobTypeName>
+      TChainTypeName
     >
   >;
   prepare: AttemptPrepare<TStateAdapter>;
-  complete: AttemptComplete<TStateAdapter, TJobTypeDefinitions, TJobTypeName>;
+  complete: AttemptComplete<TStateAdapter, TJobTypeDefinitions, TJobTypeName, TChainTypeName>;
 }) => Promise<
   | CompletedJob<
       ResolvedJobWithBlockers<
         GetStateAdapterJobId<TStateAdapter>,
         TJobTypeDefinitions,
         TJobTypeName,
-        ChainTypesReaching<TJobTypeDefinitions, TJobTypeName>
+        TChainTypeName
       >
     >
   | ContinuationJobs<
       GetStateAdapterJobId<TStateAdapter>,
       TJobTypeDefinitions,
       TJobTypeName,
-      ChainTypesReaching<TJobTypeDefinitions, TJobTypeName>
+      TChainTypeName
     >
 >;
 
@@ -253,10 +254,7 @@ export const runJobProcess = async ({
   backoffConfig: BackoffConfig;
   leaseConfig: LeaseConfig;
   workerId: string;
-  attemptMiddlewares?: JobAttemptMiddleware<
-    StateAdapter<BaseTxContext, any>,
-    BaseJobTypeDefinitions
-  >[];
+  attemptMiddlewares?: JobAttemptMiddleware<StateAdapter<BaseTxContext, any>>[];
 }): Promise<void> => {
   let completeTransactionContext: TransactionContext<BaseTxContext> | null = null;
 

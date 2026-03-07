@@ -11,34 +11,43 @@ import { type BaseJobTypeDefinitions } from "./job-type.js";
 /** Extract the definitions phantom type from a registry. */
 type ExtractDefinitions<T> = T extends JobTypeRegistry<infer D> ? D : never;
 
-/** Recursively merge definitions from a tuple of registries. */
-type MergeDefinitions<T extends readonly JobTypeRegistry<any>[]> = T extends readonly [
-  infer First extends JobTypeRegistry<any>,
-  ...infer Rest extends readonly JobTypeRegistry<any>[],
-]
-  ? ExtractDefinitions<First> & MergeDefinitions<Rest>
-  : unknown;
+type UnionToIntersection<U> = (U extends any ? (k: U) => void : never) extends (k: infer I) => void
+  ? I
+  : never;
+
+type MergeDefinitions<T extends readonly JobTypeRegistry<any>[]> = UnionToIntersection<
+  ExtractDefinitions<T[number]>
+>;
 
 /** Identity when no duplicates; error string when duplicates exist. */
-type AssertNoDuplicates<Existing, New, Success> = [keyof Existing & keyof New & string] extends [
-  never,
-]
+type AssertNoDuplicates<Existing extends string, New extends string, Success> = [
+  Existing & New,
+] extends [never]
   ? Success
-  : `Duplicate job type: ${keyof Existing & keyof New & string}`;
+  : `Duplicate job type: ${Existing & New}`;
 
-/** Recursively validate each registry against accumulated definitions. */
+/** Tail-recursive validation: each registry is checked against accumulated keys (up to 20 registries). */
 type ValidatedRegistries<
   T extends readonly JobTypeRegistry<any>[],
-  Acc = Record<never, never>,
-> = T extends readonly [
-  infer First extends JobTypeRegistry<any>,
-  ...infer Rest extends readonly JobTypeRegistry<any>[],
-]
-  ? readonly [
-      AssertNoDuplicates<Acc, ExtractDefinitions<First>, First>,
-      ...ValidatedRegistries<Rest, Acc & ExtractDefinitions<First>>,
-    ]
-  : readonly [];
+  _AccKeys extends string = never,
+  _Acc extends readonly any[] = readonly [],
+  _Depth extends any[] = [],
+> = _Depth["length"] extends 20
+  ? readonly [..._Acc, ...T]
+  : T extends readonly [
+        infer First extends JobTypeRegistry<any>,
+        ...infer Rest extends readonly JobTypeRegistry<any>[],
+      ]
+    ? ValidatedRegistries<
+        Rest,
+        _AccKeys | (keyof ExtractDefinitions<First> & string),
+        readonly [
+          ..._Acc,
+          AssertNoDuplicates<_AccKeys, keyof ExtractDefinitions<First> & string, First>,
+        ],
+        [..._Depth, any]
+      >
+    : _Acc;
 
 /**
  * Merge multiple job type registries into one.

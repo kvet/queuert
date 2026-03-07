@@ -53,6 +53,11 @@ import { type AttemptCompleteOptions } from "./worker/job-process.js";
 const normalizeTxCtx = <T extends Record<string, unknown>>(rest: T): T | undefined =>
   Object.keys(rest).length > 0 ? rest : undefined;
 
+export const clientDefinitionsSymbol: unique symbol = Symbol("queuert.clientDefinitions");
+export type ClientDefinitionsBrand<TJobTypeDefinitions extends BaseJobTypeDefinitions> = {
+  [clientDefinitionsSymbol]: TJobTypeDefinitions;
+};
+
 /** Callback type for {@link Client.completeJobChain | completeJobChain}. Receives the current job and a `complete` function. */
 export type JobChainCompleteOptions<
   TStateAdapter extends StateAdapter<any, any>,
@@ -153,6 +158,7 @@ export const createClient = async <
     log,
   });
   const client = {
+    [clientDefinitionsSymbol]: undefined as unknown as TJobTypeDefinitions,
     /** Create a new job chain. Returns the created chain with a `deduplicated` flag. */
     startJobChain: async <
       TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
@@ -730,4 +736,5 @@ export const createClient = async <
 export type Client<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TStateAdapter extends StateAdapter<any, any>,
-> = Awaited<ReturnType<typeof createClient<JobTypeRegistry<TJobTypeDefinitions>, TStateAdapter>>>;
+> = ClientDefinitionsBrand<TJobTypeDefinitions> &
+  Awaited<ReturnType<typeof createClient<JobTypeRegistry<TJobTypeDefinitions>, TStateAdapter>>>;

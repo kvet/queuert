@@ -1,31 +1,45 @@
 import { DuplicateJobTypeError } from "../errors.js";
 import { type InProcessWorkerProcessor } from "../in-process-worker.js";
 
-/** Identity when no duplicate keys; error string when duplicates exist. */
 type AssertNoDuplicateKeys<AccKeys extends string, NewKeys extends string, Success> = [
   AccKeys & NewKeys,
 ] extends [never]
   ? Success
   : `Duplicate processor: ${AccKeys & NewKeys}`;
 
-/** Recursively validate each processor map against accumulated keys. */
+/** Tail-recursive validation: each slice is checked against accumulated keys (up to 20 slices). */
 type ValidatedSlices<
   T extends readonly object[],
-  AccKeys extends string = never,
-> = T extends readonly [infer First extends object, ...infer Rest extends readonly object[]]
-  ? readonly [
-      AssertNoDuplicateKeys<AccKeys, keyof First & string, First>,
-      ...ValidatedSlices<Rest, AccKeys | (keyof First & string)>,
-    ]
-  : readonly [];
+  _AccKeys extends string = never,
+  _Acc extends readonly any[] = readonly [],
+  _Depth extends any[] = [],
+> = _Depth["length"] extends 20
+  ? readonly [..._Acc, ...T]
+  : T extends readonly [infer First extends object, ...infer Rest extends readonly object[]]
+    ? ValidatedSlices<
+        Rest,
+        _AccKeys | (keyof First & string),
+        readonly [..._Acc, AssertNoDuplicateKeys<_AccKeys, keyof First & string, First>],
+        [..._Depth, any]
+      >
+    : _Acc;
 
-/** Collect all keys from a tuple of objects. */
-type MergedKeys<T extends readonly object[]> = T extends readonly [
-  infer First,
-  ...infer Rest extends readonly object[],
-]
-  ? (keyof First & string) | MergedKeys<Rest>
+type MergedKeys<T extends readonly object[]> = T[number] extends infer U
+  ? U extends object
+    ? keyof U & string
+    : never
   : never;
+
+export const mergedProcessorsSymbol: unique symbol = Symbol("queuert.mergedProcessors");
+
+/**
+ * Brand carried by the return value of {@link mergeJobTypeProcessors}.
+ * Used by `createInProcessWorker` overloads to skip expensive per-key
+ * constraint evaluation for pre-validated merged processor maps.
+ */
+export type MergedProcessorsBrand<TKeys extends string = string> = {
+  [mergedProcessorsSymbol]: TKeys;
+};
 
 /**
  * Merge processor maps from multiple slices into a single processors object.
@@ -48,7 +62,8 @@ export const mergeJobTypeProcessors = <
   const TSlices extends readonly [object, object, ...object[]],
 >(
   ...slices: ValidatedSlices<TSlices> & TSlices
-): { [K in MergedKeys<TSlices>]: InProcessWorkerProcessor<any, any, K> } => {
+): MergedProcessorsBrand<MergedKeys<TSlices>> &
+  Record<MergedKeys<TSlices>, InProcessWorkerProcessor<any, any, any>> => {
   const seen = new Set<string>();
   const duplicates: string[] = [];
   for (const slice of slices as unknown as object[]) {
@@ -64,7 +79,8 @@ export const mergeJobTypeProcessors = <
       duplicateTypeNames: duplicates,
     });
   }
-  return Object.assign({}, ...(slices as unknown as object[])) as {
-    [K in MergedKeys<TSlices>]: InProcessWorkerProcessor<any, any, K>;
-  };
+  return Object.assign({}, ...(slices as unknown as object[])) as MergedProcessorsBrand<
+    MergedKeys<TSlices>
+  > &
+    Record<MergedKeys<TSlices>, InProcessWorkerProcessor<any, any, any>>;
 };

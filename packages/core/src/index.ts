@@ -1,6 +1,8 @@
 export {
   createClient,
+  clientDefinitionsSymbol,
   type Client,
+  type ClientDefinitionsBrand,
   type CompleteJobChainResult,
   type JobChainCompleteOptions,
 } from "./client.js";
@@ -94,4 +96,8 @@ export {
   type JobAttemptMiddleware,
 } from "./worker/job-process.js";
 export { type LeaseConfig } from "./worker/lease.js";
-export { mergeJobTypeProcessors } from "./worker/merge-job-type-processors.js";
+export {
+  mergeJobTypeProcessors,
+  mergedProcessorsSymbol,
+  type MergedProcessorsBrand,
+} from "./worker/merge-job-type-processors.js";

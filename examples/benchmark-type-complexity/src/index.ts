@@ -101,16 +101,13 @@ ${typeStrings.join("\n")}
 
 const ${slice.name}Registry = defineJobTypes<${slice.name}Defs>();
 
-const ${slice.name}Processors = ${processors} satisfies InProcessWorkerProcessors<
-  Awaited<ReturnType<typeof createInProcessStateAdapter>>,
-  ${slice.name}Defs
->;`;
+const ${slice.name}Processors = defineJobTypeProcessors(${slice.name}Registry, ${processors});`;
   });
 
   const registryNames = slices.map((s) => `${s.name}Registry`);
   const processorNames = slices.map((s) => `${s.name}Processors`);
 
-  return `import { defineJobTypes, createInProcessWorker, createClient, mergeJobTypeRegistries, type InProcessWorkerProcessors, mergeJobTypeProcessors } from "queuert";
+  return `import { defineJobTypes, defineJobTypeProcessors, createInProcessWorker, createClient, mergeJobTypeRegistries, mergeJobTypeProcessors } from "queuert";
 import { createInProcessStateAdapter, createInProcessNotifyAdapter } from "queuert/internal";
 ${sliceDecls.join("\n")}
 
@@ -384,6 +381,28 @@ const scenarios: Scenario[] = [
         })),
       ),
   },
+  {
+    name: "many-50x10",
+    description: "Many: 50 x 10-step",
+    generate: () =>
+      wrapMergeScenario(
+        Array.from({ length: 50 }, (_, i) => ({
+          name: `s${i}`,
+          defs: prefixDefs(generateLinearChain(10), `s${i}`),
+        })),
+      ),
+  },
+  {
+    name: "many-100x20",
+    description: "Many: 100 x 20-step",
+    generate: () =>
+      wrapMergeScenario(
+        Array.from({ length: 100 }, (_, i) => ({
+          name: `s${i}`,
+          defs: prefixDefs(generateLinearChain(20), `s${i}`),
+        })),
+      ),
+  },
 ];
 
 type Diagnostics = {
@@ -417,8 +436,26 @@ const parseDiagnostics = (output: string): Partial<Diagnostics> => {
   return result;
 };
 
-const tscPath = join(projectRoot, "node_modules/.bin/tsc");
-const tsgoPath = join(projectRoot, "node_modules/.bin/tsgo");
+const getVersion = (bin: string): string | null => {
+  try {
+    return execSync(`${bin} --version`, { encoding: "utf8", stdio: "pipe" }).trim();
+  } catch {
+    return null;
+  }
+};
+
+const resolveCompiler = (name: string): string => {
+  const localPath = join(projectRoot, "node_modules/.bin", name);
+  if (getVersion(localPath)) return localPath;
+  try {
+    return execSync(`which ${name}`, { encoding: "utf8", stdio: "pipe" }).trim();
+  } catch {
+    return localPath;
+  }
+};
+
+const tscPath = resolveCompiler("tsc");
+const tsgoPath = resolveCompiler("tsgo");
 
 const args = process.argv.slice(2);
 const compilerArg = args.find((a) => !a.startsWith("--"));
@@ -485,14 +522,6 @@ const runTypeCheck = (code: string, tscPath: string): Diagnostics | null => {
         memoryMB: diag.memoryMB ?? null,
       };
     }
-    return null;
-  }
-};
-
-const getVersion = (bin: string): string | null => {
-  try {
-    return execSync(`${bin} --version`, { encoding: "utf8", stdio: "pipe" }).trim();
-  } catch {
     return null;
   }
 };

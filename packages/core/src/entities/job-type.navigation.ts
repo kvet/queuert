@@ -95,16 +95,14 @@ export type ResolvedJob<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions,
-  TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string =
-    ChainTypesReaching<TJobTypeDefinitions, TJobTypeName>,
+  TChainTypeName extends string = ChainTypesReaching<TJobTypeDefinitions, TJobTypeName>,
 > = Job<TJobId, TJobTypeName, TChainTypeName, ExtractInputType<TJobTypeDefinitions[TJobTypeName]>>;
 
 export type ResolvedJobWithBlockers<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions,
-  TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string =
-    ChainTypesReaching<TJobTypeDefinitions, TJobTypeName>,
+  TChainTypeName extends string = ChainTypesReaching<TJobTypeDefinitions, TJobTypeName>,
 > = JobWithBlockers<
   ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName, TChainTypeName>,
   CompletedBlockerChains<TJobId, TJobTypeDefinitions, TJobTypeName & string>
@@ -114,8 +112,7 @@ export type ContinuationJobs<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends keyof TJobTypeDefinitions & string,
-  TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string =
-    ChainTypesReaching<TJobTypeDefinitions, TJobTypeName>,
+  TChainTypeName extends string = ChainTypesReaching<TJobTypeDefinitions, TJobTypeName>,
 > = {
   [K in ContinuationJobTypes<TJobTypeDefinitions, TJobTypeName>]: CreatedJob<
     ResolvedJob<TJobId, TJobTypeDefinitions, K, TChainTypeName>
