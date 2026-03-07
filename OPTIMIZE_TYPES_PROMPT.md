@@ -51,6 +51,7 @@ Add a unique symbol that carries `TJobTypeDefinitions` without structural matchi
 The constraint `TJobTypeProcessors extends InProcessWorkerProcessors<TStateAdapter, TJobTypeDefinitions>` forces TS to evaluate the full mapped type. Since merged processors come from `mergeJobTypeProcessors` (which returns `{ [K in MergedKeys]: InProcessWorkerProcessor<any, any, K> }`), the definitions are already `any`.
 
 Change the constraint so it doesn't expand navigation types for each key. Options:
+
 - Use `any` in the definitions position of the constraint: `InProcessWorkerProcessors<TStateAdapter, TJobTypeDefinitions>` → a version that doesn't flow `TJobTypeDefinitions` into `AttemptHandler`'s navigation types
 - Or restructure `InProcessWorkerProcessors` to separate key-checking from deep type validation
 - The excess-property check (`Record<Exclude<keyof TJobTypeProcessors & string, keyof TJobTypeDefinitions & string>, never>`) should stay — it's cheap and catches typos
@@ -62,6 +63,7 @@ The important invariant: **inline (non-merge) usage must still get full type inf
 `JobAttemptMiddleware<TStateAdapter, TJobTypeDefinitions>` distributes `ResolvedJobWithBlockers` over all types. But middlewares are generic wrappers — they don't discriminate by job type.
 
 Change the middleware's `job` parameter to use a non-distributive base type:
+
 - Instead of `ResolvedJobWithBlockers<JobId, TDefs, keyof TDefs & string, keyof EntryDefs & string>`
 - Use something like `RunningJob<JobWithBlockers<Job<JobId, string, string, unknown>, CompletedJobChain<JobChain<JobId, string, unknown, unknown>>[]>>`
 - Or introduce a `BaseResolvedJobWithBlockers<TJobId>` that doesn't distribute
