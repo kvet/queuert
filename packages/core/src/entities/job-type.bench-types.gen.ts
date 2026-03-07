@@ -2314,7 +2314,7 @@ const slice99 = defineJobTypes<{
   "s99-t19": { input: { s: 99; t: 19 }; output: { s: 99; done: true } };
 }>();
 
-const group0 = mergeJobTypeRegistries(
+const merge_L0_0 = mergeJobTypeRegistries(
   slice0,
   slice1,
   slice2,
@@ -2325,8 +2325,6 @@ const group0 = mergeJobTypeRegistries(
   slice7,
   slice8,
   slice9,
-);
-const group1 = mergeJobTypeRegistries(
   slice10,
   slice11,
   slice12,
@@ -2337,8 +2335,6 @@ const group1 = mergeJobTypeRegistries(
   slice17,
   slice18,
   slice19,
-);
-const group2 = mergeJobTypeRegistries(
   slice20,
   slice21,
   slice22,
@@ -2349,8 +2345,6 @@ const group2 = mergeJobTypeRegistries(
   slice27,
   slice28,
   slice29,
-);
-const group3 = mergeJobTypeRegistries(
   slice30,
   slice31,
   slice32,
@@ -2362,7 +2356,7 @@ const group3 = mergeJobTypeRegistries(
   slice38,
   slice39,
 );
-const group4 = mergeJobTypeRegistries(
+const merge_L0_1 = mergeJobTypeRegistries(
   slice40,
   slice41,
   slice42,
@@ -2373,8 +2367,6 @@ const group4 = mergeJobTypeRegistries(
   slice47,
   slice48,
   slice49,
-);
-const group5 = mergeJobTypeRegistries(
   slice50,
   slice51,
   slice52,
@@ -2385,8 +2377,6 @@ const group5 = mergeJobTypeRegistries(
   slice57,
   slice58,
   slice59,
-);
-const group6 = mergeJobTypeRegistries(
   slice60,
   slice61,
   slice62,
@@ -2397,8 +2387,6 @@ const group6 = mergeJobTypeRegistries(
   slice67,
   slice68,
   slice69,
-);
-const group7 = mergeJobTypeRegistries(
   slice70,
   slice71,
   slice72,
@@ -2410,7 +2398,7 @@ const group7 = mergeJobTypeRegistries(
   slice78,
   slice79,
 );
-const group8 = mergeJobTypeRegistries(
+const merge_L0_2 = mergeJobTypeRegistries(
   slice80,
   slice81,
   slice82,
@@ -2421,8 +2409,6 @@ const group8 = mergeJobTypeRegistries(
   slice87,
   slice88,
   slice89,
-);
-const group9 = mergeJobTypeRegistries(
   slice90,
   slice91,
   slice92,
@@ -2435,18 +2421,9 @@ const group9 = mergeJobTypeRegistries(
   slice99,
 );
 
-const merged = mergeJobTypeRegistries(
-  group0,
-  group1,
-  group2,
-  group3,
-  group4,
-  group5,
-  group6,
-  group7,
-  group8,
-  group9,
-);
+const merge_L1_0 = mergeJobTypeRegistries(merge_L0_0, merge_L0_1, merge_L0_2);
+
+const merged = merge_L1_0;
 type MergedDefs = JobTypeRegistryDefinitions<typeof merged>;
 
 // Exercise ChainTypesReaching (triggers ChainReachMap) on a sample of types

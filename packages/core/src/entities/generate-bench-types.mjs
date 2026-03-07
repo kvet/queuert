@@ -65,31 +65,33 @@ for (let s = 0; s < SLICES; s++) {
   lines.push(``);
 }
 
-// Merge in groups of 10, then merge the groups.
+// Recursively merge in groups of up to 40 (ValidatedRegistries hits depth limit ~46).
 // TagSlice uses Omit to strip prior __slice, so nested merges re-tag correctly.
-const GROUP_SIZE = 10;
-const groups = [];
-for (let i = 0; i < SLICES; i += GROUP_SIZE) {
-  const end = Math.min(i + GROUP_SIZE, SLICES);
-  const groupSlices = [];
-  for (let j = i; j < end; j++) {
-    groupSlices.push(`slice${j}`);
-  }
-  const groupName = `group${Math.floor(i / GROUP_SIZE)}`;
-  if (groupSlices.length === 1) {
-    lines.push(`const ${groupName} = ${groupSlices[0]};`);
-  } else {
-    lines.push(`const ${groupName} = mergeJobTypeRegistries(${groupSlices.join(", ")});`);
-  }
-  groups.push(groupName);
+const MAX_GROUP = 40;
+let level = 0;
+let currentVars = [];
+for (let i = 0; i < SLICES; i++) {
+  currentVars.push(`slice${i}`);
 }
-lines.push(``);
 
-if (groups.length === 1) {
-  lines.push(`const merged = ${groups[0]};`);
-} else {
-  lines.push(`const merged = mergeJobTypeRegistries(${groups.join(", ")});`);
+while (currentVars.length > 1) {
+  const nextVars = [];
+  for (let i = 0; i < currentVars.length; i += MAX_GROUP) {
+    const chunk = currentVars.slice(i, i + MAX_GROUP);
+    const varName = `merge_L${level}_${Math.floor(i / MAX_GROUP)}`;
+    if (chunk.length === 1) {
+      lines.push(`const ${varName} = ${chunk[0]};`);
+    } else {
+      lines.push(`const ${varName} = mergeJobTypeRegistries(${chunk.join(", ")});`);
+    }
+    nextVars.push(varName);
+  }
+  lines.push(``);
+  currentVars = nextVars;
+  level++;
 }
+const mergedVar = currentVars[0];
+lines.push(`const merged = ${mergedVar};`);
 
 lines.push(`type MergedDefs = JobTypeRegistryDefinitions<typeof merged>;`);
 lines.push(``);
