@@ -1,0 +1,19 @@
+{
+  "name": "example-benchmark-type-complexity",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node --import=tsx src/index.ts tsgo",
+    "typecheck": "tsgo --noEmit"
+  },
+  "dependencies": {
+    "queuert": "workspace:*"
+  },
+  "devDependencies": {
+    "@queuert/tsconfig": "workspace:*",
+    "@types/node": "^22.19.11",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

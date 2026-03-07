@@ -92,6 +92,7 @@ Input/output validation with different schema libraries.
 
 ## Benchmarks
 
-| Example                    | What it measures        | Source                                                                                               |
-| -------------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------- |
-| benchmark-memory-footprint | Memory usage under load | [source](https://github.com/kvet/queuert/blob/main/examples/benchmark-memory-footprint/src/index.ts) |
+| Example                    | What it measures                   | Source                                                                                               |
+| -------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| benchmark-memory-footprint | Memory usage under load            | [source](https://github.com/kvet/queuert/blob/main/examples/benchmark-memory-footprint/src/index.ts) |
+| benchmark-type-complexity  | Type-checking cost across patterns | [source](https://github.com/kvet/queuert/blob/main/examples/benchmark-type-complexity/src/index.ts)  |

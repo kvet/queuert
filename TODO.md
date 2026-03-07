@@ -1,5 +1,13 @@
 # Short term
 
+- [TASK,COMPLEX] Fix many-slice type complexity for `createInProcessWorker`
+  - **Problem**: `Client<MergedDefs>` type expansion is the bottleneck — its methods (`startJobChain`, `completeJobChain`, `getJob`, `awaitJobChain`, etc.) distribute `ResolvedJobChain`/`ResolvedJob` over all entry/job type unions, causing 2M+ instantiations at 50+ slices of 10-step chains
+  - **Root cause**: Both tsc and tsgo evaluate ALL overloads during resolution, not just the first match. Having a cheap branded overload (`client: object`) and a typed fallback (`Client<TJobTypeDefinitions, TStateAdapter>`) doesn't help — the typed overload still triggers the full expansion
+  - **Proven fix**: Using `client: object` with NO typed overload reduces many-50x10 from 2.2M to 469k instantiations and many-100x10 from 5.8M to 883k. But this loses type inference for inline processors (non-merge usage)
+  - **Approach**: Add a lightweight phantom brand to `Client` (e.g., `[clientDefinitionsSymbol]: TJobTypeDefinitions`) that carries the definitions type without expanding the full Client interface. The `createInProcessWorker` overload can then `infer` definitions from this brand instead of matching against the full `Client<TJobTypeDefinitions, TStateAdapter>` type. This avoids the expensive method-level distribution while preserving type safety for both inline and merged processor usage
+  - See `examples/benchmark-type-complexity/RESULTS.md` for current benchmark data
+- [REF] Processing capacity benchmark? Like running 100_000 jobs?
+- [TASK] Move benchmarks to a dedicated folder and dont run the with examples as they are expensive to run
 - [REF] Plugins
   - Attempt middleware plugin
   - Client amend
