@@ -67,6 +67,14 @@ export type InProcessWorkerProcessors<
   >;
 };
 
+declare const validatedProcessorsBrand: unique symbol;
+
+/** Processors that have been validated by {@link defineJobTypeProcessors} or {@link mergeJobTypeProcessors}. */
+export type ValidatedProcessors<TKeys extends string = string> = Record<
+  TKeys,
+  InProcessWorkerProcessor<any, any, any>
+> & { readonly [validatedProcessorsBrand]: true };
+
 /**
  * Define processors for a job type slice with full type inference, returning a
  * widened type that is assignable to any `InProcessWorkerProcessors` whose
@@ -92,8 +100,8 @@ export const defineJobTypeProcessors = <
       K
     >;
   } & Record<Exclude<TKeys, keyof TJobTypeDefinitions & string>, never>,
-): { [K in TKeys]: InProcessWorkerProcessor<StateAdapter<any, any>, any, K> } => {
-  return processors as { [K in TKeys]: InProcessWorkerProcessor<StateAdapter<any, any>, any, K> };
+): ValidatedProcessors<TKeys> => {
+  return processors as ValidatedProcessors<TKeys>;
 };
 
 const waitForNextJob = async ({
@@ -219,18 +227,33 @@ const performJob = async ({
 /**
  * Create an in-process worker for processing jobs.
  *
- * @param options.client - The Queuert client to process jobs for.
- * @param options.workerId - Unique worker identifier. Defaults to a random UUID.
- * @param options.concurrency - Maximum number of jobs to process in parallel. Defaults to 1.
- * @param options.backoffConfig - Backoff configuration for the worker loop itself (not job retries).
- * @param options.processDefaults - Default configuration applied to all job types unless overridden per-processor.
- * @param options.processors - Map of job type names to their processor configurations.
+ * Processors must be created via {@link defineJobTypeProcessors} or
+ * merged with {@link mergeJobTypeProcessors}.
  */
-export const createInProcessWorker = async <
-  TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TStateAdapter extends StateAdapter<any, any>,
-  const TJobTypeProcessors extends InProcessWorkerProcessors<TStateAdapter, TJobTypeDefinitions>,
->({
+export const createInProcessWorker: {
+  (options: {
+    client: object;
+    workerId?: string;
+    concurrency?: number;
+    backoffConfig?: BackoffConfig;
+    processDefaults?: InProcessWorkerProcessDefaults<any, any>;
+    processors: ValidatedProcessors;
+  }): Promise<{ start: () => Promise<() => Promise<void>> }>;
+
+  <
+    TJobTypeDefinitions extends BaseJobTypeDefinitions,
+    TStateAdapter extends StateAdapter<any, any>,
+    const TJobTypeProcessors extends InProcessWorkerProcessors<TStateAdapter, TJobTypeDefinitions>,
+  >(options: {
+    client: Client<TJobTypeDefinitions, TStateAdapter>;
+    workerId?: string;
+    concurrency?: number;
+    backoffConfig?: BackoffConfig;
+    processDefaults?: InProcessWorkerProcessDefaults<TStateAdapter, TJobTypeDefinitions>;
+    processors: TJobTypeProcessors &
+      Record<Exclude<keyof TJobTypeProcessors & string, keyof TJobTypeDefinitions & string>, never>;
+  }): Promise<{ start: () => Promise<() => Promise<void>> }>;
+} = async ({
   client,
   workerId = randomUUID(),
   concurrency,
@@ -238,13 +261,12 @@ export const createInProcessWorker = async <
   processDefaults,
   processors,
 }: {
-  client: Client<TJobTypeDefinitions, TStateAdapter>;
+  client: object;
   workerId?: string;
   concurrency?: number;
   backoffConfig?: BackoffConfig;
-  processDefaults?: InProcessWorkerProcessDefaults<TStateAdapter, TJobTypeDefinitions>;
-  processors: TJobTypeProcessors &
-    Record<Exclude<keyof TJobTypeProcessors & string, keyof TJobTypeDefinitions & string>, never>;
+  processDefaults?: InProcessWorkerProcessDefaults<any, any>;
+  processors: InProcessWorkerProcessors<any, any>;
 }) => {
   const typeNames = Array.from(Object.keys(processors));
 

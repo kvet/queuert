@@ -65,7 +65,7 @@ const wrapInScenario = (defs: JobTypeDef[]): string => {
   const typeStrings = defs.map(defToTypeString);
   const processors = generateProcessors(defs);
 
-  return `import { defineJobTypes, createInProcessWorker, createClient } from "queuert";
+  return `import { defineJobTypes, defineJobTypeProcessors, createInProcessWorker, createClient } from "queuert";
 import { createInProcessStateAdapter, createInProcessNotifyAdapter } from "queuert/internal";
 
 type Defs = {
@@ -73,6 +73,7 @@ ${typeStrings.join("\n")}
 };
 
 const jobTypes = defineJobTypes<Defs>();
+const processors = defineJobTypeProcessors(jobTypes, ${processors});
 
 const stateAdapter = await createInProcessStateAdapter();
 const notifyAdapter = createInProcessNotifyAdapter();
@@ -85,7 +86,7 @@ const client = await createClient({
 
 const _worker = await createInProcessWorker({
   client,
-  processors: ${processors},
+  processors,
 });
 `;
 };
@@ -101,16 +102,13 @@ ${typeStrings.join("\n")}
 
 const ${slice.name}Registry = defineJobTypes<${slice.name}Defs>();
 
-const ${slice.name}Processors = ${processors} satisfies InProcessWorkerProcessors<
-  Awaited<ReturnType<typeof createInProcessStateAdapter>>,
-  ${slice.name}Defs
->;`;
+const ${slice.name}Processors = defineJobTypeProcessors(${slice.name}Registry, ${processors});`;
   });
 
   const registryNames = slices.map((s) => `${s.name}Registry`);
   const processorNames = slices.map((s) => `${s.name}Processors`);
 
-  return `import { defineJobTypes, createInProcessWorker, createClient, mergeJobTypeRegistries, type InProcessWorkerProcessors, mergeJobTypeProcessors } from "queuert";
+  return `import { defineJobTypes, defineJobTypeProcessors, createInProcessWorker, createClient, mergeJobTypeRegistries, mergeJobTypeProcessors } from "queuert";
 import { createInProcessStateAdapter, createInProcessNotifyAdapter } from "queuert/internal";
 ${sliceDecls.join("\n")}
 

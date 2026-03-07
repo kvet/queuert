@@ -1,5 +1,5 @@
 import { DuplicateJobTypeError } from "../errors.js";
-import { type InProcessWorkerProcessor } from "../in-process-worker.js";
+import { type ValidatedProcessors } from "../in-process-worker.js";
 
 /** Identity when no duplicate keys; error string when duplicates exist. */
 type AssertNoDuplicateKeys<AccKeys extends string, NewKeys extends string, Success> = [
@@ -48,7 +48,7 @@ export const mergeJobTypeProcessors = <
   const TSlices extends readonly [object, object, ...object[]],
 >(
   ...slices: ValidatedSlices<TSlices> & TSlices
-): { [K in MergedKeys<TSlices>]: InProcessWorkerProcessor<any, any, K> } => {
+): ValidatedProcessors<MergedKeys<TSlices>> => {
   const seen = new Set<string>();
   const duplicates: string[] = [];
   for (const slice of slices as unknown as object[]) {
@@ -64,7 +64,7 @@ export const mergeJobTypeProcessors = <
       duplicateTypeNames: duplicates,
     });
   }
-  return Object.assign({}, ...(slices as unknown as object[])) as {
-    [K in MergedKeys<TSlices>]: InProcessWorkerProcessor<any, any, K>;
-  };
+  return Object.assign({}, ...(slices as unknown as object[])) as ValidatedProcessors<
+    MergedKeys<TSlices>
+  >;
 };

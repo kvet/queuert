@@ -69,6 +69,7 @@ export {
   type InProcessWorkerProcessDefaults,
   type InProcessWorkerProcessor,
   type InProcessWorkerProcessors,
+  type ValidatedProcessors,
 } from "./in-process-worker.js";
 export { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 export { createConsoleLog } from "./observability-adapter/log.console.js";
