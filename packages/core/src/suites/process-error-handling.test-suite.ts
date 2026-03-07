@@ -3,6 +3,7 @@ import { sleep } from "../helpers/sleep.js";
 import {
   createClient,
   createInProcessWorker,
+  defineJobTypeProcessors,
   defineJobTypes,
   withTransactionHooks,
 } from "../index.js";
@@ -51,7 +52,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processors: {
+      processors: defineJobTypeProcessors(registry, {
         test: {
           backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
           attemptHandler: async ({ job, prepare, complete }) => {
@@ -66,7 +67,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
             return complete(async () => ({ result: job.input.value * 2 }));
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -138,7 +139,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processors: {
+      processors: defineJobTypeProcessors(registry, {
         test: {
           backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
           attemptHandler: async ({ job, prepare, complete }) => {
@@ -153,7 +154,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
             return complete(async () => ({ result: job.input.value * 2 }));
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -225,7 +226,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processors: {
+      processors: defineJobTypeProcessors(registry, {
         test: {
           backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
           attemptHandler: async ({ job, prepare, complete }) => {
@@ -239,7 +240,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
             return complete(async () => ({ result: job.input.value * 2 }));
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -311,7 +312,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processors: {
+      processors: defineJobTypeProcessors(registry, {
         test: {
           backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
           attemptHandler: async ({ job, prepare, complete }) => {
@@ -326,7 +327,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
             return complete(async () => ({ result: job.input.value * 2 }));
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -405,7 +406,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processors: {
+      processors: defineJobTypeProcessors(registry, {
         test: {
           backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
           attemptHandler: async ({ job, prepare, complete }) => {
@@ -421,7 +422,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
             });
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -493,7 +494,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processors: {
+      processors: defineJobTypeProcessors(registry, {
         test: {
           backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
           attemptHandler: async ({ job, prepare, complete }) => {
@@ -510,7 +511,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
             });
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -590,7 +591,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processors: {
+      processors: defineJobTypeProcessors(registry, {
         test: {
           backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
           attemptHandler: async ({ job, prepare, complete }) => {
@@ -606,7 +607,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
             return result;
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -685,7 +686,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processors: {
+      processors: defineJobTypeProcessors(registry, {
         test: {
           backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
           attemptHandler: async ({ job, prepare, complete }) => {
@@ -702,7 +703,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
             return result;
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>

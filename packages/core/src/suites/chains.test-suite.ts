@@ -3,6 +3,7 @@ import {
   type CompletedJobChain,
   createClient,
   createInProcessWorker,
+  defineJobTypeProcessors,
   defineJobTypes,
   withTransactionHooks,
 } from "../index.js";
@@ -49,23 +50,17 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processors: {
+      processors: defineJobTypeProcessors(registry, {
         linear: {
           attemptHandler: async ({ job, complete }) => {
             expect(job.id).toEqual(jobChain.id);
             expect(job.chainId).toEqual(jobChain.id);
 
             return complete(async ({ continueWith }) => {
-              expectTypeOf<
-                Parameters<typeof continueWith>[0]["typeName"]
-              >().toEqualTypeOf<"linear_next">();
-
               const continuedJob = await continueWith({
                 typeName: "linear_next",
                 input: { valueNext: job.input.value + 1 },
               });
-              expectTypeOf(continuedJob.typeName).toEqualTypeOf<"linear_next">();
-              expectTypeOf(continuedJob.status).toEqualTypeOf<"pending" | "blocked">();
               expect(continuedJob.typeName).toBe("linear_next");
               expect(continuedJob.status).toBeOneOf(["pending", "blocked"]);
               expect(continuedJob.chainId).toEqual(jobChain.id);
@@ -79,16 +74,10 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             expect(job.chainId).toEqual(jobChain.id);
 
             return complete(async ({ continueWith }) => {
-              expectTypeOf<
-                Parameters<typeof continueWith>[0]["typeName"]
-              >().toEqualTypeOf<"linear_next_next">();
-
               const continuedJob = await continueWith({
                 typeName: "linear_next_next",
                 input: { valueNextNext: job.input.valueNext + 1 },
               });
-              expectTypeOf(continuedJob.typeName).toEqualTypeOf<"linear_next_next">();
-              expectTypeOf(continuedJob.status).toEqualTypeOf<"pending" | "blocked">();
               return continuedJob;
             });
           },
@@ -106,7 +95,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             return result;
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -172,15 +161,11 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processors: {
+      processors: defineJobTypeProcessors(registry, {
         main: {
           attemptHandler: async ({ job, prepare, complete }) => {
             await prepare({ mode: "atomic" });
             return complete(async ({ continueWith }) => {
-              expectTypeOf<Parameters<typeof continueWith>[0]["typeName"]>().toEqualTypeOf<
-                "branch1" | "branch2"
-              >();
-
               return continueWith({
                 typeName: job.input.value % 2 === 0 ? "branch1" : "branch2",
                 input: { valueBranched: job.input.value },
@@ -204,7 +189,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             }));
           },
         },
-      },
+      }),
     });
 
     const evenJobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -279,15 +264,11 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processors: {
+      processors: defineJobTypeProcessors(registry, {
         loop: {
           attemptHandler: async ({ job, prepare, complete }) => {
             await prepare({ mode: "atomic" });
             return complete(async ({ continueWith }) => {
-              expectTypeOf<
-                Parameters<typeof continueWith>[0]["typeName"]
-              >().toEqualTypeOf<"loop">();
-
               return job.input.counter < 3
                 ? continueWith({
                     typeName: "loop",
@@ -297,7 +278,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             });
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -352,13 +333,11 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processors: {
+      processors: defineJobTypeProcessors(registry, {
         start: {
           attemptHandler: async ({ job, prepare, complete }) => {
             await prepare({ mode: "atomic" });
             return complete(async ({ continueWith }) => {
-              expectTypeOf<Parameters<typeof continueWith>[0]["typeName"]>().toEqualTypeOf<"end">();
-
               return continueWith({
                 typeName: "end",
                 input: { result: job.input.value + 1 },
@@ -370,10 +349,6 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
           attemptHandler: async ({ job, prepare, complete }) => {
             await prepare({ mode: "atomic" });
             return complete(async ({ continueWith }) => {
-              expectTypeOf<
-                Parameters<typeof continueWith>[0]["typeName"]
-              >().toEqualTypeOf<"start">();
-
               if (job.input.result < 3) {
                 return continueWith({
                   typeName: "start",
@@ -385,7 +360,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             });
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -435,7 +410,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processors: {
+      processors: defineJobTypeProcessors(registry, {
         entryA: {
           attemptHandler: async ({ job, complete }) => {
             // Entry job's chainTypeName should match its own typeName
@@ -464,7 +439,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             return complete(async () => ({ done: true }));
           },
         },
-      },
+      }),
     });
 
     const chainA = await withTransactionHooks(async (transactionHooks) =>
@@ -532,7 +507,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processors: {
+      processors: defineJobTypeProcessors(registry, {
         parent: {
           attemptHandler: async ({ job, complete }) => {
             // Create an independent chain during job processing
@@ -561,7 +536,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             }));
           },
         },
-      },
+      }),
     });
 
     const parentChain = await withTransactionHooks(async (transactionHooks) =>

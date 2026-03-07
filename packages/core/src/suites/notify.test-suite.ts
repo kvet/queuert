@@ -3,6 +3,7 @@ import { sleep } from "../helpers/sleep.js";
 import {
   createClient,
   createInProcessWorker,
+  defineJobTypeProcessors,
   defineJobTypes,
   withTransactionHooks,
 } from "../index.js";
@@ -36,14 +37,14 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processors: {
+      processors: defineJobTypeProcessors(registry, {
         test: {
           attemptHandler: async ({ job, complete }) => {
             await sleep(50);
             return complete(async () => ({ result: job.input.value }));
           },
         },
-      },
+      }),
     });
 
     await withWorkers([await worker.start()], async () => {
@@ -95,14 +96,14 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       createInProcessWorker({
         client,
         concurrency: 1,
-        processors: {
+        processors: defineJobTypeProcessors(registry, {
           test: {
             attemptHandler: async ({ job, complete }) => {
               await sleep(50);
               return complete(async () => ({ result: job.input.value }));
             },
           },
-        },
+        }),
       });
 
     await withWorkers(
@@ -167,26 +168,26 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const worker1 = await createInProcessWorker({
       client,
       concurrency: 1,
-      processors: {
+      processors: defineJobTypeProcessors(registry, {
         blocker: {
           attemptHandler: async ({ complete }) => {
             await sleep(25);
             return complete(async () => ({ allowed: true }));
           },
         },
-      },
+      }),
     });
     const worker2 = await createInProcessWorker({
       client,
       concurrency: 1,
-      processors: {
+      processors: defineJobTypeProcessors(registry, {
         main: {
           attemptHandler: async ({ complete }) => {
             await sleep(25);
             return complete(async () => ({ done: true }));
           },
         },
-      },
+      }),
     });
 
     await withWorkers([await worker1.start(), await worker2.start()], async () => {
@@ -250,7 +251,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const worker1 = await createInProcessWorker({
       client,
       concurrency: 1,
-      processors: {
+      processors: defineJobTypeProcessors(registry, {
         step1: {
           attemptHandler: async ({ complete }) => {
             await sleep(25);
@@ -262,19 +263,19 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             );
           },
         },
-      },
+      }),
     });
     const worker2 = await createInProcessWorker({
       client,
       concurrency: 1,
-      processors: {
+      processors: defineJobTypeProcessors(registry, {
         step2: {
           attemptHandler: async ({ complete }) => {
             await sleep(25);
             return complete(async () => ({ finished: true }));
           },
         },
-      },
+      }),
     });
 
     await withWorkers([await worker1.start(), await worker2.start()], async () => {
@@ -332,7 +333,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       client,
       workerId: "worker",
       concurrency: 1,
-      processors: {
+      processors: defineJobTypeProcessors(registry, {
         test: {
           attemptHandler: async ({ signal, prepare }) => {
             await prepare({ mode: "staged" });
@@ -346,7 +347,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             throw new Error();
           },
         },
-      },
+      }),
     });
 
     await withWorkers([await worker.start()], async () => {
@@ -413,7 +414,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       createInProcessWorker({
         client,
         concurrency: 1,
-        processors: {
+        processors: defineJobTypeProcessors(registry, {
           test: {
             attemptHandler: async ({ signal, job, prepare, complete }) => {
               await prepare({ mode: "staged" });
@@ -436,7 +437,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             },
             leaseConfig: { leaseMs: 10, renewIntervalMs: 1000 },
           },
-        },
+        }),
       });
 
     await withWorkers([await (await createWorker()).start()], async () => {

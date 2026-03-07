@@ -5,6 +5,7 @@ import {
   createClient,
   createInProcessWorker,
   createJobTypeRegistry,
+  defineJobTypeProcessors,
   withTransactionHooks,
 } from "../index.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
@@ -276,11 +277,11 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processors: {
+      processors: defineJobTypeProcessors(simpleRegistry, {
         main: {
           attemptHandler: async ({ complete }) => complete(async () => ({ result: 84 })),
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -321,7 +322,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processors: {
+      processors: defineJobTypeProcessors(simpleRegistry, {
         main: {
           attemptHandler: async ({ complete }) => {
             try {
@@ -333,7 +334,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
             }
           },
         },
-      },
+      }),
     });
 
     await withTransactionHooks(async (transactionHooks) =>
@@ -372,7 +373,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processors: {
+      processors: defineJobTypeProcessors(continuationRegistry, {
         step1: {
           attemptHandler: async ({ complete }) =>
             complete(async ({ continueWith }) =>
@@ -382,7 +383,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         step2: {
           attemptHandler: async ({ complete }) => complete(async () => ({ result: 42 })),
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -423,7 +424,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processors: {
+      processors: defineJobTypeProcessors(continuationNoFollowUpRegistry, {
         step1: {
           attemptHandler: async ({ complete }) => {
             try {
@@ -439,7 +440,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         step2: {
           attemptHandler: async ({ complete }) => complete(async () => ({ result: 1 })),
         },
-      },
+      }),
     });
 
     await withTransactionHooks(async (transactionHooks) =>
@@ -565,11 +566,11 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processors: {
+      processors: defineJobTypeProcessors(continuationRegistry, {
         step2: {
           attemptHandler: async ({ complete }) => complete(async () => ({ result: 42 })),
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>

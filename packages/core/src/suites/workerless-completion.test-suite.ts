@@ -4,6 +4,7 @@ import {
   JobTypeMismatchError,
   createClient,
   createInProcessWorker,
+  defineJobTypeProcessors,
   defineJobTypes,
   withTransactionHooks,
 } from "../index.js";
@@ -171,14 +172,14 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processors: {
+      processors: defineJobTypeProcessors(registry, {
         "process-approved": {
           attemptHandler: async ({ prepare, complete }) => {
             await prepare({ mode: "atomic" });
             return complete(async () => ({ done: true }));
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -381,7 +382,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       client,
       workerId: "worker",
       concurrency: 1,
-      processors: {
+      processors: defineJobTypeProcessors(registry, {
         test: {
           attemptHandler: async ({ signal, complete }) => {
             jobStarted.resolve();
@@ -400,7 +401,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
             }
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>

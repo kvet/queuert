@@ -3,6 +3,7 @@ import { sleep } from "../helpers/sleep.js";
 import {
   createClient,
   createInProcessWorker,
+  defineJobTypeProcessors,
   defineJobTypes,
   withTransactionHooks,
 } from "../index.js";
@@ -51,7 +52,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processors: {
+      processors: defineJobTypeProcessors(registry, {
         "atomic-complete": {
           attemptHandler: async ({ job, complete }) => {
             return complete(async ({ continueWith: _, ...txCtx }) => {
@@ -60,7 +61,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
             });
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -136,7 +137,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processors: {
+      processors: defineJobTypeProcessors(registry, {
         "staged-complete": {
           attemptHandler: async ({ job, complete }) => {
             await sleep(1);
@@ -146,7 +147,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
             });
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -229,7 +230,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processors: {
+      processors: defineJobTypeProcessors(registry, {
         "staged-with-callback": {
           attemptHandler: async ({ job, prepare, complete }) => {
             const multiplier = await prepare({ mode: "staged" }, async (txCtx) => {
@@ -242,7 +243,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
             });
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -326,7 +327,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processors: {
+      processors: defineJobTypeProcessors(registry, {
         "staged-without-callback": {
           attemptHandler: async ({ job, prepare, complete }) => {
             await prepare({ mode: "staged" });
@@ -336,7 +337,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
             });
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -419,7 +420,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processors: {
+      processors: defineJobTypeProcessors(registry, {
         "atomic-with-callback": {
           attemptHandler: async ({ job, prepare, complete }) => {
             const multiplier = await prepare({ mode: "atomic" }, async (txCtx) => {
@@ -432,7 +433,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
             });
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -509,7 +510,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processors: {
+      processors: defineJobTypeProcessors(registry, {
         "atomic-without-callback": {
           attemptHandler: async ({ job, prepare, complete }) => {
             await prepare({ mode: "atomic" });
@@ -519,7 +520,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
             });
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>

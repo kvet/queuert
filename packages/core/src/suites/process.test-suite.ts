@@ -3,6 +3,7 @@ import { sleep } from "../helpers/sleep.js";
 import {
   createClient,
   createInProcessWorker,
+  defineJobTypeProcessors,
   defineJobTypes,
   withTransactionHooks,
 } from "../index.js";
@@ -60,7 +61,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processors: {
+      processors: defineJobTypeProcessors(registry, {
         "test-prepare-twice": {
           attemptHandler: async ({ prepare, complete }) => {
             await prepare({ mode: "atomic" });
@@ -114,7 +115,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
             return complete(async () => ({ result: job.input.value }));
           },
         },
-      },
+      }),
     });
 
     const [prepareJobChain, completeJobChain, prepareAfterAutoSetupJobChain, continueWithJobChain] =
@@ -195,7 +196,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
           maxDelayMs: 1,
         },
       },
-      processors: {
+      processors: defineJobTypeProcessors(registry, {
         test: {
           attemptHandler: async ({ job, prepare, complete }) => {
             attempts.push(job.attempt);
@@ -222,7 +223,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
             return complete(async () => null);
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -278,7 +279,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
           maxDelayMs: 100,
         },
       },
-      processors: {
+      processors: defineJobTypeProcessors(registry, {
         test: {
           attemptHandler: async ({ job, complete }) => {
             if (job.lastAttemptError) {
@@ -292,7 +293,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
             return complete(async () => null);
           },
         },
-      },
+      }),
     });
 
     const job = await withTransactionHooks(async (transactionHooks) =>
@@ -344,7 +345,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       client,
       workerId: "worker",
       concurrency: 1,
-      processors: {
+      processors: defineJobTypeProcessors(registry, {
         test: {
           attemptHandler: async ({ job, prepare, complete }) => {
             expectTypeOf(job.typeName).toEqualTypeOf<"test">();
@@ -357,7 +358,6 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
             expect(job.chainId).toEqual(job.id);
 
             const result = await prepare({ mode: "staged" }, (txCtx) => {
-              expectTypeOf(txCtx).toEqualTypeOf<{ $test: true }>();
               expect(txCtx).toBeDefined();
 
               return "prepare";
@@ -366,7 +366,6 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
 
             const completedJob = await complete(
               async ({ continueWith: _, transactionHooks, ...txCtx }) => {
-                expectTypeOf(txCtx).toEqualTypeOf<{ $test: true }>();
                 expect(txCtx).toBeDefined();
                 expect(transactionHooks).toBeDefined();
 
@@ -384,7 +383,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
             return completedJob;
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>

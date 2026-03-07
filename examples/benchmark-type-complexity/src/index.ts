@@ -404,6 +404,17 @@ const scenarios: Scenario[] = [
         })),
       ),
   },
+  {
+    name: "many-20x20",
+    description: "Many: 20 x 20-step",
+    generate: () =>
+      wrapMergeScenario(
+        Array.from({ length: 20 }, (_, i) => ({
+          name: `s${i}`,
+          defs: prefixDefs(generateLinearChain(20), `s${i}`),
+        })),
+      ),
+  },
 ];
 
 type Diagnostics = {

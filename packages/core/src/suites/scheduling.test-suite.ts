@@ -2,6 +2,7 @@ import { type TestAPI } from "vitest";
 import {
   createClient,
   createInProcessWorker,
+  defineJobTypeProcessors,
   defineJobTypes,
   rescheduleJob,
   withTransactionHooks,
@@ -38,13 +39,13 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       workerId: "worker",
       concurrency: 1,
       processDefaults: { pollIntervalMs: 50 },
-      processors: {
+      processors: defineJobTypeProcessors(registry, {
         test: {
           attemptHandler: async ({ job, complete }) => {
             return complete(async () => ({ result: job.input.value * 2 }));
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -100,13 +101,13 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       workerId: "worker",
       concurrency: 1,
       processDefaults: { pollIntervalMs: 50 },
-      processors: {
+      processors: defineJobTypeProcessors(registry, {
         test: {
           attemptHandler: async ({ job, complete }) => {
             return complete(async () => ({ result: job.input.value * 2 }));
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -169,7 +170,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       workerId: "worker",
       concurrency: 1,
       processDefaults: { pollIntervalMs: 50 },
-      processors: {
+      processors: defineJobTypeProcessors(registry, {
         first: {
           attemptHandler: async ({ complete }) => {
             try {
@@ -190,7 +191,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
             return complete(async () => ({ result: "done" }));
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -254,7 +255,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       workerId: "worker",
       concurrency: 1,
       processDefaults: { pollIntervalMs: 50 },
-      processors: {
+      processors: defineJobTypeProcessors(registry, {
         first: {
           attemptHandler: async ({ complete }) => {
             try {
@@ -275,7 +276,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
             return complete(async () => ({ result: "done" }));
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -336,7 +337,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       workerId: "worker",
       concurrency: 1,
       processDefaults: { pollIntervalMs: 50 },
-      processors: {
+      processors: defineJobTypeProcessors(registry, {
         test: {
           attemptHandler: async ({ job, complete }) => {
             attemptCount++;
@@ -347,7 +348,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
             return complete(async () => ({ result: job.input.value * 2 }));
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -410,7 +411,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       workerId: "worker",
       concurrency: 1,
       processDefaults: { pollIntervalMs: 50 },
-      processors: {
+      processors: defineJobTypeProcessors(registry, {
         test: {
           attemptHandler: async ({ job, complete }) => {
             attemptCount++;
@@ -421,7 +422,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
             return complete(async () => ({ result: job.input.value * 2 }));
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>

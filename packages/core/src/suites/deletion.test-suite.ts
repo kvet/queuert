@@ -5,6 +5,7 @@ import {
   type JobChain,
   createClient,
   createInProcessWorker,
+  defineJobTypeProcessors,
   defineJobTypes,
   withTransactionHooks,
 } from "../index.js";
@@ -181,7 +182,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processors: {
+      processors: defineJobTypeProcessors(registry, {
         test: {
           attemptHandler: async ({ signal }) => {
             jobStarted.resolve();
@@ -195,7 +196,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
           },
           leaseConfig: { leaseMs: 1000, renewIntervalMs: 100 },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -797,7 +798,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processors: {
+      processors: defineJobTypeProcessors(registry, {
         test: {
           attemptHandler: async ({ complete }) => {
             jobStarted.resolve();
@@ -812,7 +813,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
           },
           leaseConfig: { leaseMs: 100, renewIntervalMs: 10 },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
