@@ -21,6 +21,7 @@ import {
   BlockerReferenceError,
   createClient,
   createInProcessWorker,
+  defineJobTypeProcessorRegistry,
   defineJobTypes,
   withTransactionHooks,
 } from "queuert";
@@ -103,7 +104,7 @@ const client = await createClient({
 
 const worker = await createInProcessWorker({
   client,
-  processors: {
+  processorRegistry: defineJobTypeProcessorRegistry(client, jobTypes, {
     "fetch-data": {
       attemptHandler: async ({ job, complete }) => {
         console.log(`[fetch-data] Fetching ${job.input.sourceId}`);
@@ -140,7 +141,7 @@ const worker = await createInProcessWorker({
         return complete(async () => ({ completedAt: new Date().toISOString() }));
       },
     },
-  },
+  }),
 });
 
 const stopWorker = await worker.start();

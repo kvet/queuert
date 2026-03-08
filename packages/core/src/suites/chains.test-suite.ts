@@ -3,6 +3,7 @@ import {
   type CompletedJobChain,
   createClient,
   createInProcessWorker,
+  defineJobTypeProcessorRegistry,
   defineJobTypes,
   withTransactionHooks,
 } from "../index.js";
@@ -49,7 +50,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processors: {
+      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
         linear: {
           attemptHandler: async ({ job, complete }) => {
             expect(job.id).toEqual(jobChain.id);
@@ -106,7 +107,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             return result;
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -172,7 +173,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processors: {
+      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
         main: {
           attemptHandler: async ({ job, prepare, complete }) => {
             await prepare({ mode: "atomic" });
@@ -204,7 +205,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             }));
           },
         },
-      },
+      }),
     });
 
     const evenJobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -279,7 +280,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processors: {
+      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
         loop: {
           attemptHandler: async ({ job, prepare, complete }) => {
             await prepare({ mode: "atomic" });
@@ -297,7 +298,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             });
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -352,7 +353,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processors: {
+      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
         start: {
           attemptHandler: async ({ job, prepare, complete }) => {
             await prepare({ mode: "atomic" });
@@ -385,7 +386,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             });
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -435,7 +436,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processors: {
+      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
         entryA: {
           attemptHandler: async ({ job, complete }) => {
             // Entry job's chainTypeName should match its own typeName
@@ -464,7 +465,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             return complete(async () => ({ done: true }));
           },
         },
-      },
+      }),
     });
 
     const chainA = await withTransactionHooks(async (transactionHooks) =>
@@ -532,7 +533,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processors: {
+      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
         parent: {
           attemptHandler: async ({ job, complete }) => {
             // Create an independent chain during job processing
@@ -561,7 +562,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             }));
           },
         },
-      },
+      }),
     });
 
     const parentChain = await withTransactionHooks(async (transactionHooks) =>

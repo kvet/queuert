@@ -4,6 +4,7 @@ import {
   type JobChain,
   createClient,
   createInProcessWorker,
+  defineJobTypeProcessorRegistry,
   defineJobTypes,
   withTransactionHooks,
 } from "../index.js";
@@ -41,13 +42,13 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processors: {
+      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ job, complete }) => {
             return complete(async () => ({ result: job.input.test }));
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -92,7 +93,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processors: {
+      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
         email: {
           attemptHandler: async ({ complete }) => {
             processedTypes.push("email");
@@ -105,7 +106,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             return complete(async () => ({ sent: true }));
           },
         },
-      },
+      }),
     });
 
     const emailJob = await withTransactionHooks(async (transactionHooks) =>
@@ -170,13 +171,13 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       processDefaults: {
         pollIntervalMs: 100,
       },
-      processors: {
+      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ job, complete }) => {
             return complete(async () => ({ result: job.input.test }));
           },
         },
-      },
+      }),
     });
 
     await withWorkers([await worker.start()], async () => {
@@ -224,7 +225,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processors: {
+      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ job, complete }) => {
             processedJobs.push(job.input.jobNumber);
@@ -233,7 +234,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             return complete(async () => ({ success: true }));
           },
         },
-      },
+      }),
     });
 
     const jobChains: JobChain<string, "test", { jobNumber: number }, { success: boolean }>[] = [];
@@ -312,14 +313,14 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
           },
         ],
       },
-      processors: {
+      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ complete }) => {
             order.push("process");
             return complete(async () => null);
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>

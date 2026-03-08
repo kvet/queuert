@@ -2,6 +2,7 @@ import {
   createClient,
   createConsoleLog,
   createInProcessWorker,
+  defineJobTypeProcessorRegistry,
   defineJobTypes,
   withTransactionHooks,
 } from "queuert";
@@ -37,7 +38,7 @@ const qrtClient = await createClient({
 const qrtWorker = await createInProcessWorker({
   client: qrtClient,
   workerId: "worker-1",
-  processors: {
+  processorRegistry: defineJobTypeProcessorRegistry(qrtClient, registry, {
     greet: {
       attemptHandler: async ({ job, complete }) => {
         console.log(`[app] Processing greeting for ${job.input.name}`);
@@ -59,7 +60,7 @@ const qrtWorker = await createInProcessWorker({
       },
       backoffConfig: { initialDelayMs: 100, maxDelayMs: 100 },
     },
-  },
+  }),
 });
 
 const stopWorker = await qrtWorker.start();

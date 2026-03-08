@@ -8,12 +8,16 @@
  * Then open http://localhost:3333 to view results in the dashboard.
  */
 
-import { createInProcessWorker, withTransactionHooks } from "queuert";
-import { client, db, stateAdapter } from "./client.js";
+import {
+  createInProcessWorker,
+  defineJobTypeProcessorRegistry,
+  withTransactionHooks,
+} from "queuert";
+import { client, db, registry, stateAdapter } from "./client.js";
 
 const worker = await createInProcessWorker({
   client,
-  processors: {
+  processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
     greet: {
       attemptHandler: async ({ job, complete }) => {
         await delay(20);
@@ -93,7 +97,7 @@ const worker = await createInProcessWorker({
       },
       backoffConfig: { initialDelayMs: 100, maxDelayMs: 100 },
     },
-  },
+  }),
 });
 
 const stopWorker = await worker.start();

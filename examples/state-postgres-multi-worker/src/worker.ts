@@ -4,7 +4,12 @@ import {
   createPgStateAdapter,
 } from "@queuert/postgres";
 import { Pool, type PoolClient } from "pg";
-import { createClient, createInProcessWorker, defineJobTypes } from "queuert";
+import {
+  createClient,
+  createInProcessWorker,
+  defineJobTypeProcessorRegistry,
+  defineJobTypes,
+} from "queuert";
 
 const registry = defineJobTypes<{
   process_order: {
@@ -123,7 +128,7 @@ const worker = await createInProcessWorker({
   client,
   workerId,
   concurrency: 2,
-  processors: {
+  processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
     process_order: {
       attemptHandler: async ({ job, complete }) => {
         process.send!({
@@ -141,7 +146,7 @@ const worker = await createInProcessWorker({
         }));
       },
     },
-  },
+  }),
 });
 
 const stop = await worker.start();

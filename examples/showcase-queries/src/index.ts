@@ -17,7 +17,13 @@ import postgres, {
   type Row,
   type TransactionSql as _TransactionSql,
 } from "postgres";
-import { createClient, createInProcessWorker, defineJobTypes, withTransactionHooks } from "queuert";
+import {
+  createClient,
+  createInProcessWorker,
+  defineJobTypeProcessorRegistry,
+  defineJobTypes,
+  withTransactionHooks,
+} from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 
 type TransactionSql = _TransactionSql & {
@@ -102,7 +108,7 @@ const client = await createClient({
 
 const worker = await createInProcessWorker({
   client,
-  processors: {
+  processorRegistry: defineJobTypeProcessorRegistry(client, jobTypes, {
     "validate-input": {
       attemptHandler: async ({ job, complete }) => {
         console.log(`[validate-input] Validating order ${job.input.orderId}`);
@@ -142,7 +148,7 @@ const worker = await createInProcessWorker({
         return complete(async () => ({ sentAt: new Date().toISOString() }));
       },
     },
-  },
+  }),
 });
 
 const stopWorker = await worker.start();

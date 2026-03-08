@@ -4,7 +4,13 @@ import {
   createSqliteStateAdapter,
 } from "@queuert/sqlite";
 import Database from "better-sqlite3";
-import { createClient, createInProcessWorker, defineJobTypes, withTransactionHooks } from "queuert";
+import {
+  createClient,
+  createInProcessWorker,
+  defineJobTypeProcessorRegistry,
+  defineJobTypes,
+  withTransactionHooks,
+} from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 
 // 1. Create in-memory SQLite database
@@ -108,7 +114,7 @@ const qrtClient = await createClient({
 // 6. Create and start qrtWorker
 const qrtWorker = await createInProcessWorker({
   client: qrtClient,
-  processors: {
+  processorRegistry: defineJobTypeProcessorRegistry(qrtClient, registry, {
     send_welcome_email: {
       attemptHandler: async ({ job, complete }) => {
         // Simulate sending email (in real app, call email service here)
@@ -119,7 +125,7 @@ const qrtWorker = await createInProcessWorker({
         }));
       },
     },
-  },
+  }),
 });
 
 const stopWorker = await qrtWorker.start();

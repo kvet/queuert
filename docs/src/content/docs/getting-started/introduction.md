@@ -47,7 +47,7 @@ Later, a background worker picks up the job and sends the email:
 ```ts
 const worker = await createInProcessWorker({
   client,
-  processors: {
+  processorRegistry: defineJobTypeProcessorRegistry(client, jobTypes, {
     "send-welcome-email": {
       attemptHandler: async ({ job, complete }) => {
         await sendEmail({
@@ -61,7 +61,7 @@ const worker = await createInProcessWorker({
         }));
       },
     },
-  },
+  }),
 });
 
 const stop = await worker.start();

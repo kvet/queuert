@@ -10,16 +10,23 @@
  * 3. Cross-slice blockers — external references let one slice declare blockers from another
  */
 
-import { createInProcessWorker, mergeJobTypeProcessors, withTransactionHooks } from "queuert";
+import {
+  createInProcessWorker,
+  mergeJobTypeProcessorRegistries,
+  withTransactionHooks,
+} from "queuert";
 
 import { type DbContext, sql, stopContainer } from "./adapters.js";
 import { client } from "./client.js";
-import { notificationProcessors } from "./slice-notifications-processors.js";
-import { orderProcessors } from "./slice-orders-processors.js";
+import { notificationProcessorRegistry } from "./slice-notifications-processors.js";
+import { orderProcessorRegistry } from "./slice-orders-processors.js";
 
 const worker = await createInProcessWorker({
   client,
-  processors: mergeJobTypeProcessors(orderProcessors, notificationProcessors),
+  processorRegistry: mergeJobTypeProcessorRegistries(
+    orderProcessorRegistry,
+    notificationProcessorRegistry,
+  ),
 });
 
 const stopWorker = await worker.start();

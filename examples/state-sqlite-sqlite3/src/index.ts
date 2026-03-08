@@ -3,7 +3,13 @@ import {
   createAsyncLock,
   createSqliteStateAdapter,
 } from "@queuert/sqlite";
-import { createClient, createInProcessWorker, defineJobTypes, withTransactionHooks } from "queuert";
+import {
+  createClient,
+  createInProcessWorker,
+  defineJobTypeProcessorRegistry,
+  defineJobTypes,
+  withTransactionHooks,
+} from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 import sqlite3 from "sqlite3";
 
@@ -107,7 +113,7 @@ const qrtClient = await createClient({
 // 7. Create and start qrtWorker
 const qrtWorker = await createInProcessWorker({
   client: qrtClient,
-  processors: {
+  processorRegistry: defineJobTypeProcessorRegistry(qrtClient, registry, {
     send_welcome_email: {
       attemptHandler: async ({ job, complete }) => {
         // Simulate sending email (in real app, call email service here)
@@ -118,7 +124,7 @@ const qrtWorker = await createInProcessWorker({
         }));
       },
     },
-  },
+  }),
 });
 
 const stopWorker = await qrtWorker.start();

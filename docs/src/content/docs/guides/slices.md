@@ -27,10 +27,11 @@ export const orderJobTypes = defineJobTypes<{
 
 ```ts
 // slice-orders-processors.ts
-import { defineJobTypeProcessors } from "queuert";
+import { defineJobTypeProcessorRegistry } from "queuert";
+import { client } from "./client.js";
 import { orderJobTypes } from "./slice-orders-definitions.js";
 
-export const orderProcessors = defineJobTypeProcessors(orderJobTypes, {
+export const orderProcessorRegistry = defineJobTypeProcessorRegistry(client, orderJobTypes, {
   "orders.create": {
     attemptHandler: async ({ job, complete }) =>
       complete(async ({ continueWith }) =>
@@ -43,7 +44,7 @@ export const orderProcessors = defineJobTypeProcessors(orderJobTypes, {
 });
 ```
 
-`defineJobTypeProcessors` type-checks each handler against the slice's own definitions, then returns a widened type that is assignable to any `InProcessWorkerProcessors` whose definitions include the slice's types. This lets you define processors per-slice and freely pass them to `createInProcessWorker` or `mergeJobTypeProcessors` without type conflicts.
+`defineJobTypeProcessorRegistry` type-checks each handler against the slice's own definitions, then returns a `JobTypeProcessorsRegistry` that carries the slice's type definitions via phantom symbol properties. This enables lightweight compatibility checks when passed to `createInProcessWorker` or `mergeJobTypeProcessorRegistries`.
 
 ## Composing Slices
 
@@ -54,12 +55,12 @@ import {
   createClient,
   createInProcessWorker,
   mergeJobTypeRegistries,
-  mergeJobTypeProcessors,
+  mergeJobTypeProcessorRegistries,
 } from "queuert";
 import { orderJobTypes } from "./slice-orders-definitions.js";
-import { orderProcessors } from "./slice-orders-processors.js";
+import { orderProcessorRegistry } from "./slice-orders-processors.js";
 import { notificationJobTypes } from "./slice-notifications-definitions.js";
-import { notificationProcessors } from "./slice-notifications-processors.js";
+import { notificationProcessorRegistry } from "./slice-notifications-processors.js";
 
 const registry = mergeJobTypeRegistries(orderJobTypes, notificationJobTypes);
 
@@ -67,14 +68,19 @@ const client = await createClient({ stateAdapter, notifyAdapter, registry });
 
 const worker = await createInProcessWorker({
   client,
-  processors: mergeJobTypeProcessors(orderProcessors, notificationProcessors),
+  processorRegistry: mergeJobTypeProcessorRegistries(
+    orderProcessorRegistry,
+    notificationProcessorRegistry,
+  ),
 });
 ```
 
-Both merge functions detect overlapping keys at compile time and at runtime:
+`mergeJobTypeRegistries` detects overlapping keys at compile time and at runtime:
 
-- **Compile-time** — overlapping type names or processor keys produce a TypeScript error
+- **Compile-time** — overlapping type names produce a TypeScript error
 - **Runtime** — validated registries with overlapping `getTypeNames()` throw `DuplicateJobTypeError`
+
+`mergeJobTypeProcessorRegistries` detects overlapping processor keys at runtime, throwing `DuplicateJobTypeError`.
 
 ## Cross-Slice References
 
@@ -110,14 +116,15 @@ export const orderJobTypes = defineJobTypes<
 
 This eliminates the need for "workflow slices" that duplicate type definitions just to make blocker references type-check. After merging with `mergeJobTypeRegistries`, all references resolve against the full set of definitions.
 
-When writing processors for a slice with external references, `defineJobTypeProcessors` automatically extracts both owned and external definitions from the registry:
+When writing processors for a slice with external references, `defineJobTypeProcessorRegistry` automatically extracts both owned and external definitions from the registry:
 
 ```ts
 // slice-orders-processors.ts
-import { defineJobTypeProcessors } from "queuert";
+import { defineJobTypeProcessorRegistry } from "queuert";
+import { client } from "./client.js";
 import { orderJobTypes } from "./slice-orders-definitions.js";
 
-const orderProcessors = defineJobTypeProcessors(orderJobTypes, {
+const orderProcessorRegistry = defineJobTypeProcessorRegistry(client, orderJobTypes, {
   // handlers have full type inference for continueWith, blockers, etc.
 });
 ```
@@ -137,6 +144,6 @@ This also makes logs and dashboards easy to scan by feature.
 ## See Also
 
 - [Utilities — mergeJobTypeRegistries](/queuert/reference/queuert/utilities/#mergejobtyperegistries) — API reference
-- [Utilities — mergeJobTypeProcessors](/queuert/reference/queuert/utilities/#mergejobtypeprocessors) — API reference
+- [Utilities — mergeJobTypeProcessorRegistries](/queuert/reference/queuert/utilities/#mergejobtypeprocessorregistries) — API reference
 - [Type Safety](../type-safety/) — how Queuert enforces types end-to-end
 - [showcase-slices example](https://github.com/kvet/queuert/blob/main/examples/showcase-slices/src/index.ts) — full runnable example

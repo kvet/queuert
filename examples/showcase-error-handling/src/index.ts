@@ -19,6 +19,7 @@ import postgres, {
 import {
   createClient,
   createInProcessWorker,
+  defineJobTypeProcessorRegistry,
   defineJobTypes,
   rescheduleJob,
   withTransactionHooks,
@@ -127,7 +128,7 @@ const client = await createClient({
 
 const worker = await createInProcessWorker({
   client,
-  processors: {
+  processorRegistry: defineJobTypeProcessorRegistry(client, jobTypes, {
     "process-payment": {
       attemptHandler: async ({ job, complete }) => {
         console.log(
@@ -200,7 +201,7 @@ const worker = await createInProcessWorker({
         return complete(async () => ({ data: `Response from ${job.input.endpoint}` }));
       },
     },
-  },
+  }),
 });
 
 const stopWorker = await worker.start();

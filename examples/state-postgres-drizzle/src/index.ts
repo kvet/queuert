@@ -4,7 +4,13 @@ import { type ExtractTablesWithRelations, sql } from "drizzle-orm";
 import { type NodePgQueryResultHKT, drizzle } from "drizzle-orm/node-postgres";
 import { type PgTransaction, pgTable, serial, text } from "drizzle-orm/pg-core";
 import { Pool } from "pg";
-import { createClient, createInProcessWorker, defineJobTypes, withTransactionHooks } from "queuert";
+import {
+  createClient,
+  createInProcessWorker,
+  defineJobTypeProcessorRegistry,
+  defineJobTypes,
+  withTransactionHooks,
+} from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 
 // 1. Start PostgreSQL using testcontainers
@@ -81,7 +87,7 @@ const qrtClient = await createClient({
 });
 const qrtWorker = await createInProcessWorker({
   client: qrtClient,
-  processors: {
+  processorRegistry: defineJobTypeProcessorRegistry(qrtClient, registry, {
     send_welcome_email: {
       attemptHandler: async ({ job, complete }) => {
         // Simulate sending email (in real app, call email service here)
@@ -92,7 +98,7 @@ const qrtWorker = await createInProcessWorker({
         }));
       },
     },
-  },
+  }),
 });
 
 // 7. Start qrtWorker

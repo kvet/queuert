@@ -15,7 +15,7 @@ A chain of linked jobs where each job can `continueWith` to the next - just like
 
 ### Job Type
 
-Defines a named job type with its input/output types and attempt handler function. Job types are registered with workers via the `processors` configuration. The attempt handler receives the job and context for completing or continuing the chain.
+Defines a named job type with its input/output types and attempt handler function. Job types are registered with workers via the `processorRegistry` configuration. The attempt handler receives the job and context for completing or continuing the chain.
 
 ### State Adapter
 

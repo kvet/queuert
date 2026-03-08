@@ -5,6 +5,7 @@ import {
   type LeaseConfig,
   createClient,
   createInProcessWorker,
+  defineJobTypeProcessorRegistry,
   defineJobTypes,
   withTransactionHooks,
 } from "../index.js";
@@ -46,7 +47,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       processDefaults: {
         leaseConfig: { leaseMs: 10, renewIntervalMs: 100 },
       },
-      processors: {
+      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ complete }) => {
             await sleep(100);
@@ -54,7 +55,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             return complete(async () => null);
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -118,7 +119,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         leaseConfig: leaseConfig,
         pollIntervalMs: leaseConfig.leaseMs,
       },
-      processors: {
+      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ signal, complete }) => {
             if (!failed) {
@@ -137,7 +138,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             return complete(async () => null);
           },
         },
-      },
+      }),
     });
 
     const worker2 = await createInProcessWorker({
@@ -148,7 +149,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         leaseConfig: leaseConfig,
         pollIntervalMs: leaseConfig.leaseMs,
       },
-      processors: {
+      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ signal, complete }) => {
             if (!failed) {
@@ -167,7 +168,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             return complete(async () => null);
           },
         },
-      },
+      }),
     });
 
     const failJobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -249,7 +250,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         leaseConfig: leaseConfig,
         pollIntervalMs: leaseConfig.leaseMs,
       },
-      processors: {
+      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ prepare, complete }) => {
             await prepare({ mode: "staged" });
@@ -271,7 +272,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             return complete(async () => null);
           },
         },
-      },
+      }),
     });
 
     const worker2 = await createInProcessWorker({
@@ -282,7 +283,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         leaseConfig: leaseConfig,
         pollIntervalMs: leaseConfig.leaseMs,
       },
-      processors: {
+      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ prepare, complete }) => {
             await prepare({ mode: "staged" });
@@ -304,7 +305,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             return complete(async () => null);
           },
         },
-      },
+      }),
     });
 
     const failJobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -386,7 +387,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         leaseConfig: leaseConfig,
         pollIntervalMs: 10,
       },
-      processors: {
+      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ job, complete }) => {
             processedJobs.push(job.input.id);
@@ -399,7 +400,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             return complete(async () => ({ id: job.input.id }));
           },
         },
-      },
+      }),
     });
 
     const jobChain1 = await withTransactionHooks(async (transactionHooks) =>

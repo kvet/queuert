@@ -3,6 +3,7 @@ import {
   type JobChain,
   createClient,
   createInProcessWorker,
+  defineJobTypeProcessorRegistry,
   defineJobTypes,
   withTransactionHooks,
 } from "../index.js";
@@ -50,7 +51,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processors: {
+      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
         blocker: {
           attemptHandler: async ({ job, complete }) => {
             expect(job.chainId).toEqual(blockerChainId);
@@ -82,7 +83,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
             }));
           },
         },
-      },
+      }),
     });
 
     expectTypeOf<
@@ -151,7 +152,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processors: {
+      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
         blocker: {
           attemptHandler: async ({ job, complete }) => {
             return complete(async () => ({ result: job.input.value }));
@@ -166,7 +167,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
             }));
           },
         },
-      },
+      }),
     });
 
     const blockerJobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -247,7 +248,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processors: {
+      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
         inner: {
           attemptHandler: async ({ complete }) => {
             return complete(async () => {
@@ -299,7 +300,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
             });
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -358,7 +359,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       processDefaults: {
         pollIntervalMs: 100,
       },
-      processors: {
+      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ job, prepare, complete }) => {
             await prepare({ mode: "atomic" });
@@ -370,7 +371,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
             );
           },
         },
-      },
+      }),
     });
     const worker2 = await createInProcessWorker({
       client,
@@ -378,7 +379,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       processDefaults: {
         pollIntervalMs: 100,
       },
-      processors: {
+      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
         finish: {
           attemptHandler: async ({ job, prepare, complete }) => {
             await prepare({ mode: "atomic" });
@@ -387,7 +388,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
             }));
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -441,7 +442,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processors: {
+      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
         blocker: {
           attemptHandler: async ({ job, complete }) => {
             return complete(async () => ({ result: job.input.value }));
@@ -454,7 +455,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
             }));
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -529,7 +530,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processors: {
+      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
         blocker: {
           attemptHandler: async ({ job, prepare, complete }) => {
             await prepare({ mode: "atomic" });
@@ -566,7 +567,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
             return complete(async () => ({ finalResult: blocker.output.result }));
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>

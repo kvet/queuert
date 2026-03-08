@@ -4,6 +4,7 @@ import {
   type NotifyAdapter,
   createClient,
   createInProcessWorker,
+  defineJobTypeProcessorRegistry,
   defineJobTypes,
   withTransactionHooks,
 } from "../index.js";
@@ -77,14 +78,14 @@ describe("Logging", () => {
       client,
       workerId: "worker",
       concurrency: 1,
-      processors: {
+      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ prepare, complete }) => {
             await prepare({ mode: "staged" });
             return complete(async () => ({ result: true }));
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -184,7 +185,7 @@ describe("Logging", () => {
           maxDelayMs: 100,
         },
       },
-      processors: {
+      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ job, complete }) => {
             if (job.attempt < 4) {
@@ -193,7 +194,7 @@ describe("Logging", () => {
             return complete(async () => null);
           },
         },
-      },
+      }),
     });
 
     const job = await withTransactionHooks(async (transactionHooks) =>
@@ -269,7 +270,7 @@ describe("Logging", () => {
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processors: {
+      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
         linear: {
           attemptHandler: async ({ job, complete }) => {
             return complete(async ({ continueWith }) =>
@@ -296,7 +297,7 @@ describe("Logging", () => {
               result: job.input.valueNextNext,
             })),
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -385,7 +386,7 @@ describe("Logging", () => {
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processors: {
+      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
         blocker: {
           attemptHandler: async ({ job, complete }) =>
             complete(async ({ continueWith }) =>
@@ -409,7 +410,7 @@ describe("Logging", () => {
               finalResult: (blocker.output.done ? 1 : 0) + (input.start ? 1 : 0),
             })),
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -582,14 +583,14 @@ describe("Logging", () => {
       processDefaults: {
         leaseConfig: { leaseMs: 500, renewIntervalMs: 50 },
       },
-      processors: {
+      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ complete }) => {
             await sleep(200);
             return complete(async () => null);
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -641,14 +642,14 @@ describe("Logging", () => {
       processDefaults: {
         leaseConfig: { leaseMs: 10, renewIntervalMs: 100 },
       },
-      processors: {
+      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ complete }) => {
             await sleep(100);
             return complete(async () => null);
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -706,7 +707,7 @@ describe("Logging", () => {
       workerId: "w1",
       concurrency: 1,
       processDefaults: { leaseConfig, pollIntervalMs: leaseConfig.leaseMs },
-      processors: {
+      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ signal, complete }) => {
             if (!failed) {
@@ -721,14 +722,14 @@ describe("Logging", () => {
             return complete(async () => null);
           },
         },
-      },
+      }),
     });
     const worker2 = await createInProcessWorker({
       client,
       workerId: "w2",
       concurrency: 1,
       processDefaults: { leaseConfig, pollIntervalMs: leaseConfig.leaseMs },
-      processors: {
+      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ signal, complete }) => {
             if (!failed) {
@@ -743,7 +744,7 @@ describe("Logging", () => {
             return complete(async () => null);
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -822,13 +823,13 @@ describe("Logging", () => {
       client: workerClient,
       concurrency: 1,
       backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-      processors: {
+      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ complete }) => {
             return complete(async () => null);
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -877,13 +878,13 @@ describe("Logging", () => {
       client,
       concurrency: 1,
       processDefaults: { pollIntervalMs: 100 },
-      processors: {
+      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ complete }) => {
             return complete(async () => null);
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -1091,11 +1092,11 @@ describe("Logging rollback", () => {
         pollIntervalMs: 100,
         backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
       },
-      processors: {
+      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ complete }) => complete(async () => null),
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -1167,7 +1168,7 @@ describe("Logging rollback", () => {
         leaseConfig: { leaseMs: 50, renewIntervalMs: 500 },
         pollIntervalMs: 50,
       },
-      processors: {
+      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ complete }) => {
             if (!handlerFailed) {
@@ -1177,7 +1178,7 @@ describe("Logging rollback", () => {
             return complete(async () => null);
           },
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -1249,7 +1250,7 @@ describe("Logging rollback", () => {
         pollIntervalMs: 100,
         backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
       },
-      processors: {
+      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
         linear: {
           attemptHandler: async ({ complete }) =>
             complete(async ({ continueWith }) =>
@@ -1259,7 +1260,7 @@ describe("Logging rollback", () => {
         linear_next: {
           attemptHandler: async ({ complete }) => complete(async () => null),
         },
-      },
+      }),
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>

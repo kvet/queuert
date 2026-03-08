@@ -2,10 +2,12 @@ import {
   type ExternalJobTypeRegistryDefinitions,
   type JobTypeRegistryDefinitions,
   JobTypeValidationError,
-  defineJobTypeProcessors,
-  mergeJobTypeProcessors,
+  createClient,
+  defineJobTypeProcessorRegistry,
+  mergeJobTypeProcessorRegistries,
   mergeJobTypeRegistries,
 } from "queuert";
+import { createInProcessStateAdapter } from "queuert/internal";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { Type } from "@sinclair/typebox";
 import { createTypeBoxJobTypeRegistry } from "./typebox-adapter.js";
@@ -393,14 +395,19 @@ describe("createTypeBoxJobTypeRegistry", () => {
       expectTypeOf<OrderDefs>().toHaveProperty("orders.confirm-order");
     });
 
-    it("merges processors from typed slices", () => {
-      const notificationProcessors = defineJobTypeProcessors(notificationJobTypes, {
+    it("merges processors from typed slices", async () => {
+      const stateAdapter = createInProcessStateAdapter();
+      const client = await createClient({
+        stateAdapter,
+        registry: mergeJobTypeRegistries(orderJobTypes, notificationJobTypes),
+      });
+      const notificationProcessors = defineJobTypeProcessorRegistry(client, notificationJobTypes, {
         "notifications.send-notification": {
           attemptHandler: async ({ complete }) => complete(async () => ({ sentAt: "now" })),
         },
       });
 
-      const orderProcessors = defineJobTypeProcessors(orderJobTypes, {
+      const orderProcessors = defineJobTypeProcessorRegistry(client, orderJobTypes, {
         "orders.place-order": {
           attemptHandler: async ({ complete }) =>
             complete(async ({ continueWith }) =>
@@ -419,7 +426,7 @@ describe("createTypeBoxJobTypeRegistry", () => {
         },
       });
 
-      const merged = mergeJobTypeProcessors(orderProcessors, notificationProcessors);
+      const merged = mergeJobTypeProcessorRegistries(orderProcessors, notificationProcessors);
 
       expect(Object.keys(merged)).toEqual([
         "orders.place-order",

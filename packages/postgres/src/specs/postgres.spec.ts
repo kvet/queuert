@@ -1,7 +1,13 @@
 import { TESTCONTAINER_RESOURCE_TYPES, extendWithPostgres } from "@queuert/testcontainers";
 import { type UUID } from "node:crypto";
 import { Pool, type PoolClient } from "pg";
-import { createClient, createInProcessWorker, defineJobTypes, withTransactionHooks } from "queuert";
+import {
+  createClient,
+  createInProcessWorker,
+  defineJobTypeProcessorRegistry,
+  defineJobTypes,
+  withTransactionHooks,
+} from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 import { extendWithResourceLeakDetection, withWorkers } from "queuert/testing";
 import { it as baseIt, expectTypeOf, vi } from "vitest";
@@ -49,7 +55,7 @@ it("should infer types correctly with custom ID", async ({ postgresConnectionStr
     });
     const worker = await createInProcessWorker({
       client,
-      processors: {
+      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ job, complete }) => {
             expectTypeOf(job.id).toEqualTypeOf<`job.${UUID}`>();
@@ -57,7 +63,7 @@ it("should infer types correctly with custom ID", async ({ postgresConnectionStr
             return complete(async () => ({ bar: 42 }));
           },
         },
-      },
+      }),
     });
 
     const runInTransaction = async <T>(fn: (poolClient: PoolClient) => Promise<T>): Promise<T> => {

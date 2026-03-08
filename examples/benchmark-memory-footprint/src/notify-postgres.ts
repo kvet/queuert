@@ -6,7 +6,12 @@ import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import postgres from "postgres";
 import { type PgNotifyProvider, createPgNotifyAdapter } from "@queuert/postgres";
 import { createInProcessStateAdapter } from "queuert/internal";
-import { createClient, createInProcessWorker, withTransactionHooks } from "queuert";
+import {
+  createClient,
+  createInProcessWorker,
+  defineJobTypeProcessorRegistry,
+  withTransactionHooks,
+} from "queuert";
 import {
   diffMemory,
   measureBaseline,
@@ -67,11 +72,11 @@ const [beforeSetup, afterSetup, { qrtClient, stopWorker }] = await measureMemory
 
   const qrtWorker = await createInProcessWorker({
     client: qrtClient,
-    processors: {
+    processorRegistry: defineJobTypeProcessorRegistry(qrtClient, registry, {
       "test-job": {
         attemptHandler: async ({ complete }) => complete(async () => ({ processed: true })),
       },
-    },
+    }),
   });
 
   const stopWorker = await qrtWorker.start();

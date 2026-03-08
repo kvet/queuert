@@ -11,7 +11,13 @@
  * 5. Workerless Completion: Job completed externally → CONSUMER job span without attempt spans
  */
 
-import { createClient, createInProcessWorker, defineJobTypes, withTransactionHooks } from "queuert";
+import {
+  createClient,
+  createInProcessWorker,
+  defineJobTypeProcessorRegistry,
+  defineJobTypes,
+  withTransactionHooks,
+} from "queuert";
 import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
 import { flush, observabilityAdapter, shutdown } from "./observability.js";
 
@@ -132,7 +138,7 @@ const client = await createClient({
 const worker = await createInProcessWorker({
   client,
   workerId: "worker-1",
-  processors: {
+  processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
     // Scenario 1: Simple job
     greet: {
       attemptHandler: async ({ job, complete }) => {
@@ -216,7 +222,7 @@ const worker = await createInProcessWorker({
       },
       backoffConfig: { initialDelayMs: 100, maxDelayMs: 100 },
     },
-  },
+  }),
 });
 
 const stopWorker = await worker.start();

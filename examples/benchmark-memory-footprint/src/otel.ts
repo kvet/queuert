@@ -5,7 +5,12 @@
 import { metrics } from "@opentelemetry/api";
 import { MeterProvider, PeriodicExportingMetricReader } from "@opentelemetry/sdk-metrics";
 import { createOtelObservabilityAdapter } from "@queuert/otel";
-import { createClient, createInProcessWorker, withTransactionHooks } from "queuert";
+import {
+  createClient,
+  createInProcessWorker,
+  defineJobTypeProcessorRegistry,
+  withTransactionHooks,
+} from "queuert";
 import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
 import {
   diffMemory,
@@ -62,11 +67,11 @@ const [beforeSetup, afterSetup, { qrtClient, stopWorker }] = await measureMemory
 
   const qrtWorker = await createInProcessWorker({
     client: qrtClient,
-    processors: {
+    processorRegistry: defineJobTypeProcessorRegistry(qrtClient, registry, {
       "test-job": {
         attemptHandler: async ({ complete }) => complete(async () => ({ processed: true })),
       },
-    },
+    }),
   });
 
   const stopWorker = await qrtWorker.start();

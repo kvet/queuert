@@ -1,6 +1,12 @@
 import { extendWithNats } from "@queuert/testcontainers";
 import { connect } from "nats";
-import { createClient, createInProcessWorker, defineJobTypes, withTransactionHooks } from "queuert";
+import {
+  createClient,
+  createInProcessWorker,
+  defineJobTypeProcessorRegistry,
+  defineJobTypes,
+  withTransactionHooks,
+} from "queuert";
 import { createInProcessStateAdapter } from "queuert/internal";
 import { withWorkers } from "queuert/testing";
 import { it as baseIt, vi } from "vitest";
@@ -39,13 +45,13 @@ it("should work end-to-end with NATS notify adapter", async ({ natsConnectionOpt
   });
   const worker = await createInProcessWorker({
     client,
-    processors: {
+    processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
       test: {
         attemptHandler: async ({ complete }) => {
           return complete(async () => ({ processed: true }));
         },
       },
-    },
+    }),
   });
 
   const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -93,13 +99,13 @@ it("should work end-to-end without JetStream KV", async ({ natsConnectionOptions
   });
   const worker = await createInProcessWorker({
     client,
-    processors: {
+    processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
       test: {
         attemptHandler: async ({ job, complete }) => {
           return complete(async () => ({ doubled: job.input.value * 2 }));
         },
       },
-    },
+    }),
   });
 
   const jobChain = await withTransactionHooks(async (transactionHooks) =>

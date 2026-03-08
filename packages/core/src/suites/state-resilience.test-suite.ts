@@ -3,6 +3,7 @@ import {
   type StateAdapter,
   createClient,
   createInProcessWorker,
+  defineJobTypeProcessorRegistry,
   defineJobTypes,
   withTransactionHooks,
 } from "../index.js";
@@ -67,14 +68,14 @@ export const stateResilienceTestSuite = ({
           maxDelayMs: 1,
         },
       },
-      processors: {
+      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ job, prepare, complete }) => {
             await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
             return complete(async () => ({ result: job.input.value * 2 }));
           },
         },
-      },
+      }),
     });
 
     const jobChains = await withTransactionHooks(async (transactionHooks) =>
@@ -153,14 +154,14 @@ export const stateResilienceTestSuite = ({
             maxDelayMs: 1,
           },
         },
-        processors: {
+        processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
           test: {
             attemptHandler: async ({ job, prepare, complete }) => {
               await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
               return complete(async () => ({ result: job.input.value * 2 }));
             },
           },
-        },
+        }),
       });
 
       const jobChains = await withTransactionHooks(async (transactionHooks) =>
@@ -247,25 +248,25 @@ export const stateResilienceTestSuite = ({
       } as const;
       const flakyWorker1 = await createInProcessWorker({
         ...workerConfig,
-        processors: {
+        processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
           test: {
             attemptHandler: async ({ job, prepare, complete }) => {
               await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
               return complete(async () => ({ result: job.input.value * 2 }));
             },
           },
-        },
+        }),
       });
       const flakyWorker2 = await createInProcessWorker({
         ...workerConfig,
-        processors: {
+        processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
           test: {
             attemptHandler: async ({ job, prepare, complete }) => {
               await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
               return complete(async () => ({ result: job.input.value * 2 }));
             },
           },
-        },
+        }),
       });
 
       const jobChains = await withTransactionHooks(async (transactionHooks) =>

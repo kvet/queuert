@@ -14,7 +14,7 @@ const worker = await createInProcessWorker({
   concurrency?: number,
   backoffConfig?: BackoffConfig,
   processDefaults?: InProcessWorkerProcessDefaults,
-  processors: InProcessWorkerProcessors,
+  processorRegistry: JobTypeProcessorsRegistry,
 });
 ```
 
@@ -25,7 +25,7 @@ Returns `Promise<InProcessWorker>`.
 - **concurrency** -- maximum number of jobs to process in parallel (default: 1)
 - **backoffConfig** -- recovery backoff for the worker loop itself, not individual job retries
 - **processDefaults** -- default configuration applied to all job types
-- **processors** -- map of job type names to their handler configurations
+- **processorRegistry** -- a `JobTypeProcessorsRegistry` from `defineJobTypeProcessorRegistry` or `mergeJobTypeProcessorRegistries`. The registry's definitions must be a subset of the client's registry definitions.
 
 ## InProcessWorker
 
@@ -144,13 +144,13 @@ const loggingMiddleware: JobAttemptMiddleware = async ({ job, workerId }, next) 
 
 Helper that throws `RescheduleJobError` from within an attempt handler to reschedule the job. See [Utilities](/queuert/reference/queuert/utilities/#reschedulejob) for details.
 
-## mergeJobTypeProcessors
+## mergeJobTypeProcessorRegistries
 
-Merges processor maps from multiple slices into a single processors object. See [Utilities](/queuert/reference/queuert/utilities/#mergejobtypeprocessors) for details.
+Merges processors registries from multiple slices into a single registry. See [Utilities](/queuert/reference/queuert/utilities/#mergejobtypeprocessorregistries) for details.
 
-## defineJobTypeProcessors
+## defineJobTypeProcessorRegistry
 
-Defines processors for a job type slice with full type inference and a widened return type. See [Utilities](/queuert/reference/queuert/utilities/#defineprocessors) for details.
+Defines a processors registry for a job type slice with full type inference. See [Utilities](/queuert/reference/queuert/utilities/#definejobtypeprocessorregistry) for details.
 
 ## Handler Types
 

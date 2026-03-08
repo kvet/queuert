@@ -1,8 +1,8 @@
-import { defineJobTypeProcessors } from "queuert";
+import { defineJobTypeProcessorRegistry } from "queuert";
 import { client } from "./client.js";
 import { orderJobTypes } from "./slice-orders-definitions.js";
 
-export const orderProcessors = defineJobTypeProcessors(orderJobTypes, {
+export const orderProcessorRegistry = defineJobTypeProcessorRegistry(client, orderJobTypes, {
   "orders.create-order": {
     attemptHandler: async ({ job, complete }) => {
       const totalAmount = job.input.items.reduce((sum, item) => sum + item.price, 0);

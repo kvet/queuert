@@ -7,7 +7,13 @@ import Database from "better-sqlite3";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
-import { createClient, createInProcessWorker, defineJobTypes, withTransactionHooks } from "queuert";
+import {
+  createClient,
+  createInProcessWorker,
+  defineJobTypeProcessorRegistry,
+  defineJobTypes,
+  withTransactionHooks,
+} from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 
 // 1. Create in-memory SQLite database
@@ -101,7 +107,7 @@ const qrtClient = await createClient({
 
 const qrtWorker = await createInProcessWorker({
   client: qrtClient,
-  processors: {
+  processorRegistry: defineJobTypeProcessorRegistry(qrtClient, registry, {
     send_welcome_email: {
       attemptHandler: async ({ job, complete }) => {
         // Simulate sending email (in real app, call email service here)
@@ -112,7 +118,7 @@ const qrtWorker = await createInProcessWorker({
         }));
       },
     },
-  },
+  }),
 });
 
 // 7. Start qrtWorker

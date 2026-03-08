@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import { type Client, helpersSymbol } from "./client.js";
-import { type JobTypeRegistry } from "./entities/job-type-registry.js";
 import { type BaseJobTypeDefinitions } from "./entities/job-type.js";
 import { type BackoffConfig } from "./helpers/backoff.js";
 import { type ParallelExecutor, createParallelExecutor } from "./helpers/parallel-executor.js";
@@ -17,11 +16,11 @@ import {
   type StateAdapter,
   type StateJob,
 } from "./state-adapter/state-adapter.js";
+import { type JobAttemptMiddleware, runJobProcess } from "./worker/job-process.js";
 import {
-  type AttemptHandler,
-  type JobAttemptMiddleware,
-  runJobProcess,
-} from "./worker/job-process.js";
+  type InProcessWorkerProcessor,
+  type JobTypeProcessorsRegistry,
+} from "./worker/job-type-processors-registry.js";
 import { type LeaseConfig } from "./worker/lease.js";
 
 /** Default configuration applied to all job types unless overridden per-processor. */
@@ -37,62 +36,6 @@ export type InProcessWorkerProcessDefaults<
   leaseConfig?: LeaseConfig;
   /** Middlewares that wrap each job attempt */
   attemptMiddlewares?: JobAttemptMiddleware<TStateAdapter, TJobTypeDefinitions>[];
-};
-
-/** Configuration for processing a single job type. */
-export type InProcessWorkerProcessor<
-  TStateAdapter extends StateAdapter<any, any>,
-  TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TJobTypeName extends keyof TJobTypeDefinitions & string,
-> = {
-  /** Handler function called for each job attempt */
-  attemptHandler: AttemptHandler<TStateAdapter, TJobTypeDefinitions, TJobTypeName>;
-  /** Per-job-type backoff configuration (overrides processDefaults) */
-  backoffConfig?: BackoffConfig;
-  /** Per-job-type lease configuration (overrides processDefaults) */
-  leaseConfig?: LeaseConfig;
-};
-
-/** Map of job type names to their processor configurations. Only registered types will be processed. */
-export type InProcessWorkerProcessors<
-  TStateAdapter extends StateAdapter<any, any>,
-  TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TExternalJobTypeDefinitions extends BaseJobTypeDefinitions = Record<never, never>,
-> = {
-  [K in keyof TJobTypeDefinitions & string]?: InProcessWorkerProcessor<
-    TStateAdapter,
-    TJobTypeDefinitions & TExternalJobTypeDefinitions,
-    K
-  >;
-};
-
-/**
- * Define processors for a job type slice with full type inference, returning a
- * widened type that is assignable to any `InProcessWorkerProcessors` whose
- * definitions include the slice's job types.
- *
- * @example
- * const orderProcessors = defineJobTypeProcessors(orderJobTypes, {
- *   "orders.create": {
- *     attemptHandler: async ({ complete }) => complete(async () => ({ orderId: "1" })),
- *   },
- * });
- */
-export const defineJobTypeProcessors = <
-  TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TExternalJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TKeys extends keyof TJobTypeDefinitions & string,
->(
-  _jobTypeRegistry: JobTypeRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions>,
-  processors: {
-    [K in TKeys]: InProcessWorkerProcessor<
-      StateAdapter<any, any>,
-      TJobTypeDefinitions & TExternalJobTypeDefinitions,
-      K
-    >;
-  } & Record<Exclude<TKeys, keyof TJobTypeDefinitions & string>, never>,
-): { [K in TKeys]: InProcessWorkerProcessor<StateAdapter<any, any>, any, K> } => {
-  return processors as { [K in TKeys]: InProcessWorkerProcessor<StateAdapter<any, any>, any, K> };
 };
 
 const waitForNextJob = async ({
@@ -154,7 +97,7 @@ const performJob = async ({
 }: {
   helpers: Helpers;
   typeNames: string[];
-  processors: InProcessWorkerProcessors<any, any>;
+  processors: Record<string, InProcessWorkerProcessor<any, any, any>>;
   defaultBackoffConfig: BackoffConfig;
   defaultLeaseConfig: LeaseConfig;
   workerId: string;
@@ -223,29 +166,27 @@ const performJob = async ({
  * @param options.concurrency - Maximum number of jobs to process in parallel. Defaults to 1.
  * @param options.backoffConfig - Backoff configuration for the worker loop itself (not job retries).
  * @param options.processDefaults - Default configuration applied to all job types unless overridden per-processor.
- * @param options.processors - Map of job type names to their processor configurations.
+ * @param options.processorRegistry - A JobTypeProcessorsRegistry from defineJobTypeProcessorRegistry or mergeJobTypeProcessorRegistries.
  */
 export const createInProcessWorker = async <
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TStateAdapter extends StateAdapter<any, any>,
-  const TJobTypeProcessors extends InProcessWorkerProcessors<TStateAdapter, TJobTypeDefinitions>,
 >({
   client,
   workerId = randomUUID(),
   concurrency,
   backoffConfig,
   processDefaults,
-  processors,
+  processorRegistry,
 }: {
   client: Client<TJobTypeDefinitions, TStateAdapter>;
   workerId?: string;
   concurrency?: number;
   backoffConfig?: BackoffConfig;
   processDefaults?: InProcessWorkerProcessDefaults<TStateAdapter, TJobTypeDefinitions>;
-  processors: TJobTypeProcessors &
-    Record<Exclude<keyof TJobTypeProcessors & string, keyof TJobTypeDefinitions & string>, never>;
+  processorRegistry: JobTypeProcessorsRegistry<TJobTypeDefinitions, any>;
 }) => {
-  const typeNames = Array.from(Object.keys(processors));
+  const typeNames = Object.keys(processorRegistry);
 
   const pollIntervalMs = processDefaults?.pollIntervalMs ?? 60_000;
   const defaultBackoffConfig = processDefaults?.backoffConfig ?? {
@@ -283,7 +224,7 @@ export const createInProcessWorker = async <
               const result = await performJob({
                 helpers,
                 typeNames,
-                processors,
+                processors: processorRegistry,
                 defaultBackoffConfig,
                 defaultLeaseConfig,
                 workerId,

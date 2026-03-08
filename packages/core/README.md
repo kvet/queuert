@@ -56,6 +56,7 @@ import {
   createClient,
   createInProcessWorker,
   defineJobTypes,
+  defineJobTypeProcessorRegistry,
   withTransactionHooks,
   createTransactionHooks,
 } from "queuert";
@@ -81,14 +82,14 @@ const client = await createClient({
 const worker = await createInProcessWorker({
   client,
   workerId: "worker-1",
-  processors: {
+  processorRegistry: defineJobTypeProcessorRegistry(client, jobTypes, {
     "send-email": {
       attemptHandler: async ({ job, complete }) => {
         await sendEmail(job.input.to, job.input.subject);
         return complete(async () => ({ sent: true }));
       },
     },
-  },
+  }),
 });
 
 // Start a job chain (within your database transaction)
@@ -143,9 +144,9 @@ const worker = await createInProcessWorker({
       },
     ],
   },
-  processors: {
+  processorRegistry: defineJobTypeProcessorRegistry(client, jobTypes, {
     // ... job type processors
-  },
+  }),
 });
 ```
 
@@ -154,13 +155,13 @@ Per-job-type configuration:
 ```typescript
 const worker = await createInProcessWorker({
   client,
-  processors: {
+  processorRegistry: defineJobTypeProcessorRegistry(client, jobTypes, {
     'long-running-job': {
       backoffConfig: { initialDelayMs: 30_000, multiplier: 2.0, maxDelayMs: 600_000 },
       leaseConfig: { leaseMs: 300_000, renewIntervalMs: 60_000 },
       attemptHandler: async ({ job, complete }) => { ... },
     },
-  },
+  }),
 });
 ```
 

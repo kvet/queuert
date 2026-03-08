@@ -21,6 +21,7 @@ import {
   WaitChainTimeoutError,
   createClient,
   createInProcessWorker,
+  defineJobTypeProcessorRegistry,
   defineJobTypes,
   withTransactionHooks,
 } from "queuert";
@@ -100,7 +101,7 @@ const PRICES: Record<string, number> = {
 
 const worker = await createInProcessWorker({
   client,
-  processors: {
+  processorRegistry: defineJobTypeProcessorRegistry(client, jobTypes, {
     "fetch-price": {
       attemptHandler: async ({ job, complete }) => {
         const basePrice = PRICES[job.input.productId] ?? 9.99;
@@ -134,7 +135,7 @@ const worker = await createInProcessWorker({
         return complete(async () => ({ completedAt: new Date().toISOString() }));
       },
     },
-  },
+  }),
 });
 
 const stopWorker = await worker.start();

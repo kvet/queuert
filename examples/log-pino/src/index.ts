@@ -5,6 +5,7 @@ import {
   type JobTypeRegistryDefinitions,
   createClient,
   createInProcessWorker,
+  defineJobTypeProcessorRegistry,
   defineJobTypes,
   withTransactionHooks,
 } from "queuert";
@@ -94,7 +95,7 @@ const qrtWorker = await createInProcessWorker({
   processDefaults: {
     attemptMiddlewares: [contextualLoggingMiddleware],
   },
-  processors: {
+  processorRegistry: defineJobTypeProcessorRegistry(qrtClient, registry, {
     greet: {
       attemptHandler: async ({ job, complete }) => {
         // This log automatically includes job context thanks to pino mixin!
@@ -123,7 +124,7 @@ const qrtWorker = await createInProcessWorker({
       },
       backoffConfig: { initialDelayMs: 100, maxDelayMs: 100 },
     },
-  },
+  }),
 });
 
 // Start qrtWorker

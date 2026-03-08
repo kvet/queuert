@@ -3,6 +3,7 @@ import {
   JobTypeMismatchError,
   createClient,
   createInProcessWorker,
+  defineJobTypeProcessorRegistry,
   defineJobTypes,
   withTransactionHooks,
 } from "../index.js";
@@ -906,7 +907,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       const worker = await createInProcessWorker({
         client,
         concurrency: 1,
-        processors: {
+        processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
           step: {
             attemptHandler: async ({ job, complete }) =>
               complete(async ({ continueWith }) =>
@@ -915,7 +916,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
                   : { done: true },
               ),
           },
-        },
+        }),
       });
 
       const chain = await withTransactionHooks(async (transactionHooks) =>
@@ -972,7 +973,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       const worker = await createInProcessWorker({
         client,
         concurrency: 1,
-        processors: {
+        processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
           step: {
             attemptHandler: async ({ job, complete }) =>
               complete(async ({ continueWith }) =>
@@ -981,7 +982,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
                   : { done: true },
               ),
           },
-        },
+        }),
       });
 
       const chain = await withTransactionHooks(async (transactionHooks) =>
@@ -1035,7 +1036,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       const worker = await createInProcessWorker({
         client,
         concurrency: 1,
-        processors: {
+        processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
           step: {
             attemptHandler: async ({ job, complete }) =>
               complete(async ({ continueWith }) =>
@@ -1044,7 +1045,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
                   : { done: true },
               ),
           },
-        },
+        }),
       });
 
       const chain = await withTransactionHooks(async (transactionHooks) =>
@@ -1281,14 +1282,14 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       const worker = await createInProcessWorker({
         client,
         concurrency: 1,
-        processors: {
+        processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
           dep: {
             attemptHandler: async ({ complete }) => complete(async () => ({ ok: true })),
           },
           main: {
             attemptHandler: async ({ complete }) => complete(async () => ({ result: "done" })),
           },
-        },
+        }),
       });
 
       const { mainChain } = await withTransactionHooks(async (transactionHooks) =>
@@ -1523,7 +1524,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       const worker = await createInProcessWorker({
         client,
         concurrency: 1,
-        processors: {
+        processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
           task: {
             attemptHandler: async ({ job, complete }) =>
               complete(async ({ continueWith }) =>
@@ -1534,7 +1535,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
             attemptHandler: async ({ job, complete }) =>
               complete(async () => ({ final: job.input.n * 10 })),
           },
-        },
+        }),
       });
 
       const chain = await withTransactionHooks(async (transactionHooks) =>
@@ -1601,14 +1602,14 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       const worker = await createInProcessWorker({
         client,
         concurrency: 1,
-        processors: {
+        processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
           dep: {
             attemptHandler: async ({ complete }) => complete(async () => ({ ok: true })),
           },
           main: {
             attemptHandler: async ({ complete }) => complete(async () => ({ result: "done" })),
           },
-        },
+        }),
       });
 
       const { depChain, mainChain } = await withTransactionHooks(async (transactionHooks) =>

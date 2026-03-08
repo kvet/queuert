@@ -9,7 +9,12 @@
  */
 
 import * as v from "valibot";
-import { createClient, createInProcessWorker, withTransactionHooks } from "queuert";
+import {
+  createClient,
+  createInProcessWorker,
+  defineJobTypeProcessorRegistry,
+  withTransactionHooks,
+} from "queuert";
 import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
 import { createValibotJobTypeRegistry } from "./valibot-adapter.js";
 
@@ -81,7 +86,7 @@ const qrtClient = await createClient({
 // 3. Create and start qrtWorker with job type processors
 const qrtWorker = await createInProcessWorker({
   client: qrtClient,
-  processors: {
+  processorRegistry: defineJobTypeProcessorRegistry(qrtClient, registry, {
     "fetch-data": {
       attemptHandler: async ({ job, complete }) => {
         console.log(`Fetching data from ${job.input.url}`);
@@ -124,7 +129,7 @@ const qrtWorker = await createInProcessWorker({
         }));
       },
     },
-  },
+  }),
 });
 
 const stopWorker = await qrtWorker.start();

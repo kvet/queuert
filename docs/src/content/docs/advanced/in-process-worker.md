@@ -111,7 +111,7 @@ See [Job Processing](../job-processing/) for details on error handling and abort
 
 ## Client-Based Construction
 
-`createInProcessWorker` accepts a `client` instance and extracts infrastructure (`stateAdapter`, `notifyAdapter`, `observabilityAdapter`, `registry`, `log`) from it internally. Worker-specific options (`processors`, `concurrency`, `backoffConfig`, etc.) remain separate parameters. The top-level `backoffConfig` controls the worker's own main loop retry behavior (e.g., recovery from database connection errors), separate from the per-job `processDefaults.backoffConfig` that controls job attempt backoff.
+`createInProcessWorker` accepts a `client` instance and extracts infrastructure (`stateAdapter`, `notifyAdapter`, `observabilityAdapter`, `registry`, `log`) from it internally. Worker-specific options (`processorRegistry`, `concurrency`, `backoffConfig`, etc.) remain separate parameters. The top-level `backoffConfig` controls the worker's own main loop retry behavior (e.g., recovery from database connection errors), separate from the per-job `processDefaults.backoffConfig` that controls job attempt backoff.
 
 This is purely a construction convenience — no lifecycle coupling is introduced. The client and worker remain independent after construction.
 

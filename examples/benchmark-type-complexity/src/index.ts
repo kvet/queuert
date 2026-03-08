@@ -130,7 +130,7 @@ const wrapInScenario = (defs: JobTypeDef[]): string => {
   const clientCalls = generateClientCalls(defs);
   const middleware = generateMiddleware("Defs");
 
-  return `import { defineJobTypes, createInProcessWorker, createClient, createTransactionHooks, type JobAttemptMiddleware } from "queuert";
+  return `import { defineJobTypes, defineJobTypeProcessorRegistry, createInProcessWorker, createClient, createTransactionHooks, type JobAttemptMiddleware } from "queuert";
 import { createInProcessStateAdapter, createInProcessNotifyAdapter } from "queuert/internal";
 
 type Defs = {
@@ -152,7 +152,7 @@ ${middleware}
 const worker = await createInProcessWorker({
   client,
   processDefaults: { attemptMiddlewares: [middleware] },
-  processors: ${processors},
+  processorRegistry: defineJobTypeProcessorRegistry(client, jobTypes, ${processors}),
 });
 
 const stop = await worker.start();
@@ -162,20 +162,19 @@ await stop();
 };
 
 const wrapMergeScenario = (slices: { name: string; defs: JobTypeDef[] }[]): string => {
-  const sliceDecls = slices.map((slice) => {
+  const sliceTypeDecls = slices.map((slice) => {
     const typeStrings = slice.defs.map(defToTypeString);
-    const processors = generateProcessors(slice.defs, "client");
     return `
 type ${slice.name}Defs = {
 ${typeStrings.join("\n")}
 };
 
-const ${slice.name}Registry = defineJobTypes<${slice.name}Defs>();
+const ${slice.name}Registry = defineJobTypes<${slice.name}Defs>();`;
+  });
 
-const ${slice.name}Processors = ${processors} satisfies InProcessWorkerProcessors<
-  ReturnType<typeof createInProcessStateAdapter>,
-  ${slice.name}Defs
->;`;
+  const sliceProcessorDecls = slices.map((slice) => {
+    const processors = generateProcessors(slice.defs, "client");
+    return `const ${slice.name}Processors = defineJobTypeProcessorRegistry(client, ${slice.name}Registry, ${processors});`;
   });
 
   const registryNames = slices.map((s) => `${s.name}Registry`);
@@ -185,12 +184,11 @@ const ${slice.name}Processors = ${processors} satisfies InProcessWorkerProcessor
   const mergedDefsType = slices.map((s) => `${s.name}Defs`).join(" & ");
   const middleware = generateMiddleware(mergedDefsType);
 
-  return `import { defineJobTypes, createInProcessWorker, createClient, createTransactionHooks, mergeJobTypeRegistries, type InProcessWorkerProcessors, type JobAttemptMiddleware, mergeJobTypeProcessors } from "queuert";
+  return `import { defineJobTypes, defineJobTypeProcessorRegistry, createInProcessWorker, createClient, createTransactionHooks, mergeJobTypeRegistries, type JobAttemptMiddleware, mergeJobTypeProcessorRegistries } from "queuert";
 import { createInProcessStateAdapter, createInProcessNotifyAdapter } from "queuert/internal";
-${sliceDecls.join("\n")}
+${sliceTypeDecls.join("\n")}
 
 const registry = mergeJobTypeRegistries(${registryNames.join(", ")});
-const mergedProcessors = mergeJobTypeProcessors(${processorNames.join(", ")});
 
 const stateAdapter = createInProcessStateAdapter();
 const notifyAdapter = createInProcessNotifyAdapter();
@@ -201,11 +199,15 @@ const client = await createClient({
   registry,
 });
 
+${sliceProcessorDecls.join("\n")}
+
+const mergedProcessorRegistry = mergeJobTypeProcessorRegistries(${processorNames.join(", ")});
+
 ${middleware}
 const worker = await createInProcessWorker({
   client,
   processDefaults: { attemptMiddlewares: [middleware] },
-  processors: mergedProcessors,
+  processorRegistry: mergedProcessorRegistry,
 });
 
 const stop = await worker.start();

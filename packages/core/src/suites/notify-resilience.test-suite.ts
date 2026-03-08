@@ -3,6 +3,7 @@ import {
   type NotifyAdapter,
   createClient,
   createInProcessWorker,
+  defineJobTypeProcessorRegistry,
   defineJobTypes,
   withTransactionHooks,
 } from "../index.js";
@@ -56,14 +57,14 @@ export const notifyResilienceTestSuite = ({
           maxDelayMs: 1,
         },
       },
-      processors: {
+      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ job, prepare, complete }) => {
             await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
             return complete(async () => ({ result: job.input.value * 2 }));
           },
         },
-      },
+      }),
     });
 
     await withWorkers([await worker.start()], async () => {

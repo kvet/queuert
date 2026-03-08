@@ -1,54 +1,55 @@
+import { type BaseJobTypeDefinitions } from "../entities/job-type.js";
 import { DuplicateJobTypeError } from "../errors.js";
-import { type InProcessWorkerProcessor } from "../in-process-worker.js";
+import {
+  type JobTypeProcessorsRegistry,
+  type ProcessorsRegistryDefinitions,
+  type ProcessorsRegistryExternalDefinitions,
+  processorsDefinitionsSymbol,
+  processorsExternalDefinitionsSymbol,
+} from "./job-type-processors-registry.js";
 
-/** Identity when no duplicate keys; error string when duplicates exist. */
-type AssertNoDuplicateKeys<AccKeys extends string, NewKeys extends string, Success> = [
-  AccKeys & NewKeys,
-] extends [never]
-  ? Success
-  : `Duplicate processor: ${AccKeys & NewKeys}`;
-
-/** Recursively validate each processor map against accumulated keys. */
-type ValidatedSlices<
-  T extends readonly object[],
-  AccKeys extends string = never,
-> = T extends readonly [infer First extends object, ...infer Rest extends readonly object[]]
-  ? readonly [
-      AssertNoDuplicateKeys<AccKeys, keyof First & string, First>,
-      ...ValidatedSlices<Rest, AccKeys | (keyof First & string)>,
-    ]
-  : readonly [];
-
-/** Collect all keys from a tuple of objects. */
-type MergedKeys<T extends readonly object[]> = T extends readonly [
-  infer First,
-  ...infer Rest extends readonly object[],
+/** Collect definitions from a tuple of processors registries. */
+type MergedDefinitions<T extends readonly JobTypeProcessorsRegistry[]> = T extends readonly [
+  infer First extends JobTypeProcessorsRegistry,
+  ...infer Rest extends readonly JobTypeProcessorsRegistry[],
 ]
-  ? (keyof First & string) | MergedKeys<Rest>
-  : never;
+  ? ProcessorsRegistryDefinitions<First> & MergedDefinitions<Rest>
+  : Record<never, never>;
+
+/** Collect external definitions from a tuple of processors registries. */
+type MergedExternalDefinitions<T extends readonly JobTypeProcessorsRegistry[]> =
+  T extends readonly [
+    infer First extends JobTypeProcessorsRegistry,
+    ...infer Rest extends readonly JobTypeProcessorsRegistry[],
+  ]
+    ? ProcessorsRegistryExternalDefinitions<First> & MergedExternalDefinitions<Rest>
+    : Record<never, never>;
 
 /**
- * Merge processor maps from multiple slices into a single processors object.
+ * Merge processors registries from multiple slices into a single registry.
  *
- * Each slice defines processors using {@link defineJobTypeProcessors}, typed against
- * its own job type definitions. This function merges them with compile-time
- * duplicate detection — overlapping processor keys produce a type error.
- *
- * The return type preserves the specific processor keys from each slice while
- * widening the handler types so the result is assignable to
- * `InProcessWorkerProcessors` expected by `createInProcessWorker`.
+ * Each slice defines processors using {@link defineJobTypeProcessorRegistry}, typed against
+ * its own job type definitions. This function merges them with runtime
+ * duplicate detection — overlapping processor keys throw {@link DuplicateJobTypeError}.
  *
  * @example
  * const worker = await createInProcessWorker({
  *   client,
- *   processors: mergeJobTypeProcessors(orderProcessors, notificationProcessors),
+ *   processorRegistry: mergeJobTypeProcessorRegistries(orderProcessors, notificationProcessors),
  * });
  */
-export const mergeJobTypeProcessors = <
-  const TSlices extends readonly [object, object, ...object[]],
+export const mergeJobTypeProcessorRegistries = <
+  const TSlices extends readonly [
+    JobTypeProcessorsRegistry,
+    JobTypeProcessorsRegistry,
+    ...JobTypeProcessorsRegistry[],
+  ],
 >(
-  ...slices: ValidatedSlices<TSlices> & TSlices
-): { [K in MergedKeys<TSlices>]: InProcessWorkerProcessor<any, any, K> } => {
+  ...slices: TSlices
+): JobTypeProcessorsRegistry<
+  MergedDefinitions<TSlices> & BaseJobTypeDefinitions,
+  MergedExternalDefinitions<TSlices> & BaseJobTypeDefinitions
+> => {
   const seen = new Set<string>();
   const duplicates: string[] = [];
   for (const slice of slices as unknown as object[]) {
@@ -64,7 +65,13 @@ export const mergeJobTypeProcessors = <
       duplicateTypeNames: duplicates,
     });
   }
-  return Object.assign({}, ...(slices as unknown as object[])) as {
-    [K in MergedKeys<TSlices>]: InProcessWorkerProcessor<any, any, K>;
-  };
+  return Object.assign({}, ...(slices as unknown as object[]), {
+    [processorsDefinitionsSymbol]: undefined as unknown as MergedDefinitions<TSlices> &
+      BaseJobTypeDefinitions,
+    [processorsExternalDefinitionsSymbol]:
+      undefined as unknown as MergedExternalDefinitions<TSlices> & BaseJobTypeDefinitions,
+  }) as JobTypeProcessorsRegistry<
+    MergedDefinitions<TSlices> & BaseJobTypeDefinitions,
+    MergedExternalDefinitions<TSlices> & BaseJobTypeDefinitions
+  >;
 };

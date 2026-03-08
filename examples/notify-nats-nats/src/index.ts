@@ -1,7 +1,13 @@
 import { createNatsNotifyAdapter } from "@queuert/nats";
 import { NatsContainer } from "@testcontainers/nats";
 import { connect } from "nats";
-import { createClient, createInProcessWorker, defineJobTypes, withTransactionHooks } from "queuert";
+import {
+  createClient,
+  createInProcessWorker,
+  defineJobTypeProcessorRegistry,
+  defineJobTypes,
+  withTransactionHooks,
+} from "queuert";
 import { createInProcessStateAdapter } from "queuert/internal";
 
 // 1. Start NATS using testcontainers (with JetStream enabled)
@@ -42,7 +48,7 @@ const qrtClient = await createClient({
 
 const qrtWorker = await createInProcessWorker({
   client: qrtClient,
-  processors: {
+  processorRegistry: defineJobTypeProcessorRegistry(qrtClient, registry, {
     generate_report: {
       attemptHandler: async ({ job, complete }) => {
         console.log(`Generating ${job.input.reportType} report...`);
@@ -56,7 +62,7 @@ const qrtWorker = await createInProcessWorker({
         }));
       },
     },
-  },
+  }),
 });
 
 // 7. Start worker and queue a job

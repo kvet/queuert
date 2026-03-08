@@ -49,7 +49,7 @@ import { rescheduleJob } from "queuert";
 
 const worker = await createInProcessWorker({
   client,
-  processors: {
+  processorRegistry: defineJobTypeProcessorRegistry(client, jobTypes, {
     "call-external-api": {
       attemptHandler: async ({ job, prepare, complete }) => {
         const response = await fetch(job.input.url);
@@ -69,7 +69,7 @@ const worker = await createInProcessWorker({
         return complete(() => ({ data }));
       },
     },
-  },
+  }),
 });
 
 const stop = await worker.start();

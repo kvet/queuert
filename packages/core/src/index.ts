@@ -65,11 +65,8 @@ export { type BackoffConfig } from "./helpers/backoff.js";
 export { type RetryConfig } from "./helpers/retry.js";
 export {
   createInProcessWorker,
-  defineJobTypeProcessors,
   type InProcessWorker,
   type InProcessWorkerProcessDefaults,
-  type InProcessWorkerProcessor,
-  type InProcessWorkerProcessors,
 } from "./in-process-worker.js";
 export { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 export { createConsoleLog } from "./observability-adapter/log.console.js";
@@ -95,4 +92,13 @@ export {
   type JobAttemptMiddleware,
 } from "./worker/job-process.js";
 export { type LeaseConfig } from "./worker/lease.js";
-export { mergeJobTypeProcessors } from "./worker/merge-job-type-processors.js";
+export {
+  defineJobTypeProcessorRegistry,
+  processorsDefinitionsSymbol,
+  processorsExternalDefinitionsSymbol,
+  type InProcessWorkerProcessor,
+  type JobTypeProcessorsRegistry,
+  type ProcessorsRegistryDefinitions,
+  type ProcessorsRegistryExternalDefinitions,
+} from "./worker/job-type-processors-registry.js";
+export { mergeJobTypeProcessorRegistries } from "./worker/merge-job-type-processors.js";

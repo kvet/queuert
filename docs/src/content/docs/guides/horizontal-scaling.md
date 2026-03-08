@@ -13,7 +13,7 @@ const worker = await createInProcessWorker({
   client,
   workerId: "worker-a",
   concurrency: 10,
-  processors: { ... },
+  processorRegistry: defineJobTypeProcessorRegistry(client, jobTypes, { ... }),
 });
 
 // Process B (e.g., machine-2)
@@ -21,7 +21,7 @@ const worker = await createInProcessWorker({
   client,
   workerId: "worker-b",
   concurrency: 10,
-  processors: { ... },
+  processorRegistry: defineJobTypeProcessorRegistry(client, jobTypes, { ... }),
 });
 ```
 

@@ -1,12 +1,16 @@
 # Short term
 
+- [TASK] Fix `ChainJobTypeNames` TS2589 depth limit with large self-referential chains
+  - **Symptom**: `loop-100` benchmark hits "Type instantiation is excessively deep and possibly infinite" (TS2589)
+  - **Root cause**: `ChainJobTypeNames` in `job-type.navigation.ts` recurses once per chain link, hitting TypeScript's ~50-level depth limit. `ChainReachMap` amplifies this to O(n²) by calling it for every entry type × every type
+  - **Feasible fix**: Add a tuple-length depth counter to `ChainJobTypeNames` that bails out to `keyof TDefs & string` after ~50 levels — preserves type safety for realistic chain lengths, degrades gracefully for extreme cases
+  - **Alternative**: Simplify `ChainReachMap`/`ChainTypesReaching` to accept chain type name explicitly rather than computing it, removing the O(n²) amplifier
+  - **Scope**: 100 self-looping types in a single slice is synthetic; real-world usage likely stays under 50 types per slice. The `mergeJobTypeProcessorRegistries` pattern exists for scaling beyond that
 - [TASK,COMPLEX] Fix many-slice type complexity for `createInProcessWorker`
   - **Target**: Support up to 100 slices × 100 types per slice (10,000 total job types). A real pipeline can have ~50 types (e.g., 14-type deploy pipeline × several pipelines per domain), and large apps can have 100 such slices
   - **Benchmark matrix**: Test 1, 5, 10, 20, 50, 100 types per slice × 1, 5, 10, 20, 50, 100 slices
   - **Problem**: `Client<MergedDefs>` type expansion is the bottleneck — its methods (`startJobChain`, `completeJobChain`, `getJob`, `awaitJobChain`, etc.) distribute `ResolvedJobChain`/`ResolvedJob` over all entry/job type unions, causing 2M+ instantiations at 50+ slices of 10-step chains
   - **Root cause**: Both tsc and tsgo evaluate ALL overloads during resolution, not just the first match. Having a cheap branded overload (`client: object`) and a typed fallback (`Client<TJobTypeDefinitions, TStateAdapter>`) doesn't help — the typed overload still triggers the full expansion
-  - **Proven fix**: Using `client: object` with NO typed overload reduces many-50x10 from 2.2M to 469k instantiations and many-100x10 from 5.8M to 883k. But this loses type inference for inline processors (non-merge usage)
-  - **Approach**: Add a lightweight phantom brand to `Client` (e.g., `[clientDefinitionsSymbol]: TJobTypeDefinitions`) that carries the definitions type without expanding the full Client interface. The `createInProcessWorker` overload can then `infer` definitions from this brand instead of matching against the full `Client<TJobTypeDefinitions, TStateAdapter>` type. This avoids the expensive method-level distribution while preserving type safety for both inline and merged processor usage
   - See `examples/benchmark-type-complexity/RESULTS.md` for current benchmark data
 - [REF] Processing capacity benchmark? Like running 100_000 jobs?
 - [TASK] Move benchmarks to a dedicated folder and dont run the with examples as they are expensive to run

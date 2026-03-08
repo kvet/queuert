@@ -92,15 +92,7 @@ type ExtDefs = ExternalJobTypeRegistryDefinitions<typeof orderJobTypes>;
 // { "notifications.send": { ... } }
 ```
 
-Used with `InProcessWorkerProcessors` to give slice processors visibility into external types:
-
-```typescript
-satisfies InProcessWorkerProcessors<
-  typeof stateAdapter,
-  JobTypeRegistryDefinitions<typeof orderJobTypes>,
-  ExternalJobTypeRegistryDefinitions<typeof orderJobTypes>
->
-```
+When using `defineJobTypeProcessorRegistry`, external definitions are automatically extracted from the registry — no need to specify them manually.
 
 ## Attempt Handler Types
 

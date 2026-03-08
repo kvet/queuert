@@ -86,42 +86,46 @@ const registry = mergeJobTypeRegistries(ordersRegistry, notificationsRegistry);
 const client = await createClient({ registry, stateAdapter });
 ```
 
-## defineJobTypeProcessors
+## defineJobTypeProcessorRegistry
 
 ```typescript
-const orderProcessors = defineJobTypeProcessors(orderJobTypes, {
+const orderProcessorRegistry = defineJobTypeProcessorRegistry(client, orderJobTypes, {
   "orders.create": {
     attemptHandler: async ({ job, complete }) => complete(async () => ({ orderId: "123" })),
   },
 });
 ```
 
-Defines processors for a job type slice with full type inference. Handlers are type-checked against the slice's definitions (including external references from `TExternal`), then the return type is widened so it is assignable to any `InProcessWorkerProcessors` whose definitions include the slice's types.
+Defines a processors registry for a job type slice with full type inference. Handlers are type-checked against the slice's definitions (including external references from `TExternal`). Returns a `JobTypeProcessorsRegistry` that carries the slice's type definitions via phantom symbol properties.
 
-- **First argument** -- a `JobTypeRegistry` (from `defineJobTypes` or `createJobTypeRegistry`), used for type inference only
-- **Second argument** -- the processor map, typed against the registry's definitions
-- **Return type** -- preserves the specific keys but widens the handler types, making it compatible with `createInProcessWorker` and `mergeJobTypeProcessors`
+- **First argument** -- a `Client` instance, used to infer the state adapter type for proper handler typing
+- **Second argument** -- a `JobTypeRegistry` (from `defineJobTypes` or `createJobTypeRegistry`), used for type inference
+- **Third argument** -- the processor map, typed against the registry's definitions
+- **Return type** -- a `JobTypeProcessorsRegistry` carrying definitions and external definitions via phantom symbol properties
 
-This replaces the `satisfies InProcessWorkerProcessors<...>` pattern, which required manually specifying `JobTypeRegistryDefinitions` and `ExternalJobTypeRegistryDefinitions` type parameters.
-
-## mergeJobTypeProcessors
+## mergeJobTypeProcessorRegistries
 
 ```typescript
-const processors = mergeJobTypeProcessors(orderProcessors, notificationProcessors);
+const processorRegistry = mergeJobTypeProcessorRegistries(
+  orderProcessorRegistry,
+  notificationProcessorRegistry,
+);
 ```
 
-Merges processor maps from multiple slices into a single processors object. Accepts two or more processor maps (variadic).
+Merges processors registries from multiple slices into a single registry. Accepts two or more `JobTypeProcessorsRegistry` instances (variadic).
 
-- **Compile-time duplicate detection** -- overlapping processor keys produce a type error
 - **Runtime duplicate detection** -- overlapping processor keys throw `DuplicateJobTypeError`
-- **Widened return type** -- the result is assignable to `InProcessWorkerProcessors` expected by `createInProcessWorker`
+- **Merged return type** -- a `JobTypeProcessorsRegistry` with unioned definitions, external definitions, and processor keys
 
-Each slice defines processors using `defineJobTypeProcessors`, typed against its own job type definitions. This allows co-locating job type definitions and processor handlers per feature module.
+Each slice defines processors using `defineJobTypeProcessorRegistry`, typed against its own job type definitions. This allows co-locating job type definitions and processor handlers per feature module.
 
 ```typescript
 const worker = await createInProcessWorker({
   client,
-  processors: mergeJobTypeProcessors(orderProcessors, notificationProcessors),
+  processorRegistry: mergeJobTypeProcessorRegistries(
+    orderProcessorRegistry,
+    notificationProcessorRegistry,
+  ),
 });
 ```
 

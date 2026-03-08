@@ -16,7 +16,13 @@ import postgres, {
   type Row,
   type TransactionSql as _TransactionSql,
 } from "postgres";
-import { createClient, createInProcessWorker, defineJobTypes, withTransactionHooks } from "queuert";
+import {
+  createClient,
+  createInProcessWorker,
+  defineJobTypeProcessorRegistry,
+  defineJobTypes,
+  withTransactionHooks,
+} from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 
 type TransactionSql = _TransactionSql & {
@@ -133,7 +139,7 @@ const client = await createClient({
 
 const worker = await createInProcessWorker({
   client,
-  processors: {
+  processorRegistry: defineJobTypeProcessorRegistry(client, jobTypes, {
     "daily-digest": {
       attemptHandler: async ({ job, complete }) => {
         console.log(
@@ -219,7 +225,7 @@ const worker = await createInProcessWorker({
         });
       },
     },
-  },
+  }),
 });
 
 const stopWorker = await worker.start();
