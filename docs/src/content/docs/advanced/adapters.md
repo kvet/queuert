@@ -150,5 +150,5 @@ Both `createStateJob` and `finishJob` snapshot the observability buffer on entry
 
 - [OTEL Tracing](../otel-tracing/) — Span hierarchy and messaging conventions
 - [OTEL Metrics](../otel-metrics/) — Counters, histograms, and gauges
-- [Client API](../client-api/) — Mutation and query methods
+- [Client API](/queuert/reference/queuert/client/) — Mutation and query methods
 - [In-Process Worker](../in-process-worker/) — Worker lifecycle and lease management

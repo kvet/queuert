@@ -91,6 +91,6 @@ For hard timeouts (forceful termination), the lease mechanism already handles th
 
 ## See Also
 
-- [Client API](../client-api/) — Mutation methods, query methods, awaitJobChain
+- [Client API](/queuert/reference/queuert/client/) — Mutation methods, query methods, awaitJobChain
 - [In-Process Worker](../in-process-worker/) — Worker lifecycle, leasing, reaper
 - [Adapters](../adapters/) — StateAdapter context architecture

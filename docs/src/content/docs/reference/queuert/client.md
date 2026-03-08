@@ -237,5 +237,4 @@ Lists jobs that are blocked by the specified chain. Default **orderDirection** i
 - [Utilities](/queuert/reference/queuert/utilities/) — Composition helpers and utility functions
 - [Transaction Hooks](/queuert/reference/queuert/transaction-hooks/) — Transaction hooks API reference
 - [Errors](/queuert/reference/queuert/errors/) — Error classes reference
-- [Client API](/queuert/advanced/client-api/) — Architectural overview
 - [Transaction Hooks Guide](/queuert/guides/transaction-hooks/) — Usage guide
