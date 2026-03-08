@@ -12,6 +12,7 @@
     "start:notify-postgres": "node --expose-gc --import=tsx src/index.ts --notify-postgres",
     "start:notify-nats": "node --expose-gc --import=tsx src/index.ts --notify-nats",
     "start:otel": "node --expose-gc --import=tsx src/index.ts --otel",
+    "start:dashboard": "node --expose-gc --import=tsx src/index.ts --dashboard",
     "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
@@ -21,6 +22,7 @@
     "@queuert/otel": "workspace:*",
     "@queuert/postgres": "workspace:*",
     "@queuert/redis": "workspace:*",
+    "@queuert/dashboard": "workspace:*",
     "@queuert/sqlite": "workspace:*",
     "better-sqlite3": "^12.6.2",
     "nats": "^2.29.3",

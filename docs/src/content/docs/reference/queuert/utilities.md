@@ -24,7 +24,7 @@ const jobTypes = defineJobTypes<{
 
 Creates a compile-time-only type registry. No runtime validation is performed. The returned object carries type information used by `createClient` and `createWorker` to infer input, output, and chain-flow types.
 
-An optional second type parameter `TExternal` allows referencing job types from other slices without owning them:
+An optional second type parameter `TExternal` allows `blockers` to reference job types from other slices without owning them:
 
 ```typescript
 const orderJobTypes = defineJobTypes<
@@ -35,14 +35,14 @@ const orderJobTypes = defineJobTypes<
       blockers: [{ typeName: "notifications.send" }];
     };
   },
-  // External types — available for reference validation, not owned
+  // External types — available for blocker reference validation, not owned
   JobTypeRegistryDefinitions<typeof notificationJobTypes>
 >();
 ```
 
 - `T` = owned definitions (become the registry's phantom type via `JobTypeRegistryDefinitions`)
 - `TExternal` = read-only reference context (defaults to `Record<never, never>`, extractable via `ExternalJobTypeRegistryDefinitions`)
-- `continueWith` and `blockers` validate against `T & TExternal`
+- `blockers` validates against `T & TExternal`
 - The registry's phantom type remains `T` only
 
 ## createJobTypeRegistry
@@ -58,7 +58,7 @@ const registry = createJobTypeRegistry<MyJobTypes>({
 });
 ```
 
-Creates a registry with runtime validation for input/output parsing. Each callback is invoked at the appropriate lifecycle point. Use this when you need schema validation (e.g. with Zod) beyond compile-time checks. Accepts an optional `TExternal` type parameter for cross-slice reference validation (compile-time only, same as `defineJobTypes`).
+Creates a registry with runtime validation for input/output parsing. Each callback is invoked at the appropriate lifecycle point. Use this when you need schema validation (e.g. with Zod) beyond compile-time checks. Accepts an optional `TExternal` type parameter for cross-slice blocker reference validation (compile-time only, same as `defineJobTypes`).
 
 - **getTypeNames** -- returns the known job type names; used by `mergeJobTypeRegistries` for runtime duplicate detection and deterministic routing
 

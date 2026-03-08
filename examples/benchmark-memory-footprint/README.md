@@ -18,6 +18,7 @@ pnpm start:notify-redis      # Redis notify adapter
 pnpm start:notify-postgres   # PostgreSQL notify adapter
 pnpm start:notify-nats       # NATS notify adapter
 pnpm start:otel              # OpenTelemetry observability adapter
+pnpm start:dashboard         # Dashboard
 ```
 
 ## What it measures
@@ -41,28 +42,33 @@ Measures adapter creation overhead with real pub/sub drivers:
 
 - **OpenTelemetry** - OTEL SDK + metrics adapter overhead
 
+### Dashboard
+
+- **Dashboard** - Embeddable web dashboard (in-process, no external deps)
+
 ## Sample results
 
 ### State Adapters
 
-| Adapter    | Adapter Overhead |
-| ---------- | ---------------- |
-| PostgreSQL | ~290 KB          |
-| SQLite     | ~45 KB           |
+| Adapter    | Driver  | Adapter + Migrations | Client + Worker |
+| ---------- | ------: | -------------------: | --------------: |
+| PostgreSQL | ~183 KB |              ~282 KB |        ~113 KB  |
+| SQLite     |  ~79 KB |               ~43 KB |        ~139 KB  |
 
 ### Notify Adapters
 
-| Adapter    | Adapter Overhead |
-| ---------- | ---------------- |
-| Redis      | ~11 KB           |
-| PostgreSQL | ~10 KB           |
-| NATS       | ~11 KB           |
+| Adapter    | Driver  | Adapter | Client + Worker |
+| ---------- | ------: | ------: | --------------: |
+| Redis      | ~437 KB |   ~9 KB |        ~130 KB  |
+| PostgreSQL | ~184 KB |   ~9 KB |        ~236 KB  |
+| NATS       | ~193 KB |  ~10 KB |        ~122 KB  |
 
-### OpenTelemetry
+### Other Components
 
-| Component             | Overhead |
-| --------------------- | -------- |
-| Observability Adapter | ~145 KB  |
+| Component             | Heap Overhead | Notes                                        |
+| --------------------- | ------------: | -------------------------------------------- |
+| Observability (OTel)  |       ~135 KB | Adapter only; OTel MeterProvider adds ~21 KB |
+| Dashboard             |         ~2 KB | First API request loads ~1.7 MB of assets    |
 
 ## Notes
 

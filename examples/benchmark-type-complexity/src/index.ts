@@ -1,13 +1,15 @@
 import { execSync } from "node:child_process";
-import { rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 const benchmarkDir = resolve(import.meta.dirname, "..");
 const projectRoot = resolve(benchmarkDir, "../..");
+const generatedDir = join(benchmarkDir, "generated");
 
 type Scenario = {
   name: string;
   description: string;
+  group: string;
   generate: () => string;
 };
 
@@ -20,6 +22,15 @@ type JobTypeDef = {
   blockers?: string[];
 };
 
+const typeToValue = (typeStr: string): string =>
+  typeStr
+    .replace(/:\s*string/g, ': ""')
+    .replace(/:\s*number/g, ": 0")
+    .replace(/:\s*boolean/g, ": false")
+    .replace(/:\s*null/g, ": null")
+    .replace(/;\s*}/g, " }")
+    .replace(/;/g, ",");
+
 const defToTypeString = (def: JobTypeDef): string => {
   const lines = [];
   if (def.entry) lines.push("entry: true;");
@@ -30,12 +41,12 @@ const defToTypeString = (def: JobTypeDef): string => {
   return `  "${def.name}": {\n    ${lines.join("\n    ")}\n  };`;
 };
 
-const generateProcessors = (defs: JobTypeDef[]): string => {
+const generateProcessors = (defs: JobTypeDef[], clientVar: string): string => {
   const processors = defs.map((def) => {
     if (def.output && !def.continueWith) {
       return `    "${def.name}": {
       attemptHandler: async ({ complete }) =>
-        complete(async () => ({} as any)),
+        complete(async () => (${typeToValue(def.output)})),
     }`;
     }
 
@@ -43,12 +54,33 @@ const generateProcessors = (defs: JobTypeDef[]): string => {
       const typeNameMatch = def.continueWith.match(/typeName:\s*"([^"]+)"/);
       const firstTarget = typeNameMatch?.[1] ?? "unknown";
       const targetDef = defs.find((d) => d.name === firstTarget);
-      const needsBlockers = targetDef?.blockers && targetDef.blockers.length > 0;
+
+      if (targetDef?.blockers && targetDef.blockers.length > 0) {
+        const blockerStartCalls = targetDef.blockers.map((blockerStr) => {
+          const blockerNameMatch = blockerStr.match(/typeName:\s*"([^"]+)"/);
+          const blockerName = blockerNameMatch?.[1] ?? "unknown";
+          const blockerDef = defs.find((d) => d.name === blockerName);
+          const blockerInput = blockerDef ? typeToValue(blockerDef.input) : `{ id: "" }`;
+          return `${clientVar}.startJobChain({ ...txCtx, typeName: "${blockerName}", input: ${blockerInput} })`;
+        });
+        const blockerAwaits = blockerStartCalls
+          .map((call, i) => `            const blocker${i} = await ${call};`)
+          .join("\n");
+        const blockerArray = blockerStartCalls.map((_, i) => `blocker${i}`).join(", ");
+
+        return `    "${def.name}": {
+      attemptHandler: async ({ complete }) =>
+        complete(async ({ continueWith, ...txCtx }) => {
+${blockerAwaits}
+            return continueWith({ typeName: "${firstTarget}", input: ${typeToValue(targetDef.input)}, blockers: [${blockerArray}] });
+        }),
+    }`;
+      }
 
       return `    "${def.name}": {
       attemptHandler: async ({ complete }) =>
         complete(async ({ continueWith }) =>
-          continueWith({ typeName: "${firstTarget}", input: {} as any${needsBlockers ? ", blockers: [] as any" : ""} })),
+          continueWith({ typeName: "${firstTarget}", input: ${typeToValue(targetDef?.input ?? "{ id: string }")} })),
     }`;
     }
 
@@ -61,11 +93,44 @@ const generateProcessors = (defs: JobTypeDef[]): string => {
   return `{\n${processors.join(",\n")},\n  }`;
 };
 
+const generateClientCalls = (defs: JobTypeDef[]): string => {
+  const entryDef = defs.find((d) => d.entry);
+  if (!entryDef) return "";
+
+  const typeName = entryDef.name;
+  const input = typeToValue(entryDef.input);
+
+  return `
+const { transactionHooks } = createTransactionHooks();
+const chain = await client.startJobChain({ typeName: "${typeName}", input: ${input}, transactionHooks });
+const fetchedChain = await client.getJobChain({ typeName: "${typeName}", id: chain.id });
+const job = await client.getJob({ typeName: "${typeName}", id: chain.id });
+const chains = await client.listJobChains({ filter: { typeName: ["${typeName}"] } });
+const jobs = await client.listJobs({ filter: { typeName: ["${typeName}"] } });
+void fetchedChain;
+void job;
+void chains;
+void jobs;
+`;
+};
+
+const generateMiddleware = (defsType: string): string =>
+  `const middleware: JobAttemptMiddleware<
+  Awaited<ReturnType<typeof createInProcessStateAdapter>>,
+  ${defsType}
+> = async ({ job }, next) => {
+  void job.typeName;
+  return next();
+};
+`;
+
 const wrapInScenario = (defs: JobTypeDef[]): string => {
   const typeStrings = defs.map(defToTypeString);
-  const processors = generateProcessors(defs);
+  const processors = generateProcessors(defs, "client");
+  const clientCalls = generateClientCalls(defs);
+  const middleware = generateMiddleware("Defs");
 
-  return `import { defineJobTypes, createInProcessWorker, createClient } from "queuert";
+  return `import { defineJobTypes, createInProcessWorker, createClient, createTransactionHooks, type JobAttemptMiddleware } from "queuert";
 import { createInProcessStateAdapter, createInProcessNotifyAdapter } from "queuert/internal";
 
 type Defs = {
@@ -83,17 +148,23 @@ const client = await createClient({
   registry: jobTypes,
 });
 
-const _worker = await createInProcessWorker({
+${middleware}
+const worker = await createInProcessWorker({
   client,
+  processDefaults: { attemptMiddlewares: [middleware] },
   processors: ${processors},
 });
+
+const stop = await worker.start();
+${clientCalls}
+await stop();
 `;
 };
 
 const wrapMergeScenario = (slices: { name: string; defs: JobTypeDef[] }[]): string => {
   const sliceDecls = slices.map((slice) => {
     const typeStrings = slice.defs.map(defToTypeString);
-    const processors = generateProcessors(slice.defs);
+    const processors = generateProcessors(slice.defs, "client");
     return `
 type ${slice.name}Defs = {
 ${typeStrings.join("\n")}
@@ -109,13 +180,17 @@ const ${slice.name}Processors = ${processors} satisfies InProcessWorkerProcessor
 
   const registryNames = slices.map((s) => `${s.name}Registry`);
   const processorNames = slices.map((s) => `${s.name}Processors`);
+  const allDefs = slices.flatMap((s) => s.defs);
+  const clientCalls = generateClientCalls(allDefs);
+  const mergedDefsType = slices.map((s) => `${s.name}Defs`).join(" & ");
+  const middleware = generateMiddleware(mergedDefsType);
 
-  return `import { defineJobTypes, createInProcessWorker, createClient, mergeJobTypeRegistries, type InProcessWorkerProcessors, mergeJobTypeProcessors } from "queuert";
+  return `import { defineJobTypes, createInProcessWorker, createClient, createTransactionHooks, mergeJobTypeRegistries, type InProcessWorkerProcessors, type JobAttemptMiddleware, mergeJobTypeProcessors } from "queuert";
 import { createInProcessStateAdapter, createInProcessNotifyAdapter } from "queuert/internal";
 ${sliceDecls.join("\n")}
 
 const registry = mergeJobTypeRegistries(${registryNames.join(", ")});
-const processors = mergeJobTypeProcessors(${processorNames.join(", ")});
+const mergedProcessors = mergeJobTypeProcessors(${processorNames.join(", ")});
 
 const stateAdapter = await createInProcessStateAdapter();
 const notifyAdapter = createInProcessNotifyAdapter();
@@ -126,12 +201,20 @@ const client = await createClient({
   registry,
 });
 
-const _worker = await createInProcessWorker({
+${middleware}
+const worker = await createInProcessWorker({
   client,
-  processors,
+  processDefaults: { attemptMiddlewares: [middleware] },
+  processors: mergedProcessors,
 });
+
+const stop = await worker.start();
+${clientCalls}
+await stop();
 `;
 };
+
+// --- Generators ---
 
 const generateLinearChain = (depth: number): JobTypeDef[] => {
   const defs: JobTypeDef[] = [];
@@ -231,11 +314,12 @@ const generateWithLoop = (chainLength: number): JobTypeDef[] => {
 
   for (let i = 1; i < chainLength; i++) {
     const isLast = i === chainLength - 1;
+    const next = isLast ? `"end"` : `"step-${i + 1}"`;
     defs.push({
       name: `step-${i}`,
-      input: isLast ? `{ id: string; cycle: number }` : `{ id: string; step${i}: number }`,
+      input: `{ id: string; step${i}: number }`,
       output: isLast ? `{ result: string }` : undefined,
-      continueWith: isLast ? `{ typeName: "step-${i}" | "end" }` : `{ typeName: "step-${i + 1}" }`,
+      continueWith: `{ typeName: "step-${i}" | ${next} }`,
     });
   }
 
@@ -256,135 +340,81 @@ const prefixDefs = (defs: JobTypeDef[], prefix: string): JobTypeDef[] =>
     blockers: d.blockers?.map((b) => b.replace(/"([^"]+)"/g, `"${prefix}-$1"`)),
   }));
 
-const scenarios: Scenario[] = [
-  {
-    name: "linear-3",
-    description: "Linear: 3 types",
-    generate: () => wrapInScenario(generateLinearChain(3)),
-  },
-  {
-    name: "linear-5",
-    description: "Linear: 5 types",
-    generate: () => wrapInScenario(generateLinearChain(5)),
-  },
-  {
-    name: "linear-10",
-    description: "Linear: 10 types",
-    generate: () => wrapInScenario(generateLinearChain(10)),
-  },
-  {
-    name: "linear-20",
-    description: "Linear: 20 types",
-    generate: () => wrapInScenario(generateLinearChain(20)),
-  },
-  {
-    name: "linear-30",
-    description: "Linear: 30 types",
-    generate: () => wrapInScenario(generateLinearChain(30)),
-  },
-  {
-    name: "branched-2x2",
-    description: "Branched: 2w x 2d",
-    generate: () => wrapInScenario(generateBranchedChain(2, 2)),
-  },
-  {
-    name: "branched-3x3",
-    description: "Branched: 3w x 3d",
-    generate: () => wrapInScenario(generateBranchedChain(3, 3)),
-  },
-  {
-    name: "branched-4x3",
-    description: "Branched: 4w x 3d",
-    generate: () => wrapInScenario(generateBranchedChain(4, 3)),
-  },
-  {
-    name: "blockers-3",
-    description: "Blockers: 3 steps",
-    generate: () => wrapInScenario(generateWithBlockers(3)),
-  },
-  {
-    name: "blockers-5",
-    description: "Blockers: 5 steps",
-    generate: () => wrapInScenario(generateWithBlockers(5)),
-  },
-  {
-    name: "blockers-8",
-    description: "Blockers: 8 steps",
-    generate: () => wrapInScenario(generateWithBlockers(8)),
-  },
-  {
-    name: "loop-3",
-    description: "Loop: 3 steps",
-    generate: () => wrapInScenario(generateWithLoop(3)),
-  },
-  {
-    name: "loop-5",
-    description: "Loop: 5 steps",
-    generate: () => wrapInScenario(generateWithLoop(5)),
-  },
-  {
-    name: "loop-10",
-    description: "Loop: 10 steps",
-    generate: () => wrapInScenario(generateWithLoop(10)),
-  },
-  {
-    name: "loop-20",
-    description: "Loop: 20 steps",
-    generate: () => wrapInScenario(generateWithLoop(20)),
-  },
-  {
-    name: "merge-2x3",
-    description: "Merge: 2 slices x 3",
-    generate: () =>
-      wrapMergeScenario([
-        { name: "sliceA", defs: prefixDefs(generateLinearChain(3), "a") },
-        { name: "sliceB", defs: prefixDefs(generateLinearChain(3), "b") },
-      ]),
-  },
-  {
-    name: "merge-3x5",
-    description: "Merge: 3 slices x 5",
-    generate: () =>
-      wrapMergeScenario([
-        { name: "sliceA", defs: prefixDefs(generateLinearChain(5), "a") },
-        { name: "sliceB", defs: prefixDefs(generateLinearChain(5), "b") },
-        { name: "sliceC", defs: prefixDefs(generateLinearChain(5), "c") },
-      ]),
-  },
-  {
-    name: "merge-4x10",
-    description: "Merge: 4 slices x 10",
-    generate: () =>
-      wrapMergeScenario([
-        { name: "sliceA", defs: prefixDefs(generateLinearChain(10), "a") },
-        { name: "sliceB", defs: prefixDefs(generateLinearChain(10), "b") },
-        { name: "sliceC", defs: prefixDefs(generateLinearChain(10), "c") },
-        { name: "sliceD", defs: prefixDefs(generateLinearChain(10), "d") },
-      ]),
-  },
-  {
-    name: "many-10x3",
-    description: "Many: 10 x 3-step",
-    generate: () =>
-      wrapMergeScenario(
-        Array.from({ length: 10 }, (_, i) => ({
-          name: `s${i}`,
-          defs: prefixDefs(generateLinearChain(3), `s${i}`),
-        })),
-      ),
-  },
-  {
-    name: "many-20x3",
-    description: "Many: 20 x 3-step",
-    generate: () =>
-      wrapMergeScenario(
-        Array.from({ length: 20 }, (_, i) => ({
-          name: `s${i}`,
-          defs: prefixDefs(generateLinearChain(3), `s${i}`),
-        })),
-      ),
-  },
+// --- Scenario definitions ---
+
+const linearSizes = [1, 5, 10, 20, 50, 100];
+const loopSizes = [5, 10, 20, 50, 100];
+const blockerSteps = [3, 8, 15, 25];
+const branchedConfigs: [number, number][] = [
+  [2, 2], // 7 types
+  [3, 3], // 40 types
+  [4, 3], // 85 types
+  [2, 6], // 127 types
 ];
+const mergeConfigs: [number, number][] = [
+  [2, 100],
+  [5, 100],
+];
+
+const scenarios: Scenario[] = [
+  // Single-slice: Linear
+  ...linearSizes.map(
+    (n): Scenario => ({
+      name: `linear-${n}`,
+      description: `Linear: ${n} types`,
+      group: "linear",
+      generate: () => wrapInScenario(generateLinearChain(n)),
+    }),
+  ),
+
+  // Single-slice: Branched
+  ...branchedConfigs.map(
+    ([b, d]): Scenario => ({
+      name: `branched-${b}x${d}`,
+      description: `Branched: ${b}w x ${d}d`,
+      group: "branched",
+      generate: () => wrapInScenario(generateBranchedChain(b, d)),
+    }),
+  ),
+
+  // Single-slice: Blockers
+  ...blockerSteps.map(
+    (s): Scenario => ({
+      name: `blockers-${s}`,
+      description: `Blockers: ${s} steps`,
+      group: "blockers",
+      generate: () => wrapInScenario(generateWithBlockers(s)),
+    }),
+  ),
+
+  // Single-slice: Loops
+  ...loopSizes.map(
+    (l): Scenario => ({
+      name: `loop-${l}`,
+      description: `Loop: ${l} steps`,
+      group: "loop",
+      generate: () => wrapInScenario(generateWithLoop(l)),
+    }),
+  ),
+
+  // Multi-slice: Merge
+  ...mergeConfigs.map(
+    ([slices, types]): Scenario => ({
+      name: `merge-${slices}x${types}`,
+      description: `Merge: ${slices} slices x ${types}`,
+      group: "merge",
+      generate: () =>
+        wrapMergeScenario(
+          Array.from({ length: slices }, (_, i) => ({
+            name: `s${i}`,
+            defs: prefixDefs(generateLinearChain(types), `s${i}`),
+          })),
+        ),
+    }),
+  ),
+];
+
+// --- Types ---
 
 type Diagnostics = {
   timeMs: number;
@@ -397,13 +427,22 @@ type Diagnostics = {
 type Result = {
   name: string;
   description: string;
+  group: string;
   jobTypeCount: number;
   diagnostics: Diagnostics | null;
 };
 
+// --- Helpers ---
+
 const countJobTypes = (code: string): number => {
-  const matches = code.match(/^\s+"[^"]+": \{$/gm);
-  return matches?.length ?? 0;
+  const typeBlocks = code.match(/type\s+\w+\s*=\s*\{[\s\S]*?\n\};\n/g);
+  if (!typeBlocks) return 0;
+  let count = 0;
+  for (const block of typeBlocks) {
+    const entries = block.match(/^\s+"[^"]+": \{$/gm);
+    count += entries?.length ?? 0;
+  }
+  return count;
 };
 
 const parseDiagnostics = (output: string): Partial<Diagnostics> => {
@@ -417,44 +456,86 @@ const parseDiagnostics = (output: string): Partial<Diagnostics> => {
   return result;
 };
 
-const tscPath = join(projectRoot, "node_modules/.bin/tsc");
+const fmtNum = (n: number | null, suffix = ""): string => {
+  if (n === null) return "-";
+  return n.toLocaleString() + suffix;
+};
+
+const getVersion = (bin: string): string | null => {
+  try {
+    return execSync(`${bin} --version`, { encoding: "utf8", stdio: "pipe" }).trim();
+  } catch {
+    return null;
+  }
+};
+
+// --- Scenario file generation ---
+
+const generateScenarioFiles = (): Map<
+  string,
+  { dir: string; code: string; jobTypeCount: number }
+> => {
+  const scenarioMap = new Map<string, { dir: string; code: string; jobTypeCount: number }>();
+  const scenarioNames = new Set(scenarios.map((s) => s.name));
+
+  // Clean up stale generated directories
+  try {
+    for (const entry of readdirSync(generatedDir)) {
+      if (!scenarioNames.has(entry)) {
+        rmSync(join(generatedDir, entry), { recursive: true, force: true });
+      }
+    }
+  } catch {
+    // generatedDir may not exist yet
+  }
+
+  for (const scenario of scenarios) {
+    const dir = join(generatedDir, scenario.name);
+    mkdirSync(dir, { recursive: true });
+
+    const code = scenario.generate();
+    const jobTypeCount = countJobTypes(code);
+
+    writeFileSync(join(dir, "index.ts"), code);
+    writeFileSync(
+      join(dir, "tsconfig.json"),
+      JSON.stringify(
+        {
+          extends: "@queuert/tsconfig/base",
+          compilerOptions: {
+            composite: false,
+            paths: {
+              queuert: ["../../../../packages/core/dist/index.d.mts"],
+              "queuert/internal": ["../../../../packages/core/dist/internal.d.mts"],
+            },
+          },
+          include: ["index.ts"],
+          exclude: ["node_modules"],
+        },
+        null,
+        2,
+      ),
+    );
+
+    scenarioMap.set(scenario.name, { dir, code, jobTypeCount });
+  }
+
+  return scenarioMap;
+};
+
+// --- Runner ---
+
+const tscPath = join(benchmarkDir, "node_modules/.bin/tsc");
 const tsgoPath = join(projectRoot, "node_modules/.bin/tsgo");
 
 const args = process.argv.slice(2);
 const compilerArg = args.find((a) => !a.startsWith("--"));
 
-const scenarioFile = join(benchmarkDir, "src", "_scenario.gen.ts");
-const scenarioTsconfig = join(benchmarkDir, "tsconfig.scenario.json");
-
-try {
-  execSync("pnpm --filter queuert build", { cwd: projectRoot, stdio: "pipe" });
-} catch {
-  console.error("Failed to build queuert. Run `pnpm --filter queuert build` manually.");
-  process.exit(1);
-}
-
-writeFileSync(
-  scenarioTsconfig,
-  JSON.stringify({
-    extends: "@queuert/tsconfig/base",
-    compilerOptions: {
-      composite: false,
-      paths: {
-        queuert: ["../../packages/core/dist/index.d.mts"],
-        "queuert/internal": ["../../packages/core/dist/internal.d.mts"],
-      },
-    },
-    include: ["src/_scenario.gen.ts"],
-    exclude: ["node_modules", "dist"],
-  }),
-);
-
-const runTypeCheck = (code: string, tscPath: string): Diagnostics | null => {
-  writeFileSync(scenarioFile, code);
+const runTypeCheck = (scenarioDir: string, compilerPath: string): Diagnostics | null => {
   try {
     const start = performance.now();
-    const stdout = execSync(`${tscPath} --noEmit --extendedDiagnostics -p tsconfig.scenario.json`, {
-      cwd: benchmarkDir,
+    const stdout = execSync(`${compilerPath} --noEmit --extendedDiagnostics -p tsconfig.json`, {
+      cwd: scenarioDir,
       encoding: "utf8",
       stdio: ["pipe", "pipe", "pipe"],
       timeout: 120_000,
@@ -489,14 +570,6 @@ const runTypeCheck = (code: string, tscPath: string): Diagnostics | null => {
   }
 };
 
-const getVersion = (bin: string): string | null => {
-  try {
-    return execSync(`${bin} --version`, { encoding: "utf8", stdio: "pipe" }).trim();
-  } catch {
-    return null;
-  }
-};
-
 const compilers: { name: string; path: string }[] = [];
 
 if (compilerArg === "tsc") {
@@ -513,41 +586,40 @@ if (compilers.length === 0) {
   process.exit(1);
 }
 
-const fmtNum = (n: number | null, suffix = ""): string => {
-  if (n === null) return "-";
-  return n.toLocaleString() + suffix;
-};
-
 const iterations = 3;
 
-const runBenchmark = (compiler: { name: string; path: string }): Result[] => {
+const runBenchmark = (
+  compiler: { name: string; path: string },
+  scenarioMap: Map<string, { dir: string; code: string; jobTypeCount: number }>,
+): Result[] => {
   const version = getVersion(compiler.path);
   console.log(`\n${"=".repeat(80)}`);
   console.log(`Compiler: ${compiler.name} (${version})`);
   console.log("=".repeat(80));
-  console.log();
 
-  // Warmup
-  runTypeCheck(
-    `import { defineJobTypes } from "queuert";\nconst _j = defineJobTypes<{ "a": { entry: true; input: { x: number }; output: { y: string } } }>();\n`,
-    compiler.path,
-  );
+  // Warmup using the first generated scenario
+  const firstScenario = scenarioMap.values().next().value!;
+  runTypeCheck(firstScenario.dir, compiler.path);
 
   const results: Result[] = [];
-
-  console.log(
-    `${"Scenario".padEnd(25)} ${"Types".padStart(5)} ${"Time".padStart(8)} ${"Instantiations".padStart(15)} ${"Memory".padStart(8)}`,
-  );
-  console.log("-".repeat(65));
+  let currentGroup = "";
 
   for (const scenario of scenarios) {
-    const code = scenario.generate();
-    const jobTypeCount = countJobTypes(code);
+    if (scenario.group !== currentGroup) {
+      currentGroup = scenario.group;
+      console.log();
+      console.log(
+        `${"Scenario".padEnd(25)} ${"Types".padStart(5)} ${"Time".padStart(8)} ${"Instantiations".padStart(15)} ${"Memory".padStart(8)}`,
+      );
+      console.log("-".repeat(65));
+    }
+
+    const { dir, jobTypeCount } = scenarioMap.get(scenario.name)!;
 
     let best: Diagnostics | null = null;
 
     for (let i = 0; i < iterations; i++) {
-      const result = runTypeCheck(code, compiler.path);
+      const result = runTypeCheck(dir, compiler.path);
       if (
         result &&
         (best === null ||
@@ -566,15 +638,16 @@ const runBenchmark = (compiler: { name: string; path: string }): Result[] => {
     results.push({
       name: scenario.name,
       description: scenario.description,
+      group: scenario.group,
       jobTypeCount,
       diagnostics: best,
     });
   }
 
   console.log();
-  console.log("Scaling (instantiations relative to linear-3 baseline):");
+  console.log("Scaling (instantiations relative to linear-1 baseline):");
   console.log("-".repeat(60));
-  const baseline = results.find((r) => r.name === "linear-3")?.diagnostics?.instantiations;
+  const baseline = results.find((r) => r.name === "linear-1")?.diagnostics?.instantiations;
   if (baseline) {
     for (const r of results) {
       const inst = r.diagnostics?.instantiations;
@@ -589,18 +662,25 @@ const runBenchmark = (compiler: { name: string; path: string }): Result[] => {
   return results;
 };
 
-console.log("Queuert Type Complexity Benchmark (prebuilt .d.mts)");
+// --- Main ---
+
+console.log("Queuert Type Complexity Benchmark");
+
+try {
+  execSync("pnpm --filter queuert build", { cwd: projectRoot, stdio: "pipe" });
+} catch {
+  console.error("Failed to build queuert. Run `pnpm --filter queuert build` manually.");
+  process.exit(1);
+}
+
+console.log("Generating scenarios...");
+const scenarioMap = generateScenarioFiles();
+console.log(`Generated ${scenarioMap.size} scenarios in generated/`);
 
 const allResults: Map<string, Result[]> = new Map();
 for (const compiler of compilers) {
-  allResults.set(compiler.name, runBenchmark(compiler));
+  allResults.set(compiler.name, runBenchmark(compiler, scenarioMap));
 }
-
-// Clean up
-try {
-  rmSync(scenarioFile);
-  rmSync(scenarioTsconfig);
-} catch {}
 
 // Comparison table if both compilers ran
 if (allResults.size > 1) {

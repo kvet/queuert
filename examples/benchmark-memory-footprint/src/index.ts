@@ -29,6 +29,7 @@ const measurementModules: Record<string, string> = {
   "notify-postgres": "notify-postgres.ts",
   "notify-nats": "notify-nats.ts",
   otel: "otel.ts",
+  dashboard: "dashboard.ts",
 };
 
 async function runMeasurementInChildProcess(name: string): Promise<void> {
@@ -83,6 +84,8 @@ async function main(): Promise<void> {
     toRun = ["notify-nats"];
   } else if (args.includes("--otel")) {
     toRun = ["otel"];
+  } else if (args.includes("--dashboard")) {
+    toRun = ["dashboard"];
   } else {
     console.log("\nUsage: pnpm start:<measurement>");
     console.log("\nAvailable measurements:");

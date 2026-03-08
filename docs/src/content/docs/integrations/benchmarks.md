@@ -7,46 +7,52 @@ sidebar:
 
 ## Memory Footprint
 
-Queuert adapters add minimal overhead on top of the database/messaging drivers (Node.js v24, `--expose-gc`):
+Heap overhead of each Queuert component, measured in isolation with `--expose-gc` and forced GC before/after each step (Node.js v22). "Driver" is the database/messaging client connection; "Adapter" is the Queuert layer including schema migrations; "Client + Worker" is the Queuert client and in-process worker setup.
 
-| State Adapter | Adapter Overhead |
-| ------------- | ---------------- |
-| PostgreSQL    | ~290 KB          |
-| SQLite        | ~45 KB           |
+| State Adapter | Driver  | Adapter + Migrations | Client + Worker |
+| ------------- | ------: | -------------------: | --------------: |
+| PostgreSQL    | ~183 KB |              ~282 KB |        ~113 KB  |
+| SQLite        |  ~79 KB |               ~43 KB |        ~139 KB  |
 
-| Notify Adapter | Adapter Overhead |
-| -------------- | ---------------- |
-| Redis          | ~11 KB           |
-| PostgreSQL     | ~10 KB           |
-| NATS           | ~11 KB           |
+| Notify Adapter | Driver  | Adapter | Client + Worker |
+| -------------- | ------: | ------: | --------------: |
+| Redis          | ~437 KB |   ~9 KB |        ~130 KB  |
+| PostgreSQL     | ~184 KB |   ~9 KB |        ~236 KB  |
+| NATS           | ~193 KB |  ~10 KB |        ~122 KB  |
 
-| Component             | Overhead |
-| --------------------- | -------- |
-| Observability Adapter | ~145 KB  |
+| Component             | Heap Overhead | Notes                                        |
+| --------------------- | ------------: | -------------------------------------------- |
+| Observability (OTel)  |       ~135 KB | Adapter only; OTel MeterProvider adds ~21 KB |
+| Dashboard             |         ~2 KB | First API request loads ~1.7 MB of assets    |
 
 See [benchmark-memory-footprint](https://github.com/kvet/queuert/tree/main/examples/benchmark-memory-footprint) for the full measurement tool.
 
 ## Type Complexity
 
-Queuert's type-level machinery scales moderately across chain patterns (tsgo 7.0.0-dev, prebuilt `.d.mts`):
+Queuert's type-level machinery scales linearly across chain topologies (tsc 5.9.3, prebuilt `.d.mts`):
 
-| Scenario             | Job Types |  Time | Instantiations | Memory | Scaling |
-| -------------------- | --------: | ----: | -------------: | -----: | ------: |
-| Linear: 3 types      |         6 | 104ms |         21,491 |   59MB |    1.0x |
-| Linear: 10 types     |        20 | 114ms |         30,206 |   60MB |    1.4x |
-| Linear: 30 types     |        60 | 126ms |         61,586 |   63MB |    2.9x |
-| Branched: 4w x 3d    |       170 | 191ms |        174,386 |   71MB |    8.1x |
-| Blockers: 8 steps    |        60 | 126ms |         71,360 |   64MB |    3.3x |
-| Loop: 20 steps       |        42 | 120ms |         46,493 |   62MB |    2.2x |
-| Merge: 4 slices x 10 |        80 | 134ms |         76,146 |   67MB |    3.5x |
-| Many: 20 x 3-step    |       120 | 166ms |        117,310 |   72MB |    5.5x |
+| Scenario           | Types |    Time | Instantiations | Memory | Scaling |
+| ------------------ | ----: | ------: | -------------: | -----: | ------: |
+| Linear: 1 type     |     1 |  ~550ms |         18,883 |  113MB |    1.0x |
+| Linear: 10 types   |    10 |  ~560ms |         30,952 |  120MB |    1.6x |
+| Linear: 50 types   |    50 |  ~690ms |        102,912 |  133MB |    5.4x |
+| Linear: 100 types  |   100 |  ~880ms |        246,862 |  169MB |   13.1x |
+| Branched: 4w x 3d  |    85 |  ~860ms |        174,949 |  147MB |    9.3x |
+| Branched: 2w x 6d  |   127 | ~1020ms |        327,493 |  162MB |   17.3x |
+| Blockers: 8 steps  |    30 |  ~590ms |         73,123 |  128MB |    3.9x |
+| Blockers: 25 steps |    98 |  ~930ms |        359,981 |  148MB |   19.1x |
+| Loop: 20 steps     |    21 |  ~560ms |         48,249 |  118MB |    2.6x |
+| Loop: 50 steps     |    51 |  ~730ms |        108,369 |  141MB |    5.7x |
+| Merge: 2 x 100     |   200 | ~1310ms |        577,112 |  218MB |   30.6x |
 
-| Configuration                                | tsc        | tsgo       |
-| -------------------------------------------- | ---------- | ---------- |
-| Up to 30 types in a single chain             | OK, <600ms | OK, <130ms |
-| Branched chains up to 4w x 3d (~170 types)   | OK, <850ms | OK, ~190ms |
-| Blockers: up to 8 steps with 3 blockers each | OK, <580ms | OK, <130ms |
-| Merging up to 4 slices of 10 types           | OK, <630ms | OK, <140ms |
-| Many: 20 slices x 3-step chains (120 types)  | OK, <690ms | OK, <170ms |
+| Configuration                                 | Status                     |
+| --------------------------------------------- | -------------------------- |
+| Up to 100 types in a single linear chain       | OK, <900ms                 |
+| Branched chains up to 2w x 6d (~127 types)     | OK, ~1s                    |
+| Blockers: up to 25 steps with 3 blockers each  | OK, <1s                    |
+| Loops: up to 50 self-referencing steps          | OK, <750ms                 |
+| Loops: 100 steps                               | TS2589 (recursion depth)   |
+| Merging 2 slices of 100 types                  | OK, ~1.3s                  |
+| Merging 5 slices of 100 types (500 total)      | TS2590 (union complexity)  |
 
 See [benchmark-type-complexity](https://github.com/kvet/queuert/tree/main/examples/benchmark-type-complexity) for the full benchmark tool and detailed analysis.
