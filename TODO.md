@@ -1,6 +1,8 @@
 # Short term
 
 - [TASK,COMPLEX] Fix many-slice type complexity for `createInProcessWorker`
+  - **Target**: Support up to 100 slices × 100 types per slice (10,000 total job types). A real pipeline can have ~50 types (e.g., 14-type deploy pipeline × several pipelines per domain), and large apps can have 100 such slices
+  - **Benchmark matrix**: Test 1, 5, 10, 20, 50, 100 types per slice × 1, 5, 10, 20, 50, 100 slices
   - **Problem**: `Client<MergedDefs>` type expansion is the bottleneck — its methods (`startJobChain`, `completeJobChain`, `getJob`, `awaitJobChain`, etc.) distribute `ResolvedJobChain`/`ResolvedJob` over all entry/job type unions, causing 2M+ instantiations at 50+ slices of 10-step chains
   - **Root cause**: Both tsc and tsgo evaluate ALL overloads during resolution, not just the first match. Having a cheap branded overload (`client: object`) and a typed fallback (`Client<TJobTypeDefinitions, TStateAdapter>`) doesn't help — the typed overload still triggers the full expansion
   - **Proven fix**: Using `client: object` with NO typed overload reduces many-50x10 from 2.2M to 469k instantiations and many-100x10 from 5.8M to 883k. But this loses type inference for inline processors (non-merge usage)

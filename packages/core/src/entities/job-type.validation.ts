@@ -82,13 +82,17 @@ type BlockersProperty<TJobType, TAll extends BaseJobTypeDefinitions> = [
   ? { blockers?: undefined }
   : { blockers: ValidateBlockers<ExtractBlockers<TJobType>, TAll, EntryTypeKeys<TAll>> };
 
-type ValidateJobType<TJobType, TValidKeys extends string, TAll extends BaseJobTypeDefinitions> = {
+type ValidateJobType<
+  TJobType,
+  TLocal extends BaseJobTypeDefinitions,
+  TAll extends BaseJobTypeDefinitions,
+> = {
   entry?: TJobType extends { entry: infer E extends boolean } ? E : never;
   input: NoVoidOrUndefined<TJobType extends { input: infer I } ? I : never>;
   continueWith?: ValidateContinueWith<
     TJobType extends { continueWith: infer CT } ? CT : undefined,
-    TAll,
-    TValidKeys
+    TLocal,
+    keyof TLocal & string
   >;
 } & OutputProperty<TJobType> &
   BlockersProperty<TJobType, TAll>;
@@ -101,6 +105,6 @@ export type ValidatedJobTypeDefinitions<
   TExternal extends BaseJobTypeDefinitions = Record<never, never>,
 > = [OverlappingKeys<T, TExternal>] extends [never]
   ? {
-      [K in keyof T]: ValidateJobType<T[K], keyof (T & TExternal) & string, T & TExternal>;
+      [K in keyof T]: ValidateJobType<T[K], T, T & TExternal>;
     }
   : `Error: local and external definitions share overlapping keys: ${OverlappingKeys<T, TExternal> & string}`;

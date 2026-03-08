@@ -98,14 +98,14 @@ export const orderJobTypes = defineJobTypes<
       blockers: [{ typeName: "notifications.send" }];
     };
   },
-  // External types — available for reference validation, not owned by this slice
+  // External types — available for blocker reference validation, not owned by this slice
   JobTypeRegistryDefinitions<typeof notificationJobTypes>
 >();
 ```
 
 - `T` (first parameter) = owned definitions — these become the registry's phantom type
 - `TExternal` (second parameter) = read-only reference context, defaults to `Record<never, never>`
-- `continueWith` validates against `T & TExternal`; `blockers` validates against entry types in `T & TExternal`
+- `blockers` validates against entry types in `T & TExternal`
 - The registry's phantom type remains `T` only — `TExternal` types are not included
 
 This eliminates the need for "workflow slices" that duplicate type definitions just to make blocker references type-check. After merging with `mergeJobTypeRegistries`, all references resolve against the full set of definitions.
