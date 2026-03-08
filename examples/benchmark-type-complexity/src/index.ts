@@ -116,7 +116,7 @@ void jobs;
 
 const generateMiddleware = (defsType: string): string =>
   `const middleware: JobAttemptMiddleware<
-  Awaited<ReturnType<typeof createInProcessStateAdapter>>,
+  ReturnType<typeof createInProcessStateAdapter>,
   ${defsType}
 > = async ({ job }, next) => {
   void job.typeName;
@@ -139,7 +139,7 @@ ${typeStrings.join("\n")}
 
 const jobTypes = defineJobTypes<Defs>();
 
-const stateAdapter = await createInProcessStateAdapter();
+const stateAdapter = createInProcessStateAdapter();
 const notifyAdapter = createInProcessNotifyAdapter();
 
 const client = await createClient({
@@ -173,7 +173,7 @@ ${typeStrings.join("\n")}
 const ${slice.name}Registry = defineJobTypes<${slice.name}Defs>();
 
 const ${slice.name}Processors = ${processors} satisfies InProcessWorkerProcessors<
-  Awaited<ReturnType<typeof createInProcessStateAdapter>>,
+  ReturnType<typeof createInProcessStateAdapter>,
   ${slice.name}Defs
 >;`;
   });
@@ -192,7 +192,7 @@ ${sliceDecls.join("\n")}
 const registry = mergeJobTypeRegistries(${registryNames.join(", ")});
 const mergedProcessors = mergeJobTypeProcessors(${processorNames.join(", ")});
 
-const stateAdapter = await createInProcessStateAdapter();
+const stateAdapter = createInProcessStateAdapter();
 const notifyAdapter = createInProcessNotifyAdapter();
 
 const client = await createClient({

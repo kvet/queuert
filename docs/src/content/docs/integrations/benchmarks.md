@@ -9,21 +9,21 @@ sidebar:
 
 Heap overhead of each Queuert component, measured in isolation with `--expose-gc` and forced GC before/after each step (Node.js v22). "Driver" is the database/messaging client connection; "Adapter" is the Queuert layer including schema migrations; "Client + Worker" is the Queuert client and in-process worker setup.
 
-| State Adapter | Driver  | Adapter + Migrations | Client + Worker |
+| State Adapter |  Driver | Adapter + Migrations | Client + Worker |
 | ------------- | ------: | -------------------: | --------------: |
-| PostgreSQL    | ~183 KB |              ~282 KB |        ~113 KB  |
-| SQLite        |  ~79 KB |               ~43 KB |        ~139 KB  |
+| PostgreSQL    | ~183 KB |              ~282 KB |         ~113 KB |
+| SQLite        |  ~79 KB |               ~43 KB |         ~139 KB |
 
-| Notify Adapter | Driver  | Adapter | Client + Worker |
+| Notify Adapter |  Driver | Adapter | Client + Worker |
 | -------------- | ------: | ------: | --------------: |
-| Redis          | ~437 KB |   ~9 KB |        ~130 KB  |
-| PostgreSQL     | ~184 KB |   ~9 KB |        ~236 KB  |
-| NATS           | ~193 KB |  ~10 KB |        ~122 KB  |
+| Redis          | ~437 KB |   ~9 KB |         ~130 KB |
+| PostgreSQL     | ~184 KB |   ~9 KB |         ~236 KB |
+| NATS           | ~193 KB |  ~10 KB |         ~122 KB |
 
-| Component             | Heap Overhead | Notes                                        |
-| --------------------- | ------------: | -------------------------------------------- |
-| Observability (OTel)  |       ~135 KB | Adapter only; OTel MeterProvider adds ~21 KB |
-| Dashboard             |         ~2 KB | First API request loads ~1.7 MB of assets    |
+| Component            | Heap Overhead | Notes                                        |
+| -------------------- | ------------: | -------------------------------------------- |
+| Observability (OTel) |       ~135 KB | Adapter only; OTel MeterProvider adds ~21 KB |
+| Dashboard            |         ~2 KB | First API request loads ~1.7 MB of assets    |
 
 See [benchmark-memory-footprint](https://github.com/kvet/queuert/tree/main/examples/benchmark-memory-footprint) for the full measurement tool.
 
@@ -45,14 +45,14 @@ Queuert's type-level machinery scales linearly across chain topologies (tsc 5.9.
 | Loop: 50 steps     |    51 |  ~730ms |        108,369 |  141MB |    5.7x |
 | Merge: 2 x 100     |   200 | ~1310ms |        577,112 |  218MB |   30.6x |
 
-| Configuration                                 | Status                     |
-| --------------------------------------------- | -------------------------- |
-| Up to 100 types in a single linear chain       | OK, <900ms                 |
-| Branched chains up to 2w x 6d (~127 types)     | OK, ~1s                    |
-| Blockers: up to 25 steps with 3 blockers each  | OK, <1s                    |
-| Loops: up to 50 self-referencing steps          | OK, <750ms                 |
-| Loops: 100 steps                               | TS2589 (recursion depth)   |
-| Merging 2 slices of 100 types                  | OK, ~1.3s                  |
-| Merging 5 slices of 100 types (500 total)      | TS2590 (union complexity)  |
+| Configuration                                 | Status                    |
+| --------------------------------------------- | ------------------------- |
+| Up to 100 types in a single linear chain      | OK, <900ms                |
+| Branched chains up to 2w x 6d (~127 types)    | OK, ~1s                   |
+| Blockers: up to 25 steps with 3 blockers each | OK, <1s                   |
+| Loops: up to 50 self-referencing steps        | OK, <750ms                |
+| Loops: 100 steps                              | TS2589 (recursion depth)  |
+| Merging 2 slices of 100 types                 | OK, ~1.3s                 |
+| Merging 5 slices of 100 types (500 total)     | TS2590 (union complexity) |
 
 See [benchmark-type-complexity](https://github.com/kvet/queuert/tree/main/examples/benchmark-type-complexity) for the full benchmark tool and detailed analysis.

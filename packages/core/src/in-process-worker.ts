@@ -1,9 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { type Client } from "./client.js";
+import { type Client, helpersSymbol } from "./client.js";
 import { type JobTypeRegistry } from "./entities/job-type-registry.js";
 import { type BaseJobTypeDefinitions } from "./entities/job-type.js";
 import { type BackoffConfig } from "./helpers/backoff.js";
-import { clientHelpersMap } from "./helpers/client-helpers-map.js";
 import { type ParallelExecutor, createParallelExecutor } from "./helpers/parallel-executor.js";
 import { raceWithSleep } from "./helpers/sleep.js";
 import {
@@ -267,7 +266,7 @@ export const createInProcessWorker = async <
 
   return {
     start: async (): Promise<() => Promise<void>> => {
-      const helpers = clientHelpersMap.get(client)!;
+      const helpers = client[helpersSymbol];
       const { stateAdapter, notifyAdapter, observabilityHelper } = helpers;
 
       observabilityHelper.workerStarted({ workerId, jobTypeNames: typeNames });

@@ -18,11 +18,11 @@
   "dependencies": {
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/sdk-metrics": "^2.5.1",
+    "@queuert/dashboard": "workspace:*",
     "@queuert/nats": "workspace:*",
     "@queuert/otel": "workspace:*",
     "@queuert/postgres": "workspace:*",
     "@queuert/redis": "workspace:*",
-    "@queuert/dashboard": "workspace:*",
     "@queuert/sqlite": "workspace:*",
     "better-sqlite3": "^12.6.2",
     "nats": "^2.29.3",

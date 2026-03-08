@@ -1,5 +1,6 @@
 export {
   createClient,
+  helpersSymbol,
   type Client,
   type CompleteJobChainResult,
   type JobChainCompleteOptions,

@@ -46,9 +46,10 @@ import {
 import { bufferNotifyJobOwnershipLost } from "./helpers/notify-hooks.js";
 import { raceWithSleep } from "./helpers/sleep.js";
 import { createHelpers } from "./setup-helpers.js";
-import { clientHelpersMap } from "./helpers/client-helpers-map.js";
 import { type TransactionHooks } from "./transaction-hooks.js";
 import { type AttemptCompleteOptions } from "./worker/job-process.js";
+
+export const helpersSymbol: unique symbol = Symbol("queuert.helpers");
 
 const normalizeTxCtx = <T extends Record<string, unknown>>(rest: T): T | undefined =>
   Object.keys(rest).length > 0 ? rest : undefined;
@@ -153,6 +154,8 @@ export const createClient = async <
     log,
   });
   const client = {
+    [helpersSymbol]: helpers,
+
     /** Create a new job chain. Returns the created chain with a `deduplicated` flag. */
     startJobChain: async <
       TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
@@ -716,7 +719,6 @@ export const createClient = async <
       };
     },
   };
-  clientHelpersMap.set(client, helpers);
   return client;
 };
 

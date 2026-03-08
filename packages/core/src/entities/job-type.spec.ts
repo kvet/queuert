@@ -185,7 +185,6 @@ describe("external references (TExternal)", () => {
     }>();
 
     defineJobTypes<
-      // @ts-expect-error continueWith cannot reference external types
       {
         "orders.create": {
           entry: true;
