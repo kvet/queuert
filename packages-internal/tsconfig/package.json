@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./base": "./base.json"
+    "./base": "./base.json",
+    "./package": "./published.json"
   }
 }

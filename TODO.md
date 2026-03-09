@@ -1,6 +1,5 @@
 # Short term
 
-- [TASK] Return back isolated declarations
 - [TASK] Move benchmarks to a separate folder and dont run the with examples as they are expensive to run
 - [REF] Processing capacity benchmark? Like running 100_000 jobs?
 - [TASK] Move benchmarks to a dedicated folder and dont run the with examples as they are expensive to run

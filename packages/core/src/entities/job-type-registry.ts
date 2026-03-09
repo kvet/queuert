@@ -22,7 +22,7 @@ export type ExternalJobTypeRegistryDefinitions<T extends JobTypeRegistry<any>> =
 /** Extract the pre-computed navigation map from a {@link JobTypeRegistry}. */
 export type JobTypeRegistryNavigation<T extends JobTypeRegistry<any>> = T[typeof navigationSymbol];
 
-export const noopRegistries = new WeakSet<JobTypeRegistry<any>>();
+export const noopRegistries: WeakSet<JobTypeRegistry<any>> = new WeakSet<JobTypeRegistry<any>>();
 
 /**
  * Configuration for createJobTypeRegistry.

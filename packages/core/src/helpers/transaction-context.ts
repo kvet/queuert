@@ -1,6 +1,11 @@
 export const createTransactionContext = async <TTxContext>(
   runInTransaction: (callback: (txCtx: TTxContext) => Promise<void>) => Promise<void>,
-) => {
+): Promise<{
+  readonly status: "pending" | "resolved" | "rejected";
+  run: <TReturn>(callback: (txCtx: TTxContext) => Promise<TReturn>) => Promise<TReturn>;
+  resolve: () => Promise<void>;
+  reject: (error: unknown) => Promise<void>;
+}> => {
   const openPromiseHandlers = Promise.withResolvers<void>();
   const closePromiseHandlers = Promise.withResolvers<void>();
   let status: "pending" | "resolved" | "rejected" = "pending";
