@@ -25,7 +25,7 @@ Heap overhead of each Queuert component, measured in isolation with `--expose-gc
 | Observability (OTel) |       ~135 KB | Adapter only; OTel MeterProvider adds ~21 KB |
 | Dashboard            |         ~2 KB | First API request loads ~1.7 MB of assets    |
 
-See [benchmark-memory-footprint](https://github.com/kvet/queuert/tree/main/examples/benchmark-memory-footprint) for the full measurement tool.
+See [benchmark-memory-footprint](https://github.com/kvet/queuert/tree/main/benchmarks/benchmark-memory-footprint) for the full measurement tool.
 
 ## Type Complexity
 
@@ -62,4 +62,4 @@ Queuert's type-level machinery scales linearly across chain topologies (prebuilt
 | Merging 10 slices of 50 types (500 total)  | OK, ~2.2s (tsc) |
 | Merging 50 slices of 50 types (2500 total) | OK, ~11s (tsc)  |
 
-See [benchmark-type-complexity](https://github.com/kvet/queuert/tree/main/examples/benchmark-type-complexity) for the full benchmark tool and detailed results.
+See [benchmark-type-complexity](https://github.com/kvet/queuert/tree/main/benchmarks/benchmark-type-complexity) for the full benchmark tool and detailed results.

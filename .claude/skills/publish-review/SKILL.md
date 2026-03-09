@@ -1,17 +1,17 @@
 ---
 name: publish-review
-description: Run a comprehensive review of the Queuert library before publishing, launching 7 parallel agents to check documentation coherence, API design, implementation verification, feature completeness, API consistency, schema design, and code style. Use when preparing to publish or validating publish readiness.
+description: Run a comprehensive review of the Queuert library before publishing, launching 8 parallel agents to check documentation coherence, API design, implementation verification, feature completeness, API consistency, schema design, code style, and benchmarks. Use when preparing to publish or validating publish readiness.
 ---
 
 # Publish Readiness Review
 
-Run a comprehensive review of the Queuert library before publishing. This skill launches 7 specialized review agents in parallel to check different aspects of publish readiness.
+Run a comprehensive review of the Queuert library before publishing. This skill launches 8 specialized review agents in parallel to check different aspects of publish readiness.
 
 ## Instructions
 
 When this skill is invoked, you MUST:
 
-1. Launch all 7 review agents IN PARALLEL using the Task tool with a single message containing 7 tool calls
+1. Launch all 8 review agents IN PARALLEL using the Task tool with a single message containing 8 tool calls
 2. Wait for all agents to complete
 3. Write a combined report to `docs/publish-readiness-report.md`
 4. Display a summary of findings in the conversation
@@ -157,6 +157,27 @@ prompt: |
   Return a structured report.
 ```
 
+### 8. Benchmarks Agent
+
+```
+subagent_type: general-purpose
+description: Run benchmarks
+prompt: |
+  You are a benchmarks runner for the Queuert library.
+
+  Run `pnpm benchmarks` from the repository root to execute all benchmarks
+  (memory footprint and type complexity).
+
+  Report:
+  1. Whether all benchmarks ran successfully
+  2. Any errors or failures encountered
+  3. Notable results or regressions compared to values documented in
+     docs/src/content/docs/integrations/benchmarks.md
+
+  Categorize findings as CRITICAL, WARNING, or SUGGESTION.
+  Return a structured report.
+```
+
 ## Report Format
 
 After all agents complete, write the combined report to `docs/publish-readiness-report.md` with this structure:
@@ -199,6 +220,10 @@ Generated: [current date]
 ## 7. Code Style
 
 [Agent 7 findings]
+
+## 8. Benchmarks
+
+[Agent 8 findings]
 
 ## Action Items
 
