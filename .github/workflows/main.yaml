@@ -20,6 +20,14 @@ jobs:
 
       - uses: ./.github/actions/setup-repo
 
+      - name: Cache turbo
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: ${{ runner.os }}-turbo-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-
+
       - name: Format check
         run: pnpm fmt:check
 

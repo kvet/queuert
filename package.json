@@ -5,14 +5,14 @@
   "license": "MIT",
   "author": "kvet",
   "scripts": {
-    "build": "pnpm -r build",
+    "build": "turbo build",
     "lint": "oxlint --type-aware",
     "fmt": "oxlint --type-aware --fix && oxfmt",
     "fmt:check": "oxfmt --check",
     "test": "vitest --run",
-    "typecheck": "pnpm -r typecheck",
-    "benchmarks": "pnpm -r --filter \"./benchmarks/*\" start",
-    "examples": "pnpm -r --filter \"./examples/*\" start",
+    "typecheck": "turbo typecheck",
+    "benchmarks": "turbo start --filter=\"./benchmarks/*\"",
+    "examples": "turbo start --filter=\"./examples/*\"",
     "check": "pnpm fmt:check && pnpm lint && pnpm typecheck && vitest --run && pnpm build && pnpm examples",
     "modules:clean": "rm -rf $(find . -name node_modules -type d)",
     "changeset": "changeset",
@@ -29,6 +29,7 @@
     "oxlint": "^1.47.0",
     "oxlint-tsgolint": "^0.12.2",
     "tsdown": "^0.20.3",
+    "turbo": "^2.8.14",
     "vitest": "^4.0.18"
   },
   "engines": {

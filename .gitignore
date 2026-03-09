@@ -27,6 +27,9 @@ config.cache.json
 # prisma
 **/generated/prisma
 
+# turbo
+.turbo
+
 # dist
 dist
 
