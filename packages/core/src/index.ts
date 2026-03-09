@@ -17,32 +17,36 @@ export {
   type JobTypeRegistry,
   type JobTypeRegistryConfig,
   type JobTypeRegistryDefinitions,
+  type JobTypeRegistryNavigation,
 } from "./entities/job-type-registry.js";
+export { defineJobTypeRegistry } from "./entities/define-job-type-registry.js";
 export {
-  defineJobTypes,
   type BaseJobTypeDefinition,
   type BaseJobTypeDefinitions,
+  type DefineJobTypes,
+  type JobTypeReference,
+  type NominalJobTypeReference,
+  type ResolvedJobTypeReference,
+  type StructuralJobTypeReference,
+} from "./entities/job-type.js";
+export {
+  type BaseNavigationEntry,
+  type BaseNavigationMap,
+  type NavigationMap,
+} from "./entities/job-type-registry.navigation.js";
+export {
   type BlockedJobTypeNames,
   type BlockerChains,
   type ChainJobTypeNames,
   type ContinuationJobs,
-  type DefineJobTypes,
   type EntryJobTypeDefinitions,
   type JobTypeHasBlockers,
-  type JobTypeReference,
-  type NominalJobTypeReference,
   type ResolvedChainJobs,
   type ResolvedJob,
   type ResolvedJobChain,
-  type StructuralJobTypeReference,
-} from "./entities/job-type.js";
+} from "./entities/job-type-registry.resolvers.js";
 export { type ValidatedJobTypeDefinitions } from "./entities/job-type.validation.js";
-export {
-  type CompletedJob,
-  type Job,
-  type JobStatus,
-  type JobWithBlockers,
-} from "./entities/job.js";
+export { type Job, type JobStatus } from "./entities/job.js";
 export { mergeJobTypeRegistries } from "./entities/merge-job-type-registries.js";
 export { type ScheduleOptions } from "./entities/schedule.js";
 export {
@@ -91,14 +95,16 @@ export {
   type JobAbortReason,
   type JobAttemptMiddleware,
 } from "./worker/job-process.js";
-export { type LeaseConfig } from "./worker/lease.js";
+export { createJobTypeProcessorRegistry } from "./worker/create-job-type-processor-registry.js";
 export {
-  defineJobTypeProcessorRegistry,
-  processorsDefinitionsSymbol,
-  processorsExternalDefinitionsSymbol,
+  processorDefinitionsSymbol,
+  processorExternalDefinitionsSymbol,
+  processorNavigationSymbol,
   type InProcessWorkerProcessor,
-  type JobTypeProcessorsRegistry,
-  type ProcessorsRegistryDefinitions,
-  type ProcessorsRegistryExternalDefinitions,
-} from "./worker/job-type-processors-registry.js";
+  type JobTypeProcessorRegistry,
+  type ExternalJobTypeProcessorRegistryDefinitions,
+  type JobTypeProcessorRegistryNavigation,
+  type JobTypeProcessorRegistryDefinitions,
+} from "./worker/job-type-processor-registry.js";
+export { type LeaseConfig } from "./worker/lease.js";
 export { mergeJobTypeProcessorRegistries } from "./worker/merge-job-type-processors.js";

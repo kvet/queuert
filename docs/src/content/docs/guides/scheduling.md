@@ -48,13 +48,13 @@ return complete(async ({ continueWith }) =>
 For periodic tasks like daily digests, health checks, or billing cycles, start a new independent job chain from within the handler instead of using `continueWith`. This keeps each execution as its own short-lived chain rather than building an ever-growing chain history.
 
 ```ts
-type Definitions = {
+const jobTypeRegistry = defineJobTypeRegistry<{
   'daily-digest': {
     entry: true;
     input: { userId: string };
     output: { sentAt: string };
   };
-};
+}>();
 
 // In processor — start a new chain with a scheduled delay
 'daily-digest': {

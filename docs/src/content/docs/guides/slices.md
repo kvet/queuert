@@ -15,9 +15,9 @@ A slice consists of two files: definitions and processors.
 
 ```ts
 // slice-orders-definitions.ts
-import { defineJobTypes } from "queuert";
+import { defineJobTypeRegistry } from "queuert";
 
-export const orderJobTypes = defineJobTypes<{
+export const orderJobTypeRegistry = defineJobTypeRegistry<{
   "orders.create": { entry: true; input: { userId: string }; output: { orderId: string } };
   "orders.fulfill": { input: { orderId: string }; output: { fulfilled: boolean } };
 }>();
@@ -27,11 +27,11 @@ export const orderJobTypes = defineJobTypes<{
 
 ```ts
 // slice-orders-processors.ts
-import { defineJobTypeProcessorRegistry } from "queuert";
+import { createJobTypeProcessorRegistry } from "queuert";
 import { client } from "./client.js";
-import { orderJobTypes } from "./slice-orders-definitions.js";
+import { orderJobTypeRegistry } from "./slice-orders-definitions.js";
 
-export const orderProcessorRegistry = defineJobTypeProcessorRegistry(client, orderJobTypes, {
+export const orderProcessorRegistry = createJobTypeProcessorRegistry(client, orderJobTypeRegistry, {
   "orders.create": {
     attemptHandler: async ({ job, complete }) =>
       complete(async ({ continueWith }) =>
@@ -44,7 +44,7 @@ export const orderProcessorRegistry = defineJobTypeProcessorRegistry(client, ord
 });
 ```
 
-`defineJobTypeProcessorRegistry` type-checks each handler against the slice's own definitions, then returns a `JobTypeProcessorsRegistry` that carries the slice's type definitions via phantom symbol properties. This enables lightweight compatibility checks when passed to `createInProcessWorker` or `mergeJobTypeProcessorRegistries`.
+`createJobTypeProcessorRegistry` type-checks each handler against the slice's own definitions, then returns a `JobTypeProcessorRegistry` that carries the slice's type definitions via phantom symbol properties. This enables lightweight compatibility checks when passed to `createInProcessWorker` or `mergeJobTypeProcessorRegistries`.
 
 ## Composing Slices
 
@@ -57,12 +57,12 @@ import {
   mergeJobTypeRegistries,
   mergeJobTypeProcessorRegistries,
 } from "queuert";
-import { orderJobTypes } from "./slice-orders-definitions.js";
+import { orderJobTypeRegistry } from "./slice-orders-definitions.js";
 import { orderProcessorRegistry } from "./slice-orders-processors.js";
-import { notificationJobTypes } from "./slice-notifications-definitions.js";
+import { notificationJobTypeRegistry } from "./slice-notifications-definitions.js";
 import { notificationProcessorRegistry } from "./slice-notifications-processors.js";
 
-const registry = mergeJobTypeRegistries(orderJobTypes, notificationJobTypes);
+const registry = mergeJobTypeRegistries(orderJobTypeRegistry, notificationJobTypeRegistry);
 
 const client = await createClient({ stateAdapter, notifyAdapter, registry });
 
@@ -84,14 +84,14 @@ const worker = await createInProcessWorker({
 
 ## Cross-Slice References
 
-When a slice needs to reference job types from another slice — for example, declaring a blocker from the notifications domain — use the optional `TExternal` type parameter on `defineJobTypes`:
+When a slice needs to reference job types from another slice — for example, declaring a blocker from the notifications domain — use the optional `TExternal` type parameter on `defineJobTypeRegistry`:
 
 ```ts
 // slice-orders-definitions.ts
-import { type JobTypeRegistryDefinitions, defineJobTypes } from "queuert";
-import { type notificationJobTypes } from "./slice-notifications-definitions.js";
+import { type JobTypeRegistryDefinitions, defineJobTypeRegistry } from "queuert";
+import { type notificationJobTypeRegistry } from "./slice-notifications-definitions.js";
 
-export const orderJobTypes = defineJobTypes<
+export const orderJobTypeRegistry = defineJobTypeRegistry<
   {
     "orders.place": {
       entry: true;
@@ -105,7 +105,7 @@ export const orderJobTypes = defineJobTypes<
     };
   },
   // External types — available for blocker reference validation, not owned by this slice
-  JobTypeRegistryDefinitions<typeof notificationJobTypes>
+  JobTypeRegistryDefinitions<typeof notificationJobTypeRegistry>
 >();
 ```
 
@@ -116,15 +116,15 @@ export const orderJobTypes = defineJobTypes<
 
 This eliminates the need for "workflow slices" that duplicate type definitions just to make blocker references type-check. After merging with `mergeJobTypeRegistries`, all references resolve against the full set of definitions.
 
-When writing processors for a slice with external references, `defineJobTypeProcessorRegistry` automatically extracts both owned and external definitions from the registry:
+When writing processors for a slice with external references, `createJobTypeProcessorRegistry` automatically extracts both owned and external definitions from the registry:
 
 ```ts
 // slice-orders-processors.ts
-import { defineJobTypeProcessorRegistry } from "queuert";
+import { createJobTypeProcessorRegistry } from "queuert";
 import { client } from "./client.js";
-import { orderJobTypes } from "./slice-orders-definitions.js";
+import { orderJobTypeRegistry } from "./slice-orders-definitions.js";
 
-const orderProcessorRegistry = defineJobTypeProcessorRegistry(client, orderJobTypes, {
+const orderProcessorRegistry = createJobTypeProcessorRegistry(client, orderJobTypeRegistry, {
   // handlers have full type inference for continueWith, blockers, etc.
 });
 ```

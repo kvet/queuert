@@ -20,8 +20,8 @@ import postgres, {
 import {
   createClient,
   createInProcessWorker,
-  defineJobTypeProcessorRegistry,
-  defineJobTypes,
+  createJobTypeProcessorRegistry,
+  defineJobTypeRegistry,
   withTransactionHooks,
 } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
@@ -35,7 +35,7 @@ type TransactionSql = _TransactionSql & {
 
 type DbContext = { sql: TransactionSql };
 
-const jobTypes = defineJobTypes<{
+const jobTypeRegistry = defineJobTypeRegistry<{
   /*
    * Workflow:
    *   create-subscription
@@ -143,12 +143,12 @@ await sql`
 const client = await createClient({
   stateAdapter,
   notifyAdapter,
-  registry: jobTypes,
+  registry: jobTypeRegistry,
 });
 
 const worker = await createInProcessWorker({
   client,
-  processorRegistry: defineJobTypeProcessorRegistry(client, jobTypes, {
+  processorRegistry: createJobTypeProcessorRegistry(client, jobTypeRegistry, {
     "create-subscription": {
       attemptHandler: async ({ job, complete }) => {
         console.log(`\n[create-subscription] Creating subscription for user ${job.input.userId}`);

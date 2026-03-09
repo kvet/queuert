@@ -19,8 +19,8 @@ import postgres, {
 import {
   createClient,
   createInProcessWorker,
-  defineJobTypeProcessorRegistry,
-  defineJobTypes,
+  createJobTypeProcessorRegistry,
+  defineJobTypeRegistry,
   rescheduleJob,
   withTransactionHooks,
 } from "queuert";
@@ -35,7 +35,7 @@ type TransactionSql = _TransactionSql & {
 
 type DbContext = { sql: TransactionSql };
 
-const jobTypes = defineJobTypes<{
+const jobTypeRegistry = defineJobTypeRegistry<{
   /*
    * Workflow (discriminated union):
    *   process-payment --> output { success } | { error }
@@ -123,12 +123,12 @@ const notifyAdapter = createInProcessNotifyAdapter();
 const client = await createClient({
   stateAdapter,
   notifyAdapter,
-  registry: jobTypes,
+  registry: jobTypeRegistry,
 });
 
 const worker = await createInProcessWorker({
   client,
-  processorRegistry: defineJobTypeProcessorRegistry(client, jobTypes, {
+  processorRegistry: createJobTypeProcessorRegistry(client, jobTypeRegistry, {
     "process-payment": {
       attemptHandler: async ({ job, complete }) => {
         console.log(

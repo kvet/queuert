@@ -3,8 +3,8 @@ import {
   type StateAdapter,
   createClient,
   createInProcessWorker,
-  defineJobTypeProcessorRegistry,
-  defineJobTypes,
+  createJobTypeProcessorRegistry,
+  defineJobTypeRegistry,
   withTransactionHooks,
 } from "../index.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
@@ -25,7 +25,7 @@ export const stateResilienceTestSuite = ({
     observabilityAdapter,
     log,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { value: number; atomic: boolean };
@@ -68,7 +68,7 @@ export const stateResilienceTestSuite = ({
           maxDelayMs: 1,
         },
       },
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ job, prepare, complete }) => {
             await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
@@ -111,7 +111,7 @@ export const stateResilienceTestSuite = ({
       observabilityAdapter,
       log,
     }) => {
-      const registry = defineJobTypes<{
+      const registry = defineJobTypeRegistry<{
         test: {
           entry: true;
           input: { value: number; atomic: boolean };
@@ -154,7 +154,7 @@ export const stateResilienceTestSuite = ({
             maxDelayMs: 1,
           },
         },
-        processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+        processorRegistry: createJobTypeProcessorRegistry(client, registry, {
           test: {
             attemptHandler: async ({ job, prepare, complete }) => {
               await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
@@ -198,7 +198,7 @@ export const stateResilienceTestSuite = ({
       observabilityAdapter,
       log,
     }) => {
-      const registry = defineJobTypes<{
+      const registry = defineJobTypeRegistry<{
         test: {
           entry: true;
           input: { value: number; atomic: boolean };
@@ -248,7 +248,7 @@ export const stateResilienceTestSuite = ({
       } as const;
       const flakyWorker1 = await createInProcessWorker({
         ...workerConfig,
-        processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+        processorRegistry: createJobTypeProcessorRegistry(client, registry, {
           test: {
             attemptHandler: async ({ job, prepare, complete }) => {
               await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
@@ -259,7 +259,7 @@ export const stateResilienceTestSuite = ({
       });
       const flakyWorker2 = await createInProcessWorker({
         ...workerConfig,
-        processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+        processorRegistry: createJobTypeProcessorRegistry(client, registry, {
           test: {
             attemptHandler: async ({ job, prepare, complete }) => {
               await prepare({ mode: job.input.atomic ? "atomic" : "staged" });

@@ -3,7 +3,7 @@ import {
   type JobTypeRegistryDefinitions,
   JobTypeValidationError,
   createClient,
-  defineJobTypeProcessorRegistry,
+  createJobTypeProcessorRegistry,
   mergeJobTypeProcessorRegistries,
   mergeJobTypeRegistries,
 } from "queuert";
@@ -323,7 +323,7 @@ describe("createZodJobTypeRegistry", () => {
   });
 
   describe("external definitions (cross-slice)", () => {
-    const notificationJobTypes = createZodJobTypeRegistry({
+    const notificationJobTypeRegistry = createZodJobTypeRegistry({
       "notifications.send-notification": {
         entry: true,
         input: z.object({ userId: z.string(), message: z.string() }),
@@ -331,7 +331,7 @@ describe("createZodJobTypeRegistry", () => {
       },
     });
 
-    const orderJobTypes = createZodJobTypeRegistry(
+    const orderJobTypeRegistry = createZodJobTypeRegistry(
       {
         "orders.place-order": {
           entry: true,
@@ -344,11 +344,11 @@ describe("createZodJobTypeRegistry", () => {
           blockers: z.array(z.object({ typeName: z.literal("notifications.send-notification") })),
         },
       },
-      notificationJobTypes,
+      notificationJobTypeRegistry,
     );
 
     it("merges registries and validates across slices", () => {
-      const merged = mergeJobTypeRegistries(orderJobTypes, notificationJobTypes);
+      const merged = mergeJobTypeRegistries(orderJobTypeRegistry, notificationJobTypeRegistry);
 
       expect(merged.getTypeNames()).toEqual([
         "orders.place-order",
@@ -366,7 +366,7 @@ describe("createZodJobTypeRegistry", () => {
     });
 
     it("validates cross-slice blocker references", () => {
-      const merged = mergeJobTypeRegistries(orderJobTypes, notificationJobTypes);
+      const merged = mergeJobTypeRegistries(orderJobTypeRegistry, notificationJobTypeRegistry);
 
       expect(() => {
         merged.validateBlockers("orders.confirm-order", [
@@ -380,8 +380,8 @@ describe("createZodJobTypeRegistry", () => {
     });
 
     it("exposes external definitions via ExternalJobTypeRegistryDefinitions", () => {
-      type OrderDefs = JobTypeRegistryDefinitions<typeof orderJobTypes>;
-      type ExternalDefs = ExternalJobTypeRegistryDefinitions<typeof orderJobTypes>;
+      type OrderDefs = JobTypeRegistryDefinitions<typeof orderJobTypeRegistry>;
+      type ExternalDefs = ExternalJobTypeRegistryDefinitions<typeof orderJobTypeRegistry>;
 
       expectTypeOf<ExternalDefs>().toHaveProperty("notifications.send-notification");
       expectTypeOf<OrderDefs>().toHaveProperty("orders.place-order");
@@ -392,15 +392,19 @@ describe("createZodJobTypeRegistry", () => {
       const stateAdapter = createInProcessStateAdapter();
       const client = await createClient({
         stateAdapter,
-        registry: mergeJobTypeRegistries(orderJobTypes, notificationJobTypes),
+        registry: mergeJobTypeRegistries(orderJobTypeRegistry, notificationJobTypeRegistry),
       });
-      const notificationProcessors = defineJobTypeProcessorRegistry(client, notificationJobTypes, {
-        "notifications.send-notification": {
-          attemptHandler: async ({ complete }) => complete(async () => ({ sentAt: "now" })),
+      const notificationProcessorRegistry = createJobTypeProcessorRegistry(
+        client,
+        notificationJobTypeRegistry,
+        {
+          "notifications.send-notification": {
+            attemptHandler: async ({ complete }) => complete(async () => ({ sentAt: "now" })),
+          },
         },
-      });
+      );
 
-      const orderProcessors = defineJobTypeProcessorRegistry(client, orderJobTypes, {
+      const orderProcessorRegistry = createJobTypeProcessorRegistry(client, orderJobTypeRegistry, {
         "orders.place-order": {
           attemptHandler: async ({ complete }) =>
             complete(async ({ continueWith }) =>
@@ -419,7 +423,10 @@ describe("createZodJobTypeRegistry", () => {
         },
       });
 
-      const merged = mergeJobTypeProcessorRegistries(orderProcessors, notificationProcessors);
+      const merged = mergeJobTypeProcessorRegistries(
+        orderProcessorRegistry,
+        notificationProcessorRegistry,
+      );
 
       expect(Object.keys(merged)).toEqual([
         "orders.place-order",

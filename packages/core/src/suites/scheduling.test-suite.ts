@@ -2,8 +2,8 @@ import { type TestAPI } from "vitest";
 import {
   createClient,
   createInProcessWorker,
-  defineJobTypeProcessorRegistry,
-  defineJobTypes,
+  createJobTypeProcessorRegistry,
+  defineJobTypeRegistry,
   rescheduleJob,
   withTransactionHooks,
 } from "../index.js";
@@ -19,7 +19,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     log,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { value: number };
@@ -39,7 +39,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       workerId: "worker",
       concurrency: 1,
       processDefaults: { pollIntervalMs: 50 },
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ job, complete }) => {
             return complete(async () => ({ result: job.input.value * 2 }));
@@ -81,7 +81,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     log,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { value: number };
@@ -101,7 +101,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       workerId: "worker",
       concurrency: 1,
       processDefaults: { pollIntervalMs: 50 },
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ job, complete }) => {
             return complete(async () => ({ result: job.input.value * 2 }));
@@ -143,7 +143,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     log,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       first: {
         entry: true;
         input: { value: number };
@@ -170,7 +170,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       workerId: "worker",
       concurrency: 1,
       processDefaults: { pollIntervalMs: 50 },
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         first: {
           attemptHandler: async ({ complete }) => {
             try {
@@ -228,7 +228,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     log,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       first: {
         entry: true;
         input: { value: number };
@@ -255,7 +255,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       workerId: "worker",
       concurrency: 1,
       processDefaults: { pollIntervalMs: 50 },
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         first: {
           attemptHandler: async ({ complete }) => {
             try {
@@ -313,7 +313,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     log,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { value: number };
@@ -337,7 +337,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       workerId: "worker",
       concurrency: 1,
       processDefaults: { pollIntervalMs: 50 },
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ job, complete }) => {
             attemptCount++;
@@ -387,7 +387,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     log,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { value: number };
@@ -411,7 +411,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       workerId: "worker",
       concurrency: 1,
       processDefaults: { pollIntervalMs: 50 },
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ job, complete }) => {
             attemptCount++;

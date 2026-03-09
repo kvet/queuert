@@ -3,8 +3,8 @@ import { sleep } from "../helpers/sleep.js";
 import {
   createClient,
   createInProcessWorker,
-  defineJobTypeProcessorRegistry,
-  defineJobTypes,
+  createJobTypeProcessorRegistry,
+  defineJobTypeRegistry,
   withTransactionHooks,
 } from "../index.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
@@ -19,7 +19,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     runInTransaction,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { value: number };
@@ -37,7 +37,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ job, complete }) => {
             await sleep(50);
@@ -76,7 +76,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     runInTransaction,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { value: number };
@@ -96,7 +96,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       createInProcessWorker({
         client,
         concurrency: 1,
-        processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+        processorRegistry: createJobTypeProcessorRegistry(client, registry, {
           test: {
             attemptHandler: async ({ job, complete }) => {
               await sleep(50);
@@ -144,7 +144,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     runInTransaction,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       blocker: {
         entry: true;
         input: null;
@@ -168,7 +168,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const worker1 = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         blocker: {
           attemptHandler: async ({ complete }) => {
             await sleep(25);
@@ -180,7 +180,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const worker2 = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         main: {
           attemptHandler: async ({ complete }) => {
             await sleep(25);
@@ -229,7 +229,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     runInTransaction,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       step1: {
         entry: true;
         input: null;
@@ -251,7 +251,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const worker1 = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         step1: {
           attemptHandler: async ({ complete }) => {
             await sleep(25);
@@ -268,7 +268,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const worker2 = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         step2: {
           attemptHandler: async ({ complete }) => {
             await sleep(25);
@@ -310,7 +310,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     runInTransaction,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: null;
@@ -333,7 +333,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       client,
       workerId: "worker",
       concurrency: 1,
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ signal, prepare }) => {
             await prepare({ mode: "staged" });
@@ -391,7 +391,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     runInTransaction,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: null;
@@ -414,7 +414,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       createInProcessWorker({
         client,
         concurrency: 1,
-        processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+        processorRegistry: createJobTypeProcessorRegistry(client, registry, {
           test: {
             attemptHandler: async ({ signal, job, prepare, complete }) => {
               await prepare({ mode: "staged" });

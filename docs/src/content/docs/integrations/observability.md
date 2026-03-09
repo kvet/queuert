@@ -17,7 +17,7 @@ import { metrics, trace } from "@opentelemetry/api";
 
 const client = await createClient({
   stateAdapter,
-  registry: jobTypes,
+  registry: jobTypeRegistry,
   observabilityAdapter: await createOtelObservabilityAdapter({
     meter: metrics.getMeter("my-app"), // Optional — metrics disabled if omitted
     tracer: trace.getTracer("my-app"), // Optional — tracing disabled if omitted

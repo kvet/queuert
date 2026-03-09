@@ -73,7 +73,7 @@ When using `{ input: Type }`, the system finds all job types whose input matches
 
 ## Validation
 
-### Compile-Time (`defineJobTypes`)
+### Compile-Time (`defineJobTypeRegistry`)
 
 Type-level validation only. References are checked at compile time via TypeScript's type system.
 

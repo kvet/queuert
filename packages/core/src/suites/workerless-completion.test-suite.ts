@@ -4,8 +4,8 @@ import {
   JobTypeMismatchError,
   createClient,
   createInProcessWorker,
-  defineJobTypeProcessorRegistry,
-  defineJobTypes,
+  createJobTypeProcessorRegistry,
+  defineJobTypeRegistry,
   withTransactionHooks,
 } from "../index.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
@@ -24,7 +24,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     log,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { value: number };
@@ -63,7 +63,10 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
             expect(job.status).toEqual("pending");
             expect(job.input).toEqual({ value: 42 });
 
-            return complete(job, async () => ({ result: 84 }));
+            return complete(job, async ({ transactionHooks }) => {
+              expect(transactionHooks).toBeDefined();
+              return { result: 84 };
+            });
           },
         }),
       ),
@@ -81,7 +84,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     log,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       "awaiting-approval": {
         entry: true;
         input: { requestId: string };
@@ -150,7 +153,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     log,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       "awaiting-approval": {
         entry: true;
         input: { requestId: string };
@@ -172,7 +175,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         "process-approved": {
           attemptHandler: async ({ prepare, complete }) => {
             await prepare({ mode: "atomic" });
@@ -233,7 +236,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     log,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: null;
@@ -299,7 +302,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     log,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { value: number };
@@ -363,7 +366,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     const jobCompleted = Promise.withResolvers<void>();
     const processCompleted = Promise.withResolvers<void>();
 
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: null;
@@ -382,7 +385,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       client,
       workerId: "worker",
       concurrency: 1,
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ signal, complete }) => {
             jobStarted.resolve();
@@ -446,7 +449,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     log,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       entryA: { entry: true; input: null; continueWith: { typeName: "shared" } };
       entryB: { entry: true; input: null; continueWith: { typeName: "shared" } };
       shared: { input: null; output: { done: boolean } };
@@ -501,7 +504,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     log,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       order: { entry: true; input: { amount: number }; output: { receipt: string } };
       notification: { entry: true; input: { message: string }; output: { sent: boolean } };
     }>();
@@ -548,7 +551,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     log,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       order: { entry: true; input: { amount: number }; output: { receipt: string } };
       notification: { entry: true; input: { message: string }; output: { sent: boolean } };
     }>();

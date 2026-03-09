@@ -18,8 +18,8 @@ import postgres, {
 import {
   createClient,
   createInProcessWorker,
-  defineJobTypeProcessorRegistry,
-  defineJobTypes,
+  createJobTypeProcessorRegistry,
+  defineJobTypeRegistry,
   withTransactionHooks,
 } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
@@ -33,7 +33,7 @@ type TransactionSql = _TransactionSql & {
 
 type DbContext = { sql: TransactionSql };
 
-const jobTypes = defineJobTypes<{
+const jobTypeRegistry = defineJobTypeRegistry<{
   /*
    * Workflow (approval):
    *   await-approval (scheduled timeout)
@@ -104,12 +104,12 @@ const notifyAdapter = createInProcessNotifyAdapter();
 const client = await createClient({
   stateAdapter,
   notifyAdapter,
-  registry: jobTypes,
+  registry: jobTypeRegistry,
 });
 
 const worker = await createInProcessWorker({
   client,
-  processorRegistry: defineJobTypeProcessorRegistry(client, jobTypes, {
+  processorRegistry: createJobTypeProcessorRegistry(client, jobTypeRegistry, {
     "await-approval": {
       attemptHandler: async ({ job, complete }) => {
         console.log(`[await-approval] Timeout reached for ${job.input.requestId} - auto-rejecting`);

@@ -2,14 +2,14 @@ import {
   createClient,
   createConsoleLog,
   createInProcessWorker,
-  defineJobTypeProcessorRegistry,
-  defineJobTypes,
+  createJobTypeProcessorRegistry,
+  defineJobTypeRegistry,
   withTransactionHooks,
 } from "queuert";
 import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
 
 // 1. Define job types
-const registry = defineJobTypes<{
+const registry = defineJobTypeRegistry<{
   greet: {
     entry: true;
     input: { name: string };
@@ -38,7 +38,7 @@ const qrtClient = await createClient({
 const qrtWorker = await createInProcessWorker({
   client: qrtClient,
   workerId: "worker-1",
-  processorRegistry: defineJobTypeProcessorRegistry(qrtClient, registry, {
+  processorRegistry: createJobTypeProcessorRegistry(qrtClient, registry, {
     greet: {
       attemptHandler: async ({ job, complete }) => {
         console.log(`[app] Processing greeting for ${job.input.name}`);

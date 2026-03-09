@@ -14,7 +14,7 @@ const worker = await createInProcessWorker({
   concurrency?: number,
   backoffConfig?: BackoffConfig,
   processDefaults?: InProcessWorkerProcessDefaults,
-  processorRegistry: JobTypeProcessorsRegistry,
+  processorRegistry: JobTypeProcessorRegistry,
 });
 ```
 
@@ -25,7 +25,7 @@ Returns `Promise<InProcessWorker>`.
 - **concurrency** -- maximum number of jobs to process in parallel (default: 1)
 - **backoffConfig** -- recovery backoff for the worker loop itself, not individual job retries
 - **processDefaults** -- default configuration applied to all job types
-- **processorRegistry** -- a `JobTypeProcessorsRegistry` from `defineJobTypeProcessorRegistry` or `mergeJobTypeProcessorRegistries`. The registry's definitions must be a subset of the client's registry definitions.
+- **processorRegistry** -- a `JobTypeProcessorRegistry` from `createJobTypeProcessorRegistry` or `mergeJobTypeProcessorRegistries`. The registry's definitions must be a subset of the client's registry definitions.
 
 ## InProcessWorker
 
@@ -74,10 +74,10 @@ The core function called for each job attempt.
 ```typescript
 type AttemptHandler = (options: {
   signal: TypedAbortSignal<JobAbortReason>;
-  job: RunningJob<JobWithBlockers>;
+  job: ResolvedJobWithBlockers & { status: "running" };
   prepare: AttemptPrepare;
   complete: AttemptComplete;
-}) => Promise<CompletedJob | ContinuationJobs>;
+}) => Promise<(ResolvedJobWithBlockers & { status: "completed" }) | ContinuationJobs>;
 ```
 
 **signal** -- a typed `AbortSignal` whose `reason` is a `JobAbortReason`: `"taken_by_another_worker"`, `"error"`, `"not_found"`, or `"already_completed"`. Check `signal.aborted` for early termination.
@@ -126,7 +126,7 @@ Wraps each job attempt. Receives the running job and worker ID, plus a `next` fu
 
 ```typescript
 type JobAttemptMiddleware = <T>(
-  context: { job: RunningJob<JobWithBlockers>; workerId: string },
+  context: { job: ResolvedJobWithBlockers & { status: "running" }; workerId: string },
   next: () => Promise<T>,
 ) => Promise<T>;
 ```
@@ -146,11 +146,11 @@ Helper that throws `RescheduleJobError` from within an attempt handler to resche
 
 ## mergeJobTypeProcessorRegistries
 
-Merges processors registries from multiple slices into a single registry. See [Utilities](/queuert/reference/queuert/utilities/#mergejobtypeprocessorregistries) for details.
+Merges processor registries from multiple slices into a single registry. See [Utilities](/queuert/reference/queuert/utilities/#mergejobtypeprocessorregistries) for details.
 
-## defineJobTypeProcessorRegistry
+## createJobTypeProcessorRegistry
 
-Defines a processors registry for a job type slice with full type inference. See [Utilities](/queuert/reference/queuert/utilities/#definejobtypeprocessorregistry) for details.
+Defines a processor registry for a job type slice with full type inference. See [Utilities](/queuert/reference/queuert/utilities/#createjobtypeprocessorregistry) for details.
 
 ## Handler Types
 

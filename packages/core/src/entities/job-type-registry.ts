@@ -1,11 +1,15 @@
 import { JobTypeValidationError } from "../errors.js";
-import { type BaseJobTypeDefinitions } from "./job-type.js";
+import { type BaseJobTypeDefinitions, type ResolvedJobTypeReference } from "./job-type.js";
+import { type BaseNavigationMap, type NavigationMap } from "./job-type-registry.navigation.js";
 
 /** Symbol used to carry phantom job type definitions on a registry. */
 export const definitionsSymbol: unique symbol = Symbol("queuert.definitions");
 
 /** Symbol used to carry phantom external job type definitions on a registry. */
 export const externalDefinitionsSymbol: unique symbol = Symbol("queuert.externalDefinitions");
+
+/** Symbol used to carry phantom pre-computed navigation map on a registry. */
+export const navigationSymbol: unique symbol = Symbol("queuert.navigation");
 
 /** Extract the job type definitions from a {@link JobTypeRegistry}. */
 export type JobTypeRegistryDefinitions<T extends JobTypeRegistry<any>> =
@@ -15,16 +19,10 @@ export type JobTypeRegistryDefinitions<T extends JobTypeRegistry<any>> =
 export type ExternalJobTypeRegistryDefinitions<T extends JobTypeRegistry<any>> =
   T[typeof externalDefinitionsSymbol];
 
-export const noopRegistries = new WeakSet<JobTypeRegistry<any>>();
+/** Extract the pre-computed navigation map from a {@link JobTypeRegistry}. */
+export type JobTypeRegistryNavigation<T extends JobTypeRegistry<any>> = T[typeof navigationSymbol];
 
-/**
- * Reference object for continuation and blocker validation.
- * Contains both typeName (for nominal validation) and input (for structural validation).
- */
-export type ResolvedJobTypeReference = {
-  readonly typeName: string;
-  readonly input: unknown;
-};
+export const noopRegistries = new WeakSet<JobTypeRegistry<any>>();
 
 /**
  * Configuration for createJobTypeRegistry.
@@ -56,6 +54,7 @@ export type JobTypeRegistryConfig = {
 export type JobTypeRegistry<
   TJobTypeDefinitions = unknown,
   TExternalJobTypeDefinitions = Record<never, never>,
+  TNavigation extends BaseNavigationMap = BaseNavigationMap,
 > = {
   /** Validate that a job type can start a chain (is an entry point). Throws JobTypeValidationError on failure. */
   validateEntry: (typeName: string) => void;
@@ -80,17 +79,21 @@ export type JobTypeRegistry<
 
   /** Phantom property for external (cross-slice) type inference. */
   readonly [externalDefinitionsSymbol]: TExternalJobTypeDefinitions;
+
+  /** Phantom property for pre-computed navigation map. */
+  readonly [navigationSymbol]: TNavigation;
 };
 
 /**
  * Create a noop registry that passes all values through without validation.
- * Used by defineJobTypes for compile-time-only type checking.
+ * Used by defineJobTypeRegistry for compile-time-only type checking.
  */
 export const createNoopJobTypeRegistry = <
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TExternalJobTypeDefinitions extends BaseJobTypeDefinitions = Record<never, never>,
->(): JobTypeRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions> => {
-  const registry: JobTypeRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions> = {
+  TNavigation extends BaseNavigationMap = NavigationMap<TJobTypeDefinitions>,
+>(): JobTypeRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions, TNavigation> => {
+  const registry: JobTypeRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions, TNavigation> = {
     validateEntry: () => {},
     parseInput: (_, input) => input,
     parseOutput: (_, output) => output,
@@ -99,6 +102,7 @@ export const createNoopJobTypeRegistry = <
     validateBlockers: () => {},
     [definitionsSymbol]: undefined as unknown as TJobTypeDefinitions,
     [externalDefinitionsSymbol]: undefined as unknown as TExternalJobTypeDefinitions,
+    [navigationSymbol]: undefined as unknown as TNavigation,
   };
   noopRegistries.add(registry);
   return registry;
@@ -124,9 +128,10 @@ export const createNoopJobTypeRegistry = <
 export const createJobTypeRegistry = <
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TExternalJobTypeDefinitions extends BaseJobTypeDefinitions = Record<never, never>,
+  TNavigation extends BaseNavigationMap = NavigationMap<TJobTypeDefinitions>,
 >(
   config: JobTypeRegistryConfig,
-): JobTypeRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions> => ({
+): JobTypeRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions, TNavigation> => ({
   getTypeNames: () => config.getTypeNames(),
   validateEntry: (typeName) => {
     try {
@@ -187,4 +192,5 @@ export const createJobTypeRegistry = <
   },
   [definitionsSymbol]: undefined as unknown as TJobTypeDefinitions,
   [externalDefinitionsSymbol]: undefined as unknown as TExternalJobTypeDefinitions,
+  [navigationSymbol]: undefined as unknown as TNavigation,
 });

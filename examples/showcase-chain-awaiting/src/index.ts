@@ -21,8 +21,8 @@ import {
   WaitChainTimeoutError,
   createClient,
   createInProcessWorker,
-  defineJobTypeProcessorRegistry,
-  defineJobTypes,
+  createJobTypeProcessorRegistry,
+  defineJobTypeRegistry,
   withTransactionHooks,
 } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
@@ -36,7 +36,7 @@ type TransactionSql = _TransactionSql & {
 
 type DbContext = { sql: TransactionSql };
 
-const jobTypes = defineJobTypes<{
+const jobTypeRegistry = defineJobTypeRegistry<{
   /*
    * Workflow:
    *   fetch-price --> apply-discount
@@ -90,7 +90,7 @@ const notifyAdapter = createInProcessNotifyAdapter();
 const client = await createClient({
   stateAdapter,
   notifyAdapter,
-  registry: jobTypes,
+  registry: jobTypeRegistry,
 });
 
 const PRICES: Record<string, number> = {
@@ -101,7 +101,7 @@ const PRICES: Record<string, number> = {
 
 const worker = await createInProcessWorker({
   client,
-  processorRegistry: defineJobTypeProcessorRegistry(client, jobTypes, {
+  processorRegistry: createJobTypeProcessorRegistry(client, jobTypeRegistry, {
     "fetch-price": {
       attemptHandler: async ({ job, complete }) => {
         const basePrice = PRICES[job.input.productId] ?? 9.99;

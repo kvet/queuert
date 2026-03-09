@@ -3,8 +3,8 @@ import {
   type CompletedJobChain,
   createClient,
   createInProcessWorker,
-  defineJobTypeProcessorRegistry,
-  defineJobTypes,
+  createJobTypeProcessorRegistry,
+  defineJobTypeRegistry,
   withTransactionHooks,
 } from "../index.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
@@ -24,7 +24,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     log,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       linear: {
         entry: true;
         input: { value: number };
@@ -50,7 +50,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         linear: {
           attemptHandler: async ({ job, complete }) => {
             expect(job.id).toEqual(jobChain.id);
@@ -147,7 +147,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     log,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       main: {
         entry: true;
         input: { value: number };
@@ -173,7 +173,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         main: {
           attemptHandler: async ({ job, prepare, complete }) => {
             await prepare({ mode: "atomic" });
@@ -261,7 +261,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     log,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       loop: {
         entry: true;
         input: { counter: number };
@@ -280,7 +280,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         loop: {
           attemptHandler: async ({ job, prepare, complete }) => {
             await prepare({ mode: "atomic" });
@@ -330,7 +330,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     log,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       start: {
         entry: true;
         input: { value: number };
@@ -353,7 +353,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         start: {
           attemptHandler: async ({ job, prepare, complete }) => {
             await prepare({ mode: "atomic" });
@@ -420,7 +420,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     log,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       entryA: { entry: true; input: { fromA: true }; continueWith: { typeName: "shared" } };
       entryB: { entry: true; input: { fromB: true }; continueWith: { typeName: "shared" } };
       shared: { input: { data: number }; output: { done: true } };
@@ -436,7 +436,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         entryA: {
           attemptHandler: async ({ job, complete }) => {
             // Entry job's chainTypeName should match its own typeName
@@ -508,7 +508,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     log,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       parent: {
         entry: true;
         input: { value: number };
@@ -533,7 +533,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         parent: {
           attemptHandler: async ({ job, complete }) => {
             // Create an independent chain during job processing

@@ -48,10 +48,10 @@ npm install @queuert/postgres
 ## Quick Start
 
 ```typescript
-import { createClient, createConsoleLog, defineJobTypes } from "queuert";
+import { createClient, createConsoleLog, defineJobTypeRegistry } from "queuert";
 import { createPgStateAdapter, createPgNotifyAdapter } from "@queuert/postgres";
 
-const jobTypes = defineJobTypes<{
+const jobTypeRegistry = defineJobTypeRegistry<{
   "send-email": { entry: true; input: { to: string }; output: { sent: true } };
 }>();
 
@@ -67,7 +67,7 @@ const notifyAdapter = await createPgNotifyAdapter({
 const client = await createClient({
   stateAdapter,
   notifyAdapter,
-  registry: jobTypes,
+  registry: jobTypeRegistry,
   log: createConsoleLog(),
 });
 ```

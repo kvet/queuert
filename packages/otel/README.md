@@ -33,7 +33,7 @@ npm install @queuert/otel
 ## Quick Start
 
 ```typescript
-import { createClient, createConsoleLog, defineJobTypes } from "queuert";
+import { createClient, createConsoleLog, defineJobTypeRegistry } from "queuert";
 import { createPgStateAdapter } from "@queuert/postgres";
 import { createOtelObservabilityAdapter } from "@queuert/otel";
 import { metrics, trace } from "@opentelemetry/api";
@@ -41,7 +41,7 @@ import { metrics, trace } from "@opentelemetry/api";
 // Configure your OTEL SDK first (Prometheus, OTLP, etc.)
 // See: https://opentelemetry.io/docs/languages/js/getting-started/
 
-const jobTypes = defineJobTypes<{
+const jobTypeRegistry = defineJobTypeRegistry<{
   "send-email": { entry: true; input: { to: string }; output: { sent: true } };
 }>();
 
@@ -55,7 +55,7 @@ const observabilityAdapter = await createOtelObservabilityAdapter({
 const client = await createClient({
   stateAdapter,
   observabilityAdapter,
-  registry: jobTypes,
+  registry: jobTypeRegistry,
   log: createConsoleLog(),
 });
 ```

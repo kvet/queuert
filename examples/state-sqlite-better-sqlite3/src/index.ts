@@ -7,8 +7,8 @@ import Database from "better-sqlite3";
 import {
   createClient,
   createInProcessWorker,
-  defineJobTypeProcessorRegistry,
-  defineJobTypes,
+  createJobTypeProcessorRegistry,
+  defineJobTypeRegistry,
   withTransactionHooks,
 } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
@@ -27,7 +27,7 @@ db.exec(`
 `);
 
 // 3. Define job types
-const registry = defineJobTypes<{
+const registry = defineJobTypeRegistry<{
   send_welcome_email: {
     entry: true;
     input: { userId: number; email: string; name: string };
@@ -114,7 +114,7 @@ const qrtClient = await createClient({
 // 6. Create and start qrtWorker
 const qrtWorker = await createInProcessWorker({
   client: qrtClient,
-  processorRegistry: defineJobTypeProcessorRegistry(qrtClient, registry, {
+  processorRegistry: createJobTypeProcessorRegistry(qrtClient, registry, {
     send_welcome_email: {
       attemptHandler: async ({ job, complete }) => {
         // Simulate sending email (in real app, call email service here)

@@ -10,19 +10,19 @@ Queuert provides only job completion -- there is no built-in "failure" state. Th
 Handle failures by returning error information in your output types:
 
 ```ts
-type Definitions = {
+const jobTypeRegistry = defineJobTypeRegistry<{
   "process-payment": {
     entry: true;
     input: { orderId: string };
     output: { success: true; transactionId: string } | { success: false; error: string };
   };
-};
+}>();
 ```
 
 For workflows that need rollback, use the compensation pattern -- a "failed" job can continue to a compensation job that undoes previous steps:
 
 ```ts
-type Definitions = {
+const jobTypeRegistry = defineJobTypeRegistry<{
   "charge-card": {
     entry: true;
     input: { orderId: string };
@@ -37,7 +37,7 @@ type Definitions = {
     input: { chargeId: string };
     output: { refunded: true };
   };
-};
+}>();
 ```
 
 ## Explicit Rescheduling
@@ -49,7 +49,7 @@ import { rescheduleJob } from "queuert";
 
 const worker = await createInProcessWorker({
   client,
-  processorRegistry: defineJobTypeProcessorRegistry(client, jobTypes, {
+  processorRegistry: createJobTypeProcessorRegistry(client, jobTypeRegistry, {
     "call-external-api": {
       attemptHandler: async ({ job, prepare, complete }) => {
         const response = await fetch(job.input.url);

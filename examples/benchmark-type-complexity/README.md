@@ -64,12 +64,15 @@ Chains where every step can loop back to itself via `continueWith` unions.
 
 ### Multi-slice: Merge
 
-Multiple independently-typed slices merged via `mergeJobTypeRegistries` / `mergeJobTypeProcessors`, each slice containing a linear chain.
+Multiple independently-typed slices merged via `mergeJobTypeRegistries` / `mergeJobTypeProcessorRegistries`, each slice containing a linear chain.
 
 | Scenario    | Slices | Types/Slice | Total Types |
 | ----------- | -----: | ----------: | ----------: |
-| merge-2x100 |      2 |         100 |         200 |
-| merge-5x100 |      5 |         100 |         500 |
+| merge-2x50  |      2 |          50 |         100 |
+| merge-5x50  |      5 |          50 |         250 |
+| merge-10x50 |     10 |          50 |         500 |
+| merge-20x50 |     20 |          50 |       1,000 |
+| merge-50x50 |     50 |          50 |       2,500 |
 
 ## Key metrics
 

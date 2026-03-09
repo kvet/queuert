@@ -8,7 +8,7 @@ import {
 } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import { Pool, type PoolClient } from "pg";
-import { createClient, defineJobTypes, withTransactionHooks } from "queuert";
+import { createClient, defineJobTypeRegistry, withTransactionHooks } from "queuert";
 
 // ============================================================================
 // Multi-Worker Order Processing Example (with Child Processes)
@@ -44,7 +44,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const WORKER_COUNT = 3;
 const JOBS_TO_PROCESS = 12;
 
-const registry = defineJobTypes<{
+const registry = defineJobTypeRegistry<{
   process_order: {
     entry: true;
     input: { orderId: string; items: string[]; total: number };

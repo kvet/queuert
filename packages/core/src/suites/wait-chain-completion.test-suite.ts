@@ -2,7 +2,7 @@ import { type TestAPI } from "vitest";
 import {
   WaitChainTimeoutError,
   createClient,
-  defineJobTypes,
+  defineJobTypeRegistry,
   withTransactionHooks,
 } from "../index.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
@@ -18,7 +18,7 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
     log,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: null;
@@ -72,7 +72,7 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
     log,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: null;
@@ -114,7 +114,7 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
     log,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: null;
@@ -150,7 +150,7 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
     log,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: null;

@@ -3,8 +3,8 @@ import {
   JobTypeMismatchError,
   createClient,
   createInProcessWorker,
-  defineJobTypeProcessorRegistry,
-  defineJobTypes,
+  createJobTypeProcessorRegistry,
+  defineJobTypeRegistry,
   withTransactionHooks,
 } from "../index.js";
 import { sleep } from "../helpers/sleep.js";
@@ -26,7 +26,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     TestSuiteContext,
     "stateAdapter" | "notifyAdapter" | "observabilityAdapter" | "log" | "runInTransaction"
   >) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       order: {
         entry: true;
         input: { amount: number };
@@ -887,7 +887,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       expect,
     }) => {
-      const registry = defineJobTypes<{
+      const registry = defineJobTypeRegistry<{
         step: {
           entry: true;
           input: { n: number };
@@ -907,7 +907,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       const worker = await createInProcessWorker({
         client,
         concurrency: 1,
-        processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+        processorRegistry: createJobTypeProcessorRegistry(client, registry, {
           step: {
             attemptHandler: async ({ job, complete }) =>
               complete(async ({ continueWith }) =>
@@ -953,7 +953,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       expect,
     }) => {
-      const registry = defineJobTypes<{
+      const registry = defineJobTypeRegistry<{
         step: {
           entry: true;
           input: { n: number };
@@ -973,7 +973,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       const worker = await createInProcessWorker({
         client,
         concurrency: 1,
-        processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+        processorRegistry: createJobTypeProcessorRegistry(client, registry, {
           step: {
             attemptHandler: async ({ job, complete }) =>
               complete(async ({ continueWith }) =>
@@ -1016,7 +1016,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       expect,
     }) => {
-      const registry = defineJobTypes<{
+      const registry = defineJobTypeRegistry<{
         step: {
           entry: true;
           input: { n: number };
@@ -1036,7 +1036,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       const worker = await createInProcessWorker({
         client,
         concurrency: 1,
-        processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+        processorRegistry: createJobTypeProcessorRegistry(client, registry, {
           step: {
             attemptHandler: async ({ job, complete }) =>
               complete(async ({ continueWith }) =>
@@ -1257,7 +1257,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       expect,
     }) => {
-      const registry = defineJobTypes<{
+      const registry = defineJobTypeRegistry<{
         dep: {
           entry: true;
           input: { v: number };
@@ -1282,7 +1282,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       const worker = await createInProcessWorker({
         client,
         concurrency: 1,
-        processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+        processorRegistry: createJobTypeProcessorRegistry(client, registry, {
           dep: {
             attemptHandler: async ({ complete }) => complete(async () => ({ ok: true })),
           },
@@ -1500,7 +1500,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       expect,
     }) => {
-      const registry = defineJobTypes<{
+      const registry = defineJobTypeRegistry<{
         task: {
           entry: true;
           input: { n: number };
@@ -1524,7 +1524,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       const worker = await createInProcessWorker({
         client,
         concurrency: 1,
-        processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+        processorRegistry: createJobTypeProcessorRegistry(client, registry, {
           task: {
             attemptHandler: async ({ job, complete }) =>
               complete(async ({ continueWith }) =>
@@ -1577,7 +1577,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       expect,
     }) => {
-      const registry = defineJobTypes<{
+      const registry = defineJobTypeRegistry<{
         dep: {
           entry: true;
           input: { v: number };
@@ -1602,7 +1602,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       const worker = await createInProcessWorker({
         client,
         concurrency: 1,
-        processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+        processorRegistry: createJobTypeProcessorRegistry(client, registry, {
           dep: {
             attemptHandler: async ({ complete }) => complete(async () => ({ ok: true })),
           },

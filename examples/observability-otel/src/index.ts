@@ -14,14 +14,14 @@
 import {
   createClient,
   createInProcessWorker,
-  defineJobTypeProcessorRegistry,
-  defineJobTypes,
+  createJobTypeProcessorRegistry,
+  defineJobTypeRegistry,
   withTransactionHooks,
 } from "queuert";
 import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
 import { flush, observabilityAdapter, shutdown } from "./observability.js";
 
-const registry = defineJobTypes<{
+const registry = defineJobTypeRegistry<{
   /*
    * Scenario 1 - Single Job:
    *   greet → "Hello, {name}!"
@@ -138,7 +138,7 @@ const client = await createClient({
 const worker = await createInProcessWorker({
   client,
   workerId: "worker-1",
-  processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+  processorRegistry: createJobTypeProcessorRegistry(client, registry, {
     // Scenario 1: Simple job
     greet: {
       attemptHandler: async ({ job, complete }) => {

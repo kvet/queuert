@@ -13,7 +13,7 @@ Queuert provides end-to-end type safety with full type inference. Define your jo
 - **Internal job types** without `entry: true` cannot be started directly via `startJobChain`
 
 ```ts
-const jobTypes = defineJobTypes<{
+const jobTypeRegistry = defineJobTypeRegistry<{
   "fetch-data": {
     entry: true;
     input: { url: string };

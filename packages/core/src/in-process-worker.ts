@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { type Client, helpersSymbol } from "./client.js";
-import { type BaseJobTypeDefinitions } from "./entities/job-type.js";
+import { type BaseNavigationMap } from "./entities/job-type-registry.navigation.js";
 import { type BackoffConfig } from "./helpers/backoff.js";
 import { type ParallelExecutor, createParallelExecutor } from "./helpers/parallel-executor.js";
 import { raceWithSleep } from "./helpers/sleep.js";
@@ -19,14 +19,14 @@ import {
 import { type JobAttemptMiddleware, runJobProcess } from "./worker/job-process.js";
 import {
   type InProcessWorkerProcessor,
-  type JobTypeProcessorsRegistry,
-} from "./worker/job-type-processors-registry.js";
+  type JobTypeProcessorRegistry,
+} from "./worker/job-type-processor-registry.js";
 import { type LeaseConfig } from "./worker/lease.js";
 
 /** Default configuration applied to all job types unless overridden per-processor. */
 export type InProcessWorkerProcessDefaults<
   TStateAdapter extends StateAdapter<any, any>,
-  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TNavigationMap extends BaseNavigationMap,
 > = {
   /** How often to poll for new jobs in milliseconds */
   pollIntervalMs?: number;
@@ -35,7 +35,7 @@ export type InProcessWorkerProcessDefaults<
   /** Lease configuration for job ownership */
   leaseConfig?: LeaseConfig;
   /** Middlewares that wrap each job attempt */
-  attemptMiddlewares?: JobAttemptMiddleware<TStateAdapter, TJobTypeDefinitions>[];
+  attemptMiddlewares?: JobAttemptMiddleware<TStateAdapter, TNavigationMap>[];
 };
 
 const waitForNextJob = async ({
@@ -159,6 +159,15 @@ const performJob = async ({
 };
 
 /**
+ * A worker that processes jobs in the current process. Created via {@link createInProcessWorker}.
+ *
+ * Call `start()` to begin processing. It returns a `stop` function — call it to gracefully shut down.
+ */
+export type InProcessWorker = {
+  start: () => Promise<() => Promise<void>>;
+};
+
+/**
  * Create an in-process worker for processing jobs.
  *
  * @param options.client - The Queuert client to process jobs for.
@@ -166,10 +175,10 @@ const performJob = async ({
  * @param options.concurrency - Maximum number of jobs to process in parallel. Defaults to 1.
  * @param options.backoffConfig - Backoff configuration for the worker loop itself (not job retries).
  * @param options.processDefaults - Default configuration applied to all job types unless overridden per-processor.
- * @param options.processorRegistry - A JobTypeProcessorsRegistry from defineJobTypeProcessorRegistry or mergeJobTypeProcessorRegistries.
+ * @param options.processorRegistry - A JobTypeProcessorRegistry from createJobTypeProcessorRegistry or mergeJobTypeProcessorRegistries.
  */
 export const createInProcessWorker = async <
-  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TNavigationMap extends BaseNavigationMap,
   TStateAdapter extends StateAdapter<any, any>,
 >({
   client,
@@ -179,13 +188,13 @@ export const createInProcessWorker = async <
   processDefaults,
   processorRegistry,
 }: {
-  client: Client<TJobTypeDefinitions, TStateAdapter>;
+  client: Client<TNavigationMap, TStateAdapter>;
   workerId?: string;
   concurrency?: number;
   backoffConfig?: BackoffConfig;
-  processDefaults?: InProcessWorkerProcessDefaults<TStateAdapter, TJobTypeDefinitions>;
-  processorRegistry: JobTypeProcessorsRegistry<TJobTypeDefinitions, any>;
-}) => {
+  processDefaults?: InProcessWorkerProcessDefaults<TStateAdapter, TNavigationMap>;
+  processorRegistry: JobTypeProcessorRegistry<any, any, TNavigationMap>;
+}): Promise<InProcessWorker> => {
   const typeNames = Object.keys(processorRegistry);
 
   const pollIntervalMs = processDefaults?.pollIntervalMs ?? 60_000;
@@ -314,10 +323,3 @@ export const createInProcessWorker = async <
     },
   };
 };
-
-/**
- * A worker that processes jobs in the current process. Created via {@link createInProcessWorker}.
- *
- * Call `start()` to begin processing. It returns a `stop` function — call it to gracefully shut down.
- */
-export type InProcessWorker = ReturnType<typeof createInProcessWorker>;

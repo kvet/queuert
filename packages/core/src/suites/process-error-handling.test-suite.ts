@@ -3,8 +3,8 @@ import { sleep } from "../helpers/sleep.js";
 import {
   createClient,
   createInProcessWorker,
-  defineJobTypeProcessorRegistry,
-  defineJobTypes,
+  createJobTypeProcessorRegistry,
+  defineJobTypeRegistry,
   withTransactionHooks,
 } from "../index.js";
 import { createSpyStateAdapter } from "../state-adapter/state-adapter.spy.spec-helper.js";
@@ -27,7 +27,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
   }) => {
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { value: number };
@@ -52,7 +52,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         test: {
           backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
           attemptHandler: async ({ job, prepare, complete }) => {
@@ -114,7 +114,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
   }) => {
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { value: number };
@@ -139,7 +139,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         test: {
           backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
           attemptHandler: async ({ job, prepare, complete }) => {
@@ -201,7 +201,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
   }) => {
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { value: number };
@@ -226,7 +226,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         test: {
           backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
           attemptHandler: async ({ job, prepare, complete }) => {
@@ -287,7 +287,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
   }) => {
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { value: number };
@@ -312,7 +312,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         test: {
           backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
           attemptHandler: async ({ job, prepare, complete }) => {
@@ -381,7 +381,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
   }) => {
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { value: number };
@@ -406,7 +406,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         test: {
           backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
           attemptHandler: async ({ job, prepare, complete }) => {
@@ -469,7 +469,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
   }) => {
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { value: number };
@@ -494,7 +494,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         test: {
           backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
           attemptHandler: async ({ job, prepare, complete }) => {
@@ -566,7 +566,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     let attempts = 0;
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { value: number };
@@ -591,7 +591,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         test: {
           backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
           attemptHandler: async ({ job, prepare, complete }) => {
@@ -661,7 +661,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     let attempts = 0;
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { value: number };
@@ -686,7 +686,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         test: {
           backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
           attemptHandler: async ({ job, prepare, complete }) => {

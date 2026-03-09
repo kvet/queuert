@@ -12,7 +12,7 @@ import { Type } from "@sinclair/typebox";
 import {
   createClient,
   createInProcessWorker,
-  defineJobTypeProcessorRegistry,
+  createJobTypeProcessorRegistry,
   withTransactionHooks,
 } from "queuert";
 import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
@@ -89,7 +89,7 @@ const qrtClient = await createClient({
 // 3. Create and start qrtWorker with job type processors
 const qrtWorker = await createInProcessWorker({
   client: qrtClient,
-  processorRegistry: defineJobTypeProcessorRegistry(qrtClient, registry, {
+  processorRegistry: createJobTypeProcessorRegistry(qrtClient, registry, {
     "fetch-data": {
       attemptHandler: async ({ job, complete }) => {
         console.log(`Fetching data from ${job.input.url}`);

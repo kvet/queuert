@@ -19,8 +19,8 @@ import postgres, {
 import {
   createClient,
   createInProcessWorker,
-  defineJobTypeProcessorRegistry,
-  defineJobTypes,
+  createJobTypeProcessorRegistry,
+  defineJobTypeRegistry,
   withTransactionHooks,
 } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
@@ -34,7 +34,7 @@ type TransactionSql = _TransactionSql & {
 
 type DbContext = { sql: TransactionSql };
 
-const jobTypes = defineJobTypes<{
+const jobTypeRegistry = defineJobTypeRegistry<{
   /*
    * Workflow (daily-digest, health-check):
    *   chain₁ --> output  (starts new chain if condition met)
@@ -134,12 +134,12 @@ await sql`
 const client = await createClient({
   stateAdapter,
   notifyAdapter,
-  registry: jobTypes,
+  registry: jobTypeRegistry,
 });
 
 const worker = await createInProcessWorker({
   client,
-  processorRegistry: defineJobTypeProcessorRegistry(client, jobTypes, {
+  processorRegistry: createJobTypeProcessorRegistry(client, jobTypeRegistry, {
     "daily-digest": {
       attemptHandler: async ({ job, complete }) => {
         console.log(

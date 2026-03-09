@@ -10,14 +10,14 @@
 
 import {
   createInProcessWorker,
-  defineJobTypeProcessorRegistry,
+  createJobTypeProcessorRegistry,
   withTransactionHooks,
 } from "queuert";
 import { client, db, registry, stateAdapter } from "./client.js";
 
 const worker = await createInProcessWorker({
   client,
-  processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+  processorRegistry: createJobTypeProcessorRegistry(client, registry, {
     greet: {
       attemptHandler: async ({ job, complete }) => {
         await delay(20);

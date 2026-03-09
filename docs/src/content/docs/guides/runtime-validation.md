@@ -7,7 +7,7 @@ sidebar:
 
 For production APIs accepting external input, you can add runtime validation using any schema library (Zod, Valibot, TypeBox, etc.). The core is minimal -- schema-specific adapters are implemented in user-land.
 
-Both `defineJobTypes` (compile-time only) and `createJobTypeRegistry` (runtime validation) provide the same compile-time type safety. Runtime validation adds protection against invalid external data.
+Both `defineJobTypeRegistry` (compile-time only) and `createJobTypeRegistry` (runtime validation) provide the same compile-time type safety. Runtime validation adds protection against invalid external data.
 
 See complete adapter examples: [Zod](https://github.com/kvet/queuert/tree/main/examples/validation-zod), [Valibot](https://github.com/kvet/queuert/tree/main/examples/validation-valibot), [TypeBox](https://github.com/kvet/queuert/tree/main/examples/validation-typebox), [ArkType](https://github.com/kvet/queuert/tree/main/examples/validation-arktype).
 
@@ -18,12 +18,12 @@ Queuert's runtime validation follows an adapter pattern. The core provides `crea
 Each adapter:
 
 1. Accepts schema definitions in the library's native format
-2. Infers `TJobTypeDefinitions` from the schemas (providing the same compile-time safety as `defineJobTypes`)
+2. Infers `TJobTypeDefinitions` from the schemas (providing the same compile-time safety as `defineJobTypeRegistry`)
 3. Calls `createJobTypeRegistry` with validation functions that delegate to the schema library
 
-### `defineJobTypes` vs `createJobTypeRegistry`
+### `defineJobTypeRegistry` vs `createJobTypeRegistry`
 
-`defineJobTypes` is a lightweight type-only helper. It provides compile-time type inference with zero runtime cost -- no validation functions are executed. Use it when your inputs come from trusted internal code.
+`defineJobTypeRegistry` is a lightweight type-only helper. It provides compile-time type inference with zero runtime cost -- no validation functions are executed. Use it when your inputs come from trusted internal code.
 
 `createJobTypeRegistry` adds runtime validation on top of compile-time types. It accepts validation functions for entry checks, input/output parsing, continuation validation, and blocker validation. Use it when your job inputs originate from external sources (APIs, webhooks, user input) where compile-time guarantees alone are insufficient.
 

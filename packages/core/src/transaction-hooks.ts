@@ -26,12 +26,24 @@ export type TransactionHooks = {
 };
 
 /**
+ * A {@link TransactionHooks} instance with `flush` and `discard` lifecycle methods.
+ *
+ * - Call `flush()` after the transaction commits to execute all buffered side effects.
+ * - Call `discard()` on rollback to clean up without executing side effects.
+ */
+export type TransactionHooksHandle = {
+  transactionHooks: TransactionHooks;
+  flush: () => Promise<void>;
+  discard: () => Promise<void>;
+};
+
+/**
  * Create a new transaction hooks handle.
  *
  * Returns `transactionHooks` (pass to mutating client methods), `flush` (call after commit),
  * and `discard` (call on rollback).
  */
-export const createTransactionHooks = () => {
+export const createTransactionHooks = (): TransactionHooksHandle => {
   const hooks = new Map<symbol, HookDef<any>>();
 
   const transactionHooks: TransactionHooks = {
@@ -89,14 +101,6 @@ export const createTransactionHooks = () => {
 
   return { transactionHooks, flush, discard };
 };
-
-/**
- * A {@link TransactionHooks} instance with `flush` and `discard` lifecycle methods.
- *
- * - Call `flush()` after the transaction commits to execute all buffered side effects.
- * - Call `discard()` on rollback to clean up without executing side effects.
- */
-export type TransactionHooksHandle = ReturnType<typeof createTransactionHooks>;
 
 /** Execute a callback with auto-managed transaction hooks. Flushes on success, discards on error. */
 export const withTransactionHooks = async <T>(

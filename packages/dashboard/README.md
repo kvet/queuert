@@ -37,11 +37,11 @@ The state adapter must implement the dashboard listing methods (`listJobChains`,
 ## Quick Start
 
 ```typescript
-import { createClient, createConsoleLog, defineJobTypes } from "queuert";
+import { createClient, createConsoleLog, defineJobTypeRegistry } from "queuert";
 import { createPgStateAdapter } from "@queuert/postgres";
 import { createDashboard } from "@queuert/dashboard";
 
-const jobTypes = defineJobTypes<{
+const jobTypeRegistry = defineJobTypeRegistry<{
   "send-email": { entry: true; input: { to: string }; output: { sent: true } };
 }>();
 
@@ -49,7 +49,7 @@ const stateAdapter = await createPgStateAdapter({ stateProvider: myPgProvider })
 
 const client = await createClient({
   stateAdapter,
-  registry: jobTypes,
+  registry: jobTypeRegistry,
   log: createConsoleLog(),
 });
 

@@ -3,8 +3,8 @@ import { RedisContainer } from "@testcontainers/redis";
 import {
   createClient,
   createInProcessWorker,
-  defineJobTypeProcessorRegistry,
-  defineJobTypes,
+  createJobTypeProcessorRegistry,
+  defineJobTypeRegistry,
   withTransactionHooks,
 } from "queuert";
 import { createInProcessStateAdapter } from "queuert/internal";
@@ -45,7 +45,7 @@ const notifyProvider: RedisNotifyProvider = {
 };
 
 // 4. Define job types
-const registry = defineJobTypes<{
+const registry = defineJobTypeRegistry<{
   generate_report: {
     entry: true;
     input: { reportType: string; dateRange: { from: string; to: string } };
@@ -66,7 +66,7 @@ const qrtClient = await createClient({
 
 const qrtWorker = await createInProcessWorker({
   client: qrtClient,
-  processorRegistry: defineJobTypeProcessorRegistry(qrtClient, registry, {
+  processorRegistry: createJobTypeProcessorRegistry(qrtClient, registry, {
     generate_report: {
       attemptHandler: async ({ job, complete }) => {
         console.log(`Generating ${job.input.reportType} report...`);

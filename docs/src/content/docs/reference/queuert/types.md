@@ -10,7 +10,11 @@ sidebar:
 ### JobTypeRegistry
 
 ```typescript
-type JobTypeRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions = Record<never, never>> = {
+type JobTypeRegistry<
+  TJobTypeDefinitions,
+  TExternalJobTypeDefinitions = Record<never, never>,
+  TNavigation extends BaseNavigationMap = BaseNavigationMap,
+> = {
   getTypeNames: () => readonly string[];
   validateEntry: (typeName: string) => void;
   parseInput: (typeName: string, input: unknown) => unknown;
@@ -19,6 +23,7 @@ type JobTypeRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions = Record<n
   validateBlockers: (typeName: string, blockers: readonly ResolvedJobTypeReference[]) => void;
   readonly [definitionsSymbol]: TJobTypeDefinitions;
   readonly [externalDefinitionsSymbol]: TExternalJobTypeDefinitions;
+  readonly [navigationSymbol]: TNavigation;
 };
 ```
 
@@ -41,7 +46,7 @@ type BaseJobTypeDefinition = {
 };
 ```
 
-The shape of each job type in the type map passed to `defineJobTypes` or `createJobTypeRegistry`.
+The shape of each job type in the type map passed to `defineJobTypeRegistry` or `createJobTypeRegistry`.
 
 - **entry** -- marks the type as a valid chain entry point
 - **input** -- required for every job type
@@ -58,11 +63,11 @@ type JobTypeRegistryDefinitions<T extends JobTypeRegistry<any>> = T[typeof defin
 Utility type that extracts the phantom job type definitions from a `JobTypeRegistry`. Use this instead of indexing the symbol property directly.
 
 ```typescript
-const jobTypes = defineJobTypes<{
+const jobTypeRegistry = defineJobTypeRegistry<{
   "send-email": { entry: true; input: { to: string }; output: { sent: true } };
 }>();
 
-type MyDefs = JobTypeRegistryDefinitions<typeof jobTypes>;
+type MyDefs = JobTypeRegistryDefinitions<typeof jobTypeRegistry>;
 // { "send-email": { entry: true; input: { to: string }; output: { sent: true } } }
 ```
 
@@ -76,7 +81,7 @@ type ExternalJobTypeRegistryDefinitions<T extends JobTypeRegistry<any>> =
 Utility type that extracts the external (cross-slice) phantom definitions from a `JobTypeRegistry`. Returns `Record<never, never>` when no external types were declared.
 
 ```typescript
-const orderJobTypes = defineJobTypes<
+const orderJobTypeRegistry = defineJobTypeRegistry<
   {
     "orders.confirm": {
       entry: true;
@@ -85,14 +90,42 @@ const orderJobTypes = defineJobTypes<
       blockers: [{ typeName: "notifications.send" }];
     };
   },
-  JobTypeRegistryDefinitions<typeof notificationJobTypes>
+  JobTypeRegistryDefinitions<typeof notificationJobTypeRegistry>
 >();
 
-type ExtDefs = ExternalJobTypeRegistryDefinitions<typeof orderJobTypes>;
+type ExtDefs = ExternalJobTypeRegistryDefinitions<typeof orderJobTypeRegistry>;
 // { "notifications.send": { ... } }
 ```
 
-When using `defineJobTypeProcessorRegistry`, external definitions are automatically extracted from the registry — no need to specify them manually.
+When using `createJobTypeProcessorRegistry`, external definitions are automatically extracted from the registry — no need to specify them manually.
+
+### JobTypeRegistryNavigation
+
+```typescript
+type JobTypeRegistryNavigation<T extends JobTypeRegistry<any>> = T[typeof navigationSymbol];
+```
+
+Utility type that extracts the pre-computed navigation map from a `JobTypeRegistry`. The navigation map is a `NavigationMap` that pre-resolves chain topology at the type level — continuation targets, reachable entry points, input/output types, and blocker metadata per job type name.
+
+### NavigationMap
+
+```typescript
+type NavigationMap<TJobTypeDefinitions extends BaseJobTypeDefinitions> = {
+  [K in keyof TJobTypeDefinitions & string]: {
+    continuationTypes: string; // Union of resolved continueWith target type names
+    reachingEntries: string; // Union of entry type names that can reach this type
+    input: unknown; // Extracted input type
+    output: unknown; // Extracted output type
+    isEntry: boolean; // Whether this type is a chain entry point
+    hasBlockers: boolean; // Whether this type declares blockers
+    blockerRefs: readonly JobTypeReference[]; // Raw blocker references
+  };
+};
+```
+
+A compile-time map computed from job type definitions. Each entry pre-resolves the chain topology for a single job type name. Consumer types like `ChainJobTypeNames`, `EntryJobTypeDefinitions`, and `BlockerChains` operate on a `NavigationMap` rather than re-computing relationships from raw definitions.
+
+`BaseNavigationMap` and `BaseNavigationEntry` are the unconstrained base types used in generic positions.
 
 ## Attempt Handler Types
 
@@ -157,19 +190,20 @@ type Job<TJobId, TJobTypeName, TChainTypeName, TInput> = {
 
 A discriminated union on **status**. All jobs carry their chain identity via **chainId** and **chainTypeName**, and their position via **chainIndex**. The **running** variant includes lease metadata. The **completed** variant includes completion timestamps and the worker identity.
 
-### JobWithBlockers
+### ResolvedJobWithBlockers
 
 ```typescript
-type JobWithBlockers<TJob, TBlockerChains> = TJob & {
-  blockers: TBlockerChains;
+type ResolvedJobWithBlockers<TJobId, TNavigationMap, TJobTypeName, TChainTypeName> = Job<
+  TJobId,
+  TJobTypeName,
+  TChainTypeName,
+  TNavigationMap[TJobTypeName]["input"]
+> & {
+  blockers: CompletedBlockerChains<TJobId, TNavigationMap, TJobTypeName>;
 };
 ```
 
 A `Job` extended with resolved blocker chains. **blockers** contains the completed blocker chain data, available inside worker handlers when the job type declares blockers.
-
-### CompletedJob
-
-`Job` narrowed to `status: "completed"`. Guarantees the presence of **completedAt** and **completedBy** fields.
 
 ### JobStatus
 

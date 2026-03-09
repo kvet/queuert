@@ -1,10 +1,10 @@
 import { type DeduplicationOptions } from "./entities/deduplication.js";
 import {
   type JobTypeRegistry,
-  type JobTypeRegistryDefinitions,
+  type JobTypeRegistryNavigation,
 } from "./entities/job-type-registry.js";
+import { type BaseNavigationMap } from "./entities/job-type-registry.navigation.js";
 import {
-  type BaseJobTypeDefinitions,
   type BlockedJobTypeNames,
   type BlockerChains,
   type ChainJobTypeNames,
@@ -14,7 +14,7 @@ import {
   type ResolvedChainJobs,
   type ResolvedJob,
   type ResolvedJobChain,
-} from "./entities/job-type.js";
+} from "./entities/job-type-registry.resolvers.js";
 import { type ScheduleOptions } from "./entities/schedule.js";
 import { continueWith } from "./implementation/continue-with.js";
 import { finishJob } from "./implementation/finish-job.js";
@@ -31,12 +31,8 @@ import {
   type StateJob,
 } from "./state-adapter/state-adapter.js";
 
-import {
-  type CompletedJobChain,
-  type JobChain,
-  mapStateJobPairToJobChain,
-} from "./entities/job-chain.js";
-import { type CreatedJob, type Job, type JobStatus, mapStateJobToJob } from "./entities/job.js";
+import { type JobChain, mapStateJobPairToJobChain } from "./entities/job-chain.js";
+import { type Job, type JobStatus, mapStateJobToJob } from "./entities/job.js";
 import {
   JobAlreadyCompletedError,
   JobChainNotFoundError,
@@ -45,7 +41,7 @@ import {
 } from "./errors.js";
 import { bufferNotifyJobOwnershipLost } from "./helpers/notify-hooks.js";
 import { raceWithSleep } from "./helpers/sleep.js";
-import { createHelpers } from "./setup-helpers.js";
+import { type Helpers, createHelpers } from "./setup-helpers.js";
 import { type TransactionHooks } from "./transaction-hooks.js";
 import { type AttemptCompleteOptions } from "./worker/job-process.js";
 
@@ -57,26 +53,26 @@ const normalizeTxCtx = <T extends Record<string, unknown>>(rest: T): T | undefin
 /** Callback type for {@link Client.completeJobChain | completeJobChain}. Receives the current job and a `complete` function. */
 export type JobChainCompleteOptions<
   TStateAdapter extends StateAdapter<any, any>,
-  TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
+  TNavigationMap extends BaseNavigationMap,
+  TChainTypeName extends keyof EntryJobTypeDefinitions<TNavigationMap> & string,
   TCompleteReturn,
 > = (options: {
-  job: ResolvedChainJobs<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TChainTypeName>;
+  job: ResolvedChainJobs<GetStateAdapterJobId<TStateAdapter>, TNavigationMap, TChainTypeName>;
   complete: <
-    TJobTypeName extends ChainJobTypeNames<TJobTypeDefinitions, TChainTypeName> & string,
+    TJobTypeName extends ChainJobTypeNames<TNavigationMap, TChainTypeName> & string,
     TReturn extends
-      | TJobTypeDefinitions[TJobTypeName]["output"]
+      | TNavigationMap[TJobTypeName]["output"]
       | ContinuationJobs<
           GetStateAdapterJobId<TStateAdapter>,
-          TJobTypeDefinitions,
+          TNavigationMap,
           TJobTypeName,
           TChainTypeName
         >
-      | Promise<TJobTypeDefinitions[TJobTypeName]["output"]>
+      | Promise<TNavigationMap[TJobTypeName]["output"]>
       | Promise<
           ContinuationJobs<
             GetStateAdapterJobId<TStateAdapter>,
-            TJobTypeDefinitions,
+            TNavigationMap,
             TJobTypeName,
             TChainTypeName
           >
@@ -84,14 +80,14 @@ export type JobChainCompleteOptions<
   >(
     job: ResolvedJob<
       GetStateAdapterJobId<TStateAdapter>,
-      TJobTypeDefinitions,
+      TNavigationMap,
       TJobTypeName,
       TChainTypeName
     >,
     completeCallback: (
       completeOptions: AttemptCompleteOptions<
         TStateAdapter,
-        TJobTypeDefinitions,
+        TNavigationMap,
         TJobTypeName,
         TChainTypeName
       >,
@@ -102,21 +98,195 @@ export type JobChainCompleteOptions<
 /** Return type of {@link Client.completeJobChain | completeJobChain}. Narrows to `CompletedJobChain` when the chain is completed, or `JobChain` when continued. */
 export type CompleteJobChainResult<
   TStateAdapter extends StateAdapter<any, any>,
-  TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TChainTypeName extends keyof TJobTypeDefinitions & string,
+  TNavigationMap extends BaseNavigationMap,
+  TChainTypeName extends keyof TNavigationMap & string,
   TCompleteReturn,
 > = [TCompleteReturn] extends [void]
-  ? ResolvedJobChain<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TChainTypeName>
-  : TCompleteReturn extends CreatedJob<Job<any, any, any, any>>
-    ? ResolvedJobChain<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TChainTypeName>
-    : CompletedJobChain<
-        JobChain<
-          GetStateAdapterJobId<TStateAdapter>,
-          TChainTypeName,
-          TJobTypeDefinitions[TChainTypeName]["input"],
-          TCompleteReturn
-        >
+  ? ResolvedJobChain<GetStateAdapterJobId<TStateAdapter>, TNavigationMap, TChainTypeName>
+  : TCompleteReturn extends Job<any, any, any, any> &
+        ({ status: "pending" } | { status: "blocked" })
+    ? ResolvedJobChain<GetStateAdapterJobId<TStateAdapter>, TNavigationMap, TChainTypeName>
+    : JobChain<
+        GetStateAdapterJobId<TStateAdapter>,
+        TChainTypeName,
+        TNavigationMap[TChainTypeName]["input"],
+        TCompleteReturn
+      > & { status: "completed" };
+
+/**
+ * The public API for managing job chains. Created via {@link createClient}.
+ *
+ * Methods are split into two categories:
+ * - **Mutating** — `startJobChain`, `completeJobChain`, `deleteJobChains`. Require `transactionHooks` and a transaction context.
+ * - **Read-only** — `getJobChain`, `getJob`, `listJobChains`, `listJobs`, `listJobChainJobs`, `getJobBlockers`, `listBlockedJobs`, `awaitJobChain`. Accept an optional transaction context.
+ */
+export type Client<
+  TNavigationMap extends BaseNavigationMap,
+  TStateAdapter extends StateAdapter<any, any>,
+  TJobId = GetStateAdapterJobId<TStateAdapter>,
+> = {
+  readonly [helpersSymbol]: Helpers;
+
+  startJobChain: <TChainTypeName extends keyof EntryJobTypeDefinitions<TNavigationMap> & string>(
+    options: {
+      typeName: TChainTypeName;
+      input: TNavigationMap[TChainTypeName]["input"];
+      transactionHooks: TransactionHooks;
+      deduplication?: DeduplicationOptions;
+      schedule?: ScheduleOptions;
+    } & (JobTypeHasBlockers<TNavigationMap, TChainTypeName> extends true
+      ? {
+          blockers: BlockerChains<TJobId, TNavigationMap, TChainTypeName>;
+        }
+      : { blockers?: never }) &
+      GetStateAdapterTxContext<TStateAdapter>,
+  ) => Promise<
+    ResolvedJobChain<TJobId, TNavigationMap, TChainTypeName> & {
+      deduplicated: boolean;
+    }
+  >;
+
+  deleteJobChains: (
+    options: {
+      ids: TJobId[];
+      cascade?: boolean;
+      transactionHooks: TransactionHooks;
+    } & GetStateAdapterTxContext<TStateAdapter>,
+  ) => Promise<
+    ResolvedJobChain<
+      TJobId,
+      TNavigationMap,
+      keyof EntryJobTypeDefinitions<TNavigationMap> & string
+    >[]
+  >;
+
+  completeJobChain: <
+    TChainTypeName extends keyof EntryJobTypeDefinitions<TNavigationMap> & string,
+    TCompleteReturn,
+  >(
+    options: {
+      typeName: TChainTypeName;
+      id: TJobId;
+      transactionHooks: TransactionHooks;
+      complete: JobChainCompleteOptions<
+        TStateAdapter,
+        TNavigationMap,
+        TChainTypeName,
+        TCompleteReturn
       >;
+    } & GetStateAdapterTxContext<TStateAdapter>,
+  ) => Promise<
+    CompleteJobChainResult<TStateAdapter, TNavigationMap, TChainTypeName, TCompleteReturn>
+  >;
+
+  awaitJobChain: <
+    TChainTypeName extends keyof EntryJobTypeDefinitions<TNavigationMap> & string =
+      keyof EntryJobTypeDefinitions<TNavigationMap> & string,
+  >(
+    jobChain: {
+      typeName?: TChainTypeName;
+      id: TJobId;
+    },
+    options: {
+      timeoutMs: number;
+      pollIntervalMs?: number;
+      signal?: AbortSignal;
+    },
+  ) => Promise<ResolvedJobChain<TJobId, TNavigationMap, TChainTypeName> & { status: "completed" }>;
+
+  getJobChain: <
+    TChainTypeName extends keyof EntryJobTypeDefinitions<TNavigationMap> & string =
+      keyof EntryJobTypeDefinitions<TNavigationMap> & string,
+  >(
+    options: {
+      typeName?: TChainTypeName;
+      id: TJobId;
+    } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
+  ) => Promise<ResolvedJobChain<TJobId, TNavigationMap, TChainTypeName> | undefined>;
+
+  getJob: <TJobTypeName extends keyof TNavigationMap & string = keyof TNavigationMap & string>(
+    options: {
+      typeName?: TJobTypeName;
+      id: TJobId;
+    } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
+  ) => Promise<ResolvedJob<TJobId, TNavigationMap, TJobTypeName> | undefined>;
+
+  listJobChains: <TChainTypeName extends keyof EntryJobTypeDefinitions<TNavigationMap> & string>(
+    options: {
+      filter?: {
+        typeName?: TChainTypeName[];
+        status?: JobStatus[];
+        id?: TJobId[];
+        jobId?: TJobId[];
+        root?: boolean;
+        from?: Date;
+        to?: Date;
+      };
+      orderDirection?: OrderDirection;
+      cursor?: string;
+      limit?: number;
+    } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
+  ) => Promise<Page<ResolvedJobChain<TJobId, TNavigationMap, TChainTypeName>>>;
+
+  listJobs: <TJobTypeName extends keyof TNavigationMap & string>(
+    options: {
+      filter?: {
+        typeName?: TJobTypeName[];
+        id?: TJobId[];
+        jobChainId?: TJobId[];
+        status?: JobStatus[];
+        from?: Date;
+        to?: Date;
+      };
+      orderDirection?: OrderDirection;
+      cursor?: string;
+      limit?: number;
+    } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
+  ) => Promise<Page<ResolvedJob<TJobId, TNavigationMap, TJobTypeName>>>;
+
+  listJobChainJobs: <
+    TChainTypeName extends keyof EntryJobTypeDefinitions<TNavigationMap> & string =
+      keyof EntryJobTypeDefinitions<TNavigationMap> & string,
+  >(
+    options: {
+      jobChainId: TJobId;
+      typeName?: TChainTypeName;
+      orderDirection?: OrderDirection;
+      cursor?: string;
+      limit?: number;
+    } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
+  ) => Promise<Page<ResolvedChainJobs<TJobId, TNavigationMap, TChainTypeName>>>;
+
+  getJobBlockers: <
+    TJobTypeName extends keyof TNavigationMap & string = keyof TNavigationMap & string,
+  >(
+    options: {
+      jobId: TJobId;
+      typeName?: TJobTypeName;
+    } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
+  ) => Promise<BlockerChains<TJobId, TNavigationMap, TJobTypeName>>;
+
+  listBlockedJobs: <
+    TChainTypeName extends keyof EntryJobTypeDefinitions<TNavigationMap> & string =
+      keyof EntryJobTypeDefinitions<TNavigationMap> & string,
+  >(
+    options: {
+      jobChainId: TJobId;
+      typeName?: TChainTypeName;
+      orderDirection?: OrderDirection;
+      cursor?: string;
+      limit?: number;
+    } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
+  ) => Promise<
+    Page<
+      ResolvedJob<
+        TJobId,
+        TNavigationMap,
+        BlockedJobTypeNames<TNavigationMap, TChainTypeName> & keyof TNavigationMap & string
+      >
+    >
+  >;
+};
 
 /**
  * Create a new Queuert client.
@@ -124,7 +294,7 @@ export type CompleteJobChainResult<
  * @param options.stateAdapter - Database adapter for job persistence.
  * @param options.notifyAdapter - Optional pub/sub adapter for real-time notifications.
  * @param options.observabilityAdapter - Optional adapter for logging, metrics, and tracing.
- * @param options.registry - Job type registry (from {@link defineJobTypes} or {@link createJobTypeRegistry}).
+ * @param options.registry - Job type registry (from {@link defineJobTypeRegistry} or {@link createJobTypeRegistry}).
  * @param options.log - Optional structured log function.
  */
 export const createClient = async <
@@ -142,8 +312,8 @@ export const createClient = async <
   observabilityAdapter?: ObservabilityAdapter;
   registry: TJobTypeRegistry;
   log?: Log;
-}) => {
-  type TJobTypeDefinitions = JobTypeRegistryDefinitions<TJobTypeRegistry>;
+}): Promise<Client<JobTypeRegistryNavigation<TJobTypeRegistry>, TStateAdapter>> => {
+  type TNavigationMap = JobTypeRegistryNavigation<TJobTypeRegistry>;
   type TJobId = GetStateAdapterJobId<TStateAdapter>;
 
   const helpers = createHelpers({
@@ -153,27 +323,27 @@ export const createClient = async <
     registry: registryOption,
     log,
   });
-  const client = {
+  const client: Client<TNavigationMap, TStateAdapter> = {
     [helpersSymbol]: helpers,
 
     /** Create a new job chain. Returns the created chain with a `deduplicated` flag. */
     startJobChain: async <
-      TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
+      TChainTypeName extends keyof EntryJobTypeDefinitions<TNavigationMap> & string,
     >(
       options: {
         typeName: TChainTypeName;
-        input: TJobTypeDefinitions[TChainTypeName]["input"];
+        input: TNavigationMap[TChainTypeName]["input"];
         transactionHooks: TransactionHooks;
         deduplication?: DeduplicationOptions;
         schedule?: ScheduleOptions;
-      } & (JobTypeHasBlockers<TJobTypeDefinitions, TChainTypeName> extends true
+      } & (JobTypeHasBlockers<TNavigationMap, TChainTypeName> extends true
         ? {
-            blockers: BlockerChains<TJobId, TJobTypeDefinitions, TChainTypeName>;
+            blockers: BlockerChains<TJobId, TNavigationMap, TChainTypeName>;
           }
         : { blockers?: never }) &
         GetStateAdapterTxContext<TStateAdapter>,
     ): Promise<
-      ResolvedJobChain<TJobId, TJobTypeDefinitions, TChainTypeName> & {
+      ResolvedJobChain<TJobId, TNavigationMap, TChainTypeName> & {
         deduplicated: boolean;
       }
     > => {
@@ -187,7 +357,7 @@ export const createClient = async <
         deduplication,
         schedule,
         blockers,
-      })) as ResolvedJobChain<TJobId, TJobTypeDefinitions, TChainTypeName> & {
+      })) as ResolvedJobChain<TJobId, TNavigationMap, TChainTypeName> & {
         deduplicated: boolean;
       };
     },
@@ -202,8 +372,8 @@ export const createClient = async <
     ): Promise<
       ResolvedJobChain<
         TJobId,
-        TJobTypeDefinitions,
-        keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string
+        TNavigationMap,
+        keyof EntryJobTypeDefinitions<TNavigationMap> & string
       >[]
     > => {
       const { ids, cascade, transactionHooks: _transactionHooks, ...txCtx } = options;
@@ -218,15 +388,15 @@ export const createClient = async <
         (pair) =>
           mapStateJobPairToJobChain(pair) as ResolvedJobChain<
             TJobId,
-            TJobTypeDefinitions,
-            keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string
+            TNavigationMap,
+            keyof EntryJobTypeDefinitions<TNavigationMap> & string
           >,
       );
     },
 
     /** Complete a job chain from outside a worker. Validates `typeName`, then passes the current job and a `complete` function to the caller. */
     completeJobChain: async <
-      TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
+      TChainTypeName extends keyof EntryJobTypeDefinitions<TNavigationMap> & string,
       TCompleteReturn,
     >(
       options: {
@@ -235,13 +405,13 @@ export const createClient = async <
         transactionHooks: TransactionHooks;
         complete: JobChainCompleteOptions<
           TStateAdapter,
-          TJobTypeDefinitions,
+          TNavigationMap,
           TChainTypeName,
           TCompleteReturn
         >;
       } & GetStateAdapterTxContext<TStateAdapter>,
     ): Promise<
-      CompleteJobChainResult<TStateAdapter, TJobTypeDefinitions, TChainTypeName, TCompleteReturn>
+      CompleteJobChainResult<TStateAdapter, TNavigationMap, TChainTypeName, TCompleteReturn>
     > => {
       const { id, typeName, complete: completeCallback, transactionHooks, ...txCtx } = options;
       const currentJob = await helpers.stateAdapter.getLatestChainJobForUpdate({
@@ -272,6 +442,7 @@ export const createClient = async <
               schedule?: ScheduleOptions;
               blockers?: JobChain<any, any, any, any>[];
             }) => Promise<unknown>;
+            transactionHooks: TransactionHooks;
           } & BaseTxContext,
         ) => unknown,
       ): Promise<unknown> => {
@@ -285,6 +456,7 @@ export const createClient = async <
         let continuedJob: Job<any, any, any, any> | null = null;
 
         const output = await jobCompleteCallback({
+          transactionHooks,
           continueWith: async ({ typeName, input, schedule, blockers }) => {
             if (continuedJob) {
               throw new Error("continueWith can only be called once");
@@ -341,7 +513,7 @@ export const createClient = async <
 
       return mapStateJobPairToJobChain(updatedChain) as CompleteJobChainResult<
         TStateAdapter,
-        TJobTypeDefinitions,
+        TNavigationMap,
         TChainTypeName,
         TCompleteReturn
       >;
@@ -349,8 +521,8 @@ export const createClient = async <
 
     /** Wait for a job chain to complete. Combines polling with notify adapter events. Throws {@link WaitChainTimeoutError} on timeout or abort. */
     awaitJobChain: async <
-      TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string =
-        keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
+      TChainTypeName extends keyof EntryJobTypeDefinitions<TNavigationMap> & string =
+        keyof EntryJobTypeDefinitions<TNavigationMap> & string,
     >(
       jobChain: {
         typeName?: TChainTypeName;
@@ -362,7 +534,7 @@ export const createClient = async <
         signal?: AbortSignal;
       },
     ): Promise<
-      CompletedJobChain<ResolvedJobChain<TJobId, TJobTypeDefinitions, TChainTypeName>>
+      ResolvedJobChain<TJobId, TNavigationMap, TChainTypeName> & { status: "completed" }
     > => {
       const { id, typeName } = jobChain;
       const { timeoutMs, pollIntervalMs = 15_000, signal } = options;
@@ -389,9 +561,9 @@ export const createClient = async <
 
         const mapped = mapStateJobPairToJobChain(jobChain);
         return mapped.status === "completed"
-          ? (mapped as CompletedJobChain<
-              ResolvedJobChain<TJobId, TJobTypeDefinitions, TChainTypeName>
-            >)
+          ? (mapped as ResolvedJobChain<TJobId, TNavigationMap, TChainTypeName> & {
+              status: "completed";
+            })
           : null;
       };
 
@@ -442,14 +614,14 @@ export const createClient = async <
 
     /** Get a single job chain by ID. Pass `typeName` for type narrowing — throws {@link JobTypeMismatchError} on mismatch. */
     getJobChain: async <
-      TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string =
-        keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
+      TChainTypeName extends keyof EntryJobTypeDefinitions<TNavigationMap> & string =
+        keyof EntryJobTypeDefinitions<TNavigationMap> & string,
     >(
       options: {
         typeName?: TChainTypeName;
         id: TJobId;
       } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
-    ): Promise<ResolvedJobChain<TJobId, TJobTypeDefinitions, TChainTypeName> | undefined> => {
+    ): Promise<ResolvedJobChain<TJobId, TNavigationMap, TChainTypeName> | undefined> => {
       const { id, typeName, ...rest } = options;
       const txCtx = normalizeTxCtx(rest);
       const jobChainPair = await helpers.stateAdapter.getJobChainById({
@@ -468,20 +640,20 @@ export const createClient = async <
 
       return mapStateJobPairToJobChain(jobChainPair) as ResolvedJobChain<
         TJobId,
-        TJobTypeDefinitions,
+        TNavigationMap,
         TChainTypeName
       >;
     },
 
     /** Get a single job by ID. Pass `typeName` for type narrowing — throws {@link JobTypeMismatchError} on mismatch. */
     getJob: async <
-      TJobTypeName extends keyof TJobTypeDefinitions & string = keyof TJobTypeDefinitions & string,
+      TJobTypeName extends keyof TNavigationMap & string = keyof TNavigationMap & string,
     >(
       options: {
         typeName?: TJobTypeName;
         id: TJobId;
       } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
-    ): Promise<ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName> | undefined> => {
+    ): Promise<ResolvedJob<TJobId, TNavigationMap, TJobTypeName> | undefined> => {
       const { id, typeName, ...rest } = options;
       const txCtx = normalizeTxCtx(rest);
       const job = await helpers.stateAdapter.getJobById({ txCtx, jobId: id });
@@ -495,11 +667,11 @@ export const createClient = async <
         );
       }
 
-      return mapStateJobToJob(job) as ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>;
+      return mapStateJobToJob(job) as ResolvedJob<TJobId, TNavigationMap, TJobTypeName>;
     },
     /** List job chains with filtering and cursor-based pagination. Defaults to newest first. */
     listJobChains: async <
-      TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
+      TChainTypeName extends keyof EntryJobTypeDefinitions<TNavigationMap> & string,
     >(
       options: {
         filter?: {
@@ -515,7 +687,7 @@ export const createClient = async <
         cursor?: string;
         limit?: number;
       } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
-    ): Promise<Page<ResolvedJobChain<TJobId, TJobTypeDefinitions, TChainTypeName>>> => {
+    ): Promise<Page<ResolvedJobChain<TJobId, TNavigationMap, TChainTypeName>>> => {
       const { filter, orderDirection = "desc", cursor, limit = 50, ...rest } = options;
       const txCtx = normalizeTxCtx(rest);
       const result = await helpers.stateAdapter.listJobChains({
@@ -537,7 +709,7 @@ export const createClient = async <
           (pair) =>
             mapStateJobPairToJobChain(pair) as ResolvedJobChain<
               TJobId,
-              TJobTypeDefinitions,
+              TNavigationMap,
               TChainTypeName
             >,
         ),
@@ -546,7 +718,7 @@ export const createClient = async <
     },
 
     /** List jobs with filtering and cursor-based pagination. Blockers are not populated — use `getJobBlockers` for a specific job. Defaults to newest first. */
-    listJobs: async <TJobTypeName extends keyof TJobTypeDefinitions & string>(
+    listJobs: async <TJobTypeName extends keyof TNavigationMap & string>(
       options: {
         filter?: {
           typeName?: TJobTypeName[];
@@ -560,7 +732,7 @@ export const createClient = async <
         cursor?: string;
         limit?: number;
       } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
-    ): Promise<Page<ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>>> => {
+    ): Promise<Page<ResolvedJob<TJobId, TNavigationMap, TJobTypeName>>> => {
       const { filter, orderDirection = "desc", cursor, limit = 50, ...rest } = options;
       const txCtx = normalizeTxCtx(rest);
       const result = await helpers.stateAdapter.listJobs({
@@ -578,7 +750,7 @@ export const createClient = async <
       });
       return {
         items: result.items.map(
-          (job) => mapStateJobToJob(job) as ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>,
+          (job) => mapStateJobToJob(job) as ResolvedJob<TJobId, TNavigationMap, TJobTypeName>,
         ),
         nextCursor: result.nextCursor,
       };
@@ -586,8 +758,8 @@ export const createClient = async <
 
     /** List jobs within a specific chain, ordered by `chainIndex`. Defaults to ascending order. */
     listJobChainJobs: async <
-      TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string =
-        keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
+      TChainTypeName extends keyof EntryJobTypeDefinitions<TNavigationMap> & string =
+        keyof EntryJobTypeDefinitions<TNavigationMap> & string,
     >(
       options: {
         jobChainId: TJobId;
@@ -596,7 +768,7 @@ export const createClient = async <
         cursor?: string;
         limit?: number;
       } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
-    ): Promise<Page<ResolvedChainJobs<TJobId, TJobTypeDefinitions, TChainTypeName>>> => {
+    ): Promise<Page<ResolvedChainJobs<TJobId, TNavigationMap, TChainTypeName>>> => {
       const { jobChainId, typeName, orderDirection = "asc", cursor, limit = 50, ...rest } = options;
       const txCtx = normalizeTxCtx(rest);
 
@@ -619,7 +791,7 @@ export const createClient = async <
       return {
         items: result.items.map(
           (job) =>
-            mapStateJobToJob(job) as ResolvedChainJobs<TJobId, TJobTypeDefinitions, TChainTypeName>,
+            mapStateJobToJob(job) as ResolvedChainJobs<TJobId, TNavigationMap, TChainTypeName>,
         ),
         nextCursor: result.nextCursor,
       };
@@ -627,13 +799,13 @@ export const createClient = async <
 
     /** Get the blocker chains for a specific job. Not paginated — blockers are bounded by design. Pass `typeName` for type narrowing. */
     getJobBlockers: async <
-      TJobTypeName extends keyof TJobTypeDefinitions & string = keyof TJobTypeDefinitions & string,
+      TJobTypeName extends keyof TNavigationMap & string = keyof TNavigationMap & string,
     >(
       options: {
         jobId: TJobId;
         typeName?: TJobTypeName;
       } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
-    ): Promise<BlockerChains<TJobId, TJobTypeDefinitions, TJobTypeName>> => {
+    ): Promise<BlockerChains<TJobId, TNavigationMap, TJobTypeName>> => {
       const { jobId, typeName, ...rest } = options;
       const txCtx = normalizeTxCtx(rest);
 
@@ -650,15 +822,15 @@ export const createClient = async <
       const blockers = await helpers.stateAdapter.getJobBlockers({ txCtx, jobId });
       return blockers.map((pair) => mapStateJobPairToJobChain(pair)) as BlockerChains<
         TJobId,
-        TJobTypeDefinitions,
+        TNavigationMap,
         TJobTypeName
       >;
     },
 
     /** List jobs from other chains that are blocked by a given chain. Useful for understanding downstream impact before deletion. */
     listBlockedJobs: async <
-      TChainTypeName extends keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string =
-        keyof EntryJobTypeDefinitions<TJobTypeDefinitions> & string,
+      TChainTypeName extends keyof EntryJobTypeDefinitions<TNavigationMap> & string =
+        keyof EntryJobTypeDefinitions<TNavigationMap> & string,
     >(
       options: {
         jobChainId: TJobId;
@@ -671,10 +843,8 @@ export const createClient = async <
       Page<
         ResolvedJob<
           TJobId,
-          TJobTypeDefinitions,
-          BlockedJobTypeNames<TJobTypeDefinitions, TChainTypeName> &
-            keyof TJobTypeDefinitions &
-            string
+          TNavigationMap,
+          BlockedJobTypeNames<TNavigationMap, TChainTypeName> & keyof TNavigationMap & string
         >
       >
     > => {
@@ -709,10 +879,8 @@ export const createClient = async <
           (job) =>
             mapStateJobToJob(job) as ResolvedJob<
               TJobId,
-              TJobTypeDefinitions,
-              BlockedJobTypeNames<TJobTypeDefinitions, TChainTypeName> &
-                keyof TJobTypeDefinitions &
-                string
+              TNavigationMap,
+              BlockedJobTypeNames<TNavigationMap, TChainTypeName> & keyof TNavigationMap & string
             >,
         ),
         nextCursor: result.nextCursor,
@@ -721,15 +889,3 @@ export const createClient = async <
   };
   return client;
 };
-
-/**
- * The public API for managing job chains. Created via {@link createClient}.
- *
- * Methods are split into two categories:
- * - **Mutating** — `startJobChain`, `completeJobChain`, `deleteJobChains`. Require `transactionHooks` and a transaction context.
- * - **Read-only** — `getJobChain`, `getJob`, `listJobChains`, `listJobs`, `listJobChainJobs`, `getJobBlockers`, `listBlockedJobs`, `awaitJobChain`. Accept an optional transaction context.
- */
-export type Client<
-  TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TStateAdapter extends StateAdapter<any, any>,
-> = Awaited<ReturnType<typeof createClient<JobTypeRegistry<TJobTypeDefinitions>, TStateAdapter>>>;

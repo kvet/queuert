@@ -19,8 +19,8 @@ import postgres, {
 import {
   createClient,
   createInProcessWorker,
-  defineJobTypeProcessorRegistry,
-  defineJobTypes,
+  createJobTypeProcessorRegistry,
+  defineJobTypeRegistry,
   withTransactionHooks,
 } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
@@ -34,7 +34,7 @@ type TransactionSql = _TransactionSql & {
 
 type DbContext = { sql: TransactionSql };
 
-const jobTypes = defineJobTypes<{
+const jobTypeRegistry = defineJobTypeRegistry<{
   /*
    * Workflow:
    *   reserve-inventory (auto-setup atomic)
@@ -120,12 +120,12 @@ await sql`INSERT INTO products (name, price, stock) VALUES ('Widget Pro', 99.99,
 const client = await createClient({
   stateAdapter,
   notifyAdapter,
-  registry: jobTypes,
+  registry: jobTypeRegistry,
 });
 
 const worker = await createInProcessWorker({
   client,
-  processorRegistry: defineJobTypeProcessorRegistry(client, jobTypes, {
+  processorRegistry: createJobTypeProcessorRegistry(client, jobTypeRegistry, {
     "reserve-inventory": {
       attemptHandler: async ({ job, complete }) => {
         console.log(`\n[reserve-inventory] AUTO-SETUP ATOMIC mode`);

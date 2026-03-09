@@ -8,7 +8,7 @@ import { createOtelObservabilityAdapter } from "@queuert/otel";
 import {
   createClient,
   createInProcessWorker,
-  defineJobTypeProcessorRegistry,
+  createJobTypeProcessorRegistry,
   withTransactionHooks,
 } from "queuert";
 import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
@@ -67,7 +67,7 @@ const [beforeSetup, afterSetup, { qrtClient, stopWorker }] = await measureMemory
 
   const qrtWorker = await createInProcessWorker({
     client: qrtClient,
-    processorRegistry: defineJobTypeProcessorRegistry(qrtClient, registry, {
+    processorRegistry: createJobTypeProcessorRegistry(qrtClient, registry, {
       "test-job": {
         attemptHandler: async ({ complete }) => complete(async () => ({ processed: true })),
       },

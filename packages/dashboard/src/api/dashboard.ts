@@ -1,9 +1,4 @@
-import {
-  type BaseJobTypeDefinitions,
-  type Client,
-  type StateAdapter,
-  helpersSymbol,
-} from "queuert";
+import { type BaseNavigationMap, type Client, type StateAdapter, helpersSymbol } from "queuert";
 import { renderHtml } from "./html.js";
 import { handleChainBlocking, handleChainDetail, handleChainsList } from "./routes/chains.js";
 import { handleJobDetail, handleJobsList } from "./routes/jobs.js";
@@ -37,10 +32,10 @@ const loadAssets = async (): Promise<Assets | null> => {
  * @experimental
  */
 export const createDashboard = <
-  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TNavigationMap extends BaseNavigationMap,
   TStateAdapter extends StateAdapter<any, any>,
 >(options: {
-  client: Client<TJobTypeDefinitions, TStateAdapter>;
+  client: Client<TNavigationMap, TStateAdapter>;
   /** Mount prefix without trailing slash (e.g. `'/internal/queuert'`). Defaults to `''` (root). */
   basePath?: string;
 }): { fetch: (request: Request) => Response | Promise<Response> } => {

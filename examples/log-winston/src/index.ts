@@ -1,11 +1,11 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import {
   type JobAttemptMiddleware,
-  type JobTypeRegistryDefinitions,
+  type JobTypeRegistryNavigation,
   createClient,
   createInProcessWorker,
-  defineJobTypeProcessorRegistry,
-  defineJobTypes,
+  createJobTypeProcessorRegistry,
+  defineJobTypeRegistry,
   withTransactionHooks,
 } from "queuert";
 import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
@@ -62,7 +62,7 @@ const logger = winston.createLogger({
 });
 
 // 4. Define job types
-const registry = defineJobTypes<{
+const registry = defineJobTypeRegistry<{
   greet: {
     entry: true;
     input: { name: string };
@@ -89,7 +89,7 @@ const qrtClient = await createClient({
 // 6. Create middleware that sets job context for the duration of job processing
 const contextualLoggingMiddleware: JobAttemptMiddleware<
   typeof stateAdapter,
-  JobTypeRegistryDefinitions<typeof registry>
+  JobTypeRegistryNavigation<typeof registry>
 > = async ({ job, workerId }, next) => {
   // Run the job processing within the AsyncLocalStorage context
   return jobContextStore.run(
@@ -111,7 +111,7 @@ const qrtWorker = await createInProcessWorker({
   processDefaults: {
     attemptMiddlewares: [contextualLoggingMiddleware],
   },
-  processorRegistry: defineJobTypeProcessorRegistry(qrtClient, registry, {
+  processorRegistry: createJobTypeProcessorRegistry(qrtClient, registry, {
     greet: {
       attemptHandler: async ({ job, complete }) => {
         // This log automatically includes job context thanks to the custom format!

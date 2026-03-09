@@ -10,7 +10,7 @@ sidebar:
 Imagine a user signs up and you want to send them a welcome email. You don't want to block the registration request, so you queue it as a background job.
 
 ```ts
-const jobTypes = defineJobTypes<{
+const jobTypeRegistry = defineJobTypeRegistry<{
   "send-welcome-email": {
     entry: true;
     input: { userId: number; email: string; name: string };
@@ -20,7 +20,7 @@ const jobTypes = defineJobTypes<{
 
 const client = await createClient({
   stateAdapter,
-  registry: jobTypes,
+  registry: jobTypeRegistry,
 });
 
 await withTransactionHooks(async (transactionHooks) =>
@@ -47,7 +47,7 @@ Later, a background worker picks up the job and sends the email:
 ```ts
 const worker = await createInProcessWorker({
   client,
-  processorRegistry: defineJobTypeProcessorRegistry(client, jobTypes, {
+  processorRegistry: createJobTypeProcessorRegistry(client, jobTypeRegistry, {
     "send-welcome-email": {
       attemptHandler: async ({ job, complete }) => {
         await sendEmail({

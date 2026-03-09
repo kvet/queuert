@@ -3,8 +3,8 @@ import {
   type NotifyAdapter,
   createClient,
   createInProcessWorker,
-  defineJobTypeProcessorRegistry,
-  defineJobTypes,
+  createJobTypeProcessorRegistry,
+  defineJobTypeRegistry,
   withTransactionHooks,
 } from "../index.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
@@ -22,7 +22,7 @@ export const notifyResilienceTestSuite = ({
     observabilityAdapter,
     log,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { value: number; atomic: boolean };
@@ -57,7 +57,7 @@ export const notifyResilienceTestSuite = ({
           maxDelayMs: 1,
         },
       },
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ job, prepare, complete }) => {
             await prepare({ mode: job.input.atomic ? "atomic" : "staged" });

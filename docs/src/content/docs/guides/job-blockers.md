@@ -8,7 +8,7 @@ sidebar:
 Jobs can depend on other job chains to complete before they start. A job with incomplete blockers starts as `blocked` and transitions to `pending` when all blockers complete.
 
 ```ts
-type Definitions = {
+const jobTypeRegistry = defineJobTypeRegistry<{
   "fetch-data": {
     entry: true;
     input: { url: string };
@@ -20,7 +20,7 @@ type Definitions = {
     output: { results: string[] };
     blockers: [{ typeName: "fetch-data" }, ...{ typeName: "fetch-data" }[]]; // Wait for multiple fetches (tuple with rest)
   };
-};
+}>();
 
 // Start with blockers (transactionHooks required — see Transaction Hooks guide)
 const fetchBlockers = await withTransactionHooks(async (transactionHooks) =>
@@ -41,7 +41,7 @@ await withTransactionHooks(async (transactionHooks) =>
 // Access completed blockers in worker
 const worker = await createInProcessWorker({
   client,
-  processorRegistry: defineJobTypeProcessorRegistry(client, jobTypes, {
+  processorRegistry: createJobTypeProcessorRegistry(client, jobTypeRegistry, {
     "process-all": {
       attemptHandler: async ({ job, complete }) => {
         const results = job.blockers.map((b) => b.output.data);

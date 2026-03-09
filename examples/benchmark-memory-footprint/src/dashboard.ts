@@ -6,7 +6,7 @@ import { createDashboard } from "@queuert/dashboard";
 import {
   createClient,
   createInProcessWorker,
-  defineJobTypeProcessorRegistry,
+  createJobTypeProcessorRegistry,
   withTransactionHooks,
 } from "queuert";
 import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
@@ -41,7 +41,7 @@ diffMemory(beforeDashboard, afterDashboard);
 const [beforeSetup, afterSetup, stopWorker] = await measureMemory(async () => {
   const qrtWorker = await createInProcessWorker({
     client: qrtClient,
-    processorRegistry: defineJobTypeProcessorRegistry(qrtClient, registry, {
+    processorRegistry: createJobTypeProcessorRegistry(qrtClient, registry, {
       "test-job": {
         attemptHandler: async ({ complete }) => complete(async () => ({ processed: true })),
       },

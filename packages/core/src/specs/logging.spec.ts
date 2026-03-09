@@ -4,8 +4,8 @@ import {
   type NotifyAdapter,
   createClient,
   createInProcessWorker,
-  defineJobTypeProcessorRegistry,
-  defineJobTypes,
+  createJobTypeProcessorRegistry,
+  defineJobTypeRegistry,
   withTransactionHooks,
 } from "../index.js";
 import { extendWithStateInProcess } from "../state-adapter/state-adapter.in-process.spec-helper.js";
@@ -59,7 +59,7 @@ describe("Logging", () => {
     log,
     expectLogs,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { test: boolean };
@@ -78,7 +78,7 @@ describe("Logging", () => {
       client,
       workerId: "worker",
       concurrency: 1,
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ prepare, complete }) => {
             await prepare({ mode: "staged" });
@@ -160,7 +160,7 @@ describe("Logging", () => {
     log,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: null;
@@ -185,7 +185,7 @@ describe("Logging", () => {
           maxDelayMs: 100,
         },
       },
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ job, complete }) => {
             if (job.attempt < 4) {
@@ -244,7 +244,7 @@ describe("Logging", () => {
     log,
     expectLogs,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       linear: {
         entry: true;
         input: { value: number };
@@ -270,7 +270,7 @@ describe("Logging", () => {
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         linear: {
           attemptHandler: async ({ job, complete }) => {
             return complete(async ({ continueWith }) =>
@@ -359,7 +359,7 @@ describe("Logging", () => {
     log,
     expectLogs,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       blocker: {
         entry: true;
         input: { value: number };
@@ -386,7 +386,7 @@ describe("Logging", () => {
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         blocker: {
           attemptHandler: async ({ job, complete }) =>
             complete(async ({ continueWith }) =>
@@ -508,7 +508,7 @@ describe("Logging", () => {
     log,
     expectLogs,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { value: number };
@@ -566,7 +566,7 @@ describe("Logging", () => {
     log,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       test: { entry: true; input: null; output: null };
     }>();
 
@@ -583,7 +583,7 @@ describe("Logging", () => {
       processDefaults: {
         leaseConfig: { leaseMs: 500, renewIntervalMs: 50 },
       },
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ complete }) => {
             await sleep(200);
@@ -625,7 +625,7 @@ describe("Logging", () => {
     log,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       test: { entry: true; input: null; output: null };
     }>();
 
@@ -642,7 +642,7 @@ describe("Logging", () => {
       processDefaults: {
         leaseConfig: { leaseMs: 10, renewIntervalMs: 100 },
       },
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ complete }) => {
             await sleep(100);
@@ -685,7 +685,7 @@ describe("Logging", () => {
     log,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       test: { entry: true; input: null; output: null };
     }>();
 
@@ -707,7 +707,7 @@ describe("Logging", () => {
       workerId: "w1",
       concurrency: 1,
       processDefaults: { leaseConfig, pollIntervalMs: leaseConfig.leaseMs },
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ signal, complete }) => {
             if (!failed) {
@@ -729,7 +729,7 @@ describe("Logging", () => {
       workerId: "w2",
       concurrency: 1,
       processDefaults: { leaseConfig, pollIntervalMs: leaseConfig.leaseMs },
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ signal, complete }) => {
             if (!failed) {
@@ -787,7 +787,7 @@ describe("Logging", () => {
     log,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       test: { entry: true; input: null; output: null };
     }>();
 
@@ -823,7 +823,7 @@ describe("Logging", () => {
       client: workerClient,
       concurrency: 1,
       backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ complete }) => {
             return complete(async () => null);
@@ -856,7 +856,7 @@ describe("Logging", () => {
     log,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       test: { entry: true; input: null; output: null };
     }>();
 
@@ -878,7 +878,7 @@ describe("Logging", () => {
       client,
       concurrency: 1,
       processDefaults: { pollIntervalMs: 100 },
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ complete }) => {
             return complete(async () => null);
@@ -925,7 +925,7 @@ describe("Logging rollback", () => {
     log,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       test: { entry: true; input: null; output: null };
     }>();
 
@@ -957,7 +957,7 @@ describe("Logging rollback", () => {
     log,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       blocker: { entry: true; input: null; output: null };
       main: {
         entry: true;
@@ -1008,7 +1008,7 @@ describe("Logging rollback", () => {
     log,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       test: { entry: true; input: null; output: { result: number } };
     }>();
 
@@ -1055,7 +1055,7 @@ describe("Logging rollback", () => {
     log,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       test: { entry: true; input: null; output: null };
     }>();
 
@@ -1092,7 +1092,7 @@ describe("Logging rollback", () => {
         pollIntervalMs: 100,
         backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
       },
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ complete }) => complete(async () => null),
         },
@@ -1130,7 +1130,7 @@ describe("Logging rollback", () => {
     log,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       test: { entry: true; input: null; output: null };
     }>();
 
@@ -1168,7 +1168,7 @@ describe("Logging rollback", () => {
         leaseConfig: { leaseMs: 50, renewIntervalMs: 500 },
         pollIntervalMs: 50,
       },
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         test: {
           attemptHandler: async ({ complete }) => {
             if (!handlerFailed) {
@@ -1205,7 +1205,7 @@ describe("Logging rollback", () => {
     log,
     expect,
   }) => {
-    const registry = defineJobTypes<{
+    const registry = defineJobTypeRegistry<{
       linear: {
         entry: true;
         input: null;
@@ -1250,7 +1250,7 @@ describe("Logging rollback", () => {
         pollIntervalMs: 100,
         backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
       },
-      processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
         linear: {
           attemptHandler: async ({ complete }) =>
             complete(async ({ continueWith }) =>

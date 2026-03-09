@@ -1,7 +1,7 @@
-import { type JobTypeRegistryDefinitions, defineJobTypes } from "queuert";
-import { type notificationJobTypes } from "./slice-notifications-definitions.js";
+import { type JobTypeRegistryDefinitions, defineJobTypeRegistry } from "queuert";
+import { type notificationJobTypeRegistry } from "./slice-notifications-definitions.js";
 
-export const orderJobTypes = defineJobTypes<
+export const orderJobTypeRegistry = defineJobTypeRegistry<
   {
     /*
      * Workflow (independent):
@@ -35,5 +35,5 @@ export const orderJobTypes = defineJobTypes<
       blockers: [{ typeName: "notifications.send-notification" }];
     };
   },
-  JobTypeRegistryDefinitions<typeof notificationJobTypes>
+  JobTypeRegistryDefinitions<typeof notificationJobTypeRegistry>
 >();

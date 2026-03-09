@@ -99,7 +99,7 @@ type ValidateJobType<
 
 type OverlappingKeys<A, B> = keyof A & keyof B;
 
-/** Marker type for compile-time validated job type definitions. Applied by {@link defineJobTypes}. */
+/** Marker type for compile-time validated job type definitions. Applied by {@link defineJobTypeRegistry}. */
 export type ValidatedJobTypeDefinitions<
   T extends BaseJobTypeDefinitions,
   TExternal extends BaseJobTypeDefinitions = Record<never, never>,

@@ -10,7 +10,7 @@ For cooperative timeouts, combine `AbortSignal.timeout()` with the provided `sig
 ```ts
 const worker = await createInProcessWorker({
   client,
-  processorRegistry: defineJobTypeProcessorRegistry(client, jobTypes, {
+  processorRegistry: createJobTypeProcessorRegistry(client, jobTypeRegistry, {
     "fetch-data": {
       attemptHandler: async ({ signal, job, complete }) => {
         const timeout = AbortSignal.timeout(30_000); // 30 seconds
@@ -34,7 +34,7 @@ For hard timeouts, configure `leaseConfig` in the job type processor -- if a job
 ```ts
 const worker = await createInProcessWorker({
   client,
-  processorRegistry: defineJobTypeProcessorRegistry(client, jobTypes, {
+  processorRegistry: createJobTypeProcessorRegistry(client, jobTypeRegistry, {
     'long-running-job': {
       leaseConfig: { leaseMs: 300_000, renewIntervalMs: 60_000 }, // 5 min lease
       attemptHandler: async ({ job, complete }) => { ... },

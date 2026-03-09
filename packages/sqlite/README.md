@@ -44,10 +44,10 @@ npm install @queuert/sqlite
 ## Quick Start
 
 ```typescript
-import { createClient, createConsoleLog, defineJobTypes } from "queuert";
+import { createClient, createConsoleLog, defineJobTypeRegistry } from "queuert";
 import { createSqliteStateAdapter } from "@queuert/sqlite";
 
-const jobTypes = defineJobTypes<{
+const jobTypeRegistry = defineJobTypeRegistry<{
   "send-email": { entry: true; input: { to: string }; output: { sent: true } };
 }>();
 
@@ -58,7 +58,7 @@ await stateAdapter.migrateToLatest();
 
 const client = await createClient({
   stateAdapter,
-  registry: jobTypes,
+  registry: jobTypeRegistry,
   log: createConsoleLog(),
 });
 ```

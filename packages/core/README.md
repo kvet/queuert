@@ -55,15 +55,14 @@ Optional adapters:
 import {
   createClient,
   createInProcessWorker,
-  defineJobTypes,
-  defineJobTypeProcessorRegistry,
+  defineJobTypeRegistry,
+  createJobTypeProcessorRegistry,
   withTransactionHooks,
-  createTransactionHooks,
 } from "queuert";
 import { createSqliteStateAdapter } from "@queuert/sqlite";
 
 // Define your job types with full type safety
-const jobTypes = defineJobTypes<{
+const jobTypeRegistry = defineJobTypeRegistry<{
   "send-email": {
     entry: true;
     input: { to: string; subject: string };
@@ -75,14 +74,14 @@ const jobTypes = defineJobTypes<{
 const stateAdapter = await createSqliteStateAdapter({ stateProvider: myProvider });
 const client = await createClient({
   stateAdapter,
-  registry: jobTypes,
+  registry: jobTypeRegistry,
 });
 
 // Create a worker
 const worker = await createInProcessWorker({
   client,
   workerId: "worker-1",
-  processorRegistry: defineJobTypeProcessorRegistry(client, jobTypes, {
+  processorRegistry: createJobTypeProcessorRegistry(client, jobTypeRegistry, {
     "send-email": {
       attemptHandler: async ({ job, complete }) => {
         await sendEmail(job.input.to, job.input.subject);
@@ -144,7 +143,7 @@ const worker = await createInProcessWorker({
       },
     ],
   },
-  processorRegistry: defineJobTypeProcessorRegistry(client, jobTypes, {
+  processorRegistry: createJobTypeProcessorRegistry(client, jobTypeRegistry, {
     // ... job type processors
   }),
 });
@@ -155,7 +154,7 @@ Per-job-type configuration:
 ```typescript
 const worker = await createInProcessWorker({
   client,
-  processorRegistry: defineJobTypeProcessorRegistry(client, jobTypes, {
+  processorRegistry: createJobTypeProcessorRegistry(client, jobTypeRegistry, {
     'long-running-job': {
       backoffConfig: { initialDelayMs: 30_000, multiplier: 2.0, maxDelayMs: 600_000 },
       leaseConfig: { leaseMs: 300_000, renewIntervalMs: 60_000 },

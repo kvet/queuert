@@ -7,11 +7,11 @@ import { Pool, type PoolClient } from "pg";
 import {
   createClient,
   createInProcessWorker,
-  defineJobTypeProcessorRegistry,
-  defineJobTypes,
+  createJobTypeProcessorRegistry,
+  defineJobTypeRegistry,
 } from "queuert";
 
-const registry = defineJobTypes<{
+const registry = defineJobTypeRegistry<{
   process_order: {
     entry: true;
     input: { orderId: string; items: string[]; total: number };
@@ -128,7 +128,7 @@ const worker = await createInProcessWorker({
   client,
   workerId,
   concurrency: 2,
-  processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+  processorRegistry: createJobTypeProcessorRegistry(client, registry, {
     process_order: {
       attemptHandler: async ({ job, complete }) => {
         process.send!({

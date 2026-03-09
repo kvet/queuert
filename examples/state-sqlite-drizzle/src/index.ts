@@ -10,8 +10,8 @@ import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import {
   createClient,
   createInProcessWorker,
-  defineJobTypeProcessorRegistry,
-  defineJobTypes,
+  createJobTypeProcessorRegistry,
+  defineJobTypeRegistry,
   withTransactionHooks,
 } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
@@ -41,7 +41,7 @@ db.run(sql`
 `);
 
 // 4. Define job types
-const registry = defineJobTypes<{
+const registry = defineJobTypeRegistry<{
   send_welcome_email: {
     entry: true;
     input: { userId: number; email: string; name: string };
@@ -107,7 +107,7 @@ const qrtClient = await createClient({
 
 const qrtWorker = await createInProcessWorker({
   client: qrtClient,
-  processorRegistry: defineJobTypeProcessorRegistry(qrtClient, registry, {
+  processorRegistry: createJobTypeProcessorRegistry(qrtClient, registry, {
     send_welcome_email: {
       attemptHandler: async ({ job, complete }) => {
         // Simulate sending email (in real app, call email service here)

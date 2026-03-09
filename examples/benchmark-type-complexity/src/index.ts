@@ -93,6 +93,56 @@ ${blockerAwaits}
   return `{\n${processors.join(",\n")},\n  }`;
 };
 
+const generateCompleteJobChainCall = (defs: JobTypeDef[], entryDef: JobTypeDef): string => {
+  const typeName = entryDef.name;
+
+  if (!entryDef.continueWith) {
+    return `const completed = await client.completeJobChain({
+  typeName: "${typeName}",
+  id: chain.id,
+  transactionHooks,
+  complete: async ({ job: currentJob, complete: completeFn }) =>
+    completeFn(currentJob, async () => (${typeToValue(entryDef.output ?? "{ result: string }")})),
+});`;
+  }
+
+  const typeNameMatch = entryDef.continueWith.match(/typeName:\s*"([^"]+)"/);
+  const firstTarget = typeNameMatch?.[1] ?? "unknown";
+  const targetDef = defs.find((d) => d.name === firstTarget);
+  const targetInput = typeToValue(targetDef?.input ?? "{ id: string }");
+
+  if (targetDef?.blockers && targetDef.blockers.length > 0) {
+    const blockerStarts = targetDef.blockers.map((blockerStr, i) => {
+      const bMatch = blockerStr.match(/typeName:\s*"([^"]+)"/);
+      const bName = bMatch?.[1] ?? "unknown";
+      const bDef = defs.find((d) => d.name === bName);
+      const bInput = bDef ? typeToValue(bDef.input) : `{ id: "" }`;
+      return `const b${i} = await client.startJobChain({ ...txCtx, typeName: "${bName}", input: ${bInput}, transactionHooks });`;
+    });
+    const blockerArray = targetDef.blockers.map((_, i) => `b${i}`).join(", ");
+
+    return `const completed = await client.completeJobChain({
+  typeName: "${typeName}",
+  id: chain.id,
+  transactionHooks,
+  complete: async ({ job: currentJob, complete: completeFn }) =>
+    completeFn(currentJob, async ({ continueWith, ...txCtx }) => {
+${blockerStarts.map((s) => `      ${s}`).join("\n")}
+      return continueWith({ typeName: "${firstTarget}", input: ${targetInput}, blockers: [${blockerArray}] });
+    }),
+});`;
+  }
+
+  return `const completed = await client.completeJobChain({
+  typeName: "${typeName}",
+  id: chain.id,
+  transactionHooks,
+  complete: async ({ job: currentJob, complete: completeFn }) =>
+    completeFn(currentJob, async ({ continueWith }) =>
+      continueWith({ typeName: "${firstTarget}", input: ${targetInput} })),
+});`;
+};
+
 const generateClientCalls = (defs: JobTypeDef[]): string => {
   const entryDef = defs.find((d) => d.entry);
   if (!entryDef) return "";
@@ -107,17 +157,19 @@ const fetchedChain = await client.getJobChain({ typeName: "${typeName}", id: cha
 const job = await client.getJob({ typeName: "${typeName}", id: chain.id });
 const chains = await client.listJobChains({ filter: { typeName: ["${typeName}"] } });
 const jobs = await client.listJobs({ filter: { typeName: ["${typeName}"] } });
+${generateCompleteJobChainCall(defs, entryDef)}
 void fetchedChain;
 void job;
 void chains;
 void jobs;
+void completed;
 `;
 };
 
-const generateMiddleware = (defsType: string): string =>
+const generateMiddleware = (registryVar: string): string =>
   `const middleware: JobAttemptMiddleware<
   ReturnType<typeof createInProcessStateAdapter>,
-  ${defsType}
+  JobTypeRegistryNavigation<typeof ${registryVar}>
 > = async ({ job }, next) => {
   void job.typeName;
   return next();
@@ -128,16 +180,16 @@ const wrapInScenario = (defs: JobTypeDef[]): string => {
   const typeStrings = defs.map(defToTypeString);
   const processors = generateProcessors(defs, "client");
   const clientCalls = generateClientCalls(defs);
-  const middleware = generateMiddleware("Defs");
+  const middleware = generateMiddleware("jobTypeRegistry");
 
-  return `import { defineJobTypes, defineJobTypeProcessorRegistry, createInProcessWorker, createClient, createTransactionHooks, type JobAttemptMiddleware } from "queuert";
+  return `import { defineJobTypeRegistry, createJobTypeProcessorRegistry, createInProcessWorker, createClient, createTransactionHooks, type JobAttemptMiddleware, type JobTypeRegistryNavigation } from "queuert";
 import { createInProcessStateAdapter, createInProcessNotifyAdapter } from "queuert/internal";
 
 type Defs = {
 ${typeStrings.join("\n")}
 };
 
-const jobTypes = defineJobTypes<Defs>();
+const jobTypeRegistry = defineJobTypeRegistry<Defs>();
 
 const stateAdapter = createInProcessStateAdapter();
 const notifyAdapter = createInProcessNotifyAdapter();
@@ -145,14 +197,14 @@ const notifyAdapter = createInProcessNotifyAdapter();
 const client = await createClient({
   stateAdapter,
   notifyAdapter,
-  registry: jobTypes,
+  registry: jobTypeRegistry,
 });
 
 ${middleware}
 const worker = await createInProcessWorker({
   client,
   processDefaults: { attemptMiddlewares: [middleware] },
-  processorRegistry: defineJobTypeProcessorRegistry(client, jobTypes, ${processors}),
+  processorRegistry: createJobTypeProcessorRegistry(client, jobTypeRegistry, ${processors}),
 });
 
 const stop = await worker.start();
@@ -169,22 +221,21 @@ type ${slice.name}Defs = {
 ${typeStrings.join("\n")}
 };
 
-const ${slice.name}Registry = defineJobTypes<${slice.name}Defs>();`;
+const ${slice.name}Registry = defineJobTypeRegistry<${slice.name}Defs>();`;
   });
 
   const sliceProcessorDecls = slices.map((slice) => {
     const processors = generateProcessors(slice.defs, "client");
-    return `const ${slice.name}Processors = defineJobTypeProcessorRegistry(client, ${slice.name}Registry, ${processors});`;
+    return `const ${slice.name}Processors = createJobTypeProcessorRegistry(client, ${slice.name}Registry, ${processors});`;
   });
 
   const registryNames = slices.map((s) => `${s.name}Registry`);
   const processorNames = slices.map((s) => `${s.name}Processors`);
   const allDefs = slices.flatMap((s) => s.defs);
   const clientCalls = generateClientCalls(allDefs);
-  const mergedDefsType = slices.map((s) => `${s.name}Defs`).join(" & ");
-  const middleware = generateMiddleware(mergedDefsType);
+  const middleware = generateMiddleware("registry");
 
-  return `import { defineJobTypes, defineJobTypeProcessorRegistry, createInProcessWorker, createClient, createTransactionHooks, mergeJobTypeRegistries, type JobAttemptMiddleware, mergeJobTypeProcessorRegistries } from "queuert";
+  return `import { defineJobTypeRegistry, createJobTypeProcessorRegistry, createInProcessWorker, createClient, createTransactionHooks, mergeJobTypeRegistries, type JobAttemptMiddleware, type JobTypeRegistryNavigation, mergeJobTypeProcessorRegistries } from "queuert";
 import { createInProcessStateAdapter, createInProcessNotifyAdapter } from "queuert/internal";
 ${sliceTypeDecls.join("\n")}
 
@@ -345,7 +396,7 @@ const prefixDefs = (defs: JobTypeDef[], prefix: string): JobTypeDef[] =>
 // --- Scenario definitions ---
 
 const linearSizes = [1, 5, 10, 20, 50, 100];
-const loopSizes = [5, 10, 20, 50, 100];
+const loopSizes = [5, 10, 20, 50];
 const blockerSteps = [3, 8, 15, 25];
 const branchedConfigs: [number, number][] = [
   [2, 2], // 7 types
@@ -354,8 +405,11 @@ const branchedConfigs: [number, number][] = [
   [2, 6], // 127 types
 ];
 const mergeConfigs: [number, number][] = [
-  [2, 100],
-  [5, 100],
+  [2, 50],
+  [5, 50],
+  [10, 50],
+  [20, 50],
+  [50, 50],
 ];
 
 const scenarios: Scenario[] = [
@@ -532,6 +586,7 @@ const tsgoPath = join(projectRoot, "node_modules/.bin/tsgo");
 
 const args = process.argv.slice(2);
 const compilerArg = args.find((a) => !a.startsWith("--"));
+const filterArg = args.find((a) => a.startsWith("--filter="))?.split("=")[1];
 
 const runTypeCheck = (scenarioDir: string, compilerPath: string): Diagnostics | null => {
   try {
@@ -606,7 +661,11 @@ const runBenchmark = (
   const results: Result[] = [];
   let currentGroup = "";
 
-  for (const scenario of scenarios) {
+  const filteredScenarios = filterArg
+    ? scenarios.filter((s) => s.name.includes(filterArg) || s.group.includes(filterArg))
+    : scenarios;
+
+  for (const scenario of filteredScenarios) {
     if (scenario.group !== currentGroup) {
       currentGroup = scenario.group;
       console.log();

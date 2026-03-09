@@ -29,30 +29,37 @@ See [benchmark-memory-footprint](https://github.com/kvet/queuert/tree/main/examp
 
 ## Type Complexity
 
-Queuert's type-level machinery scales linearly across chain topologies (tsc 5.9.3, prebuilt `.d.mts`):
+Queuert's type-level machinery scales linearly across chain topologies (prebuilt `.d.mts`):
 
-| Scenario           | Types |    Time | Instantiations | Memory | Scaling |
-| ------------------ | ----: | ------: | -------------: | -----: | ------: |
-| Linear: 1 type     |     1 |  ~550ms |         18,883 |  113MB |    1.0x |
-| Linear: 10 types   |    10 |  ~560ms |         30,952 |  120MB |    1.6x |
-| Linear: 50 types   |    50 |  ~690ms |        102,912 |  133MB |    5.4x |
-| Linear: 100 types  |   100 |  ~880ms |        246,862 |  169MB |   13.1x |
-| Branched: 4w x 3d  |    85 |  ~860ms |        174,949 |  147MB |    9.3x |
-| Branched: 2w x 6d  |   127 | ~1020ms |        327,493 |  162MB |   17.3x |
-| Blockers: 8 steps  |    30 |  ~590ms |         73,123 |  128MB |    3.9x |
-| Blockers: 25 steps |    98 |  ~930ms |        359,981 |  148MB |   19.1x |
-| Loop: 20 steps     |    21 |  ~560ms |         48,249 |  118MB |    2.6x |
-| Loop: 50 steps     |    51 |  ~730ms |        108,369 |  141MB |    5.7x |
-| Merge: 2 x 100     |   200 | ~1310ms |        577,112 |  218MB |   30.6x |
+### tsc (5.9.3)
 
-| Configuration                                 | Status                    |
-| --------------------------------------------- | ------------------------- |
-| Up to 100 types in a single linear chain      | OK, <900ms                |
-| Branched chains up to 2w x 6d (~127 types)    | OK, ~1s                   |
-| Blockers: up to 25 steps with 3 blockers each | OK, <1s                   |
-| Loops: up to 50 self-referencing steps        | OK, <750ms                |
-| Loops: 100 steps                              | TS2589 (recursion depth)  |
-| Merging 2 slices of 100 types                 | OK, ~1.3s                 |
-| Merging 5 slices of 100 types (500 total)     | TS2590 (union complexity) |
+| Scenario           | Types |     Time | Instantiations | Memory | Scaling |
+| ------------------ | ----: | -------: | -------------: | -----: | ------: |
+| Linear: 1 type     |     1 |   ~510ms |         14,619 |  111MB |    1.0x |
+| Linear: 10 types   |    10 |   ~500ms |         26,381 |  114MB |    1.8x |
+| Linear: 50 types   |    50 |   ~690ms |         76,021 |  131MB |    5.2x |
+| Linear: 100 types  |   100 |   ~940ms |        138,071 |  156MB |    9.4x |
+| Branched: 4w x 3d  |    85 |   ~900ms |         95,314 |  146MB |    6.5x |
+| Branched: 2w x 6d  |   127 | ~1,350ms |        148,024 |  168MB |   10.1x |
+| Blockers: 8 steps  |    30 |   ~710ms |         49,562 |  124MB |    3.4x |
+| Blockers: 25 steps |    98 | ~1,010ms |        158,464 |  155MB |   10.8x |
+| Loop: 20 steps     |    21 |   ~690ms |         41,423 |  122MB |    2.8x |
+| Loop: 50 steps     |    51 |   ~910ms |         80,783 |  144MB |    5.5x |
+| Merge: 2 x 50      |   100 | ~1,240ms |        129,115 |  153MB |    8.8x |
+| Merge: 5 x 50      |   250 | ~1,490ms |        292,588 |  198MB |   20.0x |
+| Merge: 10 x 50     |   500 | ~2,160ms |        565,369 |  292MB |   38.7x |
+| Merge: 20 x 50     | 1,000 | ~3,840ms |      1,109,976 |  493MB |   75.9x |
+| Merge: 50 x 50     | 2,500 |   ~11.0s |      2,748,689 |  855MB |  188.0x |
 
-See [benchmark-type-complexity](https://github.com/kvet/queuert/tree/main/examples/benchmark-type-complexity) for the full benchmark tool and detailed analysis.
+### Practical limits
+
+| Configuration                              | Status          |
+| ------------------------------------------ | --------------- |
+| Up to 100 types in a single linear chain   | OK, <1s (tsc)   |
+| Branched chains up to 2w x 6d (~127 types) | OK, ~1.4s (tsc) |
+| Blockers: up to 25 steps, 3 blockers each  | OK, ~1s (tsc)   |
+| Loops: up to 50 self-referencing steps     | OK, <1s (tsc)   |
+| Merging 10 slices of 50 types (500 total)  | OK, ~2.2s (tsc) |
+| Merging 50 slices of 50 types (2500 total) | OK, ~11s (tsc)  |
+
+See [benchmark-type-complexity](https://github.com/kvet/queuert/tree/main/examples/benchmark-type-complexity) for the full benchmark tool and detailed results.

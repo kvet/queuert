@@ -4,8 +4,8 @@ import {
   JobTypeValidationError,
   createClient,
   createInProcessWorker,
+  createJobTypeProcessorRegistry,
   createJobTypeRegistry,
-  defineJobTypeProcessorRegistry,
   withTransactionHooks,
 } from "../index.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
@@ -277,7 +277,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: defineJobTypeProcessorRegistry(client, simpleRegistry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, simpleRegistry, {
         main: {
           attemptHandler: async ({ complete }) => complete(async () => ({ result: 84 })),
         },
@@ -322,7 +322,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: defineJobTypeProcessorRegistry(client, simpleRegistry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, simpleRegistry, {
         main: {
           attemptHandler: async ({ complete }) => {
             try {
@@ -373,7 +373,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: defineJobTypeProcessorRegistry(client, continuationRegistry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, continuationRegistry, {
         step1: {
           attemptHandler: async ({ complete }) =>
             complete(async ({ continueWith }) =>
@@ -424,7 +424,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: defineJobTypeProcessorRegistry(client, continuationNoFollowUpRegistry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, continuationNoFollowUpRegistry, {
         step1: {
           attemptHandler: async ({ complete }) => {
             try {
@@ -566,7 +566,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: defineJobTypeProcessorRegistry(client, continuationRegistry, {
+      processorRegistry: createJobTypeProcessorRegistry(client, continuationRegistry, {
         step2: {
           attemptHandler: async ({ complete }) => complete(async () => ({ result: 42 })),
         },

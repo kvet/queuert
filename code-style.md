@@ -14,6 +14,8 @@ This document describes code style conventions, testing patterns, and project or
 - **Factory functions over classes**: Expose `createClient()` instead of `new Client()`. Classes can be used internally, but the public API should always be factory functions. This keeps constructors private, allows async initialization, and makes the API consistent.
 - **Nullable conventions**: Use `undefined` for "not found/not present" and `null` for "explicitly set to no value". For example, `getJobById` returns `undefined` when job doesn't exist, while `job.completedAt` is `null` before completion.
 - **Prefer explicit context passing over async context**: Use parameters, callbacks, and handles to pass context rather than relying on `AsyncLocalStorage` or `async_hooks`. The library does not bind or snapshot async context internally — callers (e.g., OTEL adapters) are responsible for propagating their own async context.
+- **No abbreviated names**: Use full words in variable names, type names, and type parameters. Write `TDefinitions` not `TDefs`, `definitions` not `defs`, `config` not `cfg`. Single-letter type parameters (`T`, `K`) are fine when there's only one and the meaning is obvious. `ctx`/`TCtx` is also acceptable as a well-established abbreviation.
+- **Consistent pluralization**: Keep singular/plural consistent across related names — including functions, types, type parameters, variables, and file names. If a function is `defineJobTypeRegistry` (plural), related type parameters and variables should also use plural — e.g., `TJobTypeDefinitions` not `TJobTypeDefinition`, `jobTypeRegistry` not `jobType` (when referring to the collection).
 - **Arrow functions over function declarations**: Use `export const fn = () => {}` instead of `export function fn() {}`. This applies to all exports — named functions, factories, helpers, etc.
 - **Async factory functions**: Factory functions that perform I/O (database setup, network connections) should be async. Pure configuration factories like `createConsoleLog` or `createJobTypeRegistry` should be sync. Note: `createOtelObservabilityAdapter` is async for future-proofing even though current OTEL instrument creation is synchronous.
 - **No barrel files**: Do not create `index.ts` barrel re-export files within subdirectories. The only barrel file is each package's top-level `index.ts` (the package entry point). Internal modules import directly from the source file they need.
@@ -134,17 +136,6 @@ describe("MyFeature", () => {
 - `packages/redis/src/specs/` - Running with Redis notify adapter
 - `packages/nats/src/specs/` - Running with NATS notify adapter
 
-## Type Organization
-
-Source files are organized by domain:
-
-- `job-type.ts`: Base type definitions (`BaseJobTypeDefinition`) and `defineJobTypes` factory
-- `job-type-registry.ts`: Runtime validation types (`JobTypeRegistry`, `JobTypeRegistryConfig`) and factories
-- `job-type.navigation.ts`: Type-level navigation logic (`ResolvedJob`, `ChainJobTypeNames`, `ContinuationJobs`)
-- `job-type.validation.ts`: Compile-time validation types (`ValidatedJobTypeDefinitions`)
-- `job-chain.types.ts`: Core entity types (`JobChain`, `CompletedJobChain`, `JobChainStatus`)
-- `job.types.ts`: Core job entity types (`Job`, `JobWithBlockers`) and status narrowing types
-
 ## Commands
 
 ```bash
@@ -253,7 +244,7 @@ Examples should follow these conventions for clarity and readability:
 - **Direct transaction patterns**: Use database client transactions directly (e.g., `db.transaction()`, `sql.begin()`) instead of abstracting through `stateProvider.runInTransaction()` in the demonstration code
 - **Simple patterns**: Prefer straightforward code over abstraction layers — examples should be copy-paste friendly
 - **No obvious comments**: Users are smart
-- **Workflow visualization**: Examples with job chains should include ASCII workflow diagrams as comments inside the `defineJobTypes` generic, directly above the relevant job type definitions
+- **Workflow visualization**: Examples with job chains should include ASCII workflow diagrams as comments inside the `defineJobTypeRegistry` generic, directly above the relevant job type definitions
 
 ## Documentation Updates
 

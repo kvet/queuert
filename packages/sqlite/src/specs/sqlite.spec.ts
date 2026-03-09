@@ -2,8 +2,8 @@ import { type UUID } from "node:crypto";
 import {
   createClient,
   createInProcessWorker,
-  defineJobTypeProcessorRegistry,
-  defineJobTypes,
+  createJobTypeProcessorRegistry,
+  defineJobTypeRegistry,
   withTransactionHooks,
 } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
@@ -28,7 +28,7 @@ it("should infer types correctly with custom ID", async ({ db }) => {
 
   const notifyAdapter = createInProcessNotifyAdapter();
   const log = vi.fn();
-  const registry = defineJobTypes<{
+  const registry = defineJobTypeRegistry<{
     test: {
       entry: true;
       input: { foo: string };
@@ -44,7 +44,7 @@ it("should infer types correctly with custom ID", async ({ db }) => {
   });
   const worker = await createInProcessWorker({
     client,
-    processorRegistry: defineJobTypeProcessorRegistry(client, registry, {
+    processorRegistry: createJobTypeProcessorRegistry(client, registry, {
       test: {
         attemptHandler: async ({ job, complete }) => {
           expectTypeOf(job.id).toEqualTypeOf<`job.${UUID}`>();

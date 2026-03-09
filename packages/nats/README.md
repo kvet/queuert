@@ -44,12 +44,12 @@ npm install @queuert/nats
 ## Quick Start
 
 ```typescript
-import { createClient, createConsoleLog, defineJobTypes } from "queuert";
+import { createClient, createConsoleLog, defineJobTypeRegistry } from "queuert";
 import { createPgStateAdapter } from "@queuert/postgres";
 import { createNatsNotifyAdapter } from "@queuert/nats";
 import { connect } from "nats";
 
-const jobTypes = defineJobTypes<{
+const jobTypeRegistry = defineJobTypeRegistry<{
   "send-email": { entry: true; input: { to: string }; output: { sent: true } };
 }>();
 
@@ -66,7 +66,7 @@ const notifyAdapter = await createNatsNotifyAdapter({
 const client = await createClient({
   stateAdapter,
   notifyAdapter,
-  registry: jobTypes,
+  registry: jobTypeRegistry,
   log: createConsoleLog(),
 });
 ```

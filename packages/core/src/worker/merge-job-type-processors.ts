@@ -1,54 +1,101 @@
 import { type BaseJobTypeDefinitions } from "../entities/job-type.js";
 import { DuplicateJobTypeError } from "../errors.js";
 import {
-  type JobTypeProcessorsRegistry,
-  type ProcessorsRegistryDefinitions,
-  type ProcessorsRegistryExternalDefinitions,
-  processorsDefinitionsSymbol,
-  processorsExternalDefinitionsSymbol,
-} from "./job-type-processors-registry.js";
+  type ExternalJobTypeProcessorRegistryDefinitions,
+  type JobTypeProcessorRegistry,
+  type JobTypeProcessorRegistryDefinitions,
+  type JobTypeProcessorRegistryNavigation,
+  processorDefinitionsSymbol,
+  processorExternalDefinitionsSymbol,
+  processorNavigationSymbol,
+} from "./job-type-processor-registry.js";
 
-/** Collect definitions from a tuple of processors registries. */
-type MergedDefinitions<T extends readonly JobTypeProcessorsRegistry[]> = T extends readonly [
-  infer First extends JobTypeProcessorsRegistry,
-  ...infer Rest extends readonly JobTypeProcessorsRegistry[],
+/** Collect definitions from a tuple of processor registries (4-at-a-time to avoid TS2589). */
+type MergedDefinitions<T extends readonly JobTypeProcessorRegistry[]> = T extends readonly [
+  infer A extends JobTypeProcessorRegistry,
+  infer B extends JobTypeProcessorRegistry,
+  infer C extends JobTypeProcessorRegistry,
+  infer D extends JobTypeProcessorRegistry,
+  ...infer Rest extends readonly JobTypeProcessorRegistry[],
 ]
-  ? ProcessorsRegistryDefinitions<First> & MergedDefinitions<Rest>
-  : Record<never, never>;
-
-/** Collect external definitions from a tuple of processors registries. */
-type MergedExternalDefinitions<T extends readonly JobTypeProcessorsRegistry[]> =
-  T extends readonly [
-    infer First extends JobTypeProcessorsRegistry,
-    ...infer Rest extends readonly JobTypeProcessorsRegistry[],
-  ]
-    ? ProcessorsRegistryExternalDefinitions<First> & MergedExternalDefinitions<Rest>
+  ? JobTypeProcessorRegistryDefinitions<A> &
+      JobTypeProcessorRegistryDefinitions<B> &
+      JobTypeProcessorRegistryDefinitions<C> &
+      JobTypeProcessorRegistryDefinitions<D> &
+      MergedDefinitions<Rest>
+  : T extends readonly [
+        infer First extends JobTypeProcessorRegistry,
+        ...infer Rest extends readonly JobTypeProcessorRegistry[],
+      ]
+    ? JobTypeProcessorRegistryDefinitions<First> & MergedDefinitions<Rest>
     : Record<never, never>;
 
+/** Collect external definitions from a tuple of processor registries (4-at-a-time). */
+type MergedExternalDefinitions<T extends readonly JobTypeProcessorRegistry[]> = T extends readonly [
+  infer A extends JobTypeProcessorRegistry,
+  infer B extends JobTypeProcessorRegistry,
+  infer C extends JobTypeProcessorRegistry,
+  infer D extends JobTypeProcessorRegistry,
+  ...infer Rest extends readonly JobTypeProcessorRegistry[],
+]
+  ? ExternalJobTypeProcessorRegistryDefinitions<A> &
+      ExternalJobTypeProcessorRegistryDefinitions<B> &
+      ExternalJobTypeProcessorRegistryDefinitions<C> &
+      ExternalJobTypeProcessorRegistryDefinitions<D> &
+      MergedExternalDefinitions<Rest>
+  : T extends readonly [
+        infer First extends JobTypeProcessorRegistry,
+        ...infer Rest extends readonly JobTypeProcessorRegistry[],
+      ]
+    ? ExternalJobTypeProcessorRegistryDefinitions<First> & MergedExternalDefinitions<Rest>
+    : Record<never, never>;
+
+/** Merge pre-computed navigation maps from a tuple of processor registries (4-at-a-time).
+ *  Base case is `unknown` (not `Record<never, never>`) because `unknown` is the identity element for `&` intersection. */
+type MergedProcessorNavigation<T extends readonly JobTypeProcessorRegistry[]> = T extends readonly [
+  infer A extends JobTypeProcessorRegistry,
+  infer B extends JobTypeProcessorRegistry,
+  infer C extends JobTypeProcessorRegistry,
+  infer D extends JobTypeProcessorRegistry,
+  ...infer Rest extends readonly JobTypeProcessorRegistry[],
+]
+  ? JobTypeProcessorRegistryNavigation<A> &
+      JobTypeProcessorRegistryNavigation<B> &
+      JobTypeProcessorRegistryNavigation<C> &
+      JobTypeProcessorRegistryNavigation<D> &
+      MergedProcessorNavigation<Rest>
+  : T extends readonly [
+        infer First extends JobTypeProcessorRegistry,
+        ...infer Rest extends readonly JobTypeProcessorRegistry[],
+      ]
+    ? JobTypeProcessorRegistryNavigation<First> & MergedProcessorNavigation<Rest>
+    : unknown;
+
 /**
- * Merge processors registries from multiple slices into a single registry.
+ * Merge processor registries from multiple slices into a single registry.
  *
- * Each slice defines processors using {@link defineJobTypeProcessorRegistry}, typed against
+ * Each slice defines processors using {@link createJobTypeProcessorRegistry}, typed against
  * its own job type definitions. This function merges them with runtime
  * duplicate detection — overlapping processor keys throw {@link DuplicateJobTypeError}.
  *
  * @example
  * const worker = await createInProcessWorker({
  *   client,
- *   processorRegistry: mergeJobTypeProcessorRegistries(orderProcessors, notificationProcessors),
+ *   processorRegistry: mergeJobTypeProcessorRegistries(orderProcessorRegistry, notificationProcessorRegistry),
  * });
  */
 export const mergeJobTypeProcessorRegistries = <
   const TSlices extends readonly [
-    JobTypeProcessorsRegistry,
-    JobTypeProcessorsRegistry,
-    ...JobTypeProcessorsRegistry[],
+    JobTypeProcessorRegistry,
+    JobTypeProcessorRegistry,
+    ...JobTypeProcessorRegistry[],
   ],
 >(
   ...slices: TSlices
-): JobTypeProcessorsRegistry<
+): JobTypeProcessorRegistry<
   MergedDefinitions<TSlices> & BaseJobTypeDefinitions,
-  MergedExternalDefinitions<TSlices> & BaseJobTypeDefinitions
+  MergedExternalDefinitions<TSlices> & BaseJobTypeDefinitions,
+  MergedProcessorNavigation<TSlices>
 > => {
   const seen = new Set<string>();
   const duplicates: string[] = [];
@@ -66,12 +113,14 @@ export const mergeJobTypeProcessorRegistries = <
     });
   }
   return Object.assign({}, ...(slices as unknown as object[]), {
-    [processorsDefinitionsSymbol]: undefined as unknown as MergedDefinitions<TSlices> &
+    [processorDefinitionsSymbol]: undefined as unknown as MergedDefinitions<TSlices> &
       BaseJobTypeDefinitions,
-    [processorsExternalDefinitionsSymbol]:
+    [processorExternalDefinitionsSymbol]:
       undefined as unknown as MergedExternalDefinitions<TSlices> & BaseJobTypeDefinitions,
-  }) as JobTypeProcessorsRegistry<
+    [processorNavigationSymbol]: undefined as unknown as MergedProcessorNavigation<TSlices>,
+  }) as JobTypeProcessorRegistry<
     MergedDefinitions<TSlices> & BaseJobTypeDefinitions,
-    MergedExternalDefinitions<TSlices> & BaseJobTypeDefinitions
+    MergedExternalDefinitions<TSlices> & BaseJobTypeDefinitions,
+    MergedProcessorNavigation<TSlices>
   >;
 };

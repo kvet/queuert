@@ -9,7 +9,7 @@ import { createInProcessStateAdapter } from "queuert/internal";
 import {
   createClient,
   createInProcessWorker,
-  defineJobTypeProcessorRegistry,
+  createJobTypeProcessorRegistry,
   withTransactionHooks,
 } from "queuert";
 import {
@@ -72,7 +72,7 @@ const [beforeSetup, afterSetup, { qrtClient, stopWorker }] = await measureMemory
 
   const qrtWorker = await createInProcessWorker({
     client: qrtClient,
-    processorRegistry: defineJobTypeProcessorRegistry(qrtClient, registry, {
+    processorRegistry: createJobTypeProcessorRegistry(qrtClient, registry, {
       "test-job": {
         attemptHandler: async ({ complete }) => complete(async () => ({ processed: true })),
       },

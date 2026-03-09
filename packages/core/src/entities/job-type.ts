@@ -25,54 +25,14 @@ export type BaseJobTypeDefinition = {
 /** Record mapping job type names to their definitions. */
 export type BaseJobTypeDefinitions = Record<string, BaseJobTypeDefinition>;
 
-/** Identity type helper for better IntelliSense when defining job types separately from {@link defineJobTypes}. */
+/** Identity type helper for better IntelliSense when defining job types separately from {@link defineJobTypeRegistry}. */
 export type DefineJobTypes<T extends BaseJobTypeDefinitions> = T;
 
-import { createNoopJobTypeRegistry, type JobTypeRegistry } from "./job-type-registry.js";
-import { type ValidatedJobTypeDefinitions } from "./job-type.validation.js";
-
 /**
- * Define job types with compile-time type checking only (no runtime validation).
- * Returns a JobTypeRegistry that passes all values through without validation.
- *
- * @example
- * // Inline definition
- * const jobTypes = defineJobTypes<{
- *   'fetch': {
- *     entry: true;
- *     input: { url: string };
- *     output: { data: unknown };
- *   };
- *   'process': {
- *     entry: true;
- *     input: { id: string };
- *     continueWith: { typeName: 'finalize' };
- *     blockers: [{ typeName: 'fetch' }];
- *   };
- *   'finalize': {
- *     input: { result: string };
- *     output: { done: boolean };
- *   };
- * }>();
- *
- * @example
- * // With DefineJobTypes for better IntelliSense
- * type MyJobDefinitions = DefineJobTypes<{
- *   'process': {
- *     entry: true;
- *     input: { id: string };
- *     output: { result: string };
- *   };
- * }>;
- *
- * const jobTypes = defineJobTypes<MyJobDefinitions>();
+ * Reference object for continuation and blocker validation.
+ * Contains both typeName (for nominal validation) and input (for structural validation).
  */
-export const defineJobTypes = <
-  TJobTypeDefinitions extends BaseJobTypeDefinitions &
-    ValidatedJobTypeDefinitions<TJobTypeDefinitions, TExternalJobTypeDefinitions>,
-  TExternalJobTypeDefinitions extends BaseJobTypeDefinitions = Record<never, never>,
->(): JobTypeRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions> => {
-  return createNoopJobTypeRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions>();
+export type ResolvedJobTypeReference = {
+  readonly typeName: string;
+  readonly input: unknown;
 };
-
-export * from "./job-type.navigation.js";

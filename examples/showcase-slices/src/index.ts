@@ -92,7 +92,7 @@ console.log("(A notification was fired in the background by the create-order pro
 // ---------------------------------------------------------------------------
 // Pattern 3: Cross-slice blockers with external references
 // The orders slice references notifications.send-notification as a blocker
-// using defineJobTypes<T, TExternal>. No need for a separate workflow slice
+// using defineJobTypeRegistry<T, TExternal>. No need for a separate workflow slice
 // that duplicates the notification type definition.
 //
 // place-order starts a notification chain and passes it as a blocker

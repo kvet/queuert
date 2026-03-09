@@ -8,7 +8,7 @@ sidebar:
 Jobs can be completed without a worker using `completeJobChain`. This enables approval workflows, webhook-triggered completions, and patterns where jobs wait for external events. Deferred start pairs well with this -- schedule a job to auto-reject after a timeout, but allow early completion based on user action.
 
 ```ts
-type Definitions = {
+const jobTypeRegistry = defineJobTypeRegistry<{
   "await-approval": {
     entry: true;
     input: { requestId: string };
@@ -19,7 +19,7 @@ type Definitions = {
     input: { requestId: string };
     output: { processed: true };
   };
-};
+}>();
 
 // Start a job that auto-rejects in 2 hours if not handled
 const chain = await withTransactionHooks(async (transactionHooks) =>
@@ -34,7 +34,7 @@ const chain = await withTransactionHooks(async (transactionHooks) =>
 // The worker handles the timeout case (auto-reject) and processes approved requests
 const worker = await createInProcessWorker({
   client,
-  processorRegistry: defineJobTypeProcessorRegistry(client, jobTypes, {
+  processorRegistry: createJobTypeProcessorRegistry(client, jobTypeRegistry, {
     "await-approval": {
       attemptHandler: async ({ complete }) => complete(() => ({ rejected: true })),
     },

@@ -1,11 +1,11 @@
-import { createClient, defineJobTypes } from "queuert";
+import { createClient, defineJobTypeRegistry } from "queuert";
 import { createInProcessStateAdapter } from "queuert/internal";
 import { describe, expect, it } from "vitest";
 import { createDashboard } from "../api/dashboard.js";
 
 const createTestDashboard = async (basePath?: string) => {
   const stateAdapter = createInProcessStateAdapter();
-  const client = await createClient({ stateAdapter, registry: defineJobTypes() });
+  const client = await createClient({ stateAdapter, registry: defineJobTypeRegistry() });
   const dashboard = createDashboard({ client, basePath });
   const prefix = basePath ?? "";
   const request = async (path: string) =>
@@ -250,7 +250,7 @@ describe("Dashboard API", () => {
       const dashboard = createDashboard({
         client: await createClient({
           stateAdapter: createInProcessStateAdapter(),
-          registry: defineJobTypes(),
+          registry: defineJobTypeRegistry(),
         }),
         basePath: "/internal/queuert",
       });
@@ -262,7 +262,7 @@ describe("Dashboard API", () => {
       const dashboard = createDashboard({
         client: await createClient({
           stateAdapter: createInProcessStateAdapter(),
-          registry: defineJobTypes(),
+          registry: defineJobTypeRegistry(),
         }),
         basePath: "/app",
       });

@@ -1,9 +1,9 @@
 import { createSqliteStateAdapter } from "@queuert/sqlite";
-import { createClient, defineJobTypes } from "queuert";
+import { createClient, defineJobTypeRegistry } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 import { createDatabase, createStateProvider } from "./db.js";
 
-export const registry = defineJobTypes<{
+export const registry = defineJobTypeRegistry<{
   /*
    * Scenario 1 - Single Job:
    *   greet → "Hello, {name}!"
