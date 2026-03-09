@@ -97,6 +97,58 @@ importers:
         specifier: ^4.21.0
         version: 4.21.0
 
+  benchmarks/benchmark-processing-capacity:
+    dependencies:
+      '@queuert/nats':
+        specifier: workspace:*
+        version: link:../../packages/nats
+      '@queuert/postgres':
+        specifier: workspace:*
+        version: link:../../packages/postgres
+      '@queuert/redis':
+        specifier: workspace:*
+        version: link:../../packages/redis
+      '@queuert/sqlite':
+        specifier: workspace:*
+        version: link:../../packages/sqlite
+      better-sqlite3:
+        specifier: ^12.6.2
+        version: 12.6.2
+      nats:
+        specifier: ^2.29.3
+        version: 2.29.3
+      postgres:
+        specifier: ^3.4.8
+        version: 3.4.8
+      queuert:
+        specifier: workspace:*
+        version: link:../../packages/core
+      redis:
+        specifier: ^5.10.0
+        version: 5.10.0
+    devDependencies:
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages-internal/tsconfig
+      '@testcontainers/nats':
+        specifier: ^11.11.0
+        version: 11.11.0
+      '@testcontainers/postgresql':
+        specifier: ^11.11.0
+        version: 11.11.0
+      '@testcontainers/redis':
+        specifier: ^11.11.0
+        version: 11.11.0
+      '@types/better-sqlite3':
+        specifier: ^7.6.13
+        version: 7.6.13
+      '@types/node':
+        specifier: ^22.19.11
+        version: 22.19.11
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
+
   benchmarks/benchmark-type-complexity:
     dependencies:
       queuert:

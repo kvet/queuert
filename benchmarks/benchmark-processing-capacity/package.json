@@ -1,0 +1,35 @@
+{
+  "name": "example-benchmark-processing-capacity",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node --import=tsx src/index.ts",
+    "start:postgres": "node --import=tsx src/index.ts --postgres",
+    "start:sqlite": "node --import=tsx src/index.ts --sqlite",
+    "start:notify-redis": "node --import=tsx src/index.ts --notify-redis",
+    "start:notify-postgres": "node --import=tsx src/index.ts --notify-postgres",
+    "start:notify-nats": "node --import=tsx src/index.ts --notify-nats",
+    "typecheck": "! tsgo --noEmit 2>&1 | grep -v 'TS4023' | grep 'error TS'"
+  },
+  "dependencies": {
+    "@queuert/nats": "workspace:*",
+    "@queuert/postgres": "workspace:*",
+    "@queuert/redis": "workspace:*",
+    "@queuert/sqlite": "workspace:*",
+    "better-sqlite3": "^12.6.2",
+    "nats": "^2.29.3",
+    "postgres": "^3.4.8",
+    "queuert": "workspace:*",
+    "redis": "^5.10.0"
+  },
+  "devDependencies": {
+    "@queuert/tsconfig": "workspace:*",
+    "@testcontainers/nats": "^11.11.0",
+    "@testcontainers/postgresql": "^11.11.0",
+    "@testcontainers/redis": "^11.11.0",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.19.11",
+    "tsx": "^4.21.0"
+  }
+}

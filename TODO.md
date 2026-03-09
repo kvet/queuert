@@ -1,6 +1,5 @@
 # Short term
 
-- [REF] Processing capacity benchmark? Like running 100_000 jobs?
 - [REF] Plugins
   - Attempt middleware plugin
   - Client amend
@@ -25,6 +24,11 @@
 
 # Medium term
 
+- [EPIC,COMPLEX] Processing throughput (~10x) — currently 4 DB round-trips per job (acquire, getBlockers, renewLease, complete)
+  - [REF] Batch job acquisition — acquire N jobs per query instead of 1, amortize loop + transaction overhead
+  - [REF] Skip `getJobBlockers` when job type declares no blockers — saves 1 round-trip per job
+  - [REF] Merge acquire + initial lease into single operation — `acquireJob` already sets `status=running` but `renewJobLease` sets `leased_by`/`leased_until` separately
+  - [REF] Batch completions in one transaction — amortize commit overhead for fast handlers
 - [TASK,COMPLEX] Optimized batched lease renewal
 - [EPIC] MCP server
 - [EPIC] Sqlite ready:

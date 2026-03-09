@@ -1,9 +1,23 @@
 ---
 title: Benchmarks
-description: Memory footprint and type complexity benchmarks for Queuert.
+description: Processing capacity, memory footprint, and type complexity benchmarks for Queuert.
 sidebar:
   order: 5
 ---
+
+## Processing Capacity
+
+End-to-end job throughput measured in two phases: starting job chains (chains/s) and processing them to completion (jobs/s). Each adapter combination runs in a separate child process for isolation (Node.js v22, 10,000 jobs, concurrency 10).
+
+| State      | Notify     | Start (chains/s) | Process (jobs/s) | End-to-end (jobs/s) |
+| ---------- | ---------- | ---------------: | ---------------: | ------------------: |
+| PostgreSQL | in-process |             ~630 |             ~375 |                ~235 |
+| PostgreSQL | PostgreSQL |             ~506 |             ~396 |                ~222 |
+| SQLite     | in-process |          ~14,600 |             ~793 |                ~752 |
+| SQLite     | Redis      |           ~2,680 |             ~555 |                ~460 |
+| SQLite     | NATS       |          ~11,560 |             ~789 |                ~739 |
+
+See [benchmark-processing-capacity](https://github.com/kvet/queuert/tree/main/benchmarks/benchmark-processing-capacity) for the full benchmark tool.
 
 ## Memory Footprint
 
