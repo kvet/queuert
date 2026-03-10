@@ -1,5 +1,13 @@
 # @queuert/otel
 
+## 0.5.1
+
+### Patch Changes
+
+- Add compile-time validation for job type definitions and processor registries. Validation adapters now surface definition errors (missing output schemas, invalid blocker references, unknown type names) as TypeScript errors instead of accepting them silently. `createInProcessWorker` rejects processor registries containing job types unknown to the client at compile time. New exported types: `ValidatedJobTypeDefinitions`, `JobTypeDefinitionErrors`.
+- Updated dependencies
+  - queuert@0.5.1
+
 ## 0.5.0
 
 ### Minor Changes
