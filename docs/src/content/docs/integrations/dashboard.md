@@ -83,7 +83,7 @@ The dashboard is a self-contained package with two layers:
 - **Backend**: A standard `fetch` handler powered by Hono (bundled internally). Serves API routes that query the Queuert client's state adapter directly.
 - **Frontend**: A SolidJS single-page application, pre-built as static JS/CSS and shipped within the package. No external build steps required at deploy time.
 
-The dashboard works with all state adapters (PostgreSQL, SQLite, in-memory) since it queries through the client's existing query methods.
+The dashboard works with the PostgreSQL and SQLite state adapters, which implement the required listing methods.
 
 ## Authentication
 

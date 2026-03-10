@@ -17,7 +17,7 @@ End-to-end job throughput measured in two phases: starting job chains (chains/s)
 | SQLite     | Redis      |           ~2,680 |             ~555 |                ~460 |
 | SQLite     | NATS       |          ~11,560 |             ~789 |                ~739 |
 
-See [benchmark-processing-capacity](https://github.com/kvet/queuert/tree/main/benchmarks/benchmark-processing-capacity) for the full benchmark tool.
+See [processing-capacity](https://github.com/kvet/queuert/tree/main/benchmarks/processing-capacity) for the full benchmark tool.
 
 ## Memory Footprint
 
@@ -39,7 +39,7 @@ Heap overhead of each Queuert component, measured in isolation with `--expose-gc
 | Observability (OTel) |       ~135 KB | Adapter only; OTel MeterProvider adds ~21 KB |
 | Dashboard            |         ~2 KB | First API request loads ~1.7 MB of assets    |
 
-See [benchmark-memory-footprint](https://github.com/kvet/queuert/tree/main/benchmarks/benchmark-memory-footprint) for the full measurement tool.
+See [memory-footprint](https://github.com/kvet/queuert/tree/main/benchmarks/memory-footprint) for the full measurement tool.
 
 ## Type Complexity
 
@@ -76,4 +76,4 @@ Queuert's type-level machinery scales linearly across chain topologies (prebuilt
 | Merging 10 slices of 50 types (500 total)  | OK, ~2.2s (tsc) |
 | Merging 50 slices of 50 types (2500 total) | OK, ~11s (tsc)  |
 
-See [benchmark-type-complexity](https://github.com/kvet/queuert/tree/main/benchmarks/benchmark-type-complexity) for the full benchmark tool and detailed results.
+See [type-complexity](https://github.com/kvet/queuert/tree/main/benchmarks/type-complexity) for the full benchmark tool and detailed results.

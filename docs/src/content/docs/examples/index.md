@@ -89,10 +89,3 @@ Input/output validation with different schema libraries.
 | ------------------ | --------------------------------- | -------------------------------------------------------------------------------------------- |
 | observability-otel | OpenTelemetry tracing and metrics | [source](https://github.com/kvet/queuert/blob/main/examples/observability-otel/src/index.ts) |
 | dashboard          | Web dashboard UI with SQLite      | [source](https://github.com/kvet/queuert/blob/main/examples/dashboard/src/index.ts)          |
-
-## Benchmarks
-
-| Benchmark                  | What it measures                   | Source                                                                                                 |
-| -------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| benchmark-memory-footprint | Memory usage under load            | [source](https://github.com/kvet/queuert/blob/main/benchmarks/benchmark-memory-footprint/src/index.ts) |
-| benchmark-type-complexity  | Type-checking cost across patterns | [source](https://github.com/kvet/queuert/blob/main/benchmarks/benchmark-type-complexity/src/index.ts)  |

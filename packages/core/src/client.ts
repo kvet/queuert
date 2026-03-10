@@ -45,6 +45,7 @@ import { type Helpers, createHelpers } from "./setup-helpers.js";
 import { type TransactionHooks } from "./transaction-hooks.js";
 import { type AttemptCompleteOptions } from "./worker/job-process.js";
 
+/** @internal Used by `createInProcessWorker` and `createDashboard` to access client internals. Not part of the public API. */
 export const helpersSymbol: unique symbol = Symbol("queuert.helpers");
 
 const normalizeTxCtx = <T extends Record<string, unknown>>(rest: T): T | undefined =>

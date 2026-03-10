@@ -48,13 +48,11 @@ export const createOtelObservabilityAdapter = async ({
   meter?: Meter;
   tracer?: Tracer;
 } = {}): Promise<ObservabilityAdapter> => {
-  // worker
   const workerStartedCounter = meter?.createCounter("queuert.worker.started");
   const workerErrorCounter = meter?.createCounter("queuert.worker.error");
   const workerStoppingCounter = meter?.createCounter("queuert.worker.stopping");
   const workerStoppedCounter = meter?.createCounter("queuert.worker.stopped");
 
-  // job
   const jobCreatedCounter = meter?.createCounter("queuert.job.created");
   const jobAttemptStartedCounter = meter?.createCounter("queuert.job.attempt.started");
   const jobAttemptTakenByAnotherWorkerCounter = meter?.createCounter(
@@ -70,21 +68,16 @@ export const createOtelObservabilityAdapter = async ({
   const jobCompletedCounter = meter?.createCounter("queuert.job.completed");
   const jobReapedCounter = meter?.createCounter("queuert.job.reaped");
 
-  // job chain
   const jobChainCreatedCounter = meter?.createCounter("queuert.job_chain.created");
   const jobChainCompletedCounter = meter?.createCounter("queuert.job_chain.completed");
 
-  // blockers
   const jobBlockedCounter = meter?.createCounter("queuert.job.blocked");
   const jobUnblockedCounter = meter?.createCounter("queuert.job.unblocked");
 
-  // notify adapter
   const notifyAdapterErrorCounter = meter?.createCounter("queuert.notify_adapter.error");
 
-  // state adapter
   const stateAdapterErrorCounter = meter?.createCounter("queuert.state_adapter.error");
 
-  // histograms
   const jobChainDurationHistogram = meter?.createHistogram("queuert.job_chain.duration", {
     unit: "s",
     description: "Duration of job chain from creation to completion",
@@ -98,7 +91,6 @@ export const createOtelObservabilityAdapter = async ({
     description: "Duration of job attempt processing",
   });
 
-  // gauges (UpDownCounters)
   const jobTypeIdleGauge = meter?.createUpDownCounter("queuert.job_type.idle", {
     description: "Workers idle for this job type",
   });
@@ -131,7 +123,6 @@ export const createOtelObservabilityAdapter = async ({
   };
 
   return {
-    // worker
     workerStarted: ({ workerId }) => {
       workerStartedCounter?.add(1, { workerId });
     },
@@ -145,7 +136,6 @@ export const createOtelObservabilityAdapter = async ({
       workerStoppedCounter?.add(1, { workerId });
     },
 
-    // job
     jobCreated: ({ typeName, chainTypeName }) => {
       jobCreatedCounter?.add(1, { typeName, chainTypeName });
     },
@@ -182,7 +172,6 @@ export const createOtelObservabilityAdapter = async ({
       });
     },
 
-    // job chain
     jobChainCreated: ({ typeName }) => {
       jobChainCreatedCounter?.add(1, { chainTypeName: typeName });
     },
@@ -190,7 +179,6 @@ export const createOtelObservabilityAdapter = async ({
       jobChainCompletedCounter?.add(1, { chainTypeName: typeName });
     },
 
-    // blockers
     jobBlocked: ({ typeName, chainTypeName }) => {
       jobBlockedCounter?.add(1, { typeName, chainTypeName });
     },
@@ -198,17 +186,14 @@ export const createOtelObservabilityAdapter = async ({
       jobUnblockedCounter?.add(1, { typeName, chainTypeName });
     },
 
-    // notify adapter
     notifyAdapterError: ({ operation }) => {
       notifyAdapterErrorCounter?.add(1, { operation });
     },
 
-    // state adapter
     stateAdapterError: ({ operation }) => {
       stateAdapterErrorCounter?.add(1, { operation });
     },
 
-    // histograms
     jobChainDuration: ({ typeName, durationMs }) => {
       jobChainDurationHistogram?.record(durationMs / 1000, { chainTypeName: typeName });
     },
@@ -219,7 +204,6 @@ export const createOtelObservabilityAdapter = async ({
       jobAttemptDurationHistogram?.record(durationMs / 1000, { typeName, chainTypeName, workerId });
     },
 
-    // gauges
     jobTypeIdleChange: ({ delta, typeName, workerId }) => {
       jobTypeIdleGauge?.add(delta, { typeName, workerId });
     },
@@ -227,7 +211,6 @@ export const createOtelObservabilityAdapter = async ({
       jobTypeProcessingGauge?.add(delta, { typeName, workerId });
     },
 
-    // tracing
     startJobSpan(data) {
       if (!tracer) return undefined;
 

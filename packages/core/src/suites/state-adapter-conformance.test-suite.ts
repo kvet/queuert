@@ -557,11 +557,11 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const chain = await stateAdapter.getJobChainById({ chainId: rootJob.id });
+      const jobChain = await stateAdapter.getJobChainById({ chainId: rootJob.id });
 
-      expect(chain).toBeDefined();
-      expect(chain![0].id).toBe(rootJob.id);
-      expect(chain![0].chainId).toBe(rootJob.id);
+      expect(jobChain).toBeDefined();
+      expect(jobChain![0].id).toBe(rootJob.id);
+      expect(jobChain![0].chainId).toBe(rootJob.id);
     });
 
     it("returns [rootJob, lastJob] for multi-job chain", async ({ stateAdapter, expect }) => {
@@ -587,11 +587,11 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const chain = await stateAdapter.getJobChainById({ chainId: rootJob.id });
-      expect(chain).toBeDefined();
-      expect(chain![0].id).toBe(rootJob.id);
-      expect(chain![1]).toBeDefined();
-      expect(chain![1]!.id).toBe(continuation.id);
+      const jobChain = await stateAdapter.getJobChainById({ chainId: rootJob.id });
+      expect(jobChain).toBeDefined();
+      expect(jobChain![0].id).toBe(rootJob.id);
+      expect(jobChain![1]).toBeDefined();
+      expect(jobChain![1]!.id).toBe(continuation.id);
     });
   });
 

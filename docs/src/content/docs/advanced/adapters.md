@@ -9,6 +9,25 @@ sidebar:
 
 This document describes the design philosophy behind Queuert's adapter system, including factory patterns, context management, and notification optimization.
 
+## Provider vs Adapter
+
+Queuert uses a two-layer abstraction for external integrations:
+
+- **Provider** — a minimal interface that users implement to wrap their chosen database or messaging client. It contains only low-level operations (`executeSql`, `runInTransaction`, `publish`/`subscribe`). Each driver library (pg, better-sqlite3, ioredis, etc.) gets its own provider implementation.
+- **Adapter** — a high-level interface that Queuert builds from a provider via a `create*` factory function. Adapters contain the full domain logic (job lifecycle, state transitions, notification semantics) and are what `createClient` and `createInProcessWorker` consume.
+
+The factory transforms a provider into an adapter:
+
+```
+PgStateProvider      → createPgStateAdapter()        → StateAdapter
+SqliteStateProvider  → createSqliteStateAdapter()    → StateAdapter
+PgNotifyProvider     → createPgNotifyAdapter()       → NotifyAdapter
+RedisNotifyProvider  → createRedisNotifyAdapter()    → NotifyAdapter
+                       createNatsNotifyAdapter()     → NotifyAdapter
+```
+
+This separation keeps driver-specific code isolated in the provider while the adapter layer remains database-agnostic. Users only implement the provider; they never implement the adapter interface directly.
+
 ## Async Factory Pattern
 
 Public-facing adapter factories that may perform I/O are async for consistency. In-process and internal-only factories remain sync since they have no I/O.

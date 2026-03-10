@@ -5,11 +5,8 @@ Measures the memory footprint of Queuert components across all available adapter
 ## Usage
 
 ```bash
-# Show available measurements
-pnpm start
-
 # Run all adapter measurements (requires Docker)
-pnpm start:all
+pnpm start
 
 # Run specific adapter measurements
 pnpm start:state-postgres    # PostgreSQL state adapter

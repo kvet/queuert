@@ -517,7 +517,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       registry,
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
@@ -535,7 +535,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
             ...txCtx,
             transactionHooks,
             typeName: "notification",
-            id: chain.id,
+            id: jobChain.id,
             complete: async ({ job, complete }) => complete(job, async () => ({ sent: true })),
           }),
         ),
@@ -564,7 +564,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       registry,
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
@@ -576,7 +576,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
 
     await expect(
-      client.awaitJobChain({ typeName: "notification", id: chain.id }, { timeoutMs: 1000 }),
+      client.awaitJobChain({ typeName: "notification", id: jobChain.id }, { timeoutMs: 1000 }),
     ).rejects.toThrow(JobTypeMismatchError);
   });
 };

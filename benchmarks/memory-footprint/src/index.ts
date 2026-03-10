@@ -5,7 +5,7 @@
  * Each measurement runs in a separate child process for complete isolation.
  *
  * Usage:
- *   pnpm start:all                # Run all adapter measurements
+ *   pnpm start                    # Run all adapter measurements
  *   pnpm start:state-postgres     # Run PostgreSQL state adapter measurement
  *   pnpm start:state-sqlite       # Run SQLite state adapter measurement
  *   pnpm start:notify-redis       # Run Redis notify adapter measurement

@@ -57,7 +57,7 @@ console.log("\nProcessing 100 jobs...");
 const [beforeProcessing, afterProcessing] = await measureMemory(async () => {
   const promises = [];
   for (let i = 0; i < 100; i++) {
-    const chain = await withTransactionHooks(async (transactionHooks) =>
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
       stateAdapter.runInTransaction(async (ctx) =>
         qrtClient.startJobChain({
           ...ctx,
@@ -67,7 +67,7 @@ const [beforeProcessing, afterProcessing] = await measureMemory(async () => {
         }),
       ),
     );
-    promises.push(qrtClient.awaitJobChain(chain, { timeoutMs: 5000 }));
+    promises.push(qrtClient.awaitJobChain(jobChain, { timeoutMs: 5000 }));
   }
   await Promise.all(promises);
 });

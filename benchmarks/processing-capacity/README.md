@@ -5,8 +5,6 @@ Measures end-to-end job throughput of Queuert across different state and notify 
 ## Usage
 
 ```bash
-cd benchmarks/benchmark-processing-capacity
-
 # Run all combinations
 pnpm start
 

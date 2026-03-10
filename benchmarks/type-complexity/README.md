@@ -5,7 +5,6 @@ Measures TypeScript type-checking cost of Queuert's type-level machinery across 
 ## Usage
 
 ```bash
-cd benchmarks/benchmark-type-complexity
 pnpm start            # run with all available compilers
 pnpm start tsc        # tsc only
 pnpm start tsgo       # tsgo only

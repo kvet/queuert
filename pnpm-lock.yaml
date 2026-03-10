@@ -33,7 +33,7 @@ importers:
         specifier: ^4.0.18
         version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.2.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
 
-  benchmarks/benchmark-memory-footprint:
+  benchmarks/memory-footprint:
     dependencies:
       '@opentelemetry/api':
         specifier: ^1.9.0
@@ -97,7 +97,7 @@ importers:
         specifier: ^4.21.0
         version: 4.21.0
 
-  benchmarks/benchmark-processing-capacity:
+  benchmarks/processing-capacity:
     dependencies:
       '@queuert/nats':
         specifier: workspace:*
@@ -149,7 +149,7 @@ importers:
         specifier: ^4.21.0
         version: 4.21.0
 
-  benchmarks/benchmark-type-complexity:
+  benchmarks/type-complexity:
     dependencies:
       queuert:
         specifier: workspace:*

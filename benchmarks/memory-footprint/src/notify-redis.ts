@@ -1,10 +1,10 @@
 /**
- * NATS Notify Adapter Memory Measurement
+ * Redis Notify Adapter Memory Measurement
  */
 
-import { NatsContainer } from "@testcontainers/nats";
-import { connect } from "nats";
-import { createNatsNotifyAdapter } from "@queuert/nats";
+import { RedisContainer } from "@testcontainers/redis";
+import { createClient as createRedisClient } from "redis";
+import { type RedisNotifyProvider, createRedisNotifyAdapter } from "@queuert/redis";
 import { createInProcessStateAdapter } from "queuert/internal";
 import {
   createClient,
@@ -21,28 +21,51 @@ import {
   registry,
 } from "./utils.js";
 
-printHeader("NATS NOTIFY ADAPTER");
+printHeader("REDIS NOTIFY ADAPTER");
 
 const baseline = await measureBaseline();
 
-console.log("\nStarting NATS container...");
-const [beforeContainer, afterContainer, natsContainer] = await measureMemory(async () =>
-  new NatsContainer("nats:2.10").withExposedPorts(4222).start(),
+console.log("\nStarting Redis container...");
+const [beforeContainer, afterContainer, redisContainer] = await measureMemory(async () =>
+  new RedisContainer("redis:8").withExposedPorts(6379).start(),
 );
 console.log("\nAfter starting container (testcontainers overhead):");
 diffMemory(beforeContainer, afterContainer);
 
-const [beforeConnection, afterConnection, nc] = await measureMemory(async () =>
-  connect(natsContainer.getConnectionOptions()),
+const redisUrl = redisContainer.getConnectionUrl();
+
+const [beforeConnection, afterConnection, { redis, redisSubscription }] = await measureMemory(
+  async () => {
+    const redis = createRedisClient({ url: redisUrl });
+    const redisSubscription = createRedisClient({ url: redisUrl });
+    await redis.connect();
+    await redisSubscription.connect();
+    return { redis, redisSubscription };
+  },
 );
-console.log("\nAfter creating NATS connection:");
+console.log("\nAfter creating Redis connections (2 clients):");
 diffMemory(beforeConnection, afterConnection);
+
+const notifyProvider: RedisNotifyProvider = {
+  publish: async (channel, message) => {
+    await redis.publish(channel, message);
+  },
+  subscribe: async (channel, onMessage) => {
+    await redisSubscription.subscribe(channel, onMessage);
+    return async () => {
+      await redisSubscription.unsubscribe(channel);
+    };
+  },
+  eval: async (script, keys, args) => {
+    return redis.eval(script, { keys, arguments: args });
+  },
+};
 
 const stateAdapter = createInProcessStateAdapter();
 const [beforeAdapter, afterAdapter, notifyAdapter] = await measureMemory(async () =>
-  createNatsNotifyAdapter({ nc, subjectPrefix: "queuert_perf" }),
+  createRedisNotifyAdapter({ provider: notifyProvider }),
 );
-console.log("\nAfter creating NatsNotifyAdapter:");
+console.log("\nAfter creating RedisNotifyAdapter:");
 diffMemory(beforeAdapter, afterAdapter);
 
 const [beforeSetup, afterSetup, { qrtClient, stopWorker }] = await measureMemory(async () => {
@@ -71,7 +94,7 @@ console.log("\nProcessing 100 jobs...");
 const [beforeProcessing, afterProcessing] = await measureMemory(async () => {
   const promises = [];
   for (let i = 0; i < 100; i++) {
-    const chain = await withTransactionHooks(async (transactionHooks) =>
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
       stateAdapter.runInTransaction(async (ctx) =>
         qrtClient.startJobChain({
           ...ctx,
@@ -81,7 +104,7 @@ const [beforeProcessing, afterProcessing] = await measureMemory(async () => {
         }),
       ),
     );
-    promises.push(qrtClient.awaitJobChain(chain, { timeoutMs: 5000 }));
+    promises.push(qrtClient.awaitJobChain(jobChain, { timeoutMs: 5000 }));
   }
   await Promise.all(promises);
 });
@@ -89,8 +112,9 @@ console.log("\nAfter processing 100 jobs:");
 diffMemory(beforeProcessing, afterProcessing);
 
 await stopWorker();
-await nc.close();
-await natsContainer.stop();
+await redis.quit();
+await redisSubscription.quit();
+await redisContainer.stop();
 
 const [, afterCleanup] = await measureMemory(async () => {});
 console.log("\nAfter cleanup (delta from baseline):");

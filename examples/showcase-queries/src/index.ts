@@ -209,12 +209,12 @@ await Promise.all([
 // Scenario 1: Single lookups with type narrowing
 console.log("\n--- Scenario 1: Single Lookups ---\n");
 
-const chain = await client.getJobChain({ id: orderChain.id, typeName: "process-order" });
-if (chain) {
-  console.log(`Chain: ${chain.typeName} (${chain.status})`);
-  console.log(`  Input: ${JSON.stringify(chain.input)}`);
-  if (chain.status === "completed") {
-    console.log(`  Output: ${JSON.stringify(chain.output)}`);
+const jobChain = await client.getJobChain({ id: orderChain.id, typeName: "process-order" });
+if (jobChain) {
+  console.log(`Chain: ${jobChain.typeName} (${jobChain.status})`);
+  console.log(`  Input: ${JSON.stringify(jobChain.input)}`);
+  if (jobChain.status === "completed") {
+    console.log(`  Output: ${JSON.stringify(jobChain.output)}`);
   }
 }
 

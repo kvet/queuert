@@ -1,11 +1,10 @@
 {
-  "name": "example-benchmark-memory-footprint",
+  "name": "benchmark-memory-footprint",
   "version": "0.0.1",
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node --expose-gc --import=tsx src/index.ts",
-    "start:all": "node --expose-gc --import=tsx src/index.ts --all",
+    "start": "node --expose-gc --import=tsx src/index.ts --all",
     "start:state-postgres": "node --expose-gc --import=tsx src/index.ts --state-postgres",
     "start:state-sqlite": "node --expose-gc --import=tsx src/index.ts --state-sqlite",
     "start:notify-redis": "node --expose-gc --import=tsx src/index.ts --notify-redis",
