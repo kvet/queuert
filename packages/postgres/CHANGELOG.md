@@ -1,5 +1,20 @@
 # @queuert/postgres
 
+## 0.5.0
+
+### Minor Changes
+
+- **Renamed core APIs for consistency**: `defineJobTypes` is now `defineJobTypeRegistry`, processor registries use `createJobTypeProcessorRegistry`, and `createInProcessWorker` accepts `processorRegistry`. `mergeJobTypeProcessors` is now `mergeJobTypeProcessorRegistries`.
+
+  **`continueWith` restricted to local types**: `continueWith` targets now validate against local job type definitions only. Blockers remain validated against the full set (local + external).
+
+  **Faster type checking**: Navigation types rewritten in tail-recursive form with precomputed maps, reducing type instantiations by up to 86% in blocker-heavy scenarios.
+
+### Patch Changes
+
+- Updated dependencies
+  - queuert@0.5.0
+
 ## 0.4.0
 
 ### Minor Changes

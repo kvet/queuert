@@ -5,6 +5,7 @@
   - Client amend
   - Job definition amend
   - Job processors amend
+- [TASK,COMPLEX] Job cleanup utility
 - [EPIC] Dashboard
   - [TASK,COMPLEX] Better UI
   - [?,REF] Filter by status in chains view
@@ -16,11 +17,9 @@
 - [TASK,EASY] Fix flaky timeout in `postgres-postgres.data.spec.ts` "handles distributed blocker jobs" (Notify suite) — intermittent `WaitChainTimeoutError`
 - [TASK] Use transactionHooks in `deleteJobChains` to buffer post-delete side effects (e.g., observability events)
 - [?,TASK] Review `allowEmptyWorker` flag in job-process.ts staged mode — currently set when `prepareTransactionContext.status === "pending"`, may be removable
-- [TASK,COMPLEX] Job cleanup utility
 - [EPIC] Docs website enhancements
   - [TASK] Add interactive examples / live demos
   - [TASK] Custom branding and styling
-- [EPIC] Prepare 0.5 release
 
 # Medium term
 

@@ -28,13 +28,14 @@ If not on `dev` or working tree is dirty, inform the user and stop.
 ls .changeset/*.md 2>/dev/null | grep -v README.md || echo "No pending changesets"
 ```
 
-3. Show commits since last release:
+3. Find the last release tag and show commits since then:
 
 ```bash
-git log main..dev --oneline
+git describe --tags --abbrev=0
+git log $(git describe --tags --abbrev=0)..dev --oneline
 ```
 
-If there are no commits, inform the user there is nothing to release.
+If there are no commits since the last tag, inform the user there is nothing to release.
 
 ### Step 2: Analyze Changes and Create Changeset
 
@@ -45,10 +46,13 @@ subagent_type: general-purpose
 description: Analyze release changes
 run_in_background: false
 prompt: |
-  Analyze all changes between main and dev branches for the Queuert monorepo release.
+  Analyze all changes since the last release tag for the Queuert monorepo.
 
-  Run: git log main..dev --oneline
-  Then for each commit, run: git show <hash> --stat and git show <hash> to understand the full change.
+  First find the last release tag: git describe --tags --abbrev=0
+  Then run: git log <last-tag>..dev --oneline
+  For each commit, run: git show <hash> --stat and git show <hash> to understand the full change.
+
+  IMPORTANT: Only analyze commits AFTER the last release tag, not all commits since main.
 
   Produce a structured report:
 
