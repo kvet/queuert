@@ -16,8 +16,12 @@ describe("createArkTypeJobTypeRegistry", () => {
   describe("getTypeNames", () => {
     it("returns all registered type names", () => {
       const registry = createArkTypeJobTypeRegistry({
-        "job-a": { entry: true, input: type({ id: "string" }) },
-        "job-b": { input: type({ count: "number" }) },
+        "job-a": {
+          entry: true,
+          input: type({ id: "string" }),
+          continueWith: type({ typeName: "'job-b'" }),
+        },
+        "job-b": { input: type({ count: "number" }), output: type({ done: "boolean" }) },
       });
 
       expect(registry.getTypeNames()).toEqual(["job-a", "job-b"]);
@@ -27,7 +31,7 @@ describe("createArkTypeJobTypeRegistry", () => {
   describe("validateEntry", () => {
     it("passes for entry types", () => {
       const registry = createArkTypeJobTypeRegistry({
-        main: { entry: true, input: type({ id: "string" }) },
+        main: { entry: true, input: type({ id: "string" }), output: type({ ok: "boolean" }) },
       });
 
       expect(() => {
@@ -37,7 +41,7 @@ describe("createArkTypeJobTypeRegistry", () => {
 
     it("throws for non-entry types", () => {
       const registry = createArkTypeJobTypeRegistry({
-        internal: { input: type({ id: "string" }) },
+        internal: { input: type({ id: "string" }), output: type({ ok: "boolean" }) },
       });
 
       expect(() => {
@@ -47,7 +51,7 @@ describe("createArkTypeJobTypeRegistry", () => {
 
     it("throws for unknown types", () => {
       const registry = createArkTypeJobTypeRegistry({
-        main: { entry: true, input: type({ id: "string" }) },
+        main: { entry: true, input: type({ id: "string" }), output: type({ ok: "boolean" }) },
       });
 
       expect(() => {
@@ -59,7 +63,11 @@ describe("createArkTypeJobTypeRegistry", () => {
   describe("parseInput", () => {
     it("returns parsed input for valid data", () => {
       const registry = createArkTypeJobTypeRegistry({
-        main: { entry: true, input: type({ id: "string", count: "number" }) },
+        main: {
+          entry: true,
+          input: type({ id: "string", count: "number" }),
+          output: type({ ok: "boolean" }),
+        },
       });
 
       const result = registry.parseInput("main", { id: "abc", count: 42 });
@@ -68,7 +76,7 @@ describe("createArkTypeJobTypeRegistry", () => {
 
     it("throws for invalid input", () => {
       const registry = createArkTypeJobTypeRegistry({
-        main: { entry: true, input: type({ id: "string" }) },
+        main: { entry: true, input: type({ id: "string" }), output: type({ ok: "boolean" }) },
       });
 
       expect(() => {
@@ -78,7 +86,11 @@ describe("createArkTypeJobTypeRegistry", () => {
 
     it("coerces types when schema allows", () => {
       const registry = createArkTypeJobTypeRegistry({
-        main: { entry: true, input: type({ count: "string.numeric.parse" }) },
+        main: {
+          entry: true,
+          input: type({ count: "string.numeric.parse" }),
+          output: type({ ok: "boolean" }),
+        },
       });
 
       const result = registry.parseInput("main", { count: "42" });
@@ -116,7 +128,12 @@ describe("createArkTypeJobTypeRegistry", () => {
 
     it("throws when output schema is not defined", () => {
       const registry = createArkTypeJobTypeRegistry({
-        main: { entry: true, input: type({ id: "string" }) },
+        main: {
+          entry: true,
+          input: type({ id: "string" }),
+          continueWith: type({ typeName: "'next'" }),
+        },
+        next: { input: type({ id: "string" }), output: type({ ok: "boolean" }) },
       });
 
       expect(() => {
@@ -155,7 +172,7 @@ describe("createArkTypeJobTypeRegistry", () => {
             input: type({ id: "string" }),
             continueWith: type({ typeName: "'step2'" }),
           },
-          step2: { input: type({ data: "unknown" }) },
+          step2: { input: type({ data: "unknown" }), output: type({ done: "boolean" }) },
         });
 
         expect(() => {
@@ -193,7 +210,10 @@ describe("createArkTypeJobTypeRegistry", () => {
             input: type({ route: "string" }),
             continueWith: type({ input: { payload: "string" } }),
           },
-          handler: { input: type({ wrongField: "string" }) },
+          handler: {
+            input: type({ payload: "string" }),
+            output: type({ handled: "boolean" }),
+          },
         });
 
         expect(() => {
@@ -247,9 +267,14 @@ describe("createArkTypeJobTypeRegistry", () => {
           main: {
             entry: true,
             input: type({ id: "string" }),
+            output: type({ done: "boolean" }),
             blockers: type({ typeName: "'auth'" }).array(),
           },
-          auth: { entry: true, input: type({ token: "string" }) },
+          auth: {
+            entry: true,
+            input: type({ token: "string" }),
+            output: type({ userId: "string" }),
+          },
         });
 
         expect(() => {
@@ -293,18 +318,59 @@ describe("createArkTypeJobTypeRegistry", () => {
           main: {
             entry: true,
             input: type({ id: "string" }),
+            output: type({ done: "boolean" }),
             blockers: type({ input: { token: "string" } }).array(),
           },
-          config: {
+          auth: {
             entry: true,
-            input: type({ key: "string" }),
+            input: type({ token: "string" }),
+            output: type({ userId: "string" }),
           },
         });
 
         expect(() => {
-          registry.validateBlockers("main", [{ typeName: "config", input: { key: "setting" } }]);
+          registry.validateBlockers("main", [{ typeName: "auth", input: { wrong: "data" } }]);
         }).toThrow(JobTypeValidationError);
       });
+    });
+
+    it("rejects blockers referencing continuation-only job type", () => {
+      // @ts-expect-error "internal" is a continuation-only type, cannot be a blocker
+      createArkTypeJobTypeRegistry({
+        start: {
+          entry: true,
+          input: type({ id: "string" }),
+          continueWith: type({ typeName: "'internal'" }),
+        },
+        internal: {
+          input: type({ data: "string" }),
+          output: type({ done: "boolean" }),
+        },
+        main: {
+          entry: true,
+          input: type({ id: "string" }),
+          output: type({ result: "number" }),
+          blockers: type({ typeName: "'internal'" }).array(),
+        },
+      });
+    });
+
+    it("allows valid blocker references", () => {
+      const registry = createArkTypeJobTypeRegistry({
+        blocker: {
+          entry: true,
+          input: type({ value: "number" }),
+          output: type({ result: "number" }),
+        },
+        main: {
+          entry: true,
+          input: type({ id: "string" }),
+          output: type({ done: "boolean" }),
+          blockers: type({ typeName: "'blocker'" }).array(),
+        },
+      });
+
+      expect(registry.getTypeNames()).toEqual(["blocker", "main"]);
     });
 
     it("throws when blockers is not defined", () => {

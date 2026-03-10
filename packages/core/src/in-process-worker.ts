@@ -180,6 +180,7 @@ export type InProcessWorker = {
 export const createInProcessWorker = async <
   TNavigationMap extends BaseNavigationMap,
   TStateAdapter extends StateAdapter<any, any>,
+  TProcessorNavigationMap extends BaseNavigationMap = TNavigationMap,
 >({
   client,
   workerId = randomUUID(),
@@ -192,10 +193,15 @@ export const createInProcessWorker = async <
   workerId?: string;
   concurrency?: number;
   backoffConfig?: BackoffConfig;
-  processDefaults?: InProcessWorkerProcessDefaults<TStateAdapter, TNavigationMap>;
-  processorRegistry: JobTypeProcessorRegistry<any, any, TNavigationMap>;
+  processDefaults?: InProcessWorkerProcessDefaults<TStateAdapter, TProcessorNavigationMap>;
+  processorRegistry: [
+    Exclude<keyof TProcessorNavigationMap & string, keyof TNavigationMap & string>,
+  ] extends [never]
+    ? JobTypeProcessorRegistry<any, any, TProcessorNavigationMap>
+    : `Error: processor registry contains job types unknown to the client: ${Exclude<keyof TProcessorNavigationMap & string, keyof TNavigationMap & string>}`;
 }): Promise<InProcessWorker> => {
-  const typeNames = Object.keys(processorRegistry);
+  const _processorRegistry = processorRegistry as JobTypeProcessorRegistry<any, any, any>;
+  const typeNames = Object.keys(_processorRegistry);
 
   const pollIntervalMs = processDefaults?.pollIntervalMs ?? 60_000;
   const defaultBackoffConfig = processDefaults?.backoffConfig ?? {
@@ -233,7 +239,7 @@ export const createInProcessWorker = async <
               const result = await performJob({
                 helpers,
                 typeNames,
-                processors: processorRegistry,
+                processors: _processorRegistry,
                 defaultBackoffConfig,
                 defaultLeaseConfig,
                 workerId,

@@ -16,8 +16,15 @@ describe("createZodJobTypeRegistry", () => {
   describe("getTypeNames", () => {
     it("returns all registered type names", () => {
       const registry = createZodJobTypeRegistry({
-        "job-a": { entry: true, input: z.object({ id: z.string() }) },
-        "job-b": { input: z.object({ count: z.number() }) },
+        "job-a": {
+          entry: true,
+          input: z.object({ id: z.string() }),
+          continueWith: z.object({ typeName: z.literal("job-b") }),
+        },
+        "job-b": {
+          input: z.object({ count: z.number() }),
+          output: z.object({ done: z.boolean() }),
+        },
       });
 
       expect(registry.getTypeNames()).toEqual(["job-a", "job-b"]);
@@ -27,7 +34,11 @@ describe("createZodJobTypeRegistry", () => {
   describe("validateEntry", () => {
     it("passes for entry types", () => {
       const registry = createZodJobTypeRegistry({
-        main: { entry: true, input: z.object({ id: z.string() }) },
+        main: {
+          entry: true,
+          input: z.object({ id: z.string() }),
+          output: z.object({ ok: z.boolean() }),
+        },
       });
 
       expect(() => {
@@ -37,7 +48,7 @@ describe("createZodJobTypeRegistry", () => {
 
     it("throws for non-entry types", () => {
       const registry = createZodJobTypeRegistry({
-        internal: { input: z.object({ id: z.string() }) },
+        internal: { input: z.object({ id: z.string() }), output: z.object({ ok: z.boolean() }) },
       });
 
       expect(() => {
@@ -47,7 +58,11 @@ describe("createZodJobTypeRegistry", () => {
 
     it("throws for unknown types", () => {
       const registry = createZodJobTypeRegistry({
-        main: { entry: true, input: z.object({ id: z.string() }) },
+        main: {
+          entry: true,
+          input: z.object({ id: z.string() }),
+          output: z.object({ ok: z.boolean() }),
+        },
       });
 
       expect(() => {
@@ -59,7 +74,11 @@ describe("createZodJobTypeRegistry", () => {
   describe("parseInput", () => {
     it("returns parsed input for valid data", () => {
       const registry = createZodJobTypeRegistry({
-        main: { entry: true, input: z.object({ id: z.string(), count: z.number() }) },
+        main: {
+          entry: true,
+          input: z.object({ id: z.string(), count: z.number() }),
+          output: z.object({ ok: z.boolean() }),
+        },
       });
 
       const result = registry.parseInput("main", { id: "abc", count: 42 });
@@ -68,7 +87,11 @@ describe("createZodJobTypeRegistry", () => {
 
     it("throws for invalid input", () => {
       const registry = createZodJobTypeRegistry({
-        main: { entry: true, input: z.object({ id: z.string() }) },
+        main: {
+          entry: true,
+          input: z.object({ id: z.string() }),
+          output: z.object({ ok: z.boolean() }),
+        },
       });
 
       expect(() => {
@@ -78,7 +101,11 @@ describe("createZodJobTypeRegistry", () => {
 
     it("coerces types when schema allows", () => {
       const registry = createZodJobTypeRegistry({
-        main: { entry: true, input: z.object({ count: z.coerce.number() }) },
+        main: {
+          entry: true,
+          input: z.object({ count: z.coerce.number() }),
+          output: z.object({ ok: z.boolean() }),
+        },
       });
 
       const result = registry.parseInput("main", { count: "42" });
@@ -116,7 +143,12 @@ describe("createZodJobTypeRegistry", () => {
 
     it("throws when output schema is not defined", () => {
       const registry = createZodJobTypeRegistry({
-        main: { entry: true, input: z.object({ id: z.string() }) },
+        main: {
+          entry: true,
+          input: z.object({ id: z.string() }),
+          continueWith: z.object({ typeName: z.literal("next") }),
+        },
+        next: { input: z.object({ id: z.string() }), output: z.object({ ok: z.boolean() }) },
       });
 
       expect(() => {
@@ -155,7 +187,10 @@ describe("createZodJobTypeRegistry", () => {
             input: z.object({ id: z.string() }),
             continueWith: z.object({ typeName: z.literal("step2") }),
           },
-          step2: { input: z.object({ data: z.unknown() }) },
+          step2: {
+            input: z.object({ data: z.unknown() }),
+            output: z.object({ done: z.boolean() }),
+          },
         });
 
         expect(() => {
@@ -193,7 +228,10 @@ describe("createZodJobTypeRegistry", () => {
             input: z.object({ route: z.string() }),
             continueWith: z.object({ input: z.object({ payload: z.string() }) }),
           },
-          handler: { input: z.object({ wrongField: z.string() }) },
+          handler: {
+            input: z.object({ payload: z.string() }),
+            output: z.object({ ok: z.boolean() }),
+          },
         });
 
         expect(() => {
@@ -247,9 +285,14 @@ describe("createZodJobTypeRegistry", () => {
           main: {
             entry: true,
             input: z.object({ id: z.string() }),
+            output: z.object({ done: z.boolean() }),
             blockers: z.array(z.object({ typeName: z.literal("auth") })),
           },
-          auth: { entry: true, input: z.object({ token: z.string() }) },
+          auth: {
+            entry: true,
+            input: z.object({ token: z.string() }),
+            output: z.object({ userId: z.string() }),
+          },
         });
 
         expect(() => {
@@ -293,18 +336,59 @@ describe("createZodJobTypeRegistry", () => {
           main: {
             entry: true,
             input: z.object({ id: z.string() }),
+            output: z.object({ done: z.boolean() }),
             blockers: z.array(z.object({ input: z.object({ token: z.string() }) })),
           },
-          config: {
+          auth: {
             entry: true,
-            input: z.object({ key: z.string() }),
+            input: z.object({ token: z.string() }),
+            output: z.object({ userId: z.string() }),
           },
         });
 
         expect(() => {
-          registry.validateBlockers("main", [{ typeName: "config", input: { key: "setting" } }]);
+          registry.validateBlockers("main", [{ typeName: "auth", input: { wrong: "data" } }]);
         }).toThrow(JobTypeValidationError);
       });
+    });
+
+    it("rejects blockers referencing continuation-only job type", () => {
+      // @ts-expect-error "internal" is a continuation-only type, cannot be a blocker
+      createZodJobTypeRegistry({
+        start: {
+          entry: true,
+          input: z.object({ id: z.string() }),
+          continueWith: z.object({ typeName: z.literal("internal") }),
+        },
+        internal: {
+          input: z.object({ data: z.string() }),
+          output: z.object({ done: z.boolean() }),
+        },
+        main: {
+          entry: true,
+          input: z.object({ id: z.string() }),
+          output: z.object({ result: z.number() }),
+          blockers: z.array(z.object({ typeName: z.literal("internal") })),
+        },
+      });
+    });
+
+    it("allows valid blocker references", () => {
+      const registry = createZodJobTypeRegistry({
+        blocker: {
+          entry: true,
+          input: z.object({ value: z.number() }),
+          output: z.object({ result: z.number() }),
+        },
+        main: {
+          entry: true,
+          input: z.object({ id: z.string() }),
+          output: z.object({ done: z.boolean() }),
+          blockers: z.array(z.object({ typeName: z.literal("blocker") })),
+        },
+      });
+
+      expect(registry.getTypeNames()).toEqual(["blocker", "main"]);
     });
 
     it("throws when blockers is not defined", () => {

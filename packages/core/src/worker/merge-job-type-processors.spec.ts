@@ -3,6 +3,7 @@ import { createClient } from "../client.js";
 import { defineJobTypeRegistry } from "../entities/define-job-type-registry.js";
 import { mergeJobTypeRegistries } from "../entities/merge-job-type-registries.js";
 import { DuplicateJobTypeError } from "../errors.js";
+import { createInProcessWorker } from "../in-process-worker.js";
 import { createInProcessStateAdapter } from "../state-adapter/state-adapter.in-process.js";
 import { type JobTypeRegistryDefinitions } from "../entities/job-type-registry.js";
 import { createJobTypeProcessorRegistry } from "./create-job-type-processor-registry.js";
@@ -379,5 +380,71 @@ describe("2-level merge (merge of merges)", () => {
     expectTypeOf<JobTypeProcessorRegistryDefinitions<typeof secondMerge>>().toHaveProperty(
       "billing.charge",
     );
+  });
+});
+
+describe("createInProcessWorker with partial processor registries", () => {
+  it("accepts a processor registry covering a single slice of the client's job types", async () => {
+    const worker = await createInProcessWorker({
+      client,
+      processorRegistry: orderProcessorRegistry,
+    });
+    const stop = await worker.start();
+    await stop();
+  });
+
+  it("accepts a processor registry covering a different single slice", async () => {
+    const worker = await createInProcessWorker({
+      client,
+      processorRegistry: notificationProcessorRegistry,
+    });
+    const stop = await worker.start();
+    await stop();
+  });
+
+  it("rejects a plain object that is not a processor registry", () => {
+    void createInProcessWorker({
+      client,
+      // @ts-expect-error — plain object is not a JobTypeProcessorRegistry
+      processorRegistry: { "orders.create": { attemptHandler: async () => {} } },
+    });
+  });
+
+  it("rejects a processor registry with job types unknown to the client", async () => {
+    const unrelatedRegistry = defineJobTypeRegistry<{
+      "unrelated.task": { entry: true; input: { x: number }; output: { y: number } };
+    }>();
+    const unrelatedClient = await createClient({
+      stateAdapter: createInProcessStateAdapter(),
+      registry: unrelatedRegistry,
+    });
+    const unrelatedProcessorRegistry = createJobTypeProcessorRegistry(
+      unrelatedClient,
+      unrelatedRegistry,
+      {
+        "unrelated.task": {
+          attemptHandler: async ({ complete }) => complete(async () => ({ y: 1 })),
+        },
+      },
+    );
+
+    void createInProcessWorker({
+      client,
+      // @ts-expect-error — processor registry contains job types not known to the client
+      processorRegistry: unrelatedProcessorRegistry,
+    });
+  });
+
+  it("still accepts a fully merged processor registry", async () => {
+    const merged = mergeJobTypeProcessorRegistries(
+      orderProcessorRegistry,
+      notificationProcessorRegistry,
+    );
+    const worker = await createInProcessWorker({
+      client,
+      processorRegistry: merged,
+    });
+    const stop = await worker.start();
+    await stop();
   });
 });

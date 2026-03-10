@@ -8,8 +8,10 @@
 
 import {
   type BaseJobTypeDefinitions,
+  type JobTypeDefinitionErrors,
   type JobTypeReference,
   type JobTypeRegistry,
+  type ValidatedJobTypeDefinitions,
   createJobTypeRegistry,
 } from "queuert";
 import { type z } from "zod";
@@ -67,7 +69,7 @@ export type ZodJobTypeSchema = {
  */
 type InferZodJobTypes<T extends Record<string, ZodJobTypeSchema>> = {
   [K in keyof T & string]: {
-    entry: T[K]["entry"] extends true ? true : false;
+    entry: T[K]["entry"] extends true ? true : undefined;
     input: z.infer<T[K]["input"]>;
     output: T[K]["output"] extends z.ZodType ? z.infer<T[K]["output"]> : undefined;
     continueWith: T[K]["continueWith"] extends z.ZodType<infer U>
@@ -109,14 +111,19 @@ type InferZodJobTypes<T extends Record<string, ZodJobTypeSchema>> = {
  * });
  */
 export const createZodJobTypeRegistry = <
-  T extends Record<string, ZodJobTypeSchema>,
+  const T extends Record<string, ZodJobTypeSchema>,
   TExternal extends BaseJobTypeDefinitions = Record<never, never>,
 >(
-  schemas: T,
+  schemas: [InferZodJobTypes<T>] extends [
+    ValidatedJobTypeDefinitions<InferZodJobTypes<T>, TExternal>,
+  ]
+    ? T
+    : JobTypeDefinitionErrors<InferZodJobTypes<T>, TExternal>,
   _externalDefinitions?: JobTypeRegistry<TExternal>,
 ) => {
+  const _schemas = schemas as Record<string, ZodJobTypeSchema>;
   const getSchema = (typeName: string): ZodJobTypeSchema => {
-    const schema = schemas[typeName];
+    const schema = _schemas[typeName];
     if (!schema) {
       throw new Error(`Unknown job type: ${typeName}`);
     }
@@ -124,7 +131,7 @@ export const createZodJobTypeRegistry = <
   };
 
   return createJobTypeRegistry<InferZodJobTypes<T>, TExternal>({
-    getTypeNames: () => Object.keys(schemas),
+    getTypeNames: () => Object.keys(_schemas),
     validateEntry: (typeName) => {
       const schema = getSchema(typeName);
       if (schema.entry !== true) {

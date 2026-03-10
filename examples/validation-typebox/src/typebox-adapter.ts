@@ -8,8 +8,10 @@
 
 import {
   type BaseJobTypeDefinitions,
+  type JobTypeDefinitionErrors,
   type JobTypeReference,
   type JobTypeRegistry,
+  type ValidatedJobTypeDefinitions,
   createJobTypeRegistry,
 } from "queuert";
 import { type Static, type TSchema } from "@sinclair/typebox";
@@ -70,7 +72,7 @@ export type TypeBoxJobTypeSchema = {
  */
 type InferTypeBoxJobTypes<T extends Record<string, TypeBoxJobTypeSchema>> = {
   [K in keyof T & string]: {
-    entry: T[K]["entry"] extends true ? true : false;
+    entry: T[K]["entry"] extends true ? true : undefined;
     input: Static<T[K]["input"]>;
     output: T[K]["output"] extends TSchema ? Static<T[K]["output"]> : undefined;
     continueWith: T[K]["continueWith"] extends TSchema
@@ -142,14 +144,19 @@ const parse = <T extends TSchema>(schema: T, data: unknown): Static<T> => {
  * });
  */
 export const createTypeBoxJobTypeRegistry = <
-  T extends Record<string, TypeBoxJobTypeSchema>,
+  const T extends Record<string, TypeBoxJobTypeSchema>,
   TExternal extends BaseJobTypeDefinitions = Record<never, never>,
 >(
-  schemas: T,
+  schemas: [InferTypeBoxJobTypes<T>] extends [
+    ValidatedJobTypeDefinitions<InferTypeBoxJobTypes<T>, TExternal>,
+  ]
+    ? T
+    : JobTypeDefinitionErrors<InferTypeBoxJobTypes<T>, TExternal>,
   _externalDefinitions?: JobTypeRegistry<TExternal>,
 ) => {
+  const _schemas = schemas as Record<string, TypeBoxJobTypeSchema>;
   const getSchema = (typeName: string): TypeBoxJobTypeSchema => {
-    const schema = schemas[typeName];
+    const schema = _schemas[typeName];
     if (!schema) {
       throw new Error(`Unknown job type: ${typeName}`);
     }
@@ -157,7 +164,7 @@ export const createTypeBoxJobTypeRegistry = <
   };
 
   return createJobTypeRegistry<InferTypeBoxJobTypes<T>, TExternal>({
-    getTypeNames: () => Object.keys(schemas),
+    getTypeNames: () => Object.keys(_schemas),
     validateEntry: (typeName) => {
       const schema = getSchema(typeName);
       if (schema.entry !== true) {

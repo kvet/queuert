@@ -108,3 +108,18 @@ export type ValidatedJobTypeDefinitions<
       [K in keyof T]: ValidateJobType<T[K], T, T & TExternal>;
     }
   : `Error: local and external definitions share overlapping keys: ${OverlappingKeys<T, TExternal> & string}`;
+
+type InvalidJobTypeKeys<
+  T extends BaseJobTypeDefinitions,
+  TExternal extends BaseJobTypeDefinitions,
+> = {
+  [K in keyof T & string]: [T[K]] extends [ValidateJobType<T[K], T, T & TExternal>] ? never : K;
+}[keyof T & string];
+
+/** Descriptive error type produced when job type definitions fail validation. Lists the invalid type names. */
+export type JobTypeDefinitionErrors<
+  T extends BaseJobTypeDefinitions,
+  TExternal extends BaseJobTypeDefinitions = Record<never, never>,
+> = [OverlappingKeys<T, TExternal>] extends [never]
+  ? `Error: invalid job type definitions. Check the following types: ${InvalidJobTypeKeys<T, TExternal>}`
+  : `Error: local and external definitions share overlapping keys: ${OverlappingKeys<T, TExternal> & string}`;

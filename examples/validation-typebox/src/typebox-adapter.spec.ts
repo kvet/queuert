@@ -16,8 +16,15 @@ describe("createTypeBoxJobTypeRegistry", () => {
   describe("getTypeNames", () => {
     it("returns all registered type names", () => {
       const registry = createTypeBoxJobTypeRegistry({
-        "job-a": { entry: true, input: Type.Object({ id: Type.String() }) },
-        "job-b": { input: Type.Object({ count: Type.Number() }) },
+        "job-a": {
+          entry: true,
+          input: Type.Object({ id: Type.String() }),
+          continueWith: Type.Object({ typeName: Type.Literal("job-b") }),
+        },
+        "job-b": {
+          input: Type.Object({ count: Type.Number() }),
+          output: Type.Object({ done: Type.Boolean() }),
+        },
       });
 
       expect(registry.getTypeNames()).toEqual(["job-a", "job-b"]);
@@ -27,7 +34,11 @@ describe("createTypeBoxJobTypeRegistry", () => {
   describe("validateEntry", () => {
     it("passes for entry types", () => {
       const registry = createTypeBoxJobTypeRegistry({
-        main: { entry: true, input: Type.Object({ id: Type.String() }) },
+        main: {
+          entry: true,
+          input: Type.Object({ id: Type.String() }),
+          output: Type.Object({ ok: Type.Boolean() }),
+        },
       });
 
       expect(() => {
@@ -37,7 +48,10 @@ describe("createTypeBoxJobTypeRegistry", () => {
 
     it("throws for non-entry types", () => {
       const registry = createTypeBoxJobTypeRegistry({
-        internal: { input: Type.Object({ id: Type.String() }) },
+        internal: {
+          input: Type.Object({ id: Type.String() }),
+          output: Type.Object({ ok: Type.Boolean() }),
+        },
       });
 
       expect(() => {
@@ -47,7 +61,11 @@ describe("createTypeBoxJobTypeRegistry", () => {
 
     it("throws for unknown types", () => {
       const registry = createTypeBoxJobTypeRegistry({
-        main: { entry: true, input: Type.Object({ id: Type.String() }) },
+        main: {
+          entry: true,
+          input: Type.Object({ id: Type.String() }),
+          output: Type.Object({ ok: Type.Boolean() }),
+        },
       });
 
       expect(() => {
@@ -59,7 +77,11 @@ describe("createTypeBoxJobTypeRegistry", () => {
   describe("parseInput", () => {
     it("returns parsed input for valid data", () => {
       const registry = createTypeBoxJobTypeRegistry({
-        main: { entry: true, input: Type.Object({ id: Type.String(), count: Type.Number() }) },
+        main: {
+          entry: true,
+          input: Type.Object({ id: Type.String(), count: Type.Number() }),
+          output: Type.Object({ ok: Type.Boolean() }),
+        },
       });
 
       const result = registry.parseInput("main", { id: "abc", count: 42 });
@@ -68,7 +90,11 @@ describe("createTypeBoxJobTypeRegistry", () => {
 
     it("throws for invalid input", () => {
       const registry = createTypeBoxJobTypeRegistry({
-        main: { entry: true, input: Type.Object({ id: Type.String() }) },
+        main: {
+          entry: true,
+          input: Type.Object({ id: Type.String() }),
+          output: Type.Object({ ok: Type.Boolean() }),
+        },
       });
 
       expect(() => {
@@ -83,6 +109,7 @@ describe("createTypeBoxJobTypeRegistry", () => {
           input: Type.Object({
             count: Type.Transform(Type.Unknown()).Decode(Number).Encode(Number),
           }),
+          output: Type.Object({ ok: Type.Boolean() }),
         },
       });
 
@@ -121,7 +148,15 @@ describe("createTypeBoxJobTypeRegistry", () => {
 
     it("throws when output schema is not defined", () => {
       const registry = createTypeBoxJobTypeRegistry({
-        main: { entry: true, input: Type.Object({ id: Type.String() }) },
+        main: {
+          entry: true,
+          input: Type.Object({ id: Type.String() }),
+          continueWith: Type.Object({ typeName: Type.Literal("next") }),
+        },
+        next: {
+          input: Type.Object({ id: Type.String() }),
+          output: Type.Object({ ok: Type.Boolean() }),
+        },
       });
 
       expect(() => {
@@ -160,7 +195,10 @@ describe("createTypeBoxJobTypeRegistry", () => {
             input: Type.Object({ id: Type.String() }),
             continueWith: Type.Object({ typeName: Type.Literal("step2") }),
           },
-          step2: { input: Type.Object({ data: Type.Unknown() }) },
+          step2: {
+            input: Type.Object({ data: Type.Unknown() }),
+            output: Type.Object({ done: Type.Boolean() }),
+          },
         });
 
         expect(() => {
@@ -198,7 +236,10 @@ describe("createTypeBoxJobTypeRegistry", () => {
             input: Type.Object({ route: Type.String() }),
             continueWith: Type.Object({ input: Type.Object({ payload: Type.String() }) }),
           },
-          handler: { input: Type.Object({ wrongField: Type.String() }) },
+          handler: {
+            input: Type.Object({ payload: Type.String() }),
+            output: Type.Object({ ok: Type.Boolean() }),
+          },
         });
 
         expect(() => {
@@ -252,9 +293,14 @@ describe("createTypeBoxJobTypeRegistry", () => {
           main: {
             entry: true,
             input: Type.Object({ id: Type.String() }),
+            output: Type.Object({ done: Type.Boolean() }),
             blockers: Type.Array(Type.Object({ typeName: Type.Literal("auth") })),
           },
-          auth: { entry: true, input: Type.Object({ token: Type.String() }) },
+          auth: {
+            entry: true,
+            input: Type.Object({ token: Type.String() }),
+            output: Type.Object({ userId: Type.String() }),
+          },
         });
 
         expect(() => {
@@ -298,18 +344,59 @@ describe("createTypeBoxJobTypeRegistry", () => {
           main: {
             entry: true,
             input: Type.Object({ id: Type.String() }),
+            output: Type.Object({ done: Type.Boolean() }),
             blockers: Type.Array(Type.Object({ input: Type.Object({ token: Type.String() }) })),
           },
-          config: {
+          auth: {
             entry: true,
-            input: Type.Object({ key: Type.String() }),
+            input: Type.Object({ token: Type.String() }),
+            output: Type.Object({ userId: Type.String() }),
           },
         });
 
         expect(() => {
-          registry.validateBlockers("main", [{ typeName: "config", input: { key: "setting" } }]);
+          registry.validateBlockers("main", [{ typeName: "auth", input: { wrong: "data" } }]);
         }).toThrow(JobTypeValidationError);
       });
+    });
+
+    it("rejects blockers referencing continuation-only job type", () => {
+      // @ts-expect-error "internal" is a continuation-only type, cannot be a blocker
+      createTypeBoxJobTypeRegistry({
+        start: {
+          entry: true,
+          input: Type.Object({ id: Type.String() }),
+          continueWith: Type.Object({ typeName: Type.Literal("internal") }),
+        },
+        internal: {
+          input: Type.Object({ data: Type.String() }),
+          output: Type.Object({ done: Type.Boolean() }),
+        },
+        main: {
+          entry: true,
+          input: Type.Object({ id: Type.String() }),
+          output: Type.Object({ result: Type.Number() }),
+          blockers: Type.Array(Type.Object({ typeName: Type.Literal("internal") })),
+        },
+      });
+    });
+
+    it("allows valid blocker references", () => {
+      const registry = createTypeBoxJobTypeRegistry({
+        blocker: {
+          entry: true,
+          input: Type.Object({ value: Type.Number() }),
+          output: Type.Object({ result: Type.Number() }),
+        },
+        main: {
+          entry: true,
+          input: Type.Object({ id: Type.String() }),
+          output: Type.Object({ done: Type.Boolean() }),
+          blockers: Type.Array(Type.Object({ typeName: Type.Literal("blocker") })),
+        },
+      });
+
+      expect(registry.getTypeNames()).toEqual(["blocker", "main"]);
     });
 
     it("throws when blockers is not defined", () => {

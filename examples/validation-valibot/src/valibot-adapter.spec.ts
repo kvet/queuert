@@ -8,16 +8,23 @@ import {
   mergeJobTypeRegistries,
 } from "queuert";
 import { createInProcessStateAdapter } from "queuert/internal";
-import { describe, expect, expectTypeOf, it } from "vitest";
 import * as v from "valibot";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { createValibotJobTypeRegistry } from "./valibot-adapter.js";
 
 describe("createValibotJobTypeRegistry", () => {
   describe("getTypeNames", () => {
     it("returns all registered type names", () => {
       const registry = createValibotJobTypeRegistry({
-        "job-a": { entry: true, input: v.object({ id: v.string() }) },
-        "job-b": { input: v.object({ count: v.number() }) },
+        "job-a": {
+          entry: true,
+          input: v.object({ id: v.string() }),
+          continueWith: v.object({ typeName: v.literal("job-b") }),
+        },
+        "job-b": {
+          input: v.object({ count: v.number() }),
+          output: v.object({ done: v.boolean() }),
+        },
       });
 
       expect(registry.getTypeNames()).toEqual(["job-a", "job-b"]);
@@ -27,7 +34,11 @@ describe("createValibotJobTypeRegistry", () => {
   describe("validateEntry", () => {
     it("passes for entry types", () => {
       const registry = createValibotJobTypeRegistry({
-        main: { entry: true, input: v.object({ id: v.string() }) },
+        main: {
+          entry: true,
+          input: v.object({ id: v.string() }),
+          output: v.object({ ok: v.boolean() }),
+        },
       });
 
       expect(() => {
@@ -37,7 +48,7 @@ describe("createValibotJobTypeRegistry", () => {
 
     it("throws for non-entry types", () => {
       const registry = createValibotJobTypeRegistry({
-        internal: { input: v.object({ id: v.string() }) },
+        internal: { input: v.object({ id: v.string() }), output: v.object({ ok: v.boolean() }) },
       });
 
       expect(() => {
@@ -47,7 +58,11 @@ describe("createValibotJobTypeRegistry", () => {
 
     it("throws for unknown types", () => {
       const registry = createValibotJobTypeRegistry({
-        main: { entry: true, input: v.object({ id: v.string() }) },
+        main: {
+          entry: true,
+          input: v.object({ id: v.string() }),
+          output: v.object({ ok: v.boolean() }),
+        },
       });
 
       expect(() => {
@@ -59,7 +74,11 @@ describe("createValibotJobTypeRegistry", () => {
   describe("parseInput", () => {
     it("returns parsed input for valid data", () => {
       const registry = createValibotJobTypeRegistry({
-        main: { entry: true, input: v.object({ id: v.string(), count: v.number() }) },
+        main: {
+          entry: true,
+          input: v.object({ id: v.string(), count: v.number() }),
+          output: v.object({ ok: v.boolean() }),
+        },
       });
 
       const result = registry.parseInput("main", { id: "abc", count: 42 });
@@ -68,7 +87,11 @@ describe("createValibotJobTypeRegistry", () => {
 
     it("throws for invalid input", () => {
       const registry = createValibotJobTypeRegistry({
-        main: { entry: true, input: v.object({ id: v.string() }) },
+        main: {
+          entry: true,
+          input: v.object({ id: v.string() }),
+          output: v.object({ ok: v.boolean() }),
+        },
       });
 
       expect(() => {
@@ -78,7 +101,11 @@ describe("createValibotJobTypeRegistry", () => {
 
     it("coerces types when schema allows", () => {
       const registry = createValibotJobTypeRegistry({
-        main: { entry: true, input: v.object({ count: v.pipe(v.unknown(), v.transform(Number)) }) },
+        main: {
+          entry: true,
+          input: v.object({ count: v.pipe(v.unknown(), v.transform(Number)) }),
+          output: v.object({ ok: v.boolean() }),
+        },
       });
 
       const result = registry.parseInput("main", { count: "42" });
@@ -116,7 +143,12 @@ describe("createValibotJobTypeRegistry", () => {
 
     it("throws when output schema is not defined", () => {
       const registry = createValibotJobTypeRegistry({
-        main: { entry: true, input: v.object({ id: v.string() }) },
+        main: {
+          entry: true,
+          input: v.object({ id: v.string() }),
+          continueWith: v.object({ typeName: v.literal("next") }),
+        },
+        next: { input: v.object({ id: v.string() }), output: v.object({ ok: v.boolean() }) },
       });
 
       expect(() => {
@@ -155,7 +187,10 @@ describe("createValibotJobTypeRegistry", () => {
             input: v.object({ id: v.string() }),
             continueWith: v.object({ typeName: v.literal("step2") }),
           },
-          step2: { input: v.object({ data: v.unknown() }) },
+          step2: {
+            input: v.object({ data: v.unknown() }),
+            output: v.object({ done: v.boolean() }),
+          },
         });
 
         expect(() => {
@@ -193,7 +228,10 @@ describe("createValibotJobTypeRegistry", () => {
             input: v.object({ route: v.string() }),
             continueWith: v.object({ input: v.object({ payload: v.string() }) }),
           },
-          handler: { input: v.object({ wrongField: v.string() }) },
+          handler: {
+            input: v.object({ payload: v.string() }),
+            output: v.object({ ok: v.boolean() }),
+          },
         });
 
         expect(() => {
@@ -247,9 +285,14 @@ describe("createValibotJobTypeRegistry", () => {
           main: {
             entry: true,
             input: v.object({ id: v.string() }),
+            output: v.object({ done: v.boolean() }),
             blockers: v.array(v.object({ typeName: v.literal("auth") })),
           },
-          auth: { entry: true, input: v.object({ token: v.string() }) },
+          auth: {
+            entry: true,
+            input: v.object({ token: v.string() }),
+            output: v.object({ userId: v.string() }),
+          },
         });
 
         expect(() => {
@@ -293,18 +336,59 @@ describe("createValibotJobTypeRegistry", () => {
           main: {
             entry: true,
             input: v.object({ id: v.string() }),
+            output: v.object({ done: v.boolean() }),
             blockers: v.array(v.object({ input: v.object({ token: v.string() }) })),
           },
-          config: {
+          auth: {
             entry: true,
-            input: v.object({ key: v.string() }),
+            input: v.object({ token: v.string() }),
+            output: v.object({ userId: v.string() }),
           },
         });
 
         expect(() => {
-          registry.validateBlockers("main", [{ typeName: "config", input: { key: "setting" } }]);
+          registry.validateBlockers("main", [{ typeName: "auth", input: { wrong: "data" } }]);
         }).toThrow(JobTypeValidationError);
       });
+    });
+
+    it("rejects blockers referencing continuation-only job type", () => {
+      // @ts-expect-error "internal" is a continuation-only type, cannot be a blocker
+      createValibotJobTypeRegistry({
+        start: {
+          entry: true,
+          input: v.object({ id: v.string() }),
+          continueWith: v.object({ typeName: v.literal("internal") }),
+        },
+        internal: {
+          input: v.object({ data: v.string() }),
+          output: v.object({ done: v.boolean() }),
+        },
+        main: {
+          entry: true,
+          input: v.object({ id: v.string() }),
+          output: v.object({ result: v.number() }),
+          blockers: v.array(v.object({ typeName: v.literal("internal") })),
+        },
+      });
+    });
+
+    it("allows valid blocker references", () => {
+      const registry = createValibotJobTypeRegistry({
+        blocker: {
+          entry: true,
+          input: v.object({ value: v.number() }),
+          output: v.object({ result: v.number() }),
+        },
+        main: {
+          entry: true,
+          input: v.object({ id: v.string() }),
+          output: v.object({ done: v.boolean() }),
+          blockers: v.array(v.object({ typeName: v.literal("blocker") })),
+        },
+      });
+
+      expect(registry.getTypeNames()).toEqual(["blocker", "main"]);
     });
 
     it("throws when blockers is not defined", () => {

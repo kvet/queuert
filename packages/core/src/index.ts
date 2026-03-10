@@ -45,7 +45,10 @@ export {
   type ResolvedJob,
   type ResolvedJobChain,
 } from "./entities/job-type-registry.resolvers.js";
-export { type ValidatedJobTypeDefinitions } from "./entities/job-type.validation.js";
+export {
+  type JobTypeDefinitionErrors,
+  type ValidatedJobTypeDefinitions,
+} from "./entities/job-type.validation.js";
 export { type Job, type JobStatus } from "./entities/job.js";
 export { mergeJobTypeRegistries } from "./entities/merge-job-type-registries.js";
 export { type ScheduleOptions } from "./entities/schedule.js";

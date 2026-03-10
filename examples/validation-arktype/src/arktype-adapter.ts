@@ -8,8 +8,10 @@
 
 import {
   type BaseJobTypeDefinitions,
+  type JobTypeDefinitionErrors,
   type JobTypeReference,
   type JobTypeRegistry,
+  type ValidatedJobTypeDefinitions,
   createJobTypeRegistry,
 } from "queuert";
 import { type Type } from "arktype";
@@ -64,7 +66,7 @@ export type ArkTypeJobTypeSchema = {
  */
 type InferArkTypeJobTypes<T extends Record<string, ArkTypeJobTypeSchema>> = {
   [K in keyof T & string]: {
-    entry: T[K]["entry"] extends true ? true : false;
+    entry: T[K]["entry"] extends true ? true : undefined;
     input: T[K]["input"]["infer"];
     output: T[K]["output"] extends Type ? T[K]["output"]["infer"] : undefined;
     continueWith: T[K]["continueWith"] extends Type<infer U>
@@ -106,14 +108,19 @@ type InferArkTypeJobTypes<T extends Record<string, ArkTypeJobTypeSchema>> = {
  * });
  */
 export const createArkTypeJobTypeRegistry = <
-  T extends Record<string, ArkTypeJobTypeSchema>,
+  const T extends Record<string, ArkTypeJobTypeSchema>,
   TExternal extends BaseJobTypeDefinitions = Record<never, never>,
 >(
-  schemas: T,
+  schemas: [InferArkTypeJobTypes<T>] extends [
+    ValidatedJobTypeDefinitions<InferArkTypeJobTypes<T>, TExternal>,
+  ]
+    ? T
+    : JobTypeDefinitionErrors<InferArkTypeJobTypes<T>, TExternal>,
   _externalDefinitions?: JobTypeRegistry<TExternal>,
 ) => {
+  const _schemas = schemas as Record<string, ArkTypeJobTypeSchema>;
   const getSchema = (typeName: string): ArkTypeJobTypeSchema => {
-    const schema = schemas[typeName];
+    const schema = _schemas[typeName];
     if (!schema) {
       throw new Error(`Unknown job type: ${typeName}`);
     }
@@ -121,7 +128,7 @@ export const createArkTypeJobTypeRegistry = <
   };
 
   return createJobTypeRegistry<InferArkTypeJobTypes<T>, TExternal>({
-    getTypeNames: () => Object.keys(schemas),
+    getTypeNames: () => Object.keys(_schemas),
     validateEntry: (typeName) => {
       const schema = getSchema(typeName);
       if (schema.entry !== true) {
