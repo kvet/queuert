@@ -2058,12 +2058,12 @@ describe("Rollback", () => {
     let createJobErrorThrown = false;
     const erroringStateAdapter: typeof stateAdapter = {
       ...stateAdapter,
-      createJob: async (args) => {
-        if (!createJobErrorThrown && args.chainIndex > 0) {
+      createJobs: async (args) => {
+        if (!createJobErrorThrown && args.jobs.some((j) => j.chainIndex > 0)) {
           createJobErrorThrown = true;
           throw new Error("simulated createJob failure");
         }
-        return stateAdapter.createJob(args);
+        return stateAdapter.createJobs(args);
       },
     };
 

@@ -185,20 +185,14 @@ console.log("Deleting a blocker chain that is still referenced is rejected.\n");
 const [fetchChains, reportChain] = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
-    const fetches = await Promise.all([
-      client.startJobChain({
-        sql: txSql,
-        transactionHooks,
-        typeName: "fetch-data",
-        input: { sourceId: "users" },
-      }),
-      client.startJobChain({
-        sql: txSql,
-        transactionHooks,
-        typeName: "fetch-data",
-        input: { sourceId: "orders" },
-      }),
-    ]);
+    const fetches = await client.startJobChains({
+      sql: txSql,
+      transactionHooks,
+      items: [
+        { typeName: "fetch-data", input: { sourceId: "users" } },
+        { typeName: "fetch-data", input: { sourceId: "orders" } },
+      ],
+    });
     const report = await client.startJobChain({
       sql: txSql,
       transactionHooks,
@@ -257,26 +251,15 @@ console.log("Cascade resolves transitive dependencies automatically.\n");
 const [_fetchChains2, reportChain2] = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
-    const fetches = await Promise.all([
-      client.startJobChain({
-        sql: txSql,
-        transactionHooks,
-        typeName: "fetch-data",
-        input: { sourceId: "products" },
-      }),
-      client.startJobChain({
-        sql: txSql,
-        transactionHooks,
-        typeName: "fetch-data",
-        input: { sourceId: "inventory" },
-      }),
-      client.startJobChain({
-        sql: txSql,
-        transactionHooks,
-        typeName: "fetch-data",
-        input: { sourceId: "pricing" },
-      }),
-    ]);
+    const fetches = await client.startJobChains({
+      sql: txSql,
+      transactionHooks,
+      items: [
+        { typeName: "fetch-data", input: { sourceId: "products" } },
+        { typeName: "fetch-data", input: { sourceId: "inventory" } },
+        { typeName: "fetch-data", input: { sourceId: "pricing" } },
+      ],
+    });
     const report = await client.startJobChain({
       sql: txSql,
       transactionHooks,

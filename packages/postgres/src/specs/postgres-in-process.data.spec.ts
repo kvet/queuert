@@ -10,6 +10,7 @@ import {
   extendWithResourceLeakDetection,
   notifyTestSuite,
   schedulingTestSuite,
+  startChainsTestSuite,
   stateResilienceTestSuite,
   waitChainCompletionTestSuite,
   workerlessCompletionTestSuite,
@@ -29,6 +30,10 @@ it("index");
 
 describe("Chains", () => {
   chainsTestSuite({ it: postgresInProcessIt });
+});
+
+describe("Start Chains", () => {
+  startChainsTestSuite({ it: postgresInProcessIt });
 });
 
 describe("Blocker Chains", () => {

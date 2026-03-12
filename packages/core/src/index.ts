@@ -1,10 +1,4 @@
-export {
-  createClient,
-  helpersSymbol,
-  type Client,
-  type CompleteJobChainResult,
-  type JobChainCompleteOptions,
-} from "./client.js";
+export { createClient, helpersSymbol, type Client } from "./client.js";
 export { type DeduplicationOptions } from "./entities/deduplication.js";
 export {
   type CompletedJobChain,

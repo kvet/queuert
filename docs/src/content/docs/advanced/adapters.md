@@ -150,7 +150,7 @@ Observability events emitted inside database transactions are buffered and only 
 
 **Buffered** -- events that represent write claims inside transactions:
 
-- **Creation**: `jobChainCreated`, `jobCreated`, `jobBlocked`, and PRODUCER span ends from `createStateJob`
+- **Creation**: `jobChainCreated`, `jobCreated`, `jobBlocked`, and PRODUCER span ends from `createStateJobs`
 - **Completion**: `jobCompleted`, `jobDuration`, `completeJobSpan` (workerless), `jobChainCompleted`, `jobChainDuration`, `completeBlockerSpan`, `jobUnblocked` from `finishJob`
 - **Worker complete**: `jobAttemptCompleted` and continuation PRODUCER span ends from the complete transaction in `job-process`
 - **Error handling**: `jobAttemptFailed` from the error-handling transaction in `job-process`
@@ -163,7 +163,7 @@ Observability events emitted inside database transactions are buffered and only 
 
 ### Self-Cleaning
 
-Both `createStateJob` and `finishJob` snapshot the observability buffer on entry and rollback on throw, ensuring partial events from a failed operation don't accumulate in the buffer.
+Both `createStateJobs` and `finishJob` snapshot the observability buffer on entry and rollback on throw, ensuring partial events from a failed operation don't accumulate in the buffer.
 
 ## See Also
 

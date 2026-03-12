@@ -167,26 +167,15 @@ console.log("Await multiple chains concurrently with Promise.all.\n");
 const chains = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
-    return Promise.all([
-      client.startJobChain({
-        sql: txSql,
-        transactionHooks,
-        typeName: "fetch-price",
-        input: { productId: "widget" },
-      }),
-      client.startJobChain({
-        sql: txSql,
-        transactionHooks,
-        typeName: "fetch-price",
-        input: { productId: "gadget" },
-      }),
-      client.startJobChain({
-        sql: txSql,
-        transactionHooks,
-        typeName: "fetch-price",
-        input: { productId: "gizmo" },
-      }),
-    ]);
+    return client.startJobChains({
+      sql: txSql,
+      transactionHooks,
+      items: [
+        { typeName: "fetch-price", input: { productId: "widget" } },
+        { typeName: "fetch-price", input: { productId: "gadget" } },
+        { typeName: "fetch-price", input: { productId: "gizmo" } },
+      ],
+    });
   }),
 );
 

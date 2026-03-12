@@ -64,31 +64,37 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
   /** Gets a job by its ID. */
   getJobById: (params: { txCtx?: TTxContext; jobId: TJobId }) => Promise<StateJob | undefined>;
 
-  /** Creates a new job. Returns the job and whether it was deduplicated. */
-  createJob: (params: {
+  /** Creates jobs. Returns results in the same order as input. */
+  createJobs: (params: {
     txCtx?: TTxContext;
-    typeName: string;
-    chainId: TJobId | undefined;
-    chainTypeName: string;
-    chainIndex: number;
-    input: unknown;
-    deduplication?: { key: string; scope?: "incomplete" | "any"; windowMs?: number };
-    schedule?: ScheduleOptions;
-    chainTraceContext?: string | null;
-    traceContext?: string | null;
-  }) => Promise<{ job: StateJob; deduplicated: boolean }>;
+    jobs: {
+      typeName: string;
+      chainId: TJobId | undefined;
+      chainTypeName: string;
+      chainIndex: number;
+      input: unknown;
+      deduplication?: { key: string; scope?: "incomplete" | "any"; windowMs?: number };
+      schedule?: ScheduleOptions;
+      chainTraceContext?: string | null;
+      traceContext?: string | null;
+    }[];
+  }) => Promise<{ job: StateJob; deduplicated: boolean }[]>;
 
-  /** Adds blocker dependencies to a job. Returns `blockerChainTraceContexts` in the same order as `blockedByChainIds`. */
-  addJobBlockers: (params: {
+  /** Adds blocker dependencies to jobs. Returns results in the same order as input. */
+  addJobsBlockers: (params: {
     txCtx?: TTxContext;
-    jobId: TJobId;
-    blockedByChainIds: TJobId[];
-    blockerTraceContexts?: (string | null)[];
-  }) => Promise<{
-    job: StateJob;
-    incompleteBlockerChainIds: string[];
-    blockerChainTraceContexts: (string | null)[];
-  }>;
+    jobBlockers: {
+      jobId: TJobId;
+      blockedByChainIds: TJobId[];
+      blockerTraceContexts?: (string | null)[];
+    }[];
+  }) => Promise<
+    {
+      job: StateJob;
+      incompleteBlockerChainIds: string[];
+      blockerChainTraceContexts: (string | null)[];
+    }[]
+  >;
 
   /** Unblocks jobs when a blocker chain completes, transitioning them from blocked to pending. */
   unblockJobs: (params: {

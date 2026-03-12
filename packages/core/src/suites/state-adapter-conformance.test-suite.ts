@@ -13,16 +13,20 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 }: {
   it: TestAPI<T>;
 }): void => {
-  describe("createJob", () => {
+  describe("createJobs", () => {
     it("generates valid job IDs", async ({ stateAdapter, validateId, expect }) => {
-      const { job } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "test-job",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "test-job",
-          input: { value: 1 },
+          jobs: [
+            {
+              typeName: "test-job",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "test-job",
+              input: { value: 1 },
+            },
+          ],
         }),
       );
 
@@ -31,14 +35,18 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("assigns chainId correctly for new jobs", async ({ stateAdapter, validateId, expect }) => {
-      const { job } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "chain-test",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "chain-test",
-          input: null,
+          jobs: [
+            {
+              typeName: "chain-test",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "chain-test",
+              input: null,
+            },
+          ],
         }),
       );
 
@@ -47,25 +55,33 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("preserves provided chainId", async ({ stateAdapter, validateId, expect }) => {
-      const { job: rootJob } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: rootJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "root-job",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "root-job",
-          input: null,
+          jobs: [
+            {
+              typeName: "root-job",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "root-job",
+              input: null,
+            },
+          ],
         }),
       );
 
-      const { job: childJob } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: childJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "child-job",
-          chainId: rootJob.chainId,
-          chainIndex: 1,
-          chainTypeName: "root-job",
-          input: null,
+          jobs: [
+            {
+              typeName: "child-job",
+              chainId: rootJob.chainId,
+              chainIndex: 1,
+              chainTypeName: "root-job",
+              input: null,
+            },
+          ],
         }),
       );
 
@@ -79,13 +95,17 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       const jobs = await stateAdapter.runInTransaction(async (txCtx) => {
         const results: StateJob[] = [];
         for (let i = 0; i < 10; i++) {
-          const { job } = await stateAdapter.createJob({
+          const [{ job }] = await stateAdapter.createJobs({
             txCtx,
-            typeName: "test-job",
-            chainId: undefined,
-            chainIndex: 0,
-            chainTypeName: "test-job",
-            input: { value: i },
+            jobs: [
+              {
+                typeName: "test-job",
+                chainId: undefined,
+                chainIndex: 0,
+                chainTypeName: "test-job",
+                input: { value: i },
+              },
+            ],
           });
           results.push(job);
         }
@@ -99,14 +119,18 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
     it("persists and retrieves jobs correctly", async ({ stateAdapter, expect }) => {
       const input = { nested: { value: 42 }, array: [1, 2, 3] };
-      const { job: created } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: created }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "test-job",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "test-job",
-          input,
+          jobs: [
+            {
+              typeName: "test-job",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "test-job",
+              input,
+            },
+          ],
         }),
       );
 
@@ -120,14 +144,18 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("handles null values correctly", async ({ stateAdapter, expect }) => {
-      const { job } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "null-test",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "null-test",
-          input: null,
+          jobs: [
+            {
+              typeName: "null-test",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "null-test",
+              input: null,
+            },
+          ],
         }),
       );
 
@@ -161,14 +189,18 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         emptyArray: [],
       };
 
-      const { job } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "json-test",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "json-test",
-          input: complexInput,
+          jobs: [
+            {
+              typeName: "json-test",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "json-test",
+              input: complexInput,
+            },
+          ],
         }),
       );
 
@@ -177,42 +209,54 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("deduplicates jobs with same deduplication key", async ({ stateAdapter, expect }) => {
-      const { job: first } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: first }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "dedup-test",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "dedup-test",
-          input: { value: 1 },
-          deduplication: { key: "same-key" },
+          jobs: [
+            {
+              typeName: "dedup-test",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "dedup-test",
+              input: { value: 1 },
+              deduplication: { key: "same-key" },
+            },
+          ],
         }),
       );
 
-      const { job: second, deduplicated } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: second, deduplicated }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "dedup-test",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "dedup-test",
-          input: { value: 2 },
-          deduplication: { key: "same-key" },
+          jobs: [
+            {
+              typeName: "dedup-test",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "dedup-test",
+              input: { value: 2 },
+              deduplication: { key: "same-key" },
+            },
+          ],
         }),
       );
 
       expect(deduplicated).toBe(true);
       expect(second.id).toBe(first.id);
 
-      const { deduplicated: notDeduped } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ deduplicated: notDeduped }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "dedup-test",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "dedup-test",
-          input: { value: 3 },
-          deduplication: { key: "different-key" },
+          jobs: [
+            {
+              typeName: "dedup-test",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "dedup-test",
+              input: { value: 3 },
+              deduplication: { key: "different-key" },
+            },
+          ],
         }),
       );
 
@@ -220,43 +264,55 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("deduplicates continuation with same chain_index", async ({ stateAdapter, expect }) => {
-      const { job: rootJob } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: rootJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "chain-root",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "chain-root",
-          input: null,
+          jobs: [
+            {
+              typeName: "chain-root",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "chain-root",
+              input: null,
+            },
+          ],
         }),
       );
 
       expect(rootJob.chainIndex).toBe(0);
 
-      const { job: continuation1, deduplicated: dedup1 } = await stateAdapter.runInTransaction(
+      const [{ job: continuation1, deduplicated: dedup1 }] = await stateAdapter.runInTransaction(
         async (txCtx) =>
-          stateAdapter.createJob({
+          stateAdapter.createJobs({
             txCtx,
-            typeName: "chain-step2",
-            chainId: rootJob.chainId,
-            chainIndex: 1,
-            chainTypeName: "chain-root",
-            input: { value: 1 },
+            jobs: [
+              {
+                typeName: "chain-step2",
+                chainId: rootJob.chainId,
+                chainIndex: 1,
+                chainTypeName: "chain-root",
+                input: { value: 1 },
+              },
+            ],
           }),
       );
 
       expect(dedup1).toBe(false);
       expect(continuation1.chainIndex).toBe(1);
 
-      const { job: continuation2, deduplicated: dedup2 } = await stateAdapter.runInTransaction(
+      const [{ job: continuation2, deduplicated: dedup2 }] = await stateAdapter.runInTransaction(
         async (txCtx) =>
-          stateAdapter.createJob({
+          stateAdapter.createJobs({
             txCtx,
-            typeName: "chain-step2",
-            chainId: rootJob.chainId,
-            chainIndex: 1,
-            chainTypeName: "chain-root",
-            input: { value: 2 },
+            jobs: [
+              {
+                typeName: "chain-step2",
+                chainId: rootJob.chainId,
+                chainIndex: 1,
+                chainTypeName: "chain-root",
+                input: { value: 2 },
+              },
+            ],
           }),
       );
 
@@ -269,36 +325,48 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       stateAdapter,
       expect,
     }) => {
-      const { job: rootJob } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: rootJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "chain-root",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "chain-root",
-          input: null,
+          jobs: [
+            {
+              typeName: "chain-root",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "chain-root",
+              input: null,
+            },
+          ],
         }),
       );
 
-      const [result1, result2] = await Promise.all([
+      const [[result1], [result2]] = await Promise.all([
         stateAdapter.runInTransaction(async (txCtx) =>
-          stateAdapter.createJob({
+          stateAdapter.createJobs({
             txCtx,
-            typeName: "chain-step2",
-            chainId: rootJob.chainId,
-            chainIndex: 1,
-            chainTypeName: "chain-root",
-            input: { from: "tx1" },
+            jobs: [
+              {
+                typeName: "chain-step2",
+                chainId: rootJob.chainId,
+                chainIndex: 1,
+                chainTypeName: "chain-root",
+                input: { from: "tx1" },
+              },
+            ],
           }),
         ),
         stateAdapter.runInTransaction(async (txCtx) =>
-          stateAdapter.createJob({
+          stateAdapter.createJobs({
             txCtx,
-            typeName: "chain-step2",
-            chainId: rootJob.chainId,
-            chainIndex: 1,
-            chainTypeName: "chain-root",
-            input: { from: "tx2" },
+            jobs: [
+              {
+                typeName: "chain-step2",
+                chainId: rootJob.chainId,
+                chainIndex: 1,
+                chainTypeName: "chain-root",
+                input: { from: "tx2" },
+              },
+            ],
           }),
         ),
       ]);
@@ -308,26 +376,34 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("assigns sequential chain_index values", async ({ stateAdapter, expect }) => {
-      const { job: rootJob } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: rootJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "t",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "t",
-          input: null,
+          jobs: [
+            {
+              typeName: "t",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "t",
+              input: null,
+            },
+          ],
         }),
       );
       expect(rootJob.chainIndex).toBe(0);
 
-      const { job: cont1 } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: cont1 }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "t2",
-          chainId: rootJob.chainId,
-          chainIndex: 1,
-          chainTypeName: "t",
-          input: null,
+          jobs: [
+            {
+              typeName: "t2",
+              chainId: rootJob.chainId,
+              chainIndex: 1,
+              chainTypeName: "t",
+              input: null,
+            },
+          ],
         }),
       );
       expect(cont1.chainIndex).toBe(1);
@@ -336,14 +412,18 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         stateAdapter.completeJob({ txCtx, jobId: cont1.id, output: null, workerId: null }),
       );
 
-      const { job: cont2 } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: cont2 }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "t3",
-          chainId: rootJob.chainId,
-          chainIndex: 2,
-          chainTypeName: "t",
-          input: null,
+          jobs: [
+            {
+              typeName: "t3",
+              chainId: rootJob.chainId,
+              chainIndex: 2,
+              chainTypeName: "t",
+              input: null,
+            },
+          ],
         }),
       );
       expect(cont2.chainIndex).toBe(2);
@@ -353,15 +433,19 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       stateAdapter,
       expect,
     }) => {
-      const { job: first } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: first }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "scope-test",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "scope-test",
-          input: null,
-          deduplication: { key: "scope-key", scope: "incomplete" },
+          jobs: [
+            {
+              typeName: "scope-test",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "scope-test",
+              input: null,
+              deduplication: { key: "scope-key", scope: "incomplete" },
+            },
+          ],
         }),
       );
 
@@ -374,30 +458,38 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const { deduplicated: incompleteDeduped } = await stateAdapter.runInTransaction(
+      const [{ deduplicated: incompleteDeduped }] = await stateAdapter.runInTransaction(
         async (txCtx) =>
-          stateAdapter.createJob({
+          stateAdapter.createJobs({
             txCtx,
-            typeName: "scope-test",
-            chainId: undefined,
-            chainIndex: 0,
-            chainTypeName: "scope-test",
-            input: null,
-            deduplication: { key: "scope-key", scope: "incomplete" },
+            jobs: [
+              {
+                typeName: "scope-test",
+                chainId: undefined,
+                chainIndex: 0,
+                chainTypeName: "scope-test",
+                input: null,
+                deduplication: { key: "scope-key", scope: "incomplete" },
+              },
+            ],
           }),
       );
 
       expect(incompleteDeduped).toBe(false);
 
-      const { job: anyFirst } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: anyFirst }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "scope-test-any",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "scope-test-any",
-          input: null,
-          deduplication: { key: "any-key", scope: "any" },
+          jobs: [
+            {
+              typeName: "scope-test-any",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "scope-test-any",
+              input: null,
+              deduplication: { key: "any-key", scope: "any" },
+            },
+          ],
         }),
       );
 
@@ -410,15 +502,19 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const { deduplicated: anyDeduped } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ deduplicated: anyDeduped }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "scope-test-any",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "scope-test-any",
-          input: null,
-          deduplication: { key: "any-key", scope: "any" },
+          jobs: [
+            {
+              typeName: "scope-test-any",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "scope-test-any",
+              input: null,
+              deduplication: { key: "any-key", scope: "any" },
+            },
+          ],
         }),
       );
 
@@ -427,15 +523,19 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
     it("creates job with schedule options", async ({ stateAdapter, expect }) => {
       const before = Date.now();
-      const { job: afterMsJob } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: afterMsJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "schedule-test",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "schedule-test",
-          input: null,
-          schedule: { afterMs: 5000 },
+          jobs: [
+            {
+              typeName: "schedule-test",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "schedule-test",
+              input: null,
+              schedule: { afterMs: 5000 },
+            },
+          ],
         }),
       );
 
@@ -444,15 +544,19 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       expect(afterMsDiff).toBeLessThan(6000);
 
       const futureDate = new Date(Date.now() + 60_000);
-      const { job: atJob } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: atJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "schedule-test-at",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "schedule-test-at",
-          input: null,
-          schedule: { at: futureDate },
+          jobs: [
+            {
+              typeName: "schedule-test-at",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "schedule-test-at",
+              input: null,
+              schedule: { at: futureDate },
+            },
+          ],
         }),
       );
 
@@ -465,16 +569,20 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     }) => {
       const chainTraceContext = "00-abc123-chain111-01";
       const traceContext = "00-abc123-job222-01";
-      const { job } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "trace-test",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "trace-test",
-          input: null,
-          chainTraceContext,
-          traceContext,
+          jobs: [
+            {
+              typeName: "trace-test",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "trace-test",
+              input: null,
+              chainTraceContext,
+              traceContext,
+            },
+          ],
         }),
       );
 
@@ -484,14 +592,18 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("stores and retrieves dates correctly", async ({ stateAdapter, expect }) => {
-      const { job } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "date-test",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "date-test",
-          input: null,
+          jobs: [
+            {
+              typeName: "date-test",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "date-test",
+              input: null,
+            },
+          ],
         }),
       );
 
@@ -501,31 +613,203 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       const timeDiff = Math.abs(Date.now() - job.createdAt.getTime());
       expect(timeDiff).toBeLessThan(5000);
     });
+
+    it("creates multiple jobs in a single batch", async ({ stateAdapter, validateId, expect }) => {
+      const results = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
+          txCtx,
+          jobs: [
+            {
+              typeName: "batch-a",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "batch-a",
+              input: { value: 1 },
+            },
+            {
+              typeName: "batch-b",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "batch-b",
+              input: { value: 2 },
+            },
+            {
+              typeName: "batch-c",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "batch-c",
+              input: { value: 3 },
+            },
+          ],
+        }),
+      );
+
+      expect(results).toHaveLength(3);
+      for (const result of results) {
+        expect(result.deduplicated).toBe(false);
+        expect(validateId(result.job.id)).toBe(true);
+        expect(result.job.status).toBe("pending");
+        expect(result.job.chainId).toBe(result.job.id);
+      }
+      expect(results[0].job.typeName).toBe("batch-a");
+      expect(results[1].job.typeName).toBe("batch-b");
+      expect(results[2].job.typeName).toBe("batch-c");
+      expect(results[0].job.input).toEqual({ value: 1 });
+      expect(results[1].job.input).toEqual({ value: 2 });
+      expect(results[2].job.input).toEqual({ value: 3 });
+    });
+
+    it("handles per-row deduplication in a batch", async ({ stateAdapter, expect }) => {
+      const [{ job: existingJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
+          txCtx,
+          jobs: [
+            {
+              typeName: "dedup-test",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "dedup-test",
+              input: { value: "existing" },
+              deduplication: { key: "dup-key-1" },
+            },
+          ],
+        }),
+      );
+
+      const results = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
+          txCtx,
+          jobs: [
+            {
+              typeName: "dedup-test",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "dedup-test",
+              input: { value: "new-1" },
+              deduplication: { key: "dup-key-1" },
+            },
+            {
+              typeName: "dedup-test",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "dedup-test",
+              input: { value: "new-2" },
+              deduplication: { key: "dup-key-unique" },
+            },
+          ],
+        }),
+      );
+
+      expect(results).toHaveLength(2);
+      expect(results[0].deduplicated).toBe(true);
+      expect(results[0].job.id).toBe(existingJob.id);
+      expect(results[1].deduplicated).toBe(false);
+      expect(results[1].job.id).not.toBe(existingJob.id);
+    });
+
+    it("handles per-row continuation deduplication in a batch", async ({
+      stateAdapter,
+      expect,
+    }) => {
+      const [{ job: rootJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
+          txCtx,
+          jobs: [
+            {
+              typeName: "root",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "root",
+              input: null,
+            },
+          ],
+        }),
+      );
+
+      const [{ job: existingContinuation }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
+          txCtx,
+          jobs: [
+            {
+              typeName: "step",
+              chainId: rootJob.chainId,
+              chainIndex: 1,
+              chainTypeName: "root",
+              input: { value: "first" },
+            },
+          ],
+        }),
+      );
+
+      const results = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
+          txCtx,
+          jobs: [
+            {
+              typeName: "step",
+              chainId: rootJob.chainId,
+              chainIndex: 1,
+              chainTypeName: "root",
+              input: { value: "duplicate" },
+            },
+            {
+              typeName: "step",
+              chainId: rootJob.chainId,
+              chainIndex: 2,
+              chainTypeName: "root",
+              input: { value: "new" },
+            },
+          ],
+        }),
+      );
+
+      expect(results).toHaveLength(2);
+      expect(results[0].deduplicated).toBe(true);
+      expect(results[0].job.id).toBe(existingContinuation.id);
+      expect(results[1].deduplicated).toBe(false);
+      expect(results[1].job.chainIndex).toBe(2);
+    });
+
+    it("returns empty array for empty input", async ({ stateAdapter, expect }) => {
+      const results = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({ txCtx, jobs: [] }),
+      );
+
+      expect(results).toEqual([]);
+    });
   });
 
   describe("runInTransaction", () => {
     it("maintains transaction isolation", async ({ stateAdapter, expect }) => {
-      const { job } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "isolation-test",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "isolation-test",
-          input: { value: "original" },
+          jobs: [
+            {
+              typeName: "isolation-test",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "isolation-test",
+              input: { value: "original" },
+            },
+          ],
         }),
       );
 
       let rolledBackJobId: string | undefined;
       try {
         await stateAdapter.runInTransaction(async (txCtx) => {
-          const { job: innerJob } = await stateAdapter.createJob({
+          const [{ job: innerJob }] = await stateAdapter.createJobs({
             txCtx,
-            typeName: "rollback-test",
-            chainId: undefined,
-            chainIndex: 0,
-            chainTypeName: "rollback-test",
-            input: { value: "should-rollback" },
+            jobs: [
+              {
+                typeName: "rollback-test",
+                chainId: undefined,
+                chainIndex: 0,
+                chainTypeName: "rollback-test",
+                input: { value: "should-rollback" },
+              },
+            ],
           });
           rolledBackJobId = innerJob.id;
           throw new Error("Intentional rollback");
@@ -546,14 +830,18 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
   describe("getJobChainById", () => {
     it("handles job chain relationships correctly", async ({ stateAdapter, expect }) => {
-      const { job: rootJob } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: rootJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "chain-root",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "chain-root",
-          input: { step: 1 },
+          jobs: [
+            {
+              typeName: "chain-root",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "chain-root",
+              input: { step: 1 },
+            },
+          ],
         }),
       );
 
@@ -565,25 +853,33 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("returns [rootJob, lastJob] for multi-job chain", async ({ stateAdapter, expect }) => {
-      const { job: rootJob } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: rootJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "chain-root",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "chain-root",
-          input: null,
+          jobs: [
+            {
+              typeName: "chain-root",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "chain-root",
+              input: null,
+            },
+          ],
         }),
       );
 
-      const { job: continuation } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: continuation }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "chain-step2",
-          chainId: rootJob.chainId,
-          chainIndex: 1,
-          chainTypeName: "chain-root",
-          input: null,
+          jobs: [
+            {
+              typeName: "chain-step2",
+              chainId: rootJob.chainId,
+              chainIndex: 1,
+              chainTypeName: "chain-root",
+              input: null,
+            },
+          ],
         }),
       );
 
@@ -595,44 +891,48 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
   });
 
-  describe("addJobBlockers", () => {
+  describe("addJobsBlockers", () => {
     it("adds blockers and returns incomplete blocker chain IDs", async ({
       stateAdapter,
       expect,
     }) => {
-      const { job: blockerJob } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: blockerJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "blocker",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "blocker",
-          input: null,
+          jobs: [
+            {
+              typeName: "blocker",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "blocker",
+              input: null,
+            },
+          ],
         }),
       );
 
-      const { job: mainJob } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: mainJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "main",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "main",
-          input: null,
+          jobs: [
+            {
+              typeName: "main",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "main",
+              input: null,
+            },
+          ],
         }),
       );
 
-      const {
-        job: updatedMain,
-        incompleteBlockerChainIds,
-        blockerChainTraceContexts,
-      } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.addJobBlockers({
-          txCtx,
-          jobId: mainJob.id,
-          blockedByChainIds: [blockerJob.chainId],
-        }),
-      );
+      const [{ job: updatedMain, incompleteBlockerChainIds, blockerChainTraceContexts }] =
+        await stateAdapter.runInTransaction(async (txCtx) =>
+          stateAdapter.addJobsBlockers({
+            txCtx,
+            jobBlockers: [{ jobId: mainJob.id, blockedByChainIds: [blockerJob.chainId] }],
+          }),
+        );
 
       expect(updatedMain.status).toBe("blocked");
       expect(incompleteBlockerChainIds).toContain(blockerJob.chainId);
@@ -644,14 +944,18 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       stateAdapter,
       expect,
     }) => {
-      const { job: blockerJob } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: blockerJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "blocker",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "blocker",
-          input: null,
+          jobs: [
+            {
+              typeName: "blocker",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "blocker",
+              input: null,
+            },
+          ],
         }),
       );
 
@@ -664,65 +968,220 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const { job: mainJob } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: mainJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "main",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "main",
-          input: null,
+          jobs: [
+            {
+              typeName: "main",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "main",
+              input: null,
+            },
+          ],
         }),
       );
 
-      const {
-        job: updatedMain,
-        incompleteBlockerChainIds,
-        blockerChainTraceContexts,
-      } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.addJobBlockers({
-          txCtx,
-          jobId: mainJob.id,
-          blockedByChainIds: [blockerJob.chainId],
-        }),
-      );
+      const [{ job: updatedMain, incompleteBlockerChainIds, blockerChainTraceContexts }] =
+        await stateAdapter.runInTransaction(async (txCtx) =>
+          stateAdapter.addJobsBlockers({
+            txCtx,
+            jobBlockers: [{ jobId: mainJob.id, blockedByChainIds: [blockerJob.chainId] }],
+          }),
+        );
 
       expect(updatedMain.status).toBe("pending");
       expect(incompleteBlockerChainIds).toHaveLength(0);
       expect(blockerChainTraceContexts).toHaveLength(1);
       expect(blockerChainTraceContexts[0]).toBeNull();
     });
+
+    it("adds blockers to multiple jobs in a single batch", async ({ stateAdapter, expect }) => {
+      const [{ job: blocker1 }, { job: blocker2 }] = await stateAdapter.runInTransaction(
+        async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                typeName: "blocker",
+                chainId: undefined,
+                chainIndex: 0,
+                chainTypeName: "blocker",
+                input: null,
+              },
+              {
+                typeName: "blocker",
+                chainId: undefined,
+                chainIndex: 0,
+                chainTypeName: "blocker",
+                input: null,
+              },
+            ],
+          }),
+      );
+
+      const [{ job: main1 }, { job: main2 }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
+          txCtx,
+          jobs: [
+            {
+              typeName: "main",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "main",
+              input: null,
+            },
+            {
+              typeName: "main",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "main",
+              input: null,
+            },
+          ],
+        }),
+      );
+
+      const results = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.addJobsBlockers({
+          txCtx,
+          jobBlockers: [
+            { jobId: main1.id, blockedByChainIds: [blocker1.chainId] },
+            { jobId: main2.id, blockedByChainIds: [blocker1.chainId, blocker2.chainId] },
+          ],
+        }),
+      );
+
+      expect(results).toHaveLength(2);
+      expect(results[0].job.id).toBe(main1.id);
+      expect(results[0].job.status).toBe("blocked");
+      expect(results[0].incompleteBlockerChainIds).toContain(blocker1.chainId);
+
+      expect(results[1].job.id).toBe(main2.id);
+      expect(results[1].job.status).toBe("blocked");
+      expect(results[1].incompleteBlockerChainIds).toContain(blocker1.chainId);
+      expect(results[1].incompleteBlockerChainIds).toContain(blocker2.chainId);
+    });
+
+    it("batch handles mix of blocked and unblocked jobs", async ({ stateAdapter, expect }) => {
+      const [{ job: completedBlocker }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
+          txCtx,
+          jobs: [
+            {
+              typeName: "blocker",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "blocker",
+              input: null,
+            },
+          ],
+        }),
+      );
+      await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.completeJob({
+          txCtx,
+          jobId: completedBlocker.id,
+          output: null,
+          workerId: "test",
+        }),
+      );
+
+      const [{ job: incompleteBlocker }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
+          txCtx,
+          jobs: [
+            {
+              typeName: "blocker",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "blocker",
+              input: null,
+            },
+          ],
+        }),
+      );
+
+      const [{ job: main1 }, { job: main2 }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
+          txCtx,
+          jobs: [
+            {
+              typeName: "main",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "main",
+              input: null,
+            },
+            {
+              typeName: "main",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "main",
+              input: null,
+            },
+          ],
+        }),
+      );
+
+      const results = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.addJobsBlockers({
+          txCtx,
+          jobBlockers: [
+            { jobId: main1.id, blockedByChainIds: [completedBlocker.chainId] },
+            { jobId: main2.id, blockedByChainIds: [incompleteBlocker.chainId] },
+          ],
+        }),
+      );
+
+      expect(results).toHaveLength(2);
+      expect(results[0].job.id).toBe(main1.id);
+      expect(results[0].job.status).toBe("pending");
+      expect(results[0].incompleteBlockerChainIds).toHaveLength(0);
+
+      expect(results[1].job.id).toBe(main2.id);
+      expect(results[1].job.status).toBe("blocked");
+      expect(results[1].incompleteBlockerChainIds).toContain(incompleteBlocker.chainId);
+    });
   });
 
   describe("unblockJobs", () => {
     it("schedules blocked jobs when all blockers complete", async ({ stateAdapter, expect }) => {
-      const { job: blockerJob } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: blockerJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "blocker",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "blocker",
-          input: null,
+          jobs: [
+            {
+              typeName: "blocker",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "blocker",
+              input: null,
+            },
+          ],
         }),
       );
 
-      const { job: mainJob } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: mainJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "main",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "main",
-          input: null,
+          jobs: [
+            {
+              typeName: "main",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "main",
+              input: null,
+            },
+          ],
         }),
       );
 
       await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.addJobBlockers({
+        stateAdapter.addJobsBlockers({
           txCtx,
-          jobId: mainJob.id,
-          blockedByChainIds: [blockerJob.chainId],
+          jobBlockers: [{ jobId: mainJob.id, blockedByChainIds: [blockerJob.chainId] }],
         }),
       );
 
@@ -751,44 +1210,57 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       stateAdapter,
       expect,
     }) => {
-      const { job: blockerA } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: blockerA }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "blocker",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "blocker",
-          input: null,
+          jobs: [
+            {
+              typeName: "blocker",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "blocker",
+              input: null,
+            },
+          ],
         }),
       );
 
-      const { job: blockerB } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: blockerB }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "blocker",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "blocker",
-          input: null,
+          jobs: [
+            {
+              typeName: "blocker",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "blocker",
+              input: null,
+            },
+          ],
         }),
       );
 
-      const { job: mainJob } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: mainJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "main",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "main",
-          input: null,
+          jobs: [
+            {
+              typeName: "main",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "main",
+              input: null,
+            },
+          ],
         }),
       );
 
       await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.addJobBlockers({
+        stateAdapter.addJobsBlockers({
           txCtx,
-          jobId: mainJob.id,
-          blockedByChainIds: [blockerA.chainId, blockerB.chainId],
+          jobBlockers: [
+            { jobId: mainJob.id, blockedByChainIds: [blockerA.chainId, blockerB.chainId] },
+          ],
         }),
       );
 
@@ -818,14 +1290,18 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       stateAdapter,
       expect,
     }) => {
-      const { job } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "standalone",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "standalone",
-          input: null,
+          jobs: [
+            {
+              typeName: "standalone",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "standalone",
+              input: null,
+            },
+          ],
         }),
       );
 
@@ -843,36 +1319,48 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       stateAdapter,
       expect,
     }) => {
-      const { job: blockerJob } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: blockerJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "blocker",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "blocker",
-          input: null,
+          jobs: [
+            {
+              typeName: "blocker",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "blocker",
+              input: null,
+            },
+          ],
         }),
       );
 
-      const { job: mainJob } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: mainJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "main",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "main",
-          input: null,
+          jobs: [
+            {
+              typeName: "main",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "main",
+              input: null,
+            },
+          ],
         }),
       );
 
       const traceContext = "00-test-span-123-01";
 
       await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.addJobBlockers({
+        stateAdapter.addJobsBlockers({
           txCtx,
-          jobId: mainJob.id,
-          blockedByChainIds: [blockerJob.chainId],
-          blockerTraceContexts: [traceContext],
+          jobBlockers: [
+            {
+              jobId: mainJob.id,
+              blockedByChainIds: [blockerJob.chainId],
+              blockerTraceContexts: [traceContext],
+            },
+          ],
         }),
       );
 
@@ -891,14 +1379,18 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       stateAdapter,
       expect,
     }) => {
-      const { job } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "standalone",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "standalone",
-          input: null,
+          jobs: [
+            {
+              typeName: "standalone",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "standalone",
+              input: null,
+            },
+          ],
         }),
       );
 
@@ -916,33 +1408,40 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       stateAdapter,
       expect,
     }) => {
-      const { job: blockerJob } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: blockerJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "blocker",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "blocker",
-          input: null,
+          jobs: [
+            {
+              typeName: "blocker",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "blocker",
+              input: null,
+            },
+          ],
         }),
       );
 
-      const { job: mainJob } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: mainJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "main",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "main",
-          input: null,
+          jobs: [
+            {
+              typeName: "main",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "main",
+              input: null,
+            },
+          ],
         }),
       );
 
       await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.addJobBlockers({
+        stateAdapter.addJobsBlockers({
           txCtx,
-          jobId: mainJob.id,
-          blockedByChainIds: [blockerJob.chainId],
+          jobBlockers: [{ jobId: mainJob.id, blockedByChainIds: [blockerJob.chainId] }],
         }),
       );
 
@@ -963,34 +1462,41 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       expect,
     }) => {
       const blockerChainTraceContext = "00-test123-chain456-01";
-      const { job: blockerJob } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: blockerJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "blocker",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "blocker",
-          input: null,
-          chainTraceContext: blockerChainTraceContext,
+          jobs: [
+            {
+              typeName: "blocker",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "blocker",
+              input: null,
+              chainTraceContext: blockerChainTraceContext,
+            },
+          ],
         }),
       );
 
-      const { job: mainJob } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: mainJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "main",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "main",
-          input: null,
+          jobs: [
+            {
+              typeName: "main",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "main",
+              input: null,
+            },
+          ],
         }),
       );
 
-      const { blockerChainTraceContexts } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.addJobBlockers({
+      const [{ blockerChainTraceContexts }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.addJobsBlockers({
           txCtx,
-          jobId: mainJob.id,
-          blockedByChainIds: [blockerJob.chainId],
+          jobBlockers: [{ jobId: mainJob.id, blockedByChainIds: [blockerJob.chainId] }],
         }),
       );
 
@@ -1005,46 +1511,59 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       const chainTraceA = "00-aaa111-chain-aaa-01";
       const chainTraceB = "00-bbb222-chain-bbb-01";
 
-      const { job: blockerA } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: blockerA }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "blockerA",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "blockerA",
-          input: null,
-          chainTraceContext: chainTraceA,
+          jobs: [
+            {
+              typeName: "blockerA",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "blockerA",
+              input: null,
+              chainTraceContext: chainTraceA,
+            },
+          ],
         }),
       );
 
-      const { job: blockerB } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: blockerB }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "blockerB",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "blockerB",
-          input: null,
-          chainTraceContext: chainTraceB,
+          jobs: [
+            {
+              typeName: "blockerB",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "blockerB",
+              input: null,
+              chainTraceContext: chainTraceB,
+            },
+          ],
         }),
       );
 
-      const { job: mainJob } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: mainJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "main",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "main",
-          input: null,
+          jobs: [
+            {
+              typeName: "main",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "main",
+              input: null,
+            },
+          ],
         }),
       );
 
-      const { blockerChainTraceContexts } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.addJobBlockers({
+      const [{ blockerChainTraceContexts }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.addJobsBlockers({
           txCtx,
-          jobId: mainJob.id,
-          blockedByChainIds: [blockerA.chainId, blockerB.chainId],
+          jobBlockers: [
+            { jobId: mainJob.id, blockedByChainIds: [blockerA.chainId, blockerB.chainId] },
+          ],
         }),
       );
 
@@ -1056,44 +1575,57 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
   describe("getJobBlockers", () => {
     it("returns blocker chain pairs for a job", async ({ stateAdapter, expect }) => {
-      const { job: blockerA } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: blockerA }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "blocker",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "blocker",
-          input: null,
+          jobs: [
+            {
+              typeName: "blocker",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "blocker",
+              input: null,
+            },
+          ],
         }),
       );
 
-      const { job: blockerB } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: blockerB }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "blocker",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "blocker",
-          input: null,
+          jobs: [
+            {
+              typeName: "blocker",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "blocker",
+              input: null,
+            },
+          ],
         }),
       );
 
-      const { job: mainJob } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: mainJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "main",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "main",
-          input: null,
+          jobs: [
+            {
+              typeName: "main",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "main",
+              input: null,
+            },
+          ],
         }),
       );
 
       await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.addJobBlockers({
+        stateAdapter.addJobsBlockers({
           txCtx,
-          jobId: mainJob.id,
-          blockedByChainIds: [blockerA.chainId, blockerB.chainId],
+          jobBlockers: [
+            { jobId: mainJob.id, blockedByChainIds: [blockerA.chainId, blockerB.chainId] },
+          ],
         }),
       );
 
@@ -1115,14 +1647,18 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       stateAdapter,
       expect,
     }) => {
-      const { job: blockerRoot } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: blockerRoot }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "blocker-root",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "blocker-root",
-          input: null,
+          jobs: [
+            {
+              typeName: "blocker-root",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "blocker-root",
+              input: null,
+            },
+          ],
         }),
       );
 
@@ -1135,33 +1671,40 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const { job: blockerContinuation } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: blockerContinuation }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "blocker-step2",
-          chainId: blockerRoot.chainId,
-          chainIndex: 1,
-          chainTypeName: "blocker-root",
-          input: null,
+          jobs: [
+            {
+              typeName: "blocker-step2",
+              chainId: blockerRoot.chainId,
+              chainIndex: 1,
+              chainTypeName: "blocker-root",
+              input: null,
+            },
+          ],
         }),
       );
 
-      const { job: mainJob } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: mainJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "main",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "main",
-          input: null,
+          jobs: [
+            {
+              typeName: "main",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "main",
+              input: null,
+            },
+          ],
         }),
       );
 
       await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.addJobBlockers({
+        stateAdapter.addJobsBlockers({
           txCtx,
-          jobId: mainJob.id,
-          blockedByChainIds: [blockerRoot.chainId],
+          jobBlockers: [{ jobId: mainJob.id, blockedByChainIds: [blockerRoot.chainId] }],
         }),
       );
 
@@ -1175,14 +1718,18 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("returns empty array for job with no blockers", async ({ stateAdapter, expect }) => {
-      const { job } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "no-blockers",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "no-blockers",
-          input: null,
+          jobs: [
+            {
+              typeName: "no-blockers",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "no-blockers",
+              input: null,
+            },
+          ],
         }),
       );
 
@@ -1194,13 +1741,17 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
   describe("getNextJobAvailableInMs", () => {
     it("returns 0 for immediately available pending job", async ({ stateAdapter, expect }) => {
       await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "avail-test",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "avail-test",
-          input: null,
+          jobs: [
+            {
+              typeName: "avail-test",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "avail-test",
+              input: null,
+            },
+          ],
         }),
       );
 
@@ -1210,14 +1761,18 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
     it("returns milliseconds until next scheduled job", async ({ stateAdapter, expect }) => {
       await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "future-test",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "future-test",
-          input: null,
-          schedule: { afterMs: 5000 },
+          jobs: [
+            {
+              typeName: "future-test",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "future-test",
+              input: null,
+              schedule: { afterMs: 5000 },
+            },
+          ],
         }),
       );
 
@@ -1239,24 +1794,32 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
   describe("acquireJob", () => {
     it("acquires oldest eligible pending job", async ({ stateAdapter, expect }) => {
       await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "acquire-test",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "acquire-test",
-          input: { order: 1 },
+          jobs: [
+            {
+              typeName: "acquire-test",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "acquire-test",
+              input: { order: 1 },
+            },
+          ],
         }),
       );
 
       await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "acquire-test",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "acquire-test",
-          input: { order: 2 },
+          jobs: [
+            {
+              typeName: "acquire-test",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "acquire-test",
+              input: { order: 2 },
+            },
+          ],
         }),
       );
 
@@ -1272,24 +1835,32 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
     it("returns hasMore when additional eligible jobs exist", async ({ stateAdapter, expect }) => {
       await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "hasmore-test",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "hasmore-test",
-          input: null,
+          jobs: [
+            {
+              typeName: "hasmore-test",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "hasmore-test",
+              input: null,
+            },
+          ],
         }),
       );
 
       await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "hasmore-test",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "hasmore-test",
-          input: null,
+          jobs: [
+            {
+              typeName: "hasmore-test",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "hasmore-test",
+              input: null,
+            },
+          ],
         }),
       );
 
@@ -1316,14 +1887,18 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
     it("does not acquire jobs scheduled in the future", async ({ stateAdapter, expect }) => {
       await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "future-acquire",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "future-acquire",
-          input: null,
-          schedule: { afterMs: 60_000 },
+          jobs: [
+            {
+              typeName: "future-acquire",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "future-acquire",
+              input: null,
+              schedule: { afterMs: 60_000 },
+            },
+          ],
         }),
       );
 
@@ -1337,14 +1912,18 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
   describe("renewJobLease", () => {
     it("renews lease on a running job", async ({ stateAdapter, expect }) => {
-      const { job: created } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: created }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "lease-test",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "lease-test",
-          input: null,
+          jobs: [
+            {
+              typeName: "lease-test",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "lease-test",
+              input: null,
+            },
+          ],
         }),
       );
 
@@ -1370,14 +1949,18 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("updates leasedUntil on subsequent renewals", async ({ stateAdapter, expect }) => {
-      const { job: created } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: created }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "re-lease-test",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "re-lease-test",
-          input: null,
+          jobs: [
+            {
+              typeName: "re-lease-test",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "re-lease-test",
+              input: null,
+            },
+          ],
         }),
       );
 
@@ -1409,14 +1992,18 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
   describe("rescheduleJob", () => {
     it("reschedules a running job to pending with afterMs", async ({ stateAdapter, expect }) => {
-      const { job: created } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: created }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "resched-test",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "resched-test",
-          input: null,
+          jobs: [
+            {
+              typeName: "resched-test",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "resched-test",
+              input: null,
+            },
+          ],
         }),
       );
 
@@ -1455,14 +2042,18 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       stateAdapter,
       expect,
     }) => {
-      const { job: created } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: created }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "resched-at-test",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "resched-at-test",
-          input: null,
+          jobs: [
+            {
+              typeName: "resched-at-test",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "resched-at-test",
+              input: null,
+            },
+          ],
         }),
       );
 
@@ -1487,14 +2078,18 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
   describe("completeJob", () => {
     it("completes a job with output", async ({ stateAdapter, expect }) => {
-      const { job: created } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: created }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "complete-test",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "complete-test",
-          input: { value: 1 },
+          jobs: [
+            {
+              typeName: "complete-test",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "complete-test",
+              input: { value: 1 },
+            },
+          ],
         }),
       );
 
@@ -1529,14 +2124,18 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("completes a job with null workerId (workerless)", async ({ stateAdapter, expect }) => {
-      const { job: created } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: created }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "workerless-test",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "workerless-test",
-          input: null,
+          jobs: [
+            {
+              typeName: "workerless-test",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "workerless-test",
+              input: null,
+            },
+          ],
         }),
       );
 
@@ -1556,14 +2155,18 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
   describe("reapExpiredJobLease", () => {
     it("removes expired lease and resets job to pending", async ({ stateAdapter, expect }) => {
-      const { job: created } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: created }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "expire-test",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "expire-test",
-          input: null,
+          jobs: [
+            {
+              typeName: "expire-test",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "expire-test",
+              input: null,
+            },
+          ],
         }),
       );
 
@@ -1594,14 +2197,18 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("returns undefined when no expired leases exist", async ({ stateAdapter, expect }) => {
-      const { job: created } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: created }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "no-expire-test",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "no-expire-test",
-          input: null,
+          jobs: [
+            {
+              typeName: "no-expire-test",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "no-expire-test",
+              input: null,
+            },
+          ],
         }),
       );
 
@@ -1626,25 +2233,33 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("respects ignoredJobIds in reapExpiredJobLease", async ({ stateAdapter, expect }) => {
-      const { job: jobA } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: jobA }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "ignore-test",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "ignore-test",
-          input: { order: "a" },
+          jobs: [
+            {
+              typeName: "ignore-test",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "ignore-test",
+              input: { order: "a" },
+            },
+          ],
         }),
       );
 
-      const { job: jobB } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: jobB }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "ignore-test",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "ignore-test",
-          input: { order: "b" },
+          jobs: [
+            {
+              typeName: "ignore-test",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "ignore-test",
+              input: { order: "b" },
+            },
+          ],
         }),
       );
 
@@ -1689,14 +2304,18 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
   describe("deleteJobChains", () => {
     it("deletes all jobs in the given chains", async ({ stateAdapter, expect }) => {
-      const { job } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "delete-test",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "delete-test",
-          input: null,
+          jobs: [
+            {
+              typeName: "delete-test",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "delete-test",
+              input: null,
+            },
+          ],
         }),
       );
 
@@ -1714,25 +2333,33 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("does not delete jobs from other chains", async ({ stateAdapter, expect }) => {
-      const { job: jobA } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: jobA }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "chain-a",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "chain-a",
-          input: null,
+          jobs: [
+            {
+              typeName: "chain-a",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "chain-a",
+              input: null,
+            },
+          ],
         }),
       );
 
-      const { job: jobB } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: jobB }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "chain-b",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "chain-b",
-          input: null,
+          jobs: [
+            {
+              typeName: "chain-b",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "chain-b",
+              input: null,
+            },
+          ],
         }),
       );
 
@@ -1751,33 +2378,40 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       stateAdapter,
       expect,
     }) => {
-      const { job: blockerJob } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: blockerJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "blocker",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "blocker",
-          input: null,
+          jobs: [
+            {
+              typeName: "blocker",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "blocker",
+              input: null,
+            },
+          ],
         }),
       );
 
-      const { job: mainJob } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: mainJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "main",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "main",
-          input: null,
+          jobs: [
+            {
+              typeName: "main",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "main",
+              input: null,
+            },
+          ],
         }),
       );
 
       await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.addJobBlockers({
+        stateAdapter.addJobsBlockers({
           txCtx,
-          jobId: mainJob.id,
-          blockedByChainIds: [blockerJob.chainId],
+          jobBlockers: [{ jobId: mainJob.id, blockedByChainIds: [blockerJob.chainId] }],
         }),
       );
 
@@ -1802,33 +2436,40 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("cascade deletes chain and its dependencies", async ({ stateAdapter, expect }) => {
-      const { job: blockerJob } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: blockerJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "blocker",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "blocker",
-          input: null,
+          jobs: [
+            {
+              typeName: "blocker",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "blocker",
+              input: null,
+            },
+          ],
         }),
       );
 
-      const { job: mainJob } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: mainJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "main",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "main",
-          input: null,
+          jobs: [
+            {
+              typeName: "main",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "main",
+              input: null,
+            },
+          ],
         }),
       );
 
       await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.addJobBlockers({
+        stateAdapter.addJobsBlockers({
           txCtx,
-          jobId: mainJob.id,
-          blockedByChainIds: [blockerJob.chainId],
+          jobBlockers: [{ jobId: mainJob.id, blockedByChainIds: [blockerJob.chainId] }],
         }),
       );
 
@@ -1849,33 +2490,40 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       stateAdapter,
       expect,
     }) => {
-      const { job: blockerJob } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: blockerJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "blocker",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "blocker",
-          input: null,
+          jobs: [
+            {
+              typeName: "blocker",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "blocker",
+              input: null,
+            },
+          ],
         }),
       );
 
-      const { job: mainJob } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: mainJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "main",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "main",
-          input: null,
+          jobs: [
+            {
+              typeName: "main",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "main",
+              input: null,
+            },
+          ],
         }),
       );
 
       await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.addJobBlockers({
+        stateAdapter.addJobsBlockers({
           txCtx,
-          jobId: mainJob.id,
-          blockedByChainIds: [blockerJob.chainId],
+          jobBlockers: [{ jobId: mainJob.id, blockedByChainIds: [blockerJob.chainId] }],
         }),
       );
 
@@ -1892,52 +2540,62 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
     it("cascade resolves transitive dependencies", async ({ stateAdapter, expect }) => {
       // A ← B ← C (C depends on B, B depends on A)
-      const { job: jobA } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: jobA }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "chain-a",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "chain-a",
-          input: null,
+          jobs: [
+            {
+              typeName: "chain-a",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "chain-a",
+              input: null,
+            },
+          ],
         }),
       );
 
-      const { job: jobB } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: jobB }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "chain-b",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "chain-b",
-          input: null,
+          jobs: [
+            {
+              typeName: "chain-b",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "chain-b",
+              input: null,
+            },
+          ],
         }),
       );
 
-      const { job: jobC } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: jobC }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "chain-c",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "chain-c",
-          input: null,
+          jobs: [
+            {
+              typeName: "chain-c",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "chain-c",
+              input: null,
+            },
+          ],
         }),
       );
 
       await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.addJobBlockers({
+        stateAdapter.addJobsBlockers({
           txCtx,
-          jobId: jobB.id,
-          blockedByChainIds: [jobA.chainId],
+          jobBlockers: [{ jobId: jobB.id, blockedByChainIds: [jobA.chainId] }],
         }),
       );
 
       await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.addJobBlockers({
+        stateAdapter.addJobsBlockers({
           txCtx,
-          jobId: jobC.id,
-          blockedByChainIds: [jobB.chainId],
+          jobBlockers: [{ jobId: jobC.id, blockedByChainIds: [jobB.chainId] }],
         }),
       );
 
@@ -1962,71 +2620,84 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       //   B   C
       //    \ /
       //     A
-      const { job: jobA } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: jobA }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "diamond-a",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "diamond-a",
-          input: null,
+          jobs: [
+            {
+              typeName: "diamond-a",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "diamond-a",
+              input: null,
+            },
+          ],
         }),
       );
 
-      const { job: jobB } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: jobB }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "diamond-b",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "diamond-b",
-          input: null,
+          jobs: [
+            {
+              typeName: "diamond-b",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "diamond-b",
+              input: null,
+            },
+          ],
         }),
       );
 
-      const { job: jobC } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: jobC }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "diamond-c",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "diamond-c",
-          input: null,
+          jobs: [
+            {
+              typeName: "diamond-c",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "diamond-c",
+              input: null,
+            },
+          ],
         }),
       );
 
-      const { job: jobD } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: jobD }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "diamond-d",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "diamond-d",
-          input: null,
+          jobs: [
+            {
+              typeName: "diamond-d",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "diamond-d",
+              input: null,
+            },
+          ],
         }),
       );
 
       await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.addJobBlockers({
+        stateAdapter.addJobsBlockers({
           txCtx,
-          jobId: jobB.id,
-          blockedByChainIds: [jobA.chainId],
+          jobBlockers: [{ jobId: jobB.id, blockedByChainIds: [jobA.chainId] }],
         }),
       );
 
       await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.addJobBlockers({
+        stateAdapter.addJobsBlockers({
           txCtx,
-          jobId: jobC.id,
-          blockedByChainIds: [jobA.chainId],
+          jobBlockers: [{ jobId: jobC.id, blockedByChainIds: [jobA.chainId] }],
         }),
       );
 
       await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.addJobBlockers({
+        stateAdapter.addJobsBlockers({
           txCtx,
-          jobId: jobD.id,
-          blockedByChainIds: [jobB.chainId, jobC.chainId],
+          jobBlockers: [{ jobId: jobD.id, blockedByChainIds: [jobB.chainId, jobC.chainId] }],
         }),
       );
 
@@ -2049,25 +2720,33 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       stateAdapter,
       expect,
     }) => {
-      const { job: jobA } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: jobA }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "standalone-a",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "standalone-a",
-          input: null,
+          jobs: [
+            {
+              typeName: "standalone-a",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "standalone-a",
+              input: null,
+            },
+          ],
         }),
       );
 
-      const { job: jobB } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: jobB }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "standalone-b",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "standalone-b",
-          input: null,
+          jobs: [
+            {
+              typeName: "standalone-b",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "standalone-b",
+              input: null,
+            },
+          ],
         }),
       );
 
@@ -2088,14 +2767,18 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
   describe("getJobForUpdate", () => {
     it("returns job by ID via getJobForUpdate", async ({ stateAdapter, expect }) => {
-      const { job: created } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: created }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "update-test",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "update-test",
-          input: { value: 1 },
+          jobs: [
+            {
+              typeName: "update-test",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "update-test",
+              input: { value: 1 },
+            },
+          ],
         }),
       );
 
@@ -2125,25 +2808,33 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       stateAdapter,
       expect,
     }) => {
-      const { job: rootJob } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: rootJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "chain-current",
-          chainId: undefined,
-          chainIndex: 0,
-          chainTypeName: "chain-current",
-          input: null,
+          jobs: [
+            {
+              typeName: "chain-current",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "chain-current",
+              input: null,
+            },
+          ],
         }),
       );
 
-      const { job: continuation } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: continuation }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "chain-current-step2",
-          chainId: rootJob.chainId,
-          chainIndex: 1,
-          chainTypeName: "chain-current",
-          input: null,
+          jobs: [
+            {
+              typeName: "chain-current-step2",
+              chainId: rootJob.chainId,
+              chainIndex: 1,
+              chainTypeName: "chain-current",
+              input: null,
+            },
+          ],
         }),
       );
 
@@ -2180,33 +2871,40 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     stateAdapter,
     expect,
   }) => {
-    const { job: mainChain } = await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+    const [{ job: mainChain }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "main-chain",
-        chainId: undefined,
-        chainIndex: 0,
-        chainTypeName: "main-chain",
-        input: null,
+        jobs: [
+          {
+            typeName: "main-chain",
+            chainId: undefined,
+            chainIndex: 0,
+            chainTypeName: "main-chain",
+            input: null,
+          },
+        ],
       }),
     );
 
-    const { job: blockerChain } = await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+    const [{ job: blockerChain }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "blocker-chain",
-        chainId: undefined,
-        chainIndex: 0,
-        chainTypeName: "blocker-chain",
-        input: null,
+        jobs: [
+          {
+            typeName: "blocker-chain",
+            chainId: undefined,
+            chainIndex: 0,
+            chainTypeName: "blocker-chain",
+            input: null,
+          },
+        ],
       }),
     );
 
     await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.addJobBlockers({
+      stateAdapter.addJobsBlockers({
         txCtx,
-        jobId: mainChain.id,
-        blockedByChainIds: [blockerChain.chainId],
+        jobBlockers: [{ jobId: mainChain.id, blockedByChainIds: [blockerChain.chainId] }],
       }),
     );
 
@@ -2229,25 +2927,33 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     stateAdapter,
     expect,
   }) => {
-    const { job: root } = await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+    const [{ job: root }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "test-chain",
-        chainId: undefined,
-        chainTypeName: "test-chain",
-        input: { step: 1 },
-        chainIndex: 0,
+        jobs: [
+          {
+            typeName: "test-chain",
+            chainId: undefined,
+            chainTypeName: "test-chain",
+            input: { step: 1 },
+            chainIndex: 0,
+          },
+        ],
       }),
     );
 
-    const { job: continuation } = await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+    const [{ job: continuation }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "test-chain-step2",
-        chainId: root.chainId,
-        chainTypeName: "test-chain",
-        input: { step: 2 },
-        chainIndex: 1,
+        jobs: [
+          {
+            typeName: "test-chain-step2",
+            chainId: root.chainId,
+            chainTypeName: "test-chain",
+            input: { step: 2 },
+            chainIndex: 1,
+          },
+        ],
       }),
     );
 
@@ -2265,33 +2971,45 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
   it("listJobChains filters by typeName", async ({ stateAdapter, expect }) => {
     await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "send-email",
-        chainId: undefined,
-        chainTypeName: "send-email",
-        input: null,
-        chainIndex: 0,
+        jobs: [
+          {
+            typeName: "send-email",
+            chainId: undefined,
+            chainTypeName: "send-email",
+            input: null,
+            chainIndex: 0,
+          },
+        ],
       }),
     );
     await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "process-payment",
-        chainId: undefined,
-        chainTypeName: "process-payment",
-        input: null,
-        chainIndex: 0,
+        jobs: [
+          {
+            typeName: "process-payment",
+            chainId: undefined,
+            chainTypeName: "process-payment",
+            input: null,
+            chainIndex: 0,
+          },
+        ],
       }),
     );
     await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "send-email",
-        chainId: undefined,
-        chainTypeName: "send-email",
-        input: null,
-        chainIndex: 0,
+        jobs: [
+          {
+            typeName: "send-email",
+            chainId: undefined,
+            chainTypeName: "send-email",
+            input: null,
+            chainIndex: 0,
+          },
+        ],
       }),
     );
 
@@ -2307,36 +3025,48 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
   });
 
   it("listJobChains sorts by createdAt desc by default", async ({ stateAdapter, expect }) => {
-    const { job: job1 } = await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+    const [{ job: job1 }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "type-a",
-        chainId: undefined,
-        chainTypeName: "type-a",
-        input: { order: 1 },
-        chainIndex: 0,
+        jobs: [
+          {
+            typeName: "type-a",
+            chainId: undefined,
+            chainTypeName: "type-a",
+            input: { order: 1 },
+            chainIndex: 0,
+          },
+        ],
       }),
     );
     await sleep(5);
-    const { job: job2 } = await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+    const [{ job: job2 }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "type-b",
-        chainId: undefined,
-        chainTypeName: "type-b",
-        input: { order: 2 },
-        chainIndex: 0,
+        jobs: [
+          {
+            typeName: "type-b",
+            chainId: undefined,
+            chainTypeName: "type-b",
+            input: { order: 2 },
+            chainIndex: 0,
+          },
+        ],
       }),
     );
     await sleep(5);
-    const { job: job3 } = await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+    const [{ job: job3 }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "type-c",
-        chainId: undefined,
-        chainTypeName: "type-c",
-        input: { order: 3 },
-        chainIndex: 0,
+        jobs: [
+          {
+            typeName: "type-c",
+            chainId: undefined,
+            chainTypeName: "type-c",
+            input: { order: 3 },
+            chainIndex: 0,
+          },
+        ],
       }),
     );
 
@@ -2353,14 +3083,18 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
   it("listJobChains paginates with cursor", async ({ stateAdapter, expect }) => {
     const jobs = [];
     for (let i = 0; i < 5; i++) {
-      const { job } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: `type-${i}`,
-          chainId: undefined,
-          chainTypeName: `type-${i}`,
-          input: null,
-          chainIndex: 0,
+          jobs: [
+            {
+              typeName: `type-${i}`,
+              chainId: undefined,
+              chainTypeName: `type-${i}`,
+              input: null,
+              chainIndex: 0,
+            },
+          ],
         }),
       );
       jobs.push(job);
@@ -2393,24 +3127,32 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
   });
 
   it("listJobChains filters by id matching chain ID", async ({ stateAdapter, expect }) => {
-    const { job: chain1 } = await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+    const [{ job: chain1 }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "type-a",
-        chainId: undefined,
-        chainTypeName: "type-a",
-        input: null,
-        chainIndex: 0,
+        jobs: [
+          {
+            typeName: "type-a",
+            chainId: undefined,
+            chainTypeName: "type-a",
+            input: null,
+            chainIndex: 0,
+          },
+        ],
       }),
     );
     await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "type-b",
-        chainId: undefined,
-        chainTypeName: "type-b",
-        input: null,
-        chainIndex: 0,
+        jobs: [
+          {
+            typeName: "type-b",
+            chainId: undefined,
+            chainTypeName: "type-b",
+            input: null,
+            chainIndex: 0,
+          },
+        ],
       }),
     );
 
@@ -2424,25 +3166,33 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
   });
 
   it("listJobChains sorts asc when orderDirection is asc", async ({ stateAdapter, expect }) => {
-    const { job: job1 } = await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+    const [{ job: job1 }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "type-a",
-        chainId: undefined,
-        chainTypeName: "type-a",
-        input: null,
-        chainIndex: 0,
+        jobs: [
+          {
+            typeName: "type-a",
+            chainId: undefined,
+            chainTypeName: "type-a",
+            input: null,
+            chainIndex: 0,
+          },
+        ],
       }),
     );
     await sleep(5);
-    const { job: job2 } = await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+    const [{ job: job2 }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "type-b",
-        chainId: undefined,
-        chainTypeName: "type-b",
-        input: null,
-        chainIndex: 0,
+        jobs: [
+          {
+            typeName: "type-b",
+            chainId: undefined,
+            chainTypeName: "type-b",
+            input: null,
+            chainIndex: 0,
+          },
+        ],
       }),
     );
 
@@ -2458,13 +3208,17 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
   it("listJobChains paginates correctly in asc order", async ({ stateAdapter, expect }) => {
     for (let i = 0; i < 3; i++) {
       await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+        stateAdapter.createJobs({
           txCtx,
-          typeName: `type-${i}`,
-          chainId: undefined,
-          chainTypeName: `type-${i}`,
-          input: null,
-          chainIndex: 0,
+          jobs: [
+            {
+              typeName: `type-${i}`,
+              chainId: undefined,
+              chainTypeName: `type-${i}`,
+              input: null,
+              chainIndex: 0,
+            },
+          ],
         }),
       );
       await sleep(5);
@@ -2490,26 +3244,34 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
   it("listJobChains filters by from/to date range", async ({ stateAdapter, expect }) => {
     await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "type-a",
-        chainId: undefined,
-        chainTypeName: "type-a",
-        input: null,
-        chainIndex: 0,
+        jobs: [
+          {
+            typeName: "type-a",
+            chainId: undefined,
+            chainTypeName: "type-a",
+            input: null,
+            chainIndex: 0,
+          },
+        ],
       }),
     );
     await sleep(50);
     const midpoint = new Date();
     await sleep(50);
     await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "type-b",
-        chainId: undefined,
-        chainTypeName: "type-b",
-        input: null,
-        chainIndex: 0,
+        jobs: [
+          {
+            typeName: "type-b",
+            chainId: undefined,
+            chainTypeName: "type-b",
+            input: null,
+            chainIndex: 0,
+          },
+        ],
       }),
     );
 
@@ -2531,34 +3293,46 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
   });
 
   it("listJobChains filters by jobId", async ({ stateAdapter, expect }) => {
-    const { job: root } = await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+    const [{ job: root }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "chain-type",
-        chainId: undefined,
-        chainTypeName: "chain-type",
-        input: null,
-        chainIndex: 0,
+        jobs: [
+          {
+            typeName: "chain-type",
+            chainId: undefined,
+            chainTypeName: "chain-type",
+            input: null,
+            chainIndex: 0,
+          },
+        ],
       }),
     );
-    const { job: continuation } = await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+    const [{ job: continuation }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "chain-step2",
-        chainId: root.chainId,
-        chainTypeName: "chain-type",
-        input: null,
-        chainIndex: 1,
+        jobs: [
+          {
+            typeName: "chain-step2",
+            chainId: root.chainId,
+            chainTypeName: "chain-type",
+            input: null,
+            chainIndex: 1,
+          },
+        ],
       }),
     );
     await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "other-type",
-        chainId: undefined,
-        chainTypeName: "other-type",
-        input: null,
-        chainIndex: 0,
+        jobs: [
+          {
+            typeName: "other-type",
+            chainId: undefined,
+            chainTypeName: "other-type",
+            input: null,
+            chainIndex: 0,
+          },
+        ],
       }),
     );
 
@@ -2572,24 +3346,32 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
   });
 
   it("listJobChains filters by status", async ({ stateAdapter, expect }) => {
-    const { job: chain1 } = await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+    const [{ job: chain1 }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "test-type",
-        chainId: undefined,
-        chainTypeName: "test-type",
-        input: null,
-        chainIndex: 0,
+        jobs: [
+          {
+            typeName: "test-type",
+            chainId: undefined,
+            chainTypeName: "test-type",
+            input: null,
+            chainIndex: 0,
+          },
+        ],
       }),
     );
     await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "test-type",
-        chainId: undefined,
-        chainTypeName: "test-type",
-        input: null,
-        chainIndex: 0,
+        jobs: [
+          {
+            typeName: "test-type",
+            chainId: undefined,
+            chainTypeName: "test-type",
+            input: null,
+            chainIndex: 0,
+          },
+        ],
       }),
     );
 
@@ -2623,34 +3405,46 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
   });
 
   it("listJobs returns all jobs across chains", async ({ stateAdapter, expect }) => {
-    const { job: root } = await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+    const [{ job: root }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "chain-type",
-        chainId: undefined,
-        chainTypeName: "chain-type",
-        input: { step: 1 },
-        chainIndex: 0,
+        jobs: [
+          {
+            typeName: "chain-type",
+            chainId: undefined,
+            chainTypeName: "chain-type",
+            input: { step: 1 },
+            chainIndex: 0,
+          },
+        ],
       }),
     );
     await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "chain-step2",
-        chainId: root.chainId,
-        chainTypeName: "chain-type",
-        input: { step: 2 },
-        chainIndex: 1,
+        jobs: [
+          {
+            typeName: "chain-step2",
+            chainId: root.chainId,
+            chainTypeName: "chain-type",
+            input: { step: 2 },
+            chainIndex: 1,
+          },
+        ],
       }),
     );
     await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "other-type",
-        chainId: undefined,
-        chainTypeName: "other-type",
-        input: null,
-        chainIndex: 0,
+        jobs: [
+          {
+            typeName: "other-type",
+            chainId: undefined,
+            chainTypeName: "other-type",
+            input: null,
+            chainIndex: 0,
+          },
+        ],
       }),
     );
 
@@ -2659,34 +3453,46 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
   });
 
   it("listJobs filters by chainId", async ({ stateAdapter, expect }) => {
-    const { job: root } = await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+    const [{ job: root }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "chain-type",
-        chainId: undefined,
-        chainTypeName: "chain-type",
-        input: null,
-        chainIndex: 0,
+        jobs: [
+          {
+            typeName: "chain-type",
+            chainId: undefined,
+            chainTypeName: "chain-type",
+            input: null,
+            chainIndex: 0,
+          },
+        ],
       }),
     );
     await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "chain-step2",
-        chainId: root.chainId,
-        chainTypeName: "chain-type",
-        input: null,
-        chainIndex: 1,
+        jobs: [
+          {
+            typeName: "chain-step2",
+            chainId: root.chainId,
+            chainTypeName: "chain-type",
+            input: null,
+            chainIndex: 1,
+          },
+        ],
       }),
     );
     await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "other-type",
-        chainId: undefined,
-        chainTypeName: "other-type",
-        input: null,
-        chainIndex: 0,
+        jobs: [
+          {
+            typeName: "other-type",
+            chainId: undefined,
+            chainTypeName: "other-type",
+            input: null,
+            chainIndex: 0,
+          },
+        ],
       }),
     );
 
@@ -2702,24 +3508,32 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
   });
 
   it("listJobs filters by status", async ({ stateAdapter, expect }) => {
-    const { job } = await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+    const [{ job }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "test-type",
-        chainId: undefined,
-        chainTypeName: "test-type",
-        input: null,
-        chainIndex: 0,
+        jobs: [
+          {
+            typeName: "test-type",
+            chainId: undefined,
+            chainTypeName: "test-type",
+            input: null,
+            chainIndex: 0,
+          },
+        ],
       }),
     );
     await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "test-type",
-        chainId: undefined,
-        chainTypeName: "test-type",
-        input: null,
-        chainIndex: 0,
+        jobs: [
+          {
+            typeName: "test-type",
+            chainId: undefined,
+            chainTypeName: "test-type",
+            input: null,
+            chainIndex: 0,
+          },
+        ],
       }),
     );
 
@@ -2741,23 +3555,31 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
   it("listJobs filters by typeName", async ({ stateAdapter, expect }) => {
     await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "type-a",
-        chainId: undefined,
-        chainTypeName: "type-a",
-        input: null,
-        chainIndex: 0,
+        jobs: [
+          {
+            typeName: "type-a",
+            chainId: undefined,
+            chainTypeName: "type-a",
+            input: null,
+            chainIndex: 0,
+          },
+        ],
       }),
     );
     await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "type-b",
-        chainId: undefined,
-        chainTypeName: "type-b",
-        input: null,
-        chainIndex: 0,
+        jobs: [
+          {
+            typeName: "type-b",
+            chainId: undefined,
+            chainTypeName: "type-b",
+            input: null,
+            chainIndex: 0,
+          },
+        ],
       }),
     );
 
@@ -2771,24 +3593,32 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
   });
 
   it("listJobs filters by id matching job ID", async ({ stateAdapter, expect }) => {
-    const { job: job1 } = await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+    const [{ job: job1 }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "type-a",
-        chainId: undefined,
-        chainTypeName: "type-a",
-        input: null,
-        chainIndex: 0,
+        jobs: [
+          {
+            typeName: "type-a",
+            chainId: undefined,
+            chainTypeName: "type-a",
+            input: null,
+            chainIndex: 0,
+          },
+        ],
       }),
     );
     await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "type-b",
-        chainId: undefined,
-        chainTypeName: "type-b",
-        input: null,
-        chainIndex: 0,
+        jobs: [
+          {
+            typeName: "type-b",
+            chainId: undefined,
+            chainTypeName: "type-b",
+            input: null,
+            chainIndex: 0,
+          },
+        ],
       }),
     );
 
@@ -2804,13 +3634,17 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
   it("listJobs paginates with cursor", async ({ stateAdapter, expect }) => {
     for (let i = 0; i < 4; i++) {
       await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "paginate-type",
-          chainId: undefined,
-          chainTypeName: "paginate-type",
-          input: { i },
-          chainIndex: 0,
+          jobs: [
+            {
+              typeName: "paginate-type",
+              chainId: undefined,
+              chainTypeName: "paginate-type",
+              input: { i },
+              chainIndex: 0,
+            },
+          ],
         }),
       );
     }
@@ -2831,25 +3665,33 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
   });
 
   it("listJobs sorts asc when orderDirection is asc", async ({ stateAdapter, expect }) => {
-    const { job: job1 } = await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+    const [{ job: job1 }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "type-a",
-        chainId: undefined,
-        chainTypeName: "type-a",
-        input: null,
-        chainIndex: 0,
+        jobs: [
+          {
+            typeName: "type-a",
+            chainId: undefined,
+            chainTypeName: "type-a",
+            input: null,
+            chainIndex: 0,
+          },
+        ],
       }),
     );
     await sleep(5);
-    const { job: job2 } = await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+    const [{ job: job2 }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "type-b",
-        chainId: undefined,
-        chainTypeName: "type-b",
-        input: null,
-        chainIndex: 0,
+        jobs: [
+          {
+            typeName: "type-b",
+            chainId: undefined,
+            chainTypeName: "type-b",
+            input: null,
+            chainIndex: 0,
+          },
+        ],
       }),
     );
 
@@ -2864,26 +3706,34 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
   it("listJobs filters by from/to date range", async ({ stateAdapter, expect }) => {
     await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "type-a",
-        chainId: undefined,
-        chainTypeName: "type-a",
-        input: null,
-        chainIndex: 0,
+        jobs: [
+          {
+            typeName: "type-a",
+            chainId: undefined,
+            chainTypeName: "type-a",
+            input: null,
+            chainIndex: 0,
+          },
+        ],
       }),
     );
     await sleep(50);
     const midpoint = new Date();
     await sleep(50);
     await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "type-b",
-        chainId: undefined,
-        chainTypeName: "type-b",
-        input: null,
-        chainIndex: 0,
+        jobs: [
+          {
+            typeName: "type-b",
+            chainId: undefined,
+            chainTypeName: "type-b",
+            input: null,
+            chainIndex: 0,
+          },
+        ],
       }),
     );
 
@@ -2916,34 +3766,46 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("returns jobs ordered by chainIndex asc by default", async ({ stateAdapter, expect }) => {
-      const { job: root } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: root }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "step-1",
-          chainId: undefined,
-          chainTypeName: "chain-type",
-          input: null,
-          chainIndex: 0,
+          jobs: [
+            {
+              typeName: "step-1",
+              chainId: undefined,
+              chainTypeName: "chain-type",
+              input: null,
+              chainIndex: 0,
+            },
+          ],
         }),
       );
       await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "step-2",
-          chainId: root.chainId,
-          chainTypeName: "chain-type",
-          input: null,
-          chainIndex: 1,
+          jobs: [
+            {
+              typeName: "step-2",
+              chainId: root.chainId,
+              chainTypeName: "chain-type",
+              input: null,
+              chainIndex: 1,
+            },
+          ],
         }),
       );
       await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "step-3",
-          chainId: root.chainId,
-          chainTypeName: "chain-type",
-          input: null,
-          chainIndex: 2,
+          jobs: [
+            {
+              typeName: "step-3",
+              chainId: root.chainId,
+              chainTypeName: "chain-type",
+              input: null,
+              chainIndex: 2,
+            },
+          ],
         }),
       );
 
@@ -2959,24 +3821,32 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("respects orderDirection desc", async ({ stateAdapter, expect }) => {
-      const { job: root } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: root }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "step-1",
-          chainId: undefined,
-          chainTypeName: "chain-type",
-          input: null,
-          chainIndex: 0,
+          jobs: [
+            {
+              typeName: "step-1",
+              chainId: undefined,
+              chainTypeName: "chain-type",
+              input: null,
+              chainIndex: 0,
+            },
+          ],
         }),
       );
       await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "step-2",
-          chainId: root.chainId,
-          chainTypeName: "chain-type",
-          input: null,
-          chainIndex: 1,
+          jobs: [
+            {
+              typeName: "step-2",
+              chainId: root.chainId,
+              chainTypeName: "chain-type",
+              input: null,
+              chainIndex: 1,
+            },
+          ],
         }),
       );
 
@@ -2991,25 +3861,33 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("paginates with cursor", async ({ stateAdapter, expect }) => {
-      const { job: root } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: root }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "step-0",
-          chainId: undefined,
-          chainTypeName: "chain-type",
-          input: null,
-          chainIndex: 0,
+          jobs: [
+            {
+              typeName: "step-0",
+              chainId: undefined,
+              chainTypeName: "chain-type",
+              input: null,
+              chainIndex: 0,
+            },
+          ],
         }),
       );
       for (let i = 1; i < 5; i++) {
         await stateAdapter.runInTransaction(async (txCtx) =>
-          stateAdapter.createJob({
+          stateAdapter.createJobs({
             txCtx,
-            typeName: `step-${i}`,
-            chainId: root.chainId,
-            chainTypeName: "chain-type",
-            input: null,
-            chainIndex: i,
+            jobs: [
+              {
+                typeName: `step-${i}`,
+                chainId: root.chainId,
+                chainTypeName: "chain-type",
+                input: null,
+                chainIndex: i,
+              },
+            ],
           }),
         );
       }
@@ -3044,24 +3922,32 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("only returns jobs from specified chain", async ({ stateAdapter, expect }) => {
-      const { job: chain1Root } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job: chain1Root }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "step-1",
-          chainId: undefined,
-          chainTypeName: "chain-type",
-          input: null,
-          chainIndex: 0,
+          jobs: [
+            {
+              typeName: "step-1",
+              chainId: undefined,
+              chainTypeName: "chain-type",
+              input: null,
+              chainIndex: 0,
+            },
+          ],
         }),
       );
       await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+        stateAdapter.createJobs({
           txCtx,
-          typeName: "other-type",
-          chainId: undefined,
-          chainTypeName: "other-type",
-          input: null,
-          chainIndex: 0,
+          jobs: [
+            {
+              typeName: "other-type",
+              chainId: undefined,
+              chainTypeName: "other-type",
+              input: null,
+              chainIndex: 0,
+            },
+          ],
         }),
       );
 
@@ -3076,42 +3962,53 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
   });
 
   it("listBlockedJobs returns jobs blocked by a chain", async ({ stateAdapter, expect }) => {
-    const { job: blockerChain } = await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+    const [{ job: blockerChain }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "blocker-type",
-        chainId: undefined,
-        chainTypeName: "blocker-type",
-        input: null,
-        chainIndex: 0,
+        jobs: [
+          {
+            typeName: "blocker-type",
+            chainId: undefined,
+            chainTypeName: "blocker-type",
+            input: null,
+            chainIndex: 0,
+          },
+        ],
       }),
     );
-    const { job: blockedJob } = await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+    const [{ job: blockedJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "blocked-type",
-        chainId: undefined,
-        chainTypeName: "blocked-type",
-        input: null,
-        chainIndex: 0,
+        jobs: [
+          {
+            typeName: "blocked-type",
+            chainId: undefined,
+            chainTypeName: "blocked-type",
+            input: null,
+            chainIndex: 0,
+          },
+        ],
       }),
     );
     await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "unrelated-type",
-        chainId: undefined,
-        chainTypeName: "unrelated-type",
-        input: null,
-        chainIndex: 0,
+        jobs: [
+          {
+            typeName: "unrelated-type",
+            chainId: undefined,
+            chainTypeName: "unrelated-type",
+            input: null,
+            chainIndex: 0,
+          },
+        ],
       }),
     );
 
     await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.addJobBlockers({
+      stateAdapter.addJobsBlockers({
         txCtx,
-        jobId: blockedJob.id,
-        blockedByChainIds: [blockerChain.chainId],
+        jobBlockers: [{ jobId: blockedJob.id, blockedByChainIds: [blockerChain.chainId] }],
       }),
     );
 
@@ -3129,14 +4026,18 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     stateAdapter,
     expect,
   }) => {
-    const { job: chain } = await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+    const [{ job: chain }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "test-type",
-        chainId: undefined,
-        chainTypeName: "test-type",
-        input: null,
-        chainIndex: 0,
+        jobs: [
+          {
+            typeName: "test-type",
+            chainId: undefined,
+            chainTypeName: "test-type",
+            input: null,
+            chainIndex: 0,
+          },
+        ],
       }),
     );
     const result = await stateAdapter.listBlockedJobs({
@@ -3149,50 +4050,60 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
   });
 
   it("listBlockedJobs sorts asc when orderDirection is asc", async ({ stateAdapter, expect }) => {
-    const { job: blockerChain } = await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+    const [{ job: blockerChain }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "blocker-type",
-        chainId: undefined,
-        chainTypeName: "blocker-type",
-        input: null,
-        chainIndex: 0,
+        jobs: [
+          {
+            typeName: "blocker-type",
+            chainId: undefined,
+            chainTypeName: "blocker-type",
+            input: null,
+            chainIndex: 0,
+          },
+        ],
       }),
     );
-    const { job: blockedJob1 } = await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+    const [{ job: blockedJob1 }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "blocked-a",
-        chainId: undefined,
-        chainTypeName: "blocked-a",
-        input: null,
-        chainIndex: 0,
+        jobs: [
+          {
+            typeName: "blocked-a",
+            chainId: undefined,
+            chainTypeName: "blocked-a",
+            input: null,
+            chainIndex: 0,
+          },
+        ],
       }),
     );
     await sleep(5);
-    const { job: blockedJob2 } = await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+    const [{ job: blockedJob2 }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "blocked-b",
-        chainId: undefined,
-        chainTypeName: "blocked-b",
-        input: null,
-        chainIndex: 0,
+        jobs: [
+          {
+            typeName: "blocked-b",
+            chainId: undefined,
+            chainTypeName: "blocked-b",
+            input: null,
+            chainIndex: 0,
+          },
+        ],
       }),
     );
 
     await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.addJobBlockers({
+      stateAdapter.addJobsBlockers({
         txCtx,
-        jobId: blockedJob1.id,
-        blockedByChainIds: [blockerChain.chainId],
+        jobBlockers: [{ jobId: blockedJob1.id, blockedByChainIds: [blockerChain.chainId] }],
       }),
     );
     await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.addJobBlockers({
+      stateAdapter.addJobsBlockers({
         txCtx,
-        jobId: blockedJob2.id,
-        blockedByChainIds: [blockerChain.chainId],
+        jobBlockers: [{ jobId: blockedJob2.id, blockedByChainIds: [blockerChain.chainId] }],
       }),
     );
 
@@ -3216,34 +4127,41 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
   });
 
   it("listBlockedJobs paginates with cursor", async ({ stateAdapter, expect }) => {
-    const { job: blockerChain } = await stateAdapter.runInTransaction(async (txCtx) =>
-      stateAdapter.createJob({
+    const [{ job: blockerChain }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      stateAdapter.createJobs({
         txCtx,
-        typeName: "blocker-type",
-        chainId: undefined,
-        chainTypeName: "blocker-type",
-        input: null,
-        chainIndex: 0,
+        jobs: [
+          {
+            typeName: "blocker-type",
+            chainId: undefined,
+            chainTypeName: "blocker-type",
+            input: null,
+            chainIndex: 0,
+          },
+        ],
       }),
     );
     const blockedJobs = [];
     for (let i = 0; i < 4; i++) {
-      const { job } = await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.createJob({
+      const [{ job }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
-          typeName: `blocked-${i}`,
-          chainId: undefined,
-          chainTypeName: `blocked-${i}`,
-          input: null,
-          chainIndex: 0,
+          jobs: [
+            {
+              typeName: `blocked-${i}`,
+              chainId: undefined,
+              chainTypeName: `blocked-${i}`,
+              input: null,
+              chainIndex: 0,
+            },
+          ],
         }),
       );
       blockedJobs.push(job);
       await stateAdapter.runInTransaction(async (txCtx) =>
-        stateAdapter.addJobBlockers({
+        stateAdapter.addJobsBlockers({
           txCtx,
-          jobId: job.id,
-          blockedByChainIds: [blockerChain.chainId],
+          jobBlockers: [{ jobId: job.id, blockedByChainIds: [blockerChain.chainId] }],
         }),
       );
     }

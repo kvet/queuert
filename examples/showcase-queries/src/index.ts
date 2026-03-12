@@ -158,17 +158,16 @@ const [validateChain, _stockChain, orderChain] = await withTransactionHooks(
   async (transactionHooks) =>
     sql.begin(async (_sql) => {
       const txSql = _sql as TransactionSql;
-      const validate = await client.startJobChain({
+      const [validate, stock] = await client.startJobChains({
         sql: txSql,
         transactionHooks,
-        typeName: "validate-input",
-        input: { orderId: "ORD-001", items: ["widget", "gadget"] },
-      });
-      const stock = await client.startJobChain({
-        sql: txSql,
-        transactionHooks,
-        typeName: "check-stock",
-        input: { orderId: "ORD-001", items: ["widget", "gadget"] },
+        items: [
+          {
+            typeName: "validate-input",
+            input: { orderId: "ORD-001", items: ["widget", "gadget"] },
+          },
+          { typeName: "check-stock", input: { orderId: "ORD-001", items: ["widget", "gadget"] } },
+        ],
       });
       const order = await client.startJobChain({
         sql: txSql,
@@ -184,20 +183,14 @@ const [validateChain, _stockChain, orderChain] = await withTransactionHooks(
 const notifyChains = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
-    return Promise.all([
-      client.startJobChain({
-        sql: txSql,
-        transactionHooks,
-        typeName: "send-notification",
-        input: { userId: "alice", message: "Order placed" },
-      }),
-      client.startJobChain({
-        sql: txSql,
-        transactionHooks,
-        typeName: "send-notification",
-        input: { userId: "bob", message: "Welcome aboard" },
-      }),
-    ]);
+    return client.startJobChains({
+      sql: txSql,
+      transactionHooks,
+      items: [
+        { typeName: "send-notification", input: { userId: "alice", message: "Order placed" } },
+        { typeName: "send-notification", input: { userId: "bob", message: "Welcome aboard" } },
+      ],
+    });
   }),
 );
 

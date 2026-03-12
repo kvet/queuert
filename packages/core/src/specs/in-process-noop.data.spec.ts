@@ -1,5 +1,6 @@
 import { describe, it } from "vitest";
 import { extendWithStateInProcess } from "../state-adapter/state-adapter.in-process.spec-helper.js";
+import { startChainsTestSuite } from "../suites/start-chains.test-suite.js";
 import { blockerChainsTestSuite } from "../suites/blocker-chains.test-suite.js";
 import { chainsTestSuite } from "../suites/chains.test-suite.js";
 import { deduplicationTestSuite } from "../suites/deduplication.test-suite.js";
@@ -24,6 +25,10 @@ it("index");
 
 describe("Chains", () => {
   chainsTestSuite({ it: inProcessNoopIt });
+});
+
+describe("Start Chains", () => {
+  startChainsTestSuite({ it: inProcessNoopIt });
 });
 
 describe("Blocker Chains", () => {

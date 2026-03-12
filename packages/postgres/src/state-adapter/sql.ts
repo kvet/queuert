@@ -352,6 +352,209 @@ FROM final_job fj;
   true,
 );
 
+export const createJobsSql: TypedSql<
+  readonly [
+    NamedParameter<"count", number>,
+    NamedParameter<"type_names", string[]>,
+    NamedParameter<"chain_ids", (string | null)[]>,
+    NamedParameter<"chain_type_names", string[]>,
+    NamedParameter<"chain_indexes", number[]>,
+    NamedParameter<"inputs", unknown[]>,
+    NamedParameter<"deduplication_keys", (string | null)[]>,
+    NamedParameter<"deduplication_scopes", (string | null)[]>,
+    NamedParameter<"deduplication_window_ms", (number | null)[]>,
+    NamedParameter<"scheduled_ats", (string | null)[]>,
+    NamedParameter<"schedule_after_ms", (number | null)[]>,
+    NamedParameter<"chain_trace_contexts", (string | null)[]>,
+    NamedParameter<"trace_contexts", (string | null)[]>,
+  ],
+  (DbJob & { deduplicated: boolean; ord: number })[]
+> = sql(
+  /* sql */ `
+WITH generated_ids AS (
+  SELECT {{id_default}} AS id, ord
+  FROM generate_series(1, $1::integer) AS ord
+),
+input_data AS (
+  SELECT
+    gi.id, type_name, chain_id, chain_type_name, chain_index,
+    input, dedup_key, dedup_scope, dedup_window_ms,
+    scheduled_at, schedule_after_ms,
+    chain_trace_context, trace_context, gi.ord
+  FROM unnest(
+    $2::text[], $3::{{id_type}}[], $4::text[], $5::integer[],
+    $6::jsonb[], $7::text[], $8::text[], $9::bigint[],
+    $10::timestamptz[], $11::bigint[],
+    $12::text[], $13::text[]
+  ) WITH ORDINALITY AS t(
+    type_name, chain_id, chain_type_name, chain_index,
+    input, dedup_key, dedup_scope, dedup_window_ms,
+    scheduled_at, schedule_after_ms,
+    chain_trace_context, trace_context, ord
+  )
+  JOIN generated_ids gi USING (ord)
+),
+existing_continuations AS (
+  SELECT DISTINCT ON (id2.ord) id2.ord, j.*
+  FROM input_data id2
+  JOIN {{schema}}.{{table_prefix}}job j
+    ON id2.chain_id IS NOT NULL
+    AND j.chain_id = id2.chain_id
+    AND j.chain_index = id2.chain_index
+    AND j.id != j.chain_id
+  ORDER BY id2.ord
+),
+existing_deduplicated AS (
+  SELECT DISTINCT ON (id2.ord) id2.ord, j.*
+  FROM input_data id2
+  JOIN {{schema}}.{{table_prefix}}job j
+    ON id2.dedup_key IS NOT NULL
+    AND j.deduplication_key = id2.dedup_key
+    AND j.chain_index = 0
+    AND j.chain_type_name = id2.chain_type_name
+    AND (
+      id2.dedup_scope IS NULL
+      OR (id2.dedup_scope = 'incomplete' AND j.status != 'completed')
+      OR (id2.dedup_scope = 'any')
+    )
+    AND (
+      id2.dedup_window_ms IS NULL
+      OR j.created_at >= now() - (id2.dedup_window_ms || ' milliseconds')::interval
+    )
+  WHERE NOT EXISTS (SELECT 1 FROM existing_continuations ec WHERE ec.ord = id2.ord)
+  ORDER BY id2.ord, j.created_at DESC
+),
+to_insert_all AS (
+  SELECT id2.*
+  FROM input_data id2
+  WHERE NOT EXISTS (SELECT 1 FROM existing_continuations ec WHERE ec.ord = id2.ord)
+    AND NOT EXISTS (SELECT 1 FROM existing_deduplicated ed WHERE ed.ord = id2.ord)
+),
+to_insert AS (
+  SELECT tia.*
+  FROM to_insert_all tia
+  WHERE tia.dedup_key IS NULL
+    OR NOT EXISTS (
+      SELECT 1 FROM to_insert_all tia2
+      WHERE tia2.dedup_key = tia.dedup_key AND tia2.chain_type_name = tia.chain_type_name AND tia2.ord < tia.ord
+    )
+),
+inserted_jobs AS (
+  INSERT INTO {{schema}}.{{table_prefix}}job (id, type_name, chain_id, chain_type_name, chain_index, input, deduplication_key, scheduled_at, chain_trace_context, trace_context)
+  SELECT
+    ti.id, ti.type_name, COALESCE(ti.chain_id, ti.id), ti.chain_type_name,
+    ti.chain_index, ti.input, ti.dedup_key,
+    COALESCE(ti.scheduled_at, now() + (ti.schedule_after_ms || ' milliseconds')::interval, now()),
+    ti.chain_trace_context, ti.trace_context
+  FROM to_insert ti
+  ON CONFLICT (chain_id, chain_index) DO UPDATE SET id = {{schema}}.{{table_prefix}}job.id
+  RETURNING *
+)
+SELECT ec.ord, ec.id, ec.type_name, ec.chain_id, ec.chain_type_name, ec.chain_index, ec.input, ec.output, ec.status, ec.created_at, ec.scheduled_at, ec.completed_at, ec.completed_by, ec.attempt, ec.last_attempt_error, ec.last_attempt_at, ec.leased_by, ec.leased_until, ec.deduplication_key, ec.chain_trace_context, ec.trace_context, TRUE AS deduplicated
+FROM existing_continuations ec
+UNION ALL
+SELECT ed.ord, ed.id, ed.type_name, ed.chain_id, ed.chain_type_name, ed.chain_index, ed.input, ed.output, ed.status, ed.created_at, ed.scheduled_at, ed.completed_at, ed.completed_by, ed.attempt, ed.last_attempt_error, ed.last_attempt_at, ed.leased_by, ed.leased_until, ed.deduplication_key, ed.chain_trace_context, ed.trace_context, TRUE AS deduplicated
+FROM existing_deduplicated ed
+UNION ALL
+SELECT tia.ord, ij.id, ij.type_name, ij.chain_id, ij.chain_type_name, ij.chain_index, ij.input, ij.output, ij.status, ij.created_at, ij.scheduled_at, ij.completed_at, ij.completed_by, ij.attempt, ij.last_attempt_error, ij.last_attempt_at, ij.leased_by, ij.leased_until, ij.deduplication_key, ij.chain_trace_context, ij.trace_context, TRUE AS deduplicated
+FROM to_insert_all tia
+JOIN to_insert ti ON ti.dedup_key = tia.dedup_key AND ti.chain_type_name = tia.chain_type_name
+JOIN inserted_jobs ij ON COALESCE(ti.chain_id, ti.id) = ij.chain_id AND ti.chain_index = ij.chain_index
+WHERE tia.dedup_key IS NOT NULL AND tia.ord != ti.ord
+UNION ALL
+SELECT ti.ord, ij.id, ij.type_name, ij.chain_id, ij.chain_type_name, ij.chain_index, ij.input, ij.output, ij.status, ij.created_at, ij.scheduled_at, ij.completed_at, ij.completed_by, ij.attempt, ij.last_attempt_error, ij.last_attempt_at, ij.leased_by, ij.leased_until, ij.deduplication_key, ij.chain_trace_context, ij.trace_context, (ij.id != ti.id) AS deduplicated
+FROM inserted_jobs ij JOIN to_insert ti ON COALESCE(ti.chain_id, ti.id) = ij.chain_id AND ti.chain_index = ij.chain_index
+ORDER BY ord
+`,
+  true,
+);
+
+export const addJobsBlockersSql: TypedSql<
+  readonly [
+    NamedParameter<"job_ids", string[]>,
+    NamedParameter<"blocked_by_chain_ids", string[]>,
+    NamedParameter<"trace_contexts", (string | null)[]>,
+    NamedParameter<"blocker_indexes", number[]>,
+  ],
+  (DbJob & {
+    source_job_id: string;
+    incomplete_blocker_chain_ids: string[];
+    blocker_chain_trace_contexts: (string | null)[];
+  })[]
+> = sql(
+  /* sql */ `
+WITH input_data AS (
+  SELECT job_id, blocked_by_chain_id, trace_context, blocker_index AS "index", ord
+  FROM unnest($1::{{id_type}}[], $2::{{id_type}}[], $3::text[], $4::integer[]) WITH ORDINALITY AS t(job_id, blocked_by_chain_id, trace_context, blocker_index, ord)
+),
+inserted_blockers AS (
+  INSERT INTO {{schema}}.{{table_prefix}}job_blocker (job_id, blocked_by_chain_id, "index", trace_context)
+  SELECT job_id, blocked_by_chain_id, "index", trace_context
+  FROM input_data
+  RETURNING job_id, blocked_by_chain_id
+),
+blockers_status AS (
+  SELECT
+    ib.job_id,
+    ib.blocked_by_chain_id,
+    (
+      SELECT j2.status
+      FROM {{schema}}.{{table_prefix}}job j2
+      WHERE j2.chain_id = ib.blocked_by_chain_id
+      ORDER BY j2.chain_index DESC
+      LIMIT 1
+    ) AS blocker_status
+  FROM inserted_blockers ib
+),
+has_incomplete_blockers AS (
+  SELECT DISTINCT job_id
+  FROM blockers_status
+  WHERE blocker_status != 'completed'
+),
+updated_jobs AS (
+  UPDATE {{schema}}.{{table_prefix}}job j
+  SET status = 'blocked'
+  WHERE j.id IN (SELECT job_id FROM has_incomplete_blockers)
+    AND j.status = 'pending'
+  RETURNING j.*
+),
+distinct_job_ids AS (
+  SELECT DISTINCT job_id FROM input_data
+),
+final_jobs AS (
+  SELECT * FROM updated_jobs
+  UNION ALL
+  SELECT j.* FROM {{schema}}.{{table_prefix}}job j
+  JOIN distinct_job_ids dj ON dj.job_id = j.id
+  WHERE NOT EXISTS (SELECT 1 FROM updated_jobs uj WHERE uj.id = j.id)
+),
+per_job_incomplete AS (
+  SELECT
+    bs.job_id,
+    COALESCE(array_agg(bs.blocked_by_chain_id) FILTER (WHERE bs.blocker_status != 'completed'), ARRAY[]::{{id_type}}[]) AS incomplete_blocker_chain_ids
+  FROM blockers_status bs
+  GROUP BY bs.job_id
+),
+per_job_trace_contexts AS (
+  SELECT
+    id2.job_id,
+    json_agg(j.chain_trace_context ORDER BY id2.ord) AS blocker_chain_trace_contexts
+  FROM input_data id2
+  JOIN {{schema}}.{{table_prefix}}job j ON j.id = id2.blocked_by_chain_id
+  GROUP BY id2.job_id
+)
+SELECT fj.*,
+  fj.id AS source_job_id,
+  COALESCE(pi.incomplete_blocker_chain_ids, ARRAY[]::{{id_type}}[]) AS incomplete_blocker_chain_ids,
+  COALESCE(ptc.blocker_chain_trace_contexts, '[]'::json) AS blocker_chain_trace_contexts
+FROM final_jobs fj
+LEFT JOIN per_job_incomplete pi ON pi.job_id = fj.id
+LEFT JOIN per_job_trace_contexts ptc ON ptc.job_id = fj.id
+ORDER BY fj.id
+`,
+  true,
+);
+
 export const completeJobSql: TypedSql<
   readonly [
     NamedParameter<"id", string>,

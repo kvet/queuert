@@ -9,6 +9,7 @@ import {
   notifyResilienceTestSuite,
   notifyTestSuite,
   schedulingTestSuite,
+  startChainsTestSuite,
   stateResilienceTestSuite,
   waitChainCompletionTestSuite,
   workerlessCompletionTestSuite,
@@ -29,6 +30,10 @@ it("index");
 
 describe("Chains", () => {
   chainsTestSuite({ it: postgresPostgresIt });
+});
+
+describe("Start Chains", () => {
+  startChainsTestSuite({ it: postgresPostgresIt });
 });
 
 describe("Blocker Chains", () => {

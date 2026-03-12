@@ -35,6 +35,7 @@ For simpler setups, consider [SQLite](https://github.com/kvet/queuert/tree/main/
 ## Requirements
 
 - Node.js 22 or later
+- TypeScript 5.0+ (recommended)
 - PostgreSQL 14 or later
 
 ## Installation

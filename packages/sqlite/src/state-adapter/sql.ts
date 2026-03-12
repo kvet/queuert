@@ -277,31 +277,29 @@ LIMIT 1
   true,
 );
 
-export const insertJobSql: TypedSql<
-  readonly [
-    NamedParameter<"id", string>,
-    NamedParameter<"type_name", string>,
-    NamedParameter<"chain_id", string | null>,
-    NamedParameter<"id_for_chain", string>,
-    NamedParameter<"chain_type_name", string>,
-    NamedParameter<"chain_index", number>,
-    NamedParameter<"input", string | null>,
-    NamedParameter<"deduplication_key", string | null>,
-    NamedParameter<"scheduled_at", string | null>,
-    NamedParameter<"schedule_after_ms_check", number | null>,
-    NamedParameter<"schedule_after_ms", number | null>,
-    NamedParameter<"chain_trace_context", string | null>,
-    NamedParameter<"trace_context", string | null>,
-  ],
-  [DbJob]
-> = sql(
+export const insertJobsSql: TypedSql<readonly [NamedParameter<"jobs_json", string>], DbJob[]> = sql(
   /* sql */ `
 INSERT INTO {{table_prefix}}job (id, type_name, chain_id, chain_type_name, chain_index, input, deduplication_key, scheduled_at, chain_trace_context, trace_context)
-VALUES (?, ?, COALESCE(?, ?), ?, ?, ?, ?,
-  COALESCE(?,
-    CASE WHEN ? IS NOT NULL THEN datetime('now', 'subsec', '+' || (? / 1000.0) || ' seconds') ELSE NULL END,
-    datetime('now', 'subsec')),
-  ?, ?)
+SELECT
+  json_extract(je.value, '$.id'),
+  json_extract(je.value, '$.type_name'),
+  COALESCE(json_extract(je.value, '$.chain_id'), json_extract(je.value, '$.id')),
+  json_extract(je.value, '$.chain_type_name'),
+  json_extract(je.value, '$.chain_index'),
+  json_extract(je.value, '$.input'),
+  json_extract(je.value, '$.deduplication_key'),
+  COALESCE(
+    json_extract(je.value, '$.scheduled_at'),
+    CASE WHEN json_extract(je.value, '$.schedule_after_ms') IS NOT NULL
+      THEN datetime('now', 'subsec', '+' || (json_extract(je.value, '$.schedule_after_ms') / 1000.0) || ' seconds')
+      ELSE NULL
+    END,
+    datetime('now', 'subsec')
+  ),
+  json_extract(je.value, '$.chain_trace_context'),
+  json_extract(je.value, '$.trace_context')
+FROM json_each(?) AS je
+WHERE true
 ON CONFLICT (chain_id, chain_index) DO UPDATE SET id = {{table_prefix}}job.id
 RETURNING *
 `,

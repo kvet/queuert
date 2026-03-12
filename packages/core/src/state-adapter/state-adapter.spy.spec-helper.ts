@@ -58,8 +58,8 @@ export const createSpyStateAdapter = <TTxContext extends BaseTxContext, TJobId e
     },
     getJobChainById: wrap("getJobChainById", stateAdapter.getJobChainById),
     getJobById: wrap("getJobById", stateAdapter.getJobById),
-    createJob: wrap("createJob", stateAdapter.createJob),
-    addJobBlockers: wrap("addJobBlockers", stateAdapter.addJobBlockers),
+    createJobs: wrap("createJobs", stateAdapter.createJobs),
+    addJobsBlockers: wrap("addJobsBlockers", stateAdapter.addJobsBlockers),
     unblockJobs: wrap("unblockJobs", stateAdapter.unblockJobs),
     getJobBlockers: wrap("getJobBlockers", stateAdapter.getJobBlockers),
     getNextJobAvailableInMs: wrap("getNextJobAvailableInMs", stateAdapter.getNextJobAvailableInMs),
@@ -78,7 +78,6 @@ export const createSpyStateAdapter = <TTxContext extends BaseTxContext, TJobId e
     listJobs: wrap("listJobs", stateAdapter.listJobs),
     listJobChainJobs: wrap("listJobChainJobs", stateAdapter.listJobChainJobs),
     listBlockedJobs: wrap("listBlockedJobs", stateAdapter.listBlockedJobs),
-
     record: async ({ name, ...txCtx }: { name: string } & TTxContext) =>
       record({ name, txCtx: txCtx as unknown as TTxContext }),
   };

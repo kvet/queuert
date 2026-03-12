@@ -369,4 +369,321 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expect(chainB.deduplicated).toBe(false);
     expect(chainB.id).not.toBe(chainA.id);
   });
+
+  it("deduplicates within a batch", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const registry = defineJobTypeRegistry<{
+      test: {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+
+    const [chain1, chain2, chain3] = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChains({
+          ...txCtx,
+          transactionHooks,
+          items: [
+            { typeName: "test", input: { value: 1 }, deduplication: { key: "same-key" } },
+            { typeName: "test", input: { value: 2 }, deduplication: { key: "same-key" } },
+            { typeName: "test", input: { value: 3 }, deduplication: { key: "different-key" } },
+          ],
+        }),
+      ),
+    );
+
+    expect(chain1.deduplicated).toBe(false);
+    expect(chain2.deduplicated).toBe(true);
+    expect(chain2.id).toBe(chain1.id);
+    expect(chain3.deduplicated).toBe(false);
+    expect(chain3.id).not.toBe(chain1.id);
+  });
+
+  it("deduplicates against pre-existing chains", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const registry = defineJobTypeRegistry<{
+      test: {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+
+    const existing = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: { value: 100 },
+          deduplication: { key: "existing-key" },
+        }),
+      ),
+    );
+
+    const [chain1, chain2] = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChains({
+          ...txCtx,
+          transactionHooks,
+          items: [
+            { typeName: "test", input: { value: 1 }, deduplication: { key: "existing-key" } },
+            { typeName: "test", input: { value: 2 }, deduplication: { key: "fresh-key" } },
+          ],
+        }),
+      ),
+    );
+
+    expect(chain1.deduplicated).toBe(true);
+    expect(chain1.id).toBe(existing.id);
+    expect(chain2.deduplicated).toBe(false);
+    expect(chain2.id).not.toBe(existing.id);
+  });
+
+  it("deduplication scopes: 'any' vs 'incomplete'", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    log,
+    observabilityAdapter,
+    expect,
+  }) => {
+    const registry = defineJobTypeRegistry<{
+      test: {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+
+    // Create and complete a chain with 'any' scope key
+    const anyChain = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: { value: 1 },
+          deduplication: { key: "any-key", scope: "any" },
+        }),
+      ),
+    );
+
+    await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.completeJobChain({
+          ...txCtx,
+          transactionHooks,
+          ...anyChain,
+          complete: async ({ job, complete }) => {
+            await complete(job, async () => ({ result: job.input.value }));
+          },
+        }),
+      ),
+    );
+
+    // Create and complete a chain with 'incomplete' scope key
+    const incompleteChain = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: { value: 2 },
+          deduplication: { key: "incomplete-key", scope: "incomplete" },
+        }),
+      ),
+    );
+
+    await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.completeJobChain({
+          ...txCtx,
+          transactionHooks,
+          ...incompleteChain,
+          complete: async ({ job, complete }) => {
+            await complete(job, async () => ({ result: job.input.value }));
+          },
+        }),
+      ),
+    );
+
+    // Batch: 'any' should dedup against completed, 'incomplete' should not
+    const [anyResult, incompleteResult] = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChains({
+          ...txCtx,
+          transactionHooks,
+          items: [
+            {
+              typeName: "test",
+              input: { value: 3 },
+              deduplication: { key: "any-key", scope: "any" },
+            },
+            {
+              typeName: "test",
+              input: { value: 4 },
+              deduplication: { key: "incomplete-key", scope: "incomplete" },
+            },
+          ],
+        }),
+      ),
+    );
+
+    expect(anyResult.deduplicated).toBe(true);
+    expect(anyResult.id).toBe(anyChain.id);
+    expect(incompleteResult.deduplicated).toBe(false);
+    expect(incompleteResult.id).not.toBe(incompleteChain.id);
+  });
+
+  it("deduplication with windowMs respects time window", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const registry = defineJobTypeRegistry<{
+      test: {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+
+    await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: { value: 1 },
+          deduplication: { key: "window-key", scope: "any", windowMs: 50 },
+        }),
+      ),
+    );
+
+    await sleep(100);
+
+    const [chain1, chain2] = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChains({
+          ...txCtx,
+          transactionHooks,
+          items: [
+            {
+              typeName: "test",
+              input: { value: 2 },
+              deduplication: { key: "window-key", scope: "any", windowMs: 50 },
+            },
+            {
+              typeName: "test",
+              input: { value: 3 },
+              deduplication: { key: "window-key", scope: "any", windowMs: 50 },
+            },
+          ],
+        }),
+      ),
+    );
+
+    // Outside window — not deduplicated against existing
+    expect(chain1.deduplicated).toBe(false);
+    // Within same batch — deduplicated against chain1
+    expect(chain2.deduplicated).toBe(true);
+    expect(chain2.id).toBe(chain1.id);
+  });
+
+  it("does not deduplicate across different chain types with the same key", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const registry = defineJobTypeRegistry<{
+      typeA: {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+      typeB: {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+
+    const [chainA, chainB] = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChains({
+          ...txCtx,
+          transactionHooks,
+          items: [
+            { typeName: "typeA", input: { value: 1 }, deduplication: { key: "shared-key" } },
+            { typeName: "typeB", input: { value: 2 }, deduplication: { key: "shared-key" } },
+          ],
+        }),
+      ),
+    );
+
+    expect(chainA.deduplicated).toBe(false);
+    expect(chainB.deduplicated).toBe(false);
+    expect(chainB.id).not.toBe(chainA.id);
+  });
 };

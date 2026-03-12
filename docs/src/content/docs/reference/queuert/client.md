@@ -34,7 +34,7 @@ All mutating methods require `transactionHooks` and a transaction context (`tx`)
 ```typescript
 const chain = await client.startJobChain({
   typeName: "send-email",
-  input: { to: "..." },
+  input: { to: "alice@..." },
   transactionHooks,
   tx,
   deduplication?: DeduplicationOptions,
@@ -45,10 +45,20 @@ const chain = await client.startJobChain({
 
 Returns `JobChain & { deduplicated: boolean }`.
 
-- **typeName** -- must be an entry job type
-- **input** -- typed to match the job type definition
-- **blockers** -- required when the job type defines blockers
-- **deduplication** -- when it matches an existing chain, the returned object has `deduplicated: true` and no new chain is created
+### startJobChains
+
+```typescript
+const chains = await client.startJobChains({
+  items: [
+    { typeName: "send-email", input: { to: "alice@..." } },
+    { typeName: "send-email", input: { to: "bob@..." } },
+  ],
+  transactionHooks,
+  tx,
+});
+```
+
+Returns `Array<JobChain & { deduplicated: boolean }>`.
 
 ### deleteJobChains
 

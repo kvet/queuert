@@ -856,4 +856,244 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       }),
     );
   });
+
+  it("deletes batch-created chains", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const registry = defineJobTypeRegistry<{
+      test: {
+        entry: true;
+        input: { value: number };
+        output: null;
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+
+    const chains = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChains({
+          ...txCtx,
+          transactionHooks,
+          items: [
+            { typeName: "test", input: { value: 1 } },
+            { typeName: "test", input: { value: 2 } },
+            { typeName: "test", input: { value: 3 } },
+          ],
+        }),
+      ),
+    );
+
+    const deletedChains = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.deleteJobChains({
+          ...txCtx,
+          transactionHooks,
+          ids: chains.map((c) => c.id),
+        }),
+      ),
+    );
+
+    expect(deletedChains).toHaveLength(3);
+    const deletedIds = new Set(deletedChains.map((c) => c.id));
+    for (const chain of chains) {
+      expect(deletedIds).toContain(chain.id);
+    }
+
+    for (const chain of chains) {
+      const fetched = await runInTransaction(async (txCtx) =>
+        client.getJobChain({ ...txCtx, id: chain.id }),
+      );
+      expect(fetched).toBeUndefined();
+    }
+  });
+
+  it("throws when deleting batch-created blocker", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const registry = defineJobTypeRegistry<{
+      blocker: {
+        entry: true;
+        input: null;
+        output: null;
+      };
+      main: {
+        entry: true;
+        input: { label: string };
+        output: null;
+        blockers: [{ typeName: "blocker" }];
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+
+    const blocker = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "blocker",
+          input: null,
+        }),
+      ),
+    );
+
+    const [mainA, mainB] = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChains({
+          ...txCtx,
+          transactionHooks,
+          items: [
+            { typeName: "main", input: { label: "A" }, blockers: [blocker] },
+            { typeName: "main", input: { label: "B" }, blockers: [blocker] },
+          ],
+        }),
+      ),
+    );
+
+    expect(mainA.status).toBe("blocked");
+    expect(mainB.status).toBe("blocked");
+
+    await expect(
+      withTransactionHooks(async (transactionHooks) =>
+        runInTransaction(async (txCtx) =>
+          client.deleteJobChains({
+            ...txCtx,
+            transactionHooks,
+            ids: [blocker.id],
+          }),
+        ),
+      ),
+    ).rejects.toThrow(BlockerReferenceError);
+
+    const deletedChains = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.deleteJobChains({
+          ...txCtx,
+          transactionHooks,
+          ids: [mainA.id, mainB.id, blocker.id],
+        }),
+      ),
+    );
+
+    expect(deletedChains).toHaveLength(3);
+  });
+
+  it("cascade deletes batch-created diamond dependencies", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const registry = defineJobTypeRegistry<{
+      root: {
+        entry: true;
+        input: { label: string };
+        output: null;
+      };
+      mid: {
+        entry: true;
+        input: { label: string };
+        output: null;
+        blockers: [{ typeName: "root" }];
+      };
+      top: {
+        entry: true;
+        input: { label: string };
+        output: null;
+        blockers: [{ typeName: "mid" }, { typeName: "mid" }];
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+
+    //     D
+    //    / \
+    //   B   C  (batch-created)
+    //    \ /
+    //     A
+    const chainA = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "root",
+          input: { label: "A" },
+        }),
+      ),
+    );
+
+    const [chainB, chainC] = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChains({
+          ...txCtx,
+          transactionHooks,
+          items: [
+            { typeName: "mid", input: { label: "B" }, blockers: [chainA] },
+            { typeName: "mid", input: { label: "C" }, blockers: [chainA] },
+          ],
+        }),
+      ),
+    );
+
+    const chainD = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "top",
+          input: { label: "D" },
+          blockers: [chainB, chainC],
+        }),
+      ),
+    );
+
+    const deletedChains = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.deleteJobChains({
+          ...txCtx,
+          transactionHooks,
+          ids: [chainD.id],
+          cascade: true,
+        }),
+      ),
+    );
+
+    expect(deletedChains).toHaveLength(4);
+    const deletedIds = new Set(deletedChains.map((c) => c.id));
+    expect(deletedIds).toContain(chainA.id);
+    expect(deletedIds).toContain(chainB.id);
+    expect(deletedIds).toContain(chainC.id);
+    expect(deletedIds).toContain(chainD.id);
+  });
 };

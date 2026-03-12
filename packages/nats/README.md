@@ -32,6 +32,8 @@ This is a notify adapter only. You still need a state adapter ([PostgreSQL](http
 ## Requirements
 
 - Node.js 22 or later
+- TypeScript 5.0+ (recommended)
+- NATS 2.2 or later (2.6+ for JetStream KV optimization)
 
 ## Installation
 

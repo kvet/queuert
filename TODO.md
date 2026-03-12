@@ -1,6 +1,5 @@
 # Short term
 
-- [TASK,COMPLEX] Replace `startJobChain` with `createJobChain`; add `createJobChains` method; new `createJobs` + `addJobsBlockers` on `StateAdapter`; PG: single `unnest`+CTE batch insert with per-row dedup, batch blocker insert grouped by job_id; SQLite: loop within txCtx
 - [REF] Reset jobs in chains + dashboard
 - [REF] Delete jobs from dashboard
 - [REF] Optimize search of chains by status; it requires full scan currently
@@ -20,8 +19,10 @@
   - [REF] Fix job detail: fetches all chain jobs to find continuation — use targeted query
   - [REF] Fix stale cursor race condition on filter change in ChainList/JobList
 - [TASK,EASY] Fix flaky timeout in `postgres-postgres.data.spec.ts` "handles distributed blocker jobs" (Notify suite) — intermittent `WaitChainTimeoutError`
+- [REF,EASY] Review all public types exported from `@queuert/core` — hide internal-only types (prefix with `_`, remove from `index.ts`). Breaking changes OK
 - [TASK] Use transactionHooks in `deleteJobChains` to buffer post-delete side effects (e.g., observability events)
 - [?,TASK] Review `allowEmptyWorker` flag in job-process.ts staged mode — currently set when `prepareTransactionContext.status === "pending"`, may be removable
+- [TASK] Fix poisoned PG transaction in `TransactionContext` — after a `run()` call fails (e.g., constraint violation in `addJobsBlockers`), the PG transaction is poisoned but status stays "pending"; subsequent `run()` calls silently fail on the dead connection. Impact: in atomic mode, error recovery fails on the poisoned TX, ROLLBACK undoes the acquire, and the job goes straight back to "pending" — creating a hot infinite loop with no backoff. In staged mode, the acquire is already committed so the job is stuck as "running" until reaper, then the cycle repeats at lease-expiry pace. Fix: mark `TransactionContext` as "rejected" on `run()` failure so `runInGuardedTransaction` falls through to a fresh transaction
 - [EPIC] Docs website enhancements
   - [TASK] Add interactive examples / live demos
   - [TASK] Custom branding and styling

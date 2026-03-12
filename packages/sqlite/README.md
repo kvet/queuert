@@ -32,6 +32,8 @@ For production with multiple workers across machines, consider [PostgreSQL](http
 ## Requirements
 
 - Node.js 22 or later
+- TypeScript 5.0+ (recommended)
+- SQLite 3.42 or later
 
 ## Installation
 

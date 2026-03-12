@@ -1,5 +1,6 @@
 import { describe, it } from "vitest";
 import { extendWithStateInProcess } from "../state-adapter/state-adapter.in-process.spec-helper.js";
+import { startChainsTestSuite } from "../suites/start-chains.test-suite.js";
 import { blockerChainsTestSuite } from "../suites/blocker-chains.test-suite.js";
 import { clientQueriesTestSuite } from "../suites/client-queries.test-suite.js";
 import { notifyTestSuite } from "../suites/notify.test-suite.js";
@@ -48,6 +49,10 @@ describe("Reaper", () => {
 
 describe("Chains", () => {
   chainsTestSuite({ it: inProcessInProcessIt });
+});
+
+describe("Start Chains", () => {
+  startChainsTestSuite({ it: inProcessInProcessIt });
 });
 
 describe("Blocker Chains", () => {

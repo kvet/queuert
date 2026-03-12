@@ -42,7 +42,7 @@ import {
   getLatestChainJobForUpdateSql,
   getNextJobAvailableInMsSql,
   insertJobBlockersSql,
-  insertJobSql,
+  insertJobsSql,
   jobColumnsPrefixedSelect,
   jobColumnsSelect,
   migrations,
@@ -234,142 +234,185 @@ export const createSqliteStateAdapter = async <
       return job ? mapDbJobToStateJob(job) : undefined;
     },
 
-    createJob: async ({
-      txCtx,
-      typeName,
-      chainTypeName,
-      chainIndex,
-      input,
-      chainId,
-      deduplication,
-      schedule,
-      chainTraceContext,
-      traceContext,
-    }) => {
-      const newId = idGenerator();
-      const inputJson = input !== undefined ? JSON.stringify(input) : null;
-      const deduplicationKey = deduplication?.key ?? null;
-      const deduplicationScope = deduplication ? (deduplication.scope ?? "incomplete") : null;
-      const deduplicationWindowMs = deduplication?.windowMs ?? null;
+    createJobs: async ({ txCtx, jobs }) => {
+      const results: { job: StateJob; deduplicated: boolean }[] = Array.from({
+        length: jobs.length,
+      });
+      const toInsert: { index: number; id: string; json: Record<string, unknown> }[] = [];
+      const intraBatchDedup = new Map<string, number>();
+      const deferredDupes: { index: number; firstIndex: number }[] = [];
 
-      const chainIdOrNull = chainId ?? null;
-      const scheduledAtIso = schedule?.at?.toISOString().replace("T", " ").replace("Z", "") ?? null;
-      const scheduleAfterMsOrNull = schedule?.afterMs ?? null;
-      const chainTraceContextOrNull = chainTraceContext ?? null;
-      const traceContextOrNull = traceContext ?? null;
-
-      if (chainId) {
-        const [existingContinuation] = await executeTypedSql({
-          txCtx,
-          sql: findExistingContinuationSql,
-          params: [chainId, chainIndex],
-        });
-
-        if (existingContinuation) {
-          return { job: mapDbJobToStateJob(existingContinuation), deduplicated: true };
-        }
-      } else if (deduplicationKey) {
-        const [existingDeduplicated] = await executeTypedSql({
-          txCtx,
-          sql: findDeduplicatedJobSql,
-          params: [
-            deduplicationKey,
-            deduplicationKey,
-            chainTypeName,
-            deduplicationScope,
-            deduplicationScope,
-            deduplicationScope,
-            deduplicationWindowMs,
-            deduplicationWindowMs,
-          ],
-        });
-
-        if (existingDeduplicated) {
-          return { job: mapDbJobToStateJob(existingDeduplicated), deduplicated: true };
-        }
-      }
-
-      const [result] = await executeTypedSql({
-        txCtx,
-        sql: insertJobSql,
-        params: [
-          newId,
+      for (let i = 0; i < jobs.length; i++) {
+        const {
           typeName,
-          chainIdOrNull,
-          newId,
           chainTypeName,
           chainIndex,
-          inputJson,
-          deduplicationKey,
-          scheduledAtIso,
-          scheduleAfterMsOrNull,
-          scheduleAfterMsOrNull,
-          chainTraceContextOrNull,
-          traceContextOrNull,
-        ],
-      });
+          input,
+          chainId,
+          deduplication,
+          schedule,
+          chainTraceContext,
+          traceContext,
+        } = jobs[i];
+        const deduplicationKey = deduplication?.key ?? null;
+        const deduplicationScope = deduplication ? (deduplication.scope ?? "incomplete") : null;
+        const deduplicationWindowMs = deduplication?.windowMs ?? null;
 
-      return { job: mapDbJobToStateJob(result), deduplicated: result.id !== newId };
-    },
+        if (chainId) {
+          const [existingContinuation] = await executeTypedSql({
+            txCtx,
+            sql: findExistingContinuationSql,
+            params: [chainId, chainIndex],
+          });
 
-    addJobBlockers: async ({ txCtx, jobId, blockedByChainIds, blockerTraceContexts }) => {
-      const traceContextsJson = JSON.stringify(blockerTraceContexts ?? []);
+          if (existingContinuation) {
+            results[i] = { job: mapDbJobToStateJob(existingContinuation), deduplicated: true };
+            continue;
+          }
+        } else if (deduplicationKey) {
+          const batchKey = `${deduplicationKey}\0${chainTypeName}`;
+          const firstIdx = intraBatchDedup.get(batchKey);
+          if (firstIdx !== undefined) {
+            deferredDupes.push({ index: i, firstIndex: firstIdx });
+            continue;
+          }
 
-      await executeTypedSql({
-        txCtx,
-        sql: insertJobBlockersSql,
-        params: [jobId, traceContextsJson, JSON.stringify(blockedByChainIds)],
-      });
+          const [existingDeduplicated] = await executeTypedSql({
+            txCtx,
+            sql: findDeduplicatedJobSql,
+            params: [
+              deduplicationKey,
+              deduplicationKey,
+              chainTypeName,
+              deduplicationScope,
+              deduplicationScope,
+              deduplicationScope,
+              deduplicationWindowMs,
+              deduplicationWindowMs,
+            ],
+          });
 
-      const blockerStatuses = await executeTypedSql({
-        txCtx,
-        sql: checkBlockersStatusSql,
-        params: [jobId],
-      });
+          if (existingDeduplicated) {
+            results[i] = { job: mapDbJobToStateJob(existingDeduplicated), deduplicated: true };
+            continue;
+          }
 
-      const chainTraceContextRows = await executeTypedSql({
-        txCtx,
-        sql: getBlockerChainTraceContextsSql,
-        params: [JSON.stringify(blockedByChainIds)],
-      });
+          intraBatchDedup.set(batchKey, i);
+        }
 
-      const chainTraceContextMap = new Map(
-        chainTraceContextRows.map((r) => [r.blocked_by_chain_id, r.chain_trace_context]),
-      );
-      const blockerChainTraceContexts = blockedByChainIds.map(
-        (id) => chainTraceContextMap.get(id) ?? null,
-      );
-
-      const incompleteBlockerChainIds = blockerStatuses
-        .filter((b) => b.blocker_status !== "completed")
-        .map((b) => b.blocked_by_chain_id);
-
-      if (incompleteBlockerChainIds.length > 0) {
-        const [updatedJob] = await executeTypedSql({
-          txCtx,
-          sql: updateJobToBlockedSql,
-          params: [jobId],
+        const newId = idGenerator();
+        toInsert.push({
+          index: i,
+          id: newId,
+          json: {
+            id: newId,
+            type_name: typeName,
+            chain_id: chainId ?? null,
+            chain_type_name: chainTypeName,
+            chain_index: chainIndex,
+            input: input !== undefined ? JSON.stringify(input) : null,
+            deduplication_key: deduplicationKey,
+            scheduled_at: schedule?.at?.toISOString().replace("T", " ").replace("Z", "") ?? null,
+            schedule_after_ms: schedule?.afterMs ?? null,
+            chain_trace_context: chainTraceContext ?? null,
+            trace_context: traceContext ?? null,
+          },
         });
-        if (updatedJob) {
-          return {
-            job: mapDbJobToStateJob(updatedJob),
-            incompleteBlockerChainIds,
-            blockerChainTraceContexts,
+      }
+
+      if (toInsert.length > 0) {
+        const insertedRows = await executeTypedSql({
+          txCtx,
+          sql: insertJobsSql,
+          params: [JSON.stringify(toInsert.map((item) => item.json))],
+        });
+
+        for (let j = 0; j < toInsert.length; j++) {
+          const row = insertedRows[j];
+          results[toInsert[j].index] = {
+            job: mapDbJobToStateJob(row),
+            deduplicated: row.id !== toInsert[j].id,
           };
         }
       }
 
-      const [job] = await executeTypedSql({
-        txCtx,
-        sql: getJobByIdForBlockersSql,
-        params: [jobId],
-      });
-      return {
-        job: mapDbJobToStateJob(job),
-        incompleteBlockerChainIds: [],
-        blockerChainTraceContexts,
-      };
+      for (const { index, firstIndex } of deferredDupes) {
+        results[index] = { job: results[firstIndex].job, deduplicated: true };
+      }
+
+      return results;
     },
+
+    addJobsBlockers: async ({ txCtx, jobBlockers }) => {
+      const results: {
+        job: StateJob;
+        incompleteBlockerChainIds: string[];
+        blockerChainTraceContexts: (string | null)[];
+      }[] = [];
+
+      for (const { jobId, blockedByChainIds, blockerTraceContexts } of jobBlockers) {
+        const traceContextsJson = JSON.stringify(blockerTraceContexts ?? []);
+
+        await executeTypedSql({
+          txCtx,
+          sql: insertJobBlockersSql,
+          params: [jobId, traceContextsJson, JSON.stringify(blockedByChainIds)],
+        });
+
+        const blockerStatuses = await executeTypedSql({
+          txCtx,
+          sql: checkBlockersStatusSql,
+          params: [jobId],
+        });
+
+        const chainTraceContextRows = await executeTypedSql({
+          txCtx,
+          sql: getBlockerChainTraceContextsSql,
+          params: [JSON.stringify(blockedByChainIds)],
+        });
+
+        const chainTraceContextMap = new Map(
+          chainTraceContextRows.map((r) => [r.blocked_by_chain_id, r.chain_trace_context]),
+        );
+        const blockerChainTraceContexts = blockedByChainIds.map(
+          (id) => chainTraceContextMap.get(id) ?? null,
+        );
+
+        const incompleteBlockerChainIds = blockerStatuses
+          .filter((b) => b.blocker_status !== "completed")
+          .map((b) => b.blocked_by_chain_id);
+
+        if (incompleteBlockerChainIds.length > 0) {
+          const [updatedJob] = await executeTypedSql({
+            txCtx,
+            sql: updateJobToBlockedSql,
+            params: [jobId],
+          });
+          if (updatedJob) {
+            results.push({
+              job: mapDbJobToStateJob(updatedJob),
+              incompleteBlockerChainIds,
+              blockerChainTraceContexts,
+            });
+            continue;
+          }
+        }
+
+        const [job] = await executeTypedSql({
+          txCtx,
+          sql: getJobByIdForBlockersSql,
+          params: [jobId],
+        });
+        results.push({
+          job: mapDbJobToStateJob(job),
+          incompleteBlockerChainIds: [],
+          blockerChainTraceContexts,
+        });
+      }
+
+      return results;
+    },
+
     unblockJobs: async ({ txCtx, blockedByChainId }) => {
       const readyJobs = await executeTypedSql({
         txCtx,

@@ -24,10 +24,13 @@ const jobTypeRegistry = defineJobTypeRegistry<{
 
 // Start with blockers (transactionHooks required — see Transaction Hooks guide)
 const fetchBlockers = await withTransactionHooks(async (transactionHooks) =>
-  Promise.all([
-    client.startJobChain({ transactionHooks, typeName: "fetch-data", input: { url: "/a" } }),
-    client.startJobChain({ transactionHooks, typeName: "fetch-data", input: { url: "/b" } }),
-  ]),
+  client.startJobChains({
+    transactionHooks,
+    items: [
+      { typeName: "fetch-data", input: { url: "/a" } },
+      { typeName: "fetch-data", input: { url: "/b" } },
+    ],
+  }),
 );
 await withTransactionHooks(async (transactionHooks) =>
   client.startJobChain({

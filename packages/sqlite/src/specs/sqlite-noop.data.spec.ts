@@ -7,6 +7,7 @@ import {
   extendWithNotifyNoop,
   extendWithResourceLeakDetection,
   schedulingTestSuite,
+  startChainsTestSuite,
   stateResilienceTestSuite,
   waitChainCompletionTestSuite,
   workerlessCompletionTestSuite,
@@ -23,6 +24,10 @@ it("index");
 
 describe("Chains", () => {
   chainsTestSuite({ it: sqliteNoopIt });
+});
+
+describe("Start Chains", () => {
+  startChainsTestSuite({ it: sqliteNoopIt });
 });
 
 describe("Blocker Chains", () => {

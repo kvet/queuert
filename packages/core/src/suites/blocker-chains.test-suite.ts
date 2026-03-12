@@ -587,4 +587,187 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       expect(succeededJobChain.output).toEqual({ finalResult: 50 });
     });
   });
+
+  it("batch-creates multiple blocker chains", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const registry = defineJobTypeRegistry<{
+      blocker: {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+      main: {
+        entry: true;
+        input: null;
+        output: { finalResult: number[] };
+        blockers: [{ typeName: "blocker" }, ...{ typeName: "blocker" }[]];
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
+        blocker: {
+          attemptHandler: async ({ job, complete }) => {
+            return complete(async () => ({ result: job.input.value }));
+          },
+        },
+        main: {
+          attemptHandler: async ({ job, complete }) => {
+            return complete(async () => ({
+              finalResult: job.blockers.map((blocker) => blocker.output.result),
+            }));
+          },
+        },
+      }),
+    });
+
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) => {
+        const blockerChains = await client.startJobChains({
+          ...txCtx,
+          transactionHooks,
+          items: [
+            {
+              typeName: "blocker",
+              input: { value: 1 },
+            },
+            {
+              typeName: "blocker",
+              input: { value: 2 },
+            },
+            {
+              typeName: "blocker",
+              input: { value: 3 },
+            },
+            {
+              typeName: "blocker",
+              input: { value: 4 },
+            },
+            {
+              typeName: "blocker",
+              input: { value: 5 },
+            },
+          ],
+        });
+        return client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "main",
+          input: null,
+          blockers: blockerChains,
+        });
+      }),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      const succeededJobChain = await client.awaitJobChain(jobChain, completionOptions);
+
+      expect(succeededJobChain.output).toEqual({
+        finalResult: Array.from({ length: 5 }, (_, i) => i + 1),
+      });
+    });
+  });
+
+  it("batch-creates chains with shared blocker", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const registry = defineJobTypeRegistry<{
+      blocker: {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+      main: {
+        entry: true;
+        input: { label: string };
+        output: { finalResult: number };
+        blockers: [{ typeName: "blocker" }];
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 2,
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
+        blocker: {
+          attemptHandler: async ({ job, complete }) => {
+            return complete(async () => ({ result: job.input.value }));
+          },
+        },
+        main: {
+          attemptHandler: async ({ job, complete }) => {
+            return complete(async () => ({
+              finalResult: job.blockers[0].output.result,
+            }));
+          },
+        },
+      }),
+    });
+
+    const blocker = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "blocker",
+          input: { value: 99 },
+        }),
+      ),
+    );
+
+    const [mainA, mainB] = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChains({
+          ...txCtx,
+          transactionHooks,
+          items: [
+            { typeName: "main", input: { label: "A" }, blockers: [blocker] },
+            { typeName: "main", input: { label: "B" }, blockers: [blocker] },
+          ],
+        }),
+      ),
+    );
+
+    expect(mainA.status).toBe("blocked");
+    expect(mainB.status).toBe("blocked");
+
+    await withWorkers([await worker.start()], async () => {
+      const [resultA, resultB] = await Promise.all([
+        client.awaitJobChain(mainA, completionOptions),
+        client.awaitJobChain(mainB, completionOptions),
+      ]);
+
+      expect(resultA.output).toEqual({ finalResult: 99 });
+      expect(resultB.output).toEqual({ finalResult: 99 });
+    });
+  });
 };

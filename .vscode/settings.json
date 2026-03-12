@@ -5,8 +5,7 @@
   "editor.formatOnSave": true,
   "editor.codeActionsOnSave": {
     "source.fixAll": "explicit",
-    "source.organizeImports": "explicit",
-    "source.fixAll.oxc": "explicit"
+    "source.organizeImports": "explicit"
   },
   "[jsonc]": {
     "editor.defaultFormatter": "oxc.oxc-vscode"
@@ -30,5 +29,5 @@
     "editor.defaultFormatter": "oxc.oxc-vscode"
   },
   "vitest.disableWorkspaceWarning": true,
-  "typescript.experimental.useTsgo": true
+  "js/ts.experimental.useTsgo": true
 }

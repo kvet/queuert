@@ -41,6 +41,7 @@ import { Steps, Tabs, TabItem, Badge } from "@astrojs/starlight/components";
    <Tabs>
      <TabItem label="PostgreSQL">
        Recommended for production. Supports horizontal scaling and all Queuert features.
+       Requires PostgreSQL 14+.
 
        <Tabs syncKey="pkg">
          <TabItem label="npm">
@@ -62,7 +63,7 @@ import { Steps, Tabs, TabItem, Badge } from "@astrojs/starlight/components";
      </TabItem>
      <TabItem label="SQLite">
        <Badge text="Experimental" variant="caution" /> Suitable for local development, CLI tools,
-       and embedded applications.
+       and embedded applications. Requires SQLite 3.42+.
 
        <Tabs syncKey="pkg">
          <TabItem label="npm">
@@ -89,7 +90,7 @@ import { Steps, Tabs, TabItem, Badge } from "@astrojs/starlight/components";
    <Tabs>
      <TabItem label="Redis">
        Recommended for production. Uses Redis pub/sub with hint-based optimization to prevent
-       thundering herd.
+       thundering herd. Requires Redis 6+.
 
        <Tabs syncKey="pkg">
          <TabItem label="npm">
@@ -111,7 +112,7 @@ import { Steps, Tabs, TabItem, Badge } from "@astrojs/starlight/components";
      </TabItem>
      <TabItem label="NATS">
        <Badge text="Experimental" variant="caution" /> Uses NATS pub/sub. Supports revision-based
-       CAS optimization when JetStream KV is available.
+       CAS optimization when JetStream KV is available. Requires NATS 2.2+ (2.6+ for JetStream KV).
 
        <Tabs syncKey="pkg">
          <TabItem label="npm">

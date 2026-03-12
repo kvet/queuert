@@ -31,8 +31,8 @@ export const wrapStateAdapterWithLogging = <
     // Operation methods - wrap with error logging
     getJobChainById: wrap("getJobChainById", stateAdapter.getJobChainById),
     getJobById: wrap("getJobById", stateAdapter.getJobById),
-    createJob: wrap("createJob", stateAdapter.createJob),
-    addJobBlockers: wrap("addJobBlockers", stateAdapter.addJobBlockers),
+    createJobs: wrap("createJobs", stateAdapter.createJobs),
+    addJobsBlockers: wrap("addJobsBlockers", stateAdapter.addJobsBlockers),
     unblockJobs: wrap("unblockJobs", stateAdapter.unblockJobs),
     getJobBlockers: wrap("getJobBlockers", stateAdapter.getJobBlockers),
     getNextJobAvailableInMs: wrap("getNextJobAvailableInMs", stateAdapter.getNextJobAvailableInMs),

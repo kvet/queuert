@@ -19,10 +19,10 @@ import { type PgStateProvider } from "../state-provider/state-provider.pg.js";
 import {
   type DbJob,
   acquireJobSql,
-  addJobBlockersSql,
+  addJobsBlockersSql,
   checkExternalBlockerRefsSql,
   completeJobSql,
-  createJobSql,
+  createJobsSql,
   createMigrationTableSql,
   deleteJobChainsSql,
   getAppliedMigrationsSql,
@@ -149,57 +149,76 @@ export const createPgStateAdapter = async <
       return job ? mapDbJobToStateJob(job) : undefined;
     },
 
-    createJob: async ({
-      txCtx,
-      typeName,
-      chainTypeName,
-      chainIndex,
-      input,
-      chainId,
-      deduplication,
-      schedule,
-      chainTraceContext,
-      traceContext,
-    }) => {
-      const [result] = await executeTypedSql({
+    createJobs: async ({ txCtx, jobs }) => {
+      if (jobs.length === 0) return [];
+
+      const results = await executeTypedSql({
         txCtx,
-        sql: createJobSql,
+        sql: createJobsSql,
         params: [
-          typeName,
-          chainId,
-          chainTypeName,
-          input,
-          deduplication?.key ?? null,
-          deduplication ? (deduplication.scope ?? "incomplete") : null,
-          deduplication?.windowMs ?? null,
-          schedule?.at ?? null,
-          schedule?.afterMs ?? null,
-          chainTraceContext ?? null,
-          traceContext ?? null,
-          chainIndex,
+          jobs.length,
+          jobs.map((j) => j.typeName),
+          jobs.map((j) => j.chainId ?? null),
+          jobs.map((j) => j.chainTypeName),
+          jobs.map((j) => j.chainIndex),
+          jobs.map((j) => j.input),
+          jobs.map((j) => j.deduplication?.key ?? null),
+          jobs.map((j) => (j.deduplication ? (j.deduplication.scope ?? "incomplete") : null)),
+          jobs.map((j) => j.deduplication?.windowMs ?? null),
+          jobs.map((j) => j.schedule?.at?.toISOString() ?? null),
+          jobs.map((j) => j.schedule?.afterMs ?? null),
+          jobs.map((j) => j.chainTraceContext ?? null),
+          jobs.map((j) => j.traceContext ?? null),
         ],
       });
 
-      return { job: mapDbJobToStateJob(result), deduplicated: result.deduplicated };
+      return results.map((r) => ({
+        job: mapDbJobToStateJob(r),
+        deduplicated: r.deduplicated,
+      }));
     },
 
-    addJobBlockers: async ({ txCtx, jobId, blockedByChainIds, blockerTraceContexts }) => {
-      const [result] = await executeTypedSql({
+    addJobsBlockers: async ({ txCtx, jobBlockers }) => {
+      if (jobBlockers.length === 0) return [];
+
+      const flatJobIds: string[] = [];
+      const flatBlockedByChainIds: string[] = [];
+      const flatTraceContexts: (string | null)[] = [];
+      const flatIndexes: number[] = [];
+
+      for (const entry of jobBlockers) {
+        entry.blockedByChainIds.forEach((chainId, i) => {
+          flatJobIds.push(entry.jobId);
+          flatBlockedByChainIds.push(chainId);
+          flatTraceContexts.push(entry.blockerTraceContexts?.[i] ?? null);
+          flatIndexes.push(i);
+        });
+      }
+
+      const results = await executeTypedSql({
         txCtx,
-        sql: addJobBlockersSql,
-        params: [
-          Array.from({ length: blockedByChainIds.length }, () => jobId),
-          blockedByChainIds,
-          blockerTraceContexts ?? Array.from({ length: blockedByChainIds.length }, () => null),
-        ],
+        sql: addJobsBlockersSql,
+        params: [flatJobIds, flatBlockedByChainIds, flatTraceContexts, flatIndexes],
       });
 
-      return {
-        job: mapDbJobToStateJob(result),
-        incompleteBlockerChainIds: result.incomplete_blocker_chain_ids,
-        blockerChainTraceContexts: result.blocker_chain_trace_contexts,
-      };
+      const resultMap = new Map(
+        results.map((r) => [
+          r.source_job_id,
+          {
+            job: mapDbJobToStateJob(r),
+            incompleteBlockerChainIds: r.incomplete_blocker_chain_ids,
+            blockerChainTraceContexts: r.blocker_chain_trace_contexts,
+          },
+        ]),
+      );
+
+      return jobBlockers.map((entry) => {
+        const result = resultMap.get(entry.jobId);
+        if (!result) throw new Error(`Missing blocker result for job ${entry.jobId}`);
+        return result;
+      });
     },
+
     unblockJobs: async ({ txCtx, blockedByChainId }) => {
       const [result] = await executeTypedSql({
         txCtx,

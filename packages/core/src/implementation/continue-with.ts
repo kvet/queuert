@@ -5,7 +5,7 @@ import { mapStateJobToJob } from "../entities/job.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
 import { type TransactionHooks } from "../transaction-hooks.js";
 import { type Helpers } from "../setup-helpers.js";
-import { createStateJob } from "./create-state-job.js";
+import { createStateJobs } from "./create-state-jobs.js";
 
 export const continueWith = async <TJobTypeName extends string, TInput>(
   helpers: Helpers,
@@ -39,19 +39,23 @@ export const continueWith = async <TJobTypeName extends string, TInput>(
 ): Promise<ResolvedJob<string, BaseNavigationMap, TJobTypeName, string>> => {
   helpers.registry.validateContinueWith(fromTypeName, { typeName, input });
 
-  const { job } = await createStateJob(helpers, {
-    typeName,
-    input,
+  const [{ job }] = await createStateJobs(helpers, {
+    jobs: [
+      {
+        typeName,
+        chainTypeName,
+        chainIndex,
+        input,
+        blockers,
+        chainId,
+        isChainStart: false,
+        originChainTraceContext,
+        originTraceContext,
+        schedule,
+      },
+    ],
     txCtx,
     transactionHooks,
-    blockers,
-    isChain: false,
-    chainId,
-    chainIndex,
-    chainTypeName,
-    originChainTraceContext,
-    originTraceContext,
-    schedule,
   });
 
   return mapStateJobToJob(job) as ResolvedJob<string, BaseNavigationMap, TJobTypeName, string>;

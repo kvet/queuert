@@ -207,27 +207,24 @@ console.log(`\nQueueing ${JOBS_TO_PROCESS} orders...\n`);
 
 const products = ["Widget", "Gadget", "Gizmo", "Doohickey", "Thingamajig", "Contraption"];
 const jobChains = await withTransactionHooks(async (transactionHooks) =>
-  stateAdapter.runInTransaction(async (ctx) => {
-    const chains = [];
-    for (let i = 1; i <= JOBS_TO_PROCESS; i++) {
-      const itemCount = 1 + Math.floor(Math.random() * 3);
-      const items = Array.from(
-        { length: itemCount },
-        () => products[Math.floor(Math.random() * products.length)],
-      );
-      const total = Math.floor(Math.random() * 200) + 20;
-
-      chains.push(
-        await qrtClient.startJobChain({
-          ...ctx,
-          transactionHooks,
-          typeName: "process_order",
-          input: { orderId: `ORD-${String(i).padStart(3, "0")}`, items, total },
-        }),
-      );
-    }
-    return chains;
-  }),
+  stateAdapter.runInTransaction(async (ctx) =>
+    qrtClient.startJobChains({
+      ...ctx,
+      transactionHooks,
+      items: Array.from({ length: JOBS_TO_PROCESS }, (_, i) => {
+        const itemCount = 1 + Math.floor(Math.random() * 3);
+        const items = Array.from(
+          { length: itemCount },
+          () => products[Math.floor(Math.random() * products.length)],
+        );
+        const total = Math.floor(Math.random() * 200) + 20;
+        return {
+          typeName: "process_order" as const,
+          input: { orderId: `ORD-${String(i + 1).padStart(3, "0")}`, items, total },
+        };
+      }),
+    }),
+  ),
 );
 
 await Promise.all(

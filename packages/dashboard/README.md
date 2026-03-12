@@ -23,6 +23,7 @@ Read-only — no mutations (retry, cancel, delete).
 ## Requirements
 
 - Node.js 22 or later
+- TypeScript 5.0+ (recommended)
 
 ## Installation
 

@@ -180,26 +180,15 @@ console.log("Three fetch jobs run in parallel, aggregate waits for all.\n");
 const aggregateChain = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
-    const fetchBlockers = await Promise.all([
-      client.startJobChain({
-        sql: txSql,
-        transactionHooks,
-        typeName: "fetch-source",
-        input: { sourceId: "users", url: "/users" },
-      }),
-      client.startJobChain({
-        sql: txSql,
-        transactionHooks,
-        typeName: "fetch-source",
-        input: { sourceId: "orders", url: "/orders" },
-      }),
-      client.startJobChain({
-        sql: txSql,
-        transactionHooks,
-        typeName: "fetch-source",
-        input: { sourceId: "products", url: "/products" },
-      }),
-    ]);
+    const fetchBlockers = await client.startJobChains({
+      sql: txSql,
+      transactionHooks,
+      items: [
+        { typeName: "fetch-source", input: { sourceId: "users", url: "/users" } },
+        { typeName: "fetch-source", input: { sourceId: "orders", url: "/orders" } },
+        { typeName: "fetch-source", input: { sourceId: "products", url: "/products" } },
+      ],
+    });
     return client.startJobChain({
       sql: txSql,
       transactionHooks,
@@ -220,17 +209,13 @@ console.log("Action requires exactly: validate-user + load-config.\n");
 const actionChain = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
-    const userBlocker = await client.startJobChain({
+    const [userBlocker, configBlocker] = await client.startJobChains({
       sql: txSql,
       transactionHooks,
-      typeName: "validate-user",
-      input: { userId: "user-123" },
-    });
-    const configBlocker = await client.startJobChain({
-      sql: txSql,
-      transactionHooks,
-      typeName: "load-config",
-      input: { configKey: "settings" },
+      items: [
+        { typeName: "validate-user", input: { userId: "user-123" } },
+        { typeName: "load-config", input: { configKey: "settings" } },
+      ],
     });
     return client.startJobChain({
       sql: txSql,
