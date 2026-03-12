@@ -54,4 +54,8 @@ const worker = await createInProcessWorker({
 const stop = await worker.start();
 ```
 
+## Blocker References
+
+The example above uses **nominal references** — `{ typeName: "fetch-data" }`. Blockers also support fixed tuple slots, variadic rest slots, and **structural references** (`{ input: {...} }`) that match any entry job type with a compatible input shape. Blocker outputs are fully typed in the processor based on the reference. See [Job Type References](/queuert/advanced/job-type-references/) for details and examples.
+
 See [examples/showcase-blockers](https://github.com/kvet/queuert/tree/main/examples/showcase-blockers) for a complete working example demonstrating fan-out/fan-in and fixed blocker slots. See also [Transaction Hooks](../transaction-hooks/) and [Chain Patterns](../chain-patterns/).

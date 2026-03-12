@@ -1,0 +1,185 @@
+---
+title: Installation
+description: Install Queuert and its adapters.
+sidebar:
+  order: 2
+---
+
+import { Steps, Tabs, TabItem, Badge } from "@astrojs/starlight/components";
+
+## Requirements
+
+- Node.js 22 or later
+- TypeScript 5.0+ (recommended)
+
+## Installation
+
+<Steps>
+
+1. Install the core package:
+
+   <Tabs syncKey="pkg">
+     <TabItem label="npm">
+       ```bash
+       npm install queuert
+       ```
+     </TabItem>
+     <TabItem label="pnpm">
+       ```bash
+       pnpm add queuert
+       ```
+     </TabItem>
+     <TabItem label="yarn">
+       ```bash
+       yarn add queuert
+       ```
+     </TabItem>
+   </Tabs>
+
+2. Install a state adapter (pick one):
+
+   <Tabs>
+     <TabItem label="PostgreSQL">
+       Recommended for production. Supports horizontal scaling and all Queuert features.
+
+       <Tabs syncKey="pkg">
+         <TabItem label="npm">
+           ```bash
+           npm install @queuert/postgres
+           ```
+         </TabItem>
+         <TabItem label="pnpm">
+           ```bash
+           pnpm add @queuert/postgres
+           ```
+         </TabItem>
+         <TabItem label="yarn">
+           ```bash
+           yarn add @queuert/postgres
+           ```
+         </TabItem>
+       </Tabs>
+     </TabItem>
+     <TabItem label="SQLite">
+       <Badge text="Experimental" variant="caution" /> Suitable for local development, CLI tools,
+       and embedded applications.
+
+       <Tabs syncKey="pkg">
+         <TabItem label="npm">
+           ```bash
+           npm install @queuert/sqlite
+           ```
+         </TabItem>
+         <TabItem label="pnpm">
+           ```bash
+           pnpm add @queuert/sqlite
+           ```
+         </TabItem>
+         <TabItem label="yarn">
+           ```bash
+           yarn add @queuert/sqlite
+           ```
+         </TabItem>
+       </Tabs>
+     </TabItem>
+   </Tabs>
+
+3. (Optional) Install a notify adapter for reduced latency:
+
+   <Tabs>
+     <TabItem label="Redis">
+       Recommended for production. Uses Redis pub/sub with hint-based optimization to prevent
+       thundering herd.
+
+       <Tabs syncKey="pkg">
+         <TabItem label="npm">
+           ```bash
+           npm install @queuert/redis
+           ```
+         </TabItem>
+         <TabItem label="pnpm">
+           ```bash
+           pnpm add @queuert/redis
+           ```
+         </TabItem>
+         <TabItem label="yarn">
+           ```bash
+           yarn add @queuert/redis
+           ```
+         </TabItem>
+       </Tabs>
+     </TabItem>
+     <TabItem label="NATS">
+       <Badge text="Experimental" variant="caution" /> Uses NATS pub/sub. Supports revision-based
+       CAS optimization when JetStream KV is available.
+
+       <Tabs syncKey="pkg">
+         <TabItem label="npm">
+           ```bash
+           npm install @queuert/nats
+           ```
+         </TabItem>
+         <TabItem label="pnpm">
+           ```bash
+           pnpm add @queuert/nats
+           ```
+         </TabItem>
+         <TabItem label="yarn">
+           ```bash
+           yarn add @queuert/nats
+           ```
+         </TabItem>
+       </Tabs>
+     </TabItem>
+     <TabItem label="PostgreSQL LISTEN/NOTIFY">
+       Uses PostgreSQL's built-in `LISTEN`/`NOTIFY`. No additional infrastructure beyond your
+       existing PostgreSQL database — already included in `@queuert/postgres`.
+
+       <Tabs syncKey="pkg">
+         <TabItem label="npm">
+           ```bash
+           npm install @queuert/postgres
+           ```
+         </TabItem>
+         <TabItem label="pnpm">
+           ```bash
+           pnpm add @queuert/postgres
+           ```
+         </TabItem>
+         <TabItem label="yarn">
+           ```bash
+           yarn add @queuert/postgres
+           ```
+         </TabItem>
+       </Tabs>
+     </TabItem>
+     <TabItem label="None (polling)">
+       Workers poll the database on a configurable interval. No extra packages or infrastructure
+       required. Suitable for low-throughput workloads where millisecond latency is not critical.
+     </TabItem>
+   </Tabs>
+
+4. (Optional) Install additional packages:
+
+   <Tabs syncKey="pkg">
+     <TabItem label="npm">
+       ```bash
+       npm install @queuert/dashboard  # Embeddable web UI for job observation
+       npm install @queuert/otel       # OpenTelemetry metrics and tracing
+       ```
+     </TabItem>
+     <TabItem label="pnpm">
+       ```bash
+       pnpm add @queuert/dashboard  # Embeddable web UI for job observation
+       pnpm add @queuert/otel       # OpenTelemetry metrics and tracing
+       ```
+     </TabItem>
+     <TabItem label="yarn">
+       ```bash
+       yarn add @queuert/dashboard  # Embeddable web UI for job observation
+       yarn add @queuert/otel       # OpenTelemetry metrics and tracing
+       ```
+     </TabItem>
+   </Tabs>
+
+</Steps>

@@ -94,7 +94,7 @@ const jobTypeRegistry = defineJobTypeRegistry<{
 
 ## Go-to
 
-Jobs jump to different types: `charge-billing -> cancel-subscription`
+Jobs jump to a different type mid-chain: `charge-billing -> cancel-subscription`
 
 ```ts
 const jobTypeRegistry = defineJobTypeRegistry<{
@@ -127,5 +127,9 @@ const jobTypeRegistry = defineJobTypeRegistry<{
   },
 },
 ```
+
+## Continuation References
+
+All examples above use **nominal references** — `{ typeName: "..." }`. Queuert also supports **structural references** (`{ input: {...} }`) that match any job type with a compatible input shape, enabling loose coupling. See [Job Type References](/queuert/advanced/job-type-references/) for details and examples.
 
 See [examples/showcase-chain-patterns](https://github.com/kvet/queuert/tree/main/examples/showcase-chain-patterns) for a complete working example demonstrating all four patterns through a subscription lifecycle workflow. See also [Job Blockers](../job-blockers/) for parallel dependencies and [Job Chain Model](/queuert/advanced/job-chain-model/) reference.

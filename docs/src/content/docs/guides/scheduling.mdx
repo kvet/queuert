@@ -5,31 +5,38 @@ sidebar:
   order: 9
 ---
 
+import { Tabs, TabItem, Aside } from "@astrojs/starlight/components";
+
 ## Deferred Start
 
 Jobs can be scheduled to start at a future time using the `schedule` option. The job is created transactionally but won't be processed until the specified time.
 
-```ts
-// Schedule a job to run in 5 minutes
-await withTransactionHooks(async (transactionHooks) =>
-  client.startJobChain({
-    transactionHooks,
-    typeName: "send-reminder",
-    input: { userId: "123" },
-    schedule: { afterMs: 5 * 60 * 1000 }, // 5 minutes from now
-  }),
-);
-
-// Or schedule at a specific time
-await withTransactionHooks(async (transactionHooks) =>
-  client.startJobChain({
-    transactionHooks,
-    typeName: "send-reminder",
-    input: { userId: "123" },
-    schedule: { at: scheduledDate },
-  }),
-);
-```
+<Tabs>
+  <TabItem label="Relative delay (afterMs)">
+    ```ts
+    await withTransactionHooks(async (transactionHooks) =>
+      client.startJobChain({
+        transactionHooks,
+        typeName: "send-reminder",
+        input: { userId: "123" },
+        schedule: { afterMs: 5 * 60 * 1000 }, // 5 minutes from now
+      }),
+    );
+    ```
+  </TabItem>
+  <TabItem label="Specific time (at)">
+    ```ts
+    await withTransactionHooks(async (transactionHooks) =>
+      client.startJobChain({
+        transactionHooks,
+        typeName: "send-reminder",
+        input: { userId: "123" },
+        schedule: { at: scheduledDate },
+      }),
+    );
+    ```
+  </TabItem>
+</Tabs>
 
 The same `schedule` option works with `continueWith` for deferred continuations:
 
@@ -42,6 +49,12 @@ return complete(async ({ continueWith }) =>
   }),
 );
 ```
+
+<Aside type="tip">
+  Combine `schedule` with a `deduplicationKey` to prevent duplicate future jobs — for example,
+  ensuring only one reminder is queued per user even if the trigger fires multiple times. See
+  [Deduplication](../deduplication/).
+</Aside>
 
 ## Recurring Jobs
 

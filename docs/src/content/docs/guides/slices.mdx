@@ -5,16 +5,27 @@ sidebar:
   order: 15
 ---
 
+import { FileTree, Aside } from "@astrojs/starlight/components";
+
 As your application grows, defining all job types and processors in a single file becomes unwieldy. Feature slices let you split them by domain — each slice owns its type definitions and processor handlers, composed together at the application level.
 
 ## Defining a Slice
 
 A slice consists of two files: definitions and processors.
 
+<FileTree>
+- src/
+  - **slice-orders-definitions.ts**
+  - **slice-orders-processors.ts**
+  - slice-notifications-definitions.ts
+  - slice-notifications-processors.ts
+  - client.ts
+  - index.ts
+</FileTree>
+
 **Definitions** declare the job types for a feature:
 
-```ts
-// slice-orders-definitions.ts
+```ts title="slice-orders-definitions.ts"
 import { defineJobTypeRegistry } from "queuert";
 
 export const orderJobTypeRegistry = defineJobTypeRegistry<{
@@ -25,8 +36,7 @@ export const orderJobTypeRegistry = defineJobTypeRegistry<{
 
 **Processors** implement the handlers, typed against the slice's definitions:
 
-```ts
-// slice-orders-processors.ts
+```ts title="slice-orders-processors.ts"
 import { createJobTypeProcessorRegistry } from "queuert";
 import { client } from "./client.js";
 import { orderJobTypeRegistry } from "./slice-orders-definitions.js";
@@ -86,8 +96,7 @@ const worker = await createInProcessWorker({
 
 When a slice needs to reference job types from another slice — for example, declaring a blocker from the notifications domain — use the optional `TExternal` type parameter on `defineJobTypeRegistry`:
 
-```ts
-// slice-orders-definitions.ts
+```ts title="slice-orders-definitions.ts"
 import { type JobTypeRegistryDefinitions, defineJobTypeRegistry } from "queuert";
 import { type notificationJobTypeRegistry } from "./slice-notifications-definitions.js";
 
@@ -118,8 +127,7 @@ This eliminates the need for "workflow slices" that duplicate type definitions j
 
 When writing processors for a slice with external references, `createJobTypeProcessorRegistry` automatically extracts both owned and external definitions from the registry:
 
-```ts
-// slice-orders-processors.ts
+```ts title="slice-orders-processors.ts"
 import { createJobTypeProcessorRegistry } from "queuert";
 import { client } from "./client.js";
 import { orderJobTypeRegistry } from "./slice-orders-definitions.js";
@@ -131,7 +139,10 @@ const orderProcessorRegistry = createJobTypeProcessorRegistry(client, orderJobTy
 
 ## Naming Convention
 
-Prefix job type names with the slice name to avoid collisions:
+<Aside type="note">
+  Prefix job type names with the slice name to avoid collisions and make logs and dashboards easy
+  to scan by feature.
+</Aside>
 
 ```
 orders.create-order
@@ -139,11 +150,9 @@ orders.fulfill-order
 notifications.send-notification
 ```
 
-This also makes logs and dashboards easy to scan by feature.
-
 ## See Also
 
 - [Utilities — mergeJobTypeRegistries](/queuert/reference/queuert/utilities/#mergejobtyperegistries) — API reference
 - [Utilities — mergeJobTypeProcessorRegistries](/queuert/reference/queuert/utilities/#mergejobtypeprocessorregistries) — API reference
-- [Type Safety](../type-safety/) — how Queuert enforces types end-to-end
+- [Chain Patterns](../chain-patterns/) — continuation references and patterns
 - [showcase-slices example](https://github.com/kvet/queuert/blob/main/examples/showcase-slices/src/index.ts) — full runnable example

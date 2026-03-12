@@ -5,9 +5,14 @@ sidebar:
   order: 7
 ---
 
+import { Aside } from "@astrojs/starlight/components";
+
 Queuert provides only job completion -- there is no built-in "failure" state. This is intentional: you control how errors are represented in your job outputs.
 
-Handle failures by returning error information in your output types:
+## Discriminated Union
+
+Return error information in your output type. The caller inspects the output to determine
+success or failure.
 
 ```ts
 const jobTypeRegistry = defineJobTypeRegistry<{
@@ -19,7 +24,14 @@ const jobTypeRegistry = defineJobTypeRegistry<{
 }>();
 ```
 
-For workflows that need rollback, use the compensation pattern -- a "failed" job can continue to a compensation job that undoes previous steps:
+<Aside type="tip">
+  This is the simplest approach and works well for most jobs. Prefer it when the caller needs to
+  react to the outcome, or when you want the error to be part of the chain's permanent record.
+</Aside>
+
+## Compensation
+
+For workflows that need rollback, continue to a compensation job that undoes previous steps.
 
 ```ts
 const jobTypeRegistry = defineJobTypeRegistry<{
@@ -40,9 +52,10 @@ const jobTypeRegistry = defineJobTypeRegistry<{
 }>();
 ```
 
-## Explicit Rescheduling
+## Rescheduling
 
-When a job throws an error, it's automatically rescheduled with exponential backoff. For transient failures where you want explicit control over retry timing, use `rescheduleJob`:
+When a job throws an error, it's automatically rescheduled with exponential backoff. For
+transient failures where you want explicit control over retry timing, use `rescheduleJob`:
 
 ```ts
 import { rescheduleJob } from "queuert";
@@ -75,17 +88,14 @@ const worker = await createInProcessWorker({
 const stop = await worker.start();
 ```
 
-The `rescheduleJob` function throws a `RescheduleJobError` which the worker catches specially. Unlike regular errors that trigger exponential backoff based on attempt count, `rescheduleJob` uses your specified schedule exactly:
+`rescheduleJob` throws a `RescheduleJobError` which the worker catches specially. Unlike
+regular errors that trigger exponential backoff based on attempt count, `rescheduleJob` uses
+your specified schedule exactly:
 
 ```ts
-// Retry after a delay
 rescheduleJob({ afterMs: 30_000 }); // 30 seconds from now
-
-// Retry at a specific time
-rescheduleJob({ at: new Date("2026-06-15T09:00:00Z") });
-
-// Include the original error as cause (for logging/debugging)
-rescheduleJob({ afterMs: 60_000 }, originalError);
+rescheduleJob({ at: new Date("2026-06-15T09:00:00Z") }); // specific time
+rescheduleJob({ afterMs: 60_000 }, originalError); // with cause for logging
 ```
 
 See [examples/showcase-error-handling](https://github.com/kvet/queuert/tree/main/examples/showcase-error-handling) for a complete working example demonstrating discriminated unions, compensation patterns, and explicit rescheduling. See also [Timeouts](../timeouts/) and [Job Processing Modes](../processing-modes/).

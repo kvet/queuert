@@ -5,35 +5,51 @@ sidebar:
   order: 3
 ---
 
+import { Aside, Badge, Steps } from "@astrojs/starlight/components";
+
 `@queuert/dashboard` provides an embeddable web UI for observing job chains and jobs. It mounts as a single `fetch` handler on your existing server -- no external build steps or runtime dependencies beyond `queuert`.
 
-```bash
-npm install @queuert/dashboard
-```
-
-> **Experimental** -- API may change between minor versions.
+<Aside type="caution" title="Experimental">
+  API may change between minor versions.
+</Aside>
 
 ## Quick start
 
-```ts
-import { createDashboard } from "@queuert/dashboard";
+<Steps>
 
-const dashboard = createDashboard({ client });
+1. Install the package:
 
-// Use with any server that accepts a fetch handler
-serve({ fetch: dashboard.fetch, port: 3000 });
-```
+   ```bash
+   npm install @queuert/dashboard
+   ```
+
+2. Create the dashboard with your Queuert client:
+
+   ```ts
+   import { createDashboard } from "@queuert/dashboard";
+
+   const dashboard = createDashboard({ client });
+   ```
+
+3. Mount it on your server:
+
+   ```ts
+   // Use with any server that accepts a fetch handler
+   serve({ fetch: dashboard.fetch, port: 3000 });
+   ```
+
+   When mounting at a sub-path, set `basePath`:
+
+   ```ts
+   const dashboard = createDashboard({
+     client,
+     basePath: "/internal/queuert",
+   });
+   ```
+
+</Steps>
 
 `createDashboard` accepts a Queuert `client` (created via `createClient`) and returns `{ fetch }` -- a standard web `fetch` handler. Pass it to any server runtime (Node.js, Bun, Deno, etc.). The handler serves both API routes and the pre-built frontend.
-
-When mounting at a sub-path, set `basePath`:
-
-```ts
-const dashboard = createDashboard({
-  client,
-  basePath: "/internal/queuert",
-});
-```
 
 The dashboard provides:
 

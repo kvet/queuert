@@ -5,7 +5,9 @@ sidebar:
   order: 2
 ---
 
-## Start Simple: Just Call `complete`
+import { Aside } from "@astrojs/starlight/components";
+
+## Atomic Mode
 
 Most jobs don't need `prepare`. Call `complete` directly and you get atomic mode automatically — one transaction for all reads and writes:
 
@@ -24,7 +26,7 @@ Most jobs don't need `prepare`. Call `complete` directly and you get atomic mode
 
 This is the default path. If you're not sure which mode to use, start here.
 
-## When You Need Staged Mode
+## Staged Mode
 
 Use staged mode when you need to do work **between** two transactions — typically external API calls that shouldn't hold a database transaction open:
 
@@ -88,11 +90,11 @@ This means even without `prepare`, you can get staged behavior by doing async wo
 
 ## Anti-Patterns
 
-**Using staged mode with nothing between prepare and complete:**
+<Aside type="danger" title="Using staged mode with nothing between prepare and complete">
+  Staged mode adds a round-trip and loses read consistency for no benefit. Put everything in
+  `complete()` instead.
 
 ```ts
-// Don't do this — staged mode adds a round-trip and loses read consistency
-// for no benefit. Just put everything in complete().
 attemptHandler: async ({ job, prepare, complete }) => {
   const data = await prepare({ mode: "staged" }, async ({ sql }) => {
     return (await sql`SELECT * FROM items WHERE id = ${job.input.id}`)[0];
@@ -104,11 +106,12 @@ attemptHandler: async ({ job, prepare, complete }) => {
 };
 ```
 
-**Using `prepare({ mode: "atomic" })` when `complete` alone suffices:**
+</Aside>
+
+<Aside type="danger" title="Using prepare({ mode: 'atomic' }) when complete alone suffices">
+  This is the same as calling `complete()` directly, but with extra ceremony.
 
 ```ts
-// Don't do this when the mode is always atomic — it's the same as calling
-// complete() directly, but with extra ceremony.
 attemptHandler: async ({ job, prepare, complete }) => {
   const item = await prepare({ mode: "atomic" }, async ({ sql }) => {
     return (await sql`SELECT stock FROM items WHERE id = ${job.input.id}`)[0];
@@ -119,6 +122,8 @@ attemptHandler: async ({ job, prepare, complete }) => {
   });
 };
 ```
+
+</Aside>
 
 The exception is dynamic handlers where the mode is determined at runtime — explicit `prepare` is the right choice there since auto-setup can't express conditional logic.
 

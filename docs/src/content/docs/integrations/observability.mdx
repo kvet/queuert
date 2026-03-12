@@ -5,26 +5,42 @@ sidebar:
   order: 4
 ---
 
+import { Aside, Steps } from "@astrojs/starlight/components";
+
 Queuert provides an OpenTelemetry adapter for metrics collection. Configure your OTEL SDK with desired exporters (Prometheus, OTLP, Jaeger, etc.) before using this adapter.
 
-```bash
-npm install @queuert/otel
-```
+<Steps>
 
-```ts
-import { createOtelObservabilityAdapter } from "@queuert/otel";
-import { metrics, trace } from "@opentelemetry/api";
+1. Install the package:
 
-const client = await createClient({
-  stateAdapter,
-  registry: jobTypeRegistry,
-  observabilityAdapter: await createOtelObservabilityAdapter({
-    meter: metrics.getMeter("my-app"), // Optional — metrics disabled if omitted
-    tracer: trace.getTracer("my-app"), // Optional — tracing disabled if omitted
-  }),
-  log: createConsoleLog(),
-});
-```
+   ```bash
+   npm install @queuert/otel
+   ```
+
+2. Create the observability adapter with your OTEL meter and tracer:
+
+   ```ts
+   import { createOtelObservabilityAdapter } from "@queuert/otel";
+   import { metrics, trace } from "@opentelemetry/api";
+
+   const observabilityAdapter = await createOtelObservabilityAdapter({
+     meter: metrics.getMeter("my-app"), // Optional — metrics disabled if omitted
+     tracer: trace.getTracer("my-app"), // Optional — tracing disabled if omitted
+   });
+   ```
+
+3. Pass the adapter when creating your client:
+
+   ```ts
+   const client = await createClient({
+     stateAdapter,
+     registry: jobTypeRegistry,
+     observabilityAdapter,
+     log: createConsoleLog(),
+   });
+   ```
+
+</Steps>
 
 The adapter emits:
 
@@ -43,7 +59,12 @@ When no adapter is provided, a noop implementation is used automatically, making
 
 ## Transactional guarantees
 
-Observability events emitted inside database transactions are buffered and only flushed after the transaction commits. If the transaction rolls back, buffered events are discarded -- no misleading metrics or spans leak out. This uses the same `TransactionHooks` mechanism that guards other side effects like notify events.
+<Aside type="note">
+  Observability events emitted inside database transactions are buffered and only flushed after the
+  transaction commits. If the transaction rolls back, buffered events are discarded — no misleading
+  metrics or spans leak out. This uses the same `TransactionHooks` mechanism that guards notify
+  events.
+</Aside>
 
 See [observability-otel](https://github.com/kvet/queuert/tree/main/examples/observability-otel) for a complete example.
 

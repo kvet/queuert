@@ -16,7 +16,67 @@ hero:
       variant: minimal
 ---
 
-import { Card, CardGrid } from "@astrojs/starlight/components";
+import { Card, CardGrid, LinkCard, Tabs, TabItem } from "@astrojs/starlight/components";
+
+## See it in action
+
+Start a job inside a database transaction. The `input` type is inferred from your job type
+definition — no casting, no `any`. If the transaction rolls back, the job is never created.
+
+```ts
+const jobTypeRegistry = defineJobTypeRegistry<{
+  "send-welcome-email": {
+    entry: true;
+    input: { userId: number; email: string; name: string };
+    output: { sentAt: string };
+  };
+}>();
+
+const client = await createClient({ stateAdapter, registry: jobTypeRegistry });
+
+await withTransactionHooks(async (transactionHooks) =>
+  db.transaction(async (tx) => {
+    const user = await tx.users.create({
+      name: "Alice",
+      email: "alice@example.com",
+    });
+
+    await client.startJobChain({
+      tx,
+      transactionHooks,
+      typeName: "send-welcome-email",
+      input: { userId: user.id, email: user.email, name: user.name },
+    });
+  }),
+);
+```
+
+A background worker picks it up and runs it to completion.
+
+```ts
+const worker = await createInProcessWorker({
+  client,
+  processorRegistry: createJobTypeProcessorRegistry(client, jobTypeRegistry, {
+    "send-welcome-email": {
+      attemptHandler: async ({ job, complete }) => {
+        await sendEmail({
+          to: job.input.email,
+          subject: "Welcome!",
+          body: `Hello ${job.input.name}, welcome to our platform!`,
+        });
+
+        return complete(async () => ({
+          sentAt: new Date().toISOString(),
+        }));
+      },
+    },
+  }),
+});
+
+const stop = await worker.start();
+```
+
+## Features
 
 <CardGrid>
   <Card title="Transactional" icon="document">
@@ -27,10 +87,77 @@ import { Card, CardGrid } from "@astrojs/starlight/components";
     Full TypeScript inference for inputs, outputs, continuations, and blockers. Catch errors at
     compile time.
   </Card>
-  <Card title="Flexible" icon="setting">
-    PostgreSQL or SQLite. Kysely, Drizzle, Prisma, or raw drivers. Redis, NATS, or just polling.
+  <Card title="Job Chains" icon="right-arrow">
+    Model multi-step workflows as typed chains. Each step continues, loops, branches, or terminates
+    — like Promise chains, but persistent and resumable.
+  </Card>
+  <Card title="Scheduling" icon="rocket">
+    Delay jobs to a specific time or duration. Deduplicate by key. Schedule retries or future work
+    without extra infrastructure.
+  </Card>
+  <Card title="Blockers" icon="puzzle">
+    Model cross-chain dependencies. A job can wait for one or more other chains to complete before
+    proceeding.
   </Card>
   <Card title="MIT Licensed" icon="open-book">
     No vendor lock-in. No enterprise licensing. Own your stack.
   </Card>
+</CardGrid>
+
+## Integrations
+
+<CardGrid>
+  <Card title="Databases" icon="document">
+    PostgreSQL · SQLite · any database via custom adapters
+  </Card>
+  <Card title="ORMs" icon="setting">
+    Kysely · Drizzle · Prisma · any ORM via custom adapters
+  </Card>
+  <Card title="Drivers" icon="setting">
+    pg · postgres.js · better-sqlite3 · sqlite3 · any driver via custom adapters
+  </Card>
+  <Card title="Notifications" icon="right-arrow">
+    Redis · NATS · PostgreSQL LISTEN/NOTIFY
+  </Card>
+  <Card title="Validation" icon="approve-check">
+    Zod · ArkType · Valibot · TypeBox · any schema library via custom adapters
+  </Card>
+  <Card title="Observability" icon="information">
+    OpenTelemetry · Embeddable web UI dashboard
+  </Card>
+</CardGrid>
+
+## Get started
+
+<CardGrid>
+  <LinkCard
+    title="Introduction"
+    href="/queuert/getting-started/introduction/"
+    description="What Queuert is and why it exists."
+  />
+  <LinkCard
+    title="Installation"
+    href="/queuert/getting-started/installation/"
+    description="Add Queuert to your project in minutes."
+  />
+  <LinkCard
+    title="Guides"
+    href="/queuert/guides/chain-patterns/"
+    description="Patterns for chains, scheduling, error handling, and more."
+  />
+  <LinkCard
+    title="Examples"
+    href="/queuert/examples/"
+    description="Runnable examples for every integration and pattern."
+  />
+  <LinkCard
+    title="Benchmarks"
+    href="/queuert/benchmarks/"
+    description="Throughput and latency numbers across databases and drivers."
+  />
+  <LinkCard
+    title="Reference"
+    href="/queuert/reference/"
+    description="Complete API reference for every module and adapter."
+  />
 </CardGrid>

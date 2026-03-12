@@ -393,5 +393,5 @@ See [Adapter Architecture](/queuert/advanced/adapters/) for full interface defin
 - [Utilities](/queuert/reference/queuert/utilities/) — Composition helpers and utility functions
 - [Errors](/queuert/reference/queuert/errors/) — Error classes reference
 - [Core Concepts](/queuert/getting-started/core-concepts/) — Job chain model introduction
-- [Type Safety](/queuert/guides/type-safety/) — Type safety features guide
+- [Chain Patterns](/queuert/guides/chain-patterns/) — Continuation references and patterns
 - [Adapter Architecture](/queuert/advanced/adapters/) — Full adapter interface definitions

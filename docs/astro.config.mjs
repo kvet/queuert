@@ -1,5 +1,5 @@
-import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
+import { defineConfig } from "astro/config";
 import starlightLlmsTxt from "starlight-llms-txt";
 
 export default defineConfig({
@@ -48,12 +48,11 @@ export default defineConfig({
         },
         {
           label: "Examples",
-          items: [
-            {
-              label: "Overview",
-              slug: "examples",
-            },
-          ],
+          slug: "examples",
+        },
+        {
+          label: "Benchmarks",
+          slug: "benchmarks",
         },
         {
           label: "Reference",

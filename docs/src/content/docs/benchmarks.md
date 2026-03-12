@@ -1,8 +1,6 @@
 ---
 title: Benchmarks
 description: Processing capacity, memory footprint, and type complexity benchmarks for Queuert.
-sidebar:
-  order: 5
 ---
 
 ## Processing Capacity
