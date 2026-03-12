@@ -14,7 +14,7 @@ PostgreSQL state adapter and notify adapter for [Queuert](https://github.com/kve
 **State Adapter** - Stores jobs in PostgreSQL tables:
 
 - Creating and updating jobs with full ACID transactions
-- Tracking job status (`pending` → `running` → `completed`)
+- Tracking job status (`blocked`/`pending` → `running` → `completed`)
 - Managing job leases with `FOR UPDATE SKIP LOCKED` for distributed workers
 - Storing job chains and blocker relationships
 

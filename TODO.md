@@ -37,6 +37,8 @@
 - [TASK,COMPLEX] Optimized batched lease renewal
 - [EPIC] MCP server
 - [EPIC] Sqlite ready:
+  - [REF] Batch `createJobs` deduplication/continuation checks — currently loops per-job with `findExistingContinuationSql`/`findDeduplicatedJobSql`, O(N) round-trips
+  - [REF] Batch `addJobsBlockers` — currently 3-4 sequential queries per jobBlocker entry, O(N) round-trips
   - [REF] Better concurrency handling - WAL mode, busy timeout, retries
   - [REF] Separate read/write connection pools (single writer, multiple readers)
   - [REF] usage of db without pool is incorrect
