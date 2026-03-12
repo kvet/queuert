@@ -1,11 +1,16 @@
 # Short term
 
+- [TASK,COMPLEX] Replace `startJobChain` with `createJobChain`; add `createJobChains` method; new `createJobs` + `addJobsBlockers` on `StateAdapter`; PG: single `unnest`+CTE batch insert with per-row dedup, batch blocker insert grouped by job_id; SQLite: loop within txCtx
+- [REF] Reset jobs in chains + dashboard
+- [REF] Delete jobs from dashboard
+- [REF] Optimize search of chains by status; it requires full scan currently
 - [REF] Plugins
   - Attempt middleware plugin
   - Client amend
   - Job definition amend
   - Job processors amend
 - [TASK,COMPLEX] Job cleanup utility
+- [REF] Vacuum (full vacuum)
 - [EPIC] Dashboard
   - [TASK,COMPLEX] Better UI
   - [?,REF] Filter by status in chains view
