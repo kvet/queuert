@@ -1,5 +1,22 @@
 # @queuert/otel
 
+## 0.6.0
+
+### Minor Changes
+
+- **New: Batch `startJobChains` API** — Create multiple job chains in a single operation with type-safe returns and optimized DB round-trips.
+
+  **New: Savepoint-protected user callbacks** — `prepare` and `complete` callbacks run inside savepoints on PostgreSQL, preventing transaction poisoning. Custom adapters can opt in via `withSavepoint`.
+
+  **Breaking: StateAdapter interface updated** — `createJob`/`addJobBlockers` replaced by batched `createJobs`/`addJobsBlockers`.
+
+  **Breaking: Removed type exports** — `CompleteJobChainResult` and `JobChainCompleteOptions` are now internal.
+
+### Patch Changes
+
+- Updated dependencies
+  - queuert@0.6.0
+
 ## 0.5.1
 
 ### Patch Changes
