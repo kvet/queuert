@@ -13,11 +13,13 @@ export const extendWithStateInProcess = <T>(
   T & {
     stateAdapter: StateAdapter<{ $test: true }, string>;
     flakyStateAdapter: StateAdapter<{ $test: true }, string>;
+    poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
   }
 > => {
   return api.extend<{
     stateAdapter: InProcessStateAdapter;
     flakyStateAdapter: InProcessStateAdapter;
+    poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
   }>({
     stateAdapter: [
       // oxlint-disable-next-line no-empty-pattern
@@ -92,6 +94,13 @@ export const extendWithStateInProcess = <T>(
         if (queryCount > 5) {
           expect(errorCount).toBeGreaterThan(0);
         }
+      },
+      { scope: "test" },
+    ],
+    poisonTransaction: [
+      // oxlint-disable-next-line no-empty-pattern
+      async ({}, use) => {
+        await use(undefined);
       },
       { scope: "test" },
     ],

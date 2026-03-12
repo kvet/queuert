@@ -27,6 +27,7 @@ export const wrapStateAdapterWithLogging = <
   return {
     // Infrastructure methods - pass through without wrapping
     runInTransaction: stateAdapter.runInTransaction,
+    withSavepoint: stateAdapter.withSavepoint,
 
     // Operation methods - wrap with error logging
     getJobChainById: wrap("getJobChainById", stateAdapter.getJobChainById),

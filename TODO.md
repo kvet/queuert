@@ -1,5 +1,6 @@
 # Short term
 
+- [REF] Introduce `poisonExecute(cb)` in PG state provider (callback-scoped variant of `poisonTransaction` for concurrent scenarios) and rework state-resilience tests to use real DB-level errors instead of synthetic JS errors thrown before `executeSql` (poisoning is PG-specific, but all adapters should throw proper DB errors)
 - [REF] Reset jobs in chains + dashboard
 - [REF] Delete jobs from dashboard
 - [REF] Optimize search of chains by status; it requires full scan currently
@@ -22,7 +23,6 @@
 - [REF,EASY] Review all public types exported from `@queuert/core` — hide internal-only types (prefix with `_`, remove from `index.ts`). Breaking changes OK
 - [TASK] Use transactionHooks in `deleteJobChains` to buffer post-delete side effects (e.g., observability events)
 - [?,TASK] Review `allowEmptyWorker` flag in job-process.ts staged mode — currently set when `prepareTransactionContext.status === "pending"`, may be removable
-- [TASK] Fix poisoned PG transaction in `TransactionContext` — after a `run()` call fails (e.g., constraint violation in `addJobsBlockers`), the PG transaction is poisoned but status stays "pending"; subsequent `run()` calls silently fail on the dead connection. Impact: in atomic mode, error recovery fails on the poisoned TX, ROLLBACK undoes the acquire, and the job goes straight back to "pending" — creating a hot infinite loop with no backoff. In staged mode, the acquire is already committed so the job is stuck as "running" until reaper, then the cycle repeats at lease-expiry pace. Fix: mark `TransactionContext` as "rejected" on `run()` failure so `runInGuardedTransaction` falls through to a fresh transaction
 - [EPIC] Docs website enhancements
   - [TASK] Add interactive examples / live demos
   - [TASK] Custom branding and styling

@@ -21,6 +21,7 @@ export const extendWithStatePostgres = <
   T & {
     stateAdapter: StateAdapter<{ $test: true }, string>;
     flakyStateAdapter: StateAdapter<{ $test: true }, string>;
+    poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
   }
 > => {
   return api.extend<{
@@ -31,6 +32,7 @@ export const extendWithStatePostgres = <
     flakyStateProvider: PgPoolProvider;
     stateAdapter: PgStateAdapter;
     flakyStateAdapter: PgStateAdapter;
+    poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
   }>({
     statePool: [
       async ({ postgresConnectionString }, use) => {
@@ -99,7 +101,9 @@ export const extendWithStatePostgres = <
       async ({ stateProvider, expect }, use) => {
         let queryCount = 0;
         let errorCount = 0;
-        const shouldError = createFlakyBatchGenerator();
+        const shouldError = createFlakyBatchGenerator({
+          successBatchSize: { min: 10, max: 26 }, // +6 for savepoints
+        });
 
         const originalExecuteSql = stateProvider.executeSql.bind(stateProvider);
         const flakyStateProvider: typeof stateProvider = {
@@ -139,6 +143,16 @@ export const extendWithStatePostgres = <
             stateProvider: flakyStateProvider,
           }),
         );
+      },
+      { scope: "test" },
+    ],
+    poisonTransaction: [
+      // oxlint-disable-next-line no-empty-pattern
+      async ({}, use) => {
+        await use(async (txCtx: { $test: true }) => {
+          const pgCtx = txCtx as unknown as PgPoolContext;
+          await pgCtx.poolClient.query("SELECT 1 FROM nonexistent_table_queuert_poison_xyz");
+        });
       },
       { scope: "test" },
     ],

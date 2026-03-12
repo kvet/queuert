@@ -125,6 +125,20 @@ export const createPgStateAdapter = async <
   const rawAdapter: StateAdapter<TTxContext, TIdType> = {
     runInTransaction: stateProvider.runInTransaction,
 
+    withSavepoint: async ({ txCtx, fn }) => {
+      await stateProvider.executeSql({ txCtx, sql: "SAVEPOINT queuert_user_cb" });
+      try {
+        const result = await fn(txCtx);
+        await stateProvider.executeSql({ txCtx, sql: "RELEASE SAVEPOINT queuert_user_cb" });
+        return result;
+      } catch (error) {
+        await stateProvider
+          .executeSql({ txCtx, sql: "ROLLBACK TO SAVEPOINT queuert_user_cb" })
+          .catch(() => {});
+        throw error;
+      }
+    },
+
     getJobChainById: async ({ txCtx, chainId }) => {
       const [jobChain] = await executeTypedSql({
         txCtx,

@@ -86,7 +86,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       expect(completed.output).toEqual({ result: 20 });
     });
 
-    // Attempt 1: prepare throws, reschedule in same transaction
     const expected = [
       expect.objectContaining({
         name: "runInTransaction",
@@ -95,6 +94,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           expect.objectContaining({ name: "acquireJob" }),
           expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({ name: "renewJobLease" }),
+          ...(stateAdapter.withSavepoint
+            ? [expect.objectContaining({ name: "withSavepoint", status: "rolled-back" })]
+            : []),
           expect.objectContaining({ name: "rescheduleJob" }),
         ],
       }),
@@ -173,7 +175,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       expect(completed.output).toEqual({ result: 20 });
     });
 
-    // Same as atomic: prepare throws before resolve(), so TX is still pending
     const expected = [
       expect.objectContaining({
         name: "runInTransaction",
@@ -182,6 +183,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           expect.objectContaining({ name: "acquireJob" }),
           expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({ name: "renewJobLease" }),
+          ...(stateAdapter.withSavepoint
+            ? [expect.objectContaining({ name: "withSavepoint", status: "rolled-back" })]
+            : []),
           expect.objectContaining({ name: "rescheduleJob" }),
         ],
       }),
@@ -259,7 +263,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       expect(completed.output).toEqual({ result: 20 });
     });
 
-    // TX still pending in atomic mode, reschedule chains into same TX
     const expected = [
       expect.objectContaining({
         name: "runInTransaction",
@@ -268,6 +271,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           expect.objectContaining({ name: "acquireJob" }),
           expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({ name: "renewJobLease" }),
+          ...(stateAdapter.withSavepoint
+            ? [expect.objectContaining({ name: "withSavepoint", status: "committed" })]
+            : []),
           expect.objectContaining({ name: "rescheduleJob" }),
         ],
       }),
@@ -346,7 +352,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       expect(completed.output).toEqual({ result: 20 });
     });
 
-    // Prepare TX committed. Error handler runs in new TX with refetch
     const expected = [
       expect.objectContaining({
         name: "runInTransaction",
@@ -355,6 +360,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           expect.objectContaining({ name: "acquireJob" }),
           expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({ name: "renewJobLease" }),
+          ...(stateAdapter.withSavepoint
+            ? [expect.objectContaining({ name: "withSavepoint", status: "committed" })]
+            : []),
         ],
       }),
       expect.objectContaining({ name: "getNextJobAvailableInMs" }),
@@ -441,7 +449,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       expect(completed.output).toEqual({ result: 20 });
     });
 
-    // Complete runs in same pending TX. Error handler also chains into same TX
     const expected = [
       expect.objectContaining({
         name: "runInTransaction",
@@ -450,6 +457,12 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           expect.objectContaining({ name: "acquireJob" }),
           expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({ name: "renewJobLease" }),
+          ...(stateAdapter.withSavepoint
+            ? [expect.objectContaining({ name: "withSavepoint", status: "committed" })]
+            : []),
+          ...(stateAdapter.withSavepoint
+            ? [expect.objectContaining({ name: "withSavepoint", status: "rolled-back" })]
+            : []),
           expect.objectContaining({ name: "rescheduleJob" }),
         ],
       }),
@@ -530,7 +543,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       expect(completed.output).toEqual({ result: 20 });
     });
 
-    // Prepare TX committed. Complete creates TX2 (getJobForUpdate). Error handler chains rescheduleJob into TX2
     const expected = [
       expect.objectContaining({
         name: "runInTransaction",
@@ -539,6 +551,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           expect.objectContaining({ name: "acquireJob" }),
           expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({ name: "renewJobLease" }),
+          ...(stateAdapter.withSavepoint
+            ? [expect.objectContaining({ name: "withSavepoint", status: "committed" })]
+            : []),
         ],
       }),
       expect.objectContaining({ name: "getNextJobAvailableInMs" }),
@@ -547,6 +562,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         status: "committed",
         children: [
           expect.objectContaining({ name: "getJobForUpdate" }),
+          ...(stateAdapter.withSavepoint
+            ? [expect.objectContaining({ name: "withSavepoint", status: "rolled-back" })]
+            : []),
           expect.objectContaining({ name: "rescheduleJob" }),
         ],
       }),
@@ -628,8 +646,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     expect(attempts).toBe(2);
 
-    // Complete succeeds in TX1, then error handler chains rescheduleJob into same TX1.
-    // rescheduleJob overwrites completed state back to pending. All committed atomically.
     const expected = [
       expect.objectContaining({
         name: "runInTransaction",
@@ -638,6 +654,12 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           expect.objectContaining({ name: "acquireJob" }),
           expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({ name: "renewJobLease" }),
+          ...(stateAdapter.withSavepoint
+            ? [expect.objectContaining({ name: "withSavepoint", status: "committed" })]
+            : []),
+          ...(stateAdapter.withSavepoint
+            ? [expect.objectContaining({ name: "withSavepoint", status: "committed" })]
+            : []),
           expect.objectContaining({ name: "completeJob" }),
           expect.objectContaining({ name: "getJobById" }),
           expect.objectContaining({ name: "unblockJobs" }),
@@ -724,8 +746,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     expect(attempts).toBe(2);
 
-    // Prepare TX committed. Complete runs in TX2. Error handler chains rescheduleJob into TX2
-    // (still pending). rescheduleJob overwrites completed state. TX2 commits.
     const expected = [
       expect.objectContaining({
         name: "runInTransaction",
@@ -734,6 +754,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           expect.objectContaining({ name: "acquireJob" }),
           expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({ name: "renewJobLease" }),
+          ...(stateAdapter.withSavepoint
+            ? [expect.objectContaining({ name: "withSavepoint", status: "committed" })]
+            : []),
         ],
       }),
       expect.objectContaining({ name: "getNextJobAvailableInMs" }),
@@ -742,9 +765,396 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         status: "committed",
         children: [
           expect.objectContaining({ name: "getJobForUpdate" }),
+          ...(stateAdapter.withSavepoint
+            ? [expect.objectContaining({ name: "withSavepoint", status: "committed" })]
+            : []),
           expect.objectContaining({ name: "completeJob" }),
           expect.objectContaining({ name: "getJobById" }),
           expect.objectContaining({ name: "unblockJobs" }),
+          expect.objectContaining({ name: "rescheduleJob" }),
+        ],
+      }),
+    ];
+    expect(spyStateAdapter.calls.slice(0, expected.length)).toEqual(expected);
+  });
+
+  it("recovers when user code poisons transaction in prepare callback (atomic mode)", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    poisonTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+    skip,
+  }) => {
+    if (!poisonTransaction) return skip();
+
+    const spyStateAdapter = createSpyStateAdapter(stateAdapter);
+
+    const registry = defineJobTypeRegistry<{
+      test: {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+    const workerClient = await createClient({
+      stateAdapter: spyStateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+    const worker = await createInProcessWorker({
+      client: workerClient,
+      concurrency: 1,
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
+        test: {
+          backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+          attemptHandler: async ({ job, prepare, complete }) => {
+            await prepare({ mode: "atomic" }, async (prepareCtx) => {
+              await spyStateAdapter.record({ name: "user-preparation", ...prepareCtx });
+              if (job.attempt === 1) {
+                await poisonTransaction(prepareCtx);
+              }
+            });
+            return complete(async () => ({ result: job.input.value * 2 }));
+          },
+        },
+      }),
+    });
+
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: { value: 10 },
+        }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      const completed = await client.awaitJobChain(jobChain, completionOptions);
+      expect(completed.output).toEqual({ result: 20 });
+    });
+
+    const expected = [
+      expect.objectContaining({
+        name: "runInTransaction",
+        status: "committed",
+        children: [
+          expect.objectContaining({ name: "acquireJob" }),
+          expect.objectContaining({ name: "getJobBlockers" }),
+          expect.objectContaining({ name: "renewJobLease" }),
+          expect.objectContaining({
+            name: "withSavepoint",
+            status: "rolled-back",
+            children: [expect.objectContaining({ name: "user-preparation" })],
+          }),
+          expect.objectContaining({ name: "rescheduleJob" }),
+        ],
+      }),
+      expect.objectContaining({ name: "getNextJobAvailableInMs" }),
+    ];
+    expect(spyStateAdapter.calls.slice(0, expected.length)).toEqual(expected);
+  });
+
+  it("recovers when user code poisons transaction in prepare callback (staged mode)", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    poisonTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+    skip,
+  }) => {
+    if (!poisonTransaction) return skip();
+
+    const spyStateAdapter = createSpyStateAdapter(stateAdapter);
+
+    const registry = defineJobTypeRegistry<{
+      test: {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+    const workerClient = await createClient({
+      stateAdapter: spyStateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+    const worker = await createInProcessWorker({
+      client: workerClient,
+      concurrency: 1,
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
+        test: {
+          backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+          attemptHandler: async ({ job, prepare, complete }) => {
+            await prepare({ mode: "staged" }, async (prepareCtx) => {
+              await spyStateAdapter.record({ name: "user-preparation", ...prepareCtx });
+              if (job.attempt === 1) {
+                await poisonTransaction(prepareCtx);
+              }
+            });
+            return complete(async () => ({ result: job.input.value * 2 }));
+          },
+        },
+      }),
+    });
+
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: { value: 10 },
+        }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      const completed = await client.awaitJobChain(jobChain, completionOptions);
+      expect(completed.output).toEqual({ result: 20 });
+    });
+
+    const expected = [
+      expect.objectContaining({
+        name: "runInTransaction",
+        status: "committed",
+        children: [
+          expect.objectContaining({ name: "acquireJob" }),
+          expect.objectContaining({ name: "getJobBlockers" }),
+          expect.objectContaining({ name: "renewJobLease" }),
+          expect.objectContaining({
+            name: "withSavepoint",
+            status: "rolled-back",
+            children: [expect.objectContaining({ name: "user-preparation" })],
+          }),
+          expect.objectContaining({ name: "rescheduleJob" }),
+        ],
+      }),
+      expect.objectContaining({ name: "getNextJobAvailableInMs" }),
+    ];
+    expect(spyStateAdapter.calls.slice(0, expected.length)).toEqual(expected);
+  });
+
+  it("recovers when user code poisons transaction in complete callback (atomic mode)", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    poisonTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+    skip,
+  }) => {
+    if (!poisonTransaction) return skip();
+
+    const spyStateAdapter = createSpyStateAdapter(stateAdapter);
+
+    const registry = defineJobTypeRegistry<{
+      test: {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+    const workerClient = await createClient({
+      stateAdapter: spyStateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+    const worker = await createInProcessWorker({
+      client: workerClient,
+      concurrency: 1,
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
+        test: {
+          backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+          attemptHandler: async ({ job, prepare, complete }) => {
+            await prepare({ mode: "atomic" });
+            return complete(async (completeCtx) => {
+              await spyStateAdapter.record({ name: "user-completion", ...completeCtx });
+              if (job.attempt === 1) {
+                await poisonTransaction(completeCtx);
+              }
+              return { result: job.input.value * 2 };
+            });
+          },
+        },
+      }),
+    });
+
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: { value: 10 },
+        }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      const completed = await client.awaitJobChain(jobChain, completionOptions);
+      expect(completed.output).toEqual({ result: 20 });
+    });
+
+    const expected = [
+      expect.objectContaining({
+        name: "runInTransaction",
+        status: "committed",
+        children: [
+          expect.objectContaining({ name: "acquireJob" }),
+          expect.objectContaining({ name: "getJobBlockers" }),
+          expect.objectContaining({ name: "renewJobLease" }),
+          expect.objectContaining({ name: "withSavepoint", status: "committed" }),
+          expect.objectContaining({
+            name: "withSavepoint",
+            status: "rolled-back",
+            children: [expect.objectContaining({ name: "user-completion" })],
+          }),
+          expect.objectContaining({ name: "rescheduleJob" }),
+        ],
+      }),
+      expect.objectContaining({ name: "getNextJobAvailableInMs" }),
+    ];
+    expect(spyStateAdapter.calls.slice(0, expected.length)).toEqual(expected);
+  });
+
+  it("recovers when user code poisons transaction in complete callback (staged mode)", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    poisonTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+    skip,
+  }) => {
+    if (!poisonTransaction) return skip();
+
+    const spyStateAdapter = createSpyStateAdapter(stateAdapter);
+
+    const registry = defineJobTypeRegistry<{
+      test: {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+    const workerClient = await createClient({
+      stateAdapter: spyStateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+    const worker = await createInProcessWorker({
+      client: workerClient,
+      concurrency: 1,
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
+        test: {
+          backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+          attemptHandler: async ({ job, prepare, complete }) => {
+            await prepare({ mode: "staged" });
+            await sleep(1);
+            return complete(async (completeCtx) => {
+              await spyStateAdapter.record({ name: "user-completion", ...completeCtx });
+              if (job.attempt === 1) {
+                await poisonTransaction(completeCtx);
+              }
+              return { result: job.input.value * 2 };
+            });
+          },
+        },
+      }),
+    });
+
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: { value: 10 },
+        }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      const completed = await client.awaitJobChain(jobChain, completionOptions);
+      expect(completed.output).toEqual({ result: 20 });
+    });
+
+    const expected = [
+      expect.objectContaining({
+        name: "runInTransaction",
+        status: "committed",
+        children: [
+          expect.objectContaining({ name: "acquireJob" }),
+          expect.objectContaining({ name: "getJobBlockers" }),
+          expect.objectContaining({ name: "renewJobLease" }),
+          expect.objectContaining({ name: "withSavepoint", status: "committed" }),
+        ],
+      }),
+      expect.objectContaining({ name: "getNextJobAvailableInMs" }),
+      expect.objectContaining({
+        name: "runInTransaction",
+        status: "committed",
+        children: [
+          expect.objectContaining({ name: "getJobForUpdate" }),
+          expect.objectContaining({
+            name: "withSavepoint",
+            status: "rolled-back",
+            children: [expect.objectContaining({ name: "user-completion" })],
+          }),
           expect.objectContaining({ name: "rescheduleJob" }),
         ],
       }),

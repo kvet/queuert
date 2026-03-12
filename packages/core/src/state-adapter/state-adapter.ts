@@ -55,6 +55,17 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
    */
   runInTransaction: <T>(fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
 
+  /**
+   * Wraps a callback in a savepoint within an existing transaction.
+   * On success, releases the savepoint. On error, rolls back to the savepoint
+   * (cleaning up any DB-level transaction poisoning) and re-throws.
+   * Optional — only needed for databases that poison transactions on statement failure (e.g., PostgreSQL).
+   */
+  withSavepoint?: <T>(params: {
+    txCtx: TTxContext;
+    fn: (txCtx: TTxContext) => Promise<T>;
+  }) => Promise<T>;
+
   /** Gets a job chain by its chain ID. Returns [rootJob, lastJob] or undefined. */
   getJobChainById: (params: {
     txCtx?: TTxContext;

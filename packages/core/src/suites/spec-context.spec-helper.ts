@@ -16,6 +16,7 @@ export type TestSuiteContext = {
   stateAdapter: StateAdapter<{ $test: true }, string>;
   notifyAdapter: NotifyAdapter | undefined;
   runInTransaction: <T>(cb: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
+  poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
   withWorkers: <T>(workers: (() => Promise<void>)[], cb: () => Promise<T>) => Promise<T>;
   log: MockedFunction<Log>;
   observabilityAdapter: ObservabilityAdapter;

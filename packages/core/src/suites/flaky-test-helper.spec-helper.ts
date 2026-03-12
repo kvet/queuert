@@ -16,21 +16,28 @@ export const createSeededRandom = (seed: number): (() => number) => {
  * Creates a function that alternates between success and error batches.
  * Used to simulate flaky connections in tests with reproducible patterns.
  * Returns true when the current call should error.
- * Alternates between success batches (5-15 calls) and error batches (1-20 calls).
  */
-export const createFlakyBatchGenerator = (seed: number = 12345): (() => boolean) => {
+export const createFlakyBatchGenerator = ({
+  seed = 12345,
+  errorBatchSize = { min: 1, max: 20 },
+  successBatchSize = { min: 4, max: 15 },
+}: {
+  seed?: number;
+  errorBatchSize?: { min: number; max: number };
+  successBatchSize?: { min: number; max: number };
+} = {}): (() => boolean) => {
   const random = createSeededRandom(seed);
+  const range = (r: { min: number; max: number }) =>
+    Math.floor(random() * (r.max - r.min + 1)) + r.min;
   let inErrorBatch = false;
-  let batchRemaining = Math.floor(random() * 11) + 5; // First success batch: 5-15
+  let batchRemaining = range(successBatchSize);
 
   return () => {
     batchRemaining--;
 
     if (batchRemaining <= 0) {
       inErrorBatch = !inErrorBatch;
-      batchRemaining = inErrorBatch
-        ? Math.floor(random() * 20) + 1 // Error batch: 1-20
-        : Math.floor(random() * 11) + 5; // Success batch: 5-15
+      batchRemaining = range(inErrorBatch ? errorBatchSize : successBatchSize);
     }
 
     return inErrorBatch;

@@ -19,6 +19,7 @@ export const extendWithStateSqlite = <T>(
     db: Database.Database;
     stateAdapter: StateAdapter<{ $test: true }, string>;
     flakyStateAdapter: StateAdapter<{ $test: true }, string>;
+    poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
   }
 > => {
   return api.extend<{
@@ -29,6 +30,7 @@ export const extendWithStateSqlite = <T>(
     flakyStateProvider: BetterSqlite3Provider;
     stateAdapter: SqliteStateAdapter;
     flakyStateAdapter: SqliteStateAdapter;
+    poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
   }>({
     db: [
       // eslint-disable-next-line no-empty-pattern
@@ -120,6 +122,13 @@ export const extendWithStateSqlite = <T>(
             stateProvider: flakyStateProvider,
           }),
         );
+      },
+      { scope: "test" },
+    ],
+    poisonTransaction: [
+      // oxlint-disable-next-line no-empty-pattern
+      async ({}, use) => {
+        await use(undefined);
       },
       { scope: "test" },
     ],

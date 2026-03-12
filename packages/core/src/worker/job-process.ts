@@ -233,6 +233,11 @@ export const runJobProcess = async ({
   workerId: string;
   attemptMiddlewares?: JobAttemptMiddleware<StateAdapter<BaseTxContext, any>, BaseNavigationMap>[];
 }): Promise<void> => {
+  const userSavepoint = helpers.stateAdapter.withSavepoint
+    ? async <T>(txCtx: BaseTxContext, fn: (txCtx: BaseTxContext) => Promise<T>) =>
+        helpers.stateAdapter.withSavepoint!({ txCtx, fn })
+    : async <T>(txCtx: BaseTxContext, fn: (txCtx: BaseTxContext) => Promise<T>) => fn(txCtx);
+
   let completeTransactionContext: TransactionContext<BaseTxContext> | null = null;
 
   const abortController = new AbortController() as TypedAbortController<JobAbortReason>;
@@ -384,7 +389,7 @@ export const runJobProcess = async ({
       let callbackOutput: T | undefined;
       try {
         callbackOutput = await prepareTransactionContext.run(async (txCtx) =>
-          prepareCallback?.({ ...txCtx }),
+          userSavepoint(txCtx, async (txCtx) => prepareCallback?.({ ...txCtx })),
         );
       } finally {
         prepareSpan?.end();
@@ -447,31 +452,33 @@ export const runJobProcess = async ({
       try {
         result = await runInGuardedTransaction(async (txCtx) => {
           let continuedJob: Job<any, any, any, any> | null = null;
-          const output = await completeCallback({
-            continueWith: async ({ typeName, input, schedule, blockers }) => {
-              if (continuedJob) {
-                throw new Error("continueWith can only be called once");
-              }
-              continuedJob = await continueWith(helpers, {
-                typeName,
-                input,
-                txCtx,
-                transactionHooks,
-                schedule,
-                blockers: blockers as any,
-                chainId: job.chainId,
-                chainIndex: job.chainIndex + 1,
-                chainTypeName: job.chainTypeName,
-                originChainTraceContext:
-                  attemptSpanHandle?.getChainTraceContext() ?? job.chainTraceContext,
-                originTraceContext: attemptSpanHandle?.getTraceContext() ?? job.traceContext,
-                fromTypeName: job.typeName,
-              });
-              return continuedJob;
-            },
-            transactionHooks,
-            ...txCtx,
-          });
+          const output = await userSavepoint(txCtx, async (txCtx) =>
+            completeCallback({
+              continueWith: async ({ typeName, input, schedule, blockers }) => {
+                if (continuedJob) {
+                  throw new Error("continueWith can only be called once");
+                }
+                continuedJob = await continueWith(helpers, {
+                  typeName,
+                  input,
+                  txCtx,
+                  transactionHooks,
+                  schedule,
+                  blockers: blockers as any,
+                  chainId: job.chainId,
+                  chainIndex: job.chainIndex + 1,
+                  chainTypeName: job.chainTypeName,
+                  originChainTraceContext:
+                    attemptSpanHandle?.getChainTraceContext() ?? job.chainTraceContext,
+                  originTraceContext: attemptSpanHandle?.getTraceContext() ?? job.traceContext,
+                  fromTypeName: job.typeName,
+                });
+                return continuedJob;
+              },
+              transactionHooks,
+              ...txCtx,
+            }),
+          );
           bufferObservabilityEvent(transactionHooks, () => {
             helpers.observabilityHelper.jobAttemptCompleted(job, {
               output: continuedJob ? null : output,
