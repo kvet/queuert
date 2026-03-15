@@ -86,8 +86,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         status: "committed",
         children: [
           expect.objectContaining({ name: "acquireJob" }),
-          expect.objectContaining({ name: "getJobBlockers" }), // TODO: why isn't it the part of acquireJob?
-          expect.objectContaining({ name: "renewJobLease" }), // TODO: why do we need to renew the lease?
+          expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({
             name: "withSavepoint",
             status: "committed",
@@ -178,8 +177,8 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         status: "committed",
         children: [
           expect.objectContaining({ name: "acquireJob" }),
-          expect.objectContaining({ name: "getJobBlockers" }), // TODO: why isn't it the part of acquireJob?
-          expect.objectContaining({ name: "renewJobLease" }), // TODO: why do we need to renew the lease?
+          expect.objectContaining({ name: "getJobBlockers" }),
+          expect.objectContaining({ name: "renewJobLease" }),
         ],
       }),
       expect.objectContaining({
@@ -280,13 +279,13 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         status: "committed",
         children: [
           expect.objectContaining({ name: "acquireJob" }),
-          expect.objectContaining({ name: "getJobBlockers" }), // TODO: why isn't it the part of acquireJob?
-          expect.objectContaining({ name: "renewJobLease" }), // TODO: why do we need to renew the lease?
+          expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({
             name: "withSavepoint",
             status: "committed",
             children: [expect.objectContaining({ name: "user-preparation" })],
           }),
+          expect.objectContaining({ name: "renewJobLease" }),
         ],
       }),
       expect.objectContaining({
@@ -384,8 +383,8 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         status: "committed",
         children: [
           expect.objectContaining({ name: "acquireJob" }),
-          expect.objectContaining({ name: "getJobBlockers" }), // TODO: why isn't it the part of acquireJob?
-          expect.objectContaining({ name: "renewJobLease" }), // TODO: why do we need to renew the lease?
+          expect.objectContaining({ name: "getJobBlockers" }),
+          expect.objectContaining({ name: "renewJobLease" }),
         ],
       }),
       expect.objectContaining({
@@ -486,8 +485,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         status: "committed",
         children: [
           expect.objectContaining({ name: "acquireJob" }),
-          expect.objectContaining({ name: "getJobBlockers" }), // TODO: why isn't it the part of acquireJob?
-          expect.objectContaining({ name: "renewJobLease" }), // TODO: why do we need to renew the lease?
+          expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({
             name: "withSavepoint",
             status: "committed",
@@ -583,8 +581,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         status: "committed",
         children: [
           expect.objectContaining({ name: "acquireJob" }),
-          expect.objectContaining({ name: "getJobBlockers" }), // TODO: why isn't it the part of acquireJob?
-          expect.objectContaining({ name: "renewJobLease" }), // TODO: why do we need to renew the lease?
+          expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({
             name: "withSavepoint",
             status: "committed",

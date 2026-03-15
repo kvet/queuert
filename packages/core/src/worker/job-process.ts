@@ -338,14 +338,6 @@ export const runJobProcess = async ({
   const blockerPairs = await prepareTransactionContext.run(async (txCtx) =>
     helpers.stateAdapter.getJobBlockers({ txCtx, jobId: job.id }),
   );
-  await prepareTransactionContext.run(async (txCtx) =>
-    helpers.stateAdapter.renewJobLease({
-      txCtx,
-      jobId: job.id,
-      workerId,
-      leaseDurationMs: leaseConfig.leaseMs,
-    }),
-  );
   const runningJob = {
     ...mapStateJobToJob(job),
     blockers: blockerPairs.map(mapStateJobPairToJobChain) as CompletedJobChain<
@@ -394,6 +386,14 @@ export const runJobProcess = async ({
       }
 
       if (config.mode === "staged") {
+        await prepareTransactionContext.run(async (txCtx) =>
+          helpers.stateAdapter.renewJobLease({
+            txCtx,
+            jobId: job.id,
+            workerId,
+            leaseDurationMs: leaseConfig.leaseMs,
+          }),
+        );
         await prepareTransactionContext.resolve();
 
         await leaseManager.start();
@@ -580,9 +580,9 @@ export const runJobProcess = async ({
           rescheduledAt: errorResult.schedule?.at,
           rescheduledAfterMs: errorResult.schedule?.afterMs,
         });
-      } catch {
-        await prepareTransactionContext.resolve();
-        await completeTransactionContext?.resolve();
+      } catch (innerError) {
+        await prepareTransactionContext.reject(innerError);
+        await completeTransactionContext?.reject(innerError);
 
         attemptSpanHandle?.end({ status: "failed", error });
       }

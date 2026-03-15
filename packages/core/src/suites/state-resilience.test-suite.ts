@@ -146,8 +146,12 @@ export const stateResilienceTestSuite = ({
           maxDelayMs: 1,
         },
         processDefaults: {
-          // should be processed in a single worker loop
-          pollIntervalMs: 10_000,
+          // Short poll interval so the worker retries promptly after a transient error.
+          // When the complete phase hits a flaky-adapter error and the error handler's
+          // runInTransaction also fails, the job stays "acquired" with a short lease.
+          // The worker must re-poll before the reaper reclaims it, so pollIntervalMs
+          // needs to be low enough to beat the lease expiry window.
+          pollIntervalMs: 250,
           leaseConfig: {
             leaseMs: 10,
             renewIntervalMs: 5,

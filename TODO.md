@@ -20,6 +20,7 @@
   - [REF] Fix job detail: fetches all chain jobs to find continuation — use targeted query
   - [REF] Fix stale cursor race condition on filter change in ChainList/JobList
 - [TASK,EASY] Fix flaky timeout in `postgres-postgres.data.spec.ts` "handles distributed blocker jobs" (Notify suite) — intermittent `WaitChainTimeoutError`
+- [TASK,EASY] Revisit state-resilience flaky tests — increase timeout from 5s to 10s for multi-slot/multi-worker variants
 - [REF,EASY] Review all public types exported from `@queuert/core` — hide internal-only types (prefix with `_`, remove from `index.ts`). Breaking changes OK
 - [TASK] Use transactionHooks in `deleteJobChains` to buffer post-delete side effects (e.g., observability events)
 - [?,TASK] Review `allowEmptyWorker` flag in job-process.ts staged mode — currently set when `prepareTransactionContext.status === "pending"`, may be removable
