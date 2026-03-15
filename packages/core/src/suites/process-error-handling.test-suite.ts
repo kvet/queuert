@@ -94,9 +94,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           expect.objectContaining({ name: "acquireJob" }),
           expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({ name: "renewJobLease" }),
-          ...(stateAdapter.withSavepoint
-            ? [expect.objectContaining({ name: "withSavepoint", status: "rolled-back" })]
-            : []),
+          expect.objectContaining({ name: "withSavepoint", status: "rolled-back" }),
           expect.objectContaining({ name: "rescheduleJob" }),
         ],
       }),
@@ -183,9 +181,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           expect.objectContaining({ name: "acquireJob" }),
           expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({ name: "renewJobLease" }),
-          ...(stateAdapter.withSavepoint
-            ? [expect.objectContaining({ name: "withSavepoint", status: "rolled-back" })]
-            : []),
+          expect.objectContaining({ name: "withSavepoint", status: "rolled-back" }),
           expect.objectContaining({ name: "rescheduleJob" }),
         ],
       }),
@@ -271,9 +267,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           expect.objectContaining({ name: "acquireJob" }),
           expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({ name: "renewJobLease" }),
-          ...(stateAdapter.withSavepoint
-            ? [expect.objectContaining({ name: "withSavepoint", status: "committed" })]
-            : []),
           expect.objectContaining({ name: "rescheduleJob" }),
         ],
       }),
@@ -360,9 +353,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           expect.objectContaining({ name: "acquireJob" }),
           expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({ name: "renewJobLease" }),
-          ...(stateAdapter.withSavepoint
-            ? [expect.objectContaining({ name: "withSavepoint", status: "committed" })]
-            : []),
         ],
       }),
       expect.objectContaining({ name: "getNextJobAvailableInMs" }),
@@ -457,12 +447,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           expect.objectContaining({ name: "acquireJob" }),
           expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({ name: "renewJobLease" }),
-          ...(stateAdapter.withSavepoint
-            ? [expect.objectContaining({ name: "withSavepoint", status: "committed" })]
-            : []),
-          ...(stateAdapter.withSavepoint
-            ? [expect.objectContaining({ name: "withSavepoint", status: "rolled-back" })]
-            : []),
+          expect.objectContaining({ name: "withSavepoint", status: "rolled-back" }),
           expect.objectContaining({ name: "rescheduleJob" }),
         ],
       }),
@@ -551,9 +536,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           expect.objectContaining({ name: "acquireJob" }),
           expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({ name: "renewJobLease" }),
-          ...(stateAdapter.withSavepoint
-            ? [expect.objectContaining({ name: "withSavepoint", status: "committed" })]
-            : []),
         ],
       }),
       expect.objectContaining({ name: "getNextJobAvailableInMs" }),
@@ -562,9 +544,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         status: "committed",
         children: [
           expect.objectContaining({ name: "getJobForUpdate" }),
-          ...(stateAdapter.withSavepoint
-            ? [expect.objectContaining({ name: "withSavepoint", status: "rolled-back" })]
-            : []),
+          expect.objectContaining({ name: "withSavepoint", status: "rolled-back" }),
           expect.objectContaining({ name: "rescheduleJob" }),
         ],
       }),
@@ -654,15 +634,15 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           expect.objectContaining({ name: "acquireJob" }),
           expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({ name: "renewJobLease" }),
-          ...(stateAdapter.withSavepoint
-            ? [expect.objectContaining({ name: "withSavepoint", status: "committed" })]
-            : []),
-          ...(stateAdapter.withSavepoint
-            ? [expect.objectContaining({ name: "withSavepoint", status: "committed" })]
-            : []),
-          expect.objectContaining({ name: "completeJob" }),
-          expect.objectContaining({ name: "getJobById" }),
-          expect.objectContaining({ name: "unblockJobs" }),
+          expect.objectContaining({
+            name: "withSavepoint",
+            status: "rolled-back",
+            children: [
+              expect.objectContaining({ name: "completeJob" }),
+              expect.objectContaining({ name: "getJobById" }),
+              expect.objectContaining({ name: "unblockJobs" }),
+            ],
+          }),
           expect.objectContaining({ name: "rescheduleJob" }),
         ],
       }),
@@ -754,9 +734,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           expect.objectContaining({ name: "acquireJob" }),
           expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({ name: "renewJobLease" }),
-          ...(stateAdapter.withSavepoint
-            ? [expect.objectContaining({ name: "withSavepoint", status: "committed" })]
-            : []),
         ],
       }),
       expect.objectContaining({ name: "getNextJobAvailableInMs" }),
@@ -765,12 +742,15 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         status: "committed",
         children: [
           expect.objectContaining({ name: "getJobForUpdate" }),
-          ...(stateAdapter.withSavepoint
-            ? [expect.objectContaining({ name: "withSavepoint", status: "committed" })]
-            : []),
-          expect.objectContaining({ name: "completeJob" }),
-          expect.objectContaining({ name: "getJobById" }),
-          expect.objectContaining({ name: "unblockJobs" }),
+          expect.objectContaining({
+            name: "withSavepoint",
+            status: "rolled-back",
+            children: [
+              expect.objectContaining({ name: "completeJob" }),
+              expect.objectContaining({ name: "getJobById" }),
+              expect.objectContaining({ name: "unblockJobs" }),
+            ],
+          }),
           expect.objectContaining({ name: "rescheduleJob" }),
         ],
       }),
@@ -1045,7 +1025,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           expect.objectContaining({ name: "acquireJob" }),
           expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({ name: "renewJobLease" }),
-          expect.objectContaining({ name: "withSavepoint", status: "committed" }),
           expect.objectContaining({
             name: "withSavepoint",
             status: "rolled-back",
@@ -1141,7 +1120,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           expect.objectContaining({ name: "acquireJob" }),
           expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({ name: "renewJobLease" }),
-          expect.objectContaining({ name: "withSavepoint", status: "committed" }),
         ],
       }),
       expect.objectContaining({ name: "getNextJobAvailableInMs" }),
@@ -1160,5 +1138,408 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     ];
     expect(spyStateAdapter.calls.slice(0, expected.length)).toEqual(expected);
+  });
+
+  it("rolls back continuation job when handler throws after complete with continueWith (atomic mode)", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    let step1Attempts = 0;
+    const spyStateAdapter = createSpyStateAdapter(stateAdapter);
+
+    const registry = defineJobTypeRegistry<{
+      step1: {
+        entry: true;
+        input: { value: number };
+        continueWith: { typeName: "step2" };
+      };
+      step2: {
+        input: { value: number };
+        output: { result: number };
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+    const workerClient = await createClient({
+      stateAdapter: spyStateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+    const worker = await createInProcessWorker({
+      client: workerClient,
+      concurrency: 1,
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
+        step1: {
+          backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+          attemptHandler: async ({ job, prepare, complete }) => {
+            step1Attempts++;
+            await prepare({ mode: "atomic" });
+            const result = await complete(async ({ continueWith }) =>
+              continueWith({ typeName: "step2", input: { value: job.input.value * 2 } }),
+            );
+            if (job.attempt === 1) {
+              throw new Error("Error after complete with continueWith");
+            }
+            return result;
+          },
+        },
+        step2: {
+          attemptHandler: async ({ job, complete }) => {
+            return complete(async () => ({ result: job.input.value }));
+          },
+        },
+      }),
+    });
+
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "step1",
+          input: { value: 10 },
+        }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      const completed = await client.awaitJobChain(jobChain, completionOptions);
+      expect(completed.output).toEqual({ result: 20 });
+    });
+
+    expect(step1Attempts).toBe(2);
+
+    const allJobs = await client.listJobChainJobs({ jobChainId: jobChain.id });
+    expect(allJobs.items).toHaveLength(2);
+
+    const expected = [
+      expect.objectContaining({
+        name: "runInTransaction",
+        status: "committed",
+        children: [
+          expect.objectContaining({ name: "acquireJob" }),
+          expect.objectContaining({ name: "getJobBlockers" }),
+          expect.objectContaining({ name: "renewJobLease" }),
+          expect.objectContaining({
+            name: "withSavepoint",
+            status: "rolled-back",
+            children: [
+              expect.objectContaining({ name: "createJobs" }),
+              expect.objectContaining({ name: "completeJob" }),
+            ],
+          }),
+          expect.objectContaining({ name: "rescheduleJob" }),
+        ],
+      }),
+      expect.objectContaining({ name: "getNextJobAvailableInMs" }),
+    ];
+    expect(spyStateAdapter.calls.slice(0, expected.length)).toEqual(expected);
+  });
+
+  it("rolls back continuation job when handler throws after complete with continueWith (staged mode)", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    let step1Attempts = 0;
+    const spyStateAdapter = createSpyStateAdapter(stateAdapter);
+
+    const registry = defineJobTypeRegistry<{
+      step1: {
+        entry: true;
+        input: { value: number };
+        continueWith: { typeName: "step2" };
+      };
+      step2: {
+        input: { value: number };
+        output: { result: number };
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+    const workerClient = await createClient({
+      stateAdapter: spyStateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+    const worker = await createInProcessWorker({
+      client: workerClient,
+      concurrency: 1,
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
+        step1: {
+          backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+          attemptHandler: async ({ job, prepare, complete }) => {
+            step1Attempts++;
+            await prepare({ mode: "staged" });
+            await sleep(1);
+            const result = await complete(async ({ continueWith }) =>
+              continueWith({ typeName: "step2", input: { value: job.input.value * 2 } }),
+            );
+            if (job.attempt === 1) {
+              throw new Error("Error after complete with continueWith");
+            }
+            return result;
+          },
+        },
+        step2: {
+          attemptHandler: async ({ job, complete }) => {
+            return complete(async () => ({ result: job.input.value }));
+          },
+        },
+      }),
+    });
+
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "step1",
+          input: { value: 10 },
+        }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      const completed = await client.awaitJobChain(jobChain, completionOptions);
+      expect(completed.output).toEqual({ result: 20 });
+    });
+
+    expect(step1Attempts).toBe(2);
+
+    const allJobs = await client.listJobChainJobs({ jobChainId: jobChain.id });
+    expect(allJobs.items).toHaveLength(2);
+
+    const expected = [
+      expect.objectContaining({
+        name: "runInTransaction",
+        status: "committed",
+        children: [
+          expect.objectContaining({ name: "acquireJob" }),
+          expect.objectContaining({ name: "getJobBlockers" }),
+          expect.objectContaining({ name: "renewJobLease" }),
+        ],
+      }),
+      expect.objectContaining({ name: "getNextJobAvailableInMs" }),
+      expect.objectContaining({
+        name: "runInTransaction",
+        status: "committed",
+        children: [
+          expect.objectContaining({ name: "getJobForUpdate" }),
+          expect.objectContaining({
+            name: "withSavepoint",
+            status: "rolled-back",
+            children: [
+              expect.objectContaining({ name: "createJobs" }),
+              expect.objectContaining({ name: "completeJob" }),
+            ],
+          }),
+          expect.objectContaining({ name: "rescheduleJob" }),
+        ],
+      }),
+    ];
+    expect(spyStateAdapter.calls.slice(0, expected.length)).toEqual(expected);
+  });
+
+  it("blocked job remains blocked when blocker handler throws after complete (atomic mode)", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    let blockerAttempts = 0;
+
+    const registry = defineJobTypeRegistry<{
+      blocker: {
+        entry: true;
+        input: { value: number };
+        output: { done: true };
+      };
+      dependent: {
+        entry: true;
+        input: null;
+        output: { result: string };
+        blockers: [{ typeName: "blocker" }];
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
+        blocker: {
+          backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+          attemptHandler: async ({ job, prepare, complete }) => {
+            blockerAttempts++;
+            await prepare({ mode: "atomic" });
+            const result = await complete(async () => ({ done: true as const }));
+            if (job.attempt === 1) {
+              throw new Error("Error after blocker complete");
+            }
+            return result;
+          },
+        },
+        dependent: {
+          attemptHandler: async ({ job, complete }) => {
+            const [blocker] = job.blockers;
+            expect(blocker.output.done).toBe(true);
+            return complete(async () => ({ result: "ok" }));
+          },
+        },
+      }),
+    });
+
+    const blockerChain = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "blocker",
+          input: { value: 1 },
+        }),
+      ),
+    );
+    const dependentChain = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "dependent",
+          input: null,
+          blockers: [blockerChain],
+        }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      const completed = await client.awaitJobChain(dependentChain, completionOptions);
+      expect(completed.output).toEqual({ result: "ok" });
+    });
+
+    expect(blockerAttempts).toBe(2);
+  });
+
+  it("blocked job remains blocked when blocker handler throws after complete (staged mode)", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    let blockerAttempts = 0;
+
+    const registry = defineJobTypeRegistry<{
+      blocker: {
+        entry: true;
+        input: { value: number };
+        output: { done: true };
+      };
+      dependent: {
+        entry: true;
+        input: null;
+        output: { result: string };
+        blockers: [{ typeName: "blocker" }];
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
+        blocker: {
+          backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+          attemptHandler: async ({ job, prepare, complete }) => {
+            blockerAttempts++;
+            await prepare({ mode: "staged" });
+            await sleep(1);
+            const result = await complete(async () => ({ done: true as const }));
+            if (job.attempt === 1) {
+              throw new Error("Error after blocker complete");
+            }
+            return result;
+          },
+        },
+        dependent: {
+          attemptHandler: async ({ job, complete }) => {
+            const [blocker] = job.blockers;
+            expect(blocker.output.done).toBe(true);
+            return complete(async () => ({ result: "ok" }));
+          },
+        },
+      }),
+    });
+
+    const blockerChain = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "blocker",
+          input: { value: 1 },
+        }),
+      ),
+    );
+    const dependentChain = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "dependent",
+          input: null,
+          blockers: [blockerChain],
+        }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      const completed = await client.awaitJobChain(dependentChain, completionOptions);
+      expect(completed.output).toEqual({ result: "ok" });
+    });
+
+    expect(blockerAttempts).toBe(2);
   });
 };

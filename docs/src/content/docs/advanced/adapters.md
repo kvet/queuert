@@ -163,7 +163,7 @@ Observability events emitted inside database transactions are buffered and only 
 
 ### Self-Cleaning
 
-Both `createStateJobs` and `finishJob` snapshot the observability buffer on entry and rollback on throw, ensuring partial events from a failed operation don't accumulate in the buffer.
+Both `createStateJobs` and `finishJob` use `TransactionHooks` savepoints (via `withSavepoint`) to automatically roll back buffered observability events on throw, ensuring partial events from a failed operation don't accumulate in the buffer. The `checkpoint` callback on each hook definition captures the buffer position, and the savepoint restores it on rollback.
 
 ## See Also
 

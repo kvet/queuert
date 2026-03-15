@@ -56,24 +56,21 @@ export const createSpyStateAdapter = <TTxContext extends BaseTxContext, TJobId e
         throw error;
       }
     },
-    withSavepoint: stateAdapter.withSavepoint
-      ? async ({ txCtx, fn }) => {
-          const call = record({ txCtx, name: "withSavepoint" });
-          const spyRef = Symbol();
-          weakMap.set(spyRef, call);
-          try {
-            const result = await stateAdapter.withSavepoint!({
-              txCtx,
-              fn: async (innerTxCtx) => fn({ ...innerTxCtx, spyRef }),
-            });
-            call.status = "committed";
-            return result;
-          } catch (error) {
-            call.status = "rolled-back";
-            throw error;
-          }
-        }
-      : undefined,
+    withSavepoint: async (txCtx, fn) => {
+      const call = record({ txCtx, name: "withSavepoint" });
+      const spyRef = Symbol();
+      weakMap.set(spyRef, call);
+      try {
+        const result = await stateAdapter.withSavepoint(txCtx, async (innerTxCtx) =>
+          fn({ ...innerTxCtx, spyRef }),
+        );
+        call.status = "committed";
+        return result;
+      } catch (error) {
+        call.status = "rolled-back";
+        throw error;
+      }
+    },
     getJobChainById: wrap("getJobChainById", stateAdapter.getJobChainById),
     getJobById: wrap("getJobById", stateAdapter.getJobById),
     createJobs: wrap("createJobs", stateAdapter.createJobs),

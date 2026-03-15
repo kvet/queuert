@@ -1,35 +1,69 @@
 import { type TransactionHooks } from "../transaction-hooks.js";
 
-const queuertObservabilityBuffer = Symbol("queuert.observabilityBuffer");
+type Callback = () => void | Promise<void>;
 
-type ObservabilityBuffer = (() => void)[];
+const queuertObservabilityCommit = Symbol("queuert.observability.commit");
 
 export const bufferObservabilityEvent = (
   transactionHooks: TransactionHooks,
-  callback: () => void,
+  callback: Callback,
 ): void => {
-  const state = transactionHooks.getOrInsert<ObservabilityBuffer>(
-    queuertObservabilityBuffer,
-    () => ({
+  transactionHooks
+    .getOrInsert<Callback[]>(queuertObservabilityCommit, () => ({
       state: [],
-      flush: (state) => {
-        for (const cb of state) cb();
+      flush: async (cbs) => {
+        let firstError: unknown;
+        for (const cb of cbs) {
+          try {
+            await cb();
+          } catch (error) {
+            firstError ??= error;
+          }
+        }
+        if (firstError) throw firstError;
       },
-      discard: () => {},
-    }),
-  );
-  state.push(callback);
+      checkpoint: (state) => {
+        const mark = state.length;
+        return () => {
+          state.length = mark;
+        };
+      },
+    }))
+    .push(callback);
 };
 
-export const snapshotObservabilityBuffer = (transactionHooks: TransactionHooks): number => {
-  if (!transactionHooks.has(queuertObservabilityBuffer)) return 0;
-  return transactionHooks.get<ObservabilityBuffer>(queuertObservabilityBuffer).length;
-};
+const queuertObservabilityRollback = Symbol("queuert.observability.rollback");
 
-export const rollbackObservabilityBuffer = (
+export const bufferObservabilityRollback = (
   transactionHooks: TransactionHooks,
-  snapshot: number,
+  callback: Callback,
 ): void => {
-  if (!transactionHooks.has(queuertObservabilityBuffer)) return;
-  transactionHooks.get<ObservabilityBuffer>(queuertObservabilityBuffer).length = snapshot;
+  transactionHooks
+    .getOrInsert<Callback[]>(queuertObservabilityRollback, () => ({
+      state: [],
+      flush: () => {},
+      discard: async (cbs) => {
+        let firstError: unknown;
+        for (const cb of cbs) {
+          try {
+            await cb();
+          } catch (error) {
+            firstError ??= error;
+          }
+        }
+        if (firstError) throw firstError;
+      },
+      checkpoint: (state) => {
+        const mark = state.length;
+        return () => {
+          const scope = state.splice(mark);
+          for (const cb of scope) {
+            try {
+              void cb();
+            } catch {}
+          }
+        };
+      },
+    }))
+    .push(callback);
 };

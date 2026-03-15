@@ -374,11 +374,33 @@ const log = createConsoleLog();
 
 Creates a simple console logger suitable for development. For production, implement a custom `Log` function that integrates with your logging library.
 
+## Transaction Hook Types
+
+### HookDef
+
+```typescript
+type HookDef<T> = {
+  state: T;
+  flush: (state: T) => void | Promise<void>;
+  discard?: (state: T) => void | Promise<void>;
+  checkpoint?: (state: T) => () => void;
+};
+```
+
+Exported from `@queuert/core`. Defines a single hook's state and lifecycle callbacks for use with `TransactionHooks`.
+
+- **state** -- mutable state accumulated during the transaction
+- **flush** -- executes the buffered side effects after the transaction commits
+- **discard** -- cleans up without executing side effects on rollback
+- **checkpoint** -- captures the current state for savepoint support. Returns a rollback function that restores the state to the checkpoint
+
+See [Transaction Hooks Reference](/queuert/reference/queuert/transaction-hooks/) for `TransactionHooks`, `TransactionHooksSavepoint`, and usage details.
+
 ## Adapter Interfaces
 
 These interfaces are exported for adapter authors. Most users interact with adapters through factory functions from adapter packages.
 
-**StateAdapter** abstracts database operations for job persistence. Generic over `TTxContext` (transaction context) and `TJobId` (ID type).
+**StateAdapter** abstracts database operations for job persistence. Generic over `TTxContext` (transaction context) and `TJobId` (ID type). Requires a `withSavepoint` method for database savepoint support.
 
 **NotifyAdapter** abstracts pub/sub notifications for worker coordination. Methods: `notifyJobScheduled`, `listenJobScheduled`, `notifyJobChainCompleted`, `listenJobChainCompleted`, `notifyJobOwnershipLost`, `listenJobOwnershipLost`.
 

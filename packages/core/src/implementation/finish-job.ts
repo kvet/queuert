@@ -1,14 +1,10 @@
 import { type Job } from "../entities/job.js";
 import { JobChainNotFoundError } from "../errors.js";
-import { type TransactionHooks } from "../transaction-hooks.js";
 import { bufferNotifyChainCompletion, bufferNotifyJobScheduled } from "../helpers/notify-hooks.js";
-import {
-  bufferObservabilityEvent,
-  rollbackObservabilityBuffer,
-  snapshotObservabilityBuffer,
-} from "../helpers/observability-hooks.js";
+import { bufferObservabilityEvent } from "../helpers/observability-hooks.js";
 import { type Helpers } from "../setup-helpers.js";
 import { type BaseTxContext, type StateJob } from "../state-adapter/state-adapter.js";
+import { type TransactionHooks } from "../transaction-hooks.js";
 
 export const finishJob = async (
   helpers: Helpers,
@@ -42,72 +38,66 @@ export const finishJob = async (
     workerId,
   });
 
-  const observabilitySnapshot = snapshotObservabilityBuffer(transactionHooks);
-  try {
+  bufferObservabilityEvent(transactionHooks, () => {
+    helpers.observabilityHelper.jobCompleted(job, {
+      output,
+      continuedWith: hasContinuedJob ? rest.continuedJob : undefined,
+      workerId,
+    });
+    helpers.observabilityHelper.jobDuration(job);
+  });
+
+  if (workerId === null) {
     bufferObservabilityEvent(transactionHooks, () => {
-      helpers.observabilityHelper.jobCompleted(job, {
-        output,
-        continuedWith: hasContinuedJob ? rest.continuedJob : undefined,
-        workerId,
+      helpers.observabilityHelper.completeJobSpan(job, {
+        continued: hasContinuedJob ? rest.continuedJob : undefined,
+        chainCompleted: !hasContinuedJob,
       });
-      helpers.observabilityHelper.jobDuration(job);
+    });
+  }
+
+  if (!hasContinuedJob) {
+    const jobChainStartJob = await helpers.stateAdapter.getJobById({
+      txCtx,
+      jobId: job.chainId,
     });
 
-    if (workerId === null) {
+    if (!jobChainStartJob) {
+      throw new JobChainNotFoundError(`Job chain with id ${job.chainId} not found`, {
+        chainId: job.chainId,
+      });
+    }
+
+    bufferObservabilityEvent(transactionHooks, () => {
+      helpers.observabilityHelper.jobChainCompleted(jobChainStartJob, { output });
+      helpers.observabilityHelper.jobChainDuration(jobChainStartJob, job);
+    });
+    bufferNotifyChainCompletion(transactionHooks, helpers.notifyAdapter, job);
+
+    const { unblockedJobs, blockerTraceContexts } = await helpers.stateAdapter.unblockJobs({
+      txCtx,
+      blockedByChainId: jobChainStartJob.id,
+    });
+    for (const traceContext of blockerTraceContexts) {
       bufferObservabilityEvent(transactionHooks, () => {
-        helpers.observabilityHelper.completeJobSpan(job, {
-          continued: hasContinuedJob ? rest.continuedJob : undefined,
-          chainCompleted: !hasContinuedJob,
+        helpers.observabilityHelper.completeBlockerSpan({
+          traceContext,
+          blockerChainTypeName: jobChainStartJob.chainTypeName,
         });
       });
     }
 
-    if (!hasContinuedJob) {
-      const jobChainStartJob = await helpers.stateAdapter.getJobById({
-        txCtx,
-        jobId: job.chainId,
-      });
-
-      if (!jobChainStartJob) {
-        throw new JobChainNotFoundError(`Job chain with id ${job.chainId} not found`, {
-          chainId: job.chainId,
-        });
-      }
-
-      bufferObservabilityEvent(transactionHooks, () => {
-        helpers.observabilityHelper.jobChainCompleted(jobChainStartJob, { output });
-        helpers.observabilityHelper.jobChainDuration(jobChainStartJob, job);
-      });
-      bufferNotifyChainCompletion(transactionHooks, helpers.notifyAdapter, job);
-
-      const { unblockedJobs, blockerTraceContexts } = await helpers.stateAdapter.unblockJobs({
-        txCtx,
-        blockedByChainId: jobChainStartJob.id,
-      });
-      for (const traceContext of blockerTraceContexts) {
+    if (unblockedJobs.length > 0) {
+      unblockedJobs.forEach((unblockedJob) => {
+        bufferNotifyJobScheduled(transactionHooks, helpers.notifyAdapter, unblockedJob);
         bufferObservabilityEvent(transactionHooks, () => {
-          helpers.observabilityHelper.completeBlockerSpan({
-            traceContext,
-            blockerChainTypeName: jobChainStartJob.chainTypeName,
+          helpers.observabilityHelper.jobUnblocked(unblockedJob, {
+            unblockedByChain: jobChainStartJob,
           });
         });
-      }
-
-      if (unblockedJobs.length > 0) {
-        unblockedJobs.forEach((unblockedJob) => {
-          bufferNotifyJobScheduled(transactionHooks, helpers.notifyAdapter, unblockedJob);
-          bufferObservabilityEvent(transactionHooks, () => {
-            helpers.observabilityHelper.jobUnblocked(unblockedJob, {
-              unblockedByChain: jobChainStartJob,
-            });
-          });
-        });
-      }
+      });
     }
-
-    return job;
-  } catch (error) {
-    rollbackObservabilityBuffer(transactionHooks, observabilitySnapshot);
-    throw error;
   }
+
+  return job;
 };

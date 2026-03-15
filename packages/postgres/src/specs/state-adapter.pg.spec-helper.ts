@@ -101,9 +101,7 @@ export const extendWithStatePostgres = <
       async ({ stateProvider, expect }, use) => {
         let queryCount = 0;
         let errorCount = 0;
-        const shouldError = createFlakyBatchGenerator({
-          successBatchSize: { min: 10, max: 26 }, // +6 for savepoints
-        });
+        const shouldError = createFlakyBatchGenerator();
 
         const originalExecuteSql = stateProvider.executeSql.bind(stateProvider);
         const flakyStateProvider: typeof stateProvider = {

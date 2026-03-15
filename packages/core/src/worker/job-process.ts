@@ -3,6 +3,7 @@ import {
   type JobChain,
   mapStateJobPairToJobChain,
 } from "../entities/job-chain.js";
+import { type BaseNavigationMap } from "../entities/job-type-registry.navigation.js";
 import {
   type BlockerChains,
   type ChainTypesReaching,
@@ -11,7 +12,6 @@ import {
   type JobTypeHasBlockers,
   type ResolvedJobWithBlockers,
 } from "../entities/job-type-registry.resolvers.js";
-import { type BaseNavigationMap } from "../entities/job-type-registry.navigation.js";
 import { type Job, mapStateJobToJob } from "../entities/job.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
 import {
@@ -21,11 +21,8 @@ import {
 } from "../errors.js";
 import { type TypedAbortController, type TypedAbortSignal } from "../helpers/abort.js";
 import { type BackoffConfig } from "../helpers/backoff.js";
-import {
-  bufferObservabilityEvent,
-  rollbackObservabilityBuffer,
-  snapshotObservabilityBuffer,
-} from "../helpers/observability-hooks.js";
+import { bufferObservabilityEvent } from "../helpers/observability-hooks.js";
+import { type SavepointContext, createSavepointContext } from "../helpers/savepoint-context.js";
 import {
   type TransactionContext,
   createTransactionContext,
@@ -233,11 +230,6 @@ export const runJobProcess = async ({
   workerId: string;
   attemptMiddlewares?: JobAttemptMiddleware<StateAdapter<BaseTxContext, any>, BaseNavigationMap>[];
 }): Promise<void> => {
-  const userSavepoint = helpers.stateAdapter.withSavepoint
-    ? async <T>(txCtx: BaseTxContext, fn: (txCtx: BaseTxContext) => Promise<T>) =>
-        helpers.stateAdapter.withSavepoint!({ txCtx, fn })
-    : async <T>(txCtx: BaseTxContext, fn: (txCtx: BaseTxContext) => Promise<T>) => fn(txCtx);
-
   let completeTransactionContext: TransactionContext<BaseTxContext> | null = null;
 
   const abortController = new AbortController() as TypedAbortController<JobAbortReason>;
@@ -281,7 +273,7 @@ export const runJobProcess = async ({
     });
   };
   const runInGuardedTransaction = async <T>(
-    cb: (txCtx: BaseTxContext) => Promise<T>,
+    cb: (txCtx: BaseTxContext, transactionHooks: TransactionHooks) => Promise<T>,
   ): Promise<T> => {
     if (abortController.signal.aborted && abortController.signal.reason) {
       if (abortController.signal.reason === "already_completed") {
@@ -302,16 +294,18 @@ export const runJobProcess = async ({
     }
 
     if (prepareTransactionContext.status === "pending") {
-      return prepareTransactionContext.run(async (txCtx) => cb(txCtx));
+      return prepareTransactionContext.run(cb);
     }
     if (completeTransactionContext && completeTransactionContext.status === "pending") {
-      return completeTransactionContext.run(async (txCtx) => cb(txCtx));
+      return completeTransactionContext.run(cb);
     }
 
-    return helpers.stateAdapter.runInTransaction(async (txCtx) => {
-      await refetchJobForUpdate(txCtx);
-      return cb(txCtx);
-    });
+    return withTransactionHooks(async (transactionHooks) =>
+      helpers.stateAdapter.runInTransaction(async (txCtx) => {
+        await refetchJobForUpdate(txCtx);
+        return cb(txCtx, transactionHooks);
+      }),
+    );
   };
   const leaseManager = createLeaseManager({
     commitLease: async (leaseMs: number) => {
@@ -359,7 +353,7 @@ export const runJobProcess = async ({
     >[],
   } as ResolvedJobWithBlockers<any, any, any, any> & { status: "running" };
 
-  const runJobAttempt = async (transactionHooks: TransactionHooks) => {
+  const runJobAttempt = async () => {
     const attemptStartTime = Date.now();
 
     helpers.observabilityHelper.jobAttemptStarted(job, { workerId });
@@ -389,7 +383,11 @@ export const runJobProcess = async ({
       let callbackOutput: T | undefined;
       try {
         callbackOutput = await prepareTransactionContext.run(async (txCtx) =>
-          userSavepoint(txCtx, async (txCtx) => prepareCallback?.({ ...txCtx })),
+          prepareCallback
+            ? helpers.stateAdapter.withSavepoint(txCtx, async (txCtx) =>
+                prepareCallback({ ...txCtx }),
+              )
+            : undefined,
         );
       } finally {
         prepareSpan?.end();
@@ -415,6 +413,7 @@ export const runJobProcess = async ({
     }) as AttemptPrepare<StateAdapter<BaseTxContext, any>>;
 
     let completeCalled = false;
+    let completeSavepointContext: SavepointContext<BaseTxContext> | undefined;
     const complete = (async (
       completeCallback: (
         options: {
@@ -447,83 +446,79 @@ export const runJobProcess = async ({
           await refetchJobForUpdate(txCtx);
         });
       }
-      const completeSnapshot = snapshotObservabilityBuffer(transactionHooks);
-      let result;
-      try {
-        result = await runInGuardedTransaction(async (txCtx) => {
-          let continuedJob: Job<any, any, any, any> | null = null;
-          const output = await userSavepoint(txCtx, async (txCtx) =>
-            completeCallback({
-              continueWith: async ({ typeName, input, schedule, blockers }) => {
-                if (continuedJob) {
-                  throw new Error("continueWith can only be called once");
-                }
-                continuedJob = await continueWith(helpers, {
-                  typeName,
-                  input,
-                  txCtx,
-                  transactionHooks,
-                  schedule,
-                  blockers: blockers as any,
-                  chainId: job.chainId,
-                  chainIndex: job.chainIndex + 1,
-                  chainTypeName: job.chainTypeName,
-                  originChainTraceContext:
-                    attemptSpanHandle?.getChainTraceContext() ?? job.chainTraceContext,
-                  originTraceContext: attemptSpanHandle?.getTraceContext() ?? job.traceContext,
-                  fromTypeName: job.typeName,
-                });
-                return continuedJob;
-              },
+
+      completeSavepointContext = await createSavepointContext(
+        async (cb) => runInGuardedTransaction(cb),
+        helpers.stateAdapter.withSavepoint,
+      );
+
+      const result = await completeSavepointContext.run(async (txCtx, transactionHooks) => {
+        let continuedJob: Job<any, any, any, any> | null = null;
+        const output = await completeCallback({
+          continueWith: async ({ typeName, input, schedule, blockers }) => {
+            if (continuedJob) {
+              throw new Error("continueWith can only be called once");
+            }
+            continuedJob = await continueWith(helpers, {
+              typeName,
+              input,
+              txCtx,
               transactionHooks,
-              ...txCtx,
-            }),
-          );
-          bufferObservabilityEvent(transactionHooks, () => {
-            helpers.observabilityHelper.jobAttemptCompleted(job, {
-              output: continuedJob ? null : output,
-              continuedWith: continuedJob ?? undefined,
-              workerId,
+              schedule,
+              blockers: blockers as any,
+              chainId: job.chainId,
+              chainIndex: job.chainIndex + 1,
+              chainTypeName: job.chainTypeName,
+              originChainTraceContext:
+                attemptSpanHandle?.getChainTraceContext() ?? job.chainTraceContext,
+              originTraceContext: attemptSpanHandle?.getTraceContext() ?? job.traceContext,
+              fromTypeName: job.typeName,
             });
+            return continuedJob;
+          },
+          transactionHooks,
+          ...txCtx,
+        });
+        bufferObservabilityEvent(transactionHooks, () => {
+          helpers.observabilityHelper.jobAttemptCompleted(job, {
+            output: continuedJob ? null : output,
+            continuedWith: continuedJob ?? undefined,
+            workerId,
           });
-          const completedStateJob = await finishJob(
-            helpers,
-            continuedJob
-              ? { job, txCtx, transactionHooks, workerId, type: "continueWith", continuedJob }
-              : { job, txCtx, transactionHooks, workerId, type: "completeChain", output },
-          );
-          const jobResult = continuedJob ?? {
-            ...mapStateJobToJob(completedStateJob),
-            blockers: runningJob.blockers,
-          };
-          const continued = continuedJob
-            ? {
-                jobId: (continuedJob as Job<any, any, any, any>).id,
-                jobTypeName: (continuedJob as Job<any, any, any, any>).typeName,
-              }
-            : undefined;
-          const chainCompleted = !continuedJob ? { output } : undefined;
-          return {
-            result: jobResult,
+        });
+        const completedStateJob = await finishJob(
+          helpers,
+          continuedJob
+            ? { job, txCtx, transactionHooks, workerId, type: "continueWith", continuedJob }
+            : { job, txCtx, transactionHooks, workerId, type: "completeChain", output },
+        );
+        const jobResult = continuedJob ?? {
+          ...mapStateJobToJob(completedStateJob),
+          blockers: runningJob.blockers,
+        };
+        const continued = continuedJob
+          ? {
+              jobId: (continuedJob as Job<any, any, any, any>).id,
+              jobTypeName: (continuedJob as Job<any, any, any, any>).typeName,
+            }
+          : undefined;
+        const chainCompleted = !continuedJob ? { output } : undefined;
+        bufferObservabilityEvent(transactionHooks, () => {
+          helpers.observabilityHelper.jobAttemptDuration(job, {
+            durationMs: Date.now() - attemptStartTime,
+            workerId,
+          });
+          attemptSpanHandle?.end({
+            status: "completed",
             continued,
             chainCompleted,
-          };
+          });
         });
-      } catch (error) {
-        rollbackObservabilityBuffer(transactionHooks, completeSnapshot);
-        throw error;
-      }
+        return jobResult;
+      });
+
       completeSpan?.end();
-      helpers.observabilityHelper.jobAttemptDuration(job, {
-        durationMs: Date.now() - attemptStartTime,
-        workerId,
-      });
-      attemptSpanHandle?.end({
-        status: "completed",
-        continued: result.continued,
-        chainCompleted: result.chainCompleted,
-      });
-      return result.result;
+      return result;
     }) as AttemptComplete<StateAdapter<BaseTxContext, any>, BaseNavigationMap, string>;
 
     let autoSetupDone = false;
@@ -545,28 +540,39 @@ export const runJobProcess = async ({
       });
       attemptPromise.catch(() => {});
 
-      if (!prepareAccessed && !prepareCalled) {
+      if (!prepareAccessed && !prepareCalled && !completeCalled) {
         autoPreparePromise = prepare({ mode: "staged" });
         await autoPreparePromise;
         autoSetupDone = true;
       }
 
       await attemptPromise;
+
+      await completeSavepointContext?.resolve();
       await prepareTransactionContext.resolve();
       await completeTransactionContext?.resolve();
     } catch (error) {
-      const errorSnapshot = snapshotObservabilityBuffer(transactionHooks);
+      await disposeOwnershipListener?.();
+      await leaseManager.stop();
+
+      await completeSavepointContext?.reject(error);
+
       try {
-        const errorResult = await runInGuardedTransaction(async (txCtx) =>
-          handleJobHandlerError(helpers, {
-            job,
-            error,
-            txCtx,
-            transactionHooks,
-            backoffConfig,
-            workerId,
-          }),
+        const errorResult = await runInGuardedTransaction(async (txCtx, transactionHooks) =>
+          transactionHooks.withSavepoint(async () =>
+            handleJobHandlerError(helpers, {
+              job,
+              error,
+              txCtx,
+              transactionHooks,
+              backoffConfig,
+              workerId,
+            }),
+          ),
         );
+
+        await prepareTransactionContext.resolve();
+        await completeTransactionContext?.resolve();
 
         attemptSpanHandle?.end({
           status: "failed",
@@ -575,21 +581,18 @@ export const runJobProcess = async ({
           rescheduledAfterMs: errorResult.schedule?.afterMs,
         });
       } catch {
-        rollbackObservabilityBuffer(transactionHooks, errorSnapshot);
+        await prepareTransactionContext.resolve();
+        await completeTransactionContext?.resolve();
+
         attemptSpanHandle?.end({ status: "failed", error });
       }
-      await prepareTransactionContext.resolve();
-      await completeTransactionContext?.resolve();
-      await disposeOwnershipListener?.();
-      await leaseManager.stop();
     }
   };
 
   await (attemptMiddlewares ?? []).reduceRight(
     (next, mw) => async () => mw({ job: runningJob, workerId }, next),
-    async () =>
-      withTransactionHooks(async (transactionHooks) => {
-        await runJobAttempt(transactionHooks);
-      }),
+    async () => {
+      await runJobAttempt();
+    },
   )();
 };

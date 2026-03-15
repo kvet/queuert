@@ -1,6 +1,6 @@
-import { type TransactionHooks } from "../transaction-hooks.js";
 import { type NotifyAdapter } from "../notify-adapter/notify-adapter.js";
 import { type StateJob } from "../state-adapter/state-adapter.js";
+import { type TransactionHooks } from "../transaction-hooks.js";
 
 const queuertNotifyJobScheduled = Symbol("queuert.notifyJobScheduled");
 const queuertNotifyChainCompleted = Symbol("queuert.notifyChainCompleted");
@@ -21,6 +21,13 @@ export const bufferNotifyJobScheduled = (
           } catch {}
         }),
       );
+    },
+    checkpoint: (state) => {
+      const snapshot = new Map(state);
+      return () => {
+        state.clear();
+        for (const [k, v] of snapshot) state.set(k, v);
+      };
     },
   }));
   state.set(job.typeName, (state.get(job.typeName) ?? 0) + 1);
@@ -43,6 +50,13 @@ export const bufferNotifyChainCompletion = (
           }),
         );
       },
+      checkpoint: (state) => {
+        const snapshot = new Set(state);
+        return () => {
+          state.clear();
+          for (const v of snapshot) state.add(v);
+        };
+      },
     }))
     .add(job.chainId);
 };
@@ -63,6 +77,13 @@ export const bufferNotifyJobOwnershipLost = (
             } catch {}
           }),
         );
+      },
+      checkpoint: (state) => {
+        const snapshot = new Set(state);
+        return () => {
+          state.clear();
+          for (const v of snapshot) state.add(v);
+        };
       },
     }))
     .add(jobId);

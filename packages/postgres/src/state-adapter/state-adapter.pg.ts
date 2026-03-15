@@ -125,7 +125,7 @@ export const createPgStateAdapter = async <
   const rawAdapter: StateAdapter<TTxContext, TIdType> = {
     runInTransaction: stateProvider.runInTransaction,
 
-    withSavepoint: async ({ txCtx, fn }) => {
+    withSavepoint: async (txCtx, fn) => {
       await stateProvider.executeSql({ txCtx, sql: "SAVEPOINT queuert_user_cb" });
       try {
         const result = await fn(txCtx);

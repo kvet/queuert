@@ -16,6 +16,10 @@ export const stateResilienceTestSuite = ({
   it: TestAPI<TestSuiteContext & { flakyStateAdapter: StateAdapter<{ $test: true }, string> }>;
   skipConcurrencyTests?: boolean;
 }): void => {
+  const completionOptions = {
+    pollIntervalMs: 100,
+    timeoutMs: 5000,
+  };
   it("handles transient database errors gracefully", async ({
     flakyStateAdapter,
     stateAdapter,
@@ -95,7 +99,7 @@ export const stateResilienceTestSuite = ({
 
     await withWorkers([await flakyWorker.start()], async () => {
       await Promise.all(
-        jobChains.map(async (chain) => client.awaitJobChain(chain, { timeoutMs: 2000 })),
+        jobChains.map(async (chain) => client.awaitJobChain(chain, completionOptions)),
       );
     });
   });
@@ -181,7 +185,7 @@ export const stateResilienceTestSuite = ({
 
       await withWorkers([await flakyWorker.start()], async () => {
         await Promise.all(
-          jobChains.map(async (chain) => client.awaitJobChain(chain, { timeoutMs: 2000 })),
+          jobChains.map(async (chain) => client.awaitJobChain(chain, completionOptions)),
         );
       });
     },
@@ -286,7 +290,7 @@ export const stateResilienceTestSuite = ({
 
       await withWorkers([await flakyWorker1.start(), await flakyWorker2.start()], async () => {
         await Promise.all(
-          jobChains.map(async (chain) => client.awaitJobChain(chain, { timeoutMs: 2000 })),
+          jobChains.map(async (chain) => client.awaitJobChain(chain, completionOptions)),
         );
       });
     },

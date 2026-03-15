@@ -88,21 +88,16 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
           expect.objectContaining({ name: "acquireJob" }),
           expect.objectContaining({ name: "getJobBlockers" }), // TODO: why isn't it the part of acquireJob?
           expect.objectContaining({ name: "renewJobLease" }), // TODO: why do we need to renew the lease?
-          ...(stateAdapter.withSavepoint
-            ? [expect.objectContaining({ name: "withSavepoint", status: "committed" })]
-            : []),
-          ...(stateAdapter.withSavepoint
-            ? [
-                expect.objectContaining({
-                  name: "withSavepoint",
-                  status: "committed",
-                  children: [expect.objectContaining({ name: "user-completion" })],
-                }),
-              ]
-            : [expect.objectContaining({ name: "user-completion" })]),
-          expect.objectContaining({ name: "completeJob" }),
-          expect.objectContaining({ name: "getJobById" }), // TODO: why do we need it?
-          expect.objectContaining({ name: "unblockJobs" }), // TODO: shouldn't it be the part of completeJob?
+          expect.objectContaining({
+            name: "withSavepoint",
+            status: "committed",
+            children: [
+              expect.objectContaining({ name: "user-completion" }),
+              expect.objectContaining({ name: "completeJob" }),
+              expect.objectContaining({ name: "getJobById" }),
+              expect.objectContaining({ name: "unblockJobs" }),
+            ],
+          }),
         ],
       }),
       expect.objectContaining({
@@ -185,9 +180,6 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
           expect.objectContaining({ name: "acquireJob" }),
           expect.objectContaining({ name: "getJobBlockers" }), // TODO: why isn't it the part of acquireJob?
           expect.objectContaining({ name: "renewJobLease" }), // TODO: why do we need to renew the lease?
-          ...(stateAdapter.withSavepoint
-            ? [expect.objectContaining({ name: "withSavepoint", status: "committed" })]
-            : []),
         ],
       }),
       expect.objectContaining({
@@ -198,18 +190,16 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         status: "committed",
         children: [
           expect.objectContaining({ name: "getJobForUpdate" }), // TODO: why do we need it?
-          ...(stateAdapter.withSavepoint
-            ? [
-                expect.objectContaining({
-                  name: "withSavepoint",
-                  status: "committed",
-                  children: [expect.objectContaining({ name: "user-completion" })],
-                }),
-              ]
-            : [expect.objectContaining({ name: "user-completion" })]),
-          expect.objectContaining({ name: "completeJob" }),
-          expect.objectContaining({ name: "getJobById" }), // TODO: why do we need it?
-          expect.objectContaining({ name: "unblockJobs" }), // TODO: shouldn't it be the part of completeJob?
+          expect.objectContaining({
+            name: "withSavepoint",
+            status: "committed",
+            children: [
+              expect.objectContaining({ name: "user-completion" }),
+              expect.objectContaining({ name: "completeJob" }),
+              expect.objectContaining({ name: "getJobById" }),
+              expect.objectContaining({ name: "unblockJobs" }),
+            ],
+          }),
         ],
       }),
     ];
@@ -292,15 +282,11 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
           expect.objectContaining({ name: "acquireJob" }),
           expect.objectContaining({ name: "getJobBlockers" }), // TODO: why isn't it the part of acquireJob?
           expect.objectContaining({ name: "renewJobLease" }), // TODO: why do we need to renew the lease?
-          ...(stateAdapter.withSavepoint
-            ? [
-                expect.objectContaining({
-                  name: "withSavepoint",
-                  status: "committed",
-                  children: [expect.objectContaining({ name: "user-preparation" })],
-                }),
-              ]
-            : [expect.objectContaining({ name: "user-preparation" })]),
+          expect.objectContaining({
+            name: "withSavepoint",
+            status: "committed",
+            children: [expect.objectContaining({ name: "user-preparation" })],
+          }),
         ],
       }),
       expect.objectContaining({
@@ -311,18 +297,16 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         status: "committed",
         children: [
           expect.objectContaining({ name: "getJobForUpdate" }), // TODO: why do we need it?
-          ...(stateAdapter.withSavepoint
-            ? [
-                expect.objectContaining({
-                  name: "withSavepoint",
-                  status: "committed",
-                  children: [expect.objectContaining({ name: "user-completion" })],
-                }),
-              ]
-            : [expect.objectContaining({ name: "user-completion" })]),
-          expect.objectContaining({ name: "completeJob" }),
-          expect.objectContaining({ name: "getJobById" }), // TODO: why do we need it?
-          expect.objectContaining({ name: "unblockJobs" }), // TODO: shouldn't it be the part of completeJob?
+          expect.objectContaining({
+            name: "withSavepoint",
+            status: "committed",
+            children: [
+              expect.objectContaining({ name: "user-completion" }),
+              expect.objectContaining({ name: "completeJob" }),
+              expect.objectContaining({ name: "getJobById" }),
+              expect.objectContaining({ name: "unblockJobs" }),
+            ],
+          }),
         ],
       }),
     ];
@@ -402,9 +386,6 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
           expect.objectContaining({ name: "acquireJob" }),
           expect.objectContaining({ name: "getJobBlockers" }), // TODO: why isn't it the part of acquireJob?
           expect.objectContaining({ name: "renewJobLease" }), // TODO: why do we need to renew the lease?
-          ...(stateAdapter.withSavepoint
-            ? [expect.objectContaining({ name: "withSavepoint", status: "committed" })]
-            : []),
         ],
       }),
       expect.objectContaining({
@@ -415,18 +396,16 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         status: "committed",
         children: [
           expect.objectContaining({ name: "getJobForUpdate" }), // TODO: why do we need it?
-          ...(stateAdapter.withSavepoint
-            ? [
-                expect.objectContaining({
-                  name: "withSavepoint",
-                  status: "committed",
-                  children: [expect.objectContaining({ name: "user-completion" })],
-                }),
-              ]
-            : [expect.objectContaining({ name: "user-completion" })]),
-          expect.objectContaining({ name: "completeJob" }),
-          expect.objectContaining({ name: "getJobById" }), // TODO: why do we need it?
-          expect.objectContaining({ name: "unblockJobs" }), // TODO: shouldn't it be the part of completeJob?
+          expect.objectContaining({
+            name: "withSavepoint",
+            status: "committed",
+            children: [
+              expect.objectContaining({ name: "user-completion" }),
+              expect.objectContaining({ name: "completeJob" }),
+              expect.objectContaining({ name: "getJobById" }),
+              expect.objectContaining({ name: "unblockJobs" }),
+            ],
+          }),
         ],
       }),
     ];
@@ -509,27 +488,21 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
           expect.objectContaining({ name: "acquireJob" }),
           expect.objectContaining({ name: "getJobBlockers" }), // TODO: why isn't it the part of acquireJob?
           expect.objectContaining({ name: "renewJobLease" }), // TODO: why do we need to renew the lease?
-          ...(stateAdapter.withSavepoint
-            ? [
-                expect.objectContaining({
-                  name: "withSavepoint",
-                  status: "committed",
-                  children: [expect.objectContaining({ name: "user-preparation" })],
-                }),
-              ]
-            : [expect.objectContaining({ name: "user-preparation" })]),
-          ...(stateAdapter.withSavepoint
-            ? [
-                expect.objectContaining({
-                  name: "withSavepoint",
-                  status: "committed",
-                  children: [expect.objectContaining({ name: "user-completion" })],
-                }),
-              ]
-            : [expect.objectContaining({ name: "user-completion" })]),
-          expect.objectContaining({ name: "completeJob" }),
-          expect.objectContaining({ name: "getJobById" }), // TODO: why do we need it?
-          expect.objectContaining({ name: "unblockJobs" }), // TODO: shouldn't it be the part of completeJob?
+          expect.objectContaining({
+            name: "withSavepoint",
+            status: "committed",
+            children: [expect.objectContaining({ name: "user-preparation" })],
+          }),
+          expect.objectContaining({
+            name: "withSavepoint",
+            status: "committed",
+            children: [
+              expect.objectContaining({ name: "user-completion" }),
+              expect.objectContaining({ name: "completeJob" }),
+              expect.objectContaining({ name: "getJobById" }),
+              expect.objectContaining({ name: "unblockJobs" }),
+            ],
+          }),
         ],
       }),
       expect.objectContaining({
@@ -612,21 +585,16 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
           expect.objectContaining({ name: "acquireJob" }),
           expect.objectContaining({ name: "getJobBlockers" }), // TODO: why isn't it the part of acquireJob?
           expect.objectContaining({ name: "renewJobLease" }), // TODO: why do we need to renew the lease?
-          ...(stateAdapter.withSavepoint
-            ? [expect.objectContaining({ name: "withSavepoint", status: "committed" })]
-            : []),
-          ...(stateAdapter.withSavepoint
-            ? [
-                expect.objectContaining({
-                  name: "withSavepoint",
-                  status: "committed",
-                  children: [expect.objectContaining({ name: "user-completion" })],
-                }),
-              ]
-            : [expect.objectContaining({ name: "user-completion" })]),
-          expect.objectContaining({ name: "completeJob" }),
-          expect.objectContaining({ name: "getJobById" }), // TODO: why do we need it?
-          expect.objectContaining({ name: "unblockJobs" }), // TODO: shouldn't it be the part of completeJob?
+          expect.objectContaining({
+            name: "withSavepoint",
+            status: "committed",
+            children: [
+              expect.objectContaining({ name: "user-completion" }),
+              expect.objectContaining({ name: "completeJob" }),
+              expect.objectContaining({ name: "getJobById" }),
+              expect.objectContaining({ name: "unblockJobs" }),
+            ],
+          }),
         ],
       }),
       expect.objectContaining({

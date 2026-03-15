@@ -1,7 +1,10 @@
-import { type TransactionHooks, createTransactionHooks } from "../transaction-hooks.js";
+import { type TransactionHooks } from "../transaction-hooks.js";
 
-export const createTransactionContext = async <TTxContext>(
-  runInTransaction: (callback: (txCtx: TTxContext) => Promise<void>) => Promise<void>,
+export const createSavepointContext = async <TTxContext>(
+  parentRun: (
+    callback: (txCtx: TTxContext, transactionHooks: TransactionHooks) => Promise<void>,
+  ) => Promise<void>,
+  withSavepoint: (txCtx: TTxContext, fn: (txCtx: TTxContext) => Promise<void>) => Promise<void>,
 ): Promise<{
   readonly status: "pending" | "resolved" | "rejected";
   run: <TReturn>(
@@ -10,25 +13,28 @@ export const createTransactionContext = async <TTxContext>(
   resolve: () => Promise<void>;
   reject: (error: unknown) => Promise<void>;
 }> => {
-  const { transactionHooks, flush, discard } = createTransactionHooks();
   const openPromiseHandlers = Promise.withResolvers<void>();
   const closePromiseHandlers = Promise.withResolvers<void>();
   let status: "pending" | "resolved" | "rejected" = "pending";
   let chain = Promise.resolve();
+  let hooksSavepoint: ReturnType<TransactionHooks["createSavepoint"]>;
   let runInContext: <T>(
     cb: (txCtx: TTxContext, transactionHooks: TransactionHooks) => Promise<T>,
   ) => Promise<T>;
 
-  const transactionContext = runInTransaction(async (txCtx) => {
-    runInContext = async <T>(
-      cb: (transactionContext: TTxContext, transactionHooks: TransactionHooks) => Promise<T>,
-    ) => cb(txCtx, transactionHooks);
+  const savepointWork = parentRun(async (txCtx, transactionHooks) => {
+    hooksSavepoint = transactionHooks.createSavepoint();
+    return withSavepoint(txCtx, async (txCtx) => {
+      runInContext = async <T>(
+        cb: (txCtx: TTxContext, transactionHooks: TransactionHooks) => Promise<T>,
+      ) => cb(txCtx, transactionHooks);
 
-    openPromiseHandlers.resolve();
-    await closePromiseHandlers.promise;
+      openPromiseHandlers.resolve();
+      await closePromiseHandlers.promise;
+    });
   });
 
-  await Promise.race([openPromiseHandlers.promise, transactionContext]);
+  await Promise.race([openPromiseHandlers.promise, savepointWork]);
 
   return {
     get status() {
@@ -37,7 +43,7 @@ export const createTransactionContext = async <TTxContext>(
     run: async <TReturn>(
       callback: (txCtx: TTxContext, transactionHooks: TransactionHooks) => Promise<TReturn>,
     ): Promise<TReturn> => {
-      if (status !== "pending") throw new Error("Transaction is already " + status);
+      if (status !== "pending") throw new Error("Savepoint is already " + status);
       const { resolve, reject, promise } = Promise.withResolvers<TReturn>();
       chain = chain.then(async () => runInContext(callback).then(resolve, reject));
       return promise;
@@ -46,21 +52,21 @@ export const createTransactionContext = async <TTxContext>(
       if (status !== "pending") return;
       status = "resolved";
       await chain;
+      hooksSavepoint.release();
       closePromiseHandlers.resolve();
-      await transactionContext;
-      await flush();
+      await savepointWork;
     },
     reject: async (error: unknown) => {
       if (status !== "pending") return;
       status = "rejected";
       await chain;
+      hooksSavepoint.rollback();
       closePromiseHandlers.reject(error);
-      await transactionContext.catch(() => {});
-      await discard().catch(() => {});
+      await savepointWork.catch(() => {});
     },
   };
 };
 
-export type TransactionContext<TTxContext> = Awaited<
-  ReturnType<typeof createTransactionContext<TTxContext>>
+export type SavepointContext<TTxContext> = Awaited<
+  ReturnType<typeof createSavepointContext<TTxContext>>
 >;

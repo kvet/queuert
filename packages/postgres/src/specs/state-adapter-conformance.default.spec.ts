@@ -4,7 +4,7 @@ import { type StateAdapter } from "queuert";
 import { stateAdapterConformanceTestSuite } from "queuert/testing";
 import { it as baseIt, describe, expect } from "vitest";
 import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.js";
-import { createPgPoolProvider } from "./state-provider.pg-pool.js";
+import { type PgPoolContext, createPgPoolProvider } from "./state-provider.pg-pool.js";
 
 const it = extendWithPostgres(baseIt, import.meta.url);
 
@@ -19,6 +19,7 @@ describe("PostgreSQL State Adapter Conformance - Default Config", () => {
     pool: Pool;
     stateAdapter: StateAdapter<{ $test: true }, string>;
     validateId: (id: string) => boolean;
+    poisonTransaction: (txCtx: { $test: true }) => Promise<void>;
   }>({
     pool: [
       async ({ postgresConnectionString }, use) => {
@@ -45,6 +46,16 @@ describe("PostgreSQL State Adapter Conformance - Default Config", () => {
     validateId: [
       // oxlint-disable-next-line no-empty-pattern
       async ({}, use) => use((id: string) => UUID_PATTERN.test(id)),
+      { scope: "test" },
+    ],
+    poisonTransaction: [
+      // oxlint-disable-next-line no-empty-pattern
+      async ({}, use) => {
+        await use(async (txCtx: { $test: true }) => {
+          const pgCtx = txCtx as unknown as PgPoolContext;
+          await pgCtx.poolClient.query("SELECT 1 FROM nonexistent_table_queuert_poison_xyz");
+        });
+      },
       { scope: "test" },
     ],
   });

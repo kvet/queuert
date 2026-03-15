@@ -63,7 +63,41 @@ import { Tabs, TabItem, Aside } from "@astrojs/starlight/components";
 
 `TransactionHooks` is a generic container for named hooks with mutable state. It knows nothing about Queuert itself -- consumers (client, worker) register their own hooks using symbol keys.
 
-A hook is a triple of mutable state, a flush function, and a discard function. Multiple hooks can be registered on the same `TransactionHooks` instance. During the transaction, code mutates hook state freely. After the outer callback completes successfully, each hook's flush function is called with its accumulated state. If the callback throws, each hook's discard function is called instead -- no flush occurs.
+A hook definition (`HookDef`) contains mutable state, a flush function, an optional discard function, and an optional checkpoint function. Multiple hooks can be registered on the same `TransactionHooks` instance. During the transaction, code mutates hook state freely. After the outer callback completes successfully, each hook's flush function is called with its accumulated state. If the callback throws, each hook's discard function is called instead -- no flush occurs.
+
+## Savepoints
+
+`TransactionHooks` supports savepoints for partial rollback of buffered side effects. This is useful when a sub-operation within a transaction may fail without invalidating the entire transaction.
+
+<Tabs>
+  <TabItem label="Callback (recommended)">
+    `withSavepoint` runs a function and automatically rolls back hook state on error:
+
+    ```ts
+    await transactionHooks.withSavepoint(async (transactionHooks) => {
+      // buffer side effects here
+      // if this throws, only side effects buffered inside this callback are rolled back
+    });
+    ```
+
+  </TabItem>
+  <TabItem label="Manual">
+    `createSavepoint` returns a handle for fine-grained control:
+
+    ```ts
+    const sp = transactionHooks.createSavepoint();
+    try {
+      // buffer side effects
+      sp.release(); // keep changes
+    } catch {
+      sp.rollback(); // discard changes since the savepoint
+    }
+    ```
+
+  </TabItem>
+</Tabs>
+
+Savepoints rely on the `checkpoint` callback in `HookDef`. When a savepoint is created, each registered hook's `checkpoint` is called to capture its current state. On rollback, the returned function restores the hook state to that point.
 
 Hooks are registered lazily via `getOrInsert`. This avoids a separate registration step -- the hook is created on first access and reused on subsequent accesses within the same transaction.
 

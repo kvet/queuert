@@ -206,6 +206,24 @@ export const createSqliteStateAdapter = async <
   const rawAdapter: StateAdapter<TTxContext, TIdType> = {
     runInTransaction: stateProvider.runInTransaction,
 
+    withSavepoint: async (txCtx, fn) => {
+      await stateProvider.executeSql({ txCtx, sql: "SAVEPOINT queuert_sp", returns: false });
+      try {
+        const result = await fn(txCtx);
+        await stateProvider.executeSql({
+          txCtx,
+          sql: "RELEASE SAVEPOINT queuert_sp",
+          returns: false,
+        });
+        return result;
+      } catch (error) {
+        await stateProvider
+          .executeSql({ txCtx, sql: "ROLLBACK TO SAVEPOINT queuert_sp", returns: false })
+          .catch(() => {});
+        throw error;
+      }
+    },
+
     getJobChainById: async ({ txCtx, chainId }) => {
       const [row] = await executeTypedSql({
         txCtx,

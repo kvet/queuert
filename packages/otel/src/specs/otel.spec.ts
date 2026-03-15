@@ -945,8 +945,7 @@ describe("Spans", () => {
         parentName: "create job.test",
         status: "ERROR",
       },
-      // Attempt 4: prepare + complete + chain completion
-      { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.test" },
+      // Attempt 4: complete + chain completion (no auto-prepare since complete() called first)
       { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.test" },
       {
         name: "complete chain.test",
@@ -1044,32 +1043,29 @@ describe("Spans", () => {
     await expectSpans([
       { name: "create chain.linear", kind: "PRODUCER" },
       { name: "create job.linear", kind: "PRODUCER", parentName: "create chain.linear" },
-      // Attempt 1: continuation PRODUCER span deferred to flush (after attempt CONSUMER)
-      { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.linear" },
+      // Attempt 1: all spans flushed after commit — PRODUCER before CONSUMER (buffered last)
       { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.linear" },
-      { name: "start job-attempt.linear", kind: "CONSUMER", parentName: "create job.linear" },
       {
         name: "create job.linear_next",
         kind: "PRODUCER",
         parentName: "create chain.linear",
         links: 1,
       },
+      { name: "start job-attempt.linear", kind: "CONSUMER", parentName: "create job.linear" },
       // Attempt 2: same pattern
-      { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.linear_next" },
       { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.linear_next" },
-      {
-        name: "start job-attempt.linear_next",
-        kind: "CONSUMER",
-        parentName: "create job.linear_next",
-      },
       {
         name: "create job.linear_next_next",
         kind: "PRODUCER",
         parentName: "create chain.linear",
         links: 1,
       },
+      {
+        name: "start job-attempt.linear_next",
+        kind: "CONSUMER",
+        parentName: "create job.linear_next",
+      },
       // Attempt 3: no continuation, chain completes
-      { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.linear_next_next" },
       { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.linear_next_next" },
       {
         name: "complete chain.linear",
@@ -1177,19 +1173,18 @@ describe("Spans", () => {
       { name: "await chain.blocker", kind: "PRODUCER", parentName: "create job.main", links: 1 },
       { name: "create chain.main", kind: "PRODUCER" },
       { name: "create job.main", kind: "PRODUCER", parentName: "create chain.main" },
-      // Processing blocker job 1: continuation PRODUCER span deferred to flush
-      { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.blocker" },
+      // Processing blocker job 1: all spans flushed after commit — PRODUCER before CONSUMER
       { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.blocker" },
-      { name: "start job-attempt.blocker", kind: "CONSUMER", parentName: "create job.blocker" },
       {
         name: "create job.blocker",
         kind: "PRODUCER",
         parentName: "create chain.blocker",
         links: 1,
       },
-      // Processing blocker job 2: chain completes, completeBlockerSpan deferred to flush
-      { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.blocker" },
+      { name: "start job-attempt.blocker", kind: "CONSUMER", parentName: "create job.blocker" },
+      // Processing blocker job 2: chain completes, all flushed after commit
       { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.blocker" },
+      { name: "resolve chain.blocker", kind: "CONSUMER", parentName: "await chain.blocker" },
       {
         name: "complete chain.blocker",
         kind: "CONSUMER",
@@ -1197,9 +1192,7 @@ describe("Spans", () => {
         links: 1,
       },
       { name: "start job-attempt.blocker", kind: "CONSUMER", parentName: "create job.blocker" },
-      { name: "resolve chain.blocker", kind: "CONSUMER", parentName: "await chain.blocker" },
       // Processing main job: unblocked, completes
-      { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.main" },
       { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.main" },
       {
         name: "complete chain.main",
@@ -1300,7 +1293,6 @@ describe("Spans", () => {
       // Phase 1: blocker chain created and processed
       { name: "create chain.blocker", kind: "PRODUCER" },
       { name: "create job.blocker", kind: "PRODUCER", parentName: "create chain.blocker" },
-      { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.blocker" },
       { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.blocker" },
       {
         name: "complete chain.blocker",
@@ -1315,7 +1307,6 @@ describe("Spans", () => {
       { name: "create chain.main", kind: "PRODUCER" },
       { name: "create job.main", kind: "PRODUCER", parentName: "create chain.main" },
       // Phase 3: main job processes immediately (no blocking wait)
-      { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.main" },
       { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.main" },
       {
         name: "complete chain.main",
@@ -1766,7 +1757,15 @@ describe("Rollback", () => {
 
     const metricNames = await getMetricNames();
     expect(metricNames.size).toBe(0);
-    await expectSpans([]);
+    await expectSpans([
+      { name: "create chain.test", kind: "PRODUCER", status: "ERROR" },
+      {
+        name: "create job.test",
+        kind: "PRODUCER",
+        parentName: "create chain.test",
+        status: "ERROR",
+      },
+    ]);
   });
 
   it("discards creation metrics and spans with blockers on rollback", async ({
@@ -1818,7 +1817,22 @@ describe("Rollback", () => {
 
     const metricNames = await getMetricNames();
     expect(metricNames.size).toBe(0);
-    await expectSpans([]);
+    await expectSpans([
+      { name: "create chain.blocker", kind: "PRODUCER", status: "ERROR" },
+      {
+        name: "create job.blocker",
+        kind: "PRODUCER",
+        parentName: "create chain.blocker",
+        status: "ERROR",
+      },
+      { name: "create chain.main", kind: "PRODUCER", status: "ERROR" },
+      {
+        name: "create job.main",
+        kind: "PRODUCER",
+        parentName: "create chain.main",
+        status: "ERROR",
+      },
+    ]);
   });
 
   it("discards workerless completion metrics and spans on rollback", async ({
@@ -2034,6 +2048,249 @@ describe("Rollback", () => {
     ]);
   });
 
+  it("discards continuation metrics when user callback throws after continueWith", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expectMetrics,
+  }) => {
+    const registry = defineJobTypeRegistry<{
+      linear: {
+        entry: true;
+        input: null;
+        continueWith: { typeName: "linear_next" };
+      };
+      linear_next: {
+        input: null;
+        output: null;
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+
+    let throwOnce = true;
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processDefaults: {
+        pollIntervalMs: 100,
+        backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+      },
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
+        linear: {
+          attemptHandler: async ({ complete }) =>
+            complete(async ({ continueWith }) => {
+              const result = await continueWith({ typeName: "linear_next", input: null });
+              if (throwOnce) {
+                throwOnce = false;
+                throw new Error("user error after continueWith");
+              }
+              return result;
+            }),
+        },
+        linear_next: {
+          attemptHandler: async ({ complete }) => complete(async () => null),
+        },
+      }),
+    });
+
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({ ...txCtx, transactionHooks, typeName: "linear", input: null }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitJobChain(jobChain, completionOptions);
+    });
+
+    await expectMetrics([
+      { method: "jobChainCreated" },
+      { method: "jobCreated" },
+      { method: "workerStarted" },
+      { method: "jobAttemptStarted" },
+      { method: "jobAttemptFailed" },
+      { method: "jobAttemptStarted" },
+      { method: "jobCreated" },
+      { method: "jobAttemptCompleted" },
+      { method: "jobCompleted" },
+      { method: "jobAttemptStarted" },
+      { method: "jobAttemptCompleted" },
+      { method: "jobCompleted" },
+      { method: "jobChainCompleted" },
+      { method: "workerStopping" },
+      { method: "workerStopped" },
+    ]);
+  });
+
+  it("discards completion metrics on unblockJobs rollback", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expectMetrics,
+  }) => {
+    const registry = defineJobTypeRegistry<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    let unblockErrorThrown = false;
+    const erroringStateAdapter: typeof stateAdapter = {
+      ...stateAdapter,
+      unblockJobs: async (args) => {
+        if (!unblockErrorThrown) {
+          unblockErrorThrown = true;
+          throw new Error("simulated unblockJobs failure");
+        }
+        return stateAdapter.unblockJobs(args);
+      },
+    };
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+    const workerClient = await createClient({
+      stateAdapter: erroringStateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+    const worker = await createInProcessWorker({
+      client: workerClient,
+      concurrency: 1,
+      processDefaults: {
+        pollIntervalMs: 100,
+        backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+      },
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
+        test: {
+          attemptHandler: async ({ complete }) => complete(async () => null),
+        },
+      }),
+    });
+
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitJobChain(jobChain, completionOptions);
+    });
+
+    await expectMetrics([
+      { method: "jobChainCreated" },
+      { method: "jobCreated" },
+      { method: "workerStarted" },
+      { method: "jobAttemptStarted" },
+      { method: "stateAdapterError" },
+      { method: "jobAttemptFailed" },
+      { method: "jobAttemptStarted" },
+      { method: "jobAttemptCompleted" },
+      { method: "jobCompleted" },
+      { method: "jobChainCompleted" },
+      { method: "workerStopping" },
+      { method: "workerStopped" },
+    ]);
+  });
+
+  it("discards workerless completion metrics on finishJob internal failure", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    observabilityAdapter,
+    log,
+    expectMetrics,
+  }) => {
+    const registry = defineJobTypeRegistry<{
+      test: { entry: true; input: null; output: { result: number } };
+    }>();
+
+    let unblockErrorThrown = false;
+    const erroringStateAdapter: typeof stateAdapter = {
+      ...stateAdapter,
+      unblockJobs: async (args) => {
+        if (!unblockErrorThrown) {
+          unblockErrorThrown = true;
+          throw new Error("simulated unblockJobs failure");
+        }
+        return stateAdapter.unblockJobs(args);
+      },
+    };
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+    const erroringClient = await createClient({
+      stateAdapter: erroringStateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+      ),
+    );
+
+    // First attempt: unblockJobs fails inside finishJob → entire transaction rolls back
+    await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        erroringClient.completeJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          id: jobChain.id,
+          complete: async ({ job, complete }) => complete(job, async () => ({ result: 42 })),
+        }),
+      ),
+    ).catch(() => {});
+
+    // Second attempt: succeeds
+    await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.completeJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          id: jobChain.id,
+          complete: async ({ job, complete }) => complete(job, async () => ({ result: 42 })),
+        }),
+      ),
+    );
+
+    await expectMetrics([
+      { method: "jobChainCreated" },
+      { method: "jobCreated" },
+      { method: "stateAdapterError" },
+      { method: "jobCompleted" },
+      { method: "jobChainCompleted" },
+    ]);
+  });
+
   it("discards continuation metrics on createJob rollback", async ({
     stateAdapter,
     notifyAdapter,
@@ -2128,6 +2385,271 @@ describe("Rollback", () => {
       { method: "jobChainCompleted" },
       { method: "workerStopping" },
       { method: "workerStopped" },
+    ]);
+  });
+
+  it("ends job spans when transaction rolls back", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    observabilityAdapter,
+    log,
+    expectSpans,
+  }) => {
+    const registry = defineJobTypeRegistry<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+
+    await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) => {
+        await client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null });
+        throw new Error("simulated rollback");
+      }),
+    ).catch(() => {});
+
+    // startJobSpan creates spans eagerly, but their end() is buffered via
+    // transactionHooks. On rollback the buffer is discarded and the spans
+    // are orphaned — started but never finished. They should be ended with
+    // ERROR status instead.
+    await expectSpans([
+      { name: "create chain.test", kind: "PRODUCER", status: "ERROR" },
+      {
+        name: "create job.test",
+        kind: "PRODUCER",
+        parentName: "create chain.test",
+        status: "ERROR",
+      },
+    ]);
+  });
+
+  it("ends rolled-back continuation span when user callback throws after continueWith", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expectSpans,
+  }) => {
+    const registry = defineJobTypeRegistry<{
+      linear: {
+        entry: true;
+        input: null;
+        continueWith: { typeName: "linear_next" };
+      };
+      linear_next: {
+        input: null;
+        output: null;
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+
+    let throwOnce = true;
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processDefaults: {
+        pollIntervalMs: 100,
+        backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+      },
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
+        linear: {
+          attemptHandler: async ({ complete }) =>
+            complete(async ({ continueWith }) => {
+              const result = await continueWith({ typeName: "linear_next", input: null });
+              if (throwOnce) {
+                throwOnce = false;
+                throw new Error("user error after continueWith");
+              }
+              return result;
+            }),
+        },
+        linear_next: {
+          attemptHandler: async ({ complete }) => complete(async () => null),
+        },
+      }),
+    });
+
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({ ...txCtx, transactionHooks, typeName: "linear", input: null }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitJobChain(jobChain, completionOptions);
+    });
+
+    // The first attempt's continueWith creates a "create job.linear_next" span
+    // eagerly via startJobSpan. When the user callback throws, the savepoint
+    // rolls back and the buffered end() is discarded — orphaning the span.
+    // It should be ended with ERROR status on rollback.
+    await expectSpans([
+      { name: "create chain.linear", kind: "PRODUCER" },
+      { name: "create job.linear", kind: "PRODUCER", parentName: "create chain.linear" },
+      // First attempt: rolled-back continuation span must be properly ended
+      {
+        name: "create job.linear_next",
+        kind: "PRODUCER",
+        parentName: "create chain.linear",
+        status: "ERROR",
+        links: 1,
+      },
+      {
+        name: "start job-attempt.linear",
+        kind: "CONSUMER",
+        parentName: "create job.linear",
+        status: "ERROR",
+      },
+      // Second attempt: succeeds
+      { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.linear" },
+      {
+        name: "create job.linear_next",
+        kind: "PRODUCER",
+        parentName: "create chain.linear",
+        links: 1,
+      },
+      {
+        name: "start job-attempt.linear",
+        kind: "CONSUMER",
+        parentName: "create job.linear",
+        status: "OK",
+      },
+      // linear_next processing
+      { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.linear_next" },
+      {
+        name: "complete chain.linear",
+        kind: "CONSUMER",
+        parentName: "start job-attempt.linear_next",
+        links: 1,
+      },
+      {
+        name: "start job-attempt.linear_next",
+        kind: "CONSUMER",
+        parentName: "create job.linear_next",
+      },
+    ]);
+  });
+
+  it("ends rolled-back startJobChain spans when handler throws after complete returns", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expectSpans,
+  }) => {
+    const registry = defineJobTypeRegistry<{
+      test: { entry: true; input: null; output: null };
+      other: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+
+    let throwOnce = true;
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processDefaults: {
+        pollIntervalMs: 100,
+        backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+      },
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
+        test: {
+          attemptHandler: async ({ complete }) => {
+            const result = await complete(
+              async ({ continueWith: _, transactionHooks, ...txCtx }) => {
+                await client.startJobChain({
+                  ...txCtx,
+                  transactionHooks,
+                  typeName: "other",
+                  input: null,
+                });
+                return null;
+              },
+            );
+            if (throwOnce) {
+              throwOnce = false;
+              throw new Error("user error after complete returns");
+            }
+            return result;
+          },
+        },
+      }),
+    });
+
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitJobChain(jobChain, completionOptions);
+    });
+
+    // startJobChain inside complete creates chain + job spans eagerly.
+    // When the handler throws after complete returns,
+    // completeSavepointContext.reject() rolls back hooks — discarding the
+    // buffered span end() calls and orphaning both spans.
+    await expectSpans([
+      { name: "create chain.test", kind: "PRODUCER" },
+      { name: "create job.test", kind: "PRODUCER", parentName: "create chain.test" },
+      // First attempt: complete span ends before savepoint rollback ends the other spans
+      { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.test" },
+      // Rolled-back startJobChain spans are ended with ERROR
+      { name: "create chain.other", kind: "PRODUCER", status: "ERROR" },
+      {
+        name: "create job.other",
+        kind: "PRODUCER",
+        parentName: "create chain.other",
+        status: "ERROR",
+      },
+      {
+        name: "start job-attempt.test",
+        kind: "CONSUMER",
+        parentName: "create job.test",
+        status: "ERROR",
+      },
+      // Second attempt: succeeds
+      { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.test" },
+      { name: "create chain.other", kind: "PRODUCER" },
+      { name: "create job.other", kind: "PRODUCER", parentName: "create chain.other" },
+      // test chain completion
+      {
+        name: "complete chain.test",
+        kind: "CONSUMER",
+        parentName: "start job-attempt.test",
+        links: 1,
+      },
+      {
+        name: "start job-attempt.test",
+        kind: "CONSUMER",
+        parentName: "create job.test",
+        status: "OK",
+      },
     ]);
   });
 });

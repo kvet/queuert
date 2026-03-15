@@ -1,8 +1,8 @@
+import { type DeduplicationOptions } from "../entities/deduplication.js";
 import { type BlockerReference, BlockerReferenceError } from "../errors.js";
 import { createAsyncLock } from "../helpers/async-lock.js";
-import { decodeChainIndexCursor, decodeCreatedAtCursor, encodeCursor } from "./cursor.js";
 import { type OrderDirection, type Page, type PageParams } from "../pagination.js";
-import { type DeduplicationOptions } from "../entities/deduplication.js";
+import { decodeChainIndexCursor, decodeCreatedAtCursor, encodeCursor } from "./cursor.js";
 import { type StateAdapter, type StateJob, type StateJobStatus } from "./state-adapter.js";
 
 export type InProcessContext = { inTransaction?: boolean };
@@ -208,6 +208,17 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
         throw error;
       } finally {
         lock.release();
+      }
+    },
+
+    withSavepoint: async (txCtx, fn) => {
+      const snapshot = deepCloneStore(store);
+      try {
+        return await fn(txCtx);
+      } catch (error) {
+        store.jobs = snapshot.jobs;
+        store.jobBlockers = snapshot.jobBlockers;
+        throw error;
       }
     },
 

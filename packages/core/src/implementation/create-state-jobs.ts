@@ -4,8 +4,7 @@ import { type ScheduleOptions } from "../entities/schedule.js";
 import { bufferNotifyJobScheduled } from "../helpers/notify-hooks.js";
 import {
   bufferObservabilityEvent,
-  rollbackObservabilityBuffer,
-  snapshotObservabilityBuffer,
+  bufferObservabilityRollback,
 } from "../helpers/observability-hooks.js";
 import { type Helpers } from "../setup-helpers.js";
 import { type BaseTxContext, type StateJob } from "../state-adapter/state-adapter.js";
@@ -74,7 +73,6 @@ export const createStateJobs = async (
     throw error;
   }
 
-  const observabilitySnapshot = snapshotObservabilityBuffer(transactionHooks);
   try {
     const jobs: StateJob[] = createResults.map((r) => r.job);
     const perJobIncompleteBlockerChainIds: string[][] = parsed.map(() => []);
@@ -177,6 +175,12 @@ export const createStateJobs = async (
         spanHandles[i]?.end({ status: "created", chainId: job.chainId, jobId: job.id }),
       );
 
+      if (spanHandles[i]) {
+        bufferObservabilityRollback(transactionHooks, () => {
+          spanHandles[i]!.end({ status: "error", error: new Error("savepoint rolled back") });
+        });
+      }
+
       if (jobInput.isChainStart) {
         bufferObservabilityEvent(transactionHooks, () => {
           helpers.observabilityHelper.jobChainCreated(job, { input: jobInput.input });
@@ -210,7 +214,6 @@ export const createStateJobs = async (
       deduplicated: createResults[i].deduplicated,
     }));
   } catch (error) {
-    rollbackObservabilityBuffer(transactionHooks, observabilitySnapshot);
     for (let i = 0; i < spanHandles.length; i++) {
       if (!createResults![i]?.deduplicated) {
         spanHandles[i]?.end({ status: "error", error });
