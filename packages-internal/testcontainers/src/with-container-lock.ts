@@ -48,9 +48,11 @@ export const withContainerLock = async <T extends StartedTestContainer>({
   ensureLockFile(lockPath);
 
   const release = await lockfile.lock(lockPath, {
+    stale: 120_000,
     retries: {
+      retries: 50,
       minTimeout: 100,
-      maxTimeout: 30_000,
+      maxTimeout: 3_000,
     },
   });
 
