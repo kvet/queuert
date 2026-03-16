@@ -1,5 +1,21 @@
 # @queuert/dashboard
 
+## 0.7.0
+
+### Minor Changes
+
+- - Add savepoint support to `TransactionHooks` for automatic rollback of buffered side effects. New methods: `withSavepoint(fn)` and `createSavepoint()`. Hook definitions can now provide a `checkpoint` callback.
+  - Fix: lease renewal now only runs in staged mode, avoiding unnecessary work in atomic/deferred modes.
+  - Fix: error handler properly rolls back transactions on inner failure, preventing inconsistent job state.
+  - Fix: default `TJobId` type corrected from `string` to `UUID` on built-in adapters.
+  - `StateAdapter.withSavepoint` is now required with simplified positional signature.
+  - `HookDef` and `TransactionHooksSavepoint` types are now exported.
+
+### Patch Changes
+
+- Updated dependencies
+  - queuert@0.7.0
+
 ## 0.6.0
 
 ### Minor Changes
