@@ -97,6 +97,7 @@ export type NavigationMap<TJobTypeDefinitions extends BaseJobTypeDefinitions> = 
   [K in keyof TJobTypeDefinitions & string]: {
     continuationTypes: _ContinuationJobTypes<TJobTypeDefinitions, K> & string;
     reachingEntries: _ChainReachMap<TJobTypeDefinitions>[K] & string;
+    chainTypeNames: _ChainJobTypeNames<TJobTypeDefinitions, K> & string;
     input: _ExtractInputType<TJobTypeDefinitions[K]>;
     output: _ExtractOutputType<TJobTypeDefinitions[K]>;
     isEntry: _IsEntryJobType<TJobTypeDefinitions[K]>;
@@ -111,6 +112,7 @@ export type NavigationMap<TJobTypeDefinitions extends BaseJobTypeDefinitions> = 
 export type BaseNavigationEntry = {
   continuationTypes: string;
   reachingEntries: string;
+  chainTypeNames: string;
   input: unknown;
   output: unknown;
   isEntry: boolean;

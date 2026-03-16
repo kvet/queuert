@@ -5,6 +5,8 @@
 - [REF] Optimize search of chains by status; it requires full scan currently
 - [REF] Plugins
   - Attempt middleware plugin
+    - Hook into prepare
+    - Hook into complete
   - Client amend
   - Job definition amend
   - Job processors amend

@@ -1,4 +1,4 @@
-export { createClient, helpersSymbol, type Client } from "./client.js";
+export { createClient, type Client } from "./client.js";
 export { type DeduplicationOptions } from "./entities/deduplication.js";
 export {
   type CompletedJobChain,

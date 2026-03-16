@@ -1,4 +1,5 @@
-import { type BaseNavigationMap, type Client, type StateAdapter, helpersSymbol } from "queuert";
+import { helpersSymbol } from "queuert/internal";
+import { type BaseNavigationMap, type Client, type StateAdapter } from "queuert";
 import { renderHtml } from "./html.js";
 import { handleChainBlocking, handleChainDetail, handleChainsList } from "./routes/chains.js";
 import { handleJobDetail, handleJobsList } from "./routes/jobs.js";
