@@ -13,13 +13,21 @@ export const extendWithStateInProcess = <T>(
   T & {
     stateAdapter: StateAdapter<{ $test: true }, string>;
     flakyStateAdapter: StateAdapter<{ $test: true }, string>;
+    flakyDbStateAdapter: StateAdapter<{ $test: true }, string> | undefined;
     poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
+    poisonExecute:
+      | ((cb: (adapter: StateAdapter<{ $test: true }, string>) => Promise<void>) => Promise<void>)
+      | undefined;
   }
 > => {
   return api.extend<{
     stateAdapter: InProcessStateAdapter;
     flakyStateAdapter: InProcessStateAdapter;
+    flakyDbStateAdapter: InProcessStateAdapter | undefined;
     poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
+    poisonExecute:
+      | ((cb: (adapter: StateAdapter<{ $test: true }, string>) => Promise<void>) => Promise<void>)
+      | undefined;
   }>({
     stateAdapter: [
       // oxlint-disable-next-line no-empty-pattern
@@ -102,6 +110,20 @@ export const extendWithStateInProcess = <T>(
       { scope: "test" },
     ],
     poisonTransaction: [
+      // oxlint-disable-next-line no-empty-pattern
+      async ({}, use) => {
+        await use(undefined);
+      },
+      { scope: "test" },
+    ],
+    flakyDbStateAdapter: [
+      // oxlint-disable-next-line no-empty-pattern
+      async ({}, use) => {
+        await use(undefined);
+      },
+      { scope: "test" },
+    ],
+    poisonExecute: [
       // oxlint-disable-next-line no-empty-pattern
       async ({}, use) => {
         await use(undefined);

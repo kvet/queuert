@@ -1,6 +1,5 @@
 # Short term
 
-- [REF] Introduce `poisonExecute(cb)` in PG state provider (callback-scoped variant of `poisonTransaction` for concurrent scenarios) and rework state-resilience tests to use real DB-level errors instead of synthetic JS errors thrown before `executeSql` (poisoning is PG-specific, but all adapters should throw proper DB errors)
 - [REF] Reset jobs in chains + dashboard
 - [REF] Delete jobs from dashboard
 - [REF] Optimize search of chains by status; it requires full scan currently

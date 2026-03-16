@@ -19,7 +19,11 @@ export const extendWithStateSqlite = <T>(
     db: Database.Database;
     stateAdapter: StateAdapter<{ $test: true }, string>;
     flakyStateAdapter: StateAdapter<{ $test: true }, string>;
+    flakyDbStateAdapter: StateAdapter<{ $test: true }, string> | undefined;
     poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
+    poisonExecute:
+      | ((cb: (adapter: StateAdapter<{ $test: true }, string>) => Promise<void>) => Promise<void>)
+      | undefined;
   }
 > => {
   return api.extend<{
@@ -28,9 +32,14 @@ export const extendWithStateSqlite = <T>(
     _dbCleanup: void;
     stateProvider: BetterSqlite3Provider;
     flakyStateProvider: BetterSqlite3Provider;
+    flakyDbStateProvider: BetterSqlite3Provider;
     stateAdapter: SqliteStateAdapter;
     flakyStateAdapter: SqliteStateAdapter;
+    flakyDbStateAdapter: SqliteStateAdapter | undefined;
     poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
+    poisonExecute:
+      | ((cb: (adapter: StateAdapter<{ $test: true }, string>) => Promise<void>) => Promise<void>)
+      | undefined;
   }>({
     db: [
       // eslint-disable-next-line no-empty-pattern
@@ -129,6 +138,85 @@ export const extendWithStateSqlite = <T>(
       // oxlint-disable-next-line no-empty-pattern
       async ({}, use) => {
         await use(undefined);
+      },
+      { scope: "test" },
+    ],
+    flakyDbStateProvider: [
+      async ({ stateProvider, expect }, use) => {
+        let enabled = true;
+        let queryCount = 0;
+        let errorCount = 0;
+        const shouldError = createFlakyBatchGenerator();
+
+        const originalExecuteSql = stateProvider.executeSql.bind(stateProvider);
+        const flakyDbProvider: typeof stateProvider = {
+          ...stateProvider,
+          executeSql: async ({ txCtx, sql, params, returns }) => {
+            queryCount++;
+            const shouldFail = shouldError();
+            if (enabled && !txCtx && shouldFail) {
+              errorCount++;
+              return originalExecuteSql({
+                txCtx,
+                sql: "SELECT 1 FROM nonexistent_table_queuert_poison_xyz",
+                returns: true,
+              });
+            }
+            return originalExecuteSql({ txCtx, sql, params, returns });
+          },
+        };
+
+        await use(flakyDbProvider);
+
+        enabled = false;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
+        if (queryCount > 5) {
+          expect(errorCount).toBeGreaterThan(0);
+        }
+      },
+      { scope: "test" },
+    ],
+    flakyDbStateAdapter: [
+      async ({ flakyDbStateProvider }, use) => {
+        return use(
+          await createSqliteStateAdapter({
+            stateProvider: flakyDbStateProvider,
+          }),
+        );
+      },
+      { scope: "test" },
+    ],
+    poisonExecute: [
+      async ({ stateProvider }, use) => {
+        let poisoned = false;
+
+        const poisonableProvider: typeof stateProvider = {
+          ...stateProvider,
+          executeSql: async ({ txCtx, sql, params, returns }) => {
+            if (poisoned && !txCtx) {
+              return stateProvider.executeSql({
+                txCtx,
+                sql: "SELECT 1 FROM nonexistent_table_queuert_poison_xyz",
+                returns: true,
+              });
+            }
+            return stateProvider.executeSql({ txCtx, sql, params, returns });
+          },
+        };
+
+        const poisonedAdapter = await createSqliteStateAdapter({
+          stateProvider: poisonableProvider,
+        });
+
+        await use(async (cb: (adapter: StateAdapter<{ $test: true }, string>) => Promise<void>) => {
+          poisoned = true;
+          try {
+            await cb(poisonedAdapter as unknown as StateAdapter<{ $test: true }, string>);
+          } finally {
+            poisoned = false;
+          }
+        });
       },
       { scope: "test" },
     ],

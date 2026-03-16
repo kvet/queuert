@@ -299,4 +299,282 @@ export const stateResilienceTestSuite = ({
       });
     },
   );
+
+  it("handles real database errors gracefully", async ({
+    flakyDbStateAdapter,
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    skip,
+  }) => {
+    if (!flakyDbStateAdapter) return skip();
+
+    const registry = defineJobTypeRegistry<{
+      test: {
+        entry: true;
+        input: { value: number; atomic: boolean };
+        output: { result: number };
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+    const flakyWorkerClient = await createClient({
+      stateAdapter: flakyDbStateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      registry,
+    });
+    const flakyWorker = await createInProcessWorker({
+      client: flakyWorkerClient,
+      concurrency: 1,
+      backoffConfig: {
+        initialDelayMs: 1,
+        multiplier: 1,
+        maxDelayMs: 1,
+      },
+      processDefaults: {
+        pollIntervalMs: 10_000,
+        leaseConfig: {
+          leaseMs: 10,
+          renewIntervalMs: 5,
+        },
+        backoffConfig: {
+          initialDelayMs: 1,
+          multiplier: 1,
+          maxDelayMs: 1,
+        },
+      },
+      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
+        test: {
+          attemptHandler: async ({ job, prepare, complete }) => {
+            await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
+            return complete(async () => ({ result: job.input.value * 2 }));
+          },
+        },
+      }),
+    });
+
+    const jobChains = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        Promise.all(
+          Array.from({ length: 20 }, async (_, i) =>
+            client.startJobChain({
+              ...txCtx,
+              transactionHooks,
+              typeName: "test",
+              input: { value: i, atomic: i % 2 === 0 },
+            }),
+          ),
+        ),
+      ),
+    );
+
+    await withWorkers([await flakyWorker.start()], async () => {
+      await Promise.all(
+        jobChains.map(async (chain) => client.awaitJobChain(chain, completionOptions)),
+      );
+    });
+  });
+
+  it.skipIf(skipConcurrencyTests)(
+    "handles real database errors gracefully with multiple slots",
+    async ({
+      flakyDbStateAdapter,
+      stateAdapter,
+      notifyAdapter,
+      runInTransaction,
+      withWorkers,
+      observabilityAdapter,
+      log,
+      skip,
+    }) => {
+      if (!flakyDbStateAdapter) return skip();
+
+      const registry = defineJobTypeRegistry<{
+        test: {
+          entry: true;
+          input: { value: number; atomic: boolean };
+          output: { result: number };
+        };
+      }>();
+
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        registry,
+      });
+      const flakyWorkerClient = await createClient({
+        stateAdapter: flakyDbStateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        registry,
+      });
+      const flakyWorker = await createInProcessWorker({
+        client: flakyWorkerClient,
+        concurrency: 5,
+        backoffConfig: {
+          initialDelayMs: 1,
+          multiplier: 1,
+          maxDelayMs: 1,
+        },
+        processDefaults: {
+          pollIntervalMs: 250,
+          leaseConfig: {
+            leaseMs: 10,
+            renewIntervalMs: 5,
+          },
+          backoffConfig: {
+            initialDelayMs: 1,
+            multiplier: 1,
+            maxDelayMs: 1,
+          },
+        },
+        processorRegistry: createJobTypeProcessorRegistry(client, registry, {
+          test: {
+            attemptHandler: async ({ job, prepare, complete }) => {
+              await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
+              return complete(async () => ({ result: job.input.value * 2 }));
+            },
+          },
+        }),
+      });
+
+      const jobChains = await withTransactionHooks(async (transactionHooks) =>
+        runInTransaction(async (txCtx) =>
+          Promise.all(
+            Array.from({ length: 20 }, async (_, i) =>
+              client.startJobChain({
+                ...txCtx,
+                transactionHooks,
+                typeName: "test",
+                input: { value: i, atomic: i % 2 === 0 },
+              }),
+            ),
+          ),
+        ),
+      );
+
+      await withWorkers([await flakyWorker.start()], async () => {
+        await Promise.all(
+          jobChains.map(async (chain) => client.awaitJobChain(chain, completionOptions)),
+        );
+      });
+    },
+  );
+
+  it.skipIf(skipConcurrencyTests)(
+    "handles real database errors gracefully with multiple workers",
+    async ({
+      flakyDbStateAdapter,
+      stateAdapter,
+      notifyAdapter,
+      runInTransaction,
+      withWorkers,
+      observabilityAdapter,
+      log,
+      skip,
+    }) => {
+      if (!flakyDbStateAdapter) return skip();
+
+      const registry = defineJobTypeRegistry<{
+        test: {
+          entry: true;
+          input: { value: number; atomic: boolean };
+          output: { result: number };
+        };
+      }>();
+
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        registry,
+      });
+      const flakyWorkerClient = await createClient({
+        stateAdapter: flakyDbStateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        registry,
+      });
+      const workerConfig = {
+        client: flakyWorkerClient,
+        concurrency: 5,
+        backoffConfig: {
+          initialDelayMs: 1,
+          multiplier: 1,
+          maxDelayMs: 1,
+        },
+        processDefaults: {
+          pollIntervalMs: 250,
+          leaseConfig: {
+            leaseMs: 10,
+            renewIntervalMs: 5,
+          },
+          backoffConfig: {
+            initialDelayMs: 1,
+            multiplier: 1,
+            maxDelayMs: 1,
+          },
+        },
+      } as const;
+      const flakyWorker1 = await createInProcessWorker({
+        ...workerConfig,
+        processorRegistry: createJobTypeProcessorRegistry(client, registry, {
+          test: {
+            attemptHandler: async ({ job, prepare, complete }) => {
+              await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
+              return complete(async () => ({ result: job.input.value * 2 }));
+            },
+          },
+        }),
+      });
+      const flakyWorker2 = await createInProcessWorker({
+        ...workerConfig,
+        processorRegistry: createJobTypeProcessorRegistry(client, registry, {
+          test: {
+            attemptHandler: async ({ job, prepare, complete }) => {
+              await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
+              return complete(async () => ({ result: job.input.value * 2 }));
+            },
+          },
+        }),
+      });
+
+      const jobChains = await withTransactionHooks(async (transactionHooks) =>
+        runInTransaction(async (txCtx) =>
+          Promise.all(
+            Array.from({ length: 20 }, async (_, i) =>
+              client.startJobChain({
+                ...txCtx,
+                transactionHooks,
+                typeName: "test",
+                input: { value: i, atomic: i % 2 === 0 },
+              }),
+            ),
+          ),
+        ),
+      );
+
+      await withWorkers([await flakyWorker1.start(), await flakyWorker2.start()], async () => {
+        await Promise.all(
+          jobChains.map(async (chain) => client.awaitJobChain(chain, completionOptions)),
+        );
+      });
+    },
+  );
 };
