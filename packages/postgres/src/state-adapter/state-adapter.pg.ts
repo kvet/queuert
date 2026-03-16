@@ -654,7 +654,7 @@ export const createPgStateAdapter = async <
 /** PostgreSQL state adapter type. Includes `migrateToLatest` for schema migrations. */
 export type PgStateAdapter<
   TTxContext extends BaseTxContext,
-  TJobId extends string = string,
+  TJobId extends string = UUID,
 > = StateAdapter<TTxContext, TJobId> & {
   migrateToLatest: () => Promise<MigrationResult>;
 };

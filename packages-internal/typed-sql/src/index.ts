@@ -87,9 +87,13 @@ export const createTemplateApplier = (
   };
 };
 
+/** Result of running {@link executeMigrations}. Lists which migrations were applied, skipped, or unrecognized. */
 export type MigrationResult = {
+  /** Migrations already applied in a previous run. */
   skipped: string[];
+  /** Migrations applied during this run. */
   applied: string[];
+  /** Migration names found in the database that don't match any known migration. */
   unrecognized: string[];
 };
 

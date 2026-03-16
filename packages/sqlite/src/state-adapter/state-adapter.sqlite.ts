@@ -915,7 +915,7 @@ export const createSqliteStateAdapter = async <
  */
 export type SqliteStateAdapter<
   TTxContext extends BaseTxContext,
-  TJobId extends string = string,
+  TJobId extends string = UUID,
 > = StateAdapter<TTxContext, TJobId> & {
   migrateToLatest: () => Promise<MigrationResult>;
 };

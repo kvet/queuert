@@ -240,6 +240,22 @@ Generated: [current date]
 [All SUGGESTION items from all agents]
 ```
 
+## Known Accepted Items (Ignore List)
+
+The following items have been reviewed and accepted as intentional design decisions. Agents should NOT flag these:
+
+- **`createOtelObservabilityAdapter` is async**: Reserves the right to add async initialization later. Accepted.
+- **`helpersSymbol` exported publicly but marked `@internal`**: Required by `@queuert/dashboard` and `createInProcessWorker`. The `@internal` annotation is a convention, not enforcement. Accepted.
+- **`createAsyncLock` re-exported from `@queuert/sqlite` via `queuert/internal`**: SQLite users need this for transaction serialization. Accepted.
+- **`createClient` is async but performs no I/O**: Reserves the right to add async initialization later. Accepted.
+- **`createInProcessWorker` is async but performs no I/O**: Reserves the right to add async initialization later. Accepted.
+- **`$idType` phantom property on `createPgStateAdapter` options**: Intentional pattern for generic type inference. Accepted.
+- **`HookNotRegisteredError` does not accept `cause`**: This error is never caused by another error. Accepted.
+- **Notify adapter channel prefix uses different separators**: Each adapter uses its transport's idiomatic separator (`:` for Redis, `_` for PG, `.` for NATS). Accepted.
+- **`testing` export declared in `publishConfig` but files excluded**: Testing utilities are workspace-only, not shipped to npm. The `publishConfig.exports` entry is overridden by the `files` exclusion. Accepted.
+- **NATS notify adapter lacks provider abstraction**: NATS is experimental. A provider abstraction will be added when the API stabilizes. Accepted.
+- **NATS package exports no types from index.ts**: NATS is experimental. Types will be exported when the API stabilizes. Accepted.
+
 ## Severity Definitions
 
 - **CRITICAL**: Must fix before publish (breaking inconsistency, docs lie about behavior, missing critical export)

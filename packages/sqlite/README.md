@@ -17,7 +17,7 @@ SQLite state adapter for [Queuert](https://github.com/kvet/queuert) - a TypeScri
 The state adapter handles:
 
 - Creating and updating jobs in SQLite tables
-- Tracking job status (`pending` → `running` → `completed`)
+- Tracking job status (`blocked`/`pending` → `running` → `completed`)
 - Managing job leases for distributed workers
 - Storing job chains and blocker relationships
 
