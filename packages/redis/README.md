@@ -5,104 +5,22 @@
 [![stars](https://img.shields.io/github/stars/kvet/queuert.svg)](https://github.com/kvet/queuert)
 [![last commit](https://img.shields.io/github/last-commit/kvet/queuert.svg)](https://github.com/kvet/queuert/commits)
 
-Redis notify adapter for [Queuert](https://github.com/kvet/queuert) - a TypeScript library for database-backed job queues.
-
-## What does this do?
-
-[Queuert](https://github.com/kvet/queuert) separates job storage (state adapter) from worker coordination (notify adapter). This package provides a **notify adapter** that uses Redis pub/sub.
-
-The notify adapter handles:
-
-- Broadcasting job scheduling events so workers wake up immediately
-- Signaling chain completion for `awaitJobChain`
-- **Thundering herd optimization** - Uses Lua scripts to atomically limit how many workers query the database
-
-## When to use Redis
-
-- **High-throughput systems** - Redis pub/sub is fast and reliable
-- **Many workers** - Thundering herd optimization prevents database overload
-- **Existing Redis infrastructure** - If you already use Redis for caching/sessions
-
-This is a notify adapter only. You still need a state adapter ([PostgreSQL](https://github.com/kvet/queuert/tree/main/packages/postgres) or [SQLite](https://github.com/kvet/queuert/tree/main/packages/sqlite)) to store jobs.
-
-## Requirements
-
-- Node.js 22 or later
-- TypeScript 5.0+ (recommended)
-- Redis 6 or later
+Redis notify adapter for [Queuert](https://github.com/kvet/queuert) — a TypeScript library for database-backed job queues.
 
 ## Installation
 
 ```bash
 npm install @queuert/redis
+# or
+pnpm add @queuert/redis
+# or
+yarn add @queuert/redis
 ```
 
 **Peer dependencies:** `queuert`
 
-## Quick Start
-
-```typescript
-import { createClient, createConsoleLog, defineJobTypeRegistry } from "queuert";
-import { createPgStateAdapter } from "@queuert/postgres";
-import { createRedisNotifyAdapter } from "@queuert/redis";
-import { createClient as createRedisClient } from "redis";
-
-const jobTypeRegistry = defineJobTypeRegistry<{
-  "send-email": { entry: true; input: { to: string }; output: { sent: true } };
-}>();
-
-const stateAdapter = await createPgStateAdapter({ stateProvider: myPgProvider });
-
-// Redis requires two separate connections (subscribe mode is exclusive)
-const redis = createRedisClient();
-const redisSubscription = createRedisClient();
-await redis.connect();
-await redisSubscription.connect();
-
-const notifyAdapter = await createRedisNotifyAdapter({
-  provider: {
-    publish: async (channel, message) => {
-      await redis.publish(channel, message);
-    },
-    subscribe: async (channel, onMessage) => {
-      await redisSubscription.subscribe(channel, onMessage);
-      return async () => {
-        await redisSubscription.unsubscribe(channel);
-      };
-    },
-    eval: async (script, keys, args) => {
-      return redis.eval(script, { keys, arguments: args });
-    },
-  },
-});
-
-const client = await createClient({
-  stateAdapter,
-  notifyAdapter,
-  registry: jobTypeRegistry,
-  log: createConsoleLog(),
-});
-```
-
-## Configuration
-
-```typescript
-const notifyAdapter = await createRedisNotifyAdapter({
-  provider: myRedisNotifyProvider, // You provide this - see Quick Start
-  channelPrefix: "queuert", // Channel prefix (default: "queuert")
-});
-```
-
-## How it works
-
-- Uses 3 fixed channels with payload-based filtering (same pattern as PostgreSQL LISTEN/NOTIFY)
-- When N jobs are scheduled, only N workers query the database (via atomic Lua script decrements)
-- Requires two Redis connections because Redis clients in subscribe mode can't run other commands
-
-## API Reference
-
-For the full API reference with types and signatures, see the [@queuert/redis reference](https://kvet.github.io/queuert/reference/redis/).
-
 ## Documentation
 
-For full documentation and examples, see the [Queuert documentation](https://kvet.github.io/queuert/).
+- [Notify Adapters Guide](https://kvet.github.io/queuert/integrations/notify-adapters/)
+- [API Reference](https://kvet.github.io/queuert/reference/redis/)
+- [Full Documentation](https://kvet.github.io/queuert/)

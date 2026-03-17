@@ -6,93 +6,24 @@
 [![stars](https://img.shields.io/github/stars/kvet/queuert.svg)](https://github.com/kvet/queuert)
 [![last commit](https://img.shields.io/github/last-commit/kvet/queuert.svg)](https://github.com/kvet/queuert/commits)
 
-> **Experimental**: This adapter's API may change significantly. For production use, consider [@queuert/redis](https://github.com/kvet/queuert/tree/main/packages/redis).
+> **Experimental** — API may change between minor versions. For production use, consider [@queuert/redis](https://github.com/kvet/queuert/tree/main/packages/redis).
 
-NATS notify adapter for [Queuert](https://github.com/kvet/queuert) - a TypeScript library for database-backed job queues.
-
-## What does this do?
-
-[Queuert](https://github.com/kvet/queuert) separates job storage (state adapter) from worker coordination (notify adapter). This package provides a **notify adapter** that uses NATS messaging.
-
-The notify adapter handles:
-
-- Broadcasting job scheduling events so workers wake up immediately
-- Signaling chain completion for `awaitJobChain`
-- **Optional thundering herd optimization** - With JetStream KV, limits how many workers query the database
-
-## When to use NATS
-
-- **Cloud-native deployments** - NATS is lightweight and Kubernetes-friendly
-- **Existing NATS infrastructure** - If you already use NATS for messaging
-- **Single connection** - Unlike Redis, NATS is fully multiplexed (one connection for both pub and sub)
-- **Optional persistence** - JetStream KV enables thundering herd optimization
-
-This is a notify adapter only. You still need a state adapter ([PostgreSQL](https://github.com/kvet/queuert/tree/main/packages/postgres) or [SQLite](https://github.com/kvet/queuert/tree/main/packages/sqlite)) to store jobs.
-
-## Requirements
-
-- Node.js 22 or later
-- TypeScript 5.0+ (recommended)
-- NATS 2.2 or later (2.6+ for JetStream KV optimization)
+NATS notify adapter for [Queuert](https://github.com/kvet/queuert) — a TypeScript library for database-backed job queues.
 
 ## Installation
 
 ```bash
 npm install @queuert/nats
+# or
+pnpm add @queuert/nats
+# or
+yarn add @queuert/nats
 ```
 
-**Peer dependencies:** `queuert`, `nats` (requires ^2.8.0)
-
-## Quick Start
-
-```typescript
-import { createClient, createConsoleLog, defineJobTypeRegistry } from "queuert";
-import { createPgStateAdapter } from "@queuert/postgres";
-import { createNatsNotifyAdapter } from "@queuert/nats";
-import { connect } from "nats";
-
-const jobTypeRegistry = defineJobTypeRegistry<{
-  "send-email": { entry: true; input: { to: string }; output: { sent: true } };
-}>();
-
-const stateAdapter = await createPgStateAdapter({ stateProvider: myPgProvider });
-
-const nc = await connect({ servers: "localhost:4222" });
-
-const notifyAdapter = await createNatsNotifyAdapter({
-  nc,
-  // Optional: enable thundering herd optimization with JetStream KV
-  // kv: await nc.jetstream().views.kv('queuert-hints'),
-});
-
-const client = await createClient({
-  stateAdapter,
-  notifyAdapter,
-  registry: jobTypeRegistry,
-  log: createConsoleLog(),
-});
-```
-
-## Configuration
-
-```typescript
-const notifyAdapter = await createNatsNotifyAdapter({
-  nc: natsConnection, // NATS connection
-  kv: jetStreamKvBucket, // Optional JetStream KV bucket for hint optimization
-  subjectPrefix: "queuert", // Subject prefix (default: "queuert")
-});
-```
-
-## How it works
-
-- Uses 3 NATS subjects with payload-based filtering (`{prefix}.sched`, `{prefix}.chainc`, `{prefix}.owls`)
-- Without JetStream KV: all listeners query database (same as PostgreSQL LISTEN/NOTIFY)
-- With JetStream KV: uses revision-based CAS operations to limit database queries
-
-## API Reference
-
-For the full API reference with types and signatures, see the [@queuert/nats reference](https://kvet.github.io/queuert/reference/nats/).
+**Peer dependencies:** `queuert`, `nats` (^2.8.0)
 
 ## Documentation
 
-For full documentation and examples, see the [Queuert documentation](https://kvet.github.io/queuert/).
+- [Notify Adapters Guide](https://kvet.github.io/queuert/integrations/notify-adapters/)
+- [API Reference](https://kvet.github.io/queuert/reference/nats/)
+- [Full Documentation](https://kvet.github.io/queuert/)
