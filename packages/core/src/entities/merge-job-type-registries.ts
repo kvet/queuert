@@ -5,6 +5,7 @@ import {
   createNoopJobTypeRegistry,
   definitionsSymbol,
   externalDefinitionsSymbol,
+  mergedRegistrySymbol,
   navigationSymbol,
   noopRegistries,
 } from "./job-type-registry.js";
@@ -128,17 +129,26 @@ export const mergeJobTypeRegistries = <
 ): JobTypeRegistry<
   MergeDefinitions<TRegistries>,
   Record<never, never>,
-  MergedNavigation<TRegistries>
+  MergedNavigation<TRegistries>,
+  true
 > => {
   const regs = registries as unknown as JobTypeRegistry<any>[];
   const allNoop = regs.every((r) => noopRegistries.has(r));
 
   if (allNoop) {
-    return createNoopJobTypeRegistry<
-      MergeDefinitions<TRegistries> & BaseJobTypeDefinitions,
+    return {
+      ...createNoopJobTypeRegistry<
+        MergeDefinitions<TRegistries> & BaseJobTypeDefinitions,
+        Record<never, never>,
+        MergedNavigation<TRegistries>
+      >(),
+      [mergedRegistrySymbol]: true as const,
+    } as unknown as JobTypeRegistry<
+      MergeDefinitions<TRegistries>,
       Record<never, never>,
-      MergedNavigation<TRegistries>
-    >();
+      MergedNavigation<TRegistries>,
+      true
+    >;
   }
 
   const validated = regs.filter((r) => !noopRegistries.has(r));
@@ -225,5 +235,6 @@ export const mergeJobTypeRegistries = <
     [definitionsSymbol]: undefined as unknown as MergeDefinitions<TRegistries>,
     [externalDefinitionsSymbol]: undefined as unknown as Record<never, never>,
     [navigationSymbol]: undefined as unknown as MergedNavigation<TRegistries>,
+    [mergedRegistrySymbol]: true,
   };
 };

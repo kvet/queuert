@@ -1,5 +1,5 @@
 import { type Client } from "../client.js";
-import { type JobTypeRegistry } from "../entities/job-type-registry.js";
+import { type JobTypeRegistry, mergedRegistrySymbol } from "../entities/job-type-registry.js";
 import { type BaseJobTypeDefinitions } from "../entities/job-type.js";
 import {
   type BaseNavigationMap,
@@ -54,11 +54,17 @@ export const createJobTypeProcessorRegistry = <
   >,
 >(
   _client: Client<any, TStateAdapter>,
-  _jobTypeRegistry: JobTypeRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions>,
+  _jobTypeRegistry: JobTypeRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions, any, false>,
   processors: {
     [K in TProcessors]: InProcessWorkerProcessor<TStateAdapter, TNavigationMap, K>;
   } & Record<Exclude<TProcessors, keyof TJobTypeDefinitions & string>, never>,
 ): JobTypeProcessorRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions, TNavigationMap> => {
+  if ((_jobTypeRegistry as JobTypeRegistry)[mergedRegistrySymbol]) {
+    throw new TypeError(
+      "createJobTypeProcessorRegistry does not accept a merged registry. " +
+        "Create a processor registry per slice, then merge them with mergeJobTypeProcessorRegistries.",
+    );
+  }
   return Object.assign({}, processors, {
     [processorDefinitionsSymbol]: undefined as unknown as TJobTypeDefinitions,
     [processorExternalDefinitionsSymbol]: undefined as unknown as TExternalJobTypeDefinitions,

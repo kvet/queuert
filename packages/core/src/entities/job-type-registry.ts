@@ -11,6 +11,9 @@ export const externalDefinitionsSymbol: unique symbol = Symbol("queuert.external
 /** Symbol used to carry phantom pre-computed navigation map on a registry. */
 export const navigationSymbol: unique symbol = Symbol("queuert.navigation");
 
+/** Symbol that brands a registry as merged (prevents passing to createJobTypeProcessorRegistry). */
+export const mergedRegistrySymbol: unique symbol = Symbol("queuert.mergedRegistry");
+
 /** Extract the job type definitions from a {@link JobTypeRegistry}. */
 export type JobTypeRegistryDefinitions<T extends JobTypeRegistry<any>> =
   T[typeof definitionsSymbol];
@@ -55,6 +58,7 @@ export type JobTypeRegistry<
   TJobTypeDefinitions = unknown,
   TExternalJobTypeDefinitions = Record<never, never>,
   TNavigation extends BaseNavigationMap = BaseNavigationMap,
+  TMerged extends boolean = boolean,
 > = {
   /** Validate that a job type can start a chain (is an entry point). Throws JobTypeValidationError on failure. */
   validateEntry: (typeName: string) => void;
@@ -82,6 +86,9 @@ export type JobTypeRegistry<
 
   /** Phantom property for pre-computed navigation map. */
   readonly [navigationSymbol]: TNavigation;
+
+  /** Phantom property that brands merged registries. */
+  readonly [mergedRegistrySymbol]: TMerged;
 };
 
 /**
@@ -92,8 +99,13 @@ export const createNoopJobTypeRegistry = <
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TExternalJobTypeDefinitions extends BaseJobTypeDefinitions = Record<never, never>,
   TNavigation extends BaseNavigationMap = NavigationMap<TJobTypeDefinitions>,
->(): JobTypeRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions, TNavigation> => {
-  const registry: JobTypeRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions, TNavigation> = {
+>(): JobTypeRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions, TNavigation, false> => {
+  const registry: JobTypeRegistry<
+    TJobTypeDefinitions,
+    TExternalJobTypeDefinitions,
+    TNavigation,
+    false
+  > = {
     validateEntry: () => {},
     parseInput: (_, input) => input,
     parseOutput: (_, output) => output,
@@ -103,6 +115,7 @@ export const createNoopJobTypeRegistry = <
     [definitionsSymbol]: undefined as unknown as TJobTypeDefinitions,
     [externalDefinitionsSymbol]: undefined as unknown as TExternalJobTypeDefinitions,
     [navigationSymbol]: undefined as unknown as TNavigation,
+    [mergedRegistrySymbol]: false as const,
   };
   noopRegistries.add(registry);
   return registry;
@@ -131,7 +144,7 @@ export const createJobTypeRegistry = <
   TNavigation extends BaseNavigationMap = NavigationMap<TJobTypeDefinitions>,
 >(
   config: JobTypeRegistryConfig,
-): JobTypeRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions, TNavigation> => ({
+): JobTypeRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions, TNavigation, false> => ({
   getTypeNames: () => config.getTypeNames(),
   validateEntry: (typeName) => {
     try {
@@ -193,4 +206,5 @@ export const createJobTypeRegistry = <
   [definitionsSymbol]: undefined as unknown as TJobTypeDefinitions,
   [externalDefinitionsSymbol]: undefined as unknown as TExternalJobTypeDefinitions,
   [navigationSymbol]: undefined as unknown as TNavigation,
+  [mergedRegistrySymbol]: false as const,
 });

@@ -107,6 +107,36 @@ describe("createJobTypeProcessorRegistry", () => {
     expect(registry["orders.fulfill"]).toBeUndefined();
   });
 
+  it("rejects a merged registry at compile time", () => {
+    const mergedRegistry = mergeJobTypeRegistries(
+      orderJobTypeRegistry,
+      notificationJobTypeRegistry,
+    );
+
+    // @ts-expect-error — merged registries cannot be passed to createJobTypeProcessorRegistry
+    const _fn = () => createJobTypeProcessorRegistry(client, mergedRegistry, {});
+  });
+
+  it("rejects a merged registry at runtime", () => {
+    const mergedRegistry = mergeJobTypeRegistries(
+      orderJobTypeRegistry,
+      notificationJobTypeRegistry,
+    );
+
+    expect(() => {
+      createJobTypeProcessorRegistry(
+        client,
+        // @ts-expect-error — merged registries cannot be passed to createJobTypeProcessorRegistry
+        mergedRegistry,
+        {
+          "orders.create": {
+            attemptHandler: async ({ complete }: any) => complete(async () => ({ orderId: "1" })),
+          },
+        },
+      );
+    }).toThrow(TypeError);
+  });
+
   it("does not mutate the input processors object", () => {
     const processors = {
       "orders.create": {

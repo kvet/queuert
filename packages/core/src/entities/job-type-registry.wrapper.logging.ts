@@ -4,6 +4,7 @@ import {
   type JobTypeRegistry,
   definitionsSymbol,
   externalDefinitionsSymbol,
+  mergedRegistrySymbol,
   navigationSymbol,
 } from "./job-type-registry.js";
 
@@ -36,5 +37,6 @@ export const wrapJobTypeRegistryWithLogging = <TJobTypeDefinitions>({
     [definitionsSymbol]: registry[definitionsSymbol],
     [externalDefinitionsSymbol]: registry[externalDefinitionsSymbol],
     [navigationSymbol]: registry[navigationSymbol],
+    [mergedRegistrySymbol]: registry[mergedRegistrySymbol],
   };
 };

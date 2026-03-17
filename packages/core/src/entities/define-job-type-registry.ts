@@ -46,7 +46,8 @@ export const defineJobTypeRegistry = <
 >(): JobTypeRegistry<
   TJobTypeDefinitions,
   TExternalJobTypeDefinitions,
-  NavigationMap<TJobTypeDefinitions>
+  NavigationMap<TJobTypeDefinitions>,
+  false
 > => {
   return createNoopJobTypeRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions>();
 };
