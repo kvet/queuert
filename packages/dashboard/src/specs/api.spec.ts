@@ -5,7 +5,7 @@ import { createDashboard } from "../api/dashboard.js";
 
 const createTestDashboard = async (basePath?: string) => {
   const stateAdapter = createInProcessStateAdapter();
-  const client = await createClient({ stateAdapter, registry: defineJobTypeRegistry() });
+  const client = await createClient({ stateAdapter, jobTypeRegistry: defineJobTypeRegistry() });
   const dashboard = createDashboard({ client, basePath });
   const prefix = basePath ?? "";
   const request = async (path: string) =>
@@ -241,7 +241,7 @@ describe("Dashboard API", () => {
       const dashboard = createDashboard({
         client: await createClient({
           stateAdapter: createInProcessStateAdapter(),
-          registry: defineJobTypeRegistry(),
+          jobTypeRegistry: defineJobTypeRegistry(),
         }),
         basePath: "/internal/queuert",
       });
@@ -253,7 +253,7 @@ describe("Dashboard API", () => {
       const dashboard = createDashboard({
         client: await createClient({
           stateAdapter: createInProcessStateAdapter(),
-          registry: defineJobTypeRegistry(),
+          jobTypeRegistry: defineJobTypeRegistry(),
         }),
         basePath: "/app",
       });

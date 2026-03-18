@@ -22,36 +22,36 @@ describe("createJobTypeRegistry", () => {
   describe("getTypeNames", () => {
     it("returns type names from config", () => {
       const config = createMockConfig({ getTypeNames: () => ["job-a", "job-b"] });
-      const registry = createJobTypeRegistry(config);
+      const jobTypeRegistry = createJobTypeRegistry(config);
 
-      expect(registry.getTypeNames()).toEqual(["job-a", "job-b"]);
+      expect(jobTypeRegistry.getTypeNames()).toEqual(["job-a", "job-b"]);
     });
 
     it("delegates to config.getTypeNames", () => {
       const typeNames = ["x", "y", "z"];
       const getTypeNames = vi.fn(() => typeNames);
       const config = createMockConfig({ getTypeNames });
-      const registry = createJobTypeRegistry(config);
+      const jobTypeRegistry = createJobTypeRegistry(config);
 
-      registry.getTypeNames();
+      jobTypeRegistry.getTypeNames();
       expect(getTypeNames).toHaveBeenCalled();
     });
 
     it("returns empty array when config provides none", () => {
       const config = createMockConfig();
-      const registry = createJobTypeRegistry(config);
+      const jobTypeRegistry = createJobTypeRegistry(config);
 
-      expect(registry.getTypeNames()).toEqual([]);
+      expect(jobTypeRegistry.getTypeNames()).toEqual([]);
     });
   });
 
   describe("validateEntry", () => {
     it("passes when adapter does not throw", () => {
       const config = createMockConfig();
-      const registry = createJobTypeRegistry(config);
+      const jobTypeRegistry = createJobTypeRegistry(config);
 
       expect(() => {
-        registry.validateEntry("myJob");
+        jobTypeRegistry.validateEntry("myJob");
       }).not.toThrow();
       expect(config.validateEntry).toHaveBeenCalledWith("myJob");
     });
@@ -63,13 +63,13 @@ describe("createJobTypeRegistry", () => {
           throw originalError;
         }),
       });
-      const registry = createJobTypeRegistry(config);
+      const jobTypeRegistry = createJobTypeRegistry(config);
 
       expect(() => {
-        registry.validateEntry("myJob");
+        jobTypeRegistry.validateEntry("myJob");
       }).toThrow(JobTypeValidationError);
       try {
-        registry.validateEntry("myJob");
+        jobTypeRegistry.validateEntry("myJob");
       } catch (error) {
         expect(error).toBeInstanceOf(JobTypeValidationError);
         const validationError = error as JobTypeValidationError;
@@ -85,9 +85,9 @@ describe("createJobTypeRegistry", () => {
       const config = createMockConfig({
         parseInput: vi.fn((_, input) => ({ ...input, transformed: true })),
       });
-      const registry = createJobTypeRegistry(config);
+      const jobTypeRegistry = createJobTypeRegistry(config);
 
-      const result = registry.parseInput("myJob", { value: 1 });
+      const result = jobTypeRegistry.parseInput("myJob", { value: 1 });
       expect(result).toEqual({ value: 1, transformed: true });
       expect(config.parseInput).toHaveBeenCalledWith("myJob", { value: 1 });
     });
@@ -99,11 +99,13 @@ describe("createJobTypeRegistry", () => {
           throw originalError;
         }),
       });
-      const registry = createJobTypeRegistry(config);
+      const jobTypeRegistry = createJobTypeRegistry(config);
 
-      expect(() => registry.parseInput("myJob", { bad: "input" })).toThrow(JobTypeValidationError);
+      expect(() => jobTypeRegistry.parseInput("myJob", { bad: "input" })).toThrow(
+        JobTypeValidationError,
+      );
       try {
-        registry.parseInput("myJob", { bad: "input" });
+        jobTypeRegistry.parseInput("myJob", { bad: "input" });
       } catch (error) {
         const validationError = error as JobTypeValidationError;
         expect(validationError.code).toBe("invalid_input");
@@ -119,9 +121,9 @@ describe("createJobTypeRegistry", () => {
       const config = createMockConfig({
         parseOutput: vi.fn((_, output) => ({ ...output, validated: true })),
       });
-      const registry = createJobTypeRegistry(config);
+      const jobTypeRegistry = createJobTypeRegistry(config);
 
-      const result = registry.parseOutput("myJob", { result: 42 });
+      const result = jobTypeRegistry.parseOutput("myJob", { result: 42 });
       expect(result).toEqual({ result: 42, validated: true });
       expect(config.parseOutput).toHaveBeenCalledWith("myJob", { result: 42 });
     });
@@ -133,13 +135,13 @@ describe("createJobTypeRegistry", () => {
           throw originalError;
         }),
       });
-      const registry = createJobTypeRegistry(config);
+      const jobTypeRegistry = createJobTypeRegistry(config);
 
-      expect(() => registry.parseOutput("myJob", { bad: "output" })).toThrow(
+      expect(() => jobTypeRegistry.parseOutput("myJob", { bad: "output" })).toThrow(
         JobTypeValidationError,
       );
       try {
-        registry.parseOutput("myJob", { bad: "output" });
+        jobTypeRegistry.parseOutput("myJob", { bad: "output" });
       } catch (error) {
         const validationError = error as JobTypeValidationError;
         expect(validationError.code).toBe("invalid_output");
@@ -153,11 +155,11 @@ describe("createJobTypeRegistry", () => {
   describe("validateContinueWith", () => {
     it("passes when adapter does not throw", () => {
       const config = createMockConfig();
-      const registry = createJobTypeRegistry(config);
+      const jobTypeRegistry = createJobTypeRegistry(config);
       const to = { typeName: "nextJob", input: { data: "test" } };
 
       expect(() => {
-        registry.validateContinueWith("fromJob", to);
+        jobTypeRegistry.validateContinueWith("fromJob", to);
       }).not.toThrow();
       expect(config.validateContinueWith).toHaveBeenCalledWith("fromJob", to);
     });
@@ -165,9 +167,9 @@ describe("createJobTypeRegistry", () => {
     it("receives { typeName, input } for nominal validation", () => {
       const validateContinueWith = vi.fn();
       const config = createMockConfig({ validateContinueWith });
-      const registry = createJobTypeRegistry(config);
+      const jobTypeRegistry = createJobTypeRegistry(config);
 
-      registry.validateContinueWith("step1", { typeName: "step2", input: { id: 123 } });
+      jobTypeRegistry.validateContinueWith("step1", { typeName: "step2", input: { id: 123 } });
 
       expect(validateContinueWith).toHaveBeenCalledWith("step1", {
         typeName: "step2",
@@ -184,11 +186,11 @@ describe("createJobTypeRegistry", () => {
         }
       });
       const config = createMockConfig({ validateContinueWith });
-      const registry = createJobTypeRegistry(config);
+      const jobTypeRegistry = createJobTypeRegistry(config);
 
       // Valid structural match
       expect(() => {
-        registry.validateContinueWith("router", {
+        jobTypeRegistry.validateContinueWith("router", {
           typeName: "handler",
           input: { payload: { data: "test" } },
         });
@@ -196,7 +198,7 @@ describe("createJobTypeRegistry", () => {
 
       // Invalid structural match - wraps error
       expect(() => {
-        registry.validateContinueWith("router", {
+        jobTypeRegistry.validateContinueWith("router", {
           typeName: "handler",
           input: { wrongField: true },
         });
@@ -210,13 +212,13 @@ describe("createJobTypeRegistry", () => {
           throw originalError;
         }),
       });
-      const registry = createJobTypeRegistry(config);
+      const jobTypeRegistry = createJobTypeRegistry(config);
 
       expect(() => {
-        registry.validateContinueWith("fromJob", { typeName: "toJob", input: {} });
+        jobTypeRegistry.validateContinueWith("fromJob", { typeName: "toJob", input: {} });
       }).toThrow(JobTypeValidationError);
       try {
-        registry.validateContinueWith("fromJob", { typeName: "toJob", input: {} });
+        jobTypeRegistry.validateContinueWith("fromJob", { typeName: "toJob", input: {} });
       } catch (error) {
         const validationError = error as JobTypeValidationError;
         expect(validationError.code).toBe("invalid_continuation");
@@ -232,14 +234,14 @@ describe("createJobTypeRegistry", () => {
   describe("validateBlockers", () => {
     it("passes when adapter does not throw", () => {
       const config = createMockConfig();
-      const registry = createJobTypeRegistry(config);
+      const jobTypeRegistry = createJobTypeRegistry(config);
       const blockers = [
         { typeName: "auth", input: { token: "abc" } },
         { typeName: "config", input: { key: "setting" } },
       ];
 
       expect(() => {
-        registry.validateBlockers("main", blockers);
+        jobTypeRegistry.validateBlockers("main", blockers);
       }).not.toThrow();
       expect(config.validateBlockers).toHaveBeenCalledWith("main", blockers);
     });
@@ -247,10 +249,10 @@ describe("createJobTypeRegistry", () => {
     it("receives array of { typeName, input } for nominal validation", () => {
       const validateBlockers = vi.fn();
       const config = createMockConfig({ validateBlockers });
-      const registry = createJobTypeRegistry(config);
+      const jobTypeRegistry = createJobTypeRegistry(config);
 
       const blockers = [{ typeName: "auth", input: { userId: "123" } }];
-      registry.validateBlockers("main", blockers);
+      jobTypeRegistry.validateBlockers("main", blockers);
 
       expect(validateBlockers).toHaveBeenCalledWith("main", blockers);
     });
@@ -266,11 +268,11 @@ describe("createJobTypeRegistry", () => {
         }
       });
       const config = createMockConfig({ validateBlockers });
-      const registry = createJobTypeRegistry(config);
+      const jobTypeRegistry = createJobTypeRegistry(config);
 
       // Valid structural match
       expect(() => {
-        registry.validateBlockers("main", [
+        jobTypeRegistry.validateBlockers("main", [
           { typeName: "auth", input: { token: "abc" } },
           { typeName: "authAlt", input: { token: "xyz" } },
         ]);
@@ -278,7 +280,7 @@ describe("createJobTypeRegistry", () => {
 
       // Invalid structural match - wraps error
       expect(() => {
-        registry.validateBlockers("main", [{ typeName: "auth", input: { noToken: true } }]);
+        jobTypeRegistry.validateBlockers("main", [{ typeName: "auth", input: { noToken: true } }]);
       }).toThrow(JobTypeValidationError);
     });
 
@@ -289,14 +291,14 @@ describe("createJobTypeRegistry", () => {
           throw originalError;
         }),
       });
-      const registry = createJobTypeRegistry(config);
+      const jobTypeRegistry = createJobTypeRegistry(config);
 
       const blockers = [{ typeName: "bad", input: {} }];
       expect(() => {
-        registry.validateBlockers("main", blockers);
+        jobTypeRegistry.validateBlockers("main", blockers);
       }).toThrow(JobTypeValidationError);
       try {
-        registry.validateBlockers("main", blockers);
+        jobTypeRegistry.validateBlockers("main", blockers);
       } catch (error) {
         const validationError = error as JobTypeValidationError;
         expect(validationError.code).toBe("invalid_blockers");
@@ -310,40 +312,40 @@ describe("createJobTypeRegistry", () => {
 
 describe("createNoopJobTypeRegistry", () => {
   it("getTypeNames returns empty array", () => {
-    const registry = createNoopJobTypeRegistry();
-    expect(registry.getTypeNames()).toEqual([]);
+    const jobTypeRegistry = createNoopJobTypeRegistry();
+    expect(jobTypeRegistry.getTypeNames()).toEqual([]);
   });
 
   it("validateEntry does nothing", () => {
-    const registry = createNoopJobTypeRegistry();
+    const jobTypeRegistry = createNoopJobTypeRegistry();
     expect(() => {
-      registry.validateEntry("anyType");
+      jobTypeRegistry.validateEntry("anyType");
     }).not.toThrow();
   });
 
   it("parseInput returns input unchanged", () => {
-    const registry = createNoopJobTypeRegistry();
+    const jobTypeRegistry = createNoopJobTypeRegistry();
     const input = { value: 42, nested: { data: "test" } };
-    expect(registry.parseInput("anyType", input)).toBe(input);
+    expect(jobTypeRegistry.parseInput("anyType", input)).toBe(input);
   });
 
   it("parseOutput returns output unchanged", () => {
-    const registry = createNoopJobTypeRegistry();
+    const jobTypeRegistry = createNoopJobTypeRegistry();
     const output = { result: "success", count: 10 };
-    expect(registry.parseOutput("anyType", output)).toBe(output);
+    expect(jobTypeRegistry.parseOutput("anyType", output)).toBe(output);
   });
 
   it("validateContinueWith does nothing", () => {
-    const registry = createNoopJobTypeRegistry();
+    const jobTypeRegistry = createNoopJobTypeRegistry();
     expect(() => {
-      registry.validateContinueWith("from", { typeName: "to", input: { any: "value" } });
+      jobTypeRegistry.validateContinueWith("from", { typeName: "to", input: { any: "value" } });
     }).not.toThrow();
   });
 
   it("validateBlockers does nothing", () => {
-    const registry = createNoopJobTypeRegistry();
+    const jobTypeRegistry = createNoopJobTypeRegistry();
     expect(() => {
-      registry.validateBlockers("main", [
+      jobTypeRegistry.validateBlockers("main", [
         { typeName: "a", input: {} },
         { typeName: "b", input: { data: 123 } },
       ]);

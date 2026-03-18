@@ -41,15 +41,19 @@ import { createJobTypeProcessorRegistry } from "queuert";
 import { client } from "./client.js";
 import { orderJobTypeRegistry } from "./slice-orders-definitions.js";
 
-export const orderProcessorRegistry = createJobTypeProcessorRegistry(client, orderJobTypeRegistry, {
-  "orders.create": {
-    attemptHandler: async ({ job, complete }) =>
-      complete(async ({ continueWith }) =>
-        continueWith({ typeName: "orders.fulfill", input: { orderId: "123" } }),
-      ),
-  },
-  "orders.fulfill": {
-    attemptHandler: async ({ job, complete }) => complete(async () => ({ fulfilled: true })),
+export const orderJobTypeProcessorRegistry = createJobTypeProcessorRegistry({
+  client,
+  jobTypeRegistry: orderJobTypeRegistry,
+  processors: {
+    "orders.create": {
+      attemptHandler: async ({ job, complete }) =>
+        complete(async ({ continueWith }) =>
+          continueWith({ typeName: "orders.fulfill", input: { orderId: "123" } }),
+        ),
+    },
+    "orders.fulfill": {
+      attemptHandler: async ({ job, complete }) => complete(async () => ({ fulfilled: true })),
+    },
   },
 });
 ```
@@ -68,20 +72,19 @@ import {
   mergeJobTypeProcessorRegistries,
 } from "queuert";
 import { orderJobTypeRegistry } from "./slice-orders-definitions.js";
-import { orderProcessorRegistry } from "./slice-orders-processors.js";
+import { orderJobTypeProcessorRegistry } from "./slice-orders-processors.js";
 import { notificationJobTypeRegistry } from "./slice-notifications-definitions.js";
-import { notificationProcessorRegistry } from "./slice-notifications-processors.js";
+import { notificationJobTypeProcessorRegistry } from "./slice-notifications-processors.js";
 
-const registry = mergeJobTypeRegistries(orderJobTypeRegistry, notificationJobTypeRegistry);
+const mergedJobTypeRegistry = mergeJobTypeRegistries({ slices: [orderJobTypeRegistry, notificationJobTypeRegistry] });
 
-const client = await createClient({ stateAdapter, notifyAdapter, registry });
+const client = await createClient({ stateAdapter, notifyAdapter, jobTypeRegistry: mergedJobTypeRegistry });
 
 const worker = await createInProcessWorker({
   client,
-  processorRegistry: mergeJobTypeProcessorRegistries(
-    orderProcessorRegistry,
-    notificationProcessorRegistry,
-  ),
+  jobTypeProcessorRegistry: mergeJobTypeProcessorRegistries({
+    slices: [orderJobTypeProcessorRegistry, notificationJobTypeProcessorRegistry],
+  }),
 });
 ```
 
@@ -132,8 +135,12 @@ import { createJobTypeProcessorRegistry } from "queuert";
 import { client } from "./client.js";
 import { orderJobTypeRegistry } from "./slice-orders-definitions.js";
 
-const orderProcessorRegistry = createJobTypeProcessorRegistry(client, orderJobTypeRegistry, {
-  // handlers have full type inference for continueWith, blockers, etc.
+const orderJobTypeProcessorRegistry = createJobTypeProcessorRegistry({
+  client,
+  jobTypeRegistry: orderJobTypeRegistry,
+  processors: {
+    // handlers have full type inference for continueWith, blockers, etc.
+  },
 });
 ```
 

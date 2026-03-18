@@ -27,7 +27,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
   }) => {
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { value: number };
@@ -40,31 +40,35 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const workerClient = await createClient({
       stateAdapter: spyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        test: {
-          backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-          attemptHandler: async ({ job, prepare, complete }) => {
-            if (job.attempt > 1) {
-              expect(job.lastAttemptError).toBe("Error: Simulated prepare error");
-            }
-            await prepare({ mode: "atomic" }, async () => {
-              if (job.attempt === 1) {
-                throw new Error("Simulated prepare error");
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          test: {
+            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+            attemptHandler: async ({ job, prepare, complete }) => {
+              if (job.attempt > 1) {
+                expect(job.lastAttemptError).toBe("Error: Simulated prepare error");
               }
-            });
-            return complete(async () => ({ result: job.input.value * 2 }));
+              await prepare({ mode: "atomic" }, async () => {
+                if (job.attempt === 1) {
+                  throw new Error("Simulated prepare error");
+                }
+              });
+              return complete(async () => ({ result: job.input.value * 2 }));
+            },
           },
         },
       }),
@@ -113,7 +117,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
   }) => {
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { value: number };
@@ -126,31 +130,35 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const workerClient = await createClient({
       stateAdapter: spyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        test: {
-          backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-          attemptHandler: async ({ job, prepare, complete }) => {
-            if (job.attempt > 1) {
-              expect(job.lastAttemptError).toBe("Error: Simulated prepare error");
-            }
-            await prepare({ mode: "staged" }, async () => {
-              if (job.attempt === 1) {
-                throw new Error("Simulated prepare error");
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          test: {
+            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+            attemptHandler: async ({ job, prepare, complete }) => {
+              if (job.attempt > 1) {
+                expect(job.lastAttemptError).toBe("Error: Simulated prepare error");
               }
-            });
-            return complete(async () => ({ result: job.input.value * 2 }));
+              await prepare({ mode: "staged" }, async () => {
+                if (job.attempt === 1) {
+                  throw new Error("Simulated prepare error");
+                }
+              });
+              return complete(async () => ({ result: job.input.value * 2 }));
+            },
           },
         },
       }),
@@ -199,7 +207,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
   }) => {
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { value: number };
@@ -212,30 +220,34 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const workerClient = await createClient({
       stateAdapter: spyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        test: {
-          backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-          attemptHandler: async ({ job, prepare, complete }) => {
-            if (job.attempt > 1) {
-              expect(job.lastAttemptError).toBe("Error: Simulated process error");
-            }
-            await prepare({ mode: "atomic" });
-            if (job.attempt === 1) {
-              throw new Error("Simulated process error");
-            }
-            return complete(async () => ({ result: job.input.value * 2 }));
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          test: {
+            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+            attemptHandler: async ({ job, prepare, complete }) => {
+              if (job.attempt > 1) {
+                expect(job.lastAttemptError).toBe("Error: Simulated process error");
+              }
+              await prepare({ mode: "atomic" });
+              if (job.attempt === 1) {
+                throw new Error("Simulated process error");
+              }
+              return complete(async () => ({ result: job.input.value * 2 }));
+            },
           },
         },
       }),
@@ -283,7 +295,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
   }) => {
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { value: number };
@@ -296,31 +308,35 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const workerClient = await createClient({
       stateAdapter: spyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        test: {
-          backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-          attemptHandler: async ({ job, prepare, complete }) => {
-            if (job.attempt > 1) {
-              expect(job.lastAttemptError).toBe("Error: Simulated process error");
-            }
-            await prepare({ mode: "staged" });
-            await sleep(1);
-            if (job.attempt === 1) {
-              throw new Error("Simulated process error");
-            }
-            return complete(async () => ({ result: job.input.value * 2 }));
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          test: {
+            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+            attemptHandler: async ({ job, prepare, complete }) => {
+              if (job.attempt > 1) {
+                expect(job.lastAttemptError).toBe("Error: Simulated process error");
+              }
+              await prepare({ mode: "staged" });
+              await sleep(1);
+              if (job.attempt === 1) {
+                throw new Error("Simulated process error");
+              }
+              return complete(async () => ({ result: job.input.value * 2 }));
+            },
           },
         },
       }),
@@ -376,7 +392,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
   }) => {
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { value: number };
@@ -389,32 +405,36 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const workerClient = await createClient({
       stateAdapter: spyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        test: {
-          backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-          attemptHandler: async ({ job, prepare, complete }) => {
-            if (job.attempt > 1) {
-              expect(job.lastAttemptError).toBe("Error: Simulated complete error");
-            }
-            await prepare({ mode: "atomic" });
-            return complete(async () => {
-              if (job.attempt === 1) {
-                throw new Error("Simulated complete error");
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          test: {
+            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+            attemptHandler: async ({ job, prepare, complete }) => {
+              if (job.attempt > 1) {
+                expect(job.lastAttemptError).toBe("Error: Simulated complete error");
               }
-              return { result: job.input.value * 2 };
-            });
+              await prepare({ mode: "atomic" });
+              return complete(async () => {
+                if (job.attempt === 1) {
+                  throw new Error("Simulated complete error");
+                }
+                return { result: job.input.value * 2 };
+              });
+            },
           },
         },
       }),
@@ -463,7 +483,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
   }) => {
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { value: number };
@@ -476,33 +496,37 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const workerClient = await createClient({
       stateAdapter: spyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        test: {
-          backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-          attemptHandler: async ({ job, prepare, complete }) => {
-            if (job.attempt > 1) {
-              expect(job.lastAttemptError).toBe("Error: Simulated complete error");
-            }
-            await prepare({ mode: "staged" });
-            await sleep(1);
-            return complete(async () => {
-              if (job.attempt === 1) {
-                throw new Error("Simulated complete error");
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          test: {
+            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+            attemptHandler: async ({ job, prepare, complete }) => {
+              if (job.attempt > 1) {
+                expect(job.lastAttemptError).toBe("Error: Simulated complete error");
               }
-              return { result: job.input.value * 2 };
-            });
+              await prepare({ mode: "staged" });
+              await sleep(1);
+              return complete(async () => {
+                if (job.attempt === 1) {
+                  throw new Error("Simulated complete error");
+                }
+                return { result: job.input.value * 2 };
+              });
+            },
           },
         },
       }),
@@ -560,7 +584,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     let attempts = 0;
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { value: number };
@@ -573,32 +597,36 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const workerClient = await createClient({
       stateAdapter: spyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        test: {
-          backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-          attemptHandler: async ({ job, prepare, complete }) => {
-            attempts++;
-            if (job.attempt > 1) {
-              expect(job.lastAttemptError).toBe("Error: Error after complete");
-            }
-            await prepare({ mode: "atomic" });
-            const result = await complete(async () => ({ result: job.input.value * 2 }));
-            if (job.attempt === 1) {
-              throw new Error("Error after complete");
-            }
-            return result;
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          test: {
+            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+            attemptHandler: async ({ job, prepare, complete }) => {
+              attempts++;
+              if (job.attempt > 1) {
+                expect(job.lastAttemptError).toBe("Error: Error after complete");
+              }
+              await prepare({ mode: "atomic" });
+              const result = await complete(async () => ({ result: job.input.value * 2 }));
+              if (job.attempt === 1) {
+                throw new Error("Error after complete");
+              }
+              return result;
+            },
           },
         },
       }),
@@ -658,7 +686,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     let attempts = 0;
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { value: number };
@@ -671,33 +699,37 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const workerClient = await createClient({
       stateAdapter: spyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        test: {
-          backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-          attemptHandler: async ({ job, prepare, complete }) => {
-            attempts++;
-            if (job.attempt > 1) {
-              expect(job.lastAttemptError).toBe("Error: Error after complete");
-            }
-            await prepare({ mode: "staged" });
-            await sleep(1);
-            const result = await complete(async () => ({ result: job.input.value * 2 }));
-            if (job.attempt === 1) {
-              throw new Error("Error after complete");
-            }
-            return result;
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          test: {
+            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+            attemptHandler: async ({ job, prepare, complete }) => {
+              attempts++;
+              if (job.attempt > 1) {
+                expect(job.lastAttemptError).toBe("Error: Error after complete");
+              }
+              await prepare({ mode: "staged" });
+              await sleep(1);
+              const result = await complete(async () => ({ result: job.input.value * 2 }));
+              if (job.attempt === 1) {
+                throw new Error("Error after complete");
+              }
+              return result;
+            },
           },
         },
       }),
@@ -768,7 +800,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { value: number };
@@ -781,29 +813,33 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const workerClient = await createClient({
       stateAdapter: spyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        test: {
-          backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-          attemptHandler: async ({ job, prepare, complete }) => {
-            await prepare({ mode: "atomic" }, async (prepareCtx) => {
-              await spyStateAdapter.record({ name: "user-preparation", ...prepareCtx });
-              if (job.attempt === 1) {
-                await poisonTransaction(prepareCtx);
-              }
-            });
-            return complete(async () => ({ result: job.input.value * 2 }));
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          test: {
+            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+            attemptHandler: async ({ job, prepare, complete }) => {
+              await prepare({ mode: "atomic" }, async (prepareCtx) => {
+                await spyStateAdapter.record({ name: "user-preparation", ...prepareCtx });
+                if (job.attempt === 1) {
+                  await poisonTransaction(prepareCtx);
+                }
+              });
+              return complete(async () => ({ result: job.input.value * 2 }));
+            },
           },
         },
       }),
@@ -860,7 +896,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { value: number };
@@ -873,29 +909,33 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const workerClient = await createClient({
       stateAdapter: spyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        test: {
-          backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-          attemptHandler: async ({ job, prepare, complete }) => {
-            await prepare({ mode: "staged" }, async (prepareCtx) => {
-              await spyStateAdapter.record({ name: "user-preparation", ...prepareCtx });
-              if (job.attempt === 1) {
-                await poisonTransaction(prepareCtx);
-              }
-            });
-            return complete(async () => ({ result: job.input.value * 2 }));
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          test: {
+            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+            attemptHandler: async ({ job, prepare, complete }) => {
+              await prepare({ mode: "staged" }, async (prepareCtx) => {
+                await spyStateAdapter.record({ name: "user-preparation", ...prepareCtx });
+                if (job.attempt === 1) {
+                  await poisonTransaction(prepareCtx);
+                }
+              });
+              return complete(async () => ({ result: job.input.value * 2 }));
+            },
           },
         },
       }),
@@ -952,7 +992,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { value: number };
@@ -965,30 +1005,34 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const workerClient = await createClient({
       stateAdapter: spyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        test: {
-          backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-          attemptHandler: async ({ job, prepare, complete }) => {
-            await prepare({ mode: "atomic" });
-            return complete(async (completeCtx) => {
-              await spyStateAdapter.record({ name: "user-completion", ...completeCtx });
-              if (job.attempt === 1) {
-                await poisonTransaction(completeCtx);
-              }
-              return { result: job.input.value * 2 };
-            });
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          test: {
+            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+            attemptHandler: async ({ job, prepare, complete }) => {
+              await prepare({ mode: "atomic" });
+              return complete(async (completeCtx) => {
+                await spyStateAdapter.record({ name: "user-completion", ...completeCtx });
+                if (job.attempt === 1) {
+                  await poisonTransaction(completeCtx);
+                }
+                return { result: job.input.value * 2 };
+              });
+            },
           },
         },
       }),
@@ -1045,7 +1089,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { value: number };
@@ -1058,31 +1102,35 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const workerClient = await createClient({
       stateAdapter: spyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        test: {
-          backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-          attemptHandler: async ({ job, prepare, complete }) => {
-            await prepare({ mode: "staged" });
-            await sleep(1);
-            return complete(async (completeCtx) => {
-              await spyStateAdapter.record({ name: "user-completion", ...completeCtx });
-              if (job.attempt === 1) {
-                await poisonTransaction(completeCtx);
-              }
-              return { result: job.input.value * 2 };
-            });
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          test: {
+            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+            attemptHandler: async ({ job, prepare, complete }) => {
+              await prepare({ mode: "staged" });
+              await sleep(1);
+              return complete(async (completeCtx) => {
+                await spyStateAdapter.record({ name: "user-completion", ...completeCtx });
+                if (job.attempt === 1) {
+                  await poisonTransaction(completeCtx);
+                }
+                return { result: job.input.value * 2 };
+              });
+            },
           },
         },
       }),
@@ -1144,7 +1192,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     let step1Attempts = 0;
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       step1: {
         entry: true;
         input: { value: number };
@@ -1161,36 +1209,40 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const workerClient = await createClient({
       stateAdapter: spyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        step1: {
-          backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-          attemptHandler: async ({ job, prepare, complete }) => {
-            step1Attempts++;
-            await prepare({ mode: "atomic" });
-            const result = await complete(async ({ continueWith }) =>
-              continueWith({ typeName: "step2", input: { value: job.input.value * 2 } }),
-            );
-            if (job.attempt === 1) {
-              throw new Error("Error after complete with continueWith");
-            }
-            return result;
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          step1: {
+            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+            attemptHandler: async ({ job, prepare, complete }) => {
+              step1Attempts++;
+              await prepare({ mode: "atomic" });
+              const result = await complete(async ({ continueWith }) =>
+                continueWith({ typeName: "step2", input: { value: job.input.value * 2 } }),
+              );
+              if (job.attempt === 1) {
+                throw new Error("Error after complete with continueWith");
+              }
+              return result;
+            },
           },
-        },
-        step2: {
-          attemptHandler: async ({ job, complete }) => {
-            return complete(async () => ({ result: job.input.value }));
+          step2: {
+            attemptHandler: async ({ job, complete }) => {
+              return complete(async () => ({ result: job.input.value }));
+            },
           },
         },
       }),
@@ -1252,7 +1304,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     let step1Attempts = 0;
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       step1: {
         entry: true;
         input: { value: number };
@@ -1269,37 +1321,41 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const workerClient = await createClient({
       stateAdapter: spyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        step1: {
-          backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-          attemptHandler: async ({ job, prepare, complete }) => {
-            step1Attempts++;
-            await prepare({ mode: "staged" });
-            await sleep(1);
-            const result = await complete(async ({ continueWith }) =>
-              continueWith({ typeName: "step2", input: { value: job.input.value * 2 } }),
-            );
-            if (job.attempt === 1) {
-              throw new Error("Error after complete with continueWith");
-            }
-            return result;
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          step1: {
+            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+            attemptHandler: async ({ job, prepare, complete }) => {
+              step1Attempts++;
+              await prepare({ mode: "staged" });
+              await sleep(1);
+              const result = await complete(async ({ continueWith }) =>
+                continueWith({ typeName: "step2", input: { value: job.input.value * 2 } }),
+              );
+              if (job.attempt === 1) {
+                throw new Error("Error after complete with continueWith");
+              }
+              return result;
+            },
           },
-        },
-        step2: {
-          attemptHandler: async ({ job, complete }) => {
-            return complete(async () => ({ result: job.input.value }));
+          step2: {
+            attemptHandler: async ({ job, complete }) => {
+              return complete(async () => ({ result: job.input.value }));
+            },
           },
         },
       }),
@@ -1368,7 +1424,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
   }) => {
     let blockerAttempts = 0;
 
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       blocker: {
         entry: true;
         input: { value: number };
@@ -1387,29 +1443,33 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        blocker: {
-          backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-          attemptHandler: async ({ job, prepare, complete }) => {
-            blockerAttempts++;
-            await prepare({ mode: "atomic" });
-            const result = await complete(async () => ({ done: true as const }));
-            if (job.attempt === 1) {
-              throw new Error("Error after blocker complete");
-            }
-            return result;
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          blocker: {
+            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+            attemptHandler: async ({ job, prepare, complete }) => {
+              blockerAttempts++;
+              await prepare({ mode: "atomic" });
+              const result = await complete(async () => ({ done: true as const }));
+              if (job.attempt === 1) {
+                throw new Error("Error after blocker complete");
+              }
+              return result;
+            },
           },
-        },
-        dependent: {
-          attemptHandler: async ({ job, complete }) => {
-            const [blocker] = job.blockers;
-            expect(blocker.output.done).toBe(true);
-            return complete(async () => ({ result: "ok" }));
+          dependent: {
+            attemptHandler: async ({ job, complete }) => {
+              const [blocker] = job.blockers;
+              expect(blocker.output.done).toBe(true);
+              return complete(async () => ({ result: "ok" }));
+            },
           },
         },
       }),
@@ -1456,7 +1516,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
   }) => {
     let blockerAttempts = 0;
 
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       blocker: {
         entry: true;
         input: { value: number };
@@ -1475,30 +1535,34 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        blocker: {
-          backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-          attemptHandler: async ({ job, prepare, complete }) => {
-            blockerAttempts++;
-            await prepare({ mode: "staged" });
-            await sleep(1);
-            const result = await complete(async () => ({ done: true as const }));
-            if (job.attempt === 1) {
-              throw new Error("Error after blocker complete");
-            }
-            return result;
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          blocker: {
+            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+            attemptHandler: async ({ job, prepare, complete }) => {
+              blockerAttempts++;
+              await prepare({ mode: "staged" });
+              await sleep(1);
+              const result = await complete(async () => ({ done: true as const }));
+              if (job.attempt === 1) {
+                throw new Error("Error after blocker complete");
+              }
+              return result;
+            },
           },
-        },
-        dependent: {
-          attemptHandler: async ({ job, complete }) => {
-            const [blocker] = job.blockers;
-            expect(blocker.output.done).toBe(true);
-            return complete(async () => ({ result: "ok" }));
+          dependent: {
+            attemptHandler: async ({ job, complete }) => {
+              const [blocker] = job.blockers;
+              expect(blocker.output.done).toBe(true);
+              return complete(async () => ({ result: "ok" }));
+            },
           },
         },
       }),

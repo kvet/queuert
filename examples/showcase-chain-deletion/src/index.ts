@@ -99,46 +99,50 @@ const notifyAdapter = createInProcessNotifyAdapter();
 const client = await createClient({
   stateAdapter,
   notifyAdapter,
-  registry: jobTypeRegistry,
+  jobTypeRegistry,
 });
 
 const worker = await createInProcessWorker({
   client,
-  processorRegistry: createJobTypeProcessorRegistry(client, jobTypeRegistry, {
-    "fetch-data": {
-      attemptHandler: async ({ job, complete }) => {
-        console.log(`[fetch-data] Fetching ${job.input.sourceId}`);
-        return complete(async () => ({
-          sourceId: job.input.sourceId,
-          data: `Data from ${job.input.sourceId}`,
-        }));
+  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+    client,
+    jobTypeRegistry,
+    processors: {
+      "fetch-data": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(`[fetch-data] Fetching ${job.input.sourceId}`);
+          return complete(async () => ({
+            sourceId: job.input.sourceId,
+            data: `Data from ${job.input.sourceId}`,
+          }));
+        },
       },
-    },
 
-    "generate-report": {
-      attemptHandler: async ({ job, complete }) => {
-        console.log(`[generate-report] Generating ${job.input.reportId}`);
-        const summary = job.blockers.map((b) => b.output.data).join(", ");
-        return complete(async ({ continueWith }) =>
-          continueWith({
-            typeName: "send-report",
-            input: { reportId: job.input.reportId, summary },
-          }),
-        );
+      "generate-report": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(`[generate-report] Generating ${job.input.reportId}`);
+          const summary = job.blockers.map((b) => b.output.data).join(", ");
+          return complete(async ({ continueWith }) =>
+            continueWith({
+              typeName: "send-report",
+              input: { reportId: job.input.reportId, summary },
+            }),
+          );
+        },
       },
-    },
 
-    "send-report": {
-      attemptHandler: async ({ job, complete }) => {
-        console.log(`[send-report] Sending report ${job.input.reportId}`);
-        return complete(async () => ({ sentAt: new Date().toISOString() }));
+      "send-report": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(`[send-report] Sending report ${job.input.reportId}`);
+          return complete(async () => ({ sentAt: new Date().toISOString() }));
+        },
       },
-    },
 
-    "standalone-task": {
-      attemptHandler: async ({ job, complete }) => {
-        console.log(`[standalone-task] Running ${job.input.taskId}`);
-        return complete(async () => ({ completedAt: new Date().toISOString() }));
+      "standalone-task": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(`[standalone-task] Running ${job.input.taskId}`);
+          return complete(async () => ({ completedAt: new Date().toISOString() }));
+        },
       },
     },
   }),

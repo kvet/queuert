@@ -22,7 +22,7 @@ export const notifyResilienceTestSuite = ({
     observabilityAdapter,
     log,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { value: number; atomic: boolean };
@@ -35,7 +35,7 @@ export const notifyResilienceTestSuite = ({
       notifyAdapter: flakyNotifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client,
@@ -45,7 +45,7 @@ export const notifyResilienceTestSuite = ({
         multiplier: 1,
         maxDelayMs: 1,
       },
-      processDefaults: {
+      jobTypeProcessorDefaults: {
         pollIntervalMs: 1_000_000, // should be processed in a single loop invocations
         leaseConfig: {
           leaseMs: 10,
@@ -57,11 +57,15 @@ export const notifyResilienceTestSuite = ({
           maxDelayMs: 1,
         },
       },
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        test: {
-          attemptHandler: async ({ job, prepare, complete }) => {
-            await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
-            return complete(async () => ({ result: job.input.value * 2 }));
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          test: {
+            attemptHandler: async ({ job, prepare, complete }) => {
+              await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
+              return complete(async () => ({ result: job.input.value * 2 }));
+            },
           },
         },
       }),

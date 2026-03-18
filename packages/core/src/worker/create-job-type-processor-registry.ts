@@ -37,9 +37,13 @@ type MergedNavigationMap<
  * checks when passed to `createInProcessWorker`.
  *
  * @example
- * const orderProcessorRegistry = createJobTypeProcessorRegistry(client, orderJobTypeRegistry, {
- *   "orders.create": {
- *     attemptHandler: async ({ complete }) => complete(async () => ({ orderId: "1" })),
+ * const orderJobTypeProcessorRegistry = createJobTypeProcessorRegistry({
+ *   client,
+ *   jobTypeRegistry: orderJobTypeRegistry,
+ *   processors: {
+ *     "orders.create": {
+ *       attemptHandler: async ({ complete }) => complete(async () => ({ orderId: "1" })),
+ *     },
  *   },
  * });
  */
@@ -52,20 +56,20 @@ export const createJobTypeProcessorRegistry = <
     TJobTypeDefinitions,
     TExternalJobTypeDefinitions
   >,
->(
-  _client: Client<any, TStateAdapter>,
-  _jobTypeRegistry: JobTypeRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions, any, false>,
+>(options: {
+  client: Client<any, TStateAdapter>;
+  jobTypeRegistry: JobTypeRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions, any, false>;
   processors: {
     [K in TProcessors]: InProcessWorkerProcessor<TStateAdapter, TNavigationMap, K>;
-  } & Record<Exclude<TProcessors, keyof TJobTypeDefinitions & string>, never>,
-): JobTypeProcessorRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions, TNavigationMap> => {
-  if ((_jobTypeRegistry as JobTypeRegistry)[mergedRegistrySymbol]) {
+  } & Record<Exclude<TProcessors, keyof TJobTypeDefinitions & string>, never>;
+}): JobTypeProcessorRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions, TNavigationMap> => {
+  if ((options.jobTypeRegistry as JobTypeRegistry)[mergedRegistrySymbol]) {
     throw new TypeError(
       "createJobTypeProcessorRegistry does not accept a merged registry. " +
         "Create a processor registry per slice, then merge them with mergeJobTypeProcessorRegistries.",
     );
   }
-  return Object.assign({}, processors, {
+  return Object.assign({}, options.processors, {
     [processorDefinitionsSymbol]: undefined as unknown as TJobTypeDefinitions,
     [processorExternalDefinitionsSymbol]: undefined as unknown as TExternalJobTypeDefinitions,
     [processorNavigationSymbol]: undefined as unknown as TNavigationMap,

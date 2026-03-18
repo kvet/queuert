@@ -130,7 +130,7 @@ const parse = <T extends TSchema>(schema: T, data: unknown): Static<T> => {
  * in JobTypeValidationError with the appropriate error code.
  *
  * @example
- * const registry = createTypeBoxJobTypeRegistry({
+ * const jobTypeRegistry = createTypeBoxJobTypeRegistry({
  *   "process-data": {
  *     entry: true,
  *     input: Type.Object({ dataId: Type.String() }),

@@ -13,9 +13,9 @@ export type InProcessWorkerProcessor<
 > = {
   /** Handler function called for each job attempt */
   attemptHandler: AttemptHandler<TStateAdapter, TNavigationMap, TJobTypeName>;
-  /** Per-job-type backoff configuration (overrides processDefaults) */
+  /** Per-job-type backoff configuration (overrides jobTypeProcessorDefaults) */
   backoffConfig?: BackoffConfig;
-  /** Per-job-type lease configuration (overrides processDefaults) */
+  /** Per-job-type lease configuration (overrides jobTypeProcessorDefaults) */
   leaseConfig?: LeaseConfig;
 };
 

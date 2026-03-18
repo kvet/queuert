@@ -27,7 +27,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
   }) => {
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       "atomic-complete": {
         entry: true;
         input: { value: number };
@@ -40,25 +40,29 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const workerClient = await createClient({
       stateAdapter: spyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        "atomic-complete": {
-          attemptHandler: async ({ job, complete }) => {
-            return complete(async ({ continueWith: _, ...txCtx }) => {
-              await spyStateAdapter.record({ name: "user-completion", ...txCtx });
-              return { result: job.input.value * 2 };
-            });
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          "atomic-complete": {
+            attemptHandler: async ({ job, complete }) => {
+              return complete(async ({ continueWith: _, ...txCtx }) => {
+                await spyStateAdapter.record({ name: "user-completion", ...txCtx });
+                return { result: job.input.value * 2 };
+              });
+            },
           },
         },
       }),
@@ -117,7 +121,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
   }) => {
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       "staged-complete": {
         entry: true;
         input: { value: number };
@@ -130,26 +134,30 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const workerClient = await createClient({
       stateAdapter: spyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        "staged-complete": {
-          attemptHandler: async ({ job, complete }) => {
-            await sleep(1);
-            return complete(async ({ continueWith: _, ...txCtx }) => {
-              await spyStateAdapter.record({ name: "user-completion", ...txCtx });
-              return { result: job.input.value * 3 };
-            });
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          "staged-complete": {
+            attemptHandler: async ({ job, complete }) => {
+              await sleep(1);
+              return complete(async ({ continueWith: _, ...txCtx }) => {
+                await spyStateAdapter.record({ name: "user-completion", ...txCtx });
+                return { result: job.input.value * 3 };
+              });
+            },
           },
         },
       }),
@@ -216,7 +224,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
   }) => {
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       "staged-with-callback": {
         entry: true;
         input: { value: number };
@@ -229,29 +237,33 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const workerClient = await createClient({
       stateAdapter: spyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        "staged-with-callback": {
-          attemptHandler: async ({ job, prepare, complete }) => {
-            const multiplier = await prepare({ mode: "staged" }, async (txCtx) => {
-              await spyStateAdapter.record({ name: "user-preparation", ...txCtx });
-              return 4;
-            });
-            return complete(async ({ continueWith: _, ...txCtx }) => {
-              await spyStateAdapter.record({ name: "user-completion", ...txCtx });
-              return { result: job.input.value * multiplier };
-            });
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          "staged-with-callback": {
+            attemptHandler: async ({ job, prepare, complete }) => {
+              const multiplier = await prepare({ mode: "staged" }, async (txCtx) => {
+                await spyStateAdapter.record({ name: "user-preparation", ...txCtx });
+                return 4;
+              });
+              return complete(async ({ continueWith: _, ...txCtx }) => {
+                await spyStateAdapter.record({ name: "user-completion", ...txCtx });
+                return { result: job.input.value * multiplier };
+              });
+            },
           },
         },
       }),
@@ -323,7 +335,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
   }) => {
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       "staged-without-callback": {
         entry: true;
         input: { value: number };
@@ -336,26 +348,30 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const workerClient = await createClient({
       stateAdapter: spyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        "staged-without-callback": {
-          attemptHandler: async ({ job, prepare, complete }) => {
-            await prepare({ mode: "staged" });
-            return complete(async ({ continueWith: _, ...txCtx }) => {
-              await spyStateAdapter.record({ name: "user-completion", ...txCtx });
-              return { result: job.input.value * 5 };
-            });
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          "staged-without-callback": {
+            attemptHandler: async ({ job, prepare, complete }) => {
+              await prepare({ mode: "staged" });
+              return complete(async ({ continueWith: _, ...txCtx }) => {
+                await spyStateAdapter.record({ name: "user-completion", ...txCtx });
+                return { result: job.input.value * 5 };
+              });
+            },
           },
         },
       }),
@@ -422,7 +438,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
   }) => {
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       "atomic-with-callback": {
         entry: true;
         input: { value: number };
@@ -435,29 +451,33 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const workerClient = await createClient({
       stateAdapter: spyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        "atomic-with-callback": {
-          attemptHandler: async ({ job, prepare, complete }) => {
-            const multiplier = await prepare({ mode: "atomic" }, async (txCtx) => {
-              await spyStateAdapter.record({ name: "user-preparation", ...txCtx });
-              return 6;
-            });
-            return complete(async ({ continueWith: _, ...txCtx }) => {
-              await spyStateAdapter.record({ name: "user-completion", ...txCtx });
-              return { result: job.input.value * multiplier };
-            });
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          "atomic-with-callback": {
+            attemptHandler: async ({ job, prepare, complete }) => {
+              const multiplier = await prepare({ mode: "atomic" }, async (txCtx) => {
+                await spyStateAdapter.record({ name: "user-preparation", ...txCtx });
+                return 6;
+              });
+              return complete(async ({ continueWith: _, ...txCtx }) => {
+                await spyStateAdapter.record({ name: "user-completion", ...txCtx });
+                return { result: job.input.value * multiplier };
+              });
+            },
           },
         },
       }),
@@ -521,7 +541,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
   }) => {
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       "atomic-without-callback": {
         entry: true;
         input: { value: number };
@@ -534,26 +554,30 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const workerClient = await createClient({
       stateAdapter: spyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        "atomic-without-callback": {
-          attemptHandler: async ({ job, prepare, complete }) => {
-            await prepare({ mode: "atomic" });
-            return complete(async ({ continueWith: _, ...txCtx }) => {
-              await spyStateAdapter.record({ name: "user-completion", ...txCtx });
-              return { result: job.input.value * 7 };
-            });
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          "atomic-without-callback": {
+            attemptHandler: async ({ job, prepare, complete }) => {
+              await prepare({ mode: "atomic" });
+              return complete(async ({ continueWith: _, ...txCtx }) => {
+                await spyStateAdapter.record({ name: "user-completion", ...txCtx });
+                return { result: job.input.value * 7 };
+              });
+            },
           },
         },
       }),

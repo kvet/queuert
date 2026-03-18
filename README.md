@@ -24,7 +24,7 @@ const jobTypeRegistry = defineJobTypeRegistry<{
 
 const client = await createClient({
   stateAdapter,
-  registry: jobTypeRegistry,
+  jobTypeRegistry,
 });
 
 await withTransactionHooks(async (transactionHooks) =>
@@ -51,18 +51,22 @@ Later, a background worker picks up the job and sends the email:
 ```ts
 const worker = await createInProcessWorker({
   client,
-  processorRegistry: createJobTypeProcessorRegistry(client, jobTypeRegistry, {
-    "send-welcome-email": {
-      attemptHandler: async ({ job, complete }) => {
-        await sendEmail({
-          to: job.input.email,
-          subject: "Welcome!",
-          body: `Hello ${job.input.name}, welcome to our platform!`,
-        });
+  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+    client,
+    jobTypeRegistry,
+    processors: {
+      "send-welcome-email": {
+        attemptHandler: async ({ job, complete }) => {
+          await sendEmail({
+            to: job.input.email,
+            subject: "Welcome!",
+            body: `Hello ${job.input.name}, welcome to our platform!`,
+          });
 
-        return complete(async () => ({
-          sentAt: new Date().toISOString(),
-        }));
+          return complete(async () => ({
+            sentAt: new Date().toISOString(),
+          }));
+        },
       },
     },
   }),

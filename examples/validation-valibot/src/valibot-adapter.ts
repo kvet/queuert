@@ -97,7 +97,7 @@ type InferValibotJobTypes<T extends Record<string, ValibotJobTypeSchema>> = {
  * in JobTypeValidationError with the appropriate error code.
  *
  * @example
- * const registry = createValibotJobTypeRegistry({
+ * const jobTypeRegistry = createValibotJobTypeRegistry({
  *   "process-data": {
  *     entry: true,
  *     input: v.object({ dataId: v.string() }),

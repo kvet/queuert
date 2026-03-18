@@ -23,7 +23,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       log,
       expect,
     }) => {
-      const registry = defineJobTypeRegistry<{
+      const jobTypeRegistry = defineJobTypeRegistry<{
         test: { entry: true; input: { value: number }; output: null };
       }>();
 
@@ -32,7 +32,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         notifyAdapter,
         observabilityAdapter,
         log,
-        registry,
+        jobTypeRegistry,
       });
 
       const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -60,7 +60,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       log,
       expect,
     }) => {
-      const registry = defineJobTypeRegistry<{
+      const jobTypeRegistry = defineJobTypeRegistry<{
         test: { entry: true; input: { value: number }; output: null };
       }>();
 
@@ -69,7 +69,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         notifyAdapter,
         observabilityAdapter,
         log,
-        registry,
+        jobTypeRegistry,
       });
 
       const first = await withTransactionHooks(async (transactionHooks) =>
@@ -109,7 +109,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       log,
       expect,
     }) => {
-      const registry = defineJobTypeRegistry<{
+      const jobTypeRegistry = defineJobTypeRegistry<{
         dependency: { entry: true; input: null; output: null };
         main: {
           entry: true;
@@ -124,7 +124,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         notifyAdapter,
         observabilityAdapter,
         log,
-        registry,
+        jobTypeRegistry,
       });
 
       const dep = await withTransactionHooks(async (transactionHooks) =>
@@ -161,7 +161,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       log,
       expect,
     }) => {
-      const registry = defineJobTypeRegistry<{
+      const jobTypeRegistry = defineJobTypeRegistry<{
         test: { entry: true; input: null; output: null };
       }>();
 
@@ -170,7 +170,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         notifyAdapter,
         observabilityAdapter,
         log,
-        registry,
+        jobTypeRegistry,
       });
 
       const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -198,7 +198,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       log,
       expect,
     }) => {
-      const registry = defineJobTypeRegistry<{
+      const jobTypeRegistry = defineJobTypeRegistry<{
         test: { entry: true; input: { value: number }; output: { result: number } };
       }>();
 
@@ -207,7 +207,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         notifyAdapter,
         observabilityAdapter,
         log,
-        registry,
+        jobTypeRegistry,
       });
 
       const jobChains = await withTransactionHooks(async (transactionHooks) =>
@@ -244,7 +244,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       log,
       expect,
     }) => {
-      const registry = defineJobTypeRegistry<{
+      const jobTypeRegistry = defineJobTypeRegistry<{
         test: { entry: true; input: { value: number }; output: null };
       }>();
 
@@ -253,7 +253,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         notifyAdapter,
         observabilityAdapter,
         log,
-        registry,
+        jobTypeRegistry,
       });
 
       const jobChains = await withTransactionHooks(async (transactionHooks) =>
@@ -277,7 +277,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       log,
       expect,
     }) => {
-      const registry = defineJobTypeRegistry<{
+      const jobTypeRegistry = defineJobTypeRegistry<{
         test: { entry: true; input: { value: number }; output: null };
       }>();
 
@@ -286,7 +286,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         notifyAdapter,
         observabilityAdapter,
         log,
-        registry,
+        jobTypeRegistry,
       });
 
       const existingJobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -337,7 +337,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       log,
       expect,
     }) => {
-      const registry = defineJobTypeRegistry<{
+      const jobTypeRegistry = defineJobTypeRegistry<{
         dependency: { entry: true; input: null; output: null };
         main: {
           entry: true;
@@ -352,7 +352,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         notifyAdapter,
         observabilityAdapter,
         log,
-        registry,
+        jobTypeRegistry,
       });
 
       const depJobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -400,7 +400,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       log,
       expect,
     }) => {
-      const registry = defineJobTypeRegistry<{
+      const jobTypeRegistry = defineJobTypeRegistry<{
         test: { entry: true; input: { value: number }; output: null };
       }>();
 
@@ -409,7 +409,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         notifyAdapter,
         observabilityAdapter,
         log,
-        registry,
+        jobTypeRegistry,
       });
 
       const futureDate = new Date(Date.now() + 60_000);
@@ -441,7 +441,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       log,
       expect,
     }) => {
-      const registry = defineJobTypeRegistry<{
+      const jobTypeRegistry = defineJobTypeRegistry<{
         typeA: { entry: true; input: { a: number }; output: null };
         typeB: { entry: true; input: { b: string }; output: null };
       }>();
@@ -451,7 +451,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         notifyAdapter,
         observabilityAdapter,
         log,
-        registry,
+        jobTypeRegistry,
       });
 
       const [chainA, chainB] = await withTransactionHooks(async (transactionHooks) =>
@@ -482,7 +482,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       log,
       expect,
     }) => {
-      const registry = defineJobTypeRegistry<{
+      const jobTypeRegistry = defineJobTypeRegistry<{
         dependency: { entry: true; input: null; output: null };
         blocked: {
           entry: true;
@@ -498,7 +498,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         notifyAdapter,
         observabilityAdapter,
         log,
-        registry,
+        jobTypeRegistry,
       });
 
       const dep = await withTransactionHooks(async (transactionHooks) =>
@@ -538,7 +538,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       log,
       expect,
     }) => {
-      const registry = defineJobTypeRegistry<{
+      const jobTypeRegistry = defineJobTypeRegistry<{
         blocker: {
           entry: true;
           input: { value: number };
@@ -557,7 +557,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         notifyAdapter,
         observabilityAdapter,
         log,
-        registry,
+        jobTypeRegistry,
       });
 
       const blocker = await withTransactionHooks(async (transactionHooks) =>
@@ -592,17 +592,21 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       const worker = await createInProcessWorker({
         client,
         concurrency: 3,
-        processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-          blocker: {
-            attemptHandler: async ({ job, complete }) => {
-              return complete(async () => ({ result: job.input.value }));
+        jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+          client,
+          jobTypeRegistry,
+          processors: {
+            blocker: {
+              attemptHandler: async ({ job, complete }) => {
+                return complete(async () => ({ result: job.input.value }));
+              },
             },
-          },
-          main: {
-            attemptHandler: async ({ job, complete }) => {
-              return complete(async () => ({
-                finalResult: job.blockers[0].output.result,
-              }));
+            main: {
+              attemptHandler: async ({ job, complete }) => {
+                return complete(async () => ({
+                  finalResult: job.blockers[0].output.result,
+                }));
+              },
             },
           },
         }),
@@ -628,7 +632,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       log,
       expect,
     }) => {
-      const registry = defineJobTypeRegistry<{
+      const jobTypeRegistry = defineJobTypeRegistry<{
         test: { entry: true; input: { value: number }; output: { result: number } };
       }>();
 
@@ -637,7 +641,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         notifyAdapter,
         observabilityAdapter,
         log,
-        registry,
+        jobTypeRegistry,
       });
 
       const jobChains = await withTransactionHooks(async (transactionHooks) =>
@@ -657,10 +661,14 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       const worker = await createInProcessWorker({
         client,
         concurrency: 3,
-        processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-          test: {
-            attemptHandler: async ({ job, complete }) => {
-              return complete(async () => ({ result: job.input.value * 2 }));
+        jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+          client,
+          jobTypeRegistry,
+          processors: {
+            test: {
+              attemptHandler: async ({ job, complete }) => {
+                return complete(async () => ({ result: job.input.value * 2 }));
+              },
             },
           },
         }),

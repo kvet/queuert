@@ -2,23 +2,23 @@
  * NATS Notify Adapter Memory Measurement
  */
 
+import { createNatsNotifyAdapter } from "@queuert/nats";
 import { NatsContainer } from "@testcontainers/nats";
 import { connect } from "nats";
-import { createNatsNotifyAdapter } from "@queuert/nats";
-import { createInProcessStateAdapter } from "queuert/internal";
 import {
   createClient,
   createInProcessWorker,
   createJobTypeProcessorRegistry,
   withTransactionHooks,
 } from "queuert";
+import { createInProcessStateAdapter } from "queuert/internal";
 import {
   diffMemory,
+  jobTypeRegistry,
   measureBaseline,
   measureMemory,
   printHeader,
   printSummary,
-  registry,
 } from "./utils.js";
 
 printHeader("NATS NOTIFY ADAPTER");
@@ -49,14 +49,18 @@ const [beforeSetup, afterSetup, { qrtClient, stopWorker }] = await measureMemory
   const qrtClient = await createClient({
     stateAdapter,
     notifyAdapter,
-    registry,
+    jobTypeRegistry,
   });
 
   const qrtWorker = await createInProcessWorker({
     client: qrtClient,
-    processorRegistry: createJobTypeProcessorRegistry(qrtClient, registry, {
-      "test-job": {
-        attemptHandler: async ({ complete }) => complete(async () => ({ processed: true })),
+    jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      client: qrtClient,
+      jobTypeRegistry,
+      processors: {
+        "test-job": {
+          attemptHandler: async ({ complete }) => complete(async () => ({ processed: true })),
+        },
       },
     }),
   });

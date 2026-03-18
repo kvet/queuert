@@ -12,7 +12,7 @@ const client = await createClient({
   stateAdapter: StateAdapter,
   notifyAdapter?: NotifyAdapter,
   observabilityAdapter?: ObservabilityAdapter,
-  registry: JobTypeRegistry,
+  jobTypeRegistry: JobTypeRegistry,
   log?: Log,
 });
 ```
@@ -22,7 +22,7 @@ Returns `Promise<Client>`.
 - **stateAdapter** -- database adapter for job persistence
 - **notifyAdapter** -- optional pub/sub adapter for real-time notifications between client and workers
 - **observabilityAdapter** -- optional adapter for metrics and tracing
-- **registry** -- job type registry created by `defineJobTypeRegistry()` or `createJobTypeRegistry()`
+- **jobTypeRegistry** -- job type registry created by `defineJobTypeRegistry()` or `createJobTypeRegistry()`
 - **log** -- optional structured logger
 
 ## Client — Mutating Methods

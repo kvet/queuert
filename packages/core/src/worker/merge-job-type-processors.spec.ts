@@ -30,110 +30,135 @@ const notificationJobTypeRegistry = defineJobTypeRegistry<NotificationDefs>();
 const stateAdapter = createInProcessStateAdapter();
 const client = await createClient({
   stateAdapter,
-  registry: mergeJobTypeRegistries(orderJobTypeRegistry, notificationJobTypeRegistry),
+  jobTypeRegistry: mergeJobTypeRegistries({
+    slices: [orderJobTypeRegistry, notificationJobTypeRegistry],
+  }),
 });
 
-const orderProcessorRegistry = createJobTypeProcessorRegistry(client, orderJobTypeRegistry, {
-  "orders.create": {
-    attemptHandler: async ({ complete }) => complete(async () => ({ orderId: "1" })),
-  },
-  "orders.fulfill": {
-    attemptHandler: async ({ complete }) => complete(async () => ({ fulfilled: true })),
-  },
-});
-
-const notificationProcessorRegistry = createJobTypeProcessorRegistry(
+const orderJobTypeProcessorRegistry = createJobTypeProcessorRegistry({
   client,
-  notificationJobTypeRegistry,
-  {
+  jobTypeRegistry: orderJobTypeRegistry,
+  processors: {
+    "orders.create": {
+      attemptHandler: async ({ complete }) => complete(async () => ({ orderId: "1" })),
+    },
+    "orders.fulfill": {
+      attemptHandler: async ({ complete }) => complete(async () => ({ fulfilled: true })),
+    },
+  },
+});
+
+const notificationJobTypeProcessorRegistry = createJobTypeProcessorRegistry({
+  client,
+  jobTypeRegistry: notificationJobTypeRegistry,
+  processors: {
     "notifications.send": {
       attemptHandler: async ({ complete }) => complete(async () => ({ sent: true })),
     },
   },
-);
+});
 
 describe("createJobTypeProcessorRegistry", () => {
   it("rejects unknown keys at compile time", () => {
-    createJobTypeProcessorRegistry(client, orderJobTypeRegistry, {
-      // @ts-expect-error — "orders.craete" is not a key of OrderDefs
-      "orders.craete": {
-        attemptHandler: async ({ complete }: any) => complete(async () => ({ orderId: "1" })),
+    createJobTypeProcessorRegistry({
+      client,
+      jobTypeRegistry: orderJobTypeRegistry,
+      processors: {
+        // @ts-expect-error — "orders.craete" is not a key of OrderDefs
+        "orders.craete": {
+          attemptHandler: async ({ complete }: any) => complete(async () => ({ orderId: "1" })),
+        },
       },
     });
   });
 
   it("rejects a mix of valid and unknown keys at compile time", () => {
-    createJobTypeProcessorRegistry(client, orderJobTypeRegistry, {
-      "orders.create": {
-        attemptHandler: async ({ complete }) => complete(async () => ({ orderId: "1" })),
-      },
-      // @ts-expect-error — "orders.unknown" is not a key of OrderDefs
-      "orders.unknown": {
-        attemptHandler: async ({ complete }: any) => complete(async () => ({})),
+    createJobTypeProcessorRegistry({
+      client,
+      jobTypeRegistry: orderJobTypeRegistry,
+      processors: {
+        "orders.create": {
+          attemptHandler: async ({ complete }) => complete(async () => ({ orderId: "1" })),
+        },
+        // @ts-expect-error — "orders.unknown" is not a key of OrderDefs
+        "orders.unknown": {
+          attemptHandler: async ({ complete }: any) => complete(async () => ({})),
+        },
       },
     });
   });
 
   it("allows partial subsets of definitions", () => {
-    const processorRegistry = createJobTypeProcessorRegistry(client, orderJobTypeRegistry, {
-      "orders.create": {
-        attemptHandler: async ({ complete }) => complete(async () => ({ orderId: "1" })),
+    const jobTypeProcessorRegistry = createJobTypeProcessorRegistry({
+      client,
+      jobTypeRegistry: orderJobTypeRegistry,
+      processors: {
+        "orders.create": {
+          attemptHandler: async ({ complete }) => complete(async () => ({ orderId: "1" })),
+        },
       },
     });
-    expect(processorRegistry).toHaveProperty("orders.create");
-    expect(processorRegistry).not.toHaveProperty("orders.fulfill");
+    expect(jobTypeProcessorRegistry).toHaveProperty("orders.create");
+    expect(jobTypeProcessorRegistry).not.toHaveProperty("orders.fulfill");
   });
 
   it("carries definitions via symbols", () => {
     expectTypeOf<
-      JobTypeProcessorRegistryDefinitions<typeof orderProcessorRegistry>
+      JobTypeProcessorRegistryDefinitions<typeof orderJobTypeProcessorRegistry>
     >().toEqualTypeOf<OrderDefs>();
     expectTypeOf<
-      ExternalJobTypeProcessorRegistryDefinitions<typeof orderProcessorRegistry>
+      ExternalJobTypeProcessorRegistryDefinitions<typeof orderJobTypeProcessorRegistry>
     >().toEqualTypeOf<Record<never, never>>();
   });
 
   it("sets symbols at runtime", () => {
-    expect(processorDefinitionsSymbol in orderProcessorRegistry).toBe(true);
-    expect(processorExternalDefinitionsSymbol in orderProcessorRegistry).toBe(true);
+    expect(processorDefinitionsSymbol in orderJobTypeProcessorRegistry).toBe(true);
+    expect(processorExternalDefinitionsSymbol in orderJobTypeProcessorRegistry).toBe(true);
   });
 
   it("includes processor handlers accessible by key", () => {
     const handler = async ({ complete }: any) => complete(async () => ({ orderId: "1" }));
-    const registry = createJobTypeProcessorRegistry(client, orderJobTypeRegistry, {
-      "orders.create": { attemptHandler: handler },
+    const jobTypeRegistry = createJobTypeProcessorRegistry({
+      client,
+      jobTypeRegistry: orderJobTypeRegistry,
+      processors: {
+        "orders.create": { attemptHandler: handler },
+      },
     });
-    expect(registry["orders.create"].attemptHandler).toBe(handler);
-    expect(registry["orders.fulfill"]).toBeUndefined();
+    expect(jobTypeRegistry["orders.create"].attemptHandler).toBe(handler);
+    expect(jobTypeRegistry["orders.fulfill"]).toBeUndefined();
   });
 
-  it("rejects a merged registry at compile time", () => {
-    const mergedRegistry = mergeJobTypeRegistries(
-      orderJobTypeRegistry,
-      notificationJobTypeRegistry,
-    );
+  it("rejects a merged jobTypeRegistry at compile time", () => {
+    const mergedJobTypeRegistry = mergeJobTypeRegistries({
+      slices: [orderJobTypeRegistry, notificationJobTypeRegistry],
+    });
 
-    // @ts-expect-error — merged registries cannot be passed to createJobTypeProcessorRegistry
-    const _fn = () => createJobTypeProcessorRegistry(client, mergedRegistry, {});
-  });
-
-  it("rejects a merged registry at runtime", () => {
-    const mergedRegistry = mergeJobTypeRegistries(
-      orderJobTypeRegistry,
-      notificationJobTypeRegistry,
-    );
-
-    expect(() => {
-      createJobTypeProcessorRegistry(
+    const _fn = () =>
+      createJobTypeProcessorRegistry({
         client,
         // @ts-expect-error — merged registries cannot be passed to createJobTypeProcessorRegistry
-        mergedRegistry,
-        {
+        jobTypeRegistry: mergedJobTypeRegistry,
+        processors: {},
+      });
+  });
+
+  it("rejects a merged jobTypeRegistry at runtime", () => {
+    const mergedJobTypeRegistry = mergeJobTypeRegistries({
+      slices: [orderJobTypeRegistry, notificationJobTypeRegistry],
+    });
+
+    expect(() => {
+      createJobTypeProcessorRegistry({
+        client,
+        // @ts-expect-error — merged registries cannot be passed to createJobTypeProcessorRegistry
+        jobTypeRegistry: mergedJobTypeRegistry,
+        processors: {
           "orders.create": {
             attemptHandler: async ({ complete }: any) => complete(async () => ({ orderId: "1" })),
           },
         },
-      );
+      });
     }).toThrow(TypeError);
   });
 
@@ -144,7 +169,11 @@ describe("createJobTypeProcessorRegistry", () => {
       },
     };
     const keysBefore = Object.keys(processors);
-    createJobTypeProcessorRegistry(client, orderJobTypeRegistry, processors);
+    createJobTypeProcessorRegistry({
+      client,
+      jobTypeRegistry: orderJobTypeRegistry,
+      processors: processors,
+    });
     expect(Object.keys(processors)).toEqual(keysBefore);
     expect(processorDefinitionsSymbol in processors).toBe(false);
     expect(processorExternalDefinitionsSymbol in processors).toBe(false);
@@ -153,10 +182,9 @@ describe("createJobTypeProcessorRegistry", () => {
 
 describe("mergeJobTypeProcessorRegistries", () => {
   it("merges two processor slices into a single object", () => {
-    const merged = mergeJobTypeProcessorRegistries(
-      orderProcessorRegistry,
-      notificationProcessorRegistry,
-    );
+    const merged = mergeJobTypeProcessorRegistries({
+      slices: [orderJobTypeProcessorRegistry, notificationJobTypeProcessorRegistry],
+    });
 
     expect(merged).toHaveProperty("orders.create");
     expect(merged).toHaveProperty("orders.fulfill");
@@ -168,21 +196,23 @@ describe("mergeJobTypeProcessorRegistries", () => {
       "billing.charge": { entry: true; input: { amount: number }; output: { charged: boolean } };
     }>();
 
-    const billingProcessorRegistry = createJobTypeProcessorRegistry(
+    const billingJobTypeProcessorRegistry = createJobTypeProcessorRegistry({
       client,
-      billingJobTypeRegistry,
-      {
+      jobTypeRegistry: billingJobTypeRegistry,
+      processors: {
         "billing.charge": {
           attemptHandler: async ({ complete }) => complete(async () => ({ charged: true })),
         },
       },
-    );
+    });
 
-    const merged = mergeJobTypeProcessorRegistries(
-      orderProcessorRegistry,
-      notificationProcessorRegistry,
-      billingProcessorRegistry,
-    );
+    const merged = mergeJobTypeProcessorRegistries({
+      slices: [
+        orderJobTypeProcessorRegistry,
+        notificationJobTypeProcessorRegistry,
+        billingJobTypeProcessorRegistry,
+      ],
+    });
 
     expect(merged).toHaveProperty("orders.create");
     expect(merged).toHaveProperty("notifications.send");
@@ -190,58 +220,66 @@ describe("mergeJobTypeProcessorRegistries", () => {
   });
 
   it("preserves handler references", () => {
-    const merged = mergeJobTypeProcessorRegistries(
-      orderProcessorRegistry,
-      notificationProcessorRegistry,
-    );
+    const merged = mergeJobTypeProcessorRegistries({
+      slices: [orderJobTypeProcessorRegistry, notificationJobTypeProcessorRegistry],
+    });
 
-    expect(merged["orders.create"]).toBe(orderProcessorRegistry["orders.create"]);
-    expect(merged["notifications.send"]).toBe(notificationProcessorRegistry["notifications.send"]);
+    expect(merged["orders.create"]).toBe(orderJobTypeProcessorRegistry["orders.create"]);
+    expect(merged["notifications.send"]).toBe(
+      notificationJobTypeProcessorRegistry["notifications.send"],
+    );
   });
 
   it("merged result carries definitions via symbols", () => {
-    const merged = mergeJobTypeProcessorRegistries(
-      orderProcessorRegistry,
-      notificationProcessorRegistry,
-    );
+    const merged = mergeJobTypeProcessorRegistries({
+      slices: [orderJobTypeProcessorRegistry, notificationJobTypeProcessorRegistry],
+    });
 
     expectTypeOf<JobTypeProcessorRegistryDefinitions<typeof merged>>().toExtend<OrderDefs>();
     expectTypeOf<JobTypeProcessorRegistryDefinitions<typeof merged>>().toExtend<NotificationDefs>();
   });
 
   it("merged result sets symbols at runtime", () => {
-    const merged = mergeJobTypeProcessorRegistries(
-      orderProcessorRegistry,
-      notificationProcessorRegistry,
-    );
+    const merged = mergeJobTypeProcessorRegistries({
+      slices: [orderJobTypeProcessorRegistry, notificationJobTypeProcessorRegistry],
+    });
 
     expect(processorDefinitionsSymbol in merged).toBe(true);
     expect(processorExternalDefinitionsSymbol in merged).toBe(true);
   });
 
   it("throws DuplicateJobTypeError for duplicate keys at runtime", () => {
-    const altOrderProcessorRegistry = createJobTypeProcessorRegistry(client, orderJobTypeRegistry, {
-      "orders.create": {
-        attemptHandler: async ({ complete }) => complete(async () => ({ orderId: "alt" })),
+    const altOrderJobTypeProcessorRegistry = createJobTypeProcessorRegistry({
+      client,
+      jobTypeRegistry: orderJobTypeRegistry,
+      processors: {
+        "orders.create": {
+          attemptHandler: async ({ complete }) => complete(async () => ({ orderId: "alt" })),
+        },
       },
     });
 
     expect(() => {
-      mergeJobTypeProcessorRegistries(orderProcessorRegistry, altOrderProcessorRegistry);
+      mergeJobTypeProcessorRegistries({
+        slices: [orderJobTypeProcessorRegistry, altOrderJobTypeProcessorRegistry],
+      });
     }).toThrow(DuplicateJobTypeError);
   });
 
   it("merges registries where one has a single processor key", () => {
-    const singleKeyRegistry = createJobTypeProcessorRegistry(client, orderJobTypeRegistry, {
-      "orders.create": {
-        attemptHandler: async ({ complete }) => complete(async () => ({ orderId: "1" })),
+    const singleKeyJobTypeProcessorRegistry = createJobTypeProcessorRegistry({
+      client,
+      jobTypeRegistry: orderJobTypeRegistry,
+      processors: {
+        "orders.create": {
+          attemptHandler: async ({ complete }) => complete(async () => ({ orderId: "1" })),
+        },
       },
     });
 
-    const merged = mergeJobTypeProcessorRegistries(
-      singleKeyRegistry,
-      notificationProcessorRegistry,
-    );
+    const merged = mergeJobTypeProcessorRegistries({
+      slices: [singleKeyJobTypeProcessorRegistry, notificationJobTypeProcessorRegistry],
+    });
 
     expect(merged).toHaveProperty("orders.create");
     expect(merged).not.toHaveProperty("orders.fulfill");
@@ -251,14 +289,20 @@ describe("mergeJobTypeProcessorRegistries", () => {
   it("includes duplicate keys in the error", () => {
     expect.assertions(2);
 
-    const altOrderProcessorRegistry = createJobTypeProcessorRegistry(client, orderJobTypeRegistry, {
-      "orders.create": {
-        attemptHandler: async ({ complete }) => complete(async () => ({ orderId: "alt" })),
+    const altOrderJobTypeProcessorRegistry = createJobTypeProcessorRegistry({
+      client,
+      jobTypeRegistry: orderJobTypeRegistry,
+      processors: {
+        "orders.create": {
+          attemptHandler: async ({ complete }) => complete(async () => ({ orderId: "alt" })),
+        },
       },
     });
 
     try {
-      mergeJobTypeProcessorRegistries(orderProcessorRegistry, altOrderProcessorRegistry);
+      mergeJobTypeProcessorRegistries({
+        slices: [orderJobTypeProcessorRegistry, altOrderJobTypeProcessorRegistry],
+      });
     } catch (error) {
       expect(error).toBeInstanceOf(DuplicateJobTypeError);
       expect((error as DuplicateJobTypeError).duplicateTypeNames).toEqual(["orders.create"]);
@@ -268,7 +312,7 @@ describe("mergeJobTypeProcessorRegistries", () => {
 
 describe("cross-slice blocker type resolution", () => {
   it("resolves blocker output type from external slice (tuple blockers)", async () => {
-    const notifTypeRegistry = defineJobTypeRegistry<{
+    const notifJobTypeRegistry = defineJobTypeRegistry<{
       "notif.send": {
         entry: true;
         input: { userId: string; message: string };
@@ -276,7 +320,7 @@ describe("cross-slice blocker type resolution", () => {
       };
     }>();
 
-    const orderTypeRegistry = defineJobTypeRegistry<
+    const orderJobTypeRegistry = defineJobTypeRegistry<
       {
         "orders.place": {
           entry: true;
@@ -289,49 +333,58 @@ describe("cross-slice blocker type resolution", () => {
           blockers: [{ typeName: "notif.send" }];
         };
       },
-      JobTypeRegistryDefinitions<typeof notifTypeRegistry>
+      JobTypeRegistryDefinitions<typeof notifJobTypeRegistry>
     >();
 
-    const merged = mergeJobTypeRegistries(notifTypeRegistry, orderTypeRegistry);
-    const sa = createInProcessStateAdapter();
-    const c = await createClient({ stateAdapter: sa, registry: merged });
-
-    const notifProcessorRegistry = createJobTypeProcessorRegistry(c, notifTypeRegistry, {
-      "notif.send": {
-        attemptHandler: async ({ complete }) => complete(async () => ({ sentAt: "now" })),
-      },
+    const mergedJobTypeRegistry = mergeJobTypeRegistries({
+      slices: [notifJobTypeRegistry, orderJobTypeRegistry],
     });
+    const sa = createInProcessStateAdapter();
+    const c = await createClient({ stateAdapter: sa, jobTypeRegistry: mergedJobTypeRegistry });
 
-    const orderProcessorRegistry = createJobTypeProcessorRegistry(c, orderTypeRegistry, {
-      "orders.place": {
-        attemptHandler: async ({ complete }) =>
-          complete(async ({ continueWith }) =>
-            continueWith({
-              typeName: "orders.confirm",
-              input: { orderId: 1 },
-              blockers: [] as never,
-            }),
-          ),
-      },
-      "orders.confirm": {
-        attemptHandler: async ({ job, complete }) => {
-          expectTypeOf(job.blockers[0].output).toEqualTypeOf<{ sentAt: string }>();
-          return complete(async () => ({ confirmedAt: "now" }));
+    const notifJobTypeProcessorRegistry = createJobTypeProcessorRegistry({
+      client: c,
+      jobTypeRegistry: notifJobTypeRegistry,
+      processors: {
+        "notif.send": {
+          attemptHandler: async ({ complete }) => complete(async () => ({ sentAt: "now" })),
         },
       },
     });
 
-    const mergedProcessorRegistry = mergeJobTypeProcessorRegistries(
-      notifProcessorRegistry,
-      orderProcessorRegistry,
-    );
-    expect(mergedProcessorRegistry).toHaveProperty("notif.send");
-    expect(mergedProcessorRegistry).toHaveProperty("orders.place");
-    expect(mergedProcessorRegistry).toHaveProperty("orders.confirm");
+    const orderJobTypeProcessorRegistry = createJobTypeProcessorRegistry({
+      client: c,
+      jobTypeRegistry: orderJobTypeRegistry,
+      processors: {
+        "orders.place": {
+          attemptHandler: async ({ complete }) =>
+            complete(async ({ continueWith }) =>
+              continueWith({
+                typeName: "orders.confirm",
+                input: { orderId: 1 },
+                blockers: [] as never,
+              }),
+            ),
+        },
+        "orders.confirm": {
+          attemptHandler: async ({ job, complete }) => {
+            expectTypeOf(job.blockers[0].output).toEqualTypeOf<{ sentAt: string }>();
+            return complete(async () => ({ confirmedAt: "now" }));
+          },
+        },
+      },
+    });
+
+    const mergedJobTypeProcessorRegistry = mergeJobTypeProcessorRegistries({
+      slices: [notifJobTypeProcessorRegistry, orderJobTypeProcessorRegistry],
+    });
+    expect(mergedJobTypeProcessorRegistry).toHaveProperty("notif.send");
+    expect(mergedJobTypeProcessorRegistry).toHaveProperty("orders.place");
+    expect(mergedJobTypeProcessorRegistry).toHaveProperty("orders.confirm");
   });
 
   it("resolves blocker output type from external slice (array blockers)", async () => {
-    const notifTypeRegistry = defineJobTypeRegistry<{
+    const notifJobTypeRegistry = defineJobTypeRegistry<{
       "notif.send": {
         entry: true;
         input: { userId: string; message: string };
@@ -339,7 +392,7 @@ describe("cross-slice blocker type resolution", () => {
       };
     }>();
 
-    const orderTypeRegistry = defineJobTypeRegistry<
+    const orderJobTypeRegistry = defineJobTypeRegistry<
       {
         "orders.place": {
           entry: true;
@@ -352,28 +405,34 @@ describe("cross-slice blocker type resolution", () => {
           blockers: { typeName: "notif.send" }[];
         };
       },
-      JobTypeRegistryDefinitions<typeof notifTypeRegistry>
+      JobTypeRegistryDefinitions<typeof notifJobTypeRegistry>
     >();
 
-    const merged = mergeJobTypeRegistries(notifTypeRegistry, orderTypeRegistry);
+    const mergedJobTypeRegistry = mergeJobTypeRegistries({
+      slices: [notifJobTypeRegistry, orderJobTypeRegistry],
+    });
     const sa = createInProcessStateAdapter();
-    const c = await createClient({ stateAdapter: sa, registry: merged });
+    const c = await createClient({ stateAdapter: sa, jobTypeRegistry: mergedJobTypeRegistry });
 
-    createJobTypeProcessorRegistry(c, orderTypeRegistry, {
-      "orders.place": {
-        attemptHandler: async ({ complete }) =>
-          complete(async ({ continueWith }) =>
-            continueWith({
-              typeName: "orders.confirm",
-              input: { orderId: 1 },
-              blockers: [] as never,
-            }),
-          ),
-      },
-      "orders.confirm": {
-        attemptHandler: async ({ job, complete }) => {
-          expectTypeOf(job.blockers[0].output).toEqualTypeOf<{ sentAt: string }>();
-          return complete(async () => ({ confirmedAt: "now" }));
+    createJobTypeProcessorRegistry({
+      client: c,
+      jobTypeRegistry: orderJobTypeRegistry,
+      processors: {
+        "orders.place": {
+          attemptHandler: async ({ complete }) =>
+            complete(async ({ continueWith }) =>
+              continueWith({
+                typeName: "orders.confirm",
+                input: { orderId: 1 },
+                blockers: [] as never,
+              }),
+            ),
+        },
+        "orders.confirm": {
+          attemptHandler: async ({ job, complete }) => {
+            expectTypeOf(job.blockers[0].output).toEqualTypeOf<{ sentAt: string }>();
+            return complete(async () => ({ confirmedAt: "now" }));
+          },
         },
       },
     });
@@ -382,21 +441,26 @@ describe("cross-slice blocker type resolution", () => {
 
 describe("2-level merge (merge of merges)", () => {
   it("preserves processor registries through nested merges", async () => {
-    const billingTypeRegistry = defineJobTypeRegistry<{
+    const billingJobTypeRegistry = defineJobTypeRegistry<{
       "billing.charge": { entry: true; input: { amount: number }; output: { charged: boolean } };
     }>();
 
-    const billingProcessorRegistry = createJobTypeProcessorRegistry(client, billingTypeRegistry, {
-      "billing.charge": {
-        attemptHandler: async ({ complete }) => complete(async () => ({ charged: true })),
+    const billingJobTypeProcessorRegistry = createJobTypeProcessorRegistry({
+      client,
+      jobTypeRegistry: billingJobTypeRegistry,
+      processors: {
+        "billing.charge": {
+          attemptHandler: async ({ complete }) => complete(async () => ({ charged: true })),
+        },
       },
     });
 
-    const firstMerge = mergeJobTypeProcessorRegistries(
-      orderProcessorRegistry,
-      notificationProcessorRegistry,
-    );
-    const secondMerge = mergeJobTypeProcessorRegistries(firstMerge, billingProcessorRegistry);
+    const firstMerge = mergeJobTypeProcessorRegistries({
+      slices: [orderJobTypeProcessorRegistry, notificationJobTypeProcessorRegistry],
+    });
+    const secondMerge = mergeJobTypeProcessorRegistries({
+      slices: [firstMerge, billingJobTypeProcessorRegistry],
+    });
 
     expect(secondMerge).toHaveProperty("orders.create");
     expect(secondMerge).toHaveProperty("orders.fulfill");
@@ -414,65 +478,64 @@ describe("2-level merge (merge of merges)", () => {
 });
 
 describe("createInProcessWorker with partial processor registries", () => {
-  it("accepts a processor registry covering a single slice of the client's job types", async () => {
+  it("accepts a processor jobTypeRegistry covering a single slice of the client's job types", async () => {
     const worker = await createInProcessWorker({
       client,
-      processorRegistry: orderProcessorRegistry,
+      jobTypeProcessorRegistry: orderJobTypeProcessorRegistry,
     });
     const stop = await worker.start();
     await stop();
   });
 
-  it("accepts a processor registry covering a different single slice", async () => {
+  it("accepts a processor jobTypeRegistry covering a different single slice", async () => {
     const worker = await createInProcessWorker({
       client,
-      processorRegistry: notificationProcessorRegistry,
+      jobTypeProcessorRegistry: notificationJobTypeProcessorRegistry,
     });
     const stop = await worker.start();
     await stop();
   });
 
-  it("rejects a plain object that is not a processor registry", () => {
+  it("rejects a plain object that is not a processor jobTypeRegistry", () => {
     void createInProcessWorker({
       client,
       // @ts-expect-error — plain object is not a JobTypeProcessorRegistry
-      processorRegistry: { "orders.create": { attemptHandler: async () => {} } },
+      jobTypeProcessorRegistry: { "orders.create": { attemptHandler: async () => {} } },
     });
   });
 
-  it("rejects a processor registry with job types unknown to the client", async () => {
-    const unrelatedRegistry = defineJobTypeRegistry<{
+  it("rejects a processor jobTypeRegistry with job types unknown to the client", async () => {
+    const unrelatedJobTypeRegistry = defineJobTypeRegistry<{
       "unrelated.task": { entry: true; input: { x: number }; output: { y: number } };
     }>();
     const unrelatedClient = await createClient({
       stateAdapter: createInProcessStateAdapter(),
-      registry: unrelatedRegistry,
+      jobTypeRegistry: unrelatedJobTypeRegistry,
     });
-    const unrelatedProcessorRegistry = createJobTypeProcessorRegistry(
-      unrelatedClient,
-      unrelatedRegistry,
-      {
+    const unrelatedJobTypeProcessorRegistry = createJobTypeProcessorRegistry({
+      client: unrelatedClient,
+      jobTypeRegistry: unrelatedJobTypeRegistry,
+      processors: {
         "unrelated.task": {
           attemptHandler: async ({ complete }) => complete(async () => ({ y: 1 })),
         },
       },
-    );
+    });
 
     void createInProcessWorker({
       client,
-      // @ts-expect-error — processor registry contains job types not known to the client
-      processorRegistry: unrelatedProcessorRegistry,
+      // @ts-expect-error — processor jobTypeRegistry contains job types not known to the client
+      jobTypeProcessorRegistry: unrelatedJobTypeProcessorRegistry,
     });
   });
 
-  it("still accepts a fully merged processor registry", async () => {
-    const merged = mergeJobTypeProcessorRegistries(
-      orderProcessorRegistry,
-      notificationProcessorRegistry,
-    );
+  it("still accepts a fully merged processor jobTypeRegistry", async () => {
+    const merged = mergeJobTypeProcessorRegistries({
+      slices: [orderJobTypeProcessorRegistry, notificationJobTypeProcessorRegistry],
+    });
     const worker = await createInProcessWorker({
       client,
-      processorRegistry: merged,
+      jobTypeProcessorRegistry: merged,
     });
     const stop = await worker.start();
     await stop();

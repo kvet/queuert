@@ -90,7 +90,7 @@ const notifyAdapter = createInProcessNotifyAdapter();
 const client = await createClient({
   stateAdapter,
   notifyAdapter,
-  registry: jobTypeRegistry,
+  jobTypeRegistry,
 });
 
 const PRICES: Record<string, number> = {
@@ -101,38 +101,42 @@ const PRICES: Record<string, number> = {
 
 const worker = await createInProcessWorker({
   client,
-  processorRegistry: createJobTypeProcessorRegistry(client, jobTypeRegistry, {
-    "fetch-price": {
-      attemptHandler: async ({ job, complete }) => {
-        const basePrice = PRICES[job.input.productId] ?? 9.99;
-        console.log(`[fetch-price] ${job.input.productId}: $${basePrice}`);
-        return complete(async ({ continueWith }) =>
-          continueWith({
-            typeName: "apply-discount",
-            input: { productId: job.input.productId, basePrice },
-          }),
-        );
+  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+    client,
+    jobTypeRegistry,
+    processors: {
+      "fetch-price": {
+        attemptHandler: async ({ job, complete }) => {
+          const basePrice = PRICES[job.input.productId] ?? 9.99;
+          console.log(`[fetch-price] ${job.input.productId}: $${basePrice}`);
+          return complete(async ({ continueWith }) =>
+            continueWith({
+              typeName: "apply-discount",
+              input: { productId: job.input.productId, basePrice },
+            }),
+          );
+        },
       },
-    },
 
-    "apply-discount": {
-      attemptHandler: async ({ job, complete }) => {
-        const finalPrice = Math.round(job.input.basePrice * 0.9 * 100) / 100;
-        console.log(
-          `[apply-discount] ${job.input.productId}: $${job.input.basePrice} → $${finalPrice}`,
-        );
-        return complete(async () => ({
-          productId: job.input.productId,
-          finalPrice,
-        }));
+      "apply-discount": {
+        attemptHandler: async ({ job, complete }) => {
+          const finalPrice = Math.round(job.input.basePrice * 0.9 * 100) / 100;
+          console.log(
+            `[apply-discount] ${job.input.productId}: $${job.input.basePrice} → $${finalPrice}`,
+          );
+          return complete(async () => ({
+            productId: job.input.productId,
+            finalPrice,
+          }));
+        },
       },
-    },
 
-    "long-running": {
-      attemptHandler: async ({ job, complete }) => {
-        console.log(`[long-running] Sleeping ${job.input.durationMs}ms...`);
-        await new Promise((r) => setTimeout(r, job.input.durationMs));
-        return complete(async () => ({ completedAt: new Date().toISOString() }));
+      "long-running": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(`[long-running] Sleeping ${job.input.durationMs}ms...`);
+          await new Promise((r) => setTimeout(r, job.input.durationMs));
+          return complete(async () => ({ completedAt: new Date().toISOString() }));
+        },
       },
     },
   }),

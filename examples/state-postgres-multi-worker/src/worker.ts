@@ -11,7 +11,7 @@ import {
   defineJobTypeRegistry,
 } from "queuert";
 
-const registry = defineJobTypeRegistry<{
+const jobTypeRegistry = defineJobTypeRegistry<{
   process_order: {
     entry: true;
     input: { orderId: string; items: string[]; total: number };
@@ -122,28 +122,32 @@ const closeNotify = (): void => {
 
 const notifyAdapter = await createPgNotifyAdapter({ provider: notifyProvider });
 
-const client = await createClient({ stateAdapter, notifyAdapter, registry });
+const client = await createClient({ stateAdapter, notifyAdapter, jobTypeRegistry });
 
 const worker = await createInProcessWorker({
   client,
   workerId,
   concurrency: 2,
-  processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-    process_order: {
-      attemptHandler: async ({ job, complete }) => {
-        process.send!({
-          type: "processing",
-          orderId: job.input.orderId,
-          items: job.input.items.length,
-          total: job.input.total,
-        });
+  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+    client,
+    jobTypeRegistry,
+    processors: {
+      process_order: {
+        attemptHandler: async ({ job, complete }) => {
+          process.send!({
+            type: "processing",
+            orderId: job.input.orderId,
+            items: job.input.items.length,
+            total: job.input.total,
+          });
 
-        await new Promise((resolve) => setTimeout(resolve, 100 + Math.random() * 200));
+          await new Promise((resolve) => setTimeout(resolve, 100 + Math.random() * 200));
 
-        return complete(async () => ({
-          processedAt: new Date().toISOString(),
-          workerId,
-        }));
+          return complete(async () => ({
+            processedAt: new Date().toISOString(),
+            workerId,
+          }));
+        },
       },
     },
   }),

@@ -24,7 +24,7 @@ import {
 import { type LeaseConfig } from "./worker/lease.js";
 
 /** Default configuration applied to all job types unless overridden per-processor. */
-export type InProcessWorkerProcessDefaults<
+export type JobTypeProcessorDefaults<
   TStateAdapter extends StateAdapter<any, any>,
   TNavigationMap extends BaseNavigationMap,
 > = {
@@ -89,7 +89,7 @@ const waitForNextJob = async ({
 const performJob = async ({
   helpers,
   typeNames,
-  processors,
+  jobTypeProcessorRegistry,
   defaultBackoffConfig,
   defaultLeaseConfig,
   workerId,
@@ -97,7 +97,7 @@ const performJob = async ({
 }: {
   helpers: Helpers;
   typeNames: string[];
-  processors: Record<string, InProcessWorkerProcessor<any, any, any>>;
+  jobTypeProcessorRegistry: Record<string, InProcessWorkerProcessor<any, any, any>>;
   defaultBackoffConfig: BackoffConfig;
   defaultLeaseConfig: LeaseConfig;
   workerId: string;
@@ -128,8 +128,8 @@ const performJob = async ({
     return { job: null, hasMore: false };
   }
 
-  const processor = processors[job.typeName];
-  if (!processor) {
+  const jobTypeProcessor = jobTypeProcessorRegistry[job.typeName];
+  if (!jobTypeProcessor) {
     const error = new Error(`No attempt handler registered for job type "${job.typeName}"`);
     await prepareTransactionContext.reject(error);
     throw error;
@@ -142,11 +142,11 @@ const performJob = async ({
       try {
         await runJobProcess({
           helpers,
-          attemptHandler: processor.attemptHandler as any,
+          attemptHandler: jobTypeProcessor.attemptHandler as any,
           job,
           prepareTransactionContext: prepareTransactionContext as TransactionContext<BaseTxContext>,
-          backoffConfig: processor.backoffConfig ?? defaultBackoffConfig,
-          leaseConfig: processor.leaseConfig ?? defaultLeaseConfig,
+          backoffConfig: jobTypeProcessor.backoffConfig ?? defaultBackoffConfig,
+          leaseConfig: jobTypeProcessor.leaseConfig ?? defaultLeaseConfig,
           workerId,
           attemptMiddlewares: attemptMiddlewares as any[],
         });
@@ -174,8 +174,8 @@ export type InProcessWorker = {
  * @param options.workerId - Unique worker identifier. Defaults to a random UUID.
  * @param options.concurrency - Maximum number of jobs to process in parallel. Defaults to 1.
  * @param options.backoffConfig - Backoff configuration for the worker loop itself (not job retries).
- * @param options.processDefaults - Default configuration applied to all job types unless overridden per-processor.
- * @param options.processorRegistry - A JobTypeProcessorRegistry from createJobTypeProcessorRegistry or mergeJobTypeProcessorRegistries.
+ * @param options.jobTypeProcessorDefaults - Default configuration applied to all job types unless overridden per-processor.
+ * @param options.jobTypeProcessorRegistry - A JobTypeProcessorRegistry from createJobTypeProcessorRegistry or mergeJobTypeProcessorRegistries.
  */
 export const createInProcessWorker = async <
   TNavigationMap extends BaseNavigationMap,
@@ -186,30 +186,34 @@ export const createInProcessWorker = async <
   workerId = randomUUID(),
   concurrency,
   backoffConfig,
-  processDefaults,
-  processorRegistry,
+  jobTypeProcessorDefaults,
+  jobTypeProcessorRegistry,
 }: {
   client: Client<TNavigationMap, TStateAdapter>;
   workerId?: string;
   concurrency?: number;
   backoffConfig?: BackoffConfig;
-  processDefaults?: InProcessWorkerProcessDefaults<TStateAdapter, TProcessorNavigationMap>;
-  processorRegistry: [
+  jobTypeProcessorDefaults?: JobTypeProcessorDefaults<TStateAdapter, TProcessorNavigationMap>;
+  jobTypeProcessorRegistry: [
     Exclude<keyof TProcessorNavigationMap & string, keyof TNavigationMap & string>,
   ] extends [never]
     ? JobTypeProcessorRegistry<any, any, TProcessorNavigationMap>
     : `Error: processor registry contains job types unknown to the client: ${Exclude<keyof TProcessorNavigationMap & string, keyof TNavigationMap & string>}`;
 }): Promise<InProcessWorker> => {
-  const _processorRegistry = processorRegistry as JobTypeProcessorRegistry<any, any, any>;
-  const typeNames = Object.keys(_processorRegistry);
+  const _jobTypeProcessorRegistry = jobTypeProcessorRegistry as JobTypeProcessorRegistry<
+    any,
+    any,
+    any
+  >;
+  const typeNames = Object.keys(_jobTypeProcessorRegistry);
 
-  const pollIntervalMs = processDefaults?.pollIntervalMs ?? 60_000;
-  const defaultBackoffConfig = processDefaults?.backoffConfig ?? {
+  const pollIntervalMs = jobTypeProcessorDefaults?.pollIntervalMs ?? 60_000;
+  const defaultBackoffConfig = jobTypeProcessorDefaults?.backoffConfig ?? {
     initialDelayMs: 10_000,
     multiplier: 2.0,
     maxDelayMs: 300_000,
   };
-  const defaultLeaseConfig = processDefaults?.leaseConfig ?? {
+  const defaultLeaseConfig = jobTypeProcessorDefaults?.leaseConfig ?? {
     leaseMs: 60_000,
     renewIntervalMs: 30_000,
   };
@@ -218,7 +222,7 @@ export const createInProcessWorker = async <
     multiplier: 2.0,
     maxDelayMs: 300_000,
   };
-  const attemptMiddlewares = processDefaults?.attemptMiddlewares;
+  const attemptMiddlewares = jobTypeProcessorDefaults?.attemptMiddlewares;
 
   return {
     start: async (): Promise<() => Promise<void>> => {
@@ -239,7 +243,7 @@ export const createInProcessWorker = async <
               const result = await performJob({
                 helpers,
                 typeNames,
-                processors: _processorRegistry,
+                jobTypeProcessorRegistry: _jobTypeProcessorRegistry,
                 defaultBackoffConfig,
                 defaultLeaseConfig,
                 workerId,

@@ -103,49 +103,53 @@ const notifyAdapter = createInProcessNotifyAdapter();
 const client = await createClient({
   stateAdapter,
   notifyAdapter,
-  registry: jobTypeRegistry,
+  jobTypeRegistry,
 });
 
 const worker = await createInProcessWorker({
   client,
-  processorRegistry: createJobTypeProcessorRegistry(client, jobTypeRegistry, {
-    "validate-input": {
-      attemptHandler: async ({ job, complete }) => {
-        console.log(`[validate-input] Validating order ${job.input.orderId}`);
-        return complete(async () => ({ valid: true }));
+  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+    client,
+    jobTypeRegistry,
+    processors: {
+      "validate-input": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(`[validate-input] Validating order ${job.input.orderId}`);
+          return complete(async () => ({ valid: true }));
+        },
       },
-    },
 
-    "check-stock": {
-      attemptHandler: async ({ job, complete }) => {
-        console.log(`[check-stock] Checking stock for order ${job.input.orderId}`);
-        return complete(async () => ({ available: true }));
+      "check-stock": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(`[check-stock] Checking stock for order ${job.input.orderId}`);
+          return complete(async () => ({ available: true }));
+        },
       },
-    },
 
-    "process-order": {
-      attemptHandler: async ({ job, complete }) => {
-        console.log(`[process-order] Processing order ${job.input.orderId}`);
-        return complete(async ({ continueWith }) =>
-          continueWith({
-            typeName: "ship-order",
-            input: { orderId: job.input.orderId, total: 99.99 },
-          }),
-        );
+      "process-order": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(`[process-order] Processing order ${job.input.orderId}`);
+          return complete(async ({ continueWith }) =>
+            continueWith({
+              typeName: "ship-order",
+              input: { orderId: job.input.orderId, total: 99.99 },
+            }),
+          );
+        },
       },
-    },
 
-    "ship-order": {
-      attemptHandler: async ({ job, complete }) => {
-        console.log(`[ship-order] Shipping order ${job.input.orderId}`);
-        return complete(async () => ({ trackingId: `TRACK-${job.input.orderId}` }));
+      "ship-order": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(`[ship-order] Shipping order ${job.input.orderId}`);
+          return complete(async () => ({ trackingId: `TRACK-${job.input.orderId}` }));
+        },
       },
-    },
 
-    "send-notification": {
-      attemptHandler: async ({ job, complete }) => {
-        console.log(`[send-notification] Sending to ${job.input.userId}`);
-        return complete(async () => ({ sentAt: new Date().toISOString() }));
+      "send-notification": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(`[send-notification] Sending to ${job.input.userId}`);
+          return complete(async () => ({ sentAt: new Date().toISOString() }));
+        },
       },
     },
   }),

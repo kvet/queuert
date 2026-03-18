@@ -80,13 +80,13 @@ const createTestSchemaRegistry = <T extends BaseJobTypeDefinitions>(
 
 // --- Registries ---
 
-const simpleRegistry = createTestSchemaRegistry<{
+const simpleJobTypeRegistry = createTestSchemaRegistry<{
   main: { entry: true; input: { value: number }; output: { result: number } };
 }>({
   main: { entry: true, input: { value: "number" }, output: { result: "number" } },
 });
 
-const continuationRegistry = createTestSchemaRegistry<{
+const continuationJobTypeRegistry = createTestSchemaRegistry<{
   step1: { entry: true; input: { value: number }; continueWith: { typeName: "step2" } };
   step2: { input: { data: number }; output: { result: number } };
 }>({
@@ -94,7 +94,7 @@ const continuationRegistry = createTestSchemaRegistry<{
   step2: { input: { data: "number" }, output: { result: "number" } },
 });
 
-const continuationNoFollowUpRegistry = createTestSchemaRegistry<{
+const continuationNoFollowUpJobTypeRegistry = createTestSchemaRegistry<{
   step1: { entry: true; input: { value: number }; continueWith: { typeName: "step2" } };
   step2: { input: { data: number }; output: { result: number } };
 }>({
@@ -102,7 +102,7 @@ const continuationNoFollowUpRegistry = createTestSchemaRegistry<{
   step2: { input: { data: "number" }, output: { result: "number" } },
 });
 
-const blockerRegistry = createTestSchemaRegistry<{
+const blockerJobTypeRegistry = createTestSchemaRegistry<{
   main: {
     entry: true;
     input: { id: string };
@@ -129,9 +129,11 @@ const completionOptions = {
 
 export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
   it("getTypeNames returns registered type names", ({ expect }) => {
-    expect(simpleRegistry.getTypeNames()).toEqual(["main"]);
-    expect(continuationRegistry.getTypeNames()).toEqual(expect.arrayContaining(["step1", "step2"]));
-    expect(blockerRegistry.getTypeNames()).toEqual(expect.arrayContaining(["main", "auth"]));
+    expect(simpleJobTypeRegistry.getTypeNames()).toEqual(["main"]);
+    expect(continuationJobTypeRegistry.getTypeNames()).toEqual(
+      expect.arrayContaining(["step1", "step2"]),
+    );
+    expect(blockerJobTypeRegistry.getTypeNames()).toEqual(expect.arrayContaining(["main", "auth"]));
   });
 
   it("accepts valid input at chain start", async ({
@@ -147,7 +149,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry: simpleRegistry,
+      jobTypeRegistry: simpleJobTypeRegistry,
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -178,7 +180,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry: simpleRegistry,
+      jobTypeRegistry: simpleJobTypeRegistry,
     });
 
     await expect(
@@ -209,7 +211,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry: simpleRegistry,
+      jobTypeRegistry: simpleJobTypeRegistry,
     });
 
     await expect(
@@ -240,7 +242,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry: blockerRegistry,
+      jobTypeRegistry: blockerJobTypeRegistry,
     });
 
     await expect(
@@ -272,14 +274,18 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry: simpleRegistry,
+      jobTypeRegistry: simpleJobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, simpleRegistry, {
-        main: {
-          attemptHandler: async ({ complete }) => complete(async () => ({ result: 84 })),
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry: simpleJobTypeRegistry,
+        processors: {
+          main: {
+            attemptHandler: async ({ complete }) => complete(async () => ({ result: 84 })),
+          },
         },
       }),
     });
@@ -317,21 +323,25 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry: simpleRegistry,
+      jobTypeRegistry: simpleJobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, simpleRegistry, {
-        main: {
-          attemptHandler: async ({ complete }) => {
-            try {
-              // @ts-expect-error testing runtime validation
-              return await complete(async () => ({ result: "not-a-number" }));
-            } catch (error) {
-              validationFailed.resolve(error);
-              throw error;
-            }
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry: simpleJobTypeRegistry,
+        processors: {
+          main: {
+            attemptHandler: async ({ complete }) => {
+              try {
+                // @ts-expect-error testing runtime validation
+                return await complete(async () => ({ result: "not-a-number" }));
+              } catch (error) {
+                validationFailed.resolve(error);
+                throw error;
+              }
+            },
           },
         },
       }),
@@ -368,20 +378,24 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry: continuationRegistry,
+      jobTypeRegistry: continuationJobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, continuationRegistry, {
-        step1: {
-          attemptHandler: async ({ complete }) =>
-            complete(async ({ continueWith }) =>
-              continueWith({ typeName: "step2", input: { data: 1 } }),
-            ),
-        },
-        step2: {
-          attemptHandler: async ({ complete }) => complete(async () => ({ result: 42 })),
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry: continuationJobTypeRegistry,
+        processors: {
+          step1: {
+            attemptHandler: async ({ complete }) =>
+              complete(async ({ continueWith }) =>
+                continueWith({ typeName: "step2", input: { data: 1 } }),
+              ),
+          },
+          step2: {
+            attemptHandler: async ({ complete }) => complete(async () => ({ result: 42 })),
+          },
         },
       }),
     });
@@ -419,26 +433,30 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry: continuationNoFollowUpRegistry,
+      jobTypeRegistry: continuationNoFollowUpJobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, continuationNoFollowUpRegistry, {
-        step1: {
-          attemptHandler: async ({ complete }) => {
-            try {
-              return await complete(async ({ continueWith }) =>
-                continueWith({ typeName: "step2", input: { data: 1 } }),
-              );
-            } catch (error) {
-              validationFailed.resolve(error);
-              throw error;
-            }
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry: continuationNoFollowUpJobTypeRegistry,
+        processors: {
+          step1: {
+            attemptHandler: async ({ complete }) => {
+              try {
+                return await complete(async ({ continueWith }) =>
+                  continueWith({ typeName: "step2", input: { data: 1 } }),
+                );
+              } catch (error) {
+                validationFailed.resolve(error);
+                throw error;
+              }
+            },
           },
-        },
-        step2: {
-          attemptHandler: async ({ complete }) => complete(async () => ({ result: 1 })),
+          step2: {
+            attemptHandler: async ({ complete }) => complete(async () => ({ result: 1 })),
+          },
         },
       }),
     });
@@ -473,7 +491,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry: simpleRegistry,
+      jobTypeRegistry: simpleJobTypeRegistry,
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -516,7 +534,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry: simpleRegistry,
+      jobTypeRegistry: simpleJobTypeRegistry,
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -561,14 +579,18 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry: continuationRegistry,
+      jobTypeRegistry: continuationJobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, continuationRegistry, {
-        step2: {
-          attemptHandler: async ({ complete }) => complete(async () => ({ result: 42 })),
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry: continuationJobTypeRegistry,
+        processors: {
+          step2: {
+            attemptHandler: async ({ complete }) => complete(async () => ({ result: 42 })),
+          },
         },
       }),
     });
@@ -623,7 +645,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry: continuationNoFollowUpRegistry,
+      jobTypeRegistry: continuationNoFollowUpJobTypeRegistry,
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>

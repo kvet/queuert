@@ -9,10 +9,10 @@ import {
 } from "./job-type-registry.js";
 
 export const wrapJobTypeRegistryWithLogging = <TJobTypeDefinitions>({
-  registry,
+  jobTypeRegistry,
   observabilityHelper,
 }: {
-  registry: JobTypeRegistry<TJobTypeDefinitions>;
+  jobTypeRegistry: JobTypeRegistry<TJobTypeDefinitions>;
   observabilityHelper: ObservabilityHelper;
 }): JobTypeRegistry<TJobTypeDefinitions> => {
   const wrap = <T extends (...args: never[]) => unknown>(fn: T): T =>
@@ -28,15 +28,15 @@ export const wrapJobTypeRegistryWithLogging = <TJobTypeDefinitions>({
     }) as T;
 
   return {
-    getTypeNames: () => registry.getTypeNames(),
-    validateEntry: wrap(registry.validateEntry),
-    parseInput: wrap(registry.parseInput),
-    parseOutput: wrap(registry.parseOutput),
-    validateContinueWith: wrap(registry.validateContinueWith),
-    validateBlockers: wrap(registry.validateBlockers),
-    [definitionsSymbol]: registry[definitionsSymbol],
-    [externalDefinitionsSymbol]: registry[externalDefinitionsSymbol],
-    [navigationSymbol]: registry[navigationSymbol],
-    [mergedRegistrySymbol]: registry[mergedRegistrySymbol],
+    getTypeNames: () => jobTypeRegistry.getTypeNames(),
+    validateEntry: wrap(jobTypeRegistry.validateEntry),
+    parseInput: wrap(jobTypeRegistry.parseInput),
+    parseOutput: wrap(jobTypeRegistry.parseOutput),
+    validateContinueWith: wrap(jobTypeRegistry.validateContinueWith),
+    validateBlockers: wrap(jobTypeRegistry.validateBlockers),
+    [definitionsSymbol]: jobTypeRegistry[definitionsSymbol],
+    [externalDefinitionsSymbol]: jobTypeRegistry[externalDefinitionsSymbol],
+    [navigationSymbol]: jobTypeRegistry[navigationSymbol],
+    [mergedRegistrySymbol]: jobTypeRegistry[mergedRegistrySymbol],
   };
 };

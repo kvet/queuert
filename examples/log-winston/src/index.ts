@@ -62,7 +62,7 @@ const logger = winston.createLogger({
 });
 
 // 4. Define job types
-const registry = defineJobTypeRegistry<{
+const jobTypeRegistry = defineJobTypeRegistry<{
   greet: {
     entry: true;
     input: { name: string };
@@ -84,12 +84,12 @@ const qrtClient = await createClient({
   stateAdapter,
   notifyAdapter,
   log,
-  registry,
+  jobTypeRegistry,
 });
 // 6. Create middleware that sets job context for the duration of job processing
 const contextualLoggingMiddleware: JobAttemptMiddleware<
   typeof stateAdapter,
-  JobTypeRegistryNavigation<typeof registry>
+  JobTypeRegistryNavigation<typeof jobTypeRegistry>
 > = async ({ job, workerId }, next) => {
   // Run the job processing within the AsyncLocalStorage context
   return jobContextStore.run(
@@ -108,37 +108,41 @@ const contextualLoggingMiddleware: JobAttemptMiddleware<
 const qrtWorker = await createInProcessWorker({
   client: qrtClient,
   workerId: "worker-1",
-  processDefaults: {
+  jobTypeProcessorDefaults: {
     attemptMiddlewares: [contextualLoggingMiddleware],
   },
-  processorRegistry: createJobTypeProcessorRegistry(qrtClient, registry, {
-    greet: {
-      attemptHandler: async ({ job, complete }) => {
-        // This log automatically includes job context thanks to the custom format!
-        logger.info("Starting to process greeting");
+  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+    client: qrtClient,
+    jobTypeRegistry,
+    processors: {
+      greet: {
+        attemptHandler: async ({ job, complete }) => {
+          // This log automatically includes job context thanks to the custom format!
+          logger.info("Starting to process greeting");
 
-        return complete(async () => {
-          logger.info("Generating greeting", { name: job.input.name });
-          return { greeting: `Hello, ${job.input.name}!` };
-        });
+          return complete(async () => {
+            logger.info("Generating greeting", { name: job.input.name });
+            return { greeting: `Hello, ${job.input.name}!` };
+          });
+        },
       },
-    },
-    "might-fail": {
-      attemptHandler: async ({ job, complete }) => {
-        // Job context is automatically included in all logs
-        logger.info("Processing might-fail job");
+      "might-fail": {
+        attemptHandler: async ({ job, complete }) => {
+          // Job context is automatically included in all logs
+          logger.info("Processing might-fail job");
 
-        if (job.input.shouldFail && job.attempt < 2) {
-          logger.warn("About to throw simulated error");
-          throw new Error("Simulated failure for demonstration");
-        }
+          if (job.input.shouldFail && job.attempt < 2) {
+            logger.warn("About to throw simulated error");
+            throw new Error("Simulated failure for demonstration");
+          }
 
-        return complete(async () => {
-          logger.info("Job succeeded");
-          return { success: true as const };
-        });
+          return complete(async () => {
+            logger.info("Job succeeded");
+            return { success: true as const };
+          });
+        },
+        backoffConfig: { initialDelayMs: 100, maxDelayMs: 100 },
       },
-      backoffConfig: { initialDelayMs: 100, maxDelayMs: 100 },
     },
   }),
 });

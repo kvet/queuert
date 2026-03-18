@@ -6,7 +6,7 @@ import { type ResolvedJobChain } from "../entities/job-type-registry.resolvers.j
 import { type StateAdapter } from "../state-adapter/state-adapter.js";
 import { type TransactionHooks } from "../transaction-hooks.js";
 
-const registry = defineJobTypeRegistry<{
+const jobTypeRegistry = defineJobTypeRegistry<{
   email: { entry: true; input: { to: string }; output: { sent: boolean } };
   sms: { entry: true; input: { phone: string }; output: { delivered: boolean } };
   dep: { entry: true; input: null; output: null };
@@ -18,7 +18,7 @@ const registry = defineJobTypeRegistry<{
   };
 }>();
 
-type Nav = JobTypeRegistryNavigation<typeof registry>;
+type Nav = JobTypeRegistryNavigation<typeof jobTypeRegistry>;
 type TestAdapter = StateAdapter<{}, string>;
 type TestClient = Client<Nav, TestAdapter>;
 

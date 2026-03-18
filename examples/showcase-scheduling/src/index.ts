@@ -134,95 +134,101 @@ await sql`
 const client = await createClient({
   stateAdapter,
   notifyAdapter,
-  registry: jobTypeRegistry,
+  jobTypeRegistry,
 });
 
 const worker = await createInProcessWorker({
   client,
-  processorRegistry: createJobTypeProcessorRegistry(client, jobTypeRegistry, {
-    "daily-digest": {
-      attemptHandler: async ({ job, complete }) => {
-        console.log(
-          `\n[daily-digest] Sending digest #${job.input.iteration} to user ${job.input.userId}`,
-        );
+  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+    client,
+    jobTypeRegistry,
+    processors: {
+      "daily-digest": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(
+            `\n[daily-digest] Sending digest #${job.input.iteration} to user ${job.input.userId}`,
+          );
 
-        await new Promise((r) => setTimeout(r, 50));
+          await new Promise((r) => setTimeout(r, 50));
 
-        return complete(async ({ sql: txSql, transactionHooks }) => {
-          await txSql`
-            INSERT INTO digest_logs (user_id) VALUES (${job.input.userId})
-          `;
+          return complete(async ({ sql: txSql, transactionHooks }) => {
+            await txSql`
+              INSERT INTO digest_logs (user_id) VALUES (${job.input.userId})
+            `;
 
-          const shouldContinue = userSubscribed && job.input.iteration < MAX_DIGEST_ITERATIONS;
+            const shouldContinue = userSubscribed && job.input.iteration < MAX_DIGEST_ITERATIONS;
 
-          if (shouldContinue) {
-            console.log(`  Scheduling next digest in ${DIGEST_INTERVAL_MS}ms...`);
-            await client.startJobChain({
-              sql: txSql,
-              transactionHooks,
-              typeName: "daily-digest",
-              input: { userId: job.input.userId, iteration: job.input.iteration + 1 },
-              schedule: { afterMs: DIGEST_INTERVAL_MS },
-            });
-          } else {
-            console.log(`  User unsubscribed or max iterations reached. Stopping.`);
-          }
+            if (shouldContinue) {
+              console.log(`  Scheduling next digest in ${DIGEST_INTERVAL_MS}ms...`);
+              await client.startJobChain({
+                sql: txSql,
+                transactionHooks,
+                typeName: "daily-digest",
+                input: { userId: job.input.userId, iteration: job.input.iteration + 1 },
+                schedule: { afterMs: DIGEST_INTERVAL_MS },
+              });
+            } else {
+              console.log(`  User unsubscribed or max iterations reached. Stopping.`);
+            }
 
-          return { sentAt: new Date().toISOString() };
-        });
+            return { sentAt: new Date().toISOString() };
+          });
+        },
       },
-    },
 
-    "health-check": {
-      attemptHandler: async ({ job, complete }) => {
-        console.log(`\n[health-check] Check #${job.input.checkNumber} for ${job.input.serviceId}`);
+      "health-check": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(
+            `\n[health-check] Check #${job.input.checkNumber} for ${job.input.serviceId}`,
+          );
 
-        const status = serviceRunning ? "healthy" : "stopped";
-        console.log(`  Status: ${status}`);
+          const status = serviceRunning ? "healthy" : "stopped";
+          console.log(`  Status: ${status}`);
 
-        return complete(async ({ sql: txSql, transactionHooks }) => {
-          await txSql`
-            INSERT INTO health_logs (service_id, status)
-            VALUES (${job.input.serviceId}, ${status})
-          `;
+          return complete(async ({ sql: txSql, transactionHooks }) => {
+            await txSql`
+              INSERT INTO health_logs (service_id, status)
+              VALUES (${job.input.serviceId}, ${status})
+            `;
 
-          const shouldContinue = serviceRunning && job.input.checkNumber < MAX_HEALTH_CHECKS;
+            const shouldContinue = serviceRunning && job.input.checkNumber < MAX_HEALTH_CHECKS;
 
-          if (shouldContinue) {
-            console.log(`  Scheduling next check in ${HEALTH_CHECK_INTERVAL_MS}ms...`);
-            await client.startJobChain({
-              sql: txSql,
-              transactionHooks,
-              typeName: "health-check",
-              input: {
-                serviceId: job.input.serviceId,
-                checkNumber: job.input.checkNumber + 1,
-              },
-              schedule: { afterMs: HEALTH_CHECK_INTERVAL_MS },
-            });
-          } else {
-            console.log(`  Service stopped or max checks reached. Stopping.`);
-          }
+            if (shouldContinue) {
+              console.log(`  Scheduling next check in ${HEALTH_CHECK_INTERVAL_MS}ms...`);
+              await client.startJobChain({
+                sql: txSql,
+                transactionHooks,
+                typeName: "health-check",
+                input: {
+                  serviceId: job.input.serviceId,
+                  checkNumber: job.input.checkNumber + 1,
+                },
+                schedule: { afterMs: HEALTH_CHECK_INTERVAL_MS },
+              });
+            } else {
+              console.log(`  Service stopped or max checks reached. Stopping.`);
+            }
 
-          return { status, checkedAt: new Date().toISOString() };
-        });
+            return { status, checkedAt: new Date().toISOString() };
+          });
+        },
       },
-    },
 
-    "sync-data": {
-      attemptHandler: async ({ job, complete }) => {
-        console.log(`\n[sync-data] Syncing data from ${job.input.sourceId}`);
+      "sync-data": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(`\n[sync-data] Syncing data from ${job.input.sourceId}`);
 
-        await new Promise((r) => setTimeout(r, 100));
+          await new Promise((r) => setTimeout(r, 100));
 
-        return complete(async ({ sql: txSql }) => {
-          await txSql`
-            INSERT INTO sync_logs (source_id) VALUES (${job.input.sourceId})
-          `;
-          const syncedAt = new Date().toISOString();
-          console.log(`  Sync completed at ${syncedAt}`);
-          return { syncedAt };
-        });
+          return complete(async ({ sql: txSql }) => {
+            await txSql`
+              INSERT INTO sync_logs (source_id) VALUES (${job.input.sourceId})
+            `;
+            const syncedAt = new Date().toISOString();
+            console.log(`  Sync completed at ${syncedAt}`);
+            return { syncedAt };
+          });
+        },
       },
     },
   }),

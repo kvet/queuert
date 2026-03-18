@@ -334,13 +334,13 @@ export const createClient = async <
   stateAdapter: stateAdapterOption,
   notifyAdapter: notifyAdapterOption,
   observabilityAdapter: observabilityAdapterOption,
-  registry: registryOption,
+  jobTypeRegistry: jobTypeRegistryOption,
   log,
 }: {
   stateAdapter: TStateAdapter;
   notifyAdapter?: NotifyAdapter;
   observabilityAdapter?: ObservabilityAdapter;
-  registry: TJobTypeRegistry;
+  jobTypeRegistry: TJobTypeRegistry;
   log?: Log;
 }): Promise<Client<JobTypeRegistryNavigation<TJobTypeRegistry>, TStateAdapter>> => {
   type TNavigationMap = JobTypeRegistryNavigation<TJobTypeRegistry>;
@@ -350,7 +350,7 @@ export const createClient = async <
     stateAdapter: stateAdapterOption,
     notifyAdapter: notifyAdapterOption,
     observabilityAdapter: observabilityAdapterOption,
-    registry: registryOption,
+    jobTypeRegistry: jobTypeRegistryOption,
     log,
   });
   const client: Client<TNavigationMap, TStateAdapter> = {

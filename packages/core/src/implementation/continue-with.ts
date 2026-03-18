@@ -37,7 +37,7 @@ export const continueWith = async <TJobTypeName extends string, TInput>(
     fromTypeName: string;
   },
 ): Promise<ResolvedJob<string, BaseNavigationMap, TJobTypeName, string>> => {
-  helpers.registry.validateContinueWith(fromTypeName, { typeName, input });
+  helpers.jobTypeRegistry.validateContinueWith(fromTypeName, { typeName, input });
 
   const [{ job }] = await createStateJobs(helpers, {
     jobs: [

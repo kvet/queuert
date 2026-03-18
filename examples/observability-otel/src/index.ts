@@ -21,7 +21,7 @@ import {
 import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
 import { flush, observabilityAdapter, shutdown } from "./observability.js";
 
-const registry = defineJobTypeRegistry<{
+const jobTypeRegistry = defineJobTypeRegistry<{
   /*
    * Scenario 1 - Single Job:
    *   greet → "Hello, {name}!"
@@ -131,96 +131,100 @@ const client = await createClient({
   stateAdapter,
   notifyAdapter,
   observabilityAdapter,
-  registry,
+  jobTypeRegistry,
 });
 
 // Create worker with processors
 const worker = await createInProcessWorker({
   client,
   workerId: "worker-1",
-  processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-    // Scenario 1: Simple job
-    greet: {
-      attemptHandler: async ({ job, complete }) => {
-        await new Promise((r) => setTimeout(r, 20));
-        return complete(async () => ({
-          greeting: `Hello, ${job.input.name}!`,
-        }));
+  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+    client,
+    jobTypeRegistry,
+    processors: {
+      // Scenario 1: Simple job
+      greet: {
+        attemptHandler: async ({ job, complete }) => {
+          await new Promise((r) => setTimeout(r, 20));
+          return complete(async () => ({
+            greeting: `Hello, ${job.input.name}!`,
+          }));
+        },
       },
-    },
 
-    // Scenario 2: Continuation jobs
-    "order:validate": {
-      attemptHandler: async ({ job, complete }) => {
-        await new Promise((r) => setTimeout(r, 50));
-        return complete(async ({ continueWith }) =>
-          continueWith({
-            typeName: "order:process",
-            input: { orderId: job.input.orderId, validated: true },
-          }),
-        );
+      // Scenario 2: Continuation jobs
+      "order:validate": {
+        attemptHandler: async ({ job, complete }) => {
+          await new Promise((r) => setTimeout(r, 50));
+          return complete(async ({ continueWith }) =>
+            continueWith({
+              typeName: "order:process",
+              input: { orderId: job.input.orderId, validated: true },
+            }),
+          );
+        },
       },
-    },
-    "order:process": {
-      attemptHandler: async ({ job, complete }) => {
-        await new Promise((r) => setTimeout(r, 100));
-        return complete(async ({ continueWith }) =>
-          continueWith({
-            typeName: "order:complete",
-            input: { orderId: job.input.orderId, processed: true },
-          }),
-        );
+      "order:process": {
+        attemptHandler: async ({ job, complete }) => {
+          await new Promise((r) => setTimeout(r, 100));
+          return complete(async ({ continueWith }) =>
+            continueWith({
+              typeName: "order:complete",
+              input: { orderId: job.input.orderId, processed: true },
+            }),
+          );
+        },
       },
-    },
-    "order:complete": {
-      attemptHandler: async ({ job, complete }) => {
-        await new Promise((r) => setTimeout(r, 30));
-        return complete(async () => ({
-          orderId: job.input.orderId,
-          status: "completed",
-        }));
+      "order:complete": {
+        attemptHandler: async ({ job, complete }) => {
+          await new Promise((r) => setTimeout(r, 30));
+          return complete(async () => ({
+            orderId: job.input.orderId,
+            status: "completed",
+          }));
+        },
       },
-    },
 
-    // Scenario 3: Blocker jobs
-    "fetch-user": {
-      attemptHandler: async ({ job, complete }) => {
-        await new Promise((r) => setTimeout(r, 80));
-        return complete(async () => ({
-          userId: job.input.userId,
-          name: "Alice",
-        }));
+      // Scenario 3: Blocker jobs
+      "fetch-user": {
+        attemptHandler: async ({ job, complete }) => {
+          await new Promise((r) => setTimeout(r, 80));
+          return complete(async () => ({
+            userId: job.input.userId,
+            name: "Alice",
+          }));
+        },
       },
-    },
-    "fetch-permissions": {
-      attemptHandler: async ({ job, complete }) => {
-        await new Promise((r) => setTimeout(r, 60));
-        return complete(async () => ({
-          userId: job.input.userId,
-          permissions: ["read", "write"],
-        }));
+      "fetch-permissions": {
+        attemptHandler: async ({ job, complete }) => {
+          await new Promise((r) => setTimeout(r, 60));
+          return complete(async () => ({
+            userId: job.input.userId,
+            permissions: ["read", "write"],
+          }));
+        },
       },
-    },
-    "process-with-blockers": {
-      attemptHandler: async ({ job, complete }) => {
-        const [userBlocker, permBlocker] = job.blockers;
-        await new Promise((r) => setTimeout(r, 40));
-        return complete(async () => ({
-          taskId: job.input.taskId,
-          result: `${userBlocker.output.name} has ${permBlocker.output.permissions.join(", ")}`,
-        }));
+      "process-with-blockers": {
+        attemptHandler: async ({ job, complete }) => {
+          const [userBlocker, permBlocker] = job.blockers;
+          await new Promise((r) => setTimeout(r, 40));
+          return complete(async () => ({
+            taskId: job.input.taskId,
+            result: `${userBlocker.output.name} has ${permBlocker.output.permissions.join(", ")}`,
+          }));
+        },
       },
-    },
 
-    // Scenario 4: Failing job
-    "might-fail": {
-      attemptHandler: async ({ job, complete }) => {
-        if (job.input.shouldFail && job.attempt < 2) {
-          throw new Error("Simulated failure");
-        }
-        return complete(async () => ({ success: true as const }));
+      // Scenario 4: Failing job
+      "might-fail": {
+        attemptHandler: async ({ job, complete }) => {
+          if (job.input.shouldFail && job.attempt < 2) {
+            throw new Error("Simulated failure");
+          }
+          return complete(async () => ({ success: true as const }));
+        },
+        backoffConfig: { initialDelayMs: 100, maxDelayMs: 100 },
       },
-      backoffConfig: { initialDelayMs: 100, maxDelayMs: 100 },
     },
   }),
 });

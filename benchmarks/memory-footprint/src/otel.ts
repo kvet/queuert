@@ -14,11 +14,11 @@ import {
 import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
 import {
   diffMemory,
+  jobTypeRegistry,
   measureBaseline,
   measureMemory,
   printHeader,
   printSummary,
-  registry,
 } from "./utils.js";
 
 class NoopMetricExporter {
@@ -62,14 +62,18 @@ const [beforeSetup, afterSetup, { qrtClient, stopWorker }] = await measureMemory
     stateAdapter,
     notifyAdapter,
     observabilityAdapter,
-    registry,
+    jobTypeRegistry,
   });
 
   const qrtWorker = await createInProcessWorker({
     client: qrtClient,
-    processorRegistry: createJobTypeProcessorRegistry(qrtClient, registry, {
-      "test-job": {
-        attemptHandler: async ({ complete }) => complete(async () => ({ processed: true })),
+    jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      client: qrtClient,
+      jobTypeRegistry,
+      processors: {
+        "test-job": {
+          attemptHandler: async ({ complete }) => complete(async () => ({ processed: true })),
+        },
       },
     }),
   });

@@ -116,7 +116,7 @@ type ValidatedRegistries<
  * @example
  * const ordersRegistry = defineJobTypeRegistry<OrderJobTypes>();
  * const notificationsRegistry = defineJobTypeRegistry<NotificationJobTypes>();
- * const registry = mergeJobTypeRegistries(ordersRegistry, notificationsRegistry);
+ * const registry = mergeJobTypeRegistries({ slices: [ordersRegistry, notificationsRegistry] });
  */
 export const mergeJobTypeRegistries = <
   const TRegistries extends readonly [
@@ -124,15 +124,15 @@ export const mergeJobTypeRegistries = <
     JobTypeRegistry<any>,
     ...JobTypeRegistry<any>[],
   ],
->(
-  ...registries: ValidatedRegistries<TRegistries> & TRegistries
-): JobTypeRegistry<
+>(options: {
+  slices: ValidatedRegistries<TRegistries> & TRegistries;
+}): JobTypeRegistry<
   MergeDefinitions<TRegistries>,
   Record<never, never>,
   MergedNavigation<TRegistries>,
   true
 > => {
-  const regs = registries as unknown as JobTypeRegistry<any>[];
+  const regs = options.slices as unknown as JobTypeRegistry<any>[];
   const allNoop = regs.every((r) => noopRegistries.has(r));
 
   if (allNoop) {

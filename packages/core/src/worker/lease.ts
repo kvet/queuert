@@ -37,6 +37,7 @@ export const createLeaseManager = ({
   return {
     start: async () => {
       loopPromise = runRenewalLoop();
+      loopPromise.catch(() => {});
     },
     stop: async () => {
       abortController.abort();

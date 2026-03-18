@@ -65,10 +65,10 @@ Creates a registry with runtime validation for input/output parsing. Each callba
 ## mergeJobTypeRegistries
 
 ```typescript
-const registry = mergeJobTypeRegistries(ordersRegistry, notificationsRegistry);
+const registry = mergeJobTypeRegistries({ slices: [ordersRegistry, notificationsRegistry] });
 ```
 
-Merges multiple `JobTypeRegistry` instances into a single registry. Accepts two or more registries (variadic).
+Merges multiple `JobTypeRegistry` instances into a single registry. Accepts an options bag with a `slices` array of two or more registries.
 
 - **Compile-time duplicate detection** -- overlapping job type names produce a type error
 - **Runtime duplicate detection** -- validated registries with overlapping type names throw `DuplicateJobTypeError`
@@ -81,38 +81,41 @@ const ordersRegistry = defineJobTypeRegistry<OrderJobTypes>();
 const notificationsRegistry = defineJobTypeRegistry<NotificationJobTypes>();
 
 // Compile-time error if types overlap
-const registry = mergeJobTypeRegistries(ordersRegistry, notificationsRegistry);
+const jobTypeRegistry = mergeJobTypeRegistries({ slices: [ordersRegistry, notificationsRegistry] });
 
-const client = await createClient({ registry, stateAdapter });
+const client = await createClient({ jobTypeRegistry, stateAdapter });
 ```
 
 ## createJobTypeProcessorRegistry
 
 ```typescript
-const orderProcessorRegistry = createJobTypeProcessorRegistry(client, orderJobTypeRegistry, {
-  "orders.create": {
-    attemptHandler: async ({ job, complete }) => complete(async () => ({ orderId: "123" })),
+const orderJobTypeProcessorRegistry = createJobTypeProcessorRegistry({
+  client,
+  jobTypeRegistry: orderJobTypeRegistry,
+  processors: {
+    "orders.create": {
+      attemptHandler: async ({ job, complete }) => complete(async () => ({ orderId: "123" })),
+    },
   },
 });
 ```
 
 Defines a processor registry for a job type slice with full type inference. Handlers are type-checked against the slice's definitions (including external references from `TExternal`). Returns a `JobTypeProcessorRegistry` that carries the slice's type definitions via phantom symbol properties.
 
-- **First argument** -- a `Client` instance, used to infer the state adapter type for proper handler typing
-- **Second argument** -- a `JobTypeRegistry` (from `defineJobTypeRegistry` or `createJobTypeRegistry`), used for type inference
-- **Third argument** -- the processor map, typed against the registry's definitions
+- **client** -- a `Client` instance, used to infer the state adapter type for proper handler typing
+- **jobTypeRegistry** -- a `JobTypeRegistry` (from `defineJobTypeRegistry` or `createJobTypeRegistry`), used for type inference
+- **processors** -- the processor map, typed against the registry's definitions
 - **Return type** -- a `JobTypeProcessorRegistry` carrying definitions and external definitions via phantom symbol properties
 
 ## mergeJobTypeProcessorRegistries
 
 ```typescript
-const processorRegistry = mergeJobTypeProcessorRegistries(
-  orderProcessorRegistry,
-  notificationProcessorRegistry,
-);
+const jobTypeProcessorRegistry = mergeJobTypeProcessorRegistries({
+  slices: [orderJobTypeProcessorRegistry, notificationJobTypeProcessorRegistry],
+});
 ```
 
-Merges processor registries from multiple slices into a single registry. Accepts two or more `JobTypeProcessorRegistry` instances (variadic).
+Merges processor registries from multiple slices into a single registry. Accepts an options bag with a `slices` array of `JobTypeProcessorRegistry` instances.
 
 - **Runtime duplicate detection** -- overlapping processor keys throw `DuplicateJobTypeError`
 - **Merged return type** -- a `JobTypeProcessorRegistry` with unioned definitions, external definitions, and processor keys
@@ -122,10 +125,9 @@ Each slice defines processors using `createJobTypeProcessorRegistry`, typed agai
 ```typescript
 const worker = await createInProcessWorker({
   client,
-  processorRegistry: mergeJobTypeProcessorRegistries(
-    orderProcessorRegistry,
-    notificationProcessorRegistry,
-  ),
+  jobTypeProcessorRegistry: mergeJobTypeProcessorRegistries({
+    slices: [orderJobTypeProcessorRegistry, notificationJobTypeProcessorRegistry],
+  }),
 });
 ```
 

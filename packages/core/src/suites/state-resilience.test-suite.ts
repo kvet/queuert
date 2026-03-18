@@ -29,7 +29,7 @@ export const stateResilienceTestSuite = ({
     observabilityAdapter,
     log,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { value: number; atomic: boolean };
@@ -42,14 +42,14 @@ export const stateResilienceTestSuite = ({
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const flakyWorkerClient = await createClient({
       stateAdapter: flakyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const flakyWorker = await createInProcessWorker({
       client: flakyWorkerClient,
@@ -59,7 +59,7 @@ export const stateResilienceTestSuite = ({
         multiplier: 1,
         maxDelayMs: 1,
       },
-      processDefaults: {
+      jobTypeProcessorDefaults: {
         // should be processed in a single worker loop
         pollIntervalMs: 10_000,
         leaseConfig: {
@@ -72,11 +72,15 @@ export const stateResilienceTestSuite = ({
           maxDelayMs: 1,
         },
       },
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        test: {
-          attemptHandler: async ({ job, prepare, complete }) => {
-            await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
-            return complete(async () => ({ result: job.input.value * 2 }));
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          test: {
+            attemptHandler: async ({ job, prepare, complete }) => {
+              await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
+              return complete(async () => ({ result: job.input.value * 2 }));
+            },
           },
         },
       }),
@@ -115,7 +119,7 @@ export const stateResilienceTestSuite = ({
       observabilityAdapter,
       log,
     }) => {
-      const registry = defineJobTypeRegistry<{
+      const jobTypeRegistry = defineJobTypeRegistry<{
         test: {
           entry: true;
           input: { value: number; atomic: boolean };
@@ -128,14 +132,14 @@ export const stateResilienceTestSuite = ({
         notifyAdapter,
         observabilityAdapter,
         log,
-        registry,
+        jobTypeRegistry,
       });
       const flakyWorkerClient = await createClient({
         stateAdapter: flakyStateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
-        registry,
+        jobTypeRegistry,
       });
       const flakyWorker = await createInProcessWorker({
         client: flakyWorkerClient,
@@ -145,7 +149,7 @@ export const stateResilienceTestSuite = ({
           multiplier: 1,
           maxDelayMs: 1,
         },
-        processDefaults: {
+        jobTypeProcessorDefaults: {
           // Short poll interval so the worker retries promptly after a transient error.
           // When the complete phase hits a flaky-adapter error and the error handler's
           // runInTransaction also fails, the job stays "acquired" with a short lease.
@@ -162,11 +166,15 @@ export const stateResilienceTestSuite = ({
             maxDelayMs: 1,
           },
         },
-        processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-          test: {
-            attemptHandler: async ({ job, prepare, complete }) => {
-              await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
-              return complete(async () => ({ result: job.input.value * 2 }));
+        jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+          client,
+          jobTypeRegistry,
+          processors: {
+            test: {
+              attemptHandler: async ({ job, prepare, complete }) => {
+                await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
+                return complete(async () => ({ result: job.input.value * 2 }));
+              },
             },
           },
         }),
@@ -206,7 +214,7 @@ export const stateResilienceTestSuite = ({
       observabilityAdapter,
       log,
     }) => {
-      const registry = defineJobTypeRegistry<{
+      const jobTypeRegistry = defineJobTypeRegistry<{
         test: {
           entry: true;
           input: { value: number; atomic: boolean };
@@ -219,14 +227,14 @@ export const stateResilienceTestSuite = ({
         notifyAdapter,
         observabilityAdapter,
         log,
-        registry,
+        jobTypeRegistry,
       });
       const flakyWorkerClient = await createClient({
         stateAdapter: flakyStateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
-        registry,
+        jobTypeRegistry,
       });
       const workerConfig = {
         client: flakyWorkerClient,
@@ -236,7 +244,7 @@ export const stateResilienceTestSuite = ({
           multiplier: 1,
           maxDelayMs: 1,
         },
-        processDefaults: {
+        jobTypeProcessorDefaults: {
           // Short poll interval so the worker retries promptly after a transient error.
           // When the complete phase hits a flaky-adapter error and the error handler's
           // runInTransaction also fails, the job stays "acquired" with a short lease.
@@ -256,22 +264,30 @@ export const stateResilienceTestSuite = ({
       } as const;
       const flakyWorker1 = await createInProcessWorker({
         ...workerConfig,
-        processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-          test: {
-            attemptHandler: async ({ job, prepare, complete }) => {
-              await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
-              return complete(async () => ({ result: job.input.value * 2 }));
+        jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+          client,
+          jobTypeRegistry,
+          processors: {
+            test: {
+              attemptHandler: async ({ job, prepare, complete }) => {
+                await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
+                return complete(async () => ({ result: job.input.value * 2 }));
+              },
             },
           },
         }),
       });
       const flakyWorker2 = await createInProcessWorker({
         ...workerConfig,
-        processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-          test: {
-            attemptHandler: async ({ job, prepare, complete }) => {
-              await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
-              return complete(async () => ({ result: job.input.value * 2 }));
+        jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+          client,
+          jobTypeRegistry,
+          processors: {
+            test: {
+              attemptHandler: async ({ job, prepare, complete }) => {
+                await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
+                return complete(async () => ({ result: job.input.value * 2 }));
+              },
             },
           },
         }),
@@ -312,7 +328,7 @@ export const stateResilienceTestSuite = ({
   }) => {
     if (!flakyDbStateAdapter) return skip();
 
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { value: number; atomic: boolean };
@@ -325,14 +341,14 @@ export const stateResilienceTestSuite = ({
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const flakyWorkerClient = await createClient({
       stateAdapter: flakyDbStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const flakyWorker = await createInProcessWorker({
       client: flakyWorkerClient,
@@ -342,7 +358,7 @@ export const stateResilienceTestSuite = ({
         multiplier: 1,
         maxDelayMs: 1,
       },
-      processDefaults: {
+      jobTypeProcessorDefaults: {
         pollIntervalMs: 10_000,
         leaseConfig: {
           leaseMs: 10,
@@ -354,11 +370,15 @@ export const stateResilienceTestSuite = ({
           maxDelayMs: 1,
         },
       },
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        test: {
-          attemptHandler: async ({ job, prepare, complete }) => {
-            await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
-            return complete(async () => ({ result: job.input.value * 2 }));
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          test: {
+            attemptHandler: async ({ job, prepare, complete }) => {
+              await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
+              return complete(async () => ({ result: job.input.value * 2 }));
+            },
           },
         },
       }),
@@ -400,7 +420,7 @@ export const stateResilienceTestSuite = ({
     }) => {
       if (!flakyDbStateAdapter) return skip();
 
-      const registry = defineJobTypeRegistry<{
+      const jobTypeRegistry = defineJobTypeRegistry<{
         test: {
           entry: true;
           input: { value: number; atomic: boolean };
@@ -413,14 +433,14 @@ export const stateResilienceTestSuite = ({
         notifyAdapter,
         observabilityAdapter,
         log,
-        registry,
+        jobTypeRegistry,
       });
       const flakyWorkerClient = await createClient({
         stateAdapter: flakyDbStateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
-        registry,
+        jobTypeRegistry,
       });
       const flakyWorker = await createInProcessWorker({
         client: flakyWorkerClient,
@@ -430,7 +450,7 @@ export const stateResilienceTestSuite = ({
           multiplier: 1,
           maxDelayMs: 1,
         },
-        processDefaults: {
+        jobTypeProcessorDefaults: {
           pollIntervalMs: 250,
           leaseConfig: {
             leaseMs: 10,
@@ -442,11 +462,15 @@ export const stateResilienceTestSuite = ({
             maxDelayMs: 1,
           },
         },
-        processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-          test: {
-            attemptHandler: async ({ job, prepare, complete }) => {
-              await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
-              return complete(async () => ({ result: job.input.value * 2 }));
+        jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+          client,
+          jobTypeRegistry,
+          processors: {
+            test: {
+              attemptHandler: async ({ job, prepare, complete }) => {
+                await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
+                return complete(async () => ({ result: job.input.value * 2 }));
+              },
             },
           },
         }),
@@ -489,7 +513,7 @@ export const stateResilienceTestSuite = ({
     }) => {
       if (!flakyDbStateAdapter) return skip();
 
-      const registry = defineJobTypeRegistry<{
+      const jobTypeRegistry = defineJobTypeRegistry<{
         test: {
           entry: true;
           input: { value: number; atomic: boolean };
@@ -502,14 +526,14 @@ export const stateResilienceTestSuite = ({
         notifyAdapter,
         observabilityAdapter,
         log,
-        registry,
+        jobTypeRegistry,
       });
       const flakyWorkerClient = await createClient({
         stateAdapter: flakyDbStateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
-        registry,
+        jobTypeRegistry,
       });
       const workerConfig = {
         client: flakyWorkerClient,
@@ -519,7 +543,7 @@ export const stateResilienceTestSuite = ({
           multiplier: 1,
           maxDelayMs: 1,
         },
-        processDefaults: {
+        jobTypeProcessorDefaults: {
           pollIntervalMs: 250,
           leaseConfig: {
             leaseMs: 10,
@@ -534,22 +558,30 @@ export const stateResilienceTestSuite = ({
       } as const;
       const flakyWorker1 = await createInProcessWorker({
         ...workerConfig,
-        processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-          test: {
-            attemptHandler: async ({ job, prepare, complete }) => {
-              await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
-              return complete(async () => ({ result: job.input.value * 2 }));
+        jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+          client,
+          jobTypeRegistry,
+          processors: {
+            test: {
+              attemptHandler: async ({ job, prepare, complete }) => {
+                await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
+                return complete(async () => ({ result: job.input.value * 2 }));
+              },
             },
           },
         }),
       });
       const flakyWorker2 = await createInProcessWorker({
         ...workerConfig,
-        processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-          test: {
-            attemptHandler: async ({ job, prepare, complete }) => {
-              await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
-              return complete(async () => ({ result: job.input.value * 2 }));
+        jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+          client,
+          jobTypeRegistry,
+          processors: {
+            test: {
+              attemptHandler: async ({ job, prepare, complete }) => {
+                await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
+                return complete(async () => ({ result: job.input.value * 2 }));
+              },
             },
           },
         }),

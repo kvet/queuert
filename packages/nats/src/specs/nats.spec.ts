@@ -29,7 +29,7 @@ it("should work end-to-end with NATS notify adapter", async ({ natsConnectionOpt
   const stateAdapter = createInProcessStateAdapter();
 
   const log = vi.fn();
-  const registry = defineJobTypeRegistry<{
+  const jobTypeRegistry = defineJobTypeRegistry<{
     test: {
       entry: true;
       input: { message: string };
@@ -41,14 +41,18 @@ it("should work end-to-end with NATS notify adapter", async ({ natsConnectionOpt
     stateAdapter,
     notifyAdapter,
     log,
-    registry,
+    jobTypeRegistry,
   });
   const worker = await createInProcessWorker({
     client,
-    processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-      test: {
-        attemptHandler: async ({ complete }) => {
-          return complete(async () => ({ processed: true }));
+    jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      client,
+      jobTypeRegistry,
+      processors: {
+        test: {
+          attemptHandler: async ({ complete }) => {
+            return complete(async () => ({ processed: true }));
+          },
         },
       },
     }),
@@ -83,7 +87,7 @@ it("should work end-to-end without JetStream KV", async ({ natsConnectionOptions
   const stateAdapter = createInProcessStateAdapter();
 
   const log = vi.fn();
-  const registry = defineJobTypeRegistry<{
+  const jobTypeRegistry = defineJobTypeRegistry<{
     test: {
       entry: true;
       input: { value: number };
@@ -95,14 +99,18 @@ it("should work end-to-end without JetStream KV", async ({ natsConnectionOptions
     stateAdapter,
     notifyAdapter,
     log,
-    registry,
+    jobTypeRegistry,
   });
   const worker = await createInProcessWorker({
     client,
-    processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-      test: {
-        attemptHandler: async ({ job, complete }) => {
-          return complete(async () => ({ doubled: job.input.value * 2 }));
+    jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      client,
+      jobTypeRegistry,
+      processors: {
+        test: {
+          attemptHandler: async ({ job, complete }) => {
+            return complete(async () => ({ doubled: job.input.value * 2 }));
+          },
         },
       },
     }),

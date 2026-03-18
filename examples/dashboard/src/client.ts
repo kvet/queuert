@@ -3,7 +3,7 @@ import { createClient, defineJobTypeRegistry } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 import { createDatabase, createStateProvider } from "./db.js";
 
-export const registry = defineJobTypeRegistry<{
+export const jobTypeRegistry = defineJobTypeRegistry<{
   /*
    * Scenario 1 - Single Job:
    *   greet → "Hello, {name}!"
@@ -68,4 +68,4 @@ await stateAdapter.migrateToLatest();
 
 export const notifyAdapter = createInProcessNotifyAdapter();
 
-export const client = await createClient({ stateAdapter, notifyAdapter, registry });
+export const client = await createClient({ stateAdapter, notifyAdapter, jobTypeRegistry });

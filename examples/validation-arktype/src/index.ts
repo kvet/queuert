@@ -3,7 +3,7 @@
  *
  * This example demonstrates how to use ArkType for runtime validation of job types.
  * It shows:
- * 1. Creating an ArkType-based job type registry
+ * 1. Creating an ArkType-based job type jobTypeRegistry
  * 2. Nominal reference validation (by type name)
  * 3. Structural reference validation (by input shape)
  */
@@ -19,7 +19,7 @@ import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queue
 import { createArkTypeJobTypeRegistry } from "./arktype-adapter.js";
 
 // 1. Define job types with ArkType schemas
-const registry = createArkTypeJobTypeRegistry({
+const jobTypeRegistry = createArkTypeJobTypeRegistry({
   // Entry point with nominal continuation validation
   "fetch-data": {
     entry: true,
@@ -71,60 +71,64 @@ const registry = createArkTypeJobTypeRegistry({
   },
 });
 
-// 2. Create queuert client and worker with the registry
+// 2. Create queuert client and worker with the jobTypeRegistry
 const stateAdapter = createInProcessStateAdapter();
 const notifyAdapter = createInProcessNotifyAdapter();
 
 const qrtClient = await createClient({
   stateAdapter,
   notifyAdapter,
-  registry,
+  jobTypeRegistry,
 });
 
 // 3. Create and start qrtWorker with job type processors
 const qrtWorker = await createInProcessWorker({
   client: qrtClient,
-  processorRegistry: createJobTypeProcessorRegistry(qrtClient, registry, {
-    "fetch-data": {
-      attemptHandler: async ({ job, complete }) => {
-        console.log(`Fetching data from ${job.input.url}`);
-        const data = { items: [1, 2, 3], source: job.input.url };
+  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+    client: qrtClient,
+    jobTypeRegistry,
+    processors: {
+      "fetch-data": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(`Fetching data from ${job.input.url}`);
+          const data = { items: [1, 2, 3], source: job.input.url };
 
-        return complete(async ({ continueWith }) =>
-          continueWith({
-            typeName: "process-data",
-            input: { data },
-          }),
-        );
+          return complete(async ({ continueWith }) =>
+            continueWith({
+              typeName: "process-data",
+              input: { data },
+            }),
+          );
+        },
       },
-    },
-    "process-data": {
-      attemptHandler: async ({ job, complete }) => {
-        console.log("Processing data:", job.input.data);
-        const data = job.input.data as { items: number[] };
+      "process-data": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log("Processing data:", job.input.data);
+          const data = job.input.data as { items: number[] };
 
-        return complete(async () => ({
-          processed: true,
-          itemCount: data.items?.length ?? 0,
-        }));
+          return complete(async () => ({
+            processed: true,
+            itemCount: data.items?.length ?? 0,
+          }));
+        },
       },
-    },
-    "batch-process": {
-      attemptHandler: async ({ job, complete }) => {
-        console.log(`Processing batch ${job.input.batchId}`);
-        console.log("Blockers completed:", job.blockers.length);
+      "batch-process": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(`Processing batch ${job.input.batchId}`);
+          console.log("Blockers completed:", job.blockers.length);
 
-        return complete(async () => ({
-          success: true,
-        }));
+          return complete(async () => ({
+            success: true,
+          }));
+        },
       },
-    },
-    auth: {
-      attemptHandler: async ({ job, complete }) => {
-        console.log(`Authenticating with token: ${job.input.token.substring(0, 8)}...`);
-        return complete(async () => ({
-          userId: `user-${job.input.token.substring(0, 4)}`,
-        }));
+      auth: {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(`Authenticating with token: ${job.input.token.substring(0, 8)}...`);
+          return complete(async () => ({
+            userId: `user-${job.input.token.substring(0, 4)}`,
+          }));
+        },
       },
     },
   }),

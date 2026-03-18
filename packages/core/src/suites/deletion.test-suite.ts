@@ -20,7 +20,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     log,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { value: number };
@@ -33,7 +33,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -83,7 +83,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     log,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       step1: {
         entry: true;
         input: { value: number };
@@ -100,7 +100,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -160,7 +160,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     log,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: null;
@@ -173,7 +173,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
 
     const jobStarted = Promise.withResolvers<void>();
@@ -182,19 +182,23 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        test: {
-          attemptHandler: async ({ signal }) => {
-            jobStarted.resolve();
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          test: {
+            attemptHandler: async ({ signal }) => {
+              jobStarted.resolve();
 
-            await sleep(5000, { signal });
+              await sleep(5000, { signal });
 
-            expect(signal.reason).toBe("not_found");
-            jobDeleted.resolve();
+              expect(signal.reason).toBe("not_found");
+              jobDeleted.resolve();
 
-            throw new Error();
+              throw new Error();
+            },
+            leaseConfig: { leaseMs: 1000, renewIntervalMs: 100 },
           },
-          leaseConfig: { leaseMs: 1000, renewIntervalMs: 100 },
         },
       }),
     });
@@ -243,7 +247,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     log,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       blocker: {
         entry: true;
         input: { value: number };
@@ -262,7 +266,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
 
     let blockerChain: JobChain<string, "blocker", { value: number }, { result: number }>;
@@ -350,7 +354,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     log,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       blocker: {
         entry: true;
         input: { value: number };
@@ -369,7 +373,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
 
     let blockerChain: JobChain<string, "blocker", { value: number }, { result: number }>;
@@ -415,7 +419,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     log,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       blocker: {
         entry: true;
         input: { value: number };
@@ -434,7 +438,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
 
     let blockerChain: JobChain<string, "blocker", { value: number }, { result: number }>;
@@ -480,7 +484,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     log,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       root: {
         entry: true;
         input: { label: string };
@@ -499,7 +503,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
 
     // A ← B ← C (C depends on B, B depends on A)
@@ -557,7 +561,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     log,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       root: {
         entry: true;
         input: { label: string };
@@ -582,7 +586,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
 
     //     D
@@ -652,7 +656,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     log,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: null;
@@ -665,7 +669,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -702,7 +706,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     log,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       shared: {
         entry: true;
         input: null;
@@ -721,7 +725,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
 
     // shared ← consumerA, shared ← consumerB
@@ -776,7 +780,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     log,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: null;
@@ -789,7 +793,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
 
     const jobStarted = Promise.withResolvers<void>();
@@ -798,20 +802,24 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        test: {
-          attemptHandler: async ({ complete }) => {
-            jobStarted.resolve();
-            await sleep(200);
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          test: {
+            attemptHandler: async ({ complete }) => {
+              jobStarted.resolve();
+              await sleep(200);
 
-            try {
-              return await complete(async () => null);
-            } catch (error) {
-              processThrown.resolve();
-              throw error;
-            }
+              try {
+                return await complete(async () => null);
+              } catch (error) {
+                processThrown.resolve();
+                throw error;
+              }
+            },
+            leaseConfig: { leaseMs: 100, renewIntervalMs: 10 },
           },
-          leaseConfig: { leaseMs: 100, renewIntervalMs: 10 },
         },
       }),
     });
@@ -865,7 +873,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     log,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { value: number };
@@ -878,7 +886,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
 
     const chains = await withTransactionHooks(async (transactionHooks) =>
@@ -927,7 +935,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     log,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       blocker: {
         entry: true;
         input: null;
@@ -946,7 +954,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
 
     const blocker = await withTransactionHooks(async (transactionHooks) =>
@@ -1009,7 +1017,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     log,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       root: {
         entry: true;
         input: { label: string };
@@ -1034,7 +1042,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
 
     //     D

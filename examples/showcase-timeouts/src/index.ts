@@ -97,48 +97,52 @@ const notifyAdapter = createInProcessNotifyAdapter();
 const client = await createClient({
   stateAdapter,
   notifyAdapter,
-  registry: jobTypeRegistry,
+  jobTypeRegistry,
 });
 
 const worker = await createInProcessWorker({
   client,
-  processorRegistry: createJobTypeProcessorRegistry(client, jobTypeRegistry, {
-    "fetch-with-timeout": {
-      attemptHandler: async ({ signal, job, complete }) => {
-        console.log(
-          `[fetch-with-timeout] Fetching ${job.input.url} (timeout: ${job.input.timeoutMs}ms)`,
-        );
+  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+    client,
+    jobTypeRegistry,
+    processors: {
+      "fetch-with-timeout": {
+        attemptHandler: async ({ signal, job, complete }) => {
+          console.log(
+            `[fetch-with-timeout] Fetching ${job.input.url} (timeout: ${job.input.timeoutMs}ms)`,
+          );
 
-        const timeout = AbortSignal.timeout(job.input.timeoutMs);
-        const combined = AbortSignal.any([signal, timeout]);
+          const timeout = AbortSignal.timeout(job.input.timeoutMs);
+          const combined = AbortSignal.any([signal, timeout]);
 
-        try {
-          const data = await simulatedFetch(job.input.url, combined, 300);
-          console.log(`  Fetch SUCCESS`);
-          return await complete(async () => ({ data }));
-        } catch (error) {
-          if (error instanceof DOMException && error.name === "AbortError") {
-            console.log(`  Fetch TIMED OUT`);
-            return complete(async () => ({ timedOut: true }));
+          try {
+            const data = await simulatedFetch(job.input.url, combined, 300);
+            console.log(`  Fetch SUCCESS`);
+            return await complete(async () => ({ data }));
+          } catch (error) {
+            if (error instanceof DOMException && error.name === "AbortError") {
+              console.log(`  Fetch TIMED OUT`);
+              return complete(async () => ({ timedOut: true }));
+            }
+            throw error;
           }
-          throw error;
-        }
+        },
       },
-    },
 
-    "long-running-job": {
-      // Configure shorter lease for demo (normally you'd use longer values)
-      leaseConfig: { leaseMs: 500, renewIntervalMs: 200 },
-      attemptHandler: async ({ job, complete }) => {
-        const attempt = job.attempt;
-        console.log(
-          `[long-running-job] Task ${job.input.taskId}, attempt ${attempt}, duration ${job.input.durationMs}ms`,
-        );
+      "long-running-job": {
+        // Configure shorter lease for demo (normally you'd use longer values)
+        leaseConfig: { leaseMs: 500, renewIntervalMs: 200 },
+        attemptHandler: async ({ job, complete }) => {
+          const attempt = job.attempt;
+          console.log(
+            `[long-running-job] Task ${job.input.taskId}, attempt ${attempt}, duration ${job.input.durationMs}ms`,
+          );
 
-        await new Promise((r) => setTimeout(r, job.input.durationMs));
+          await new Promise((r) => setTimeout(r, job.input.durationMs));
 
-        console.log(`  Task completed on attempt ${attempt}`);
-        return complete(async () => ({ completed: true, attempt }));
+          console.log(`  Task completed on attempt ${attempt}`);
+          return complete(async () => ({ completed: true, attempt }));
+        },
       },
     },
   }),

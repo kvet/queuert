@@ -39,7 +39,7 @@ it("should infer types correctly with custom ID", async ({ postgresConnectionStr
 
     const notifyAdapter = createInProcessNotifyAdapter();
     const log = vi.fn();
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { foo: string };
@@ -51,16 +51,20 @@ it("should infer types correctly with custom ID", async ({ postgresConnectionStr
       stateAdapter,
       notifyAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        test: {
-          attemptHandler: async ({ job, complete }) => {
-            expectTypeOf(job.id).toEqualTypeOf<`job.${UUID}`>();
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          test: {
+            attemptHandler: async ({ job, complete }) => {
+              expectTypeOf(job.id).toEqualTypeOf<`job.${UUID}`>();
 
-            return complete(async () => ({ bar: 42 }));
+              return complete(async () => ({ bar: 42 }));
+            },
           },
         },
       }),

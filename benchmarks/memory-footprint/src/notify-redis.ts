@@ -2,23 +2,23 @@
  * Redis Notify Adapter Memory Measurement
  */
 
-import { RedisContainer } from "@testcontainers/redis";
-import { createClient as createRedisClient } from "redis";
 import { type RedisNotifyProvider, createRedisNotifyAdapter } from "@queuert/redis";
-import { createInProcessStateAdapter } from "queuert/internal";
+import { RedisContainer } from "@testcontainers/redis";
 import {
   createClient,
   createInProcessWorker,
   createJobTypeProcessorRegistry,
   withTransactionHooks,
 } from "queuert";
+import { createInProcessStateAdapter } from "queuert/internal";
+import { createClient as createRedisClient } from "redis";
 import {
   diffMemory,
+  jobTypeRegistry,
   measureBaseline,
   measureMemory,
   printHeader,
   printSummary,
-  registry,
 } from "./utils.js";
 
 printHeader("REDIS NOTIFY ADAPTER");
@@ -72,14 +72,18 @@ const [beforeSetup, afterSetup, { qrtClient, stopWorker }] = await measureMemory
   const qrtClient = await createClient({
     stateAdapter,
     notifyAdapter,
-    registry,
+    jobTypeRegistry,
   });
 
   const qrtWorker = await createInProcessWorker({
     client: qrtClient,
-    processorRegistry: createJobTypeProcessorRegistry(qrtClient, registry, {
-      "test-job": {
-        attemptHandler: async ({ complete }) => complete(async () => ({ processed: true })),
+    jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      client: qrtClient,
+      jobTypeRegistry,
+      processors: {
+        "test-job": {
+          attemptHandler: async ({ complete }) => complete(async () => ({ processed: true })),
+        },
       },
     }),
   });

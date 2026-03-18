@@ -123,82 +123,86 @@ const notifyAdapter = createInProcessNotifyAdapter();
 const client = await createClient({
   stateAdapter,
   notifyAdapter,
-  registry: jobTypeRegistry,
+  jobTypeRegistry,
 });
 
 const worker = await createInProcessWorker({
   client,
-  processorRegistry: createJobTypeProcessorRegistry(client, jobTypeRegistry, {
-    "process-payment": {
-      attemptHandler: async ({ job, complete }) => {
-        console.log(
-          `[process-payment] Processing $${job.input.amount} for order ${job.input.orderId}`,
-        );
+  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+    client,
+    jobTypeRegistry,
+    processors: {
+      "process-payment": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(
+            `[process-payment] Processing $${job.input.amount} for order ${job.input.orderId}`,
+          );
 
-        if (job.input.amount > 1000) {
-          console.log(`  Payment FAILED: Amount exceeds limit`);
-          return complete(async () => ({ success: false, error: "Amount exceeds limit" }));
-        }
+          if (job.input.amount > 1000) {
+            console.log(`  Payment FAILED: Amount exceeds limit`);
+            return complete(async () => ({ success: false, error: "Amount exceeds limit" }));
+          }
 
-        console.log(`  Payment SUCCESS`);
-        return complete(async () => ({ success: true, transactionId: `txn_${Date.now()}` }));
+          console.log(`  Payment SUCCESS`);
+          return complete(async () => ({ success: true, transactionId: `txn_${Date.now()}` }));
+        },
       },
-    },
 
-    "charge-card": {
-      attemptHandler: async ({ job, complete }) => {
-        console.log(`[charge-card] Charging $${job.input.amount} for order ${job.input.orderId}`);
-        const chargeId = `ch_${Date.now()}`;
-        console.log(`  Charge successful: ${chargeId}`);
+      "charge-card": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(`[charge-card] Charging $${job.input.amount} for order ${job.input.orderId}`);
+          const chargeId = `ch_${Date.now()}`;
+          console.log(`  Charge successful: ${chargeId}`);
 
-        return complete(async ({ continueWith }) =>
-          continueWith({
-            typeName: "ship-order",
-            input: { orderId: job.input.orderId, chargeId },
-          }),
-        );
-      },
-    },
-
-    "ship-order": {
-      attemptHandler: async ({ job, complete }) => {
-        console.log(`[ship-order] Shipping order ${job.input.orderId}`);
-
-        if (shipmentShouldFail) {
-          console.log(`  Shipping FAILED - continuing to refund`);
           return complete(async ({ continueWith }) =>
             continueWith({
-              typeName: "refund-charge",
-              input: { chargeId: job.input.chargeId, reason: "shipping_failed" },
+              typeName: "ship-order",
+              input: { orderId: job.input.orderId, chargeId },
             }),
           );
-        }
-
-        console.log(`  Shipping SUCCESS`);
-        return complete(async () => ({ shipped: true }));
+        },
       },
-    },
 
-    "refund-charge": {
-      attemptHandler: async ({ job, complete }) => {
-        console.log(`[refund-charge] Refunding ${job.input.chargeId} (${job.input.reason})`);
-        const refundId = `rf_${Date.now()}`;
-        console.log(`  Refund successful: ${refundId}`);
-        return complete(async () => ({ refunded: true, refundId }));
+      "ship-order": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(`[ship-order] Shipping order ${job.input.orderId}`);
+
+          if (shipmentShouldFail) {
+            console.log(`  Shipping FAILED - continuing to refund`);
+            return complete(async ({ continueWith }) =>
+              continueWith({
+                typeName: "refund-charge",
+                input: { chargeId: job.input.chargeId, reason: "shipping_failed" },
+              }),
+            );
+          }
+
+          console.log(`  Shipping SUCCESS`);
+          return complete(async () => ({ shipped: true }));
+        },
       },
-    },
 
-    "call-rate-limited-api": {
-      attemptHandler: async ({ job, complete }) => {
-        console.log(`[call-rate-limited-api] Attempt ${job.attempt} to ${job.input.endpoint}`);
+      "refund-charge": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(`[refund-charge] Refunding ${job.input.chargeId} (${job.input.reason})`);
+          const refundId = `rf_${Date.now()}`;
+          console.log(`  Refund successful: ${refundId}`);
+          return complete(async () => ({ refunded: true, refundId }));
+        },
+      },
 
-        if (apiRateLimited && job.attempt < 3) {
-          console.log(`  Rate limited! Rescheduling in 100ms...`);
-          rescheduleJob({ afterMs: 100 });
-        }
+      "call-rate-limited-api": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(`[call-rate-limited-api] Attempt ${job.attempt} to ${job.input.endpoint}`);
 
-        console.log(`  API call SUCCESS`);
-        return complete(async () => ({ data: `Response from ${job.input.endpoint}` }));
+          if (apiRateLimited && job.attempt < 3) {
+            console.log(`  Rate limited! Rescheduling in 100ms...`);
+            rescheduleJob({ afterMs: 100 });
+          }
+
+          console.log(`  API call SUCCESS`);
+          return complete(async () => ({ data: `Response from ${job.input.endpoint}` }));
+        },
       },
     },
   }),

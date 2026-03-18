@@ -44,11 +44,15 @@ await withTransactionHooks(async (transactionHooks) =>
 // Access completed blockers in worker
 const worker = await createInProcessWorker({
   client,
-  processorRegistry: createJobTypeProcessorRegistry(client, jobTypeRegistry, {
-    "process-all": {
-      attemptHandler: async ({ job, complete }) => {
-        const results = job.blockers.map((b) => b.output.data);
-        return complete(() => ({ results }));
+  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+    client,
+    jobTypeRegistry,
+    processors: {
+      "process-all": {
+        attemptHandler: async ({ job, complete }) => {
+          const results = job.blockers.map((b) => b.output.data);
+          return complete(() => ({ results }));
+        },
       },
     },
   }),

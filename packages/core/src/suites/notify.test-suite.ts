@@ -19,7 +19,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     runInTransaction,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { value: number };
@@ -32,16 +32,20 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        test: {
-          attemptHandler: async ({ job, complete }) => {
-            await sleep(50);
-            return complete(async () => ({ result: job.input.value }));
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          test: {
+            attemptHandler: async ({ job, complete }) => {
+              await sleep(50);
+              return complete(async () => ({ result: job.input.value }));
+            },
           },
         },
       }),
@@ -76,7 +80,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     runInTransaction,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { value: number };
@@ -89,18 +93,22 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
 
     const createWorker = async () =>
       createInProcessWorker({
         client,
         concurrency: 1,
-        processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-          test: {
-            attemptHandler: async ({ job, complete }) => {
-              await sleep(50);
-              return complete(async () => ({ result: job.input.value }));
+        jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+          client,
+          jobTypeRegistry,
+          processors: {
+            test: {
+              attemptHandler: async ({ job, complete }) => {
+                await sleep(50);
+                return complete(async () => ({ result: job.input.value }));
+              },
             },
           },
         }),
@@ -144,7 +152,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     runInTransaction,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       blocker: {
         entry: true;
         input: null;
@@ -163,16 +171,20 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const worker1 = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        blocker: {
-          attemptHandler: async ({ complete }) => {
-            await sleep(25);
-            return complete(async () => ({ allowed: true }));
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          blocker: {
+            attemptHandler: async ({ complete }) => {
+              await sleep(25);
+              return complete(async () => ({ allowed: true }));
+            },
           },
         },
       }),
@@ -180,11 +192,15 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const worker2 = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        main: {
-          attemptHandler: async ({ complete }) => {
-            await sleep(25);
-            return complete(async () => ({ done: true }));
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          main: {
+            attemptHandler: async ({ complete }) => {
+              await sleep(25);
+              return complete(async () => ({ done: true }));
+            },
           },
         },
       }),
@@ -229,7 +245,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     runInTransaction,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       step1: {
         entry: true;
         input: null;
@@ -246,21 +262,25 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const worker1 = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        step1: {
-          attemptHandler: async ({ complete }) => {
-            await sleep(25);
-            return complete(async ({ continueWith }) =>
-              continueWith({
-                typeName: "step2",
-                input: null,
-              }),
-            );
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          step1: {
+            attemptHandler: async ({ complete }) => {
+              await sleep(25);
+              return complete(async ({ continueWith }) =>
+                continueWith({
+                  typeName: "step2",
+                  input: null,
+                }),
+              );
+            },
           },
         },
       }),
@@ -268,11 +288,15 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const worker2 = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        step2: {
-          attemptHandler: async ({ complete }) => {
-            await sleep(25);
-            return complete(async () => ({ finished: true }));
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          step2: {
+            attemptHandler: async ({ complete }) => {
+              await sleep(25);
+              return complete(async () => ({ finished: true }));
+            },
           },
         },
       }),
@@ -310,7 +334,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     runInTransaction,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: null;
@@ -323,7 +347,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
 
     const jobStarted = Promise.withResolvers<void>();
@@ -333,18 +357,22 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       client,
       workerId: "worker",
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        test: {
-          attemptHandler: async ({ signal, prepare }) => {
-            await prepare({ mode: "staged" });
-            jobStarted.resolve();
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          test: {
+            attemptHandler: async ({ signal, prepare }) => {
+              await prepare({ mode: "staged" });
+              jobStarted.resolve();
 
-            await sleep(1000, { signal });
-            expect(signal.aborted).toBe(true);
-            expect(signal.reason).toBe("already_completed");
-            jobCompleted.resolve();
+              await sleep(1000, { signal });
+              expect(signal.aborted).toBe(true);
+              expect(signal.reason).toBe("already_completed");
+              jobCompleted.resolve();
 
-            throw new Error();
+              throw new Error();
+            },
           },
         },
       }),
@@ -391,7 +419,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     runInTransaction,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: null;
@@ -404,7 +432,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
 
     const jobStarted = Promise.withResolvers<void>();
@@ -414,28 +442,32 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       createInProcessWorker({
         client,
         concurrency: 1,
-        processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-          test: {
-            attemptHandler: async ({ signal, job, prepare, complete }) => {
-              await prepare({ mode: "staged" });
+        jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+          client,
+          jobTypeRegistry,
+          processors: {
+            test: {
+              attemptHandler: async ({ signal, job, prepare, complete }) => {
+                await prepare({ mode: "staged" });
 
-              if (job.attempt > 1) {
-                await jobCompleted.promise;
-                await sleep(10);
+                if (job.attempt > 1) {
+                  await jobCompleted.promise;
+                  await sleep(10);
 
-                return complete(async () => ({ result: "recovered" }));
-              }
+                  return complete(async () => ({ result: "recovered" }));
+                }
 
-              jobStarted.resolve();
+                jobStarted.resolve();
 
-              await sleep(1000, { signal });
-              expect(signal.aborted).toBe(true);
-              expect(signal.reason).toBe("taken_by_another_worker");
-              jobCompleted.resolve();
+                await sleep(1000, { signal });
+                expect(signal.aborted).toBe(true);
+                expect(signal.reason).toBe("taken_by_another_worker");
+                jobCompleted.resolve();
 
-              throw new Error();
+                throw new Error();
+              },
+              leaseConfig: { leaseMs: 10, renewIntervalMs: 1000 },
             },
-            leaseConfig: { leaseMs: 10, renewIntervalMs: 1000 },
           },
         }),
       });

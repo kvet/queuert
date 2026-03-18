@@ -143,173 +143,181 @@ await sql`
 const client = await createClient({
   stateAdapter,
   notifyAdapter,
-  registry: jobTypeRegistry,
+  jobTypeRegistry,
 });
 
 const worker = await createInProcessWorker({
   client,
-  processorRegistry: createJobTypeProcessorRegistry(client, jobTypeRegistry, {
-    "create-subscription": {
-      attemptHandler: async ({ job, complete }) => {
-        console.log(`\n[create-subscription] Creating subscription for user ${job.input.userId}`);
+  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+    client,
+    jobTypeRegistry,
+    processors: {
+      "create-subscription": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(`\n[create-subscription] Creating subscription for user ${job.input.userId}`);
 
-        return complete(async ({ sql: txSql, continueWith }) => {
-          const [sub] = await txSql<{ id: number }[]>`
-            INSERT INTO subscriptions (user_id, plan_id, status)
-            VALUES (${job.input.userId}, ${job.input.planId}, 'pending')
-            RETURNING id
-          `;
-          console.log(`  Created subscription #${sub.id}`);
+          return complete(async ({ sql: txSql, continueWith }) => {
+            const [sub] = await txSql<{ id: number }[]>`
+              INSERT INTO subscriptions (user_id, plan_id, status)
+              VALUES (${job.input.userId}, ${job.input.planId}, 'pending')
+              RETURNING id
+            `;
+            console.log(`  Created subscription #${sub.id}`);
 
-          return continueWith({
-            typeName: "activate-trial",
-            input: { subscriptionId: sub.id, trialDays: TRIAL_DAYS },
-          });
-        });
-      },
-    },
-
-    "activate-trial": {
-      attemptHandler: async ({ job, complete }) => {
-        console.log(`\n[activate-trial] Activating ${job.input.trialDays}-day trial`);
-
-        return complete(async ({ sql: txSql, continueWith }) => {
-          const trialEndsAt = new Date(Date.now() + job.input.trialDays * 24 * 60 * 60 * 1000);
-          await txSql`
-            UPDATE subscriptions
-            SET status = 'trial', trial_ends_at = ${trialEndsAt.toISOString()}
-            WHERE id = ${job.input.subscriptionId}
-          `;
-          console.log(`  Trial activated until ${trialEndsAt.toISOString()}`);
-
-          return continueWith({
-            typeName: "trial-decision",
-            input: { subscriptionId: job.input.subscriptionId },
-          });
-        });
-      },
-    },
-
-    "trial-decision": {
-      attemptHandler: async ({ job, complete }) => {
-        console.log(
-          `\n[trial-decision] Evaluating trial for subscription #${job.input.subscriptionId}`,
-        );
-
-        const shouldConvert = userConverts;
-        console.log(`  User decision: ${shouldConvert ? "CONVERT to paid" : "LET EXPIRE"}`);
-
-        return complete(async ({ continueWith }) => {
-          if (shouldConvert) {
             return continueWith({
-              typeName: "convert-to-paid",
+              typeName: "activate-trial",
+              input: { subscriptionId: sub.id, trialDays: TRIAL_DAYS },
+            });
+          });
+        },
+      },
+
+      "activate-trial": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(`\n[activate-trial] Activating ${job.input.trialDays}-day trial`);
+
+          return complete(async ({ sql: txSql, continueWith }) => {
+            const trialEndsAt = new Date(Date.now() + job.input.trialDays * 24 * 60 * 60 * 1000);
+            await txSql`
+              UPDATE subscriptions
+              SET status = 'trial', trial_ends_at = ${trialEndsAt.toISOString()}
+              WHERE id = ${job.input.subscriptionId}
+            `;
+            console.log(`  Trial activated until ${trialEndsAt.toISOString()}`);
+
+            return continueWith({
+              typeName: "trial-decision",
               input: { subscriptionId: job.input.subscriptionId },
             });
-          } else {
-            return continueWith({
-              typeName: "expire-trial",
-              input: { subscriptionId: job.input.subscriptionId },
-            });
-          }
-        });
-      },
-    },
-
-    "expire-trial": {
-      attemptHandler: async ({ job, complete }) => {
-        console.log(`\n[expire-trial] Trial expired for subscription #${job.input.subscriptionId}`);
-
-        return complete(async ({ sql: txSql }) => {
-          await txSql`
-            UPDATE subscriptions
-            SET status = 'expired'
-            WHERE id = ${job.input.subscriptionId}
-          `;
-          const expiredAt = new Date().toISOString();
-          console.log(`  Subscription expired at ${expiredAt}`);
-
-          return { expiredAt };
-        });
-      },
-    },
-
-    "convert-to-paid": {
-      attemptHandler: async ({ job, complete }) => {
-        console.log(
-          `\n[convert-to-paid] Converting subscription #${job.input.subscriptionId} to paid`,
-        );
-
-        return complete(async ({ sql: txSql, continueWith }) => {
-          await txSql`
-            UPDATE subscriptions
-            SET status = 'active'
-            WHERE id = ${job.input.subscriptionId}
-          `;
-          console.log(`  Subscription is now active!`);
-
-          return continueWith({
-            typeName: "charge-billing",
-            input: { subscriptionId: job.input.subscriptionId, cycle: 1 },
           });
-        });
+        },
       },
-    },
 
-    "charge-billing": {
-      attemptHandler: async ({ job, complete }) => {
-        console.log(`\n[charge-billing] Processing cycle ${job.input.cycle}`);
+      "trial-decision": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(
+            `\n[trial-decision] Evaluating trial for subscription #${job.input.subscriptionId}`,
+          );
 
-        await new Promise((r) => setTimeout(r, 100));
-        console.log(`  Charged $${PRICE_PER_CYCLE} for cycle ${job.input.cycle}`);
+          const shouldConvert = userConverts;
+          console.log(`  User decision: ${shouldConvert ? "CONVERT to paid" : "LET EXPIRE"}`);
 
-        return complete(async ({ sql: txSql, continueWith }) => {
-          const [sub] = await txSql<{ total_charged: string }[]>`
-            UPDATE subscriptions
-            SET current_cycle = ${job.input.cycle},
-                total_charged = total_charged + ${PRICE_PER_CYCLE}
-            WHERE id = ${job.input.subscriptionId}
-            RETURNING total_charged
-          `;
+          return complete(async ({ continueWith }) => {
+            if (shouldConvert) {
+              return continueWith({
+                typeName: "convert-to-paid",
+                input: { subscriptionId: job.input.subscriptionId },
+              });
+            } else {
+              return continueWith({
+                typeName: "expire-trial",
+                input: { subscriptionId: job.input.subscriptionId },
+              });
+            }
+          });
+        },
+      },
 
-          const totalCharged = Number(sub.total_charged);
-          console.log(`  Total charged so far: $${totalCharged.toFixed(2)}`);
+      "expire-trial": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(
+            `\n[expire-trial] Trial expired for subscription #${job.input.subscriptionId}`,
+          );
 
-          if (job.input.cycle < MAX_BILLING_CYCLES) {
-            console.log(`  Scheduling next billing cycle...`);
+          return complete(async ({ sql: txSql }) => {
+            await txSql`
+              UPDATE subscriptions
+              SET status = 'expired'
+              WHERE id = ${job.input.subscriptionId}
+            `;
+            const expiredAt = new Date().toISOString();
+            console.log(`  Subscription expired at ${expiredAt}`);
+
+            return { expiredAt };
+          });
+        },
+      },
+
+      "convert-to-paid": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(
+            `\n[convert-to-paid] Converting subscription #${job.input.subscriptionId} to paid`,
+          );
+
+          return complete(async ({ sql: txSql, continueWith }) => {
+            await txSql`
+              UPDATE subscriptions
+              SET status = 'active'
+              WHERE id = ${job.input.subscriptionId}
+            `;
+            console.log(`  Subscription is now active!`);
+
             return continueWith({
               typeName: "charge-billing",
-              input: { subscriptionId: job.input.subscriptionId, cycle: job.input.cycle + 1 },
+              input: { subscriptionId: job.input.subscriptionId, cycle: 1 },
             });
-          } else {
-            console.log(`  Max cycles reached, cancelling subscription...`);
-            return continueWith({
-              typeName: "cancel-subscription",
-              input: {
-                subscriptionId: job.input.subscriptionId,
-                reason: "max_billing_cycles_reached",
-              },
-            });
-          }
-        });
+          });
+        },
       },
-    },
 
-    "cancel-subscription": {
-      attemptHandler: async ({ job, complete }) => {
-        console.log(`\n[cancel-subscription] Cancelling subscription #${job.input.subscriptionId}`);
-        console.log(`  Reason: ${job.input.reason}`);
+      "charge-billing": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(`\n[charge-billing] Processing cycle ${job.input.cycle}`);
 
-        return complete(async ({ sql: txSql }) => {
-          const cancelledAt = new Date().toISOString();
-          await txSql`
-            UPDATE subscriptions
-            SET status = 'cancelled', cancelled_at = ${cancelledAt}
-            WHERE id = ${job.input.subscriptionId}
-          `;
-          console.log(`  Subscription cancelled at ${cancelledAt}`);
+          await new Promise((r) => setTimeout(r, 100));
+          console.log(`  Charged $${PRICE_PER_CYCLE} for cycle ${job.input.cycle}`);
 
-          return { cancelledAt };
-        });
+          return complete(async ({ sql: txSql, continueWith }) => {
+            const [sub] = await txSql<{ total_charged: string }[]>`
+              UPDATE subscriptions
+              SET current_cycle = ${job.input.cycle},
+                  total_charged = total_charged + ${PRICE_PER_CYCLE}
+              WHERE id = ${job.input.subscriptionId}
+              RETURNING total_charged
+            `;
+
+            const totalCharged = Number(sub.total_charged);
+            console.log(`  Total charged so far: $${totalCharged.toFixed(2)}`);
+
+            if (job.input.cycle < MAX_BILLING_CYCLES) {
+              console.log(`  Scheduling next billing cycle...`);
+              return continueWith({
+                typeName: "charge-billing",
+                input: { subscriptionId: job.input.subscriptionId, cycle: job.input.cycle + 1 },
+              });
+            } else {
+              console.log(`  Max cycles reached, cancelling subscription...`);
+              return continueWith({
+                typeName: "cancel-subscription",
+                input: {
+                  subscriptionId: job.input.subscriptionId,
+                  reason: "max_billing_cycles_reached",
+                },
+              });
+            }
+          });
+        },
+      },
+
+      "cancel-subscription": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(
+            `\n[cancel-subscription] Cancelling subscription #${job.input.subscriptionId}`,
+          );
+          console.log(`  Reason: ${job.input.reason}`);
+
+          return complete(async ({ sql: txSql }) => {
+            const cancelledAt = new Date().toISOString();
+            await txSql`
+              UPDATE subscriptions
+              SET status = 'cancelled', cancelled_at = ${cancelledAt}
+              WHERE id = ${job.input.subscriptionId}
+            `;
+            console.log(`  Subscription cancelled at ${cancelledAt}`);
+
+            return { cancelledAt };
+          });
+        },
       },
     },
   }),

@@ -24,7 +24,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     log,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       "test-prepare-twice": {
         entry: true;
         input: null;
@@ -56,63 +56,67 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        "test-prepare-twice": {
-          attemptHandler: async ({ prepare, complete }) => {
-            await prepare({ mode: "atomic" });
-            await expect(prepare({ mode: "atomic" })).rejects.toThrow(
-              "Prepare can only be called once",
-            );
-            return complete(async () => null);
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          "test-prepare-twice": {
+            attemptHandler: async ({ prepare, complete }) => {
+              await prepare({ mode: "atomic" });
+              await expect(prepare({ mode: "atomic" })).rejects.toThrow(
+                "Prepare can only be called once",
+              );
+              return complete(async () => null);
+            },
           },
-        },
-        "test-complete-twice": {
-          attemptHandler: async ({ prepare, complete }) => {
-            await prepare({ mode: "atomic" });
-            const result = complete(async () => null);
-            await expect(complete(async () => null)).rejects.toThrow(
-              "Complete can only be called once",
-            );
-            return result;
+          "test-complete-twice": {
+            attemptHandler: async ({ prepare, complete }) => {
+              await prepare({ mode: "atomic" });
+              const result = complete(async () => null);
+              await expect(complete(async () => null)).rejects.toThrow(
+                "Complete can only be called once",
+              );
+              return result;
+            },
           },
-        },
-        "test-prepare-after-auto-setup": {
-          attemptHandler: async (options) => {
-            // Don't access prepare synchronously - auto-setup will run
-            // Use 50ms to ensure auto-setup completes before we continue
-            await sleep(50);
-            // Now try to access prepare after auto-setup
-            expect(() => options.prepare).toThrow("Prepare cannot be accessed after auto-setup");
-            return options.complete(async () => null);
+          "test-prepare-after-auto-setup": {
+            attemptHandler: async (options) => {
+              // Don't access prepare synchronously - auto-setup will run
+              // Use 50ms to ensure auto-setup completes before we continue
+              await sleep(50);
+              // Now try to access prepare after auto-setup
+              expect(() => options.prepare).toThrow("Prepare cannot be accessed after auto-setup");
+              return options.complete(async () => null);
+            },
           },
-        },
-        "test-continueWith-twice": {
-          attemptHandler: async ({ prepare, complete }) => {
-            await prepare({ mode: "atomic" });
-            return complete(async ({ continueWith }) => {
-              const continuation1 = await continueWith({
-                typeName: "test-next",
-                input: { value: 1 },
-              });
-              await expect(
-                continueWith({
+          "test-continueWith-twice": {
+            attemptHandler: async ({ prepare, complete }) => {
+              await prepare({ mode: "atomic" });
+              return complete(async ({ continueWith }) => {
+                const continuation1 = await continueWith({
                   typeName: "test-next",
-                  input: { value: 2 },
-                }),
-              ).rejects.toThrow("continueWith can only be called once");
-              return continuation1;
-            });
+                  input: { value: 1 },
+                });
+                await expect(
+                  continueWith({
+                    typeName: "test-next",
+                    input: { value: 2 },
+                  }),
+                ).rejects.toThrow("continueWith can only be called once");
+                return continuation1;
+              });
+            },
           },
-        },
-        "test-next": {
-          attemptHandler: async ({ job, prepare, complete }) => {
-            await prepare({ mode: "atomic" });
-            return complete(async () => ({ result: job.input.value }));
+          "test-next": {
+            attemptHandler: async ({ job, prepare, complete }) => {
+              await prepare({ mode: "atomic" });
+              return complete(async () => ({ result: job.input.value }));
+            },
           },
         },
       }),
@@ -169,7 +173,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     log,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: null;
@@ -184,43 +188,47 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processDefaults: {
+      jobTypeProcessorDefaults: {
         backoffConfig: {
           initialDelayMs: 1,
           multiplier: 1,
           maxDelayMs: 1,
         },
       },
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        test: {
-          attemptHandler: async ({ job, prepare, complete }) => {
-            attempts.push(job.attempt);
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          test: {
+            attemptHandler: async ({ job, prepare, complete }) => {
+              attempts.push(job.attempt);
 
-            expectTypeOf(job.attempt).toEqualTypeOf<number>();
-            expectTypeOf(job.lastAttemptAt).toEqualTypeOf<Date | null>();
-            expectTypeOf(job.lastAttemptError).toEqualTypeOf<string | null>();
+              expectTypeOf(job.attempt).toEqualTypeOf<number>();
+              expectTypeOf(job.lastAttemptAt).toEqualTypeOf<Date | null>();
+              expectTypeOf(job.lastAttemptError).toEqualTypeOf<string | null>();
 
-            expect(job.attempt).toBeGreaterThan(0);
-            if (job.attempt > 1) {
-              expect(job.lastAttemptAt).toBeInstanceOf(Date);
-              expect(job.lastAttemptError).toBe("Error: Simulated failure");
-            } else {
-              expect(job.lastAttemptAt).toBeNull();
-              expect(job.lastAttemptError).toBeNull();
-            }
+              expect(job.attempt).toBeGreaterThan(0);
+              if (job.attempt > 1) {
+                expect(job.lastAttemptAt).toBeInstanceOf(Date);
+                expect(job.lastAttemptError).toBe("Error: Simulated failure");
+              } else {
+                expect(job.lastAttemptAt).toBeNull();
+                expect(job.lastAttemptError).toBeNull();
+              }
 
-            if (job.attempt < 3) {
-              throw new Error("Simulated failure");
-            }
+              if (job.attempt < 3) {
+                throw new Error("Simulated failure");
+              }
 
-            await prepare({ mode: "atomic" });
+              await prepare({ mode: "atomic" });
 
-            return complete(async () => null);
+              return complete(async () => null);
+            },
           },
         },
       }),
@@ -252,7 +260,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     log,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: null;
@@ -267,30 +275,34 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processDefaults: {
+      jobTypeProcessorDefaults: {
         backoffConfig: {
           initialDelayMs: 10,
           multiplier: 2.0,
           maxDelayMs: 100,
         },
       },
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        test: {
-          attemptHandler: async ({ job, complete }) => {
-            if (job.lastAttemptError) {
-              errors.push(job.lastAttemptError);
-            }
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          test: {
+            attemptHandler: async ({ job, complete }) => {
+              if (job.lastAttemptError) {
+                errors.push(job.lastAttemptError);
+              }
 
-            if (job.attempt < 4) {
-              throw new Error("Unexpected error");
-            }
+              if (job.attempt < 4) {
+                throw new Error("Unexpected error");
+              }
 
-            return complete(async () => null);
+              return complete(async () => null);
+            },
           },
         },
       }),
@@ -326,7 +338,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     log,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { test: boolean };
@@ -339,50 +351,54 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client,
       workerId: "worker",
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        test: {
-          attemptHandler: async ({ job, prepare, complete }) => {
-            expectTypeOf(job.typeName).toEqualTypeOf<"test">();
-            expectTypeOf(job.input).toEqualTypeOf<{ test: boolean }>();
-            expectTypeOf(job.status).toEqualTypeOf<"running">();
-            expect(job.typeName).toBe("test");
-            expect(job.input).toEqual({ test: true });
-            expect(job.status).toBe("running");
-            expect(job.id).toBeDefined();
-            expect(job.chainId).toEqual(job.id);
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          test: {
+            attemptHandler: async ({ job, prepare, complete }) => {
+              expectTypeOf(job.typeName).toEqualTypeOf<"test">();
+              expectTypeOf(job.input).toEqualTypeOf<{ test: boolean }>();
+              expectTypeOf(job.status).toEqualTypeOf<"running">();
+              expect(job.typeName).toBe("test");
+              expect(job.input).toEqual({ test: true });
+              expect(job.status).toBe("running");
+              expect(job.id).toBeDefined();
+              expect(job.chainId).toEqual(job.id);
 
-            const result = await prepare({ mode: "staged" }, (txCtx) => {
-              expectTypeOf(txCtx).toEqualTypeOf<{ $test: true }>();
-              expect(txCtx).toBeDefined();
-
-              return "prepare";
-            });
-            expect(result).toEqual("prepare");
-
-            const completedJob = await complete(
-              async ({ continueWith: _, transactionHooks, ...txCtx }) => {
+              const result = await prepare({ mode: "staged" }, (txCtx) => {
                 expectTypeOf(txCtx).toEqualTypeOf<{ $test: true }>();
                 expect(txCtx).toBeDefined();
-                expect(transactionHooks).toBeDefined();
 
-                return { result: true };
-              },
-            );
-            expectTypeOf(completedJob.typeName).toEqualTypeOf<"test">();
-            expectTypeOf(completedJob.status).toEqualTypeOf<"completed">();
-            expect(completedJob.typeName).toBe("test");
-            expect(completedJob.status).toBe("completed");
-            if (completedJob.status === "completed") {
-              expectTypeOf(completedJob.completedBy).toEqualTypeOf<string | null>();
-              expect(completedJob.completedBy).toBe("worker");
-            }
-            return completedJob;
+                return "prepare";
+              });
+              expect(result).toEqual("prepare");
+
+              const completedJob = await complete(
+                async ({ continueWith: _, transactionHooks, ...txCtx }) => {
+                  expectTypeOf(txCtx).toEqualTypeOf<{ $test: true }>();
+                  expect(txCtx).toBeDefined();
+                  expect(transactionHooks).toBeDefined();
+
+                  return { result: true };
+                },
+              );
+              expectTypeOf(completedJob.typeName).toEqualTypeOf<"test">();
+              expectTypeOf(completedJob.status).toEqualTypeOf<"completed">();
+              expect(completedJob.typeName).toBe("test");
+              expect(completedJob.status).toBe("completed");
+              if (completedJob.status === "completed") {
+                expectTypeOf(completedJob.completedBy).toEqualTypeOf<string | null>();
+                expect(completedJob.completedBy).toBe("worker");
+              }
+              return completedJob;
+            },
           },
         },
       }),

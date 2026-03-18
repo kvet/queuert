@@ -120,79 +120,83 @@ await sql`INSERT INTO products (name, price, stock) VALUES ('Widget Pro', 99.99,
 const client = await createClient({
   stateAdapter,
   notifyAdapter,
-  registry: jobTypeRegistry,
+  jobTypeRegistry,
 });
 
 const worker = await createInProcessWorker({
   client,
-  processorRegistry: createJobTypeProcessorRegistry(client, jobTypeRegistry, {
-    "reserve-inventory": {
-      attemptHandler: async ({ job, complete }) => {
-        console.log(`\n[reserve-inventory] AUTO-SETUP ATOMIC mode`);
+  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+    client,
+    jobTypeRegistry,
+    processors: {
+      "reserve-inventory": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(`\n[reserve-inventory] AUTO-SETUP ATOMIC mode`);
 
-        return complete(async ({ sql: txSql, continueWith }) => {
-          console.log(`  Reading order, checking stock, and reserving...`);
-          const [order] = await txSql<{ quantity: number; stock: number; price: number }[]>`
-            SELECT o.quantity, p.stock, p.price
-            FROM orders o JOIN products p ON p.id = o.product_id
-            WHERE o.id = ${job.input.orderId}
-          `;
-          if (order.stock < order.quantity) {
-            throw new Error(`Insufficient stock: ${order.stock} < ${order.quantity}`);
-          }
-          await txSql`UPDATE products SET stock = stock - ${order.quantity} WHERE id = (SELECT product_id FROM orders WHERE id = ${job.input.orderId})`;
-          await txSql`UPDATE orders SET status = 'reserved' WHERE id = ${job.input.orderId}`;
-          console.log(`  Transaction committed!`);
+          return complete(async ({ sql: txSql, continueWith }) => {
+            console.log(`  Reading order, checking stock, and reserving...`);
+            const [order] = await txSql<{ quantity: number; stock: number; price: number }[]>`
+              SELECT o.quantity, p.stock, p.price
+              FROM orders o JOIN products p ON p.id = o.product_id
+              WHERE o.id = ${job.input.orderId}
+            `;
+            if (order.stock < order.quantity) {
+              throw new Error(`Insufficient stock: ${order.stock} < ${order.quantity}`);
+            }
+            await txSql`UPDATE products SET stock = stock - ${order.quantity} WHERE id = (SELECT product_id FROM orders WHERE id = ${job.input.orderId})`;
+            await txSql`UPDATE orders SET status = 'reserved' WHERE id = ${job.input.orderId}`;
+            console.log(`  Transaction committed!`);
 
-          return continueWith({
-            typeName: "charge-payment",
-            input: { orderId: job.input.orderId, amount: Number(order.price) * order.quantity },
+            return continueWith({
+              typeName: "charge-payment",
+              input: { orderId: job.input.orderId, amount: Number(order.price) * order.quantity },
+            });
           });
-        });
+        },
       },
-    },
 
-    "charge-payment": {
-      attemptHandler: async ({ job, prepare, complete }) => {
-        console.log(`\n[charge-payment] STAGED mode`);
+      "charge-payment": {
+        attemptHandler: async ({ job, prepare, complete }) => {
+          console.log(`\n[charge-payment] STAGED mode`);
 
-        const orderId = await prepare({ mode: "staged" }, async ({ sql: txSql }) => {
-          console.log(`  Loading order...`);
-          const [row] = await txSql<{ id: number; status: string }[]>`
-            SELECT id, status FROM orders WHERE id = ${job.input.orderId}
-          `;
-          if (row.status !== "reserved") throw new Error(`Invalid status: ${row.status}`);
-          return row.id;
-        });
-        console.log(`  Transaction closed, calling external API...`);
-
-        const { paymentId } = await chargePaymentAPI(job.input.amount);
-        console.log(`  Payment complete: ${paymentId}`);
-
-        return complete(async ({ sql: txSql, continueWith }) => {
-          console.log(`  Recording payment...`);
-          await txSql`UPDATE orders SET status = 'paid', payment_id = ${paymentId} WHERE id = ${orderId}`;
-          console.log(`  Transaction committed!`);
-
-          return continueWith({
-            typeName: "send-confirmation",
-            input: { orderId, paymentId },
+          const orderId = await prepare({ mode: "staged" }, async ({ sql: txSql }) => {
+            console.log(`  Loading order...`);
+            const [row] = await txSql<{ id: number; status: string }[]>`
+              SELECT id, status FROM orders WHERE id = ${job.input.orderId}
+            `;
+            if (row.status !== "reserved") throw new Error(`Invalid status: ${row.status}`);
+            return row.id;
           });
-        });
+          console.log(`  Transaction closed, calling external API...`);
+
+          const { paymentId } = await chargePaymentAPI(job.input.amount);
+          console.log(`  Payment complete: ${paymentId}`);
+
+          return complete(async ({ sql: txSql, continueWith }) => {
+            console.log(`  Recording payment...`);
+            await txSql`UPDATE orders SET status = 'paid', payment_id = ${paymentId} WHERE id = ${orderId}`;
+            console.log(`  Transaction committed!`);
+
+            return continueWith({
+              typeName: "send-confirmation",
+              input: { orderId, paymentId },
+            });
+          });
+        },
       },
-    },
 
-    "send-confirmation": {
-      attemptHandler: async ({ job, complete }) => {
-        console.log(`\n[send-confirmation] AUTO-SETUP STAGED mode`);
-        console.log(`  Sending confirmation for order ${job.input.orderId}...`);
+      "send-confirmation": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(`\n[send-confirmation] AUTO-SETUP STAGED mode`);
+          console.log(`  Sending confirmation for order ${job.input.orderId}...`);
 
-        await new Promise((r) => setTimeout(r, 100));
+          await new Promise((r) => setTimeout(r, 100));
 
-        return complete(async ({ sql: txSql }) => {
-          await txSql`UPDATE orders SET status = 'confirmed' WHERE id = ${job.input.orderId}`;
-          return { confirmedAt: new Date().toISOString() };
-        });
+          return complete(async ({ sql: txSql }) => {
+            await txSql`UPDATE orders SET status = 'confirmed' WHERE id = ${job.input.orderId}`;
+            return { confirmedAt: new Date().toISOString() };
+          });
+        },
       },
     },
   }),

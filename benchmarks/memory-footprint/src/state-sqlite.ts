@@ -2,26 +2,26 @@
  * SQLite State Adapter Memory Measurement
  */
 
-import Database from "better-sqlite3";
 import {
   type SqliteStateProvider,
   createAsyncLock,
   createSqliteStateAdapter,
 } from "@queuert/sqlite";
-import { createInProcessNotifyAdapter } from "queuert/internal";
+import Database from "better-sqlite3";
 import {
   createClient,
   createInProcessWorker,
   createJobTypeProcessorRegistry,
   withTransactionHooks,
 } from "queuert";
+import { createInProcessNotifyAdapter } from "queuert/internal";
 import {
   diffMemory,
+  jobTypeRegistry,
   measureBaseline,
   measureMemory,
   printHeader,
   printSummary,
-  registry,
 } from "./utils.js";
 
 printHeader("SQLITE STATE ADAPTER");
@@ -93,14 +93,18 @@ const [beforeSetup, afterSetup, { qrtClient, stopWorker }] = await measureMemory
   const qrtClient = await createClient({
     stateAdapter,
     notifyAdapter,
-    registry,
+    jobTypeRegistry,
   });
 
   const qrtWorker = await createInProcessWorker({
     client: qrtClient,
-    processorRegistry: createJobTypeProcessorRegistry(qrtClient, registry, {
-      "test-job": {
-        attemptHandler: async ({ complete }) => complete(async () => ({ processed: true })),
+    jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      client: qrtClient,
+      jobTypeRegistry,
+      processors: {
+        "test-job": {
+          attemptHandler: async ({ complete }) => complete(async () => ({ processed: true })),
+        },
       },
     }),
   });

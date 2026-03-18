@@ -24,7 +24,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     log,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       linear: {
         entry: true;
         input: { value: number };
@@ -45,66 +45,70 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        linear: {
-          attemptHandler: async ({ job, complete }) => {
-            expect(job.id).toEqual(jobChain.id);
-            expect(job.chainId).toEqual(jobChain.id);
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          linear: {
+            attemptHandler: async ({ job, complete }) => {
+              expect(job.id).toEqual(jobChain.id);
+              expect(job.chainId).toEqual(jobChain.id);
 
-            return complete(async ({ continueWith }) => {
-              expectTypeOf<
-                Parameters<typeof continueWith>[0]["typeName"]
-              >().toEqualTypeOf<"linear_next">();
+              return complete(async ({ continueWith }) => {
+                expectTypeOf<
+                  Parameters<typeof continueWith>[0]["typeName"]
+                >().toEqualTypeOf<"linear_next">();
 
-              const continuedJob = await continueWith({
-                typeName: "linear_next",
-                input: { valueNext: job.input.value + 1 },
+                const continuedJob = await continueWith({
+                  typeName: "linear_next",
+                  input: { valueNext: job.input.value + 1 },
+                });
+                expectTypeOf(continuedJob.typeName).toEqualTypeOf<"linear_next">();
+                expectTypeOf(continuedJob.status).toEqualTypeOf<"pending" | "blocked">();
+                expect(continuedJob.typeName).toBe("linear_next");
+                expect(continuedJob.status).toBeOneOf(["pending", "blocked"]);
+                expect(continuedJob.chainId).toEqual(jobChain.id);
+                return continuedJob;
               });
-              expectTypeOf(continuedJob.typeName).toEqualTypeOf<"linear_next">();
-              expectTypeOf(continuedJob.status).toEqualTypeOf<"pending" | "blocked">();
-              expect(continuedJob.typeName).toBe("linear_next");
-              expect(continuedJob.status).toBeOneOf(["pending", "blocked"]);
-              expect(continuedJob.chainId).toEqual(jobChain.id);
-              return continuedJob;
-            });
+            },
           },
-        },
-        linear_next: {
-          attemptHandler: async ({ job, complete }) => {
-            expect(job.id).not.toEqual(jobChain.id);
-            expect(job.chainId).toEqual(jobChain.id);
+          linear_next: {
+            attemptHandler: async ({ job, complete }) => {
+              expect(job.id).not.toEqual(jobChain.id);
+              expect(job.chainId).toEqual(jobChain.id);
 
-            return complete(async ({ continueWith }) => {
-              expectTypeOf<
-                Parameters<typeof continueWith>[0]["typeName"]
-              >().toEqualTypeOf<"linear_next_next">();
+              return complete(async ({ continueWith }) => {
+                expectTypeOf<
+                  Parameters<typeof continueWith>[0]["typeName"]
+                >().toEqualTypeOf<"linear_next_next">();
 
-              const continuedJob = await continueWith({
-                typeName: "linear_next_next",
-                input: { valueNextNext: job.input.valueNext + 1 },
+                const continuedJob = await continueWith({
+                  typeName: "linear_next_next",
+                  input: { valueNextNext: job.input.valueNext + 1 },
+                });
+                expectTypeOf(continuedJob.typeName).toEqualTypeOf<"linear_next_next">();
+                expectTypeOf(continuedJob.status).toEqualTypeOf<"pending" | "blocked">();
+                return continuedJob;
               });
-              expectTypeOf(continuedJob.typeName).toEqualTypeOf<"linear_next_next">();
-              expectTypeOf(continuedJob.status).toEqualTypeOf<"pending" | "blocked">();
-              return continuedJob;
-            });
+            },
           },
-        },
-        linear_next_next: {
-          attemptHandler: async ({ job, complete }) => {
-            expect(job.id).not.toEqual(jobChain.id);
-            expect(job.chainId).toEqual(jobChain.id);
+          linear_next_next: {
+            attemptHandler: async ({ job, complete }) => {
+              expect(job.id).not.toEqual(jobChain.id);
+              expect(job.chainId).toEqual(jobChain.id);
 
-            const result = await complete(async () => ({
-              result: job.input.valueNextNext,
-            }));
-            expectTypeOf(result.typeName).toEqualTypeOf<"linear_next_next">();
-            expectTypeOf(result.status).toEqualTypeOf<"completed">();
-            return result;
+              const result = await complete(async () => ({
+                result: job.input.valueNextNext,
+              }));
+              expectTypeOf(result.typeName).toEqualTypeOf<"linear_next_next">();
+              expectTypeOf(result.status).toEqualTypeOf<"completed">();
+              return result;
+            },
           },
         },
       }),
@@ -147,7 +151,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     log,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       main: {
         entry: true;
         input: { value: number };
@@ -168,41 +172,45 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        main: {
-          attemptHandler: async ({ job, prepare, complete }) => {
-            await prepare({ mode: "atomic" });
-            return complete(async ({ continueWith }) => {
-              expectTypeOf<Parameters<typeof continueWith>[0]["typeName"]>().toEqualTypeOf<
-                "branch1" | "branch2"
-              >();
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          main: {
+            attemptHandler: async ({ job, prepare, complete }) => {
+              await prepare({ mode: "atomic" });
+              return complete(async ({ continueWith }) => {
+                expectTypeOf<Parameters<typeof continueWith>[0]["typeName"]>().toEqualTypeOf<
+                  "branch1" | "branch2"
+                >();
 
-              return continueWith({
-                typeName: job.input.value % 2 === 0 ? "branch1" : "branch2",
-                input: { valueBranched: job.input.value },
+                return continueWith({
+                  typeName: job.input.value % 2 === 0 ? "branch1" : "branch2",
+                  input: { valueBranched: job.input.value },
+                });
               });
-            });
+            },
           },
-        },
-        branch1: {
-          attemptHandler: async ({ job, prepare, complete }) => {
-            await prepare({ mode: "atomic" });
-            return complete(async () => ({
-              result1: job.input.valueBranched,
-            }));
+          branch1: {
+            attemptHandler: async ({ job, prepare, complete }) => {
+              await prepare({ mode: "atomic" });
+              return complete(async () => ({
+                result1: job.input.valueBranched,
+              }));
+            },
           },
-        },
-        branch2: {
-          attemptHandler: async ({ job, prepare, complete }) => {
-            await prepare({ mode: "atomic" });
-            return complete(async () => ({
-              result2: job.input.valueBranched,
-            }));
+          branch2: {
+            attemptHandler: async ({ job, prepare, complete }) => {
+              await prepare({ mode: "atomic" });
+              return complete(async () => ({
+                result2: job.input.valueBranched,
+              }));
+            },
           },
         },
       }),
@@ -261,7 +269,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     log,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       loop: {
         entry: true;
         input: { counter: number };
@@ -275,27 +283,31 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        loop: {
-          attemptHandler: async ({ job, prepare, complete }) => {
-            await prepare({ mode: "atomic" });
-            return complete(async ({ continueWith }) => {
-              expectTypeOf<
-                Parameters<typeof continueWith>[0]["typeName"]
-              >().toEqualTypeOf<"loop">();
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          loop: {
+            attemptHandler: async ({ job, prepare, complete }) => {
+              await prepare({ mode: "atomic" });
+              return complete(async ({ continueWith }) => {
+                expectTypeOf<
+                  Parameters<typeof continueWith>[0]["typeName"]
+                >().toEqualTypeOf<"loop">();
 
-              return job.input.counter < 3
-                ? continueWith({
-                    typeName: "loop",
-                    input: { counter: job.input.counter + 1 },
-                  })
-                : { done: true };
-            });
+                return job.input.counter < 3
+                  ? continueWith({
+                      typeName: "loop",
+                      input: { counter: job.input.counter + 1 },
+                    })
+                  : { done: true };
+              });
+            },
           },
         },
       }),
@@ -330,7 +342,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     log,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       start: {
         entry: true;
         input: { value: number };
@@ -348,42 +360,48 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        start: {
-          attemptHandler: async ({ job, prepare, complete }) => {
-            await prepare({ mode: "atomic" });
-            return complete(async ({ continueWith }) => {
-              expectTypeOf<Parameters<typeof continueWith>[0]["typeName"]>().toEqualTypeOf<"end">();
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          start: {
+            attemptHandler: async ({ job, prepare, complete }) => {
+              await prepare({ mode: "atomic" });
+              return complete(async ({ continueWith }) => {
+                expectTypeOf<
+                  Parameters<typeof continueWith>[0]["typeName"]
+                >().toEqualTypeOf<"end">();
 
-              return continueWith({
-                typeName: "end",
-                input: { result: job.input.value + 1 },
-              });
-            });
-          },
-        },
-        end: {
-          attemptHandler: async ({ job, prepare, complete }) => {
-            await prepare({ mode: "atomic" });
-            return complete(async ({ continueWith }) => {
-              expectTypeOf<
-                Parameters<typeof continueWith>[0]["typeName"]
-              >().toEqualTypeOf<"start">();
-
-              if (job.input.result < 3) {
                 return continueWith({
-                  typeName: "start",
-                  input: { value: job.input.result },
+                  typeName: "end",
+                  input: { result: job.input.value + 1 },
                 });
-              } else {
-                return { finalResult: job.input.result };
-              }
-            });
+              });
+            },
+          },
+          end: {
+            attemptHandler: async ({ job, prepare, complete }) => {
+              await prepare({ mode: "atomic" });
+              return complete(async ({ continueWith }) => {
+                expectTypeOf<
+                  Parameters<typeof continueWith>[0]["typeName"]
+                >().toEqualTypeOf<"start">();
+
+                if (job.input.result < 3) {
+                  return continueWith({
+                    typeName: "start",
+                    input: { value: job.input.result },
+                  });
+                } else {
+                  return { finalResult: job.input.result };
+                }
+              });
+            },
           },
         },
       }),
@@ -420,7 +438,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     log,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       entryA: { entry: true; input: { fromA: true }; continueWith: { typeName: "shared" } };
       entryB: { entry: true; input: { fromB: true }; continueWith: { typeName: "shared" } };
       shared: { input: { data: number }; output: { done: true } };
@@ -431,38 +449,42 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        entryA: {
-          attemptHandler: async ({ job, complete }) => {
-            // Entry job's chainTypeName should match its own typeName
-            expectTypeOf(job.chainTypeName).toEqualTypeOf<"entryA">();
-            expect(job.chainTypeName).toBe("entryA");
-            return complete(async ({ continueWith }) =>
-              continueWith({ typeName: "shared", input: { data: 1 } }),
-            );
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          entryA: {
+            attemptHandler: async ({ job, complete }) => {
+              // Entry job's chainTypeName should match its own typeName
+              expectTypeOf(job.chainTypeName).toEqualTypeOf<"entryA">();
+              expect(job.chainTypeName).toBe("entryA");
+              return complete(async ({ continueWith }) =>
+                continueWith({ typeName: "shared", input: { data: 1 } }),
+              );
+            },
           },
-        },
-        entryB: {
-          attemptHandler: async ({ job, complete }) => {
-            // Entry job's chainTypeName should match its own typeName
-            expectTypeOf(job.chainTypeName).toEqualTypeOf<"entryB">();
-            expect(job.chainTypeName).toBe("entryB");
-            return complete(async ({ continueWith }) =>
-              continueWith({ typeName: "shared", input: { data: 2 } }),
-            );
+          entryB: {
+            attemptHandler: async ({ job, complete }) => {
+              // Entry job's chainTypeName should match its own typeName
+              expectTypeOf(job.chainTypeName).toEqualTypeOf<"entryB">();
+              expect(job.chainTypeName).toBe("entryB");
+              return complete(async ({ continueWith }) =>
+                continueWith({ typeName: "shared", input: { data: 2 } }),
+              );
+            },
           },
-        },
-        shared: {
-          attemptHandler: async ({ job, complete }) => {
-            // Shared job's chainTypeName should be union of both entry types
-            expectTypeOf(job.chainTypeName).toEqualTypeOf<"entryA" | "entryB">();
-            expect(["entryA", "entryB"]).toContain(job.chainTypeName);
-            return complete(async () => ({ done: true }));
+          shared: {
+            attemptHandler: async ({ job, complete }) => {
+              // Shared job's chainTypeName should be union of both entry types
+              expectTypeOf(job.chainTypeName).toEqualTypeOf<"entryA" | "entryB">();
+              expect(["entryA", "entryB"]).toContain(job.chainTypeName);
+              return complete(async () => ({ done: true }));
+            },
           },
         },
       }),
@@ -508,7 +530,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     log,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       parent: {
         entry: true;
         input: { value: number };
@@ -526,40 +548,44 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     let independentChainId: string | null = null;
 
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        parent: {
-          attemptHandler: async ({ job, complete }) => {
-            // Create an independent chain during job processing
-            const independentChain = await withTransactionHooks(async (transactionHooks) =>
-              runInTransaction(async (txCtx) =>
-                client.startJobChain({
-                  ...txCtx,
-                  transactionHooks,
-                  typeName: "independent",
-                  input: { fromParent: job.input.value },
-                }),
-              ),
-            );
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          parent: {
+            attemptHandler: async ({ job, complete }) => {
+              // Create an independent chain during job processing
+              const independentChain = await withTransactionHooks(async (transactionHooks) =>
+                runInTransaction(async (txCtx) =>
+                  client.startJobChain({
+                    ...txCtx,
+                    transactionHooks,
+                    typeName: "independent",
+                    input: { fromParent: job.input.value },
+                  }),
+                ),
+              );
 
-            independentChainId = independentChain.id;
+              independentChainId = independentChain.id;
 
-            return complete(async () => ({
-              childChainId: independentChain.id,
-            }));
+              return complete(async () => ({
+                childChainId: independentChain.id,
+              }));
+            },
           },
-        },
-        independent: {
-          attemptHandler: async ({ job, complete }) => {
-            return complete(async () => ({
-              result: job.input.fromParent * 2,
-            }));
+          independent: {
+            attemptHandler: async ({ job, complete }) => {
+              return complete(async () => ({
+                result: job.input.fromParent * 2,
+              }));
+            },
           },
         },
       }),

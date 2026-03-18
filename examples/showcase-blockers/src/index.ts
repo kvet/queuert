@@ -108,64 +108,68 @@ const notifyAdapter = createInProcessNotifyAdapter();
 const client = await createClient({
   stateAdapter,
   notifyAdapter,
-  registry: jobTypeRegistry,
+  jobTypeRegistry,
 });
 
 const worker = await createInProcessWorker({
   client,
-  processorRegistry: createJobTypeProcessorRegistry(client, jobTypeRegistry, {
-    "fetch-source": {
-      attemptHandler: async ({ job, complete }) => {
-        console.log(`[fetch-source] Fetching ${job.input.sourceId}...`);
-        await new Promise((r) => setTimeout(r, 100));
-        return complete(async () => ({
-          sourceId: job.input.sourceId,
-          data: `Data from ${job.input.sourceId}`,
-        }));
+  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+    client,
+    jobTypeRegistry,
+    processors: {
+      "fetch-source": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(`[fetch-source] Fetching ${job.input.sourceId}...`);
+          await new Promise((r) => setTimeout(r, 100));
+          return complete(async () => ({
+            sourceId: job.input.sourceId,
+            data: `Data from ${job.input.sourceId}`,
+          }));
+        },
       },
-    },
 
-    "aggregate-data": {
-      attemptHandler: async ({ job, complete }) => {
-        console.log(`[aggregate-data] Aggregating ${job.blockers.length} sources`);
+      "aggregate-data": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(`[aggregate-data] Aggregating ${job.blockers.length} sources`);
 
-        for (const blocker of job.blockers) {
-          console.log(`  - ${blocker.output.sourceId}: "${blocker.output.data}"`);
-        }
+          for (const blocker of job.blockers) {
+            console.log(`  - ${blocker.output.sourceId}: "${blocker.output.data}"`);
+          }
 
-        return complete(async () => ({
-          reportId: job.input.reportId,
-          totalSources: job.blockers.length,
-          combinedData: job.blockers.map((b) => b.output.data).join(" | "),
-        }));
+          return complete(async () => ({
+            reportId: job.input.reportId,
+            totalSources: job.blockers.length,
+            combinedData: job.blockers.map((b) => b.output.data).join(" | "),
+          }));
+        },
       },
-    },
 
-    "validate-user": {
-      attemptHandler: async ({ job, complete }) => {
-        console.log(`[validate-user] Validating ${job.input.userId}`);
-        return complete(async () => ({ userId: job.input.userId, role: "admin" }));
+      "validate-user": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(`[validate-user] Validating ${job.input.userId}`);
+          return complete(async () => ({ userId: job.input.userId, role: "admin" }));
+        },
       },
-    },
 
-    "load-config": {
-      attemptHandler: async ({ job, complete }) => {
-        console.log(`[load-config] Loading ${job.input.configKey}`);
-        return complete(async () => ({ configKey: job.input.configKey, value: "production" }));
+      "load-config": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(`[load-config] Loading ${job.input.configKey}`);
+          return complete(async () => ({ configKey: job.input.configKey, value: "production" }));
+        },
       },
-    },
 
-    "perform-action": {
-      attemptHandler: async ({ job, complete }) => {
-        const [userBlocker, configBlocker] = job.blockers;
-        console.log(
-          `[perform-action] User: ${userBlocker.output.role}, Config: ${configBlocker.output.value}`,
-        );
+      "perform-action": {
+        attemptHandler: async ({ job, complete }) => {
+          const [userBlocker, configBlocker] = job.blockers;
+          console.log(
+            `[perform-action] User: ${userBlocker.output.role}, Config: ${configBlocker.output.value}`,
+          );
 
-        return complete(async () => ({
-          actionId: job.input.actionId,
-          result: `Completed by ${userBlocker.output.role} with ${configBlocker.output.value}`,
-        }));
+          return complete(async () => ({
+            actionId: job.input.actionId,
+            result: `Completed by ${userBlocker.output.role} with ${configBlocker.output.value}`,
+          }));
+        },
       },
     },
   }),

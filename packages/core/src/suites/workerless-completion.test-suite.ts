@@ -24,7 +24,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     log,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { value: number };
@@ -37,7 +37,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -84,7 +84,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     log,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       "awaiting-approval": {
         entry: true;
         input: { requestId: string };
@@ -101,7 +101,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -153,7 +153,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     log,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       "awaiting-approval": {
         entry: true;
         input: { requestId: string };
@@ -170,16 +170,20 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        "process-approved": {
-          attemptHandler: async ({ prepare, complete }) => {
-            await prepare({ mode: "atomic" });
-            return complete(async () => ({ done: true }));
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          "process-approved": {
+            attemptHandler: async ({ prepare, complete }) => {
+              await prepare({ mode: "atomic" });
+              return complete(async () => ({ done: true }));
+            },
           },
         },
       }),
@@ -236,7 +240,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     log,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: null;
@@ -249,7 +253,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -302,7 +306,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     log,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: { value: number };
@@ -315,7 +319,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -366,7 +370,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     const jobCompleted = Promise.withResolvers<void>();
     const processCompleted = Promise.withResolvers<void>();
 
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: null;
@@ -379,29 +383,33 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
     const worker = await createInProcessWorker({
       client,
       workerId: "worker",
       concurrency: 1,
-      processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-        test: {
-          attemptHandler: async ({ signal, complete }) => {
-            jobStarted.resolve();
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          test: {
+            attemptHandler: async ({ signal, complete }) => {
+              jobStarted.resolve();
 
-            await jobCompleted.promise;
+              await jobCompleted.promise;
 
-            try {
-              await expect(complete(async () => ({ result: "from-worker" }))).rejects.toThrow();
+              try {
+                await expect(complete(async () => ({ result: "from-worker" }))).rejects.toThrow();
 
-              expect(signal.aborted).toBe(true);
-              expect(signal.reason).toBe("already_completed");
+                expect(signal.aborted).toBe(true);
+                expect(signal.reason).toBe("already_completed");
 
-              throw new Error();
-            } finally {
-              processCompleted.resolve();
-            }
+                throw new Error();
+              } finally {
+                processCompleted.resolve();
+              }
+            },
           },
         },
       }),
@@ -449,7 +457,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     log,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       entryA: { entry: true; input: null; continueWith: { typeName: "shared" } };
       entryB: { entry: true; input: null; continueWith: { typeName: "shared" } };
       shared: { input: null; output: { done: boolean } };
@@ -460,7 +468,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -504,7 +512,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     log,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       order: { entry: true; input: { amount: number }; output: { receipt: string } };
       notification: { entry: true; input: { message: string }; output: { sent: boolean } };
     }>();
@@ -514,7 +522,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -551,7 +559,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     log,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       order: { entry: true; input: { amount: number }; output: { receipt: string } };
       notification: { entry: true; input: { message: string }; output: { sent: boolean } };
     }>();
@@ -561,7 +569,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>

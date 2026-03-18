@@ -81,7 +81,9 @@ type MergedProcessorNavigation<T extends readonly JobTypeProcessorRegistry[]> = 
  * @example
  * const worker = await createInProcessWorker({
  *   client,
- *   processorRegistry: mergeJobTypeProcessorRegistries(orderProcessorRegistry, notificationProcessorRegistry),
+ *   jobTypeProcessorRegistry: mergeJobTypeProcessorRegistries({
+ *     slices: [orderJobTypeProcessorRegistry, notificationJobTypeProcessorRegistry],
+ *   }),
  * });
  */
 export const mergeJobTypeProcessorRegistries = <
@@ -90,16 +92,16 @@ export const mergeJobTypeProcessorRegistries = <
     JobTypeProcessorRegistry,
     ...JobTypeProcessorRegistry[],
   ],
->(
-  ...slices: TSlices
-): JobTypeProcessorRegistry<
+>(options: {
+  slices: TSlices;
+}): JobTypeProcessorRegistry<
   MergedDefinitions<TSlices> & BaseJobTypeDefinitions,
   MergedExternalDefinitions<TSlices> & BaseJobTypeDefinitions,
   MergedProcessorNavigation<TSlices>
 > => {
   const seen = new Set<string>();
   const duplicates: string[] = [];
-  for (const slice of slices as unknown as object[]) {
+  for (const slice of options.slices as unknown as object[]) {
     for (const key of Object.keys(slice)) {
       if (seen.has(key)) {
         duplicates.push(key);
@@ -112,7 +114,7 @@ export const mergeJobTypeProcessorRegistries = <
       duplicateTypeNames: duplicates,
     });
   }
-  return Object.assign({}, ...(slices as unknown as object[]), {
+  return Object.assign({}, ...(options.slices as unknown as object[]), {
     [processorDefinitionsSymbol]: undefined as unknown as MergedDefinitions<TSlices> &
       BaseJobTypeDefinitions,
     [processorExternalDefinitionsSymbol]:

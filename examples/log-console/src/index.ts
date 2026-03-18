@@ -9,7 +9,7 @@ import {
 import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
 
 // 1. Define job types
-const registry = defineJobTypeRegistry<{
+const jobTypeRegistry = defineJobTypeRegistry<{
   greet: {
     entry: true;
     input: { name: string };
@@ -31,34 +31,38 @@ const qrtClient = await createClient({
   stateAdapter,
   notifyAdapter,
   log,
-  registry,
+  jobTypeRegistry,
 });
 
 // 3. Create and start worker
 const qrtWorker = await createInProcessWorker({
   client: qrtClient,
   workerId: "worker-1",
-  processorRegistry: createJobTypeProcessorRegistry(qrtClient, registry, {
-    greet: {
-      attemptHandler: async ({ job, complete }) => {
-        console.log(`[app] Processing greeting for ${job.input.name}`);
+  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+    client: qrtClient,
+    jobTypeRegistry,
+    processors: {
+      greet: {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(`[app] Processing greeting for ${job.input.name}`);
 
-        return complete(async () => ({
-          greeting: `Hello, ${job.input.name}!`,
-        }));
+          return complete(async () => ({
+            greeting: `Hello, ${job.input.name}!`,
+          }));
+        },
       },
-    },
-    "might-fail": {
-      attemptHandler: async ({ job, complete }) => {
-        console.log("[app] Processing might-fail job");
+      "might-fail": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log("[app] Processing might-fail job");
 
-        if (job.input.shouldFail && job.attempt < 2) {
-          throw new Error("Simulated failure for demonstration");
-        }
+          if (job.input.shouldFail && job.attempt < 2) {
+            throw new Error("Simulated failure for demonstration");
+          }
 
-        return complete(async () => ({ success: true as const }));
+          return complete(async () => ({ success: true as const }));
+        },
+        backoffConfig: { initialDelayMs: 100, maxDelayMs: 100 },
       },
-      backoffConfig: { initialDelayMs: 100, maxDelayMs: 100 },
     },
   }),
 });

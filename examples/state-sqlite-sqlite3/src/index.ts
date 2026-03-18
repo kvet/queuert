@@ -57,7 +57,7 @@ await promisify.exec(
 );
 
 // 3. Define job types
-const registry = defineJobTypeRegistry<{
+const jobTypeRegistry = defineJobTypeRegistry<{
   send_welcome_email: {
     entry: true;
     input: { userId: number; email: string; name: string };
@@ -107,21 +107,25 @@ const notifyAdapter = createInProcessNotifyAdapter();
 const qrtClient = await createClient({
   stateAdapter,
   notifyAdapter,
-  registry,
+  jobTypeRegistry,
 });
 
 // 7. Create and start qrtWorker
 const qrtWorker = await createInProcessWorker({
   client: qrtClient,
-  processorRegistry: createJobTypeProcessorRegistry(qrtClient, registry, {
-    send_welcome_email: {
-      attemptHandler: async ({ job, complete }) => {
-        // Simulate sending email (in real app, call email service here)
-        console.log(`Sending welcome email to ${job.input.email} for ${job.input.name}`);
+  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+    client: qrtClient,
+    jobTypeRegistry,
+    processors: {
+      send_welcome_email: {
+        attemptHandler: async ({ job, complete }) => {
+          // Simulate sending email (in real app, call email service here)
+          console.log(`Sending welcome email to ${job.input.email} for ${job.input.name}`);
 
-        return complete(async () => ({
-          sentAt: new Date().toISOString(),
-        }));
+          return complete(async () => ({
+            sentAt: new Date().toISOString(),
+          }));
+        },
       },
     },
   }),

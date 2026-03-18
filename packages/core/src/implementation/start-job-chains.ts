@@ -29,7 +29,7 @@ export const startJobChains = async (
   if (chains.length === 0) return [];
 
   for (const chain of chains) {
-    helpers.registry.validateEntry(chain.typeName);
+    helpers.jobTypeRegistry.validateEntry(chain.typeName);
   }
 
   const results = await createStateJobs(helpers, {

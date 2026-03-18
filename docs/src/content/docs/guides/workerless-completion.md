@@ -34,14 +34,18 @@ const chain = await withTransactionHooks(async (transactionHooks) =>
 // The worker handles the timeout case (auto-reject) and processes approved requests
 const worker = await createInProcessWorker({
   client,
-  processorRegistry: createJobTypeProcessorRegistry(client, jobTypeRegistry, {
-    "await-approval": {
-      attemptHandler: async ({ complete }) => complete(() => ({ rejected: true })),
-    },
-    "process-request": {
-      attemptHandler: async ({ job, complete }) => {
-        await doSomethingWith(job.input.requestId);
-        return complete(() => ({ processed: true }));
+  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+    client,
+    jobTypeRegistry,
+    processors: {
+      "await-approval": {
+        attemptHandler: async ({ complete }) => complete(() => ({ rejected: true })),
+      },
+      "process-request": {
+        attemptHandler: async ({ job, complete }) => {
+          await doSomethingWith(job.input.requestId);
+          return complete(() => ({ processed: true }));
+        },
       },
     },
   }),

@@ -11,7 +11,7 @@ import {
 
 export const JOB_COUNT = 10_000;
 
-export const registry = defineJobTypeRegistry<{
+export const jobTypeRegistry = defineJobTypeRegistry<{
   "test-job": {
     entry: true;
     input: { index: number };
@@ -53,15 +53,19 @@ export const runBenchmark = async ({
   const client: Client<any, any> = await createClient({
     stateAdapter,
     notifyAdapter,
-    registry,
+    jobTypeRegistry,
   });
 
   const worker = await createInProcessWorker({
     client,
     concurrency,
-    processorRegistry: createJobTypeProcessorRegistry(client, registry, {
-      "test-job": {
-        attemptHandler: async ({ complete }) => complete(async () => ({ done: true as const })),
+    jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      client,
+      jobTypeRegistry,
+      processors: {
+        "test-job": {
+          attemptHandler: async ({ complete }) => complete(async () => ({ done: true as const })),
+        },
       },
     }),
   });

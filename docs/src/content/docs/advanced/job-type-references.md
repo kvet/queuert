@@ -135,13 +135,17 @@ const jobTypeRegistry = defineJobTypeRegistry<{
   };
 }>();
 
-const processorRegistry = createJobTypeProcessorRegistry(client, jobTypeRegistry, {
-  process: {
-    attemptHandler: async ({ job, complete }) => {
-      const [auth, validate] = job.blockers;
-      // auth.output is { userId: string }
-      // validate.output is { valid: boolean }
-      return complete(() => ({ done: auth.output.userId !== "" && validate.output.valid }));
+const jobTypeProcessorRegistry = createJobTypeProcessorRegistry({
+  client,
+  jobTypeRegistry,
+  processors: {
+    process: {
+      attemptHandler: async ({ job, complete }) => {
+        const [auth, validate] = job.blockers;
+        // auth.output is { userId: string }
+        // validate.output is { valid: boolean }
+        return complete(() => ({ done: auth.output.userId !== "" && validate.output.valid }));
+      },
     },
   },
 });

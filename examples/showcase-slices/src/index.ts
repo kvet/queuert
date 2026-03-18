@@ -18,15 +18,14 @@ import {
 
 import { type DbContext, sql, stopContainer } from "./adapters.js";
 import { client } from "./client.js";
-import { notificationProcessorRegistry } from "./slice-notifications-processors.js";
-import { orderProcessorRegistry } from "./slice-orders-processors.js";
+import { notificationJobTypeProcessorRegistry } from "./slice-notifications-processors.js";
+import { orderJobTypeProcessorRegistry } from "./slice-orders-processors.js";
 
 const worker = await createInProcessWorker({
   client,
-  processorRegistry: mergeJobTypeProcessorRegistries(
-    orderProcessorRegistry,
-    notificationProcessorRegistry,
-  ),
+  jobTypeProcessorRegistry: mergeJobTypeProcessorRegistries({
+    slices: [orderJobTypeProcessorRegistry, notificationJobTypeProcessorRegistry],
+  }),
 });
 
 const stopWorker = await worker.start();

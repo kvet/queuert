@@ -97,7 +97,7 @@ type InferZodJobTypes<T extends Record<string, ZodJobTypeSchema>> = {
  * in JobTypeValidationError with the appropriate error code.
  *
  * @example
- * const registry = createZodJobTypeRegistry({
+ * const jobTypeRegistry = createZodJobTypeRegistry({
  *   "process-data": {
  *     entry: true,
  *     input: z.object({ dataId: z.string() }),

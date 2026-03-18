@@ -94,7 +94,7 @@ type InferArkTypeJobTypes<T extends Record<string, ArkTypeJobTypeSchema>> = {
  * in JobTypeValidationError with the appropriate error code.
  *
  * @example
- * const registry = createArkTypeJobTypeRegistry({
+ * const jobTypeRegistry = createArkTypeJobTypeRegistry({
  *   "process-data": {
  *     entry: true,
  *     input: type({ dataId: "string" }),

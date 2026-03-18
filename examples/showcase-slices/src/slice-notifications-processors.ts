@@ -2,10 +2,10 @@ import { createJobTypeProcessorRegistry } from "queuert";
 import { client } from "./client.js";
 import { notificationJobTypeRegistry } from "./slice-notifications-definitions.js";
 
-export const notificationProcessorRegistry = createJobTypeProcessorRegistry(
+export const notificationJobTypeProcessorRegistry = createJobTypeProcessorRegistry({
   client,
-  notificationJobTypeRegistry,
-  {
+  jobTypeRegistry: notificationJobTypeRegistry,
+  processors: {
     "notifications.send-notification": {
       attemptHandler: async ({ job, complete }) => {
         console.log(
@@ -18,4 +18,4 @@ export const notificationProcessorRegistry = createJobTypeProcessorRegistry(
       },
     },
   },
-);
+});

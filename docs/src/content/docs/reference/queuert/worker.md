@@ -13,8 +13,8 @@ const worker = await createInProcessWorker({
   workerId?: string,
   concurrency?: number,
   backoffConfig?: BackoffConfig,
-  processDefaults?: InProcessWorkerProcessDefaults,
-  processorRegistry: JobTypeProcessorRegistry,
+  jobTypeProcessorDefaults?: JobTypeProcessorDefaults,
+  jobTypeProcessorRegistry: JobTypeProcessorRegistry,
 });
 ```
 
@@ -24,8 +24,8 @@ Returns `Promise<InProcessWorker>`.
 - **workerId** -- unique identifier for this worker (default: random UUID)
 - **concurrency** -- maximum number of jobs to process in parallel (default: 1)
 - **backoffConfig** -- recovery backoff for the worker loop itself, not individual job retries
-- **processDefaults** -- default configuration applied to all job types
-- **processorRegistry** -- a `JobTypeProcessorRegistry` from `createJobTypeProcessorRegistry` or `mergeJobTypeProcessorRegistries`. The registry's definitions must be a subset of the client's registry definitions.
+- **jobTypeProcessorDefaults** -- default configuration applied to all job types
+- **jobTypeProcessorRegistry** -- a `JobTypeProcessorRegistry` from `createJobTypeProcessorRegistry` or `mergeJobTypeProcessorRegistries`. The registry's definitions must be a subset of the client's registry definitions.
 
 ## InProcessWorker
 
@@ -37,12 +37,12 @@ type InProcessWorker = {
 
 Call `start()` to begin processing. It returns a `stop` function for graceful shutdown -- signals the worker to stop spawning new jobs, waits for in-flight jobs to finish, then resolves.
 
-## InProcessWorkerProcessDefaults
+## JobTypeProcessorDefaults
 
 Default configuration applied to all job types unless overridden per-processor.
 
 ```typescript
-type InProcessWorkerProcessDefaults = {
+type JobTypeProcessorDefaults = {
   pollIntervalMs?: number;
   backoffConfig?: BackoffConfig;
   leaseConfig?: LeaseConfig;
@@ -57,7 +57,7 @@ type InProcessWorkerProcessDefaults = {
 
 ## InProcessWorkerProcessor
 
-Configuration for processing a single job type. Overrides `processDefaults` for `backoffConfig` and `leaseConfig`.
+Configuration for processing a single job type. Overrides `jobTypeProcessorDefaults` for `backoffConfig` and `leaseConfig`.
 
 ```typescript
 type InProcessWorkerProcessor = {

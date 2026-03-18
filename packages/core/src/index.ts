@@ -67,7 +67,7 @@ export { type RetryConfig } from "./helpers/retry.js";
 export {
   createInProcessWorker,
   type InProcessWorker,
-  type InProcessWorkerProcessDefaults,
+  type JobTypeProcessorDefaults,
 } from "./in-process-worker.js";
 export { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 export { createConsoleLog } from "./observability-adapter/log.console.js";

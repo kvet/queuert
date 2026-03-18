@@ -2,23 +2,23 @@
  * PostgreSQL State Adapter Memory Measurement
  */
 
+import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import postgres from "postgres";
-import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
-import { createInProcessNotifyAdapter } from "queuert/internal";
 import {
   createClient,
   createInProcessWorker,
   createJobTypeProcessorRegistry,
   withTransactionHooks,
 } from "queuert";
+import { createInProcessNotifyAdapter } from "queuert/internal";
 import {
   diffMemory,
+  jobTypeRegistry,
   measureBaseline,
   measureMemory,
   printHeader,
   printSummary,
-  registry,
 } from "./utils.js";
 
 printHeader("POSTGRESQL STATE ADAPTER");
@@ -68,14 +68,18 @@ const [beforeSetup, afterSetup, { qrtClient, stopWorker }] = await measureMemory
   const qrtClient = await createClient({
     stateAdapter,
     notifyAdapter,
-    registry,
+    jobTypeRegistry,
   });
 
   const qrtWorker = await createInProcessWorker({
     client: qrtClient,
-    processorRegistry: createJobTypeProcessorRegistry(qrtClient, registry, {
-      "test-job": {
-        attemptHandler: async ({ complete }) => complete(async () => ({ processed: true })),
+    jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      client: qrtClient,
+      jobTypeRegistry,
+      processors: {
+        "test-job": {
+          attemptHandler: async ({ complete }) => complete(async () => ({ processed: true })),
+        },
       },
     }),
   });

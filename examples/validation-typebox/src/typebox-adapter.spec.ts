@@ -15,7 +15,7 @@ import { createTypeBoxJobTypeRegistry } from "./typebox-adapter.js";
 describe("createTypeBoxJobTypeRegistry", () => {
   describe("getTypeNames", () => {
     it("returns all registered type names", () => {
-      const registry = createTypeBoxJobTypeRegistry({
+      const jobTypeRegistry = createTypeBoxJobTypeRegistry({
         "job-a": {
           entry: true,
           input: Type.Object({ id: Type.String() }),
@@ -27,13 +27,13 @@ describe("createTypeBoxJobTypeRegistry", () => {
         },
       });
 
-      expect(registry.getTypeNames()).toEqual(["job-a", "job-b"]);
+      expect(jobTypeRegistry.getTypeNames()).toEqual(["job-a", "job-b"]);
     });
   });
 
   describe("validateEntry", () => {
     it("passes for entry types", () => {
-      const registry = createTypeBoxJobTypeRegistry({
+      const jobTypeRegistry = createTypeBoxJobTypeRegistry({
         main: {
           entry: true,
           input: Type.Object({ id: Type.String() }),
@@ -42,12 +42,12 @@ describe("createTypeBoxJobTypeRegistry", () => {
       });
 
       expect(() => {
-        registry.validateEntry("main");
+        jobTypeRegistry.validateEntry("main");
       }).not.toThrow();
     });
 
     it("throws for non-entry types", () => {
-      const registry = createTypeBoxJobTypeRegistry({
+      const jobTypeRegistry = createTypeBoxJobTypeRegistry({
         internal: {
           input: Type.Object({ id: Type.String() }),
           output: Type.Object({ ok: Type.Boolean() }),
@@ -55,12 +55,12 @@ describe("createTypeBoxJobTypeRegistry", () => {
       });
 
       expect(() => {
-        registry.validateEntry("internal");
+        jobTypeRegistry.validateEntry("internal");
       }).toThrow(JobTypeValidationError);
     });
 
     it("throws for unknown types", () => {
-      const registry = createTypeBoxJobTypeRegistry({
+      const jobTypeRegistry = createTypeBoxJobTypeRegistry({
         main: {
           entry: true,
           input: Type.Object({ id: Type.String() }),
@@ -69,14 +69,14 @@ describe("createTypeBoxJobTypeRegistry", () => {
       });
 
       expect(() => {
-        registry.validateEntry("unknown");
+        jobTypeRegistry.validateEntry("unknown");
       }).toThrow(JobTypeValidationError);
     });
   });
 
   describe("parseInput", () => {
     it("returns parsed input for valid data", () => {
-      const registry = createTypeBoxJobTypeRegistry({
+      const jobTypeRegistry = createTypeBoxJobTypeRegistry({
         main: {
           entry: true,
           input: Type.Object({ id: Type.String(), count: Type.Number() }),
@@ -84,12 +84,12 @@ describe("createTypeBoxJobTypeRegistry", () => {
         },
       });
 
-      const result = registry.parseInput("main", { id: "abc", count: 42 });
+      const result = jobTypeRegistry.parseInput("main", { id: "abc", count: 42 });
       expect(result).toEqual({ id: "abc", count: 42 });
     });
 
     it("throws for invalid input", () => {
-      const registry = createTypeBoxJobTypeRegistry({
+      const jobTypeRegistry = createTypeBoxJobTypeRegistry({
         main: {
           entry: true,
           input: Type.Object({ id: Type.String() }),
@@ -98,12 +98,12 @@ describe("createTypeBoxJobTypeRegistry", () => {
       });
 
       expect(() => {
-        registry.parseInput("main", { id: 123 });
+        jobTypeRegistry.parseInput("main", { id: 123 });
       }).toThrow(JobTypeValidationError);
     });
 
     it("coerces types when schema allows", () => {
-      const registry = createTypeBoxJobTypeRegistry({
+      const jobTypeRegistry = createTypeBoxJobTypeRegistry({
         main: {
           entry: true,
           input: Type.Object({
@@ -113,14 +113,14 @@ describe("createTypeBoxJobTypeRegistry", () => {
         },
       });
 
-      const result = registry.parseInput("main", { count: "42" });
+      const result = jobTypeRegistry.parseInput("main", { count: "42" });
       expect(result).toEqual({ count: 42 });
     });
   });
 
   describe("parseOutput", () => {
     it("returns parsed output for valid data", () => {
-      const registry = createTypeBoxJobTypeRegistry({
+      const jobTypeRegistry = createTypeBoxJobTypeRegistry({
         main: {
           entry: true,
           input: Type.Object({ id: Type.String() }),
@@ -128,12 +128,12 @@ describe("createTypeBoxJobTypeRegistry", () => {
         },
       });
 
-      const result = registry.parseOutput("main", { success: true });
+      const result = jobTypeRegistry.parseOutput("main", { success: true });
       expect(result).toEqual({ success: true });
     });
 
     it("throws for invalid output", () => {
-      const registry = createTypeBoxJobTypeRegistry({
+      const jobTypeRegistry = createTypeBoxJobTypeRegistry({
         main: {
           entry: true,
           input: Type.Object({ id: Type.String() }),
@@ -142,12 +142,12 @@ describe("createTypeBoxJobTypeRegistry", () => {
       });
 
       expect(() => {
-        registry.parseOutput("main", { success: "yes" });
+        jobTypeRegistry.parseOutput("main", { success: "yes" });
       }).toThrow(JobTypeValidationError);
     });
 
     it("throws when output schema is not defined", () => {
-      const registry = createTypeBoxJobTypeRegistry({
+      const jobTypeRegistry = createTypeBoxJobTypeRegistry({
         main: {
           entry: true,
           input: Type.Object({ id: Type.String() }),
@@ -160,7 +160,7 @@ describe("createTypeBoxJobTypeRegistry", () => {
       });
 
       expect(() => {
-        registry.parseOutput("main", { success: true });
+        jobTypeRegistry.parseOutput("main", { success: true });
       }).toThrow(JobTypeValidationError);
     });
   });
@@ -168,7 +168,7 @@ describe("createTypeBoxJobTypeRegistry", () => {
   describe("validateContinueWith", () => {
     describe("nominal validation", () => {
       it("passes for valid type name", () => {
-        const registry = createTypeBoxJobTypeRegistry({
+        const jobTypeRegistry = createTypeBoxJobTypeRegistry({
           step1: {
             entry: true,
             input: Type.Object({ id: Type.String() }),
@@ -181,7 +181,7 @@ describe("createTypeBoxJobTypeRegistry", () => {
         });
 
         expect(() => {
-          registry.validateContinueWith("step1", {
+          jobTypeRegistry.validateContinueWith("step1", {
             typeName: "step2",
             input: { data: "test" },
           });
@@ -189,7 +189,7 @@ describe("createTypeBoxJobTypeRegistry", () => {
       });
 
       it("throws for invalid type name", () => {
-        const registry = createTypeBoxJobTypeRegistry({
+        const jobTypeRegistry = createTypeBoxJobTypeRegistry({
           step1: {
             entry: true,
             input: Type.Object({ id: Type.String() }),
@@ -202,14 +202,14 @@ describe("createTypeBoxJobTypeRegistry", () => {
         });
 
         expect(() => {
-          registry.validateContinueWith("step1", { typeName: "step3", input: {} });
+          jobTypeRegistry.validateContinueWith("step1", { typeName: "step3", input: {} });
         }).toThrow(JobTypeValidationError);
       });
     });
 
     describe("structural validation", () => {
       it("passes for matching input shape", () => {
-        const registry = createTypeBoxJobTypeRegistry({
+        const jobTypeRegistry = createTypeBoxJobTypeRegistry({
           router: {
             entry: true,
             input: Type.Object({ route: Type.String() }),
@@ -222,7 +222,7 @@ describe("createTypeBoxJobTypeRegistry", () => {
         });
 
         expect(() => {
-          registry.validateContinueWith("router", {
+          jobTypeRegistry.validateContinueWith("router", {
             typeName: "handler",
             input: { payload: "test-data" },
           });
@@ -230,7 +230,7 @@ describe("createTypeBoxJobTypeRegistry", () => {
       });
 
       it("throws for non-matching input shape", () => {
-        const registry = createTypeBoxJobTypeRegistry({
+        const jobTypeRegistry = createTypeBoxJobTypeRegistry({
           router: {
             entry: true,
             input: Type.Object({ route: Type.String() }),
@@ -243,7 +243,7 @@ describe("createTypeBoxJobTypeRegistry", () => {
         });
 
         expect(() => {
-          registry.validateContinueWith("router", {
+          jobTypeRegistry.validateContinueWith("router", {
             typeName: "handler",
             input: { wrongField: "test" },
           });
@@ -252,7 +252,7 @@ describe("createTypeBoxJobTypeRegistry", () => {
     });
 
     it("throws when continueWith is not defined", () => {
-      const registry = createTypeBoxJobTypeRegistry({
+      const jobTypeRegistry = createTypeBoxJobTypeRegistry({
         terminal: {
           entry: true,
           input: Type.Object({ id: Type.String() }),
@@ -261,7 +261,7 @@ describe("createTypeBoxJobTypeRegistry", () => {
       });
 
       expect(() => {
-        registry.validateContinueWith("terminal", { typeName: "next", input: {} });
+        jobTypeRegistry.validateContinueWith("terminal", { typeName: "next", input: {} });
       }).toThrow(JobTypeValidationError);
     });
   });
@@ -269,7 +269,7 @@ describe("createTypeBoxJobTypeRegistry", () => {
   describe("validateBlockers", () => {
     describe("nominal validation", () => {
       it("passes for valid blocker type names", () => {
-        const registry = createTypeBoxJobTypeRegistry({
+        const jobTypeRegistry = createTypeBoxJobTypeRegistry({
           main: {
             entry: true,
             input: Type.Object({ id: Type.String() }),
@@ -284,12 +284,12 @@ describe("createTypeBoxJobTypeRegistry", () => {
         });
 
         expect(() => {
-          registry.validateBlockers("main", [{ typeName: "auth", input: { token: "abc" } }]);
+          jobTypeRegistry.validateBlockers("main", [{ typeName: "auth", input: { token: "abc" } }]);
         }).not.toThrow();
       });
 
       it("throws for invalid blocker type name", () => {
-        const registry = createTypeBoxJobTypeRegistry({
+        const jobTypeRegistry = createTypeBoxJobTypeRegistry({
           main: {
             entry: true,
             input: Type.Object({ id: Type.String() }),
@@ -304,14 +304,14 @@ describe("createTypeBoxJobTypeRegistry", () => {
         });
 
         expect(() => {
-          registry.validateBlockers("main", [{ typeName: "wrong", input: {} }]);
+          jobTypeRegistry.validateBlockers("main", [{ typeName: "wrong", input: {} }]);
         }).toThrow(JobTypeValidationError);
       });
     });
 
     describe("structural validation", () => {
       it("passes for matching blocker input shapes", () => {
-        const registry = createTypeBoxJobTypeRegistry({
+        const jobTypeRegistry = createTypeBoxJobTypeRegistry({
           main: {
             entry: true,
             input: Type.Object({ id: Type.String() }),
@@ -332,7 +332,7 @@ describe("createTypeBoxJobTypeRegistry", () => {
 
         // Both auth types have { token: string } in input, so both are valid
         expect(() => {
-          registry.validateBlockers("main", [
+          jobTypeRegistry.validateBlockers("main", [
             { typeName: "auth", input: { token: "abc" } },
             { typeName: "authOther", input: { token: "xyz", extra: "data" } },
           ]);
@@ -340,7 +340,7 @@ describe("createTypeBoxJobTypeRegistry", () => {
       });
 
       it("throws for non-matching blocker input shape", () => {
-        const registry = createTypeBoxJobTypeRegistry({
+        const jobTypeRegistry = createTypeBoxJobTypeRegistry({
           main: {
             entry: true,
             input: Type.Object({ id: Type.String() }),
@@ -355,7 +355,9 @@ describe("createTypeBoxJobTypeRegistry", () => {
         });
 
         expect(() => {
-          registry.validateBlockers("main", [{ typeName: "auth", input: { wrong: "data" } }]);
+          jobTypeRegistry.validateBlockers("main", [
+            { typeName: "auth", input: { wrong: "data" } },
+          ]);
         }).toThrow(JobTypeValidationError);
       });
     });
@@ -382,7 +384,7 @@ describe("createTypeBoxJobTypeRegistry", () => {
     });
 
     it("allows valid blocker references", () => {
-      const registry = createTypeBoxJobTypeRegistry({
+      const jobTypeRegistry = createTypeBoxJobTypeRegistry({
         blocker: {
           entry: true,
           input: Type.Object({ value: Type.Number() }),
@@ -396,11 +398,11 @@ describe("createTypeBoxJobTypeRegistry", () => {
         },
       });
 
-      expect(registry.getTypeNames()).toEqual(["blocker", "main"]);
+      expect(jobTypeRegistry.getTypeNames()).toEqual(["blocker", "main"]);
     });
 
     it("throws when blockers is not defined", () => {
-      const registry = createTypeBoxJobTypeRegistry({
+      const jobTypeRegistry = createTypeBoxJobTypeRegistry({
         main: {
           entry: true,
           input: Type.Object({ id: Type.String() }),
@@ -409,7 +411,7 @@ describe("createTypeBoxJobTypeRegistry", () => {
       });
 
       expect(() => {
-        registry.validateBlockers("main", [{ typeName: "auth", input: {} }]);
+        jobTypeRegistry.validateBlockers("main", [{ typeName: "auth", input: {} }]);
       }).toThrow(JobTypeValidationError);
     });
   });
@@ -442,7 +444,9 @@ describe("createTypeBoxJobTypeRegistry", () => {
     );
 
     it("merges registries and validates across slices", () => {
-      const merged = mergeJobTypeRegistries(orderJobTypeRegistry, notificationJobTypeRegistry);
+      const merged = mergeJobTypeRegistries({
+        slices: [orderJobTypeRegistry, notificationJobTypeRegistry],
+      });
 
       expect(merged.getTypeNames()).toEqual([
         "orders.place-order",
@@ -460,7 +464,9 @@ describe("createTypeBoxJobTypeRegistry", () => {
     });
 
     it("validates cross-slice blocker references", () => {
-      const merged = mergeJobTypeRegistries(orderJobTypeRegistry, notificationJobTypeRegistry);
+      const merged = mergeJobTypeRegistries({
+        slices: [orderJobTypeRegistry, notificationJobTypeRegistry],
+      });
 
       expect(() => {
         merged.validateBlockers("orders.confirm-order", [
@@ -486,41 +492,46 @@ describe("createTypeBoxJobTypeRegistry", () => {
       const stateAdapter = createInProcessStateAdapter();
       const client = await createClient({
         stateAdapter,
-        registry: mergeJobTypeRegistries(orderJobTypeRegistry, notificationJobTypeRegistry),
+        jobTypeRegistry: mergeJobTypeRegistries({
+          slices: [orderJobTypeRegistry, notificationJobTypeRegistry],
+        }),
       });
-      const notificationProcessorRegistry = createJobTypeProcessorRegistry(
+      const notificationJobTypeProcessorRegistry = createJobTypeProcessorRegistry({
         client,
-        notificationJobTypeRegistry,
-        {
+        jobTypeRegistry: notificationJobTypeRegistry,
+        processors: {
           "notifications.send-notification": {
             attemptHandler: async ({ complete }) => complete(async () => ({ sentAt: "now" })),
           },
         },
-      );
+      });
 
-      const orderProcessorRegistry = createJobTypeProcessorRegistry(client, orderJobTypeRegistry, {
-        "orders.place-order": {
-          attemptHandler: async ({ complete }) =>
-            complete(async ({ continueWith }) =>
-              continueWith({
-                typeName: "orders.confirm-order",
-                input: { orderId: 1 },
-                blockers: [] as never,
-              }),
-            ),
-        },
-        "orders.confirm-order": {
-          attemptHandler: async ({ job, complete }) => {
-            expectTypeOf(job.blockers[0].output).toEqualTypeOf<{ sentAt: string }>();
-            return complete(async () => ({ confirmedAt: "now" }));
+      const orderJobTypeProcessorRegistry = createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry: orderJobTypeRegistry,
+        processors: {
+          "orders.place-order": {
+            attemptHandler: async ({ complete }) =>
+              complete(async ({ continueWith }) =>
+                continueWith({
+                  typeName: "orders.confirm-order",
+                  input: { orderId: 1 },
+                  blockers: [] as never,
+                }),
+              ),
+          },
+          "orders.confirm-order": {
+            attemptHandler: async ({ job, complete }) => {
+              expectTypeOf(job.blockers[0].output).toEqualTypeOf<{ sentAt: string }>();
+              return complete(async () => ({ confirmedAt: "now" }));
+            },
           },
         },
       });
 
-      const merged = mergeJobTypeProcessorRegistries(
-        orderProcessorRegistry,
-        notificationProcessorRegistry,
-      );
+      const merged = mergeJobTypeProcessorRegistries({
+        slices: [orderJobTypeProcessorRegistry, notificationJobTypeProcessorRegistry],
+      });
 
       expect(Object.keys(merged)).toEqual([
         "orders.place-order",

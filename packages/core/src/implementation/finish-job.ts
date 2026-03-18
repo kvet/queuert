@@ -28,7 +28,7 @@ export const finishJob = async (
   let output = hasContinuedJob ? null : rest.output;
 
   if (!hasContinuedJob) {
-    output = helpers.registry.parseOutput(job.typeName, output);
+    output = helpers.jobTypeRegistry.parseOutput(job.typeName, output);
   }
 
   job = await helpers.stateAdapter.completeJob({

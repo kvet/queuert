@@ -104,30 +104,36 @@ const notifyAdapter = createInProcessNotifyAdapter();
 const client = await createClient({
   stateAdapter,
   notifyAdapter,
-  registry: jobTypeRegistry,
+  jobTypeRegistry,
 });
 
 const worker = await createInProcessWorker({
   client,
-  processorRegistry: createJobTypeProcessorRegistry(client, jobTypeRegistry, {
-    "await-approval": {
-      attemptHandler: async ({ job, complete }) => {
-        console.log(`[await-approval] Timeout reached for ${job.input.requestId} - auto-rejecting`);
-        return complete(async () => ({ rejected: true, reason: "timeout" }));
+  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+    client,
+    jobTypeRegistry,
+    processors: {
+      "await-approval": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(
+            `[await-approval] Timeout reached for ${job.input.requestId} - auto-rejecting`,
+          );
+          return complete(async () => ({ rejected: true, reason: "timeout" }));
+        },
       },
-    },
 
-    "process-approved": {
-      attemptHandler: async ({ job, complete }) => {
-        console.log(`[process-approved] Processing approved request ${job.input.requestId}`);
-        return complete(async () => ({ processed: true, completedAt: new Date().toISOString() }));
+      "process-approved": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(`[process-approved] Processing approved request ${job.input.requestId}`);
+          return complete(async () => ({ processed: true, completedAt: new Date().toISOString() }));
+        },
       },
-    },
 
-    "pending-action": {
-      attemptHandler: async ({ job, complete }) => {
-        console.log(`[pending-action] Action ${job.input.actionId} expired`);
-        return complete(async () => ({ expired: true }));
+      "pending-action": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(`[pending-action] Action ${job.input.actionId} expired`);
+          return complete(async () => ({ expired: true }));
+        },
       },
     },
   }),

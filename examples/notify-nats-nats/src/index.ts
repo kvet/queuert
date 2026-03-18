@@ -23,7 +23,7 @@ const js = nc.jetstream();
 const kv = await js.views.kv("queuert_example", { ttl: 60_000 });
 
 // 4. Define job types
-const registry = defineJobTypeRegistry<{
+const jobTypeRegistry = defineJobTypeRegistry<{
   generate_report: {
     entry: true;
     input: { reportType: string; dateRange: { from: string; to: string } };
@@ -43,23 +43,27 @@ const notifyAdapter = await createNatsNotifyAdapter({
 const qrtClient = await createClient({
   stateAdapter,
   notifyAdapter,
-  registry,
+  jobTypeRegistry,
 });
 
 const qrtWorker = await createInProcessWorker({
   client: qrtClient,
-  processorRegistry: createJobTypeProcessorRegistry(qrtClient, registry, {
-    generate_report: {
-      attemptHandler: async ({ job, complete }) => {
-        console.log(`Generating ${job.input.reportType} report...`);
-        // Simulate report generation work
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        const rowCount = Math.floor(Math.random() * 1000) + 100;
-        console.log(`Report generated with ${rowCount} rows`);
-        return complete(async () => ({
-          reportId: `RPT-${Date.now()}`,
-          rowCount,
-        }));
+  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+    client: qrtClient,
+    jobTypeRegistry,
+    processors: {
+      generate_report: {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(`Generating ${job.input.reportType} report...`);
+          // Simulate report generation work
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          const rowCount = Math.floor(Math.random() * 1000) + 100;
+          console.log(`Report generated with ${rowCount} rows`);
+          return complete(async () => ({
+            reportId: `RPT-${Date.now()}`,
+            rowCount,
+          }));
+        },
       },
     },
   }),

@@ -44,12 +44,12 @@ describe("mergeJobTypeRegistries", () => {
         "job-b": { entry: true; input: { count: number }; output: number };
       }>();
 
-      const merged = mergeJobTypeRegistries(a, b);
+      const mergedJobTypeRegistry = mergeJobTypeRegistries({ slices: [a, b] });
 
-      merged.validateEntry("job-a");
-      merged.validateEntry("job-b");
-      expect(merged.parseInput("job-a", { id: "test" })).toEqual({ id: "test" });
-      expect(merged.parseInput("job-b", { count: 42 })).toEqual({ count: 42 });
+      mergedJobTypeRegistry.validateEntry("job-a");
+      mergedJobTypeRegistry.validateEntry("job-b");
+      expect(mergedJobTypeRegistry.parseInput("job-a", { id: "test" })).toEqual({ id: "test" });
+      expect(mergedJobTypeRegistry.parseInput("job-b", { count: 42 })).toEqual({ count: 42 });
     });
 
     it("merges three noop registries", () => {
@@ -63,11 +63,11 @@ describe("mergeJobTypeRegistries", () => {
         "job-c": { entry: true; input: boolean; output: boolean };
       }>();
 
-      const merged = mergeJobTypeRegistries(a, b, c);
+      const mergedJobTypeRegistry = mergeJobTypeRegistries({ slices: [a, b, c] });
 
-      merged.validateEntry("job-a");
-      merged.validateEntry("job-b");
-      merged.validateEntry("job-c");
+      mergedJobTypeRegistry.validateEntry("job-a");
+      mergedJobTypeRegistry.validateEntry("job-b");
+      mergedJobTypeRegistry.validateEntry("job-c");
     });
 
     it("returns passthrough behavior", () => {
@@ -78,16 +78,16 @@ describe("mergeJobTypeRegistries", () => {
         "job-b": { entry: true; input: { count: number }; output: number };
       }>();
 
-      const merged = mergeJobTypeRegistries(a, b);
+      const mergedJobTypeRegistry = mergeJobTypeRegistries({ slices: [a, b] });
       const input = { id: "test" };
 
-      expect(merged.parseInput("job-a", input)).toBe(input);
-      expect(merged.parseOutput("job-a", "result")).toBe("result");
+      expect(mergedJobTypeRegistry.parseInput("job-a", input)).toBe(input);
+      expect(mergedJobTypeRegistry.parseOutput("job-a", "result")).toBe("result");
       expect(() => {
-        merged.validateContinueWith("job-a", { typeName: "job-b", input: {} });
+        mergedJobTypeRegistry.validateContinueWith("job-a", { typeName: "job-b", input: {} });
       }).not.toThrow();
       expect(() => {
-        merged.validateBlockers("job-a", [{ typeName: "job-b", input: {} }]);
+        mergedJobTypeRegistry.validateBlockers("job-a", [{ typeName: "job-b", input: {} }]);
       }).not.toThrow();
     });
 
@@ -100,7 +100,7 @@ describe("mergeJobTypeRegistries", () => {
       }>();
 
       // @ts-expect-error — duplicate "job-a" detected at compile time
-      mergeJobTypeRegistries(a, b);
+      mergeJobTypeRegistries({ slices: [a, b] });
     });
 
     it("detects duplicates across three registries at compile time", () => {
@@ -115,7 +115,7 @@ describe("mergeJobTypeRegistries", () => {
       }>();
 
       // @ts-expect-error — "job-a" duplicated between registries a and c
-      mergeJobTypeRegistries(a, b, c);
+      mergeJobTypeRegistries({ slices: [a, b, c] });
     });
 
     it("merges a registry with no types alongside a typed registry", () => {
@@ -124,10 +124,10 @@ describe("mergeJobTypeRegistries", () => {
         "job-a": { entry: true; input: string; output: string };
       }>();
 
-      const merged = mergeJobTypeRegistries(empty, typed);
+      const mergedJobTypeRegistry = mergeJobTypeRegistries({ slices: [empty, typed] });
 
-      merged.validateEntry("job-a");
-      expect(merged.parseInput("job-a", "hello")).toBe("hello");
+      mergedJobTypeRegistry.validateEntry("job-a");
+      expect(mergedJobTypeRegistry.parseInput("job-a", "hello")).toBe("hello");
     });
 
     it("preserves phantom type information", () => {
@@ -138,9 +138,9 @@ describe("mergeJobTypeRegistries", () => {
         "send-email": { entry: true; input: { to: string }; output: { sent: boolean } };
       }>();
 
-      const merged = mergeJobTypeRegistries(a, b);
+      const mergedJobTypeRegistry = mergeJobTypeRegistries({ slices: [a, b] });
 
-      type MergedDefs = JobTypeRegistryDefinitions<typeof merged>;
+      type MergedDefs = JobTypeRegistryDefinitions<typeof mergedJobTypeRegistry>;
       expectTypeOf<MergedDefs["create-order"]["input"]>().toExtend<{ userId: string }>();
       expectTypeOf<MergedDefs["send-email"]["input"]>().toExtend<{ to: string }>();
     });
@@ -161,9 +161,9 @@ describe("mergeJobTypeRegistries", () => {
         "send-email": { entry: true; input: { to: string }; output: { sent: boolean } };
       }>();
 
-      const merged = mergeJobTypeRegistries(a, b);
+      const mergedJobTypeRegistry = mergeJobTypeRegistries({ slices: [a, b] });
 
-      type Nav = JobTypeRegistryNavigation<typeof merged>;
+      type Nav = JobTypeRegistryNavigation<typeof mergedJobTypeRegistry>;
       expectTypeOf<Nav["create-order"]["input"]>().toEqualTypeOf<{ userId: string }>();
       expectTypeOf<Nav["create-order"]["isEntry"]>().toEqualTypeOf<true>();
       expectTypeOf<Nav["create-order"]["continuationTypes"]>().toEqualTypeOf<"fulfill-order">();
@@ -183,12 +183,12 @@ describe("mergeJobTypeRegistries", () => {
       const a = createValidatedRegistry<TypesA>(["job-a"]);
       const b = createValidatedRegistry<TypesB>(["job-b"]);
 
-      const merged = mergeJobTypeRegistries(a, b);
+      const mergedJobTypeRegistry = mergeJobTypeRegistries({ slices: [a, b] });
 
-      merged.validateEntry("job-a");
-      merged.validateEntry("job-b");
-      expect(merged.parseInput("job-a", "hello")).toBe("hello");
-      expect(merged.parseInput("job-b", 42)).toBe(42);
+      mergedJobTypeRegistry.validateEntry("job-a");
+      mergedJobTypeRegistry.validateEntry("job-b");
+      expect(mergedJobTypeRegistry.parseInput("job-a", "hello")).toBe("hello");
+      expect(mergedJobTypeRegistry.parseInput("job-b", 42)).toBe(42);
     });
 
     it("delegates parseOutput to the correct source registry", () => {
@@ -198,10 +198,10 @@ describe("mergeJobTypeRegistries", () => {
       const a = createValidatedRegistry<TypesA>(["job-a"]);
       const b = createValidatedRegistry<TypesB>(["job-b"]);
 
-      const merged = mergeJobTypeRegistries(a, b);
+      const mergedJobTypeRegistry = mergeJobTypeRegistries({ slices: [a, b] });
 
-      expect(merged.parseOutput("job-a", "result")).toBe("result");
-      expect(merged.parseOutput("job-b", 99)).toBe(99);
+      expect(mergedJobTypeRegistry.parseOutput("job-a", "result")).toBe("result");
+      expect(mergedJobTypeRegistry.parseOutput("job-b", 99)).toBe(99);
     });
 
     it("returns type names from all validated registries", () => {
@@ -211,10 +211,12 @@ describe("mergeJobTypeRegistries", () => {
       const a = createValidatedRegistry<TypesA>(["job-a"]);
       const b = createValidatedRegistry<TypesB>(["job-b"]);
 
-      const merged = mergeJobTypeRegistries(a, b);
+      const mergedJobTypeRegistry = mergeJobTypeRegistries({ slices: [a, b] });
 
-      expect(merged.getTypeNames()).toEqual(expect.arrayContaining(["job-a", "job-b"]));
-      expect(merged.getTypeNames()).toHaveLength(2);
+      expect(mergedJobTypeRegistry.getTypeNames()).toEqual(
+        expect.arrayContaining(["job-a", "job-b"]),
+      );
+      expect(mergedJobTypeRegistry.getTypeNames()).toHaveLength(2);
     });
 
     it("merges a validated registry with no types alongside a typed registry", () => {
@@ -224,10 +226,10 @@ describe("mergeJobTypeRegistries", () => {
       const a = createValidatedRegistry<TypesA>([]);
       const b = createValidatedRegistry<TypesB>(["job-b"]);
 
-      const merged = mergeJobTypeRegistries(a, b);
+      const mergedJobTypeRegistry = mergeJobTypeRegistries({ slices: [a, b] });
 
-      expect(merged.getTypeNames()).toEqual(["job-b"]);
-      merged.validateEntry("job-b");
+      expect(mergedJobTypeRegistry.getTypeNames()).toEqual(["job-b"]);
+      mergedJobTypeRegistry.validateEntry("job-b");
     });
 
     it("throws for unknown type when all registries are validated", () => {
@@ -237,10 +239,10 @@ describe("mergeJobTypeRegistries", () => {
       const a = createValidatedRegistry<TypesA>(["job-a"]);
       const b = createValidatedRegistry<TypesB>(["job-b"]);
 
-      const merged = mergeJobTypeRegistries(a, b);
+      const mergedJobTypeRegistry = mergeJobTypeRegistries({ slices: [a, b] });
 
       expect(() => {
-        merged.validateEntry("job-unknown");
+        mergedJobTypeRegistry.validateEntry("job-unknown");
       }).toThrow(JobTypeValidationError);
     });
 
@@ -263,13 +265,13 @@ describe("mergeJobTypeRegistries", () => {
       const a = createJobTypeRegistry<TypesA>(configA);
       const b = createValidatedRegistry<TypesB>(["job-b"]);
 
-      const merged = mergeJobTypeRegistries(a, b);
+      const mergedJobTypeRegistry = mergeJobTypeRegistries({ slices: [a, b] });
       const target = { typeName: "job-b", input: 42 };
 
-      merged.validateContinueWith("job-a", target);
+      mergedJobTypeRegistry.validateContinueWith("job-a", target);
       expect(configA.validateContinueWith).toHaveBeenCalledWith("job-a", target);
 
-      merged.validateBlockers("job-a", [target]);
+      mergedJobTypeRegistry.validateBlockers("job-a", [target]);
       expect(configA.validateBlockers).toHaveBeenCalledWith("job-a", [target]);
     });
 
@@ -282,7 +284,7 @@ describe("mergeJobTypeRegistries", () => {
 
       expect(() => {
         // @ts-expect-error — also detected at compile time
-        mergeJobTypeRegistries(a, b);
+        mergeJobTypeRegistries({ slices: [a, b] });
       }).toThrow(DuplicateJobTypeError);
     });
 
@@ -303,7 +305,7 @@ describe("mergeJobTypeRegistries", () => {
 
       try {
         // @ts-expect-error — duplicate "overlap"
-        mergeJobTypeRegistries(a, b);
+        mergeJobTypeRegistries({ slices: [a, b] });
       } catch (error) {
         expect(error).toBeInstanceOf(DuplicateJobTypeError);
         expect((error as DuplicateJobTypeError).duplicateTypeNames).toEqual(["overlap"]);
@@ -321,7 +323,7 @@ describe("mergeJobTypeRegistries", () => {
 
       expect(() => {
         // @ts-expect-error — "job-a" duplicated between registries a and c
-        mergeJobTypeRegistries(a, b, c);
+        mergeJobTypeRegistries({ slices: [a, b, c] });
       }).toThrow(DuplicateJobTypeError);
     });
 
@@ -344,10 +346,10 @@ describe("mergeJobTypeRegistries", () => {
       });
       const b = createValidatedRegistry<TypesB>(["job-b"]);
 
-      const merged = mergeJobTypeRegistries(a, b);
+      const mergedJobTypeRegistry = mergeJobTypeRegistries({ slices: [a, b] });
 
       expect(() => {
-        merged.parseInput("job-a", { id: 123 });
+        mergedJobTypeRegistry.parseInput("job-a", { id: 123 });
       }).toThrow(JobTypeValidationError);
     });
   });
@@ -374,14 +376,14 @@ describe("mergeJobTypeRegistries", () => {
         JobTypeRegistryDefinitions<typeof notifications>
       >();
 
-      const merged = mergeJobTypeRegistries(notifications, orders);
+      const mergedJobTypeRegistry = mergeJobTypeRegistries({ slices: [notifications, orders] });
 
-      type MergedDefs = JobTypeRegistryDefinitions<typeof merged>;
+      type MergedDefs = JobTypeRegistryDefinitions<typeof mergedJobTypeRegistry>;
       expectTypeOf<MergedDefs["notifications.send"]["input"]>().toExtend<{ userId: string }>();
       expectTypeOf<MergedDefs["orders.create"]["input"]>().toExtend<{ userId: string }>();
 
-      merged.validateEntry("notifications.send");
-      merged.validateEntry("orders.create");
+      mergedJobTypeRegistry.validateEntry("notifications.send");
+      mergedJobTypeRegistry.validateEntry("orders.create");
     });
   });
 
@@ -416,13 +418,13 @@ describe("mergeJobTypeRegistries", () => {
         },
       });
 
-      const merged = mergeJobTypeRegistries(noop, validated);
+      const mergedJobTypeRegistry = mergeJobTypeRegistries({ slices: [noop, validated] });
 
-      merged.validateEntry("validated-job");
+      mergedJobTypeRegistry.validateEntry("validated-job");
       expect(validateEntryCalled).toBe(true);
 
-      merged.validateEntry("noop-job");
-      expect(merged.parseInput("noop-job", { id: "test" })).toEqual({ id: "test" });
+      mergedJobTypeRegistry.validateEntry("noop-job");
+      expect(mergedJobTypeRegistry.parseInput("noop-job", { id: "test" })).toEqual({ id: "test" });
     });
 
     it("returns only validated registry type names from getTypeNames", () => {
@@ -433,9 +435,9 @@ describe("mergeJobTypeRegistries", () => {
         "validated-job": { entry: true; input: number; output: number };
       }>(["validated-job"]);
 
-      const merged = mergeJobTypeRegistries(noop, validated);
+      const mergedJobTypeRegistry = mergeJobTypeRegistries({ slices: [noop, validated] });
 
-      expect(merged.getTypeNames()).toEqual(["validated-job"]);
+      expect(mergedJobTypeRegistry.getTypeNames()).toEqual(["validated-job"]);
     });
 
     it("passes through parseInput for noop types in mixed mode", () => {
@@ -446,11 +448,11 @@ describe("mergeJobTypeRegistries", () => {
         "validated-job": { entry: true; input: number; output: number };
       }>(["validated-job"]);
 
-      const merged = mergeJobTypeRegistries(noop, validated);
+      const mergedJobTypeRegistry = mergeJobTypeRegistries({ slices: [noop, validated] });
       const input = { id: "test" };
 
-      expect(merged.parseInput("noop-job", input)).toBe(input);
-      expect(merged.parseInput("validated-job", 42)).toBe(42);
+      expect(mergedJobTypeRegistry.parseInput("noop-job", input)).toBe(input);
+      expect(mergedJobTypeRegistry.parseInput("validated-job", 42)).toBe(42);
     });
   });
 
@@ -471,19 +473,19 @@ describe("mergeJobTypeRegistries", () => {
         "slice-c": { entry: true; input: { c: boolean }; output: { doneC: string } };
       }>();
 
-      const ab = mergeJobTypeRegistries(a, b);
-      const merged = mergeJobTypeRegistries(ab, c);
+      const ab = mergeJobTypeRegistries({ slices: [a, b] });
+      const mergedJobTypeRegistry = mergeJobTypeRegistries({ slices: [ab, c] });
 
-      type Nav = JobTypeRegistryNavigation<typeof merged>;
+      type Nav = JobTypeRegistryNavigation<typeof mergedJobTypeRegistry>;
       expectTypeOf<Nav["slice-a"]["isEntry"]>().toEqualTypeOf<true>();
       expectTypeOf<Nav["slice-a"]["continuationTypes"]>().toEqualTypeOf<"slice-a2">();
       expectTypeOf<Nav["slice-a2"]["input"]>().toEqualTypeOf<{ x: number }>();
       expectTypeOf<Nav["slice-b"]["input"]>().toEqualTypeOf<{ b: number }>();
       expectTypeOf<Nav["slice-c"]["input"]>().toEqualTypeOf<{ c: boolean }>();
 
-      merged.validateEntry("slice-a");
-      merged.validateEntry("slice-b");
-      merged.validateEntry("slice-c");
+      mergedJobTypeRegistry.validateEntry("slice-a");
+      mergedJobTypeRegistry.validateEntry("slice-b");
+      mergedJobTypeRegistry.validateEntry("slice-c");
     });
 
     it("preserves navigation maps through nested validated merges", () => {
@@ -495,19 +497,21 @@ describe("mergeJobTypeRegistries", () => {
       const b = createValidatedRegistry<TypesB>(["job-b"]);
       const c = createValidatedRegistry<TypesC>(["job-c"]);
 
-      const ab = mergeJobTypeRegistries(a, b);
-      const merged = mergeJobTypeRegistries(ab, c);
+      const ab = mergeJobTypeRegistries({ slices: [a, b] });
+      const mergedJobTypeRegistry = mergeJobTypeRegistries({ slices: [ab, c] });
 
-      type Nav = JobTypeRegistryNavigation<typeof merged>;
+      type Nav = JobTypeRegistryNavigation<typeof mergedJobTypeRegistry>;
       expectTypeOf<Nav["job-a"]["input"]>().toEqualTypeOf<{ a: string }>();
       expectTypeOf<Nav["job-b"]["input"]>().toEqualTypeOf<{ b: number }>();
       expectTypeOf<Nav["job-c"]["input"]>().toEqualTypeOf<{ c: boolean }>();
 
-      expect(merged.getTypeNames()).toEqual(expect.arrayContaining(["job-a", "job-b", "job-c"]));
-      expect(merged.getTypeNames()).toHaveLength(3);
-      merged.validateEntry("job-a");
-      merged.validateEntry("job-b");
-      merged.validateEntry("job-c");
+      expect(mergedJobTypeRegistry.getTypeNames()).toEqual(
+        expect.arrayContaining(["job-a", "job-b", "job-c"]),
+      );
+      expect(mergedJobTypeRegistry.getTypeNames()).toHaveLength(3);
+      mergedJobTypeRegistry.validateEntry("job-a");
+      mergedJobTypeRegistry.validateEntry("job-b");
+      mergedJobTypeRegistry.validateEntry("job-c");
     });
 
     it("detects duplicates across nested merges at compile time", () => {
@@ -521,10 +525,10 @@ describe("mergeJobTypeRegistries", () => {
         shared: { entry: true; input: boolean; output: boolean };
       }>();
 
-      const ab = mergeJobTypeRegistries(a, b);
+      const ab = mergeJobTypeRegistries({ slices: [a, b] });
 
       // @ts-expect-error — "shared" duplicated between ab and c
-      mergeJobTypeRegistries(ab, c);
+      mergeJobTypeRegistries({ slices: [ab, c] });
     });
   });
 });

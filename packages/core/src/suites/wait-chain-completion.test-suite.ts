@@ -18,7 +18,7 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
     log,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: null;
@@ -31,7 +31,7 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -72,7 +72,7 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
     log,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: null;
@@ -85,7 +85,7 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -114,7 +114,7 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
     log,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: null;
@@ -127,7 +127,7 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -150,7 +150,7 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
     log,
     expect,
   }) => {
-    const registry = defineJobTypeRegistry<{
+    const jobTypeRegistry = defineJobTypeRegistry<{
       test: {
         entry: true;
         input: null;
@@ -163,7 +163,7 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
       notifyAdapter,
       observabilityAdapter,
       log,
-      registry,
+      jobTypeRegistry,
     });
 
     const nonExistentId = crypto.randomUUID();

@@ -44,7 +44,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const WORKER_COUNT = 3;
 const JOBS_TO_PROCESS = 12;
 
-const registry = defineJobTypeRegistry<{
+const jobTypeRegistry = defineJobTypeRegistry<{
   process_order: {
     entry: true;
     input: { orderId: string; items: string[]; total: number };
@@ -160,7 +160,7 @@ const notifyAdapter = await createPgNotifyAdapter({ provider: notifyProvider });
 const qrtClient = await createClient({
   stateAdapter,
   notifyAdapter,
-  registry,
+  jobTypeRegistry,
 });
 
 const workerNames = ["alpha", "beta", "gamma"];
