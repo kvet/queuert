@@ -51,6 +51,19 @@ export class JobAlreadyCompletedError extends Error {
   }
 }
 
+/** Thrown when attempting to trigger a job that is not in a triggerable state (must be pending). */
+export class JobNotTriggerableError extends Error {
+  readonly jobId: string | undefined;
+  readonly status: string | undefined;
+
+  constructor(message: string, options?: { jobId?: string; status?: string; cause?: unknown }) {
+    super(message, options?.cause !== undefined ? { cause: options.cause } : undefined);
+    this.name = "JobNotTriggerableError";
+    this.jobId = options?.jobId;
+    this.status = options?.status;
+  }
+}
+
 /** Thrown when {@link Client.awaitJobChain | awaitJobChain} exceeds its timeout or is aborted. */
 export class WaitChainTimeoutError extends Error {
   readonly chainId: string | undefined;

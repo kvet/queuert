@@ -17,6 +17,7 @@ import {
 } from "../suites/spec-context.spec-helper.js";
 import { waitChainCompletionTestSuite } from "../suites/wait-chain-completion.test-suite.js";
 import { workerTestSuite } from "../suites/worker.test-suite.js";
+import { triggerJobTestSuite } from "../suites/trigger-job.test-suite.js";
 import { workerlessCompletionTestSuite } from "../suites/workerless-completion.test-suite.js";
 import { notifyResilienceTestSuite, stateResilienceTestSuite } from "../testing.js";
 
@@ -73,6 +74,10 @@ describe("Notify Resilience", () => {
 
 describe("Workerless Completion", () => {
   workerlessCompletionTestSuite({ it: inProcessInProcessIt });
+});
+
+describe("Trigger Job", () => {
+  triggerJobTestSuite({ it: inProcessInProcessIt });
 });
 
 describe("Scheduling", () => {

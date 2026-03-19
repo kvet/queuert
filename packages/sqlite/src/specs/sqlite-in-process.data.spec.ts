@@ -11,6 +11,7 @@ import {
   schedulingTestSuite,
   startChainsTestSuite,
   stateResilienceTestSuite,
+  triggerJobTestSuite,
   waitChainCompletionTestSuite,
   workerlessCompletionTestSuite,
 } from "queuert/testing";
@@ -54,6 +55,10 @@ describe("State Resilience", () => {
 
 describe("Workerless Completion", () => {
   workerlessCompletionTestSuite({ it: sqliteInProcessIt });
+});
+
+describe("Trigger Job", () => {
+  triggerJobTestSuite({ it: sqliteInProcessIt });
 });
 
 describe("Scheduling", () => {

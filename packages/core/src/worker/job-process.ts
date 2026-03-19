@@ -74,31 +74,26 @@ export type AttemptCompleteOptions<
   TChainTypeName extends string,
 > = {
   continueWith: <
-    TContinueJobTypeName extends ContinuationJobTypes<TNavigationMap, TJobTypeName> & string,
+    TContinueJobTypeNames extends ContinuationJobTypes<TNavigationMap, TJobTypeName> & string,
   >(
-    options: TContinueJobTypeName extends infer N extends string
+    options: TContinueJobTypeNames extends infer TContinueJobTypeName extends string
       ? {
-          typeName: N;
-          input: TNavigationMap[N]["input"];
+          typeName: TContinueJobTypeName;
+          input: TNavigationMap[TContinueJobTypeName]["input"];
           schedule?: ScheduleOptions;
-        } & (JobTypeHasBlockers<TNavigationMap, N> extends true
+        } & (JobTypeHasBlockers<TNavigationMap, TContinueJobTypeName> extends true
           ? {
               blockers: BlockerChains<
                 GetStateAdapterJobId<TStateAdapter>,
                 TNavigationMap,
-                N
+                TContinueJobTypeName
               >;
             }
           : { blockers?: never })
       : never,
   ) => Promise<
-    TContinueJobTypeName extends infer N extends string
-      ? Job<
-          GetStateAdapterJobId<TStateAdapter>,
-          N,
-          TChainTypeName,
-          TNavigationMap[N]["input"]
-        > &
+    TContinueJobTypeNames extends infer N extends string
+      ? Job<GetStateAdapterJobId<TStateAdapter>, N, TChainTypeName, TNavigationMap[N]["input"]> &
           ({ status: "pending" } | { status: "blocked" })
       : never
   >;

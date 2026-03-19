@@ -51,6 +51,7 @@ import {
   renewJobLeaseSql,
   rescheduleJobSql,
   scheduleBlockedJobsSql,
+  triggerJobSql,
   updateJobToBlockedSql,
 } from "./sql.js";
 
@@ -802,6 +803,15 @@ export const createSqliteStateAdapter = async <
       }
 
       return { items, nextCursor };
+    },
+
+    triggerJob: async ({ txCtx, jobId }) => {
+      const [job] = await executeTypedSql({
+        txCtx,
+        sql: triggerJobSql,
+        params: [jobId],
+      });
+      return mapDbJobToStateJob(job);
     },
 
     listBlockedJobs: async ({ txCtx, chainId, orderDirection, page }) => {

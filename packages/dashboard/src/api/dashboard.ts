@@ -2,7 +2,7 @@ import { helpersSymbol } from "queuert/internal";
 import { type BaseNavigationMap, type Client, type StateAdapter } from "queuert";
 import { renderHtml } from "./html.js";
 import { handleChainBlocking, handleChainDetail, handleChainsList } from "./routes/chains.js";
-import { handleJobDetail, handleJobsList } from "./routes/jobs.js";
+import { handleJobDetail, handleJobTrigger, handleJobsList } from "./routes/jobs.js";
 
 type Assets = Record<string, { content: string; contentType: string }>;
 
@@ -40,7 +40,7 @@ export const createDashboard = <
   /** Mount prefix without trailing slash (e.g. `'/internal/queuert'`). Defaults to `''` (root). */
   basePath?: string;
 }): { fetch: (request: Request) => Response | Promise<Response> } => {
-  const { stateAdapter } = options.client[helpersSymbol];
+  const { stateAdapter, notifyAdapter } = options.client[helpersSymbol];
   const basePath = options.basePath?.replace(/\/+$/, "") ?? "";
 
   const handleRequest = async (request: Request): Promise<Response> => {
@@ -62,6 +62,10 @@ export const createDashboard = <
     if (match) return handleChainDetail(url, stateAdapter, match[1]);
 
     if (localPath === "/api/chains") return handleChainsList(url, stateAdapter);
+
+    match = localPath.match(/^\/api\/jobs\/([^/]+)\/trigger$/);
+    if (match && request.method === "POST")
+      return handleJobTrigger(stateAdapter, notifyAdapter, match[1]);
 
     match = localPath.match(/^\/api\/jobs\/([^/]+)$/);
     if (match) return handleJobDetail(url, stateAdapter, match[1]);

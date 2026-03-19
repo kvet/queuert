@@ -2,8 +2,8 @@ import { type Job, type SerializedJob, deserializeJob } from "../shared/job.js";
 
 const BASE = "./api";
 
-const fetchJson = async <T>(path: string): Promise<T> => {
-  const res = await fetch(`${BASE}${path}`);
+const fetchJson = async <T>(path: string, init?: RequestInit): Promise<T> => {
+  const res = await fetch(`${BASE}${path}`, init);
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   return res.json() as Promise<T>;
 };
@@ -103,6 +103,13 @@ export const getChainDetail = async (
 export const getChainBlocking = async (chainId: string): Promise<{ items: Job[] }> => {
   const raw = await fetchJson<{ items: SerializedJob[] }>(`/chains/${chainId}/blocking`);
   return { items: raw.items.map(deserializeJob) };
+};
+
+export const triggerJob = async (jobId: string): Promise<Job> => {
+  const raw = await fetchJson<{ job: SerializedJob }>(`/jobs/${jobId}/trigger`, {
+    method: "POST",
+  });
+  return deserializeJob(raw.job);
 };
 
 export const getJobDetail = async (

@@ -250,7 +250,7 @@ export const stateResilienceTestSuite = ({
           // runInTransaction also fails, the job stays "acquired" with a short lease.
           // The worker must re-poll before the reaper reclaims it, so pollIntervalMs
           // needs to be low enough to beat the lease expiry window.
-          pollIntervalMs: 250,
+          pollIntervalMs: 100,
           leaseConfig: {
             leaseMs: 10,
             renewIntervalMs: 5,
@@ -544,7 +544,7 @@ export const stateResilienceTestSuite = ({
           maxDelayMs: 1,
         },
         jobTypeProcessorDefaults: {
-          pollIntervalMs: 250,
+          pollIntervalMs: 100,
           leaseConfig: {
             leaseMs: 10,
             renewIntervalMs: 5,

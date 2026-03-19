@@ -666,6 +666,19 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       return paginateByChainIndex(jobs, page, orderDirection);
     },
 
+    triggerJob: async ({ jobId }) => {
+      const job = store.jobs.get(jobId);
+      if (!job) throw new Error("Job not found");
+
+      const updatedJob: StateJob = {
+        ...job,
+        scheduledAt: new Date(),
+      };
+
+      store.jobs.set(jobId, updatedJob);
+      return updatedJob;
+    },
+
     listBlockedJobs: async ({ chainId, orderDirection, page }) => {
       const jobs: StateJob[] = [];
       for (const [jobId, blockerMap] of store.jobBlockers) {

@@ -307,11 +307,13 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
                   "branch1" | "branch2"
                 >();
 
-                void continueWith({
-                  typeName: "branch1",
-                  // @ts-expect-error typeName/input mismatch must be rejected
-                  input: { valueBranched2: job.input.value },
-                });
+                if (false as boolean) {
+                  void continueWith({
+                    typeName: "branch1",
+                    // @ts-expect-error typeName/input mismatch must be rejected
+                    input: { valueBranched2: job.input.value },
+                  });
+                }
 
                 return continueWith(
                   job.input.value % 2 === 0

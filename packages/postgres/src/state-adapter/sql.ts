@@ -706,6 +706,16 @@ RETURNING *
   true,
 );
 
+export const triggerJobSql: TypedSql<readonly [NamedParameter<"id", string>], [DbJob]> = sql(
+  /* sql */ `
+UPDATE {{schema}}.{{table_prefix}}job
+SET scheduled_at = now()
+WHERE id = $1
+RETURNING *
+`,
+  true,
+);
+
 export const renewJobLeaseSql: TypedSql<
   readonly [
     NamedParameter<"id", string>,

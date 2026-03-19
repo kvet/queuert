@@ -75,6 +75,20 @@ Returns `JobChain[]`.
 
 Deletes the specified job chains. When **cascade** is `true`, transitive dependencies are included (default: `false`). Throws `BlockerReferenceError` if external jobs depend on the targeted chains.
 
+### triggerJob
+
+```typescript
+const job = await client.triggerJob({
+  id: jobId,
+  transactionHooks,
+  tx,
+});
+```
+
+Returns `Job`.
+
+Triggers a pending job immediately by setting its `scheduledAt` to now. Throws `JobNotFoundError` if the job does not exist, `JobNotTriggerableError` if the job is not pending.
+
 ### completeJobChain
 
 ```typescript

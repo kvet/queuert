@@ -37,6 +37,17 @@ class JobAlreadyCompletedError extends Error {
 
 Thrown when attempting to complete a job that is already completed.
 
+## JobNotTriggerableError
+
+```typescript
+class JobNotTriggerableError extends Error {
+  readonly jobId: string | undefined;
+  readonly status: string | undefined;
+}
+```
+
+Thrown by `triggerJob` when the job is not in a triggerable state. Only `pending` jobs can be triggered.
+
 ## JobTakenByAnotherWorkerError
 
 ```typescript

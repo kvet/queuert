@@ -100,6 +100,15 @@ const worker = await createInProcessWorker({
         },
         backoffConfig: { initialDelayMs: 100, maxDelayMs: 100 },
       },
+
+      "scheduled-report": {
+        attemptHandler: async ({ complete }) => {
+          await delay(50);
+          return complete(async () => ({
+            generatedAt: new Date().toISOString(),
+          }));
+        },
+      },
     },
   }),
 });
@@ -175,6 +184,21 @@ const retryJob = await withTransactionHooks(async (transactionHooks) =>
 );
 const retryResult = await client.awaitJobChain(retryJob, { timeoutMs: 5000 });
 console.log("Result:", retryResult.output);
+
+// Scenario 5: Scheduled Job (1 hour in the future — trigger it from the dashboard)
+console.log("\n--- Scenario 5: Scheduled Job ---");
+await withTransactionHooks(async (transactionHooks) =>
+  stateAdapter.runInTransaction(async (ctx) =>
+    client.startJobChain({
+      ...ctx,
+      transactionHooks,
+      typeName: "scheduled-report",
+      input: { reportType: "daily-summary" },
+      schedule: { afterMs: 60 * 60 * 1000 },
+    }),
+  ),
+);
+console.log('Created scheduled-report (in 1 hour). Use "Trigger now" in the dashboard!');
 
 // Cleanup
 await stopWorker();

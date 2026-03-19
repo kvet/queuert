@@ -13,6 +13,7 @@ import {
 } from "../suites/spec-context.spec-helper.js";
 import { validationTestSuite } from "../suites/validation.test-suite.js";
 import { waitChainCompletionTestSuite } from "../suites/wait-chain-completion.test-suite.js";
+import { triggerJobTestSuite } from "../suites/trigger-job.test-suite.js";
 import { workerlessCompletionTestSuite } from "../suites/workerless-completion.test-suite.js";
 import { stateResilienceTestSuite } from "../testing.js";
 
@@ -53,6 +54,10 @@ describe("State Resilience", () => {
 
 describe("Workerless Completion", () => {
   workerlessCompletionTestSuite({ it: inProcessNoopIt });
+});
+
+describe("Trigger Job", () => {
+  triggerJobTestSuite({ it: inProcessNoopIt });
 });
 
 describe("Scheduling", () => {

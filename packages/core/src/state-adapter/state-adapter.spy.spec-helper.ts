@@ -93,6 +93,7 @@ export const createSpyStateAdapter = <TTxContext extends BaseTxContext, TJobId e
     listJobs: wrap("listJobs", stateAdapter.listJobs),
     listJobChainJobs: wrap("listJobChainJobs", stateAdapter.listJobChainJobs),
     listBlockedJobs: wrap("listBlockedJobs", stateAdapter.listBlockedJobs),
+    triggerJob: wrap("triggerJob", stateAdapter.triggerJob),
     record: async ({ name, ...txCtx }: { name: string } & TTxContext) =>
       record({ name, txCtx: txCtx as unknown as TTxContext }),
   };

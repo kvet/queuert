@@ -1,4 +1,4 @@
-import { type StateAdapter } from "queuert";
+import { type NotifyAdapter, type StateAdapter } from "queuert";
 import { serializeJob } from "../../shared/job.js";
 import { parseCursor, parseLimit, parseStatusFilter, parseTypeNameFilter } from "./params.js";
 
@@ -59,4 +59,26 @@ export const handleJobDetail = async (
       lastJob ? serializeJob(lastJob) : null,
     ]),
   });
+};
+
+export const handleJobTrigger = async (
+  stateAdapter: StateAdapter<any, any>,
+  notifyAdapter: NotifyAdapter,
+  jobId: string,
+): Promise<Response> => {
+  const existing = await stateAdapter.getJobById({ jobId });
+  if (!existing) {
+    return Response.json({ error: "Job not found" }, { status: 404 });
+  }
+  if (existing.status !== "pending") {
+    return Response.json(
+      { error: `Cannot trigger job with status "${existing.status}"` },
+      { status: 409 },
+    );
+  }
+
+  const job = await stateAdapter.triggerJob({ jobId });
+  await notifyAdapter.notifyJobScheduled(job.typeName, 1);
+
+  return Response.json({ job: serializeJob(job) });
 };

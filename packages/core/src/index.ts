@@ -53,6 +53,7 @@ export {
   JobAlreadyCompletedError,
   JobChainNotFoundError,
   JobNotFoundError,
+  JobNotTriggerableError,
   JobTakenByAnotherWorkerError,
   JobTypeMismatchError,
   JobTypeValidationError,

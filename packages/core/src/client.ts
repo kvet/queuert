@@ -36,10 +36,12 @@ import { type Job, type JobStatus, mapStateJobToJob } from "./entities/job.js";
 import {
   JobAlreadyCompletedError,
   JobChainNotFoundError,
+  JobNotFoundError,
+  JobNotTriggerableError,
   JobTypeMismatchError,
   WaitChainTimeoutError,
 } from "./errors.js";
-import { bufferNotifyJobOwnershipLost } from "./helpers/notify-hooks.js";
+import { bufferNotifyJobOwnershipLost, bufferNotifyJobScheduled } from "./helpers/notify-hooks.js";
 import { raceWithSleep } from "./helpers/sleep.js";
 import { type Helpers, createHelpers } from "./setup-helpers.js";
 import { type TransactionHooks } from "./transaction-hooks.js";
@@ -154,7 +156,7 @@ type _StartJobChainsResult<
  * The public API for managing job chains. Created via {@link createClient}.
  *
  * Methods are split into two categories:
- * - **Mutating** — `startJobChain`, `startJobChains`, `completeJobChain`, `deleteJobChains`. Require `transactionHooks` and a transaction context.
+ * - **Mutating** — `startJobChain`, `startJobChains`, `completeJobChain`, `deleteJobChains`, `triggerJob`. Require `transactionHooks` and a transaction context.
  * - **Read-only** — `getJobChain`, `getJob`, `listJobChains`, `listJobs`, `listJobChainJobs`, `getJobBlockers`, `listBlockedJobs`, `awaitJobChain`. Accept an optional transaction context.
  */
 export type Client<
@@ -194,6 +196,13 @@ export type Client<
       keyof EntryJobTypeDefinitions<TNavigationMap> & string
     >[]
   >;
+
+  triggerJob: (
+    options: {
+      id: TJobId;
+      transactionHooks: TransactionHooks;
+    } & GetStateAdapterTxContext<TStateAdapter>,
+  ) => Promise<ResolvedJob<TJobId, TNavigationMap, keyof TNavigationMap & string>>;
 
   completeJobChain: <
     TChainTypeName extends keyof EntryJobTypeDefinitions<TNavigationMap> & string,
@@ -441,6 +450,37 @@ export const createClient = async <
             keyof EntryJobTypeDefinitions<TNavigationMap> & string
           >,
       );
+    },
+
+    /** Trigger a pending job immediately by setting its scheduledAt to now. Throws {@link JobNotFoundError} if the job does not exist, {@link JobNotTriggerableError} if the job is not pending. */
+    triggerJob: async (
+      options: {
+        id: TJobId;
+        transactionHooks: TransactionHooks;
+      } & GetStateAdapterTxContext<TStateAdapter>,
+    ): Promise<ResolvedJob<TJobId, TNavigationMap, keyof TNavigationMap & string>> => {
+      const { id, transactionHooks, ...txCtx } = options;
+
+      const existing = await helpers.stateAdapter.getJobById({ txCtx, jobId: id });
+      if (!existing) {
+        throw new JobNotFoundError(`Job with id ${String(id)} not found`, {
+          jobId: id as string,
+        });
+      }
+      if (existing.status !== "pending") {
+        throw new JobNotTriggerableError(
+          `Cannot trigger job ${String(id)}: job status is "${existing.status}", must be "pending"`,
+          { jobId: id as string, status: existing.status },
+        );
+      }
+
+      const job = await helpers.stateAdapter.triggerJob({ txCtx, jobId: id });
+      bufferNotifyJobScheduled(transactionHooks, helpers.notifyAdapter, job);
+      return mapStateJobToJob(job) as ResolvedJob<
+        TJobId,
+        TNavigationMap,
+        keyof TNavigationMap & string
+      >;
     },
 
     /** Complete a job chain from outside a worker. Validates `typeName`, then passes the current job and a `complete` function to the caller. */

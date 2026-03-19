@@ -2077,6 +2077,101 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
   });
 
+  describe("triggerJob", () => {
+    it("sets scheduledAt to now on a pending job", async ({ stateAdapter, expect }) => {
+      const futureDate = new Date(Date.now() + 60_000);
+      const [{ job: created }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
+          txCtx,
+          jobs: [
+            {
+              typeName: "trigger-test",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "trigger-test",
+              input: null,
+              schedule: { at: futureDate },
+            },
+          ],
+        }),
+      );
+
+      expect(Math.abs(created.scheduledAt.getTime() - futureDate.getTime())).toBeLessThan(1000);
+
+      const before = Date.now();
+      const triggered = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.triggerJob({ txCtx, jobId: created.id }),
+      );
+
+      expect(triggered.status).toBe("pending");
+      expect(triggered.scheduledAt.getTime()).toBeGreaterThanOrEqual(before - 1000);
+      expect(triggered.scheduledAt.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
+    });
+
+    it("makes a future-scheduled job acquirable", async ({ stateAdapter, expect }) => {
+      const futureDate = new Date(Date.now() + 60_000);
+      const [{ job: created }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
+          txCtx,
+          jobs: [
+            {
+              typeName: "trigger-acquire",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "trigger-acquire",
+              input: null,
+              schedule: { at: futureDate },
+            },
+          ],
+        }),
+      );
+
+      const beforeTrigger = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.acquireJob({ txCtx, typeNames: ["trigger-acquire"] }),
+      );
+      expect(beforeTrigger.job).toBeUndefined();
+
+      await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.triggerJob({ txCtx, jobId: created.id }),
+      );
+
+      const afterTrigger = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.acquireJob({ txCtx, typeNames: ["trigger-acquire"] }),
+      );
+      expect(afterTrigger.job).toBeDefined();
+      expect(afterTrigger.job!.id).toBe(created.id);
+    });
+
+    it("preserves other job fields", async ({ stateAdapter, expect }) => {
+      const futureDate = new Date(Date.now() + 60_000);
+      const [{ job: created }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
+          txCtx,
+          jobs: [
+            {
+              typeName: "trigger-fields",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "trigger-fields",
+              input: { key: "value" },
+              schedule: { at: futureDate },
+            },
+          ],
+        }),
+      );
+
+      const triggered = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.triggerJob({ txCtx, jobId: created.id }),
+      );
+
+      expect(triggered.id).toBe(created.id);
+      expect(triggered.typeName).toBe("trigger-fields");
+      expect(triggered.input).toEqual({ key: "value" });
+      expect(triggered.chainId).toBe(created.chainId);
+      expect(triggered.attempt).toBe(created.attempt);
+    });
+  });
+
   describe("completeJob", () => {
     it("completes a job with output", async ({ stateAdapter, expect }) => {
       const [{ job: created }] = await stateAdapter.runInTransaction(async (txCtx) =>

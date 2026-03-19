@@ -58,6 +58,16 @@ export const jobTypeRegistry = defineJobTypeRegistry<{
    *   might-fail (attempt #1: fail) → (attempt #2: success)
    */
   "might-fail": { entry: true; input: { shouldFail: boolean }; output: { success: true } };
+
+  /*
+   * Scenario 5 - Scheduled Job:
+   *   scheduled-report (scheduled 1 hour in the future — use "Trigger now" in the dashboard)
+   */
+  "scheduled-report": {
+    entry: true;
+    input: { reportType: string };
+    output: { generatedAt: string };
+  };
 }>();
 
 export const db = createDatabase();

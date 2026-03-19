@@ -221,6 +221,9 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     orderDirection: OrderDirection;
     page: PageParams;
   }) => Promise<Page<StateJob>>;
+
+  /** Triggers a pending job immediately by setting its scheduledAt to now. */
+  triggerJob: (params: { txCtx?: TTxContext; jobId: TJobId }) => Promise<StateJob>;
 };
 
 export type GetStateAdapterTxContext<TStateAdapter> =

@@ -1,6 +1,6 @@
-import { For, Show, createResource } from "solid-js";
+import { For, Show, createResource, createSignal } from "solid-js";
 import { A, useParams } from "@solidjs/router";
-import { getJobDetail } from "../api.js";
+import { getJobDetail, triggerJob } from "../api.js";
 import { StatusBadge } from "./StatusBadge.js";
 import { JsonView } from "./JsonView.js";
 import { TimeAgo } from "./TimeAgo.js";
@@ -14,7 +14,18 @@ const fmtDate = (d: Date) => dtf.format(d);
 
 export function JobDetail() {
   const params = useParams<{ id: string }>();
-  const [detail] = createResource(() => params.id, getJobDetail);
+  const [detail, { mutate }] = createResource(() => params.id, getJobDetail);
+  const [triggering, setTriggering] = createSignal(false);
+
+  const handleTrigger = async (jobId: string) => {
+    setTriggering(true);
+    try {
+      const updated = await triggerJob(jobId);
+      mutate((prev) => (prev ? { ...prev, job: updated } : prev));
+    } finally {
+      setTriggering(false);
+    }
+  };
 
   return (
     <div>
@@ -53,6 +64,16 @@ export function JobDetail() {
                   <dt>Scheduled</dt>
                   <dd>
                     {fmtDate(job.scheduledAt)} (<TimeAgo date={job.scheduledAt} />)
+                    <Show when={job.status === "pending" && job.scheduledAt > new Date()}>
+                      {" "}
+                      <button
+                        class="trigger-btn"
+                        disabled={triggering()}
+                        onClick={() => void handleTrigger(job.id)}
+                      >
+                        {triggering() ? "Triggering..." : "Trigger now"}
+                      </button>
+                    </Show>
                   </dd>
                   <Show when={job.completedAt}>
                     <dt>Completed</dt>

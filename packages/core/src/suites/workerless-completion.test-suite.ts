@@ -199,9 +199,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
             if (job.typeName === "start") {
               job = await complete(job, async ({ continueWith }) => {
-                expectTypeOf<Parameters<typeof continueWith>[0]["typeName"]>().toEqualTypeOf<
-                  "step-a"
-                >();
+                expectTypeOf<
+                  Parameters<typeof continueWith>[0]["typeName"]
+                >().toEqualTypeOf<"step-a">();
 
                 return continueWith({
                   typeName: "step-a",
@@ -212,9 +212,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
             if (job.typeName === "step-a") {
               job = await complete(job, async ({ continueWith }) => {
-                expectTypeOf<Parameters<typeof continueWith>[0]["typeName"]>().toEqualTypeOf<
-                  "step-b"
-                >();
+                expectTypeOf<
+                  Parameters<typeof continueWith>[0]["typeName"]
+                >().toEqualTypeOf<"step-b">();
 
                 return continueWith({
                   typeName: "step-b",

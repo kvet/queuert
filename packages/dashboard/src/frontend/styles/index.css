@@ -265,6 +265,26 @@ a:hover {
   color: var(--text-muted);
 }
 
+.trigger-btn {
+  margin-left: 8px;
+  padding: 2px 8px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-hover);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.trigger-btn:hover {
+  background: var(--border);
+}
+
+.trigger-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .section {
   margin-bottom: 24px;
 }

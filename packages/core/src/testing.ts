@@ -23,6 +23,7 @@ export {
 export { stateResilienceTestSuite } from "./suites/state-resilience.test-suite.js";
 export { waitChainCompletionTestSuite } from "./suites/wait-chain-completion.test-suite.js";
 export { workerTestSuite } from "./suites/worker.test-suite.js";
+export { triggerJobTestSuite } from "./suites/trigger-job.test-suite.js";
 export { workerlessCompletionTestSuite } from "./suites/workerless-completion.test-suite.js";
 
 // Test Context Helpers
