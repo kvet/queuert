@@ -43,6 +43,7 @@ import { bufferNotifyJobOwnershipLost } from "./helpers/notify-hooks.js";
 import { raceWithSleep } from "./helpers/sleep.js";
 import { type Helpers, createHelpers } from "./setup-helpers.js";
 import { type TransactionHooks } from "./transaction-hooks.js";
+import { type IsUnion } from "./helpers/typescript.js";
 import { type AttemptCompleteOptions } from "./worker/job-process.js";
 
 /** @internal Used by `createInProcessWorker` and `createDashboard` to access client internals. Not part of the public API. */
@@ -78,20 +79,24 @@ type _JobChainCompleteOptions<
           >
         >,
   >(
-    job: ResolvedJob<
-      GetStateAdapterJobId<TStateAdapter>,
-      TNavigationMap,
-      TJobTypeName,
-      TChainTypeName
-    >,
-    completeCallback: (
-      completeOptions: AttemptCompleteOptions<
-        TStateAdapter,
-        TNavigationMap,
-        TJobTypeName,
-        TChainTypeName
-      >,
-    ) => TReturn,
+    ...args: true extends IsUnion<TJobTypeName>
+      ? [job: "Error: narrow the job type before calling complete (e.g. check job.typeName)"]
+      : [
+          job: ResolvedJob<
+            GetStateAdapterJobId<TStateAdapter>,
+            TNavigationMap,
+            TJobTypeName,
+            TChainTypeName
+          >,
+          completeCallback: (
+            completeOptions: AttemptCompleteOptions<
+              TStateAdapter,
+              TNavigationMap,
+              TJobTypeName,
+              TChainTypeName
+            >,
+          ) => TReturn,
+        ]
   ) => Promise<Awaited<TReturn>>;
 }) => Promise<TCompleteReturn>;
 

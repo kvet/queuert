@@ -144,6 +144,94 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     expect(completedChain.output).toEqual({ done: true });
   });
 
+  it("rejects continueWith typeName/input mismatches in completeJobChain", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    observabilityAdapter,
+    log,
+  }) => {
+    const jobTypeRegistry = defineJobTypeRegistry<{
+      start: {
+        entry: true;
+        input: { requestId: string };
+        continueWith: { typeName: "step-a" };
+      };
+      "step-a": {
+        input: { valueA: number };
+        continueWith: { typeName: "step-b" };
+      };
+      "step-b": {
+        input: { valueB: boolean };
+        output: { result: string };
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+    });
+
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "start",
+          input: { requestId: "req-1" },
+        }),
+      ),
+    );
+
+    await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.completeJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "start",
+          id: jobChain.id,
+          complete: async ({ job, complete }) => {
+            // @ts-expect-error complete() rejects un-narrowed union job types
+            void complete(job, async () => ({ result: "done" }));
+
+            if (job.typeName === "start") {
+              job = await complete(job, async ({ continueWith }) => {
+                expectTypeOf<Parameters<typeof continueWith>[0]["typeName"]>().toEqualTypeOf<
+                  "step-a"
+                >();
+
+                return continueWith({
+                  typeName: "step-a",
+                  input: { valueA: 42 },
+                });
+              });
+            }
+
+            if (job.typeName === "step-a") {
+              job = await complete(job, async ({ continueWith }) => {
+                expectTypeOf<Parameters<typeof continueWith>[0]["typeName"]>().toEqualTypeOf<
+                  "step-b"
+                >();
+
+                return continueWith({
+                  typeName: "step-b",
+                  input: { valueB: true },
+                });
+              });
+            }
+
+            if (job.typeName === "step-b") {
+              return complete(job, async () => ({ result: "done" }));
+            }
+          },
+        }),
+      ),
+    );
+  });
+
   it("partially completes a complex job chain without worker", async ({
     stateAdapter,
     notifyAdapter,
