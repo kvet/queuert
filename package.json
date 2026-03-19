@@ -4,23 +4,30 @@
   "keywords": [],
   "license": "MIT",
   "author": "kvet",
+  "workspaces": [
+    "benchmarks/*",
+    "docs",
+    "examples/*",
+    "packages-internal/*",
+    "packages/*"
+  ],
   "scripts": {
-    "build": "turbo build",
+    "build": "bun run --filter './packages/*' build",
     "lint": "oxlint --type-aware",
     "fmt": "oxlint --type-aware --fix && oxfmt",
     "fmt:check": "oxfmt --check",
     "test": "vitest --run",
-    "typecheck": "turbo typecheck",
-    "benchmarks": "turbo start --filter=\"./benchmarks/*\" --concurrency=1",
-    "examples": "turbo start --filter=\"./examples/*\"",
-    "check": "pnpm fmt:check && pnpm lint && pnpm typecheck && pnpm build && vitest --run && pnpm examples",
+    "typecheck": "bun run --filter './packages/*' --filter './packages-internal/*' typecheck",
+    "benchmarks": "bun run --filter benchmark-memory-footprint start && bun run --filter benchmark-processing-capacity start && bun run --filter benchmark-type-complexity start",
+    "examples": "bun run --filter './examples/*' start",
+    "check": "bun run fmt:check && bun run lint && bun run typecheck && bun run build && vitest --run && bun run examples",
     "modules:clean": "rm -rf $(find . -name node_modules -type d)",
     "changeset": "changeset",
     "version": "changeset version",
-    "docs:dev": "pnpm --filter @queuert/docs dev",
-    "docs:build": "pnpm --filter @queuert/docs build",
-    "docs:preview": "pnpm --filter @queuert/docs preview",
-    "release": "pnpm build && changeset publish"
+    "docs:dev": "bun run --filter @queuert/docs dev",
+    "docs:build": "bun run --filter @queuert/docs build",
+    "docs:preview": "bun run --filter @queuert/docs preview",
+    "release": "bun run build && changeset publish"
   },
   "devDependencies": {
     "@changesets/cli": "^2.29.8",
@@ -29,11 +36,9 @@
     "oxlint": "^1.47.0",
     "oxlint-tsgolint": "^0.12.2",
     "tsdown": "^0.20.3",
-    "turbo": "^2.8.14",
     "vitest": "^4.0.18"
   },
   "engines": {
     "node": ">=22"
-  },
-  "packageManager": "pnpm@10.17.0"
+  }
 }

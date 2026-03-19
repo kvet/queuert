@@ -43,7 +43,7 @@
     }
   },
   "scripts": {
-    "prepublishOnly": "pnpm build",
+    "prepublishOnly": "bun run build",
     "build": "tsdown",
     "typecheck": "tsgo --noEmit",
     "test": "vitest --run"

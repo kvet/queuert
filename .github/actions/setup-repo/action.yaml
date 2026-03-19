@@ -2,10 +2,6 @@ name: Setup repo
 description: Installs dependencies and prepares the environment for execution
 
 inputs:
-  install_dependencies:
-    description: Whether to install dependencies
-    required: false
-    default: "true"
   node-version:
     description: Node.js version to install (overrides .nvmrc if set)
     required: false
@@ -18,21 +14,10 @@ inputs:
 runs:
   using: composite
   steps:
-    - uses: pnpm/action-setup@v4
-      name: Install pnpm
-      with:
-        run_install: false
+    - uses: oven-sh/setup-bun@v2
+      name: Install bun
 
     - name: Install Node.js
-      if: inputs.install_dependencies == 'true'
-      uses: actions/setup-node@v4
-      with:
-        cache: pnpm
-        node-version: ${{ inputs.node-version }}
-        node-version-file: ${{ inputs.node-version == '' && '.nvmrc' || '' }}
-        registry-url: ${{ inputs.registry-url || '' }}
-    - name: Install Node.js
-      if: inputs.install_dependencies == 'false'
       uses: actions/setup-node@v4
       with:
         node-version: ${{ inputs.node-version }}
@@ -40,6 +25,5 @@ runs:
         registry-url: ${{ inputs.registry-url || '' }}
 
     - name: Install dependencies
-      if: inputs.install_dependencies == 'true'
       shell: bash
-      run: pnpm install --frozen-lockfile
+      run: bun install --frozen-lockfile

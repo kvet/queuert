@@ -39,8 +39,8 @@
     }
   },
   "scripts": {
-    "prepublishOnly": "pnpm build",
-    "build": "pnpm build:frontend && tsdown",
+    "prepublishOnly": "bun run build",
+    "build": "bun run build:frontend && tsdown",
     "build:frontend": "vite build",
     "typecheck": "tsgo --noEmit",
     "test": "vitest --run"

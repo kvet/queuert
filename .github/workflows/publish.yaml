@@ -32,4 +32,4 @@ jobs:
         run: npm install -g npm@latest
 
       - name: Publish packages
-        run: pnpm -r publish --access public --no-git-checks --provenance
+        run: npx changeset publish --access public --no-git-checks --provenance

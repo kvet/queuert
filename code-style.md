@@ -139,11 +139,11 @@ describe("MyFeature", () => {
 ## Commands
 
 ```bash
-pnpm fmt        # Format code (run before checks)
-pnpm lint       # Run linter
-pnpm typecheck  # Run type checking
-pnpm test       # Run tests
-pnpm check      # Run all checks together
+bun run fmt        # Format code (run before checks)
+bun run lint       # Run linter
+bun run typecheck  # Run type checking
+bun run test       # Run tests
+bun run check      # Run all checks together
 ```
 
 ## Examples

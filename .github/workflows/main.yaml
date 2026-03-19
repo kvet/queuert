@@ -20,34 +20,26 @@ jobs:
 
       - uses: ./.github/actions/setup-repo
 
-      - name: Cache turbo
-        uses: actions/cache@v4
-        with:
-          path: .turbo
-          key: ${{ runner.os }}-turbo-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-turbo-
-
       - name: Format check
-        run: pnpm fmt:check
+        run: bun run fmt:check
 
       - name: Lint
-        run: pnpm lint
+        run: bun run lint
 
       - name: Build
-        run: pnpm build
+        run: bun run build
 
       - name: Typecheck
-        run: pnpm typecheck
+        run: bun run typecheck
 
       - name: Test
-        run: pnpm test
+        run: bun run test
 
       - name: Examples
-        run: pnpm examples
+        run: bun run examples
 
       - name: Benchmarks
-        run: pnpm benchmarks
+        run: bun run benchmarks
 
   # PR CHECKS
 

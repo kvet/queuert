@@ -1,7 +1,0 @@
-packages:
-  - "benchmarks/*"
-  - "docs"
-  - "examples/*"
-  - "packages-internal/*"
-  - "packages/*"
-dangerouslyAllowAllBuilds: true

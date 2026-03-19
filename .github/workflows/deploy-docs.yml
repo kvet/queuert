@@ -28,7 +28,7 @@ jobs:
       - uses: ./.github/actions/setup-repo
 
       - name: Build docs
-        run: pnpm docs:build
+        run: bun run docs:build
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
