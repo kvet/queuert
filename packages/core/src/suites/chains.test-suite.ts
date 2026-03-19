@@ -260,6 +260,133 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
   });
 
+  it("handles branched chains with different inputs", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypeRegistry = defineJobTypeRegistry<{
+      main: {
+        entry: true;
+        input: { value: number };
+        continueWith: { typeName: "branch1" | "branch2" };
+      };
+      branch1: {
+        input: { valueBranched1: number };
+        output: { result: number };
+      };
+      branch2: {
+        input: { valueBranched2: number };
+        output: { result: number };
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          main: {
+            attemptHandler: async ({ job, prepare, complete }) => {
+              await prepare({ mode: "atomic" });
+              return complete(async ({ continueWith }) => {
+                expectTypeOf<Parameters<typeof continueWith>[0]["typeName"]>().toEqualTypeOf<
+                  "branch1" | "branch2"
+                >();
+
+                void continueWith({
+                  typeName: "branch1",
+                  // @ts-expect-error typeName/input mismatch must be rejected
+                  input: { valueBranched2: job.input.value },
+                });
+
+                return continueWith(
+                  job.input.value % 2 === 0
+                    ? {
+                        typeName: "branch1",
+                        input: { valueBranched1: job.input.value },
+                      }
+                    : {
+                        typeName: "branch2",
+                        input: { valueBranched2: job.input.value },
+                      },
+                );
+              });
+            },
+          },
+          branch1: {
+            attemptHandler: async ({ job, prepare, complete }) => {
+              await prepare({ mode: "atomic" });
+              return complete(async () => ({
+                result: job.input.valueBranched1,
+              }));
+            },
+          },
+          branch2: {
+            attemptHandler: async ({ job, prepare, complete }) => {
+              await prepare({ mode: "atomic" });
+              return complete(async () => ({
+                result: job.input.valueBranched2,
+              }));
+            },
+          },
+        },
+      }),
+    });
+
+    const evenJobChain = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "main",
+          input: { value: 2 },
+        }),
+      ),
+    );
+    const oddJobChain = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "main",
+          input: { value: 3 },
+        }),
+      ),
+    );
+    expectTypeOf<CompletedJobChain<typeof evenJobChain>["output"]>().toEqualTypeOf<{
+      result: number;
+    }>();
+    expectTypeOf<CompletedJobChain<typeof oddJobChain>["output"]>().toEqualTypeOf<{
+      result: number;
+    }>();
+
+    await withWorkers([await worker.start()], async () => {
+      const [succeededJobEven, succeededJobOdd] = await Promise.all([
+        client.awaitJobChain(evenJobChain, completionOptions),
+        client.awaitJobChain(oddJobChain, completionOptions),
+      ]);
+
+      expectTypeOf(succeededJobEven.output).toEqualTypeOf<{ result: number }>();
+      expectTypeOf(succeededJobOdd.output).toEqualTypeOf<{ result: number }>();
+      expect(succeededJobEven.output).toEqual({ result: 2 });
+      expect(succeededJobOdd.output).toEqual({ result: 3 });
+    });
+  });
+
   it("handles loops", async ({
     stateAdapter,
     notifyAdapter,
