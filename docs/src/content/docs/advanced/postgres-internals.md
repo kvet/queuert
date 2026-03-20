@@ -245,6 +245,14 @@ The adapter uses CTEs (Common Table Expressions) extensively to perform multi-st
 
 All writeable CTEs use `RETURNING` to propagate results between steps without additional round-trips.
 
+## Listing Queries and Vacuum
+
+`listJobChains` joins each root row with the last job in the chain via a lateral subquery. The `status` filter applies to the joined last job and cannot use an index — only `typeName` and date range filters narrow the scan before the join. Without these filters, every root row is scanned and joined.
+
+Listing queries hold an MVCC snapshot for their duration. On tables with frequent writes, unfiltered scans hold snapshots longer, preventing autovacuum from reclaiming dead tuples and causing table bloat over time.
+
+`listJobs` uses straightforward indexed scans without a join and is efficient at any scale.
+
 ## See Also
 
 - [Adapter Architecture](../adapters/) — Provider/adapter design philosophy

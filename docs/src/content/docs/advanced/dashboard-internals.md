@@ -73,6 +73,10 @@ Returns the root job, last job, all jobs in the chain ordered by chain index, an
 
 **`GET /`** (and all non-API paths) — Serves the SPA `index.html` with a dynamically injected `<base>` tag matching the configured `basePath`. This enables client-side routing to work correctly behind reverse proxies.
 
+## Query Performance
+
+The chain listing endpoint (`GET /api/chains`) joins each root row with the last job in the chain. Filtering by `status` is not optimized — it applies to the joined last job and cannot use an index. Always pass `typeName` to narrow the scan. See [Performance considerations](/queuert/guides/queries/#performance-considerations).
+
 ## Frontend
 
 The frontend is a SolidJS single-page application built with Vite.

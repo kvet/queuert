@@ -164,6 +164,7 @@ const performJob = async ({
  * Call `start()` to begin processing. It returns a `stop` function — call it to gracefully shut down.
  */
 export type InProcessWorker = {
+  /** Begin processing jobs. Returns a `stop` function that gracefully shuts down the worker. */
   start: () => Promise<() => Promise<void>>;
 };
 

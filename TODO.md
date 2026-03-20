@@ -5,7 +5,6 @@
 - [REF] Reset jobs in chains + dashboard
 - [REF] Delete chains from dashboard
 - [REF] Use client in dashboard instead of direct calls to adapters
-- [REF] Optimize search of chains by status; it requires full scan currently
 - [REF] Plugins
   - Attempt middleware plugin
     - Hook into prepare

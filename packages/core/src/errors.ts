@@ -2,8 +2,11 @@ import { type ScheduleOptions } from "./entities/schedule.js";
 
 /** Thrown when a job's lease is held by another worker. */
 export class JobTakenByAnotherWorkerError extends Error {
+  /** The job that was contested. */
   readonly jobId: string | undefined;
+  /** The worker that attempted to acquire the job. */
   readonly workerId: string | undefined;
+  /** The worker that currently holds the lease. */
   readonly leasedBy: string | null | undefined;
 
   constructor(
@@ -20,6 +23,7 @@ export class JobTakenByAnotherWorkerError extends Error {
 
 /** Thrown when a job does not exist. */
 export class JobNotFoundError extends Error {
+  /** The ID that was looked up. */
   readonly jobId: string | undefined;
 
   constructor(message: string, options?: { jobId?: string; cause?: unknown }) {
@@ -31,6 +35,7 @@ export class JobNotFoundError extends Error {
 
 /** Thrown when a job chain does not exist. */
 export class JobChainNotFoundError extends Error {
+  /** The chain ID that was looked up. */
   readonly chainId: string | undefined;
 
   constructor(message: string, options?: { chainId?: string; cause?: unknown }) {
@@ -42,6 +47,7 @@ export class JobChainNotFoundError extends Error {
 
 /** Thrown when attempting to complete an already-completed job. */
 export class JobAlreadyCompletedError extends Error {
+  /** The job that was already completed. */
   readonly jobId: string | undefined;
 
   constructor(message: string, options?: { jobId?: string; cause?: unknown }) {
@@ -53,7 +59,9 @@ export class JobAlreadyCompletedError extends Error {
 
 /** Thrown when attempting to trigger a job that is not in a triggerable state (must be pending). */
 export class JobNotTriggerableError extends Error {
+  /** The job that could not be triggered. */
   readonly jobId: string | undefined;
+  /** The job's current status (must be `pending` to trigger). */
   readonly status: string | undefined;
 
   constructor(message: string, options?: { jobId?: string; status?: string; cause?: unknown }) {
@@ -66,7 +74,9 @@ export class JobNotTriggerableError extends Error {
 
 /** Thrown when {@link Client.awaitJobChain | awaitJobChain} exceeds its timeout or is aborted. */
 export class WaitChainTimeoutError extends Error {
+  /** The chain that timed out. */
   readonly chainId: string | undefined;
+  /** The timeout duration in milliseconds. */
   readonly timeoutMs: number | undefined;
 
   constructor(
@@ -82,7 +92,9 @@ export class WaitChainTimeoutError extends Error {
 
 /** Thrown when a job or chain's actual type does not match the expected `typeName`. */
 export class JobTypeMismatchError extends Error {
+  /** The type name that was expected. */
   readonly expectedTypeName: string;
+  /** The type name that was found. */
   readonly actualTypeName: string;
 
   constructor(
@@ -104,6 +116,7 @@ export type BlockerReference = {
 
 /** Thrown when deleting chains that are still referenced as blockers by other jobs. */
 export class BlockerReferenceError extends Error {
+  /** The blocker references that prevented deletion. */
   readonly references: readonly BlockerReference[];
 
   constructor(
@@ -118,6 +131,7 @@ export class BlockerReferenceError extends Error {
 
 /** Thrown when accessing a transaction hook that has not been registered. */
 export class HookNotRegisteredError extends Error {
+  /** The hook key that was not found. */
   readonly key: symbol;
 
   constructor(message: string, options: { key: symbol }) {
@@ -158,6 +172,7 @@ export const rescheduleJob = (schedule: ScheduleOptions, cause?: unknown): never
 
 /** Thrown when merging registries that contain overlapping job type names. */
 export class DuplicateJobTypeError extends Error {
+  /** The type names that appeared in more than one registry. */
   readonly duplicateTypeNames: readonly string[];
 
   constructor(

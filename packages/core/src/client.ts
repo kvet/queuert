@@ -166,6 +166,7 @@ export type Client<
 > = {
   readonly [helpersSymbol]: Helpers;
 
+  /** Create a new job chain. Returns the created chain with a `deduplicated` flag. */
   startJobChain: <TChainTypeName extends keyof EntryJobTypeDefinitions<TNavigationMap> & string>(
     options: _StartJobChainEntry<TJobId, TNavigationMap, TChainTypeName> & {
       transactionHooks: TransactionHooks;
@@ -176,6 +177,7 @@ export type Client<
     }
   >;
 
+  /** Create multiple job chains in a single batch operation. Returns created chains with `deduplicated` flags, in the same order as input. */
   startJobChains: <const TChains extends readonly _AnyStartJobChainEntry<TJobId, TNavigationMap>[]>(
     options: {
       items: TChains;
@@ -183,6 +185,7 @@ export type Client<
     } & GetStateAdapterTxContext<TStateAdapter>,
   ) => Promise<_StartJobChainsResult<TJobId, TNavigationMap, TChains>>;
 
+  /** Delete job chains by ID. Throws {@link BlockerReferenceError} if external jobs depend on them. When `cascade` is true, includes transitive dependencies. */
   deleteJobChains: (
     options: {
       ids: TJobId[];
@@ -197,6 +200,7 @@ export type Client<
     >[]
   >;
 
+  /** Trigger a pending job immediately by setting its scheduledAt to now. Throws {@link JobNotFoundError} if the job does not exist, {@link JobNotTriggerableError} if the job is not pending. */
   triggerJob: (
     options: {
       id: TJobId;
@@ -204,6 +208,7 @@ export type Client<
     } & GetStateAdapterTxContext<TStateAdapter>,
   ) => Promise<ResolvedJob<TJobId, TNavigationMap, keyof TNavigationMap & string>>;
 
+  /** Complete a job chain from outside a worker. Validates `typeName`, then passes the current job and a `complete` function to the caller. */
   completeJobChain: <
     TChainTypeName extends keyof EntryJobTypeDefinitions<TNavigationMap> & string,
     TCompleteReturn,
@@ -223,6 +228,7 @@ export type Client<
     _CompleteJobChainResult<TStateAdapter, TNavigationMap, TChainTypeName, TCompleteReturn>
   >;
 
+  /** Wait for a job chain to complete. Combines polling with notify adapter events. Throws {@link WaitChainTimeoutError} on timeout or abort. */
   awaitJobChain: <
     TChainTypeName extends keyof EntryJobTypeDefinitions<TNavigationMap> & string =
       keyof EntryJobTypeDefinitions<TNavigationMap> & string,
@@ -238,6 +244,7 @@ export type Client<
     },
   ) => Promise<ResolvedJobChain<TJobId, TNavigationMap, TChainTypeName> & { status: "completed" }>;
 
+  /** Get a single job chain by ID. Pass `typeName` for type narrowing — throws {@link JobTypeMismatchError} on mismatch. */
   getJobChain: <
     TChainTypeName extends keyof EntryJobTypeDefinitions<TNavigationMap> & string =
       keyof EntryJobTypeDefinitions<TNavigationMap> & string,
@@ -248,6 +255,7 @@ export type Client<
     } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
   ) => Promise<ResolvedJobChain<TJobId, TNavigationMap, TChainTypeName> | undefined>;
 
+  /** Get a single job by ID. Pass `typeName` for type narrowing — throws {@link JobTypeMismatchError} on mismatch. */
   getJob: <TJobTypeName extends keyof TNavigationMap & string = keyof TNavigationMap & string>(
     options: {
       typeName?: TJobTypeName;
@@ -255,6 +263,13 @@ export type Client<
     } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
   ) => Promise<ResolvedJob<TJobId, TNavigationMap, TJobTypeName> | undefined>;
 
+  /**
+   * List job chains with filtering and cursor-based pagination. Defaults to newest first.
+   *
+   * @remarks
+   * Filtering by `status` alone is not optimized — it applies to the last job in the chain
+   * and cannot use an index. Always combine with `typeName` or a date range (`from`/`to`).
+   */
   listJobChains: <TChainTypeName extends keyof EntryJobTypeDefinitions<TNavigationMap> & string>(
     options: {
       filter?: {
@@ -272,6 +287,7 @@ export type Client<
     } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
   ) => Promise<Page<ResolvedJobChain<TJobId, TNavigationMap, TChainTypeName>>>;
 
+  /** List jobs with filtering and cursor-based pagination. Blockers are not populated — use {@link Client.getJobBlockers | getJobBlockers} for a specific job. Defaults to newest first. */
   listJobs: <TJobTypeName extends keyof TNavigationMap & string>(
     options: {
       filter?: {
@@ -289,6 +305,7 @@ export type Client<
     } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
   ) => Promise<Page<ResolvedJob<TJobId, TNavigationMap, TJobTypeName>>>;
 
+  /** List jobs within a specific chain, ordered by `chainIndex`. Defaults to ascending order. */
   listJobChainJobs: <
     TChainTypeName extends keyof EntryJobTypeDefinitions<TNavigationMap> & string =
       keyof EntryJobTypeDefinitions<TNavigationMap> & string,
@@ -302,6 +319,7 @@ export type Client<
     } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
   ) => Promise<Page<ResolvedChainJobs<TJobId, TNavigationMap, TChainTypeName>>>;
 
+  /** Get the blocker chains for a specific job. Not paginated — blockers are bounded by design. Pass `typeName` for type narrowing. */
   getJobBlockers: <
     TJobTypeName extends keyof TNavigationMap & string = keyof TNavigationMap & string,
   >(
@@ -311,6 +329,7 @@ export type Client<
     } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
   ) => Promise<BlockerChains<TJobId, TNavigationMap, TJobTypeName>>;
 
+  /** List jobs from other chains that are blocked by a given chain. Useful for understanding downstream impact before deletion. */
   listBlockedJobs: <
     TChainTypeName extends keyof EntryJobTypeDefinitions<TNavigationMap> & string =
       keyof EntryJobTypeDefinitions<TNavigationMap> & string,
@@ -759,7 +778,13 @@ export const createClient = async <
 
       return mapStateJobToJob(job) as ResolvedJob<TJobId, TNavigationMap, TJobTypeName>;
     },
-    /** List job chains with filtering and cursor-based pagination. Defaults to newest first. */
+    /**
+     * List job chains with filtering and cursor-based pagination. Defaults to newest first.
+     *
+     * @remarks
+     * Filtering by `status` alone is not optimized — it applies to the last job in the chain
+     * and cannot use an index. Always combine with `typeName` or a date range (`from`/`to`).
+     */
     listJobChains: async <
       TChainTypeName extends keyof EntryJobTypeDefinitions<TNavigationMap> & string,
     >(

@@ -110,6 +110,29 @@ a:hover {
   margin-left: auto;
 }
 
+.select-with-warning {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.filter-warning-inline {
+  position: absolute;
+  right: -8px;
+  top: -8px;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--status-pending);
+  text-decoration: none;
+  cursor: help;
+  pointer-events: auto;
+}
+
+.filter-warning-inline:hover {
+  text-decoration: none;
+  color: var(--status-pending);
+}
+
 .card {
   background: var(--bg-card);
   border: 1px solid var(--border);

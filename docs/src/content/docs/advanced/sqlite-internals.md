@@ -186,6 +186,12 @@ SQLite has no built-in notification mechanism like PostgreSQL's `LISTEN`/`NOTIFY
 
 For multi-process deployments, an external notify adapter (Redis or NATS) can be paired with the SQLite state adapter.
 
+## Listing Queries and Locking
+
+`listJobChains` joins each root row with the last job in the chain. The `status` filter applies to the joined last job and cannot use an index — only `typeName` and date range filters narrow the scan before the join. Without these filters, every root row is scanned and joined. On deployments with frequent writes, unfiltered scans over large tables can extend write queue wait times because the read lock is held longer.
+
+`listJobs` uses straightforward indexed scans without a join and is efficient at any scale.
+
 ## See Also
 
 - [Adapter Architecture](../adapters/) — Provider/adapter design philosophy

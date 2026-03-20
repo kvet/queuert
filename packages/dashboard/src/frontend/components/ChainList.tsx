@@ -83,18 +83,29 @@ export function ChainList() {
             setSearchParams({ typeName: e.target.value.trim() || undefined });
           }}
         />
-        <select
-          value={status()}
-          onChange={(e) => {
-            setSearchParams({ status: e.target.value || undefined });
-          }}
-        >
-          <option value="">All statuses</option>
-          <option value="pending">Pending</option>
-          <option value="running">Running</option>
-          <option value="completed">Completed</option>
-          <option value="blocked">Blocked</option>
-        </select>
+        <span class="select-with-warning">
+          <select
+            value={status()}
+            onChange={(e) => {
+              setSearchParams({ status: e.target.value || undefined });
+            }}
+          >
+            <option value="">All statuses</option>
+            <option value="pending">Pending</option>
+            <option value="running">Running</option>
+            <option value="completed">Completed</option>
+            <option value="blocked">Blocked</option>
+          </select>
+          <a
+            class="filter-warning-inline"
+            href="https://kvet.github.io/queuert/guides/queries/#performance-considerations"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Filtering chains by status alone is not optimized. Combine with a type name filter."
+          >
+            ⚠
+          </a>
+        </span>
         <label class="checkbox-label">
           <input
             type="checkbox"

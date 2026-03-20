@@ -60,6 +60,10 @@ The dashboard provides:
 
 Read-only -- no mutations. Add authentication middleware before the dashboard handler to restrict access.
 
+<Aside type="caution" title="Performance on large tables">
+  Chain listing joins each root row with the last job in the chain. Filtering by status alone is not optimized. Always use the type name filter when browsing large tables — see [Performance considerations](/queuert/guides/queries/#performance-considerations).
+</Aside>
+
 ## UI views
 
 ### Chain list

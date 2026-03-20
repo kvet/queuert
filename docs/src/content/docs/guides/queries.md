@@ -39,3 +39,21 @@ const blockedJobs = await client.listBlockedJobs({ jobChainId });
 All lookup methods accept an optional `typeName` for type narrowing -- the return type narrows to the specified type. If the entity exists but has a different type, `JobTypeMismatchError` is thrown.
 
 See [examples/showcase-queries](https://github.com/kvet/queuert/tree/main/examples/showcase-queries) for a complete working example demonstrating single lookups, paginated lists, chain job listing, and blocker queries. See also [Client API](/queuert/reference/queuert/client/) reference and [Dashboard](/queuert/integrations/dashboard/).
+
+## Performance considerations
+
+`listJobChains` joins each root row with the last job in the chain to resolve chain status. Filtering by `status` is not optimized — it applies to the joined last job and cannot use an index. Always provide a `typeName` or date range (`from`/`to`) filter to narrow the scan:
+
+```ts
+// Expensive — status filter alone still scans every root row
+const all = await client.listJobChains({
+  filter: { status: ["running"] },
+});
+
+// Efficient — typeName narrows the scan via a partial index
+const filtered = await client.listJobChains({
+  filter: { typeName: ["send-email"], status: ["running"] },
+});
+```
+
+On PostgreSQL, long-running unfiltered scans hold MVCC snapshots that prevent autovacuum from reclaiming dead tuples, causing table bloat over time. See [PostgreSQL Internals](/queuert/advanced/postgres-internals/#listing-queries-and-vacuum) for details.

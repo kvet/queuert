@@ -11,7 +11,7 @@
   },
   "type": "module",
   "scripts": {
-    "dashboard": "tsx src/dashboard.ts",
+    "dashboard": "bun run --filter '@queuert/dashboard' build && tsx src/dashboard.ts",
     "start": "tsx src/start.ts",
     "typecheck": "tsgo --noEmit"
   },
