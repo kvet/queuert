@@ -23,3 +23,4 @@ Both parameters are optional. When neither is provided, all observability operat
 - [Observability](/queuert/integrations/observability/) — Integration guide for observability
 - [OTEL Metrics](/queuert/advanced/otel-metrics/) — Counters, histograms, and gauges
 - [OTEL Tracing](/queuert/advanced/otel-tracing/) — Span hierarchy and messaging conventions
+- [OTEL Internals](/queuert/advanced/otel-internals/) — Adapter architecture, W3C context propagation, and transactional buffering

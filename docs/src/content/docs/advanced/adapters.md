@@ -142,7 +142,7 @@ The `ObservabilityAdapter` provides two observability mechanisms:
 
 2. **Tracing**: `startJobSpan` and `startAttemptSpan` methods return handles for managing span lifecycle. Spans follow OpenTelemetry messaging conventions with PRODUCER spans for job creation and CONSUMER spans for processing.
 
-When no adapter is provided, a noop implementation is used automatically, making observability opt-in. See [OTEL Tracing](../otel-tracing/) for span hierarchy and [OTEL Metrics](../otel-metrics/) for available metrics.
+When no adapter is provided, a noop implementation is used automatically, making observability opt-in. See [OTEL Tracing](../otel-tracing/) for span hierarchy and [OTEL Metrics](../otel-metrics/) for available metrics. See [OTEL Internals](../otel-internals/) for adapter architecture and trace context propagation.
 
 ### Transactional Buffering
 
@@ -167,7 +167,8 @@ Both `createStateJobs` and `finishJob` use `TransactionHooks` savepoints (via `w
 
 ## See Also
 
-- [OTEL Tracing](../otel-tracing/) — Span hierarchy and messaging conventions
 - [OTEL Metrics](../otel-metrics/) — Counters, histograms, and gauges
+- [OTEL Tracing](../otel-tracing/) — Span hierarchy and messaging conventions
+- [OTEL Internals](../otel-internals/) — Adapter architecture, W3C context propagation, and transactional buffering
 - [Client API](/queuert/reference/queuert/client/) — Mutation and query methods
 - [In-Process Worker](../in-process-worker/) — Worker lifecycle and lease management

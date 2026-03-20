@@ -1,5 +1,6 @@
 # Short term
 
+- [REVIEW] Review `addJobBlocker` design — see `design/add-job-blocker.md`
 - [REF] Add input and output filtering
 - [REF] Reset jobs in chains + dashboard
 - [REF] Delete chains from dashboard

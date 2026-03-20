@@ -2,7 +2,7 @@
 title: OTEL Metrics
 description: OpenTelemetry counters, histograms, and gauges.
 sidebar:
-  order: 7
+  order: 11
 ---
 
 ## Overview
@@ -97,6 +97,7 @@ Two gauges track real-time worker state. They are incremented/decremented via de
 
 ## See Also
 
-- [OTEL Tracing](../otel-tracing/) — Distributed tracing with spans
+- [OTEL Tracing](../otel-tracing/) — Span hierarchy and attributes
+- [OTEL Internals](../otel-internals/) — Adapter architecture, W3C context propagation, and transactional buffering
 - [Adapters](../adapters/) — Overall adapter design philosophy
 - [In-Process Worker](../in-process-worker/) — Worker lifecycle and processing

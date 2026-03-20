@@ -2,7 +2,7 @@
 title: OTEL Tracing
 description: OpenTelemetry span hierarchy and messaging conventions.
 sidebar:
-  order: 8
+  order: 12
 ---
 
 ## Overview
@@ -51,52 +51,6 @@ Span kinds use OpenTelemetry's PRODUCER/CONSUMER/INTERNAL semantics. The chain h
 | **complete**                 | INTERNAL | `complete()` called                 | `complete()` returns    | Transaction time |
 | **complete job.{type}**      | CONSUMER | Workerless completion               | Immediately             | ~0ms             |
 | **complete chain.{type}**    | CONSUMER | Final job completes                 | Immediately             | ~0ms             |
-
-## Trace Context Propagation
-
-Each job stores two trace contexts: `chainTraceContext` (chain-level, for chain completion and blocker linking) and `traceContext` (job-level, for attempt spans and continuation linking). Blocker dependencies store a single trace context in the `job_blocker` table (the blocker PRODUCER span context). All context values are `string | null` at the core level—the OTEL adapter uses W3C traceparent strings.
-
-Context flows through the system:
-
-- **Chain start**: Creates chain and job spans, stores `chainTraceContext` (chain span) and `traceContext` (job span) with the job
-- **Blockers**: Creates blocker PRODUCER spans as children of the job span, stores blocker span context in `job_blocker` table. Returns `blockerChainTraceContexts` (the `chainTraceContext` from each blocker chain's root job) for linking
-- **Continuation**: Inherits `chainTraceContext` from origin, creates new job span with its own `traceContext`, links to origin job
-- **Worker processing**: Creates attempt span as child of job using `traceContext`, chain completion uses `chainTraceContext`
-- **Blocker completion**: Ends blocker span using context from `job_blocker` table
-- **Chain completion**: Creates CONSUMER chain span linked to PRODUCER chain using `chainTraceContext`
-
-## Deduplication
-
-When `startJobChain` is called with deduplication options and a matching chain already exists, no new chain is created. The span must reflect this outcome correctly.
-
-Deduplication is **not an error**—it's expected behavior that successfully returned an existing chain. Per [OpenTelemetry status conventions](https://opentelemetry.io/docs/specs/otel/trace/api/#set-status), the span status should remain `UNSET` (not `ERROR`), with an attribute indicating deduplication occurred.
-
-### Span Behavior
-
-When deduplication occurs:
-
-1. Adds attribute `queuert.chain.deduplicated: true`
-2. References the existing chain's IDs
-3. Optionally links to the existing chain's trace context
-
-### Visualization
-
-```
-Caller requests startJobChain with deduplication key "user-123":
-
-First call (creates new chain):
-PRODUCER create chain.process-user [0ms] ──────────────
-│   queuert.chain.id: "abc-123"
-│   queuert.chain.deduplicated: false
-│
-└── ... (normal processing)
-
-Second call (deduplicated):
-PRODUCER create chain.process-user [0ms] ──────────────
-    queuert.chain.id: "abc-123"  ← same as existing
-    queuert.chain.deduplicated: true
-    links: [chain abc-123]  ← link to existing chain
-```
 
 ## Blocker Relationships
 
@@ -212,21 +166,34 @@ Chain Duration = complete chain.startTime - create chain.startTime
 
 This provides end-to-end visibility even though individual PRODUCER/CONSUMER spans are instantaneous markers.
 
-## Span Reference
+## Deduplication
 
-All spans created by the `@queuert/otel` adapter:
+When `startJobChain` is called with deduplication options and a matching chain already exists, no new chain is created. The span must reflect this outcome correctly.
 
-| Span Name | Kind | Created When | Duration |
-| --- | --- | --- | --- |
-| `create chain.{type}` | PRODUCER | `startJobChain()` | ~0ms |
-| `create job.{type}` | PRODUCER | `startJobChain()`, `continueWith()` | ~0ms |
-| `await chain.{type}` | PRODUCER | `startJobChain()` with blockers | ~0ms |
-| `resolve chain.{type}` | CONSUMER | Blocker chain completes | ~0ms |
-| `start job-attempt.{type}` | CONSUMER | Worker claims job | Processing time |
-| `prepare` | INTERNAL | `prepare()` called | Transaction time |
-| `complete` | INTERNAL | `complete()` called | Transaction time |
-| `complete job.{type}` | CONSUMER | Workerless completion | ~0ms |
-| `complete chain.{type}` | CONSUMER | Final job completes | ~0ms |
+Deduplication is **not an error**—it's expected behavior that successfully returned an existing chain. Per [OpenTelemetry status conventions](https://opentelemetry.io/docs/specs/otel/trace/api/#set-status), the span status should remain `UNSET` (not `ERROR`), with an attribute indicating deduplication occurred.
+
+When deduplication occurs:
+
+1. Adds attribute `queuert.chain.deduplicated: true`
+2. References the existing chain's IDs
+3. Optionally links to the existing chain's trace context
+
+```
+Caller requests startJobChain with deduplication key "user-123":
+
+First call (creates new chain):
+PRODUCER create chain.process-user [0ms] ──────────────
+│   queuert.chain.id: "abc-123"
+│   queuert.chain.deduplicated: false
+│
+└── ... (normal processing)
+
+Second call (deduplicated):
+PRODUCER create chain.process-user [0ms] ──────────────
+    queuert.chain.id: "abc-123"  ← same as existing
+    queuert.chain.deduplicated: true
+    links: [chain abc-123]  ← link to existing chain
+```
 
 ## Span Attributes
 
@@ -277,7 +244,8 @@ All spans created by the `@queuert/otel` adapter:
 
 ## See Also
 
-- [OTEL Metrics](../otel-metrics/) — OpenTelemetry metrics implementation
+- [OTEL Metrics](../otel-metrics/) — Counters, histograms, and gauges
+- [OTEL Internals](../otel-internals/) — Adapter architecture, W3C context propagation, and transactional buffering
 - [Job Chain Model](../job-chain-model/) — Chain identity and continuation model
 - [Job Processing](../job-processing/) — Prepare/complete pattern
 - [Adapters](../adapters/) — Overall adapter design philosophy
