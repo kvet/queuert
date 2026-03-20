@@ -197,6 +197,7 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     filter?: {
       status?: StateJobStatus[];
       typeName?: string[];
+      chainTypeName?: string[];
       chainId?: string[];
       jobId?: string[];
       from?: Date;

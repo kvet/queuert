@@ -1,6 +1,6 @@
 # Short term
 
-- [REF] Add `chainTypeName` filter to `listJobs` — analogous to `typeName`, enables efficient stuck-chain monitoring per chain type without client-side filtering
+- [REF] Add input and output filtering
 - [REF] Reset jobs in chains + dashboard
 - [REF] Delete chains from dashboard
 - [REF] Use client in dashboard instead of direct calls to adapters

@@ -193,9 +193,10 @@ Paginated listing of job chains. **root** filters to only root chains (not block
 const page = await client.listJobs({
   filter?: {
     typeName?: string[],
-    id?: string[],
-    jobChainId?: string[],
     status?: JobStatus[],
+    id?: string[],
+    jobChainTypeName?: string[],
+    jobChainId?: string[],
     from?: Date,
     to?: Date,
   },
@@ -207,7 +208,7 @@ const page = await client.listJobs({
 
 Returns `Page<Job>`.
 
-Paginated listing of jobs. Default **orderDirection** is `"desc"`. Default **limit** is `50`.
+Paginated listing of jobs. **jobChainTypeName** filters to jobs belonging to chains started by the given entry type names. Default **orderDirection** is `"desc"`. Default **limit** is `50`.
 
 ### listJobChainJobs
 

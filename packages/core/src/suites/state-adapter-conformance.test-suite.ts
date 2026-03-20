@@ -3688,6 +3688,61 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     expect(result.items[0].typeName).toBe("type-a");
   });
 
+  it("listJobs filters by chainTypeName", async ({ stateAdapter, expect }) => {
+    await stateAdapter.runInTransaction(async (txCtx) =>
+      stateAdapter.createJobs({
+        txCtx,
+        jobs: [
+          {
+            typeName: "root-a",
+            chainId: undefined,
+            chainTypeName: "root-a",
+            input: null,
+            chainIndex: 0,
+          },
+        ],
+      }),
+    );
+    const [{ job: rootB }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      stateAdapter.createJobs({
+        txCtx,
+        jobs: [
+          {
+            typeName: "root-b",
+            chainId: undefined,
+            chainTypeName: "root-b",
+            input: null,
+            chainIndex: 0,
+          },
+        ],
+      }),
+    );
+    await stateAdapter.runInTransaction(async (txCtx) =>
+      stateAdapter.createJobs({
+        txCtx,
+        jobs: [
+          {
+            typeName: "child-b",
+            chainId: rootB.chainId,
+            chainTypeName: "root-b",
+            input: null,
+            chainIndex: 1,
+          },
+        ],
+      }),
+    );
+
+    const result = await stateAdapter.listJobs({
+      filter: { chainTypeName: ["root-b"] },
+      orderDirection: "desc",
+      page: { limit: 10 },
+    });
+    expect(result.items).toHaveLength(2);
+    for (const job of result.items) {
+      expect(job.chainTypeName).toBe("root-b");
+    }
+  });
+
   it("listJobs filters by id matching job ID", async ({ stateAdapter, expect }) => {
     const [{ job: job1 }] = await stateAdapter.runInTransaction(async (txCtx) =>
       stateAdapter.createJobs({

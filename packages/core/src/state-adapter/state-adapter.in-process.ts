@@ -142,6 +142,9 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
   const matchesTypeNameFilter = (job: StateJob, typeNames?: string[]): boolean =>
     !typeNames || typeNames.length === 0 || typeNames.includes(job.typeName);
 
+  const matchesChainTypeNameFilter = (job: StateJob, chainTypeNames?: string[]): boolean =>
+    !chainTypeNames || chainTypeNames.length === 0 || chainTypeNames.includes(job.chainTypeName);
+
   const getLastJobInChain = (chainId: string): StateJob | undefined => {
     let lastJob: StateJob | undefined;
     for (const job of store.jobs.values()) {
@@ -650,6 +653,7 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
         if (filter?.jobId && !filter.jobId.includes(job.id)) continue;
         if (!matchesStatusFilter(job, filter?.status)) continue;
         if (!matchesTypeNameFilter(job, filter?.typeName)) continue;
+        if (!matchesChainTypeNameFilter(job, filter?.chainTypeName)) continue;
         if (filter?.chainId && !filter.chainId.includes(job.chainId)) continue;
         if (!matchesDateRange(job.createdAt, filter?.from, filter?.to)) continue;
         jobs.push(job);

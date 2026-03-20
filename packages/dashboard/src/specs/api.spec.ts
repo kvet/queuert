@@ -180,6 +180,21 @@ describe("Dashboard API", () => {
       expect(body.items).toHaveLength(2);
     });
 
+    it("filters by chainTypeName", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      const root = await createJob(stateAdapter, "chain-type", null);
+      await createContinuation(stateAdapter, "chain-step2", root.chainId, "chain-type", 1, null);
+      await createJob(stateAdapter, "other-type", null);
+
+      const res = await request("/api/jobs?chainTypeName=chain-type");
+      const body = await res.json();
+
+      expect(body.items).toHaveLength(2);
+      for (const job of body.items) {
+        expect(job.chainTypeName).toBe("chain-type");
+      }
+    });
+
     it("filters by chainId", async () => {
       const { request, stateAdapter } = await createTestDashboard();
       const root = await createJob(stateAdapter, "chain-type", null);

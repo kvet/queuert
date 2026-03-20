@@ -8,6 +8,7 @@ export const handleJobsList = async (
 ): Promise<Response> => {
   const status = parseStatusFilter(url.searchParams.get("status") ?? undefined);
   const typeName = parseTypeNameFilter(url.searchParams.get("typeName") ?? undefined);
+  const chainTypeName = parseTypeNameFilter(url.searchParams.get("chainTypeName") ?? undefined);
   const chainId = url.searchParams.get("chainId") ?? undefined;
   const id = url.searchParams.get("id") ?? undefined;
   const cursor = parseCursor(url.searchParams.get("cursor") ?? undefined);
@@ -17,6 +18,7 @@ export const handleJobsList = async (
     filter: {
       status,
       typeName,
+      chainTypeName,
       chainId: chainId ? [chainId] : undefined,
       jobId: id ? [id] : undefined,
     },

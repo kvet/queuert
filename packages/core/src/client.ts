@@ -43,9 +43,9 @@ import {
 } from "./errors.js";
 import { bufferNotifyJobOwnershipLost, bufferNotifyJobScheduled } from "./helpers/notify-hooks.js";
 import { raceWithSleep } from "./helpers/sleep.js";
+import { type IsUnion } from "./helpers/typescript.js";
 import { type Helpers, createHelpers } from "./setup-helpers.js";
 import { type TransactionHooks } from "./transaction-hooks.js";
-import { type IsUnion } from "./helpers/typescript.js";
 import { type AttemptCompleteOptions } from "./worker/job-process.js";
 
 /** @internal Used by `createInProcessWorker` and `createDashboard` to access client internals. Not part of the public API. */
@@ -276,9 +276,10 @@ export type Client<
     options: {
       filter?: {
         typeName?: TJobTypeName[];
-        id?: TJobId[];
-        jobChainId?: TJobId[];
         status?: JobStatus[];
+        id?: TJobId[];
+        jobChainTypeName?: (keyof EntryJobTypeDefinitions<TNavigationMap> & string)[];
+        jobChainId?: TJobId[];
         from?: Date;
         to?: Date;
       };
@@ -811,9 +812,10 @@ export const createClient = async <
       options: {
         filter?: {
           typeName?: TJobTypeName[];
-          id?: TJobId[];
-          jobChainId?: TJobId[];
           status?: JobStatus[];
+          id?: TJobId[];
+          jobChainTypeName?: (keyof EntryJobTypeDefinitions<TNavigationMap> & string)[];
+          jobChainId?: TJobId[];
           from?: Date;
           to?: Date;
         };
@@ -828,6 +830,7 @@ export const createClient = async <
         txCtx,
         filter: {
           typeName: filter?.typeName,
+          chainTypeName: filter?.jobChainTypeName,
           jobId: filter?.id,
           chainId: filter?.jobChainId,
           status: filter?.status,

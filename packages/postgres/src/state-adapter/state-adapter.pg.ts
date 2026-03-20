@@ -470,6 +470,11 @@ export const createPgStateAdapter = async <
         params.push(filter.typeName);
         p++;
       }
+      if (filter?.chainTypeName?.length) {
+        conditions.push(`j.chain_type_name = ANY($${p}::text[])`);
+        params.push(filter.chainTypeName);
+        p++;
+      }
       if (filter?.chainId?.length) {
         conditions.push(`j.chain_id = ANY($${p}::${idType}[])`);
         params.push(filter.chainId);

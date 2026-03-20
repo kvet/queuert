@@ -681,6 +681,41 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       expect(page.items[0].typeName).toBe("notification");
     });
 
+    it("listJobs filters by jobChainTypeName", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      runInTransaction,
+      expect,
+    }) => {
+      const { client, startChain } = await createContext({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        runInTransaction,
+      });
+      await startChain("order", { amount: 100 });
+      await startChain("notification", { message: "hi" });
+
+      const page = await client.listJobs({
+        filter: { jobChainTypeName: ["order"] },
+      });
+
+      expect(page.items).toHaveLength(1);
+      expect(page.items[0].chainTypeName).toBe("order");
+
+      // Type-level: jobChainTypeName only accepts entry job type names
+      expectTypeOf(client.listJobs)
+        .parameter(0)
+        .toHaveProperty("filter")
+        .exclude<undefined>()
+        .toHaveProperty("jobChainTypeName")
+        .exclude<undefined>()
+        .items.toEqualTypeOf<"order" | "notification" | "report">();
+    });
+
     it("listJobs filters by jobChainId", async ({
       stateAdapter,
       notifyAdapter,

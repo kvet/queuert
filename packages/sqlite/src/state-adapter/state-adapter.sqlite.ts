@@ -708,6 +708,10 @@ export const createSqliteStateAdapter = async <
         conditions.push("j.type_name IN (SELECT value FROM json_each(?))");
         params.push(JSON.stringify(filter.typeName));
       }
+      if (filter?.chainTypeName?.length) {
+        conditions.push("j.chain_type_name IN (SELECT value FROM json_each(?))");
+        params.push(JSON.stringify(filter.chainTypeName));
+      }
       if (filter?.chainId?.length) {
         conditions.push("j.chain_id IN (SELECT value FROM json_each(?))");
         params.push(JSON.stringify(filter.chainId));
