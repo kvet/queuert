@@ -112,6 +112,16 @@ export const triggerJob = async (jobId: string): Promise<Job> => {
   return deserializeJob(raw.job);
 };
 
+export const deleteChain = async (chainId: string): Promise<void> => {
+  const res = await fetch(`${BASE}/chains/${chainId}`, { method: "DELETE" });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(
+      (body as { error?: string } | null)?.error ?? `${res.status} ${res.statusText}`,
+    );
+  }
+};
+
 export const getJobDetail = async (
   jobId: string,
 ): Promise<{

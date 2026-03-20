@@ -1,15 +1,32 @@
-import { For, Show, createResource } from "solid-js";
+import { For, Show, createResource, createSignal } from "solid-js";
 import { A, useNavigate, useParams } from "@solidjs/router";
-import { getChainBlocking, getChainDetail } from "../api.js";
+import { deleteChain, getChainBlocking, getChainDetail } from "../api.js";
 import { StatusBadge } from "./StatusBadge.js";
 import { JsonView } from "./JsonView.js";
 import { TimeAgo } from "./TimeAgo.js";
+import { ConfirmDeleteDialog } from "./ConfirmDeleteDialog.js";
 
 export function ChainDetail() {
   const navigate = useNavigate();
   const params = useParams<{ id: string }>();
   const [chain] = createResource(() => params.id, getChainDetail);
   const [blocking] = createResource(() => params.id, getChainBlocking);
+  const [showDelete, setShowDelete] = createSignal(false);
+  const [deleting, setDeleting] = createSignal(false);
+  const [deleteError, setDeleteError] = createSignal<string | null>(null);
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteChain(params.id);
+      navigate("/");
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   return (
     <div>
@@ -29,7 +46,22 @@ export function ChainDetail() {
                 <div style={{ "font-size": "13px", color: "var(--text-secondary)" }}>
                   Created <TimeAgo date={d.rootJob.createdAt} />
                 </div>
+                <button class="delete-btn" onClick={() => setShowDelete(true)}>
+                  Delete chain
+                </button>
               </div>
+
+              <ConfirmDeleteDialog
+                chainId={d.rootJob.chainId}
+                open={showDelete()}
+                onClose={() => {
+                  setShowDelete(false);
+                  setDeleteError(null);
+                }}
+                onConfirm={() => void handleDelete()}
+                deleting={deleting()}
+                error={deleteError()}
+              />
 
               <div class="section">
                 <h3>Jobs ({d.jobs.length})</h3>

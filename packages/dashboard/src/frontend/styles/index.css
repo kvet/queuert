@@ -379,3 +379,114 @@ a:hover {
   color: #ef4444;
   font-size: 12px;
 }
+
+.delete-btn {
+  margin-top: 8px;
+  padding: 4px 12px;
+  font-size: 12px;
+  border: 1px solid #ef4444;
+  border-radius: 4px;
+  background: transparent;
+  color: #ef4444;
+  cursor: pointer;
+}
+
+.delete-btn:hover {
+  background: #ef4444;
+  color: #fff;
+}
+
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.dialog {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  max-width: 420px;
+  width: 90%;
+}
+
+.dialog h3 {
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.dialog p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+.dialog-chain-id {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px 10px;
+  margin-bottom: 8px;
+  user-select: all;
+}
+
+.dialog-input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.dialog-btn-cancel {
+  padding: 6px 14px;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-card);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.dialog-btn-cancel:hover {
+  background: var(--bg-hover);
+}
+
+.dialog-btn-delete {
+  padding: 6px 14px;
+  font-size: 13px;
+  border: 1px solid #ef4444;
+  border-radius: 4px;
+  background: #ef4444;
+  color: #fff;
+  cursor: pointer;
+}
+
+.dialog-btn-delete:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.dialog-btn-delete:not(:disabled):hover {
+  background: #dc2626;
+  border-color: #dc2626;
+}

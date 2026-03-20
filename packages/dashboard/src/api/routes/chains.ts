@@ -1,4 +1,4 @@
-import { type StateAdapter } from "queuert";
+import { BlockerReferenceError, type StateAdapter } from "queuert";
 import { serializeJob } from "../../shared/job.js";
 import { parseCursor, parseLimit, parseStatusFilter, parseTypeNameFilter } from "./params.js";
 
@@ -70,6 +70,34 @@ export const handleChainDetail = async (
     jobs: jobs.items.map(serializeJob),
     jobBlockers: Object.fromEntries(jobBlockers),
   });
+};
+
+export const handleChainDelete = async (
+  stateAdapter: StateAdapter<any, any>,
+  chainId: string,
+): Promise<Response> => {
+  const chain = await stateAdapter.getJobChainById({ chainId });
+  if (!chain) {
+    return Response.json({ error: "Chain not found" }, { status: 404 });
+  }
+
+  try {
+    const deleted = await stateAdapter.deleteJobChains({ chainIds: [chainId] });
+    return Response.json({
+      deleted: deleted.map(([rootJob, lastJob]) => [
+        serializeJob(rootJob),
+        lastJob ? serializeJob(lastJob) : null,
+      ]),
+    });
+  } catch (err) {
+    if (err instanceof BlockerReferenceError) {
+      return Response.json(
+        { error: "Cannot delete: other jobs depend on this chain as a blocker" },
+        { status: 409 },
+      );
+    }
+    throw err;
+  }
 };
 
 export const handleChainBlocking = async (

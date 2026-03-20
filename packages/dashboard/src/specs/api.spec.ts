@@ -8,8 +8,8 @@ const createTestDashboard = async (basePath?: string) => {
   const client = await createClient({ stateAdapter, jobTypeRegistry: defineJobTypeRegistry() });
   const dashboard = createDashboard({ client, basePath });
   const prefix = basePath ?? "";
-  const request = async (path: string) =>
-    dashboard.fetch(new Request(`http://test${prefix}${path}`));
+  const request = async (path: string, init?: RequestInit) =>
+    dashboard.fetch(new Request(`http://test${prefix}${path}`, init));
   return { request, stateAdapter };
 };
 
@@ -159,6 +159,48 @@ describe("Dashboard API", () => {
     });
   });
 
+  describe("DELETE /api/chains/:chainId", () => {
+    it("deletes a chain and returns deleted entries", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      const root = await createJob(stateAdapter, "test-type", null);
+
+      const res = await request(`/api/chains/${root.chainId}`, { method: "DELETE" });
+      const body = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(body.deleted).toHaveLength(1);
+      expect(body.deleted[0][0].id).toBe(root.id);
+
+      const detail = await request(`/api/chains/${root.chainId}`);
+      expect(detail.status).toBe(404);
+    });
+
+    it("returns 404 for missing chain", async () => {
+      const { request } = await createTestDashboard();
+      const res = await request("/api/chains/nonexistent", { method: "DELETE" });
+      expect(res.status).toBe(404);
+    });
+
+    it("returns 409 when chain is a blocker", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      const blockerChain = await createJob(stateAdapter, "blocker-type", null);
+      const blockedJob = await createJob(stateAdapter, "blocked-type", null);
+
+      await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.addJobsBlockers({
+          txCtx,
+          jobBlockers: [{ jobId: blockedJob.id, blockedByChainIds: [blockerChain.chainId] }],
+        }),
+      );
+
+      const res = await request(`/api/chains/${blockerChain.chainId}`, { method: "DELETE" });
+      const body = await res.json();
+
+      expect(res.status).toBe(409);
+      expect(body.error).toContain("blocker");
+    });
+  });
+
   describe("GET /api/jobs", () => {
     it("returns empty list when no jobs exist", async () => {
       const { request } = await createTestDashboard();
@@ -228,6 +270,54 @@ describe("Dashboard API", () => {
       const { request } = await createTestDashboard();
       const res = await request("/api/jobs/nonexistent");
       expect(res.status).toBe(404);
+    });
+  });
+
+  describe("POST /api/jobs/:jobId/trigger", () => {
+    it("triggers a pending future-scheduled job", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      const [{ job }] = await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
+          txCtx,
+          jobs: [
+            {
+              typeName: "scheduled-type",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "scheduled-type",
+              input: null,
+              schedule: { afterMs: 60_000 },
+            },
+          ],
+        }),
+      );
+
+      const res = await request(`/api/jobs/${job.id}/trigger`, { method: "POST" });
+      const body = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(body.job.id).toBe(job.id);
+    });
+
+    it("returns 404 for missing job", async () => {
+      const { request } = await createTestDashboard();
+      const res = await request("/api/jobs/nonexistent/trigger", { method: "POST" });
+      expect(res.status).toBe(404);
+    });
+
+    it("returns 409 for non-pending job", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      const job = await createJob(stateAdapter, "test-type", null);
+
+      await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.acquireJob({ txCtx, typeNames: ["test-type"] }),
+      );
+
+      const res = await request(`/api/jobs/${job.id}/trigger`, { method: "POST" });
+      const body = await res.json();
+
+      expect(res.status).toBe(409);
+      expect(body.error).toContain("running");
     });
   });
 

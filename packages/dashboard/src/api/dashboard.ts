@@ -1,7 +1,12 @@
 import { helpersSymbol } from "queuert/internal";
 import { type BaseNavigationMap, type Client, type StateAdapter } from "queuert";
 import { renderHtml } from "./html.js";
-import { handleChainBlocking, handleChainDetail, handleChainsList } from "./routes/chains.js";
+import {
+  handleChainBlocking,
+  handleChainDelete,
+  handleChainDetail,
+  handleChainsList,
+} from "./routes/chains.js";
 import { handleJobDetail, handleJobTrigger, handleJobsList } from "./routes/jobs.js";
 
 type Assets = Record<string, { content: string; contentType: string }>;
@@ -59,6 +64,7 @@ export const createDashboard = <
     if (match) return handleChainBlocking(url, stateAdapter, match[1]);
 
     match = localPath.match(/^\/api\/chains\/([^/]+)$/);
+    if (match && request.method === "DELETE") return handleChainDelete(stateAdapter, match[1]);
     if (match) return handleChainDetail(url, stateAdapter, match[1]);
 
     if (localPath === "/api/chains") return handleChainsList(url, stateAdapter);
