@@ -16,7 +16,7 @@ const pgContainer = await new PostgreSqlContainer("postgres:18").withExposedPort
 const connectionString = pgContainer.getConnectionUri();
 
 // 2. Push Prisma schema to database and generate client
-execSync("pnpm prisma db push", {
+execSync("npx prisma db push", {
   env: { ...process.env, DATABASE_URL: connectionString },
   stdio: "inherit",
 });

@@ -23,7 +23,7 @@ const dbPath = join(tempDir, "test.db");
 
 // 2. Push Prisma schema to database and generate client
 process.env.DATABASE_URL = `file:${dbPath}`;
-execSync("pnpm prisma db push", {
+execSync("npx prisma db push", {
   stdio: "inherit",
 });
 
