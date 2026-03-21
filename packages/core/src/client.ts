@@ -414,7 +414,7 @@ export const createClient = async <
       const { input, typeName, deduplication, schedule, blockers, transactionHooks, ...txCtx } =
         options;
       const [result] = await startJobChains(helpers, {
-        chains: [{ typeName, input, deduplication, schedule, blockers }],
+        jobChains: [{ typeName, input, deduplication, schedule, blockers }],
         txCtx,
         transactionHooks,
       });
@@ -434,7 +434,7 @@ export const createClient = async <
     ): Promise<_StartJobChainsResult<TJobId, TNavigationMap, TChains>> => {
       const { items, transactionHooks, ...txCtx } = options;
       return (await startJobChains(helpers, {
-        chains: items,
+        jobChains: items,
         txCtx,
         transactionHooks,
       })) as _StartJobChainsResult<TJobId, TNavigationMap, TChains>;

@@ -64,8 +64,8 @@ export const handleChainDelete = async (
   client: Client<any, any>,
   chainId: string,
 ): Promise<Response> => {
-  const chain = await client.getJobChain({ id: chainId });
-  if (!chain) {
+  const jobChain = await client.getJobChain({ id: chainId });
+  if (!jobChain) {
     return serovalResponse({ error: "Chain not found" }, 404);
   }
 

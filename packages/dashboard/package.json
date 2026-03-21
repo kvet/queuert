@@ -23,8 +23,7 @@
   "files": [
     "dist",
     "package.json",
-    "README.md",
-    "AGENTS.md"
+    "README.md"
   ],
   "type": "module",
   "types": "./dist/index.d.mts",

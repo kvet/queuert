@@ -127,14 +127,14 @@ export const createPgStateAdapter = async <
     runInTransaction: stateProvider.runInTransaction,
 
     withSavepoint: async (txCtx, fn) => {
-      await stateProvider.executeSql({ txCtx, sql: "SAVEPOINT queuert_user_cb" });
+      await stateProvider.executeSql({ txCtx, sql: "SAVEPOINT queuert_sp" });
       try {
         const result = await fn(txCtx);
-        await stateProvider.executeSql({ txCtx, sql: "RELEASE SAVEPOINT queuert_user_cb" });
+        await stateProvider.executeSql({ txCtx, sql: "RELEASE SAVEPOINT queuert_sp" });
         return result;
       } catch (error) {
         await stateProvider
-          .executeSql({ txCtx, sql: "ROLLBACK TO SAVEPOINT queuert_user_cb" })
+          .executeSql({ txCtx, sql: "ROLLBACK TO SAVEPOINT queuert_sp" })
           .catch(() => {});
         throw error;
       }

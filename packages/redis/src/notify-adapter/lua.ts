@@ -1,8 +1,8 @@
 /**
  * Atomically sets a hint counter and publishes a notification.
  *
- * KEYS[1] = hint key (e.g., "queuert:job-hint:{hintId}")
- * KEYS[2] = channel (e.g., "queuert:job-scheduled:{typeName}")
+ * KEYS[1] = hint key (e.g., "queuert:hint:{hintId}")
+ * KEYS[2] = channel (e.g., "queuert:sched")
  * ARGV[1] = count (number of jobs scheduled)
  * ARGV[2] = hintId (message to publish)
  */

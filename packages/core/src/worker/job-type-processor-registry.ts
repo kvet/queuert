@@ -19,15 +19,24 @@ export type InProcessWorkerProcessor<
   leaseConfig?: LeaseConfig;
 };
 
-/** Symbol used to carry phantom job type definitions on a processor registry. */
+/**
+ * Symbol used to carry phantom job type definitions on a processor registry.
+ * @internal
+ */
 export const processorDefinitionsSymbol: unique symbol = Symbol("queuert.processor.definitions");
 
-/** Symbol used to carry phantom external job type definitions on a processor registry. */
+/**
+ * Symbol used to carry phantom external job type definitions on a processor registry.
+ * @internal
+ */
 export const processorExternalDefinitionsSymbol: unique symbol = Symbol(
   "queuert.processor.externalDefinitions",
 );
 
-/** Symbol used to carry phantom pre-computed navigation map on a processor registry. */
+/**
+ * Symbol used to carry phantom pre-computed navigation map on a processor registry.
+ * @internal
+ */
 export const processorNavigationSymbol: unique symbol = Symbol("queuert.processor.navigation");
 
 /** Extract the job type definitions from a {@link JobTypeProcessorRegistry}. */

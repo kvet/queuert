@@ -6,7 +6,7 @@ import { type Helpers } from "../setup-helpers.js";
 import { type BaseTxContext } from "../state-adapter/state-adapter.js";
 import { createStateJobs } from "./create-state-jobs.js";
 
-type ChainInput = {
+type JobChainInput = {
   typeName: string;
   input: unknown;
   blockers?: JobChain<any, any, any, any>[];
@@ -17,31 +17,31 @@ type ChainInput = {
 export const startJobChains = async (
   helpers: Helpers,
   {
-    chains,
+    jobChains,
     txCtx,
     transactionHooks,
   }: {
-    chains: ChainInput[];
+    jobChains: JobChainInput[];
     txCtx: BaseTxContext;
     transactionHooks: TransactionHooks;
   },
 ): Promise<(JobChain<string, string, unknown, unknown> & { deduplicated: boolean })[]> => {
-  if (chains.length === 0) return [];
+  if (jobChains.length === 0) return [];
 
-  for (const chain of chains) {
-    helpers.jobTypeRegistry.validateEntry(chain.typeName);
+  for (const jobChain of jobChains) {
+    helpers.jobTypeRegistry.validateEntry(jobChain.typeName);
   }
 
   const results = await createStateJobs(helpers, {
-    jobs: chains.map((chain) => ({
-      typeName: chain.typeName,
-      chainTypeName: chain.typeName,
+    jobs: jobChains.map((jobChain) => ({
+      typeName: jobChain.typeName,
+      chainTypeName: jobChain.typeName,
       chainIndex: 0,
-      input: chain.input,
-      blockers: chain.blockers,
+      input: jobChain.input,
+      blockers: jobChain.blockers,
       isChainStart: true,
-      deduplication: chain.deduplication,
-      schedule: chain.schedule,
+      deduplication: jobChain.deduplication,
+      schedule: jobChain.schedule,
     })),
     txCtx,
     transactionHooks,
