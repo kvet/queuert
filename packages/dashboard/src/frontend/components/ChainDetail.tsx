@@ -40,11 +40,11 @@ export function ChainDetail() {
             <>
               <div class="detail-header">
                 <h2>
-                  {d.rootJob.chainTypeName} <StatusBadge status={(d.lastJob ?? d.rootJob).status} />
+                  {d.chain.typeName} <StatusBadge status={d.chain.status} />
                 </h2>
-                <div class="id">chain {d.rootJob.chainId}</div>
+                <div class="id">chain {d.chain.id}</div>
                 <div style={{ "font-size": "13px", color: "var(--text-secondary)" }}>
-                  Created <TimeAgo date={d.rootJob.createdAt} />
+                  Created <TimeAgo date={d.chain.createdAt} />
                 </div>
                 <button class="delete-btn" onClick={() => setShowDelete(true)}>
                   Delete chain
@@ -52,7 +52,7 @@ export function ChainDetail() {
               </div>
 
               <ConfirmDeleteDialog
-                chainId={d.rootJob.chainId}
+                chainId={d.chain.id}
                 open={showDelete()}
                 onClose={() => {
                   setShowDelete(false);
@@ -113,12 +113,11 @@ export function ChainDetail() {
                           <strong style={{ "font-size": "12px" }}>Blockers</strong>
                           <ul class="blocker-list">
                             <For each={d.jobBlockers[job.id]}>
-                              {([rootJob, lastJob]) => (
+                              {(blocker) => (
                                 <li>
-                                  <StatusBadge status={(lastJob ?? rootJob).status} />{" "}
-                                  {rootJob.chainTypeName}{" "}
-                                  <A href={`/chains/${rootJob.chainId}`} class="chain-link">
-                                    chain {rootJob.chainId}
+                                  <StatusBadge status={blocker.status} /> {blocker.typeName}{" "}
+                                  <A href={`/chains/${blocker.id}`} class="chain-link">
+                                    chain {blocker.id}
                                   </A>
                                 </li>
                               )}

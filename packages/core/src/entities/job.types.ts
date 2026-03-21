@@ -8,8 +8,9 @@ export type JobStatus = "blocked" | "pending" | "running" | "completed";
  * @typeParam TJobTypeName - The job type name literal
  * @typeParam TChainTypeName - The chain type name literal
  * @typeParam TInput - The job's input payload type
+ * @typeParam TOutput - The job's output type (available when completed)
  */
-export type Job<TJobId, TJobTypeName, TChainTypeName, TInput> = {
+export type Job<TJobId, TJobTypeName, TChainTypeName, TInput, TOutput> = {
   id: TJobId;
   /** ID of the chain this job belongs to (equals `id` for the first job). */
   chainId: TJobId;
@@ -30,5 +31,5 @@ export type Job<TJobId, TJobTypeName, TChainTypeName, TInput> = {
   | { status: "blocked" }
   | { status: "pending" }
   | { status: "running"; leasedBy?: string; leasedUntil?: Date }
-  | { status: "completed"; completedAt: Date; completedBy: string | null }
+  | { status: "completed"; completedAt: Date; completedBy: string | null; output: TOutput }
 );

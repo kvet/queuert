@@ -1,11 +1,13 @@
-import { type NotifyAdapter, type StateAdapter } from "queuert";
-import { serializeJob } from "../../shared/job.js";
+import {
+  type Client,
+  JobNotFoundError,
+  JobNotTriggerableError,
+  withTransactionHooks,
+} from "queuert";
+import { serovalResponse } from "../response.js";
 import { parseCursor, parseLimit, parseStatusFilter, parseTypeNameFilter } from "./params.js";
 
-export const handleJobsList = async (
-  url: URL,
-  stateAdapter: StateAdapter<any, any>,
-): Promise<Response> => {
+export const handleJobsList = async (url: URL, client: Client<any, any>): Promise<Response> => {
   const status = parseStatusFilter(url.searchParams.get("status") ?? undefined);
   const typeName = parseTypeNameFilter(url.searchParams.get("typeName") ?? undefined);
   const chainTypeName = parseTypeNameFilter(url.searchParams.get("chainTypeName") ?? undefined);
@@ -14,73 +16,69 @@ export const handleJobsList = async (
   const cursor = parseCursor(url.searchParams.get("cursor") ?? undefined);
   const limit = parseLimit(url.searchParams.get("limit") ?? undefined);
 
-  const result = await stateAdapter.listJobs({
+  const result = await client.listJobs({
     filter: {
       status,
       typeName,
-      chainTypeName,
-      chainId: chainId ? [chainId] : undefined,
-      jobId: id ? [id] : undefined,
+      jobChainTypeName: chainTypeName,
+      jobChainId: chainId ? [chainId] : undefined,
+      id: id ? [id] : undefined,
     },
     orderDirection: "desc",
-    page: { cursor, limit },
+    cursor,
+    limit,
   });
 
-  return Response.json({
-    items: result.items.map(serializeJob),
+  return serovalResponse({
+    items: result.items,
     nextCursor: result.nextCursor,
   });
 };
 
 export const handleJobDetail = async (
   _url: URL,
-  stateAdapter: StateAdapter<any, any>,
+  client: Client<any, any>,
   jobId: string,
 ): Promise<Response> => {
-  const job = await stateAdapter.getJobById({ jobId });
+  const job = await client.getJob({ id: jobId });
   if (!job) {
-    return Response.json({ error: "Job not found" }, { status: 404 });
+    return serovalResponse({ error: "Job not found" }, 404);
   }
 
   const [blockers, chainJobs] = await Promise.all([
-    stateAdapter.getJobBlockers({ jobId }),
-    stateAdapter.listJobs({
-      filter: { chainId: [job.chainId] },
+    client.getJobBlockers({ jobId: job.id }),
+    client.listJobs({
+      filter: { jobChainId: [job.chainId] },
       orderDirection: "asc",
-      page: { limit: 1000 },
+      limit: 1000,
     }),
   ]);
 
   const continuation = chainJobs.items.find((j) => j.chainIndex === job.chainIndex + 1);
 
-  return Response.json({
-    job: serializeJob(job),
-    continuation: continuation ? serializeJob(continuation) : null,
-    blockers: blockers.map(([rootJob, lastJob]) => [
-      serializeJob(rootJob),
-      lastJob ? serializeJob(lastJob) : null,
-    ]),
+  return serovalResponse({
+    job,
+    continuation: continuation ?? null,
+    blockers,
   });
 };
 
 export const handleJobTrigger = async (
-  stateAdapter: StateAdapter<any, any>,
-  notifyAdapter: NotifyAdapter,
+  client: Client<any, any>,
   jobId: string,
 ): Promise<Response> => {
-  const existing = await stateAdapter.getJobById({ jobId });
-  if (!existing) {
-    return Response.json({ error: "Job not found" }, { status: 404 });
-  }
-  if (existing.status !== "pending") {
-    return Response.json(
-      { error: `Cannot trigger job with status "${existing.status}"` },
-      { status: 409 },
+  try {
+    const job = await withTransactionHooks(async (transactionHooks) =>
+      client.triggerJob({ id: jobId, transactionHooks }),
     );
+    return serovalResponse({ job });
+  } catch (err) {
+    if (err instanceof JobNotFoundError) {
+      return serovalResponse({ error: "Job not found" }, 404);
+    }
+    if (err instanceof JobNotTriggerableError) {
+      return serovalResponse({ error: err.message }, 409);
+    }
+    throw err;
   }
-
-  const job = await stateAdapter.triggerJob({ jobId });
-  await notifyAdapter.notifyJobScheduled(job.typeName, 1);
-
-  return Response.json({ job: serializeJob(job) });
 };

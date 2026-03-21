@@ -58,14 +58,26 @@ export type ResolvedJob<
   TNavigationMap extends BaseNavigationMap,
   TJobTypeName extends keyof TNavigationMap & string,
   TChainTypeName extends string = TNavigationMap[TJobTypeName]["reachingEntries"],
-> = Job<TJobId, TJobTypeName, TChainTypeName, TNavigationMap[TJobTypeName]["input"]>;
+> = Job<
+  TJobId,
+  TJobTypeName,
+  TChainTypeName,
+  TNavigationMap[TJobTypeName]["input"],
+  TNavigationMap[TJobTypeName]["output"]
+>;
 
 export type ResolvedJobWithBlockers<
   TJobId,
   TNavigationMap extends BaseNavigationMap,
   TJobTypeName extends keyof TNavigationMap & string,
   TChainTypeName extends string = TNavigationMap[TJobTypeName]["reachingEntries"],
-> = Job<TJobId, TJobTypeName, TChainTypeName, TNavigationMap[TJobTypeName]["input"]> & {
+> = Job<
+  TJobId,
+  TJobTypeName,
+  TChainTypeName,
+  TNavigationMap[TJobTypeName]["input"],
+  TNavigationMap[TJobTypeName]["output"]
+> & {
   blockers: CompletedBlockerChains<TJobId, TNavigationMap, TJobTypeName>;
 };
 
@@ -77,7 +89,13 @@ export type ContinuationJobs<
 > = TNavigationMap[TJobTypeName]["continuationTypes"] extends infer TCont extends
   keyof TNavigationMap & string
   ? {
-      [K in TCont]: Job<TJobId, K, TChainTypeName, TNavigationMap[K]["input"]> &
+      [K in TCont]: Job<
+        TJobId,
+        K,
+        TChainTypeName,
+        TNavigationMap[K]["input"],
+        TNavigationMap[K]["output"]
+      > &
         ({ status: "pending" } | { status: "blocked" });
     }[TCont]
   : never;
@@ -107,7 +125,13 @@ export type ResolvedChainJobs<
   _NavChainTypeNames<TNavigationMap, TChainTypeName> extends infer TChainTypeNames extends
     keyof TNavigationMap & string
     ? {
-        [K in TChainTypeNames]: Job<TJobId, K, TChainTypeName, TNavigationMap[K]["input"]>;
+        [K in TChainTypeNames]: Job<
+          TJobId,
+          K,
+          TChainTypeName,
+          TNavigationMap[K]["input"],
+          TNavigationMap[K]["output"]
+        >;
       }[TChainTypeNames]
     : never;
 

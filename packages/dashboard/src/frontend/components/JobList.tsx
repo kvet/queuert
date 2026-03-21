@@ -1,7 +1,6 @@
 import { A, useNavigate, useSearchParams } from "@solidjs/router";
 import { For, Show, createResource, createSignal } from "solid-js";
-import { type Job } from "../../shared/job.js";
-import { listJobs } from "../api.js";
+import { type UnknownJob, listJobs } from "../api.js";
 import { StatusBadge } from "./StatusBadge.js";
 import { TimeAgo } from "./TimeAgo.js";
 
@@ -14,7 +13,7 @@ export function JobList() {
   const id = () => (searchParams.id ?? "") as string;
   const chainId = () => (searchParams.chainId ?? "") as string;
 
-  const [items, setItems] = createSignal<Job[]>([]);
+  const [items, setItems] = createSignal<UnknownJob[]>([]);
   const [cursor, setCursor] = createSignal<string | null>(null);
 
   const [page] = createResource(

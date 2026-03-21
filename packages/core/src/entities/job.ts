@@ -3,7 +3,7 @@ import { type Job } from "./job.types.js";
 
 export * from "./job.types.js";
 
-export const mapStateJobToJob = (stateJob: StateJob): Job<any, any, any, any> => {
+export const mapStateJobToJob = (stateJob: StateJob): Job<any, any, any, any, any> => {
   const base = {
     id: stateJob.id,
     chainId: stateJob.chainId,
@@ -25,6 +25,7 @@ export const mapStateJobToJob = (stateJob: StateJob): Job<any, any, any, any> =>
         status: "completed",
         completedAt: stateJob.completedAt!,
         completedBy: stateJob.completedBy,
+        output: stateJob.output,
       };
     case "running":
       return {

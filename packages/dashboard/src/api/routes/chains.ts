@@ -1,99 +1,84 @@
-import { BlockerReferenceError, type StateAdapter } from "queuert";
-import { serializeJob } from "../../shared/job.js";
+import { BlockerReferenceError, type Client, withTransactionHooks } from "queuert";
+import { serovalResponse } from "../response.js";
 import { parseCursor, parseLimit, parseStatusFilter, parseTypeNameFilter } from "./params.js";
 
-export const handleChainsList = async (
-  url: URL,
-  stateAdapter: StateAdapter<any, any>,
-): Promise<Response> => {
+export const handleChainsList = async (url: URL, client: Client<any, any>): Promise<Response> => {
   const typeName = parseTypeNameFilter(url.searchParams.get("typeName") ?? undefined);
   const status = parseStatusFilter(url.searchParams.get("status") ?? undefined);
-  const rootOnly = url.searchParams.get("rootOnly") !== "false";
+  const root = url.searchParams.get("root") !== "false";
   const id = url.searchParams.get("id") ?? undefined;
   const jobId = url.searchParams.get("jobId") ?? undefined;
   const cursor = parseCursor(url.searchParams.get("cursor") ?? undefined);
   const limit = parseLimit(url.searchParams.get("limit") ?? undefined);
 
-  const result = await stateAdapter.listJobChains({
+  const result = await client.listJobChains({
     filter: {
       typeName,
       status,
-      rootOnly,
-      chainId: id ? [id] : undefined,
+      root,
+      id: id ? [id] : undefined,
       jobId: jobId ? [jobId] : undefined,
     },
     orderDirection: "desc",
-    page: { cursor, limit },
+    cursor,
+    limit,
   });
 
-  return Response.json({
-    items: result.items.map(([rootJob, lastJob]) => [
-      serializeJob(rootJob),
-      lastJob ? serializeJob(lastJob) : null,
-    ]),
+  return serovalResponse({
+    items: result.items,
     nextCursor: result.nextCursor,
   });
 };
 
 export const handleChainDetail = async (
   url: URL,
-  stateAdapter: StateAdapter<any, any>,
+  client: Client<any, any>,
   chainId: string,
 ): Promise<Response> => {
-  const jobChain = await stateAdapter.getJobChainById({ chainId });
+  const jobChain = await client.getJobChain({ id: chainId });
   if (!jobChain) {
-    return Response.json({ error: "Chain not found" }, { status: 404 });
+    return serovalResponse({ error: "Chain not found" }, 404);
   }
 
-  const jobs = await stateAdapter.listJobChainJobs({
-    chainId,
+  const jobs = await client.listJobChainJobs({
+    jobChainId: chainId,
     orderDirection: "asc",
-    page: { limit: 1000 },
+    limit: 1000,
   });
 
   const jobBlockers = await Promise.all(
     jobs.items.map(async (job) => {
-      const blockers = await stateAdapter.getJobBlockers({ jobId: job.id });
-      return [
-        job.id,
-        blockers.map(([rootJob, lastJob]) => [
-          serializeJob(rootJob),
-          lastJob ? serializeJob(lastJob) : null,
-        ]),
-      ] as const;
+      const blockers = await client.getJobBlockers({ jobId: job.id });
+      return [job.id, blockers] as const;
     }),
   );
 
-  return Response.json({
-    rootJob: serializeJob(jobChain[0]),
-    lastJob: jobChain[1] ? serializeJob(jobChain[1]) : null,
-    jobs: jobs.items.map(serializeJob),
+  return serovalResponse({
+    chain: jobChain,
+    jobs: jobs.items,
     jobBlockers: Object.fromEntries(jobBlockers),
   });
 };
 
 export const handleChainDelete = async (
-  stateAdapter: StateAdapter<any, any>,
+  client: Client<any, any>,
   chainId: string,
 ): Promise<Response> => {
-  const chain = await stateAdapter.getJobChainById({ chainId });
+  const chain = await client.getJobChain({ id: chainId });
   if (!chain) {
-    return Response.json({ error: "Chain not found" }, { status: 404 });
+    return serovalResponse({ error: "Chain not found" }, 404);
   }
 
   try {
-    const deleted = await stateAdapter.deleteJobChains({ chainIds: [chainId] });
-    return Response.json({
-      deleted: deleted.map(([rootJob, lastJob]) => [
-        serializeJob(rootJob),
-        lastJob ? serializeJob(lastJob) : null,
-      ]),
-    });
+    const deleted = await withTransactionHooks(async (transactionHooks) =>
+      client.deleteJobChains({ ids: [chainId], transactionHooks }),
+    );
+    return serovalResponse({ deleted });
   } catch (err) {
     if (err instanceof BlockerReferenceError) {
-      return Response.json(
+      return serovalResponse(
         { error: "Cannot delete: other jobs depend on this chain as a blocker" },
-        { status: 409 },
+        409,
       );
     }
     throw err;
@@ -102,16 +87,14 @@ export const handleChainDelete = async (
 
 export const handleChainBlocking = async (
   _url: URL,
-  stateAdapter: StateAdapter<any, any>,
+  client: Client<any, any>,
   chainId: string,
 ): Promise<Response> => {
-  const result = await stateAdapter.listBlockedJobs({
-    chainId,
+  const result = await client.listBlockedJobs({
+    jobChainId: chainId,
     orderDirection: "desc",
-    page: { limit: 1000 },
+    limit: 1000,
   });
 
-  return Response.json({
-    items: result.items.map(serializeJob),
-  });
+  return serovalResponse({ items: result.items });
 };

@@ -1,7 +1,11 @@
 import { createClient, defineJobTypeRegistry } from "queuert";
 import { createInProcessStateAdapter } from "queuert/internal";
+// @ts-expect-error tsgo doesn't resolve export * re-exports from seroval
+import { deserialize } from "seroval";
 import { describe, expect, it } from "vitest";
 import { createDashboard } from "../api/dashboard.js";
+
+const parseBody = async (res: Response) => deserialize(await res.text());
 
 const createTestDashboard = async (basePath?: string) => {
   const stateAdapter = createInProcessStateAdapter();
@@ -49,56 +53,48 @@ describe("Dashboard API", () => {
     it("returns empty list when no chains exist", async () => {
       const { request } = await createTestDashboard();
       const res = await request("/api/chains");
-      const body = await res.json();
+      const body = await parseBody(res);
 
       expect(res.status).toBe(200);
       expect(body.items).toEqual([]);
       expect(body.nextCursor).toBeNull();
     });
 
-    it("returns chains as [rootJob, lastJob] pairs", async () => {
+    it("returns chains as serialized job chain objects", async () => {
       const { request, stateAdapter } = await createTestDashboard();
       const root = await createJob(stateAdapter, "test-type", { key: "value" });
 
       const res = await request("/api/chains");
-      const body = await res.json();
+      const body = await parseBody(res);
 
       expect(body.items).toHaveLength(1);
-      expect(body.items[0][0].id).toBe(root.id);
-      expect(body.items[0][0].typeName).toBe("test-type");
-      expect(body.items[0][1]).toBeNull();
+      expect(body.items[0].id).toBe(root.id);
+      expect(body.items[0].typeName).toBe("test-type");
     });
 
     it("returns chain with continuation", async () => {
       const { request, stateAdapter } = await createTestDashboard();
       const root = await createJob(stateAdapter, "chain-type", { step: 1 });
-      const cont = await createContinuation(
-        stateAdapter,
-        "chain-step2",
-        root.chainId,
-        "chain-type",
-        1,
-        { step: 2 },
-      );
+      await createContinuation(stateAdapter, "chain-step2", root.chainId, "chain-type", 1, {
+        step: 2,
+      });
 
       const res = await request("/api/chains");
-      const body = await res.json();
+      const body = await parseBody(res);
 
       expect(body.items).toHaveLength(1);
-      expect(body.items[0][0].id).toBe(root.id);
-      expect(body.items[0][1]).not.toBeNull();
-      expect(body.items[0][1].id).toBe(cont.id);
+      expect(body.items[0].id).toBe(root.id);
+      expect(body.items[0].status).toBe("pending");
     });
 
-    it("serializes dates as ISO strings", async () => {
+    it("preserves Date objects via seroval", async () => {
       const { request, stateAdapter } = await createTestDashboard();
       await createJob(stateAdapter, "test", null);
 
       const res = await request("/api/chains");
-      const body = await res.json();
+      const body = await parseBody(res);
 
-      expect(typeof body.items[0][0].createdAt).toBe("string");
-      expect(body.items[0][0].createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+      expect(body.items[0].createdAt).toBeInstanceOf(Date);
     });
 
     it("respects limit param", async () => {
@@ -108,7 +104,7 @@ describe("Dashboard API", () => {
       }
 
       const res = await request("/api/chains?limit=2");
-      const body = await res.json();
+      const body = await parseBody(res);
 
       expect(body.items).toHaveLength(2);
       expect(body.nextCursor).not.toBeNull();
@@ -124,10 +120,10 @@ describe("Dashboard API", () => {
       });
 
       const res = await request(`/api/chains/${root.chainId}`);
-      const body = await res.json();
+      const body = await parseBody(res);
 
       expect(res.status).toBe(200);
-      expect(body.rootJob.id).toBe(root.id);
+      expect(body.chain.id).toBe(root.id);
       expect(body.jobs).toHaveLength(2);
     });
 
@@ -152,7 +148,7 @@ describe("Dashboard API", () => {
       );
 
       const res = await request(`/api/chains/${blockerChain.chainId}/blocking`);
-      const body = await res.json();
+      const body = await parseBody(res);
 
       expect(body.items).toHaveLength(1);
       expect(body.items[0].id).toBe(blockedJob.id);
@@ -165,11 +161,11 @@ describe("Dashboard API", () => {
       const root = await createJob(stateAdapter, "test-type", null);
 
       const res = await request(`/api/chains/${root.chainId}`, { method: "DELETE" });
-      const body = await res.json();
+      const body = await parseBody(res);
 
       expect(res.status).toBe(200);
       expect(body.deleted).toHaveLength(1);
-      expect(body.deleted[0][0].id).toBe(root.id);
+      expect(body.deleted[0].id).toBe(root.id);
 
       const detail = await request(`/api/chains/${root.chainId}`);
       expect(detail.status).toBe(404);
@@ -194,7 +190,7 @@ describe("Dashboard API", () => {
       );
 
       const res = await request(`/api/chains/${blockerChain.chainId}`, { method: "DELETE" });
-      const body = await res.json();
+      const body = await parseBody(res);
 
       expect(res.status).toBe(409);
       expect(body.error).toContain("blocker");
@@ -205,7 +201,7 @@ describe("Dashboard API", () => {
     it("returns empty list when no jobs exist", async () => {
       const { request } = await createTestDashboard();
       const res = await request("/api/jobs");
-      const body = await res.json();
+      const body = await parseBody(res);
 
       expect(res.status).toBe(200);
       expect(body.items).toEqual([]);
@@ -217,7 +213,7 @@ describe("Dashboard API", () => {
       await createJob(stateAdapter, "type-b", null);
 
       const res = await request("/api/jobs");
-      const body = await res.json();
+      const body = await parseBody(res);
 
       expect(body.items).toHaveLength(2);
     });
@@ -229,7 +225,7 @@ describe("Dashboard API", () => {
       await createJob(stateAdapter, "other-type", null);
 
       const res = await request("/api/jobs?chainTypeName=chain-type");
-      const body = await res.json();
+      const body = await parseBody(res);
 
       expect(body.items).toHaveLength(2);
       for (const job of body.items) {
@@ -244,7 +240,7 @@ describe("Dashboard API", () => {
       await createJob(stateAdapter, "other-type", null);
 
       const res = await request(`/api/jobs?chainId=${root.chainId}`);
-      const body = await res.json();
+      const body = await parseBody(res);
 
       expect(body.items).toHaveLength(2);
       for (const job of body.items) {
@@ -259,7 +255,7 @@ describe("Dashboard API", () => {
       const job = await createJob(stateAdapter, "test-type", { key: "value" });
 
       const res = await request(`/api/jobs/${job.id}`);
-      const body = await res.json();
+      const body = await parseBody(res);
 
       expect(res.status).toBe(200);
       expect(body.job.id).toBe(job.id);
@@ -293,7 +289,7 @@ describe("Dashboard API", () => {
       );
 
       const res = await request(`/api/jobs/${job.id}/trigger`, { method: "POST" });
-      const body = await res.json();
+      const body = await parseBody(res);
 
       expect(res.status).toBe(200);
       expect(body.job.id).toBe(job.id);
@@ -314,7 +310,7 @@ describe("Dashboard API", () => {
       );
 
       const res = await request(`/api/jobs/${job.id}/trigger`, { method: "POST" });
-      const body = await res.json();
+      const body = await parseBody(res);
 
       expect(res.status).toBe(409);
       expect(body.error).toContain("running");

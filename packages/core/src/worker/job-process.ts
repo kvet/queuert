@@ -93,7 +93,13 @@ export type AttemptCompleteOptions<
       : never,
   ) => Promise<
     TContinueJobTypeNames extends infer N extends string
-      ? Job<GetStateAdapterJobId<TStateAdapter>, N, TChainTypeName, TNavigationMap[N]["input"]> &
+      ? Job<
+          GetStateAdapterJobId<TStateAdapter>,
+          N,
+          TChainTypeName,
+          TNavigationMap[N]["input"],
+          TNavigationMap[N]["output"]
+        > &
           ({ status: "pending" } | { status: "blocked" })
       : never
   >;
@@ -452,7 +458,7 @@ export const runJobProcess = async ({
       );
 
       const result = await completeSavepointContext.run(async (txCtx, transactionHooks) => {
-        let continuedJob: Job<any, any, any, any> | null = null;
+        let continuedJob: Job<any, any, any, any, any> | null = null;
         const output = await completeCallback({
           continueWith: async ({ typeName, input, schedule, blockers }) => {
             if (continuedJob) {
@@ -497,8 +503,8 @@ export const runJobProcess = async ({
         };
         const continued = continuedJob
           ? {
-              jobId: (continuedJob as Job<any, any, any, any>).id,
-              jobTypeName: (continuedJob as Job<any, any, any, any>).typeName,
+              jobId: (continuedJob as Job<any, any, any, any, any>).id,
+              jobTypeName: (continuedJob as Job<any, any, any, any, any>).typeName,
             }
           : undefined;
         const chainCompleted = !continuedJob ? { output } : undefined;

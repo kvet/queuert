@@ -1,7 +1,6 @@
-import { For, Show, createResource, createSignal } from "solid-js";
 import { useNavigate, useSearchParams } from "@solidjs/router";
-import { type Job } from "../../shared/job.js";
-import { listJobChains } from "../api.js";
+import { For, Show, createResource, createSignal } from "solid-js";
+import { type UnknownJobChain, listJobChains } from "../api.js";
 import { StatusBadge } from "./StatusBadge.js";
 import { TimeAgo } from "./TimeAgo.js";
 
@@ -13,9 +12,9 @@ export function ChainList() {
   const status = () => (searchParams.status ?? "") as string;
   const id = () => (searchParams.id ?? "") as string;
   const jobId = () => (searchParams.jobId ?? "") as string;
-  const rootOnly = () => searchParams.rootOnly !== "false";
+  const root = () => searchParams.root !== "false";
 
-  const [items, setItems] = createSignal<[Job, Job | null][]>([]);
+  const [items, setItems] = createSignal<UnknownJobChain[]>([]);
   const [cursor, setCursor] = createSignal<string | null>(null);
 
   const [page] = createResource(
@@ -24,7 +23,7 @@ export function ChainList() {
       status: status(),
       id: id(),
       jobId: jobId(),
-      rootOnly: rootOnly(),
+      root: root(),
     }),
     async (params) => {
       const result = await listJobChains({ ...params, limit: 25 });
@@ -42,7 +41,7 @@ export function ChainList() {
       status: status(),
       id: id(),
       jobId: jobId(),
-      rootOnly: rootOnly(),
+      root: root(),
       cursor: c,
       limit: 25,
     });
@@ -109,9 +108,9 @@ export function ChainList() {
         <label class="checkbox-label">
           <input
             type="checkbox"
-            checked={rootOnly()}
+            checked={root()}
             onChange={(e) => {
-              setSearchParams({ rootOnly: e.target.checked ? undefined : "false" });
+              setSearchParams({ root: e.target.checked ? undefined : "false" });
             }}
           />
           Hide blockers
@@ -123,54 +122,47 @@ export function ChainList() {
       </Show>
 
       <For each={items()}>
-        {([rootJob, lastJob]) => {
-          const chainStatus = (lastJob ?? rootJob).status;
-          return (
-            <div
-              class="card"
-              onClick={(e) => {
-                if ((e.target as HTMLElement).closest("button")) return;
-                navigate(`/chains/${rootJob.chainId}`);
-              }}
-            >
-              <div class="card-header">
-                <span class="card-type">
-                  {rootJob.chainTypeName}
-                  <button
-                    class="filter-btn"
-                    title={`Filter by ${rootJob.chainTypeName}`}
-                    onClick={() => {
-                      setSearchParams({ typeName: rootJob.chainTypeName });
-                    }}
-                  />
-                </span>
-                <span class="card-id">
-                  {rootJob.chainId}
-                  <button
-                    class="filter-btn"
-                    title={`Filter by ${rootJob.chainId}`}
-                    onClick={() => {
-                      setSearchParams({ id: rootJob.chainId });
-                    }}
-                  />
-                </span>
-                <span class="card-time">
-                  <TimeAgo date={rootJob.createdAt} />
-                </span>
-              </div>
-              <div class="card-meta">
-                <StatusBadge status={chainStatus} />
-                <Show when={lastJob}>{(lj) => <span>{lj().typeName} (last)</span>}</Show>
-                <Show when={chainStatus === "blocked" && (lastJob ?? rootJob).attempt > 0}>
-                  <span>attempt #{(lastJob ?? rootJob).attempt}</span>
-                </Show>
-              </div>
-              <Show when={rootJob.input != null}>
-                <div class="card-input">{inputPreview(rootJob.input)}</div>
-              </Show>
+        {(chain) => (
+          <div
+            class="card"
+            onClick={(e) => {
+              if ((e.target as HTMLElement).closest("button")) return;
+              navigate(`/chains/${chain.id}`);
+            }}
+          >
+            <div class="card-header">
+              <span class="card-type">
+                {chain.typeName}
+                <button
+                  class="filter-btn"
+                  title={`Filter by ${chain.typeName}`}
+                  onClick={() => {
+                    setSearchParams({ typeName: chain.typeName });
+                  }}
+                />
+              </span>
+              <span class="card-id">
+                {chain.id}
+                <button
+                  class="filter-btn"
+                  title={`Filter by ${chain.id}`}
+                  onClick={() => {
+                    setSearchParams({ id: chain.id });
+                  }}
+                />
+              </span>
+              <span class="card-time">
+                <TimeAgo date={chain.createdAt} />
+              </span>
             </div>
-          );
-        }}
+            <div class="card-meta">
+              <StatusBadge status={chain.status} />
+            </div>
+            <Show when={chain.input != null}>
+              <div class="card-input">{inputPreview(chain.input)}</div>
+            </Show>
+          </div>
+        )}
       </For>
 
       <Show when={cursor()}>

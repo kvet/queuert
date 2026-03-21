@@ -109,7 +109,7 @@ type _CompleteJobChainResult<
   TCompleteReturn,
 > = [TCompleteReturn] extends [void]
   ? ResolvedJobChain<GetStateAdapterJobId<TStateAdapter>, TNavigationMap, TChainTypeName>
-  : TCompleteReturn extends Job<any, any, any, any> &
+  : TCompleteReturn extends Job<any, any, any, any, any> &
         ({ status: "pending" } | { status: "blocked" })
     ? ResolvedJobChain<GetStateAdapterJobId<TStateAdapter>, TNavigationMap, TChainTypeName>
     : JobChain<
@@ -562,7 +562,7 @@ export const createClient = async <
           );
         }
 
-        let continuedJob: Job<any, any, any, any> | null = null;
+        let continuedJob: Job<any, any, any, any, any> | null = null;
 
         const output = await jobCompleteCallback({
           transactionHooks,

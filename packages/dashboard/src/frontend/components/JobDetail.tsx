@@ -78,7 +78,7 @@ export function JobDetail() {
                   <Show when={job.completedAt}>
                     <dt>Completed</dt>
                     <dd>
-                      {fmtDate(job.completedAt!)} (<TimeAgo date={job.completedAt!} />)
+                      {fmtDate(job.completedAt)} (<TimeAgo date={job.completedAt} />)
                     </dd>
                   </Show>
                   <Show when={job.completedBy}>
@@ -92,7 +92,7 @@ export function JobDetail() {
                   <Show when={job.leasedUntil}>
                     <dt>Lease until</dt>
                     <dd>
-                      {fmtDate(job.leasedUntil!)} (<TimeAgo date={job.leasedUntil!} />)
+                      {fmtDate(job.leasedUntil)} (<TimeAgo date={job.leasedUntil} />)
                     </dd>
                   </Show>
                 </dl>
@@ -103,12 +103,11 @@ export function JobDetail() {
                   <h3>Blockers</h3>
                   <ul class="blocker-list">
                     <For each={d.blockers}>
-                      {([rootJob, lastJob]) => (
+                      {(blocker) => (
                         <li>
-                          <StatusBadge status={(lastJob ?? rootJob).status} />{" "}
-                          {rootJob.chainTypeName}{" "}
-                          <A href={`/chains/${rootJob.chainId}`} class="chain-link">
-                            chain {rootJob.chainId}
+                          <StatusBadge status={blocker.status} /> {blocker.typeName}{" "}
+                          <A href={`/chains/${blocker.id}`} class="chain-link">
+                            chain {blocker.id}
                           </A>
                         </li>
                       )}
