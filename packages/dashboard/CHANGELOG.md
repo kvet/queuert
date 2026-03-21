@@ -1,5 +1,33 @@
 # @queuert/dashboard
 
+## 0.8.0
+
+### Minor Changes
+
+- **Breaking changes:**
+  - Renamed worker and client options for clarity: `registry` is now `jobTypeRegistry`, `processorRegistry` is now `jobTypeProcessorRegistry`, `processDefaults` is now `jobTypeProcessorDefaults`. The `InProcessWorkerProcessDefaults` type is now `JobTypeProcessorDefaults`. `mergeJobTypeRegistries` and `mergeJobTypeProcessorRegistries` now take `{ slices: [...] }`.
+  - The `Job` type now has a 5th type parameter `TOutput`. Completed jobs expose an `output` field.
+  - Dashboard now takes a `Client` instance instead of raw adapters.
+
+  **New features:**
+  - `triggerJob` client method: trigger a pending job immediately, bypassing its scheduled time.
+  - `listJobs` now supports a `jobChainTypeName` filter to query jobs by their chain's type.
+  - `createJobTypeProcessorRegistry` rejects merged registries at runtime with a clear error message.
+
+  **Bug fixes:**
+  - `continueWith` now uses distributive conditional types for correct type checking across union job types.
+  - `completeJobChain` rejects un-narrowed union jobs, preventing ambiguous completions.
+
+  **Dashboard:**
+  - Chain deletion with confirmation dialog.
+  - "Trigger" button for pending jobs.
+  - Dashboard now uses the Client API internally with seroval serialization, preserving Date objects in the UI.
+
+### Patch Changes
+
+- Updated dependencies
+  - queuert@0.8.0
+
 ## 0.7.0
 
 ### Minor Changes
