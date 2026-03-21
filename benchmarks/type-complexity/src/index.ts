@@ -101,8 +101,10 @@ const generateCompleteJobChainCall = (defs: JobTypeDef[], entryDef: JobTypeDef):
   typeName: "${typeName}",
   id: chain.id,
   transactionHooks,
-  complete: async ({ job: currentJob, complete: completeFn }) =>
-    completeFn(currentJob, async () => (${typeToValue(entryDef.output ?? "{ result: string }")})),
+  complete: async ({ job: currentJob, complete: completeFn }) => {
+    if (currentJob.typeName !== "${typeName}") throw new Error("unexpected");
+    return completeFn(currentJob, async () => (${typeToValue(entryDef.output ?? "{ result: string }")}));
+  },
 });`;
   }
 
@@ -125,11 +127,13 @@ const generateCompleteJobChainCall = (defs: JobTypeDef[], entryDef: JobTypeDef):
   typeName: "${typeName}",
   id: chain.id,
   transactionHooks,
-  complete: async ({ job: currentJob, complete: completeFn }) =>
-    completeFn(currentJob, async ({ continueWith, ...txCtx }) => {
+  complete: async ({ job: currentJob, complete: completeFn }) => {
+    if (currentJob.typeName !== "${typeName}") throw new Error("unexpected");
+    return completeFn(currentJob, async ({ continueWith, ...txCtx }) => {
 ${blockerStarts.map((s) => `      ${s}`).join("\n")}
       return continueWith({ typeName: "${firstTarget}", input: ${targetInput}, blockers: [${blockerArray}] });
-    }),
+    });
+  },
 });`;
   }
 
@@ -137,9 +141,11 @@ ${blockerStarts.map((s) => `      ${s}`).join("\n")}
   typeName: "${typeName}",
   id: chain.id,
   transactionHooks,
-  complete: async ({ job: currentJob, complete: completeFn }) =>
-    completeFn(currentJob, async ({ continueWith }) =>
-      continueWith({ typeName: "${firstTarget}", input: ${targetInput} })),
+  complete: async ({ job: currentJob, complete: completeFn }) => {
+    if (currentJob.typeName !== "${typeName}") throw new Error("unexpected");
+    return completeFn(currentJob, async ({ continueWith }) =>
+      continueWith({ typeName: "${firstTarget}", input: ${targetInput} }));
+  },
 });`;
 };
 
@@ -728,7 +734,7 @@ const runBenchmark = (
 console.log("Queuert Type Complexity Benchmark");
 
 try {
-  execSync("pnpm --filter queuert build", { cwd: projectRoot, stdio: "pipe" });
+  execSync("bun run --filter queuert build", { cwd: projectRoot, stdio: "pipe" });
 } catch {
   console.error("Failed to build queuert. Run `pnpm --filter queuert build` manually.");
   process.exit(1);
