@@ -1,5 +1,18 @@
 # @queuert/nats
 
+## 0.8.1
+
+### Patch Changes
+
+- ### Dashboard
+  - Fixed job detail continuation lookup to use a targeted query instead of fetching the entire chain, significantly improving performance for long chains.
+  - Fixed a race condition where changing filters while a "load more" request was in-flight could append stale results in the chain and job list views.
+  - The `leasedBy` badge in the job list now only appears for running jobs.
+  - Fixed TypeScript type inference for `createDashboard` — the `client` option now preserves generic types instead of requiring `Client<any, any>`.
+
+- Updated dependencies
+  - queuert@0.8.1
+
 ## 0.8.0
 
 ### Minor Changes
