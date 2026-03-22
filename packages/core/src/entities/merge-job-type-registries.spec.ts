@@ -3,11 +3,15 @@ import { DuplicateJobTypeError, JobTypeValidationError } from "../errors.js";
 import {
   type JobTypeRegistryConfig,
   type JobTypeRegistryDefinitions,
-  type JobTypeRegistryNavigation,
   createJobTypeRegistry,
 } from "./job-type-registry.js";
 import { defineJobTypeRegistry } from "./define-job-type-registry.js";
 import { type BaseJobTypeDefinitions } from "./job-type.js";
+import {
+  type JobTypeContinuation,
+  type JobTypeEntryNames,
+  type JobTypeProperty,
+} from "./job-type-registry.resolvers.js";
 import { mergeJobTypeRegistries } from "./merge-job-type-registries.js";
 
 const createValidatedRegistry = <T extends BaseJobTypeDefinitions>(typeNames: string[]) => {
@@ -141,11 +145,15 @@ describe("mergeJobTypeRegistries", () => {
       const mergedJobTypeRegistry = mergeJobTypeRegistries({ slices: [a, b] });
 
       type MergedDefs = JobTypeRegistryDefinitions<typeof mergedJobTypeRegistry>;
-      expectTypeOf<MergedDefs["create-order"]["input"]>().toExtend<{ userId: string }>();
-      expectTypeOf<MergedDefs["send-email"]["input"]>().toExtend<{ to: string }>();
+      expectTypeOf<JobTypeProperty<MergedDefs, "create-order", "input">>().toEqualTypeOf<{
+        userId: string;
+      }>();
+      expectTypeOf<JobTypeProperty<MergedDefs, "send-email", "input">>().toEqualTypeOf<{
+        to: string;
+      }>();
     });
 
-    it("preserves pre-computed navigation map from each slice", () => {
+    it("preserves type information from each slice", () => {
       const a = defineJobTypeRegistry<{
         "create-order": {
           entry: true;
@@ -163,15 +171,21 @@ describe("mergeJobTypeRegistries", () => {
 
       const mergedJobTypeRegistry = mergeJobTypeRegistries({ slices: [a, b] });
 
-      type Nav = JobTypeRegistryNavigation<typeof mergedJobTypeRegistry>;
-      expectTypeOf<Nav["create-order"]["input"]>().toEqualTypeOf<{ userId: string }>();
-      expectTypeOf<Nav["create-order"]["isEntry"]>().toEqualTypeOf<true>();
-      expectTypeOf<Nav["create-order"]["continuationTypes"]>().toEqualTypeOf<"fulfill-order">();
-      expectTypeOf<Nav["fulfill-order"]["input"]>().toEqualTypeOf<{ orderId: string }>();
-      expectTypeOf<Nav["fulfill-order"]["output"]>().toEqualTypeOf<{ shipped: boolean }>();
-      expectTypeOf<Nav["fulfill-order"]["isEntry"]>().toEqualTypeOf<false>();
-      expectTypeOf<Nav["send-email"]["input"]>().toEqualTypeOf<{ to: string }>();
-      expectTypeOf<Nav["send-email"]["isEntry"]>().toEqualTypeOf<true>();
+      type Defs = JobTypeRegistryDefinitions<typeof mergedJobTypeRegistry>;
+      expectTypeOf<JobTypeProperty<Defs, "create-order", "input">>().toEqualTypeOf<{
+        userId: string;
+      }>();
+      expectTypeOf<JobTypeEntryNames<Defs>>().toEqualTypeOf<"create-order" | "send-email">();
+      expectTypeOf<JobTypeContinuation<Defs, "create-order">>().toEqualTypeOf<"fulfill-order">();
+      expectTypeOf<JobTypeProperty<Defs, "fulfill-order", "input">>().toEqualTypeOf<{
+        orderId: string;
+      }>();
+      expectTypeOf<JobTypeProperty<Defs, "fulfill-order", "output">>().toEqualTypeOf<{
+        shipped: boolean;
+      }>();
+      expectTypeOf<JobTypeProperty<Defs, "send-email", "input">>().toEqualTypeOf<{
+        to: string;
+      }>();
     });
   });
 
@@ -379,8 +393,12 @@ describe("mergeJobTypeRegistries", () => {
       const mergedJobTypeRegistry = mergeJobTypeRegistries({ slices: [notifications, orders] });
 
       type MergedDefs = JobTypeRegistryDefinitions<typeof mergedJobTypeRegistry>;
-      expectTypeOf<MergedDefs["notifications.send"]["input"]>().toExtend<{ userId: string }>();
-      expectTypeOf<MergedDefs["orders.create"]["input"]>().toExtend<{ userId: string }>();
+      expectTypeOf<JobTypeProperty<MergedDefs, "notifications.send", "input">>().toExtend<{
+        userId: string;
+      }>();
+      expectTypeOf<JobTypeProperty<MergedDefs, "orders.create", "input">>().toExtend<{
+        userId: string;
+      }>();
 
       mergedJobTypeRegistry.validateEntry("notifications.send");
       mergedJobTypeRegistry.validateEntry("orders.create");
@@ -457,7 +475,7 @@ describe("mergeJobTypeRegistries", () => {
   });
 
   describe("2-level merge (merge of merges)", () => {
-    it("preserves navigation maps through nested noop merges", () => {
+    it("preserves type information through nested noop merges", () => {
       const a = defineJobTypeRegistry<{
         "slice-a": {
           entry: true;
@@ -476,19 +494,25 @@ describe("mergeJobTypeRegistries", () => {
       const ab = mergeJobTypeRegistries({ slices: [a, b] });
       const mergedJobTypeRegistry = mergeJobTypeRegistries({ slices: [ab, c] });
 
-      type Nav = JobTypeRegistryNavigation<typeof mergedJobTypeRegistry>;
-      expectTypeOf<Nav["slice-a"]["isEntry"]>().toEqualTypeOf<true>();
-      expectTypeOf<Nav["slice-a"]["continuationTypes"]>().toEqualTypeOf<"slice-a2">();
-      expectTypeOf<Nav["slice-a2"]["input"]>().toEqualTypeOf<{ x: number }>();
-      expectTypeOf<Nav["slice-b"]["input"]>().toEqualTypeOf<{ b: number }>();
-      expectTypeOf<Nav["slice-c"]["input"]>().toEqualTypeOf<{ c: boolean }>();
+      type Defs = JobTypeRegistryDefinitions<typeof mergedJobTypeRegistry>;
+      expectTypeOf<JobTypeEntryNames<Defs>>().toEqualTypeOf<"slice-a" | "slice-b" | "slice-c">();
+      expectTypeOf<JobTypeContinuation<Defs, "slice-a">>().toEqualTypeOf<"slice-a2">();
+      expectTypeOf<JobTypeProperty<Defs, "slice-a2", "input">>().toEqualTypeOf<{
+        x: number;
+      }>();
+      expectTypeOf<JobTypeProperty<Defs, "slice-b", "input">>().toEqualTypeOf<{
+        b: number;
+      }>();
+      expectTypeOf<JobTypeProperty<Defs, "slice-c", "input">>().toEqualTypeOf<{
+        c: boolean;
+      }>();
 
       mergedJobTypeRegistry.validateEntry("slice-a");
       mergedJobTypeRegistry.validateEntry("slice-b");
       mergedJobTypeRegistry.validateEntry("slice-c");
     });
 
-    it("preserves navigation maps through nested validated merges", () => {
+    it("preserves type information through nested validated merges", () => {
       type TypesA = { "job-a": { entry: true; input: { a: string }; output: string } };
       type TypesB = { "job-b": { entry: true; input: { b: number }; output: number } };
       type TypesC = { "job-c": { entry: true; input: { c: boolean }; output: boolean } };
@@ -500,10 +524,16 @@ describe("mergeJobTypeRegistries", () => {
       const ab = mergeJobTypeRegistries({ slices: [a, b] });
       const mergedJobTypeRegistry = mergeJobTypeRegistries({ slices: [ab, c] });
 
-      type Nav = JobTypeRegistryNavigation<typeof mergedJobTypeRegistry>;
-      expectTypeOf<Nav["job-a"]["input"]>().toEqualTypeOf<{ a: string }>();
-      expectTypeOf<Nav["job-b"]["input"]>().toEqualTypeOf<{ b: number }>();
-      expectTypeOf<Nav["job-c"]["input"]>().toEqualTypeOf<{ c: boolean }>();
+      type Defs = JobTypeRegistryDefinitions<typeof mergedJobTypeRegistry>;
+      expectTypeOf<JobTypeProperty<Defs, "job-a", "input">>().toEqualTypeOf<{
+        a: string;
+      }>();
+      expectTypeOf<JobTypeProperty<Defs, "job-b", "input">>().toEqualTypeOf<{
+        b: number;
+      }>();
+      expectTypeOf<JobTypeProperty<Defs, "job-c", "input">>().toEqualTypeOf<{
+        c: boolean;
+      }>();
 
       expect(mergedJobTypeRegistry.getTypeNames()).toEqual(
         expect.arrayContaining(["job-a", "job-b", "job-c"]),

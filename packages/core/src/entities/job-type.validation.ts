@@ -8,13 +8,13 @@ import {
 type NoVoid<T> = [T] extends [void] ? never : T;
 type NoVoidOrUndefined<T> = [T] extends [void | undefined] ? never : T;
 
-type MatchingJobTypesByInput<TDefs extends BaseJobTypeDefinitions, TInput> = {
-  [K in keyof TDefs]: TDefs[K] extends { input: infer I }
+type MatchingJobTypesByInput<TJobTypeDefinitions extends BaseJobTypeDefinitions, TInput> = {
+  [K in keyof TJobTypeDefinitions]: TJobTypeDefinitions[K] extends { input: infer I }
     ? [TInput] extends [I]
       ? K
       : never
     : never;
-}[keyof TDefs] &
+}[keyof TJobTypeDefinitions] &
   string;
 
 type HasContinueWith<TJobType> = TJobType extends { continueWith: JobTypeReference } ? true : false;
@@ -30,22 +30,26 @@ type ValidateOutput<TJobType> =
       ? NoVoidOrUndefined<O>
       : never;
 
-type ValidateReference<TRef, TDefs extends BaseJobTypeDefinitions, TValidKeys extends string> =
+type ValidateReference<
+  TRef,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TValidKeys extends string,
+> =
   TRef extends NominalJobTypeReference<infer TN>
     ? TN extends TValidKeys
       ? TRef
       : NominalJobTypeReference<TValidKeys>
     : TRef extends StructuralJobTypeReference<infer TI>
-      ? [MatchingJobTypesByInput<TDefs, TI>] extends [never]
+      ? [MatchingJobTypesByInput<TJobTypeDefinitions, TI>] extends [never]
         ? never
         : TRef
       : never;
 
 type ValidateContinueWith<
   T,
-  TDefs extends BaseJobTypeDefinitions,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TValidKeys extends string,
-> = T extends JobTypeReference ? ValidateReference<T, TDefs, TValidKeys> : T;
+> = T extends JobTypeReference ? ValidateReference<T, TJobTypeDefinitions, TValidKeys> : T;
 
 type EntryTypeKeys<T extends BaseJobTypeDefinitions> = {
   [K in keyof T]: T[K] extends { entry: true } ? K : never;
@@ -54,15 +58,15 @@ type EntryTypeKeys<T extends BaseJobTypeDefinitions> = {
 
 type ValidateBlockers<
   T,
-  TDefs extends BaseJobTypeDefinitions,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TEntryKeys extends string,
 > = T extends readonly [infer First extends JobTypeReference, ...infer Rest]
   ? readonly [
-      ValidateReference<First, TDefs, TEntryKeys>,
-      ...ValidateBlockers<Rest, TDefs, TEntryKeys>,
+      ValidateReference<First, TJobTypeDefinitions, TEntryKeys>,
+      ...ValidateBlockers<Rest, TJobTypeDefinitions, TEntryKeys>,
     ]
   : T extends readonly (infer TElement extends JobTypeReference)[]
-    ? readonly ValidateReference<TElement, TDefs, TEntryKeys>[]
+    ? readonly ValidateReference<TElement, TJobTypeDefinitions, TEntryKeys>[]
     : T;
 
 type ExtractOutput<T> = T extends { output: infer O } ? O : undefined;

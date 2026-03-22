@@ -187,6 +187,108 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
 
       expect(jobChain.status).toBe("pending");
     });
+
+    it("rejects wrong input type at compile time", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      runInTransaction,
+    }) => {
+      const jobTypeRegistry = defineJobTypeRegistry<{
+        test: { entry: true; input: { value: number }; output: null };
+      }>();
+
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypeRegistry,
+      });
+
+      void withTransactionHooks(async (transactionHooks) =>
+        runInTransaction(async (txCtx) =>
+          client.startJobChain({
+            ...txCtx,
+            transactionHooks,
+            typeName: "test",
+            // @ts-expect-error wrong input type
+            input: { wrong: "field" },
+          }),
+        ),
+      );
+    });
+
+    it("rejects non-entry type name at compile time", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      runInTransaction,
+    }) => {
+      const jobTypeRegistry = defineJobTypeRegistry<{
+        test: { entry: true; input: { value: number }; output: null };
+      }>();
+
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypeRegistry,
+      });
+
+      void withTransactionHooks(async (transactionHooks) =>
+        runInTransaction(async (txCtx) =>
+          client.startJobChain({
+            ...txCtx,
+            transactionHooks,
+            // @ts-expect-error non-existent type
+            typeName: "nonexistent",
+            input: { value: 0 },
+          }),
+        ),
+      );
+    });
+
+    it("requires blockers when defined at compile time", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      runInTransaction,
+    }) => {
+      const jobTypeRegistry = defineJobTypeRegistry<{
+        dep: { entry: true; input: null; output: null };
+        withBlocker: {
+          entry: true;
+          input: { value: number };
+          output: null;
+          blockers: [{ typeName: "dep" }];
+        };
+      }>();
+
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypeRegistry,
+      });
+
+      void withTransactionHooks(async (transactionHooks) =>
+        runInTransaction(async (txCtx) =>
+          // @ts-expect-error missing required blockers
+          client.startJobChain({
+            ...txCtx,
+            transactionHooks,
+            typeName: "withBlocker",
+            input: { value: 1 },
+          }),
+        ),
+      );
+    });
   });
 
   describe("startJobChains", () => {
@@ -683,6 +785,111 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         expect(results[1].output).toEqual({ result: 40 });
         expect(results[2].output).toEqual({ result: 60 });
       });
+    });
+
+    it("rejects non-entry type name in batch at compile time", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      runInTransaction,
+    }) => {
+      const jobTypeRegistry = defineJobTypeRegistry<{
+        test: { entry: true; input: { value: number }; output: null };
+      }>();
+
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypeRegistry,
+      });
+
+      void withTransactionHooks(async (transactionHooks) =>
+        runInTransaction(async (txCtx) =>
+          client.startJobChains({
+            ...txCtx,
+            transactionHooks,
+            items: [
+              // @ts-expect-error non-existent type
+              { typeName: "nonexistent", input: { value: 0 } },
+            ],
+          }),
+        ),
+      );
+    });
+
+    it("rejects wrong input type in batch at compile time", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      runInTransaction,
+    }) => {
+      const jobTypeRegistry = defineJobTypeRegistry<{
+        test: { entry: true; input: { value: number }; output: null };
+      }>();
+
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypeRegistry,
+      });
+
+      void withTransactionHooks(async (transactionHooks) =>
+        runInTransaction(async (txCtx) =>
+          client.startJobChains({
+            ...txCtx,
+            transactionHooks,
+            items: [
+              // @ts-expect-error wrong input for test
+              { typeName: "test", input: { wrong: "field" } },
+            ],
+          }),
+        ),
+      );
+    });
+
+    it("rejects missing blockers in batch at compile time", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      runInTransaction,
+    }) => {
+      const jobTypeRegistry = defineJobTypeRegistry<{
+        dep: { entry: true; input: null; output: null };
+        withBlocker: {
+          entry: true;
+          input: { value: number };
+          output: null;
+          blockers: [{ typeName: "dep" }];
+        };
+      }>();
+
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypeRegistry,
+      });
+
+      void withTransactionHooks(async (transactionHooks) =>
+        runInTransaction(async (txCtx) =>
+          client.startJobChains({
+            ...txCtx,
+            transactionHooks,
+            items: [
+              // @ts-expect-error missing required blockers for withBlocker
+              { typeName: "withBlocker", input: { value: 1 } },
+            ],
+          }),
+        ),
+      );
     });
   });
 };

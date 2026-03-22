@@ -1,4 +1,4 @@
-import { type BaseNavigationMap, type Client, type StateAdapter } from "queuert";
+import { type BaseJobTypeDefinitions, type Client, type StateAdapter } from "queuert";
 import { renderHtml } from "./html.js";
 import {
   handleChainBlocking,
@@ -37,10 +37,10 @@ const loadAssets = async (): Promise<Assets | null> => {
  * @experimental
  */
 export const createDashboard = <
-  TNavigationMap extends BaseNavigationMap,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TStateAdapter extends StateAdapter<any, any>,
 >(options: {
-  client: Client<TNavigationMap, TStateAdapter>;
+  client: Client<TJobTypeDefinitions, TStateAdapter>;
   /** Mount prefix without trailing slash (e.g. `'/internal/queuert'`). Defaults to `''` (root). */
   basePath?: string;
 }): { fetch: (request: Request) => Response | Promise<Response> } => {

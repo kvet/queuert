@@ -11,7 +11,6 @@ export {
   type JobTypeRegistry,
   type JobTypeRegistryConfig,
   type JobTypeRegistryDefinitions,
-  type JobTypeRegistryNavigation,
 } from "./entities/job-type-registry.js";
 export { defineJobTypeRegistry } from "./entities/define-job-type-registry.js";
 export {
@@ -24,17 +23,10 @@ export {
   type StructuralJobTypeReference,
 } from "./entities/job-type.js";
 export {
-  type BaseNavigationEntry,
-  type BaseNavigationMap,
-  type NavigationMap,
-} from "./entities/job-type-registry.navigation.js";
-export {
-  type BlockedJobTypeNames,
   type BlockerChains,
-  type ChainJobTypeNames,
-  type ContinuationJobs,
-  type EntryJobTypeDefinitions,
-  type JobTypeHasBlockers,
+  type JobTypeEntryNames,
+  type JobTypeNames,
+  type JobTypeProperty,
   type ResolvedChainJobs,
   type ResolvedJob,
   type ResolvedJobChain,
@@ -97,11 +89,9 @@ export { createJobTypeProcessorRegistry } from "./worker/create-job-type-process
 export {
   processorDefinitionsSymbol,
   processorExternalDefinitionsSymbol,
-  processorNavigationSymbol,
   type InProcessWorkerProcessor,
   type JobTypeProcessorRegistry,
   type ExternalJobTypeProcessorRegistryDefinitions,
-  type JobTypeProcessorRegistryNavigation,
   type JobTypeProcessorRegistryDefinitions,
 } from "./worker/job-type-processor-registry.js";
 export { type LeaseConfig } from "./worker/lease.js";

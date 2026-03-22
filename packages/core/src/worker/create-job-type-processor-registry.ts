@@ -1,34 +1,21 @@
 import { type Client } from "../client.js";
 import { type JobTypeRegistry, mergedRegistrySymbol } from "../entities/job-type-registry.js";
 import { type BaseJobTypeDefinitions } from "../entities/job-type.js";
-import {
-  type BaseNavigationMap,
-  type NavigationMap,
-} from "../entities/job-type-registry.navigation.js";
 import { type StateAdapter } from "../state-adapter/state-adapter.js";
 import {
   type InProcessWorkerProcessor,
   type JobTypeProcessorRegistry,
   processorDefinitionsSymbol,
   processorExternalDefinitionsSymbol,
-  processorNavigationSymbol,
 } from "./job-type-processor-registry.js";
 
-type MergedNavigationMap<
+/** Merged definitions: union of own + external defs for use as TJobTypeDefinitions in processors. */
+type MergedDefs<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TExternalJobTypeDefinitions extends BaseJobTypeDefinitions,
 > = [keyof TExternalJobTypeDefinitions & string] extends [never]
-  ? NavigationMap<TJobTypeDefinitions>
-  : {
-      [K in
-        | (keyof TJobTypeDefinitions & string)
-        | (keyof TExternalJobTypeDefinitions &
-            string)]: K extends keyof NavigationMap<TJobTypeDefinitions>
-        ? NavigationMap<TJobTypeDefinitions>[K]
-        : K extends keyof NavigationMap<TExternalJobTypeDefinitions>
-          ? NavigationMap<TExternalJobTypeDefinitions>[K]
-          : never;
-    };
+  ? TJobTypeDefinitions
+  : TJobTypeDefinitions | TExternalJobTypeDefinitions;
 
 /**
  * Define a processor registry for a job type slice with full type inference.
@@ -52,17 +39,17 @@ export const createJobTypeProcessorRegistry = <
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TExternalJobTypeDefinitions extends BaseJobTypeDefinitions,
   TProcessors extends keyof TJobTypeDefinitions & string,
-  TNavigationMap extends BaseNavigationMap = MergedNavigationMap<
+  TMergedJobTypeDefinitions extends BaseJobTypeDefinitions = MergedDefs<
     TJobTypeDefinitions,
     TExternalJobTypeDefinitions
   >,
 >(options: {
   client: Client<any, TStateAdapter>;
-  jobTypeRegistry: JobTypeRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions, any, false>;
+  jobTypeRegistry: JobTypeRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions, false>;
   processors: {
-    [K in TProcessors]: InProcessWorkerProcessor<TStateAdapter, TNavigationMap, K>;
+    [K in TProcessors]: InProcessWorkerProcessor<TStateAdapter, TMergedJobTypeDefinitions, K>;
   } & Record<Exclude<TProcessors, keyof TJobTypeDefinitions & string>, never>;
-}): JobTypeProcessorRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions, TNavigationMap> => {
+}): JobTypeProcessorRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions> => {
   if ((options.jobTypeRegistry as JobTypeRegistry)[mergedRegistrySymbol]) {
     throw new TypeError(
       "createJobTypeProcessorRegistry does not accept a merged registry. " +
@@ -72,6 +59,5 @@ export const createJobTypeProcessorRegistry = <
   return Object.assign({}, options.processors, {
     [processorDefinitionsSymbol]: undefined as unknown as TJobTypeDefinitions,
     [processorExternalDefinitionsSymbol]: undefined as unknown as TExternalJobTypeDefinitions,
-    [processorNavigationSymbol]: undefined as unknown as TNavigationMap,
-  }) as JobTypeProcessorRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions, TNavigationMap>;
+  }) as JobTypeProcessorRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions>;
 };

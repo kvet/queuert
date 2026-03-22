@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { type Client, helpersSymbol } from "./client.js";
-import { type BaseNavigationMap } from "./entities/job-type-registry.navigation.js";
+import { type JobTypeNames } from "./entities/job-type-registry.resolvers.js";
+import { type BaseJobTypeDefinitions } from "./entities/job-type.js";
 import { type BackoffConfig } from "./helpers/backoff.js";
 import { type ParallelExecutor, createParallelExecutor } from "./helpers/parallel-executor.js";
 import { raceWithSleep } from "./helpers/sleep.js";
@@ -26,7 +27,7 @@ import { type LeaseConfig } from "./worker/lease.js";
 /** Default configuration applied to all job types unless overridden per-processor. */
 export type JobTypeProcessorDefaults<
   TStateAdapter extends StateAdapter<any, any>,
-  TNavigationMap extends BaseNavigationMap,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
 > = {
   /** How often to poll for new jobs in milliseconds */
   pollIntervalMs?: number;
@@ -35,7 +36,7 @@ export type JobTypeProcessorDefaults<
   /** Lease configuration for job ownership */
   leaseConfig?: LeaseConfig;
   /** Middlewares that wrap each job attempt */
-  attemptMiddlewares?: JobAttemptMiddleware<TStateAdapter, TNavigationMap>[];
+  attemptMiddlewares?: JobAttemptMiddleware<TStateAdapter, TJobTypeDefinitions>[];
 };
 
 const waitForNextJob = async ({
@@ -179,34 +180,33 @@ export type InProcessWorker = {
  * @param options.jobTypeProcessorRegistry - A JobTypeProcessorRegistry from createJobTypeProcessorRegistry or mergeJobTypeProcessorRegistries.
  */
 export const createInProcessWorker = async <
-  TNavigationMap extends BaseNavigationMap,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TStateAdapter extends StateAdapter<any, any>,
-  TProcessorNavigationMap extends BaseNavigationMap = TNavigationMap,
+  TProcessorJobTypeDefinitions extends BaseJobTypeDefinitions = TJobTypeDefinitions,
 >({
   client,
   workerId = randomUUID(),
   concurrency,
   backoffConfig,
   jobTypeProcessorDefaults,
-  jobTypeProcessorRegistry,
+  jobTypeProcessorRegistry: jobTypeProcessorRegistryOption,
 }: {
-  client: Client<TNavigationMap, TStateAdapter>;
+  client: Client<TJobTypeDefinitions, TStateAdapter>;
   workerId?: string;
   concurrency?: number;
   backoffConfig?: BackoffConfig;
-  jobTypeProcessorDefaults?: JobTypeProcessorDefaults<TStateAdapter, TProcessorNavigationMap>;
+  jobTypeProcessorDefaults?: JobTypeProcessorDefaults<TStateAdapter, TProcessorJobTypeDefinitions>;
   jobTypeProcessorRegistry: [
-    Exclude<keyof TProcessorNavigationMap & string, keyof TNavigationMap & string>,
+    Exclude<JobTypeNames<TProcessorJobTypeDefinitions>, JobTypeNames<TJobTypeDefinitions>>,
   ] extends [never]
-    ? JobTypeProcessorRegistry<any, any, TProcessorNavigationMap>
-    : `Error: processor registry contains job types unknown to the client: ${Exclude<keyof TProcessorNavigationMap & string, keyof TNavigationMap & string>}`;
+    ? JobTypeProcessorRegistry<TProcessorJobTypeDefinitions, any>
+    : `Error: processor registry contains job types unknown to the client: ${Exclude<JobTypeNames<TProcessorJobTypeDefinitions>, JobTypeNames<TJobTypeDefinitions>> & string}`;
 }): Promise<InProcessWorker> => {
-  const _jobTypeProcessorRegistry = jobTypeProcessorRegistry as JobTypeProcessorRegistry<
-    any,
+  const jobTypeProcessorRegistry = jobTypeProcessorRegistryOption as JobTypeProcessorRegistry<
     any,
     any
   >;
-  const typeNames = Object.keys(_jobTypeProcessorRegistry);
+  const typeNames = Object.keys(jobTypeProcessorRegistry);
 
   const pollIntervalMs = jobTypeProcessorDefaults?.pollIntervalMs ?? 60_000;
   const defaultBackoffConfig = jobTypeProcessorDefaults?.backoffConfig ?? {
@@ -244,7 +244,7 @@ export const createInProcessWorker = async <
               const result = await performJob({
                 helpers,
                 typeNames,
-                jobTypeProcessorRegistry: _jobTypeProcessorRegistry,
+                jobTypeProcessorRegistry,
                 defaultBackoffConfig,
                 defaultLeaseConfig,
                 workerId,

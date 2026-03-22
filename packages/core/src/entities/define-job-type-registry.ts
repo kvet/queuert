@@ -1,6 +1,5 @@
 import { type BaseJobTypeDefinitions } from "./job-type.js";
 import { type JobTypeRegistry, createNoopJobTypeRegistry } from "./job-type-registry.js";
-import { type NavigationMap } from "./job-type-registry.navigation.js";
 import { type ValidatedJobTypeDefinitions } from "./job-type.validation.js";
 
 /**
@@ -43,11 +42,6 @@ export const defineJobTypeRegistry = <
   TJobTypeDefinitions extends BaseJobTypeDefinitions &
     ValidatedJobTypeDefinitions<TJobTypeDefinitions, TExternalJobTypeDefinitions>,
   TExternalJobTypeDefinitions extends BaseJobTypeDefinitions = Record<never, never>,
->(): JobTypeRegistry<
-  TJobTypeDefinitions,
-  TExternalJobTypeDefinitions,
-  NavigationMap<TJobTypeDefinitions>,
-  false
-> => {
+>(): JobTypeRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions, false> => {
   return createNoopJobTypeRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions>();
 };

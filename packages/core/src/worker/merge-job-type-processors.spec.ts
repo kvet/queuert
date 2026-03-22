@@ -7,6 +7,7 @@ import { createInProcessWorker } from "../in-process-worker.js";
 import { createInProcessStateAdapter } from "../state-adapter/state-adapter.in-process.js";
 import { type JobTypeRegistryDefinitions } from "../entities/job-type-registry.js";
 import { createJobTypeProcessorRegistry } from "./create-job-type-processor-registry.js";
+import { type JobTypeProperty } from "../entities/job-type-registry.resolvers.js";
 import {
   type ExternalJobTypeProcessorRegistryDefinitions,
   type JobTypeProcessorRegistryDefinitions,
@@ -235,8 +236,8 @@ describe("mergeJobTypeProcessorRegistries", () => {
       slices: [orderJobTypeProcessorRegistry, notificationJobTypeProcessorRegistry],
     });
 
-    expectTypeOf<JobTypeProcessorRegistryDefinitions<typeof merged>>().toExtend<OrderDefs>();
-    expectTypeOf<JobTypeProcessorRegistryDefinitions<typeof merged>>().toExtend<NotificationDefs>();
+    expectTypeOf<OrderDefs>().toExtend<JobTypeProcessorRegistryDefinitions<typeof merged>>();
+    expectTypeOf<NotificationDefs>().toExtend<JobTypeProcessorRegistryDefinitions<typeof merged>>();
   });
 
   it("merged result sets symbols at runtime", () => {
@@ -467,13 +468,17 @@ describe("2-level merge (merge of merges)", () => {
     expect(secondMerge).toHaveProperty("notifications.send");
     expect(secondMerge).toHaveProperty("billing.charge");
 
-    expectTypeOf<JobTypeProcessorRegistryDefinitions<typeof secondMerge>>().toExtend<OrderDefs>();
-    expectTypeOf<
+    expectTypeOf<OrderDefs>().toExtend<JobTypeProcessorRegistryDefinitions<typeof secondMerge>>();
+    expectTypeOf<NotificationDefs>().toExtend<
       JobTypeProcessorRegistryDefinitions<typeof secondMerge>
-    >().toExtend<NotificationDefs>();
-    expectTypeOf<JobTypeProcessorRegistryDefinitions<typeof secondMerge>>().toHaveProperty(
-      "billing.charge",
-    );
+    >();
+    expectTypeOf<
+      JobTypeProperty<
+        JobTypeProcessorRegistryDefinitions<typeof secondMerge>,
+        "billing.charge",
+        "input"
+      >
+    >().toEqualTypeOf<{ amount: number }>();
   });
 });
 

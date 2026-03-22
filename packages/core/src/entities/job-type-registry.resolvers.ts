@@ -1,203 +1,310 @@
+/**
+ * Type-level resolution for job type definitions.
+ *
+ * All types operate directly on `BaseJobTypeDefinitions` — the user's raw type definitions.
+ * For merged registries, definitions are a union (`DefsA | DefsB`); TypeScript's
+ * distributive conditional types automatically distribute operations over each slice.
+ *
+ * Foundation accessors:
+ * - `JobTypeProperty<TJobTypeDefinitions, K, P>` — look up a definition property
+ * - `JobTypeNames<TJobTypeDefinitions>` — all type names
+ *
+ * Computed cross-type resolution:
+ * - `JobTypeContinuation<TJobTypeDefinitions, K>` — resolves continueWith references to type name strings
+ * - `JobTypeReachingEntry<TJobTypeDefinitions, K>` — which entry types can reach K via chain walking
+ */
+
 import { type CompletedJobChain, type JobChain } from "./job-chain.types.js";
 import {
+  type BaseJobTypeDefinitions,
   type JobTypeReference,
   type NominalJobTypeReference,
   type StructuralJobTypeReference,
 } from "./job-type.js";
-import { type BaseNavigationMap } from "./job-type-registry.navigation.js";
 import { type Job } from "./job.js";
 
-// ─── Internal helpers ───
+// ─── Distributive accessors ───
 
-type _NavChainTypeNames<
-  TNavigationMap extends BaseNavigationMap,
-  TJobTypeName,
-  _Visited = never,
-> = [TJobTypeName] extends [never]
+/**
+ * Distributive property access on job type definitions.
+ * For unions (`DefsA | DefsB`), distributes to the slice containing key K.
+ */
+export type JobTypeProperty<
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  K extends string,
+  P extends string,
+> = TJobTypeDefinitions extends any
+  ? K extends keyof TJobTypeDefinitions
+    ? P extends keyof TJobTypeDefinitions[K]
+      ? TJobTypeDefinitions[K][P]
+      : never
+    : never
+  : never;
+
+/** Distributive keyof — returns all type names across all slices. */
+export type JobTypeNames<TJobTypeDefinitions extends BaseJobTypeDefinitions> =
+  TJobTypeDefinitions extends any ? keyof TJobTypeDefinitions & string : never;
+
+/** Distributive key filter — returns type names where property P extends value V. */
+type _FilterByProperty<
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  P extends string,
+  V,
+> = TJobTypeDefinitions extends any
+  ? {
+      [K in keyof TJobTypeDefinitions & string]: P extends keyof TJobTypeDefinitions[K]
+        ? TJobTypeDefinitions[K][P] extends V
+          ? K
+          : never
+        : never;
+    }[keyof TJobTypeDefinitions & string]
+  : never;
+
+// ─── Computed cross-type resolution ───
+
+type _MatchingByInput<TJobTypeDefinitions extends BaseJobTypeDefinitions, TInput> = {
+  [K in keyof TJobTypeDefinitions]: TJobTypeDefinitions[K] extends { input: infer I }
+    ? [TInput] extends [I]
+      ? K
+      : never
+    : never;
+}[keyof TJobTypeDefinitions] &
+  string;
+
+/** Non-distributive reference resolution — used inside already-distributed contexts. */
+type _ResolveReference<TJobTypeDefinitions extends BaseJobTypeDefinitions, TRef> =
+  TRef extends NominalJobTypeReference<infer TN>
+    ? TN & keyof TJobTypeDefinitions
+    : TRef extends StructuralJobTypeReference<infer TI>
+      ? _MatchingByInput<TJobTypeDefinitions, TI>
+      : never;
+
+/** Distributive reference resolution — for cross-slice blocker resolution on union definitions. */
+type _ResolveReferenceDistributive<TJobTypeDefinitions extends BaseJobTypeDefinitions, TRef> =
+  TRef extends NominalJobTypeReference<infer TN>
+    ? TN & JobTypeNames<TJobTypeDefinitions>
+    : TRef extends StructuralJobTypeReference<infer TI>
+      ? TJobTypeDefinitions extends any
+        ? _MatchingByInput<TJobTypeDefinitions, TI>
+        : never
+      : never;
+
+/**
+ * Resolves `continueWith` references to concrete type name strings.
+ * Distributive — for unions, resolves within the slice containing K.
+ */
+export type JobTypeContinuation<
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  K extends string,
+> = TJobTypeDefinitions extends any
+  ? K extends keyof TJobTypeDefinitions
+    ? TJobTypeDefinitions[K] extends { continueWith: infer CT }
+      ? _ResolveReference<TJobTypeDefinitions, CT> & string
+      : never
+    : never
+  : never;
+
+type _ChainWalk<
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  K extends string,
+  _Visited extends string = never,
+> = [K] extends [never]
   ? _Visited
-  : TJobTypeName extends _Visited
+  : K extends _Visited
     ? _Visited
-    : TJobTypeName extends keyof TNavigationMap & string
-      ? _NavChainTypeNames<
-          TNavigationMap,
-          TNavigationMap[TJobTypeName]["continuationTypes"],
-          _Visited | TJobTypeName
-        >
-      : _Visited;
+    : _ChainWalk<TJobTypeDefinitions, JobTypeContinuation<TJobTypeDefinitions, K>, _Visited | K>;
 
-// ─── Consumer types (operate on TNavigationMap — a NavigationMap) ───
-
-export type EntryJobTypeDefinitions<TNavigationMap extends BaseNavigationMap> = {
-  [K in keyof TNavigationMap as TNavigationMap[K]["isEntry"] extends true
+type _EntryKeys<TJobTypeDefinitions extends BaseJobTypeDefinitions> = {
+  [K in keyof TJobTypeDefinitions & string]: TJobTypeDefinitions[K] extends { entry: true }
     ? K
-    : never]: TNavigationMap[K];
+    : never;
+}[keyof TJobTypeDefinitions & string];
+
+type _ChainReachMap<TJobTypeDefinitions extends BaseJobTypeDefinitions> = {
+  [TypeName in keyof TJobTypeDefinitions]: {
+    [E in _EntryKeys<TJobTypeDefinitions>]: TypeName extends _ChainWalk<TJobTypeDefinitions, E>
+      ? E
+      : never;
+  }[_EntryKeys<TJobTypeDefinitions>];
 };
 
-export type ContinuationJobTypes<
-  TNavigationMap extends BaseNavigationMap,
-  TJobTypeName extends keyof TNavigationMap,
-> = TNavigationMap[TJobTypeName]["continuationTypes"];
+/**
+ * Which entry types can reach K via chain walking.
+ * Distributive — for unions, computes within the slice containing K.
+ */
+export type JobTypeReachingEntry<
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  K extends string,
+> = TJobTypeDefinitions extends any
+  ? K extends keyof TJobTypeDefinitions
+    ? _ChainReachMap<TJobTypeDefinitions>[K] & string
+    : never
+  : never;
 
-export type ChainJobTypeNames<
-  TNavigationMap extends BaseNavigationMap,
-  TJobTypeName extends keyof TNavigationMap,
-> = _NavChainTypeNames<TNavigationMap, TJobTypeName> & string;
+/**
+ * All type names reachable from K by following continuation links.
+ * Distributive — for unions, walks within the slice containing K.
+ */
+export type JobTypeChainNames<
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  K extends string,
+> = _ChainWalk<TJobTypeDefinitions, K> & string;
 
-export type ChainTypesReaching<
-  TNavigationMap extends BaseNavigationMap,
-  TJobTypeName extends keyof TNavigationMap,
-> = TNavigationMap[TJobTypeName]["reachingEntries"];
+// ─── Entry types ───
+
+/** Entry type definitions — filters to job types with `entry: true`. */
+export type JobTypeEntryDefinitions<TJobTypeDefinitions extends BaseJobTypeDefinitions> = {
+  [K in keyof TJobTypeDefinitions as TJobTypeDefinitions[K] extends { entry: true }
+    ? K
+    : never]: TJobTypeDefinitions[K];
+};
+
+/** Entry type names — distributive, works on merged (union) definitions. */
+export type JobTypeEntryNames<TJobTypeDefinitions extends BaseJobTypeDefinitions> =
+  _FilterByProperty<TJobTypeDefinitions, "entry", true>;
+
+// ─── Job resolution ───
 
 export type JobTypeHasBlockers<
-  TNavigationMap extends BaseNavigationMap,
-  TJobTypeName extends keyof TNavigationMap,
-> = TNavigationMap[TJobTypeName]["hasBlockers"];
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TJobTypeName extends string,
+> =
+  JobTypeProperty<TJobTypeDefinitions, TJobTypeName, "blockers"> extends infer B
+    ? [B] extends [never]
+      ? false
+      : B extends readonly []
+        ? false
+        : B extends readonly unknown[]
+          ? true
+          : false
+    : false;
 
 export type ResolvedJob<
   TJobId,
-  TNavigationMap extends BaseNavigationMap,
-  TJobTypeName extends keyof TNavigationMap & string,
-  TChainTypeName extends string = TNavigationMap[TJobTypeName]["reachingEntries"],
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TJobTypeName extends string,
+  TChainTypeName extends string = JobTypeReachingEntry<TJobTypeDefinitions, TJobTypeName>,
 > = Job<
   TJobId,
   TJobTypeName,
   TChainTypeName,
-  TNavigationMap[TJobTypeName]["input"],
-  TNavigationMap[TJobTypeName]["output"]
+  JobTypeProperty<TJobTypeDefinitions, TJobTypeName, "input">,
+  JobTypeProperty<TJobTypeDefinitions, TJobTypeName, "output">
 >;
 
 export type ResolvedJobWithBlockers<
   TJobId,
-  TNavigationMap extends BaseNavigationMap,
-  TJobTypeName extends keyof TNavigationMap & string,
-  TChainTypeName extends string = TNavigationMap[TJobTypeName]["reachingEntries"],
-> = Job<
-  TJobId,
-  TJobTypeName,
-  TChainTypeName,
-  TNavigationMap[TJobTypeName]["input"],
-  TNavigationMap[TJobTypeName]["output"]
-> & {
-  blockers: CompletedBlockerChains<TJobId, TNavigationMap, TJobTypeName>;
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TJobTypeName extends string,
+  TChainTypeName extends string = JobTypeReachingEntry<TJobTypeDefinitions, TJobTypeName>,
+> = ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName, TChainTypeName> & {
+  blockers: CompletedBlockerChains<TJobId, TJobTypeDefinitions, TJobTypeName>;
 };
 
 export type ContinuationJobs<
   TJobId,
-  TNavigationMap extends BaseNavigationMap,
-  TJobTypeName extends keyof TNavigationMap & string,
-  TChainTypeName extends string = TNavigationMap[TJobTypeName]["reachingEntries"],
-> = TNavigationMap[TJobTypeName]["continuationTypes"] extends infer TCont extends
-  keyof TNavigationMap & string
-  ? {
-      [K in TCont]: Job<
-        TJobId,
-        K,
-        TChainTypeName,
-        TNavigationMap[K]["input"],
-        TNavigationMap[K]["output"]
-      > &
-        ({ status: "pending" } | { status: "blocked" });
-    }[TCont]
-  : never;
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TJobTypeName extends string,
+  TChainTypeName extends string = JobTypeReachingEntry<TJobTypeDefinitions, TJobTypeName>,
+> =
+  JobTypeContinuation<TJobTypeDefinitions, TJobTypeName> extends infer TContinuation extends string
+    ? {
+        [K in TContinuation]: Job<
+          TJobId,
+          K,
+          TChainTypeName,
+          JobTypeProperty<TJobTypeDefinitions, K, "input">,
+          JobTypeProperty<TJobTypeDefinitions, K, "output">
+        > &
+          ({ status: "pending" } | { status: "blocked" });
+      }[TContinuation]
+    : never;
 
 export type ResolvedJobChain<
   TJobId,
-  TNavigationMap extends BaseNavigationMap,
-  TJobTypeName extends keyof TNavigationMap & string,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TJobTypeName extends string,
 > =
-  _NavChainTypeNames<TNavigationMap, TJobTypeName> extends infer TChainTypeNames extends
-    keyof TNavigationMap & string
+  JobTypeChainNames<TJobTypeDefinitions, TJobTypeName> extends infer TChainTypeNames extends string
     ? {
         [K in TChainTypeNames]: JobChain<
           TJobId,
           TJobTypeName,
-          TNavigationMap[K]["input"],
-          TNavigationMap[K]["output"]
+          JobTypeProperty<TJobTypeDefinitions, K, "input">,
+          JobTypeProperty<TJobTypeDefinitions, K, "output">
         >;
       }[TChainTypeNames]
     : never;
 
 export type ResolvedChainJobs<
   TJobId,
-  TNavigationMap extends BaseNavigationMap,
-  TChainTypeName extends keyof TNavigationMap & string,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TChainTypeName extends string,
 > =
-  _NavChainTypeNames<TNavigationMap, TChainTypeName> extends infer TChainTypeNames extends
-    keyof TNavigationMap & string
+  JobTypeChainNames<TJobTypeDefinitions, TChainTypeName> extends infer TChainTypeNames extends
+    string
     ? {
         [K in TChainTypeNames]: Job<
           TJobId,
           K,
           TChainTypeName,
-          TNavigationMap[K]["input"],
-          TNavigationMap[K]["output"]
+          JobTypeProperty<TJobTypeDefinitions, K, "input">,
+          JobTypeProperty<TJobTypeDefinitions, K, "output">
         >;
       }[TChainTypeNames]
     : never;
 
 // ─── Blocker types ───
 
-type _MatchingNavTypesByInput<TNavigationMap extends BaseNavigationMap, TInput> = {
-  [K in keyof TNavigationMap & string]: [TInput] extends [TNavigationMap[K]["input"]] ? K : never;
-}[keyof TNavigationMap & string];
-
-type _ResolveReferenceFromNav<TNavigationMap extends BaseNavigationMap, TRef> =
-  TRef extends NominalJobTypeReference<infer TN>
-    ? TN & keyof TNavigationMap
-    : TRef extends StructuralJobTypeReference<infer TI>
-      ? _MatchingNavTypesByInput<TNavigationMap, TI>
-      : never;
-
-type _ReferenceToChain<TJobId, TNavigationMap extends BaseNavigationMap, TRef> = ResolvedJobChain<
-  TJobId,
-  TNavigationMap,
-  _ResolveReferenceFromNav<TNavigationMap, TRef> & keyof TNavigationMap & string
->;
-
 type _MapBlockersToChains<
   TJobId,
-  TNavigationMap extends BaseNavigationMap,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TBlockers extends readonly unknown[],
 > = {
   [K in keyof TBlockers]: TBlockers[K] extends JobTypeReference
-    ? _ReferenceToChain<TJobId, TNavigationMap, TBlockers[K]>
+    ? ResolvedJobChain<
+        TJobId,
+        TJobTypeDefinitions,
+        _ResolveReferenceDistributive<TJobTypeDefinitions, TBlockers[K]> & string
+      >
     : never;
 };
 
 export type BlockerChains<
   TJobId,
-  TNavigationMap extends BaseNavigationMap,
-  TJobTypeName extends keyof TNavigationMap & string,
-> = TNavigationMap[TJobTypeName]["hasBlockers"] extends false
-  ? []
-  : TNavigationMap[TJobTypeName]["blockerRefs"] extends infer TBlockers
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TJobTypeName extends string,
+> =
+  JobTypeProperty<TJobTypeDefinitions, TJobTypeName, "blockers"> extends infer TBlockers
     ? [TBlockers] extends [never]
       ? []
       : TBlockers extends readonly unknown[]
-        ? _MapBlockersToChains<TJobId, TNavigationMap, TBlockers>
+        ? _MapBlockersToChains<TJobId, TJobTypeDefinitions, TBlockers>
         : []
     : [];
 
-type _BlockerRefChainNames<
-  TNavigationMap extends BaseNavigationMap,
-  TNavigationMapEntry,
-> = TNavigationMapEntry extends {
-  blockerRefs: readonly (infer TRef)[];
+type _BlockerRefNames<
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TDefEntry,
+> = TDefEntry extends {
+  blockers: readonly (infer TRef)[];
 }
-  ? _ResolveReferenceFromNav<TNavigationMap, TRef>
+  ? _ResolveReferenceDistributive<TJobTypeDefinitions, TRef>
   : never;
 
-export type BlockedJobTypeNames<
-  TNavigationMap extends BaseNavigationMap,
+export type JobTypeBlockedNames<
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TBlockerChainTypeName extends string,
-> = {
-  [K in keyof TNavigationMap & string]: TBlockerChainTypeName extends _BlockerRefChainNames<
-    TNavigationMap,
-    TNavigationMap[K]
-  >
-    ? K
-    : never;
-}[keyof TNavigationMap & string];
+> = TJobTypeDefinitions extends any
+  ? {
+      [K in keyof TJobTypeDefinitions & string]: TBlockerChainTypeName extends _BlockerRefNames<
+        TJobTypeDefinitions,
+        TJobTypeDefinitions[K]
+      >
+        ? K
+        : never;
+    }[keyof TJobTypeDefinitions & string]
+  : never;
 
 type _MapToCompletedChains<TJobId, TBlockers extends readonly unknown[]> = {
   [K in keyof TBlockers]: TBlockers[K] extends JobChain<TJobId, string, unknown, unknown>
@@ -207,8 +314,6 @@ type _MapToCompletedChains<TJobId, TBlockers extends readonly unknown[]> = {
 
 export type CompletedBlockerChains<
   TJobId,
-  TNavigationMap extends BaseNavigationMap,
-  TJobTypeName extends keyof TNavigationMap & string,
-> = TNavigationMap[TJobTypeName]["hasBlockers"] extends false
-  ? []
-  : _MapToCompletedChains<TJobId, BlockerChains<TJobId, TNavigationMap, TJobTypeName>>;
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TJobTypeName extends string,
+> = _MapToCompletedChains<TJobId, BlockerChains<TJobId, TJobTypeDefinitions, TJobTypeName>>;

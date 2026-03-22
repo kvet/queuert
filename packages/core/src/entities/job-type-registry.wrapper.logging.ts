@@ -5,7 +5,6 @@ import {
   definitionsSymbol,
   externalDefinitionsSymbol,
   mergedRegistrySymbol,
-  navigationSymbol,
 } from "./job-type-registry.js";
 
 export const wrapJobTypeRegistryWithLogging = <TJobTypeDefinitions>({
@@ -36,7 +35,6 @@ export const wrapJobTypeRegistryWithLogging = <TJobTypeDefinitions>({
     validateBlockers: wrap(jobTypeRegistry.validateBlockers),
     [definitionsSymbol]: jobTypeRegistry[definitionsSymbol],
     [externalDefinitionsSymbol]: jobTypeRegistry[externalDefinitionsSymbol],
-    [navigationSymbol]: jobTypeRegistry[navigationSymbol],
     [mergedRegistrySymbol]: jobTypeRegistry[mergedRegistrySymbol],
   };
 };

@@ -1,12 +1,10 @@
 import { DuplicateJobTypeError } from "../errors.js";
 import {
   type JobTypeRegistry,
-  type JobTypeRegistryNavigation,
   createNoopJobTypeRegistry,
   definitionsSymbol,
   externalDefinitionsSymbol,
   mergedRegistrySymbol,
-  navigationSymbol,
   noopRegistries,
 } from "./job-type-registry.js";
 import { type BaseJobTypeDefinitions } from "./job-type.js";
@@ -14,7 +12,7 @@ import { type BaseJobTypeDefinitions } from "./job-type.js";
 /** Extract the definitions phantom type from a registry. */
 type ExtractDefinitions<T> = T extends JobTypeRegistry<infer D> ? D : never;
 
-/** Recursively merge definitions from a tuple of registries (4-at-a-time to avoid TS2589). */
+/** Recursively merge definitions from a tuple of registries as a UNION (4-at-a-time to avoid TS2589). */
 type MergeDefinitions<T extends readonly JobTypeRegistry<any>[]> = T extends readonly [
   infer A extends JobTypeRegistry<any>,
   infer B extends JobTypeRegistry<any>,
@@ -22,44 +20,28 @@ type MergeDefinitions<T extends readonly JobTypeRegistry<any>[]> = T extends rea
   infer D extends JobTypeRegistry<any>,
   ...infer Rest extends readonly JobTypeRegistry<any>[],
 ]
-  ? ExtractDefinitions<A> &
-      ExtractDefinitions<B> &
-      ExtractDefinitions<C> &
-      ExtractDefinitions<D> &
-      MergeDefinitions<Rest>
+  ?
+      | ExtractDefinitions<A>
+      | ExtractDefinitions<B>
+      | ExtractDefinitions<C>
+      | ExtractDefinitions<D>
+      | MergeDefinitions<Rest>
   : T extends readonly [
         infer First extends JobTypeRegistry<any>,
         ...infer Rest extends readonly JobTypeRegistry<any>[],
       ]
-    ? ExtractDefinitions<First> & MergeDefinitions<Rest>
-    : unknown;
+    ? ExtractDefinitions<First> | MergeDefinitions<Rest>
+    : never;
 
-/** Recursively merge pre-computed navigation maps from a tuple of registries (4-at-a-time). */
-type MergedNavigation<T extends readonly JobTypeRegistry<any>[]> = T extends readonly [
-  infer A extends JobTypeRegistry<any>,
-  infer B extends JobTypeRegistry<any>,
-  infer C extends JobTypeRegistry<any>,
-  infer D extends JobTypeRegistry<any>,
-  ...infer Rest extends readonly JobTypeRegistry<any>[],
-]
-  ? JobTypeRegistryNavigation<A> &
-      JobTypeRegistryNavigation<B> &
-      JobTypeRegistryNavigation<C> &
-      JobTypeRegistryNavigation<D> &
-      MergedNavigation<Rest>
-  : T extends readonly [
-        infer First extends JobTypeRegistry<any>,
-        ...infer Rest extends readonly JobTypeRegistry<any>[],
-      ]
-    ? JobTypeRegistryNavigation<First> & MergedNavigation<Rest>
-    : unknown;
+/** Distributive keyof that works on unions — returns all keys, not just common ones. */
+type _AllKeys<T> = T extends any ? keyof T & string : never;
 
 /** Identity when no duplicates; error string when duplicates exist. */
-type AssertNoDuplicates<Existing, New, Success> = [keyof Existing & keyof New & string] extends [
+type AssertNoDuplicates<Existing, New, Success> = [_AllKeys<Existing> & _AllKeys<New>] extends [
   never,
 ]
   ? Success
-  : `Duplicate job type: ${keyof Existing & keyof New & string}`;
+  : `Duplicate job type: ${_AllKeys<Existing> & _AllKeys<New>}`;
 
 /** Recursively validate each registry against accumulated definitions (4-at-a-time). */
 type ValidatedRegistries<
@@ -126,29 +108,15 @@ export const mergeJobTypeRegistries = <
   ],
 >(options: {
   slices: ValidatedRegistries<TRegistries> & TRegistries;
-}): JobTypeRegistry<
-  MergeDefinitions<TRegistries>,
-  Record<never, never>,
-  MergedNavigation<TRegistries>,
-  true
-> => {
+}): JobTypeRegistry<MergeDefinitions<TRegistries>, Record<never, never>, true> => {
   const regs = options.slices as unknown as JobTypeRegistry<any>[];
   const allNoop = regs.every((r) => noopRegistries.has(r));
 
   if (allNoop) {
     return {
-      ...createNoopJobTypeRegistry<
-        MergeDefinitions<TRegistries> & BaseJobTypeDefinitions,
-        Record<never, never>,
-        MergedNavigation<TRegistries>
-      >(),
+      ...createNoopJobTypeRegistry<MergeDefinitions<TRegistries> & BaseJobTypeDefinitions>(),
       [mergedRegistrySymbol]: true as const,
-    } as unknown as JobTypeRegistry<
-      MergeDefinitions<TRegistries>,
-      Record<never, never>,
-      MergedNavigation<TRegistries>,
-      true
-    >;
+    } as unknown as JobTypeRegistry<MergeDefinitions<TRegistries>, Record<never, never>, true>;
   }
 
   const validated = regs.filter((r) => !noopRegistries.has(r));
@@ -234,7 +202,6 @@ export const mergeJobTypeRegistries = <
     },
     [definitionsSymbol]: undefined as unknown as MergeDefinitions<TRegistries>,
     [externalDefinitionsSymbol]: undefined as unknown as Record<never, never>,
-    [navigationSymbol]: undefined as unknown as MergedNavigation<TRegistries>,
     [mergedRegistrySymbol]: true,
   };
 };

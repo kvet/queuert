@@ -2,20 +2,18 @@ import { describe, expectTypeOf, it } from "vitest";
 import {
   type ExternalJobTypeRegistryDefinitions,
   type JobTypeRegistryDefinitions,
-  type JobTypeRegistryNavigation,
 } from "./job-type-registry.js";
 import {
-  type BlockedJobTypeNames,
   type BlockerChains,
-  type ChainJobTypeNames,
-  type ChainTypesReaching,
   type CompletedBlockerChains,
-  type ContinuationJobTypes,
-  type EntryJobTypeDefinitions,
+  type JobTypeBlockedNames,
+  type JobTypeChainNames,
+  type JobTypeContinuation,
+  type JobTypeEntryDefinitions,
+  type JobTypeReachingEntry,
   type ResolvedJob,
   type ResolvedJobChain,
 } from "./job-type-registry.resolvers.js";
-import { type NavigationMap } from "./job-type-registry.navigation.js";
 import { defineJobTypeRegistry } from "./define-job-type-registry.js";
 
 describe("defineJobTypeRegistry", () => {
@@ -386,7 +384,7 @@ describe("continuation-only jobs (default behavior)", () => {
       second: { input: null; output: { done: true } };
     }>();
 
-    type SecondJob = ResolvedJob<string, JobTypeRegistryNavigation<typeof defs>, "second">;
+    type SecondJob = ResolvedJob<string, JobTypeRegistryDefinitions<typeof defs>, "second">;
     expectTypeOf<SecondJob["input"]>().toEqualTypeOf<null>();
   });
 
@@ -399,7 +397,7 @@ describe("continuation-only jobs (default behavior)", () => {
       };
     }>();
 
-    type SecondJob = ResolvedJob<string, JobTypeRegistryNavigation<typeof defs>, "second">;
+    type SecondJob = ResolvedJob<string, JobTypeRegistryDefinitions<typeof defs>, "second">;
     expectTypeOf<SecondJob["input"]>().toEqualTypeOf<{
       value: number;
       name: string;
@@ -412,7 +410,7 @@ describe("continuation-only jobs (default behavior)", () => {
       second: { input: number; output: { done: true } };
     }>();
 
-    type SecondJob = ResolvedJob<string, JobTypeRegistryNavigation<typeof defs>, "second">;
+    type SecondJob = ResolvedJob<string, JobTypeRegistryDefinitions<typeof defs>, "second">;
     expectTypeOf<SecondJob["input"]>().toEqualTypeOf<number>();
   });
 
@@ -422,7 +420,7 @@ describe("continuation-only jobs (default behavior)", () => {
       second: { input: string[]; output: { done: true } };
     }>();
 
-    type SecondJob = ResolvedJob<string, JobTypeRegistryNavigation<typeof defs>, "second">;
+    type SecondJob = ResolvedJob<string, JobTypeRegistryDefinitions<typeof defs>, "second">;
     expectTypeOf<SecondJob["input"]>().toEqualTypeOf<string[]>();
   });
 
@@ -443,7 +441,7 @@ describe("continuation-only jobs (default behavior)", () => {
   });
 });
 
-describe("EntryJobTypeDefinitions", () => {
+describe("JobTypeEntryDefinitions", () => {
   it("includes only job types with entry: true", () => {
     type Defs = {
       public: { entry: true; input: { id: string }; continueWith: { typeName: "internal" } };
@@ -451,7 +449,7 @@ describe("EntryJobTypeDefinitions", () => {
       alsoPublic: { entry: true; input: null; output: { result: string } };
     };
 
-    type EntryDefs = EntryJobTypeDefinitions<NavigationMap<Defs>>;
+    type EntryDefs = JobTypeEntryDefinitions<Defs>;
 
     expectTypeOf<keyof EntryDefs>().toEqualTypeOf<"public" | "alsoPublic">();
   });
@@ -462,7 +460,7 @@ describe("EntryJobTypeDefinitions", () => {
       b: { input: { x: number }; output: { done: true } };
     };
 
-    type EntryDefs = EntryJobTypeDefinitions<NavigationMap<Defs>>;
+    type EntryDefs = JobTypeEntryDefinitions<Defs>;
 
     expectTypeOf<keyof EntryDefs>().toEqualTypeOf<never>();
   });
@@ -478,8 +476,8 @@ describe("ResolvedJob", () => {
       };
     }>();
 
-    type FirstJob = ResolvedJob<string, JobTypeRegistryNavigation<typeof defs>, "first">;
-    type SecondJob = ResolvedJob<string, JobTypeRegistryNavigation<typeof defs>, "second">;
+    type FirstJob = ResolvedJob<string, JobTypeRegistryDefinitions<typeof defs>, "first">;
+    type SecondJob = ResolvedJob<string, JobTypeRegistryDefinitions<typeof defs>, "second">;
 
     expectTypeOf<FirstJob["input"]>().toEqualTypeOf<{ value: number }>();
     expectTypeOf<SecondJob["input"]>().toEqualTypeOf<{ continued: boolean }>();
@@ -490,7 +488,7 @@ describe("ResolvedJob", () => {
       test: { entry: true; input: { id: string }; output: { result: number } };
     }>();
 
-    type TestJob = ResolvedJob<string, JobTypeRegistryNavigation<typeof defs>, "test">;
+    type TestJob = ResolvedJob<string, JobTypeRegistryDefinitions<typeof defs>, "test">;
 
     expectTypeOf<TestJob["id"]>().toEqualTypeOf<string>();
     expectTypeOf<TestJob["chainId"]>().toEqualTypeOf<string>();
@@ -500,14 +498,14 @@ describe("ResolvedJob", () => {
   });
 });
 
-describe("ContinuationJobTypes", () => {
+describe("JobTypeContinuation", () => {
   it("resolves continuation types from continueWith", () => {
     const defs = defineJobTypeRegistry<{
       first: { entry: true; input: null; continueWith: { typeName: "second" } };
       second: { input: null; output: { done: true } };
     }>();
 
-    type NextFromFirst = ContinuationJobTypes<JobTypeRegistryNavigation<typeof defs>, "first">;
+    type NextFromFirst = JobTypeContinuation<JobTypeRegistryDefinitions<typeof defs>, "first">;
 
     expectTypeOf<NextFromFirst>().toEqualTypeOf<"second">();
   });
@@ -524,7 +522,7 @@ describe("ContinuationJobTypes", () => {
       branchB: { input: null; output: { b: true } };
     }>();
 
-    type NextFromStart = ContinuationJobTypes<JobTypeRegistryNavigation<typeof defs>, "start">;
+    type NextFromStart = JobTypeContinuation<JobTypeRegistryDefinitions<typeof defs>, "start">;
 
     expectTypeOf<NextFromStart>().toEqualTypeOf<"branchA" | "branchB">();
   });
@@ -534,8 +532,8 @@ describe("ContinuationJobTypes", () => {
       terminal: { entry: true; input: null; output: { done: true } };
     }>();
 
-    type NextFromTerminal = ContinuationJobTypes<
-      JobTypeRegistryNavigation<typeof defs>,
+    type NextFromTerminal = JobTypeContinuation<
+      JobTypeRegistryDefinitions<typeof defs>,
       "terminal"
     >;
 
@@ -543,7 +541,7 @@ describe("ContinuationJobTypes", () => {
   });
 });
 
-describe("ChainJobTypeNames", () => {
+describe("JobTypeChainNames", () => {
   it("collects all job types in a chain", () => {
     const defs = defineJobTypeRegistry<{
       first: { entry: true; input: null; continueWith: { typeName: "second" } };
@@ -552,7 +550,7 @@ describe("ChainJobTypeNames", () => {
       unrelated: { entry: true; input: { other: true }; output: { other: true } };
     }>();
 
-    type ChainTypes = ChainJobTypeNames<JobTypeRegistryNavigation<typeof defs>, "first">;
+    type ChainTypes = JobTypeChainNames<JobTypeRegistryDefinitions<typeof defs>, "first">;
 
     expectTypeOf<ChainTypes>().toEqualTypeOf<"first" | "second" | "third">();
   });
@@ -567,7 +565,7 @@ describe("ChainJobTypeNames", () => {
       };
     }>();
 
-    type ChainTypes = ChainJobTypeNames<JobTypeRegistryNavigation<typeof defs>, "loop">;
+    type ChainTypes = JobTypeChainNames<JobTypeRegistryDefinitions<typeof defs>, "loop">;
 
     expectTypeOf<ChainTypes>().toEqualTypeOf<"loop">();
   });
@@ -585,7 +583,7 @@ describe("BlockerChains", () => {
       };
     }>();
 
-    type MainBlockers = BlockerChains<string, JobTypeRegistryNavigation<typeof defs>, "main">;
+    type MainBlockers = BlockerChains<string, JobTypeRegistryDefinitions<typeof defs>, "main">;
 
     expectTypeOf<MainBlockers[0]["typeName"]>().toEqualTypeOf<"blocker">();
     expectTypeOf<MainBlockers[0]["input"]>().toEqualTypeOf<{ value: number }>();
@@ -596,12 +594,12 @@ describe("BlockerChains", () => {
       simple: { entry: true; input: null; output: { done: true } };
     }>();
 
-    type SimpleBlockers = BlockerChains<string, JobTypeRegistryNavigation<typeof defs>, "simple">;
+    type SimpleBlockers = BlockerChains<string, JobTypeRegistryDefinitions<typeof defs>, "simple">;
 
     expectTypeOf<SimpleBlockers>().toEqualTypeOf<[]>();
   });
 
-  it("resolves cross-slice blocker output via merged navigation (tuple)", () => {
+  it("resolves cross-slice blocker output via merged definitions (tuple)", () => {
     type NotifDefs = {
       "notif.send": {
         entry: true;
@@ -623,21 +621,13 @@ describe("BlockerChains", () => {
       };
     };
 
-    type MergedNav = {
-      [K in
-        | keyof NavigationMap<OrderDefs>
-        | keyof NavigationMap<NotifDefs>]: K extends keyof NavigationMap<OrderDefs>
-        ? NavigationMap<OrderDefs>[K]
-        : K extends keyof NavigationMap<NotifDefs>
-          ? NavigationMap<NotifDefs>[K]
-          : never;
-    };
+    type MergedDefs = OrderDefs | NotifDefs;
 
-    type Blockers = CompletedBlockerChains<string, MergedNav, "orders.confirm">;
+    type Blockers = CompletedBlockerChains<string, MergedDefs, "orders.confirm">;
     expectTypeOf<Blockers[0]["output"]>().toEqualTypeOf<{ sentAt: string }>();
   });
 
-  it("resolves cross-slice blocker output via merged navigation (array)", () => {
+  it("resolves cross-slice blocker output via merged definitions (array)", () => {
     type NotifDefs = {
       "notif.send": {
         entry: true;
@@ -659,26 +649,14 @@ describe("BlockerChains", () => {
       };
     };
 
-    type MergedNav = {
-      [K in
-        | keyof NavigationMap<OrderDefs>
-        | keyof NavigationMap<NotifDefs>]: K extends keyof NavigationMap<OrderDefs>
-        ? NavigationMap<OrderDefs>[K]
-        : K extends keyof NavigationMap<NotifDefs>
-          ? NavigationMap<NotifDefs>[K]
-          : never;
-    };
+    type MergedDefs = OrderDefs | NotifDefs;
 
-    type Chains = BlockerChains<string, MergedNav, "orders.confirm">;
-    type Blockers = CompletedBlockerChains<string, MergedNav, "orders.confirm">;
+    type Chains = BlockerChains<string, MergedDefs, "orders.confirm">;
+    type Blockers = CompletedBlockerChains<string, MergedDefs, "orders.confirm">;
 
-    expectTypeOf<ChainJobTypeNames<MergedNav, "notif.send">>().toEqualTypeOf<"notif.send">();
-    expectTypeOf<MergedNav["notif.send"]["output"]>().toEqualTypeOf<{ sentAt: string }>();
-    expectTypeOf<MergedNav["orders.confirm"]["blockerRefs"]>().toEqualTypeOf<
-      { typeName: "notif.send" }[]
-    >();
+    expectTypeOf<JobTypeChainNames<MergedDefs, "notif.send">>().toEqualTypeOf<"notif.send">();
 
-    type Chain = ResolvedJobChain<string, MergedNav, "notif.send">;
+    type Chain = ResolvedJobChain<string, MergedDefs, "notif.send">;
     expectTypeOf<Chain["typeName"]>().toEqualTypeOf<"notif.send">();
 
     expectTypeOf<Chains[number]["typeName"]>().toEqualTypeOf<"notif.send">();
@@ -686,7 +664,7 @@ describe("BlockerChains", () => {
   });
 });
 
-describe("BlockedJobTypeNames", () => {
+describe("JobTypeBlockedNames", () => {
   it("resolves job types blocked by a given chain type", () => {
     type Defs = {
       dep: { entry: true; input: { v: number }; output: { ok: boolean } };
@@ -698,7 +676,7 @@ describe("BlockedJobTypeNames", () => {
       };
     };
 
-    expectTypeOf<BlockedJobTypeNames<NavigationMap<Defs>, "dep">>().toEqualTypeOf<"main">();
+    expectTypeOf<JobTypeBlockedNames<Defs, "dep">>().toEqualTypeOf<"main">();
   });
 
   it("returns never when no job types are blocked by the chain", () => {
@@ -707,7 +685,7 @@ describe("BlockedJobTypeNames", () => {
       other: { entry: true; input: { x: number }; output: { y: number } };
     };
 
-    expectTypeOf<BlockedJobTypeNames<NavigationMap<Defs>, "standalone">>().toEqualTypeOf<never>();
+    expectTypeOf<JobTypeBlockedNames<Defs, "standalone">>().toEqualTypeOf<never>();
   });
 
   it("resolves multiple job types blocked by the same chain", () => {
@@ -727,9 +705,7 @@ describe("BlockedJobTypeNames", () => {
       };
     };
 
-    expectTypeOf<BlockedJobTypeNames<NavigationMap<Defs>, "auth">>().toEqualTypeOf<
-      "taskA" | "taskB"
-    >();
+    expectTypeOf<JobTypeBlockedNames<Defs, "auth">>().toEqualTypeOf<"taskA" | "taskB">();
   });
 
   it("handles multiple blockers on a single job type", () => {
@@ -744,8 +720,8 @@ describe("BlockedJobTypeNames", () => {
       };
     };
 
-    expectTypeOf<BlockedJobTypeNames<NavigationMap<Defs>, "depA">>().toEqualTypeOf<"main">();
-    expectTypeOf<BlockedJobTypeNames<NavigationMap<Defs>, "depB">>().toEqualTypeOf<"main">();
+    expectTypeOf<JobTypeBlockedNames<Defs, "depA">>().toEqualTypeOf<"main">();
+    expectTypeOf<JobTypeBlockedNames<Defs, "depB">>().toEqualTypeOf<"main">();
   });
 });
 
@@ -759,7 +735,7 @@ describe("ResolvedJobChain", () => {
       };
     }>();
 
-    type Chain = ResolvedJobChain<string, JobTypeRegistryNavigation<typeof defs>, "first">;
+    type Chain = ResolvedJobChain<string, JobTypeRegistryDefinitions<typeof defs>, "first">;
 
     // The chain input should be the type from each job in the chain
     type ChainInput = Chain extends { input: infer I } ? I : never;
@@ -769,7 +745,7 @@ describe("ResolvedJobChain", () => {
   });
 });
 
-describe("ChainTypesReaching", () => {
+describe("JobTypeReachingEntry", () => {
   it("computes reaching chain types for complex job graphs", () => {
     // Complex graph with:
     // - 5 entry points
@@ -868,72 +844,72 @@ describe("ChainTypesReaching", () => {
 
     // Entry points reach only themselves
     expectTypeOf<
-      ChainTypesReaching<JobTypeRegistryNavigation<typeof defs>, "entryA">
+      JobTypeReachingEntry<JobTypeRegistryDefinitions<typeof defs>, "entryA">
     >().toEqualTypeOf<"entryA">();
     expectTypeOf<
-      ChainTypesReaching<JobTypeRegistryNavigation<typeof defs>, "entryB">
+      JobTypeReachingEntry<JobTypeRegistryDefinitions<typeof defs>, "entryB">
     >().toEqualTypeOf<"entryB">();
     expectTypeOf<
-      ChainTypesReaching<JobTypeRegistryNavigation<typeof defs>, "entryC">
+      JobTypeReachingEntry<JobTypeRegistryDefinitions<typeof defs>, "entryC">
     >().toEqualTypeOf<"entryC">();
     expectTypeOf<
-      ChainTypesReaching<JobTypeRegistryNavigation<typeof defs>, "entryD">
+      JobTypeReachingEntry<JobTypeRegistryDefinitions<typeof defs>, "entryD">
     >().toEqualTypeOf<"entryD">();
     expectTypeOf<
-      ChainTypesReaching<JobTypeRegistryNavigation<typeof defs>, "entryE">
+      JobTypeReachingEntry<JobTypeRegistryDefinitions<typeof defs>, "entryE">
     >().toEqualTypeOf<"entryE">();
 
     // Shared steps reachable from A and B
     expectTypeOf<
-      ChainTypesReaching<JobTypeRegistryNavigation<typeof defs>, "sharedStep1">
+      JobTypeReachingEntry<JobTypeRegistryDefinitions<typeof defs>, "sharedStep1">
     >().toEqualTypeOf<"entryA" | "entryB">();
     expectTypeOf<
-      ChainTypesReaching<JobTypeRegistryNavigation<typeof defs>, "sharedStep2">
+      JobTypeReachingEntry<JobTypeRegistryDefinitions<typeof defs>, "sharedStep2">
     >().toEqualTypeOf<"entryA" | "entryB">();
 
     // Final shared is reachable from A, B, and C (via diamond pattern)
     expectTypeOf<
-      ChainTypesReaching<JobTypeRegistryNavigation<typeof defs>, "finalShared">
+      JobTypeReachingEntry<JobTypeRegistryDefinitions<typeof defs>, "finalShared">
     >().toEqualTypeOf<"entryA" | "entryB" | "entryC">();
 
     // C-only branches
     expectTypeOf<
-      ChainTypesReaching<JobTypeRegistryNavigation<typeof defs>, "branchC1">
+      JobTypeReachingEntry<JobTypeRegistryDefinitions<typeof defs>, "branchC1">
     >().toEqualTypeOf<"entryC">();
     expectTypeOf<
-      ChainTypesReaching<JobTypeRegistryNavigation<typeof defs>, "branchC2">
+      JobTypeReachingEntry<JobTypeRegistryDefinitions<typeof defs>, "branchC2">
     >().toEqualTypeOf<"entryC">();
 
     // Deep chain only from D
     expectTypeOf<
-      ChainTypesReaching<JobTypeRegistryNavigation<typeof defs>, "deepChain1">
+      JobTypeReachingEntry<JobTypeRegistryDefinitions<typeof defs>, "deepChain1">
     >().toEqualTypeOf<"entryD">();
     expectTypeOf<
-      ChainTypesReaching<JobTypeRegistryNavigation<typeof defs>, "deepChain6">
+      JobTypeReachingEntry<JobTypeRegistryDefinitions<typeof defs>, "deepChain6">
     >().toEqualTypeOf<"entryD">();
 
     // E branches and convergence point
     expectTypeOf<
-      ChainTypesReaching<JobTypeRegistryNavigation<typeof defs>, "branchE1">
+      JobTypeReachingEntry<JobTypeRegistryDefinitions<typeof defs>, "branchE1">
     >().toEqualTypeOf<"entryE">();
     expectTypeOf<
-      ChainTypesReaching<JobTypeRegistryNavigation<typeof defs>, "branchE2">
+      JobTypeReachingEntry<JobTypeRegistryDefinitions<typeof defs>, "branchE2">
     >().toEqualTypeOf<"entryE">();
     expectTypeOf<
-      ChainTypesReaching<JobTypeRegistryNavigation<typeof defs>, "convergencePoint">
+      JobTypeReachingEntry<JobTypeRegistryDefinitions<typeof defs>, "convergencePoint">
     >().toEqualTypeOf<"entryE">();
 
     // ResolvedJob uses the computed chain type by default
     type SharedStep1Job = ResolvedJob<
       string,
-      JobTypeRegistryNavigation<typeof defs>,
+      JobTypeRegistryDefinitions<typeof defs>,
       "sharedStep1"
     >;
     expectTypeOf<SharedStep1Job["chainTypeName"]>().toEqualTypeOf<"entryA" | "entryB">();
 
     type FinalSharedJob = ResolvedJob<
       string,
-      JobTypeRegistryNavigation<typeof defs>,
+      JobTypeRegistryDefinitions<typeof defs>,
       "finalShared"
     >;
     expectTypeOf<FinalSharedJob["chainTypeName"]>().toEqualTypeOf<"entryA" | "entryB" | "entryC">();
@@ -941,7 +917,7 @@ describe("ChainTypesReaching", () => {
     // Can narrow with explicit 4th param
     type FinalSharedFromA = ResolvedJob<
       string,
-      JobTypeRegistryNavigation<typeof defs>,
+      JobTypeRegistryDefinitions<typeof defs>,
       "finalShared",
       "entryA"
     >;
@@ -963,7 +939,7 @@ describe("structural references", () => {
       };
     }>();
 
-    type NextFromRouter = ContinuationJobTypes<JobTypeRegistryNavigation<typeof defs>, "router">;
+    type NextFromRouter = JobTypeContinuation<JobTypeRegistryDefinitions<typeof defs>, "router">;
 
     expectTypeOf<NextFromRouter>().toEqualTypeOf<"handler">();
   });
@@ -985,7 +961,7 @@ describe("structural references", () => {
       };
     }>();
 
-    type NextFromRouter = ContinuationJobTypes<JobTypeRegistryNavigation<typeof defs>, "router">;
+    type NextFromRouter = JobTypeContinuation<JobTypeRegistryDefinitions<typeof defs>, "router">;
 
     expectTypeOf<NextFromRouter>().toEqualTypeOf<"handlerA" | "handlerB">();
   });
@@ -1022,7 +998,7 @@ describe("structural references", () => {
       };
     }>();
 
-    type NextFromRouter = ContinuationJobTypes<JobTypeRegistryNavigation<typeof defs>, "router">;
+    type NextFromRouter = JobTypeContinuation<JobTypeRegistryDefinitions<typeof defs>, "router">;
 
     // handlerA from nominal, handlerB from structural
     expectTypeOf<NextFromRouter>().toEqualTypeOf<"handlerA" | "handlerB">();
@@ -1041,7 +1017,7 @@ describe("structural references in blockers", () => {
       };
     }>();
 
-    type MainBlockers = BlockerChains<string, JobTypeRegistryNavigation<typeof defs>, "main">;
+    type MainBlockers = BlockerChains<string, JobTypeRegistryDefinitions<typeof defs>, "main">;
 
     expectTypeOf<MainBlockers>().toBeArray();
     expectTypeOf<MainBlockers[0]["typeName"]>().toEqualTypeOf<"auth">();
@@ -1060,8 +1036,12 @@ describe("structural references in blockers", () => {
       };
     }>();
 
-    type MainBlockers = BlockerChains<string, JobTypeRegistryNavigation<typeof defs>, "main">;
-    type Completed = CompletedBlockerChains<string, JobTypeRegistryNavigation<typeof defs>, "main">;
+    type MainBlockers = BlockerChains<string, JobTypeRegistryDefinitions<typeof defs>, "main">;
+    type Completed = CompletedBlockerChains<
+      string,
+      JobTypeRegistryDefinitions<typeof defs>,
+      "main"
+    >;
 
     expectTypeOf<MainBlockers>().toBeArray();
     expectTypeOf<MainBlockers[0]["typeName"]>().toEqualTypeOf<"authA" | "authB">();
@@ -1086,7 +1066,7 @@ describe("rest/variadic blocker slots", () => {
 
     expectTypeOf<JobTypeRegistryDefinitions<typeof defs>>().toHaveProperty("main");
 
-    type MainBlockers = BlockerChains<string, JobTypeRegistryNavigation<typeof defs>, "main">;
+    type MainBlockers = BlockerChains<string, JobTypeRegistryDefinitions<typeof defs>, "main">;
     expectTypeOf<MainBlockers>().toBeArray();
   });
 
@@ -1105,7 +1085,7 @@ describe("rest/variadic blocker slots", () => {
 
     type AggregatorBlockers = BlockerChains<
       string,
-      JobTypeRegistryNavigation<typeof defs>,
+      JobTypeRegistryDefinitions<typeof defs>,
       "aggregator"
     >;
     expectTypeOf<AggregatorBlockers>().toBeArray();
@@ -1126,7 +1106,7 @@ describe("rest/variadic blocker slots", () => {
 
     expectTypeOf<JobTypeRegistryDefinitions<typeof defs>>().toHaveProperty("main");
 
-    type MainBlockers = BlockerChains<string, JobTypeRegistryNavigation<typeof defs>, "main">;
+    type MainBlockers = BlockerChains<string, JobTypeRegistryDefinitions<typeof defs>, "main">;
     expectTypeOf<MainBlockers>().toBeArray();
   });
 
@@ -1146,7 +1126,7 @@ describe("rest/variadic blocker slots", () => {
 
     type AggregatorBlockers = BlockerChains<
       string,
-      JobTypeRegistryNavigation<typeof defs>,
+      JobTypeRegistryDefinitions<typeof defs>,
       "aggregator"
     >;
     expectTypeOf<AggregatorBlockers>().toBeArray();
@@ -1166,7 +1146,7 @@ describe("rest/variadic blocker slots", () => {
 
     expectTypeOf<JobTypeRegistryDefinitions<typeof defs>>().toHaveProperty("main");
 
-    type MainBlockers = BlockerChains<string, JobTypeRegistryNavigation<typeof defs>, "main">;
+    type MainBlockers = BlockerChains<string, JobTypeRegistryDefinitions<typeof defs>, "main">;
     expectTypeOf<MainBlockers>().toBeArray();
   });
 
@@ -1185,7 +1165,7 @@ describe("rest/variadic blocker slots", () => {
 
     expectTypeOf<JobTypeRegistryDefinitions<typeof defs>>().toHaveProperty("main");
 
-    type MainBlockers = BlockerChains<string, JobTypeRegistryNavigation<typeof defs>, "main">;
+    type MainBlockers = BlockerChains<string, JobTypeRegistryDefinitions<typeof defs>, "main">;
     expectTypeOf<MainBlockers>().toBeArray();
   });
 
@@ -1207,7 +1187,7 @@ describe("rest/variadic blocker slots", () => {
 
     expectTypeOf<JobTypeRegistryDefinitions<typeof defs>>().toHaveProperty("main");
 
-    type MainBlockers = BlockerChains<string, JobTypeRegistryNavigation<typeof defs>, "main">;
+    type MainBlockers = BlockerChains<string, JobTypeRegistryDefinitions<typeof defs>, "main">;
     expectTypeOf<MainBlockers>().toBeArray();
   });
 });

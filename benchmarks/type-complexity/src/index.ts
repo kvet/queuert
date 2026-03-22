@@ -175,7 +175,7 @@ void completed;
 const generateMiddleware = (registryVar: string): string =>
   `const middleware: JobAttemptMiddleware<
   ReturnType<typeof createInProcessStateAdapter>,
-  JobTypeRegistryNavigation<typeof ${registryVar}>
+  JobTypeRegistryDefinitions<typeof ${registryVar}>
 > = async ({ job }, next) => {
   void job.typeName;
   return next();
@@ -188,7 +188,7 @@ const wrapInScenario = (defs: JobTypeDef[]): string => {
   const clientCalls = generateClientCalls(defs);
   const middleware = generateMiddleware("jobTypeRegistry");
 
-  return `import { defineJobTypeRegistry, createJobTypeProcessorRegistry, createInProcessWorker, createClient, createTransactionHooks, type JobAttemptMiddleware, type JobTypeRegistryNavigation } from "queuert";
+  return `import { defineJobTypeRegistry, createJobTypeProcessorRegistry, createInProcessWorker, createClient, createTransactionHooks, type JobAttemptMiddleware, type JobTypeRegistryDefinitions } from "queuert";
 import { createInProcessStateAdapter, createInProcessNotifyAdapter } from "queuert/internal";
 
 type Defs = {
@@ -241,7 +241,7 @@ const ${slice.name}Registry = defineJobTypeRegistry<${slice.name}Defs>();`;
   const clientCalls = generateClientCalls(allDefs);
   const middleware = generateMiddleware("mergedJobTypeRegistry");
 
-  return `import { defineJobTypeRegistry, createJobTypeProcessorRegistry, createInProcessWorker, createClient, createTransactionHooks, mergeJobTypeRegistries, type JobAttemptMiddleware, type JobTypeRegistryNavigation, mergeJobTypeProcessorRegistries } from "queuert";
+  return `import { defineJobTypeRegistry, createJobTypeProcessorRegistry, createInProcessWorker, createClient, createTransactionHooks, mergeJobTypeRegistries, type JobAttemptMiddleware, type JobTypeRegistryDefinitions, mergeJobTypeProcessorRegistries } from "queuert";
 import { createInProcessStateAdapter, createInProcessNotifyAdapter } from "queuert/internal";
 ${sliceTypeDecls.join("\n")}
 
