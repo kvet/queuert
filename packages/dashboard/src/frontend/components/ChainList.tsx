@@ -16,6 +16,7 @@ export function ChainList() {
 
   const [items, setItems] = createSignal<UnknownJobChain[]>([]);
   const [cursor, setCursor] = createSignal<string | null>(null);
+  let loadMoreController: AbortController | null = null;
 
   const [page] = createResource(
     () => ({
@@ -26,6 +27,8 @@ export function ChainList() {
       root: root(),
     }),
     async (params) => {
+      loadMoreController?.abort();
+      loadMoreController = null;
       const result = await listJobChains({ ...params, limit: 25 });
       setItems(result.items);
       setCursor(result.nextCursor);
@@ -36,15 +39,26 @@ export function ChainList() {
   const loadMore = async () => {
     const c = cursor();
     if (!c) return;
-    const result = await listJobChains({
-      typeName: typeName(),
-      status: status(),
-      id: id(),
-      jobId: jobId(),
-      root: root(),
-      cursor: c,
-      limit: 25,
-    });
+    loadMoreController?.abort();
+    const controller = new AbortController();
+    loadMoreController = controller;
+    let result: Awaited<ReturnType<typeof listJobChains>>;
+    try {
+      result = await listJobChains({
+        typeName: typeName(),
+        status: status(),
+        id: id(),
+        jobId: jobId(),
+        root: root(),
+        cursor: c,
+        limit: 25,
+        signal: controller.signal,
+      });
+    } catch (e) {
+      if (controller.signal.aborted) return;
+      throw e;
+    }
+    if (controller.signal.aborted) return;
     setItems((prev) => [...prev, ...result.items]);
     setCursor(result.nextCursor);
   };

@@ -28,6 +28,7 @@ export const listJobChains = async (
     jobId?: string;
     cursor?: string;
     limit?: number;
+    signal?: AbortSignal;
   } = {},
 ): Promise<PageResult<UnknownJobChain>> => {
   const qs = new URLSearchParams();
@@ -39,7 +40,9 @@ export const listJobChains = async (
   if (params.cursor) qs.set("cursor", params.cursor);
   if (params.limit) qs.set("limit", String(params.limit));
   const q = qs.toString();
-  return fetchSeroval<PageResult<UnknownJobChain>>(`/chains${q ? `?${q}` : ""}`);
+  return fetchSeroval<PageResult<UnknownJobChain>>(`/chains${q ? `?${q}` : ""}`, {
+    signal: params.signal,
+  });
 };
 
 export const listJobs = async (
@@ -50,6 +53,7 @@ export const listJobs = async (
     id?: string;
     cursor?: string;
     limit?: number;
+    signal?: AbortSignal;
   } = {},
 ): Promise<PageResult<UnknownJob>> => {
   const qs = new URLSearchParams();
@@ -60,7 +64,9 @@ export const listJobs = async (
   if (params.cursor) qs.set("cursor", params.cursor);
   if (params.limit) qs.set("limit", String(params.limit));
   const q = qs.toString();
-  return fetchSeroval<PageResult<UnknownJob>>(`/jobs${q ? `?${q}` : ""}`);
+  return fetchSeroval<PageResult<UnknownJob>>(`/jobs${q ? `?${q}` : ""}`, {
+    signal: params.signal,
+  });
 };
 
 export const getChainDetail = async (

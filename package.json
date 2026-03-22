@@ -17,7 +17,7 @@
     "fmt": "oxlint --type-aware --fix && oxfmt",
     "fmt:check": "oxfmt --check",
     "test": "vitest --run",
-    "typecheck": "bun run --filter './packages/*' --filter './packages-internal/*' typecheck",
+    "typecheck": "bun run --filter '*' typecheck",
     "benchmarks": "bun run --filter benchmark-memory-footprint start && bun run --filter benchmark-processing-capacity start && bun run --filter benchmark-type-complexity start",
     "examples": "bun run --filter './examples/*' start",
     "check": "bun run fmt:check && bun run lint && bun run typecheck && bun run build && vitest --run && bun run examples",

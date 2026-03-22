@@ -17,6 +17,7 @@
   - [?,REF] Add inputs for date range filtering in chains and jobs views
   - [REF] Fix stale cursor race condition on filter change in ChainList/JobList
 - [TASK] Use transactionHooks in `deleteJobChains` to buffer post-delete side effects (e.g., observability events)
+- [TASK] Use transactionHooks in `triggerJob` to buffer post-delete side effects (e.g., observability events)
 - [?,TASK] Review `allowEmptyWorker` flag in job-process.ts staged mode — currently set when `prepareTransactionContext.status === "pending"`, may be removable
 - [EPIC] Docs website enhancements
   - [TASK] Add interactive examples / live demos

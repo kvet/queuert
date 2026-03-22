@@ -15,6 +15,7 @@ export function JobList() {
 
   const [items, setItems] = createSignal<UnknownJob[]>([]);
   const [cursor, setCursor] = createSignal<string | null>(null);
+  let loadMoreController: AbortController | null = null;
 
   const [page] = createResource(
     () => ({
@@ -24,6 +25,8 @@ export function JobList() {
       chainId: chainId(),
     }),
     async (params) => {
+      loadMoreController?.abort();
+      loadMoreController = null;
       const result = await listJobs({ ...params, limit: 25 });
       setItems(result.items);
       setCursor(result.nextCursor);
@@ -34,14 +37,25 @@ export function JobList() {
   const loadMore = async () => {
     const c = cursor();
     if (!c) return;
-    const result = await listJobs({
-      status: status(),
-      typeName: typeName(),
-      id: id(),
-      chainId: chainId(),
-      cursor: c,
-      limit: 25,
-    });
+    loadMoreController?.abort();
+    const controller = new AbortController();
+    loadMoreController = controller;
+    let result: Awaited<ReturnType<typeof listJobs>>;
+    try {
+      result = await listJobs({
+        status: status(),
+        typeName: typeName(),
+        id: id(),
+        chainId: chainId(),
+        cursor: c,
+        limit: 25,
+        signal: controller.signal,
+      });
+    } catch (e) {
+      if (controller.signal.aborted) return;
+      throw e;
+    }
+    if (controller.signal.aborted) return;
     setItems((prev) => [...prev, ...result.items]);
     setCursor(result.nextCursor);
   };
@@ -136,8 +150,8 @@ export function JobList() {
               <Show when={job.status === "blocked" && job.attempt > 0}>
                 <span>attempt #{job.attempt}</span>
               </Show>
-              <Show when={job.leasedBy}>
-                <span>{job.leasedBy}</span>
+              <Show when={job.status === "running" ? job.leasedBy : undefined}>
+                {(leasedBy) => <span>{leasedBy()}</span>}
               </Show>
               <A href={`/chains/${job.chainId}`} class="chain-link">
                 chain {job.chainId}

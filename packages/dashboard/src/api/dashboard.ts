@@ -1,4 +1,4 @@
-import { type Client } from "queuert";
+import { type BaseNavigationMap, type Client, type StateAdapter } from "queuert";
 import { renderHtml } from "./html.js";
 import {
   handleChainBlocking,
@@ -36,12 +36,15 @@ const loadAssets = async (): Promise<Assets | null> => {
  *
  * @experimental
  */
-export const createDashboard = (options: {
-  client: Client<any, any>;
+export const createDashboard = <
+  TNavigationMap extends BaseNavigationMap,
+  TStateAdapter extends StateAdapter<any, any>,
+>(options: {
+  client: Client<TNavigationMap, TStateAdapter>;
   /** Mount prefix without trailing slash (e.g. `'/internal/queuert'`). Defaults to `''` (root). */
   basePath?: string;
 }): { fetch: (request: Request) => Response | Promise<Response> } => {
-  const client = options.client;
+  const client = options.client as unknown as Client<any, any>;
   const basePath = options.basePath?.replace(/\/+$/, "") ?? "";
 
   const handleRequest = async (request: Request): Promise<Response> => {
