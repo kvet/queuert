@@ -126,7 +126,7 @@ const jobChain = await withTransactionHooks(async (transactionHooks) =>
 );
 
 // 10. Wait for the job chain to complete
-const result = await qrtClient.awaitJobChain(jobChain, { timeoutMs: 1000 });
+const result = await qrtClient.awaitJobChain(jobChain, { timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);
 
 // 11. Cleanup
