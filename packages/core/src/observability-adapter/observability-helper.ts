@@ -93,6 +93,9 @@ export type ObservabilityHelper = {
   // job chain
   jobChainCreated: (job: StateJob, options: { input: unknown }) => void;
   jobChainCompleted: (jobChainStartJob: StateJob, options: { output: unknown }) => void;
+  jobChainDeleted: (job: StateJob) => void;
+  // trigger
+  jobTriggered: (job: StateJob) => void;
   // blockers
   jobBlocked: (job: StateJob, options: { blockedByChains: JobChain<any, any, any, any>[] }) => void;
   jobUnblocked: (job: StateJob, options: { unblockedByChain: StateJob }) => void;
@@ -367,6 +370,29 @@ export const createObservabilityHelper = ({
       data,
     });
     adapter.jobChainCompleted(data);
+  },
+
+  jobChainDeleted(job) {
+    const data = mapStateJobToJobChainData(job);
+    log({
+      type: "job_chain_deleted",
+      level: "info",
+      message: "Job chain deleted",
+      data,
+    });
+    adapter.jobChainDeleted(data);
+  },
+
+  // trigger
+  jobTriggered(job) {
+    const data = mapStateJobToJobBasicData(job);
+    log({
+      type: "job_triggered",
+      level: "info",
+      message: "Job triggered",
+      data,
+    });
+    adapter.jobTriggered(data);
   },
 
   // blockers

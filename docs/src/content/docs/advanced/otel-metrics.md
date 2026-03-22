@@ -2,7 +2,7 @@
 title: OTEL Metrics
 description: OpenTelemetry counters, histograms, and gauges.
 sidebar:
-  order: 11
+  order: 12
 ---
 
 ## Overview
@@ -36,6 +36,7 @@ The `ObservabilityAdapter` interface accepts milliseconds; the `@queuert/otel` a
 | `queuert.job.completed` | `typeName`, `chainTypeName`, `workerId`, `continued` | Job completed. `workerId` is `"null"` for workerless completion. `continued` is `"true"`/`"false"` |
 | `queuert.job.reaped` | `typeName`, `chainTypeName`, `workerId` | Stale job reclaimed by reaper |
 | `queuert.job.blocked` | `typeName`, `chainTypeName` | Job blocked by pending blocker chains |
+| `queuert.job.triggered` | `typeName`, `chainTypeName` | Pending job triggered to run immediately |
 | `queuert.job.unblocked` | `typeName`, `chainTypeName` | Job unblocked after blocker chain completed |
 
 ### Attempt Lifecycle
@@ -56,6 +57,7 @@ The `ObservabilityAdapter` interface accepts milliseconds; the `@queuert/otel` a
 | --- | --- | --- |
 | `queuert.job_chain.created` | `chainTypeName` | Job chain created |
 | `queuert.job_chain.completed` | `chainTypeName` | Job chain completed |
+| `queuert.job_chain.deleted` | `chainTypeName` | Job chain deleted |
 
 ### Adapter Errors
 

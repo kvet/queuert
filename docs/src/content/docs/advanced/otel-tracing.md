@@ -2,7 +2,7 @@
 title: OTEL Tracing
 description: OpenTelemetry span hierarchy and messaging conventions.
 sidebar:
-  order: 12
+  order: 13
 ---
 
 ## Overview

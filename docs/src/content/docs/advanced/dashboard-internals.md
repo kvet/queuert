@@ -2,7 +2,7 @@
 title: Dashboard Internals
 description: API endpoints, SolidJS frontend, and deployment architecture of the dashboard.
 sidebar:
-  order: 14
+  order: 15
 ---
 
 ## Overview

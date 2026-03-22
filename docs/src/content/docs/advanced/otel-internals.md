@@ -2,7 +2,7 @@
 title: OTEL Internals
 description: Adapter architecture, W3C context propagation, and transactional buffering.
 sidebar:
-  order: 13
+  order: 14
 ---
 
 ## Overview

@@ -44,6 +44,7 @@ import {
   WaitChainTimeoutError,
 } from "./errors.js";
 import { bufferNotifyJobOwnershipLost, bufferNotifyJobScheduled } from "./helpers/notify-hooks.js";
+import { bufferObservabilityEvent } from "./helpers/observability-hooks.js";
 import { raceWithSleep } from "./helpers/sleep.js";
 import { type IsUnion } from "./helpers/typescript.js";
 import { type Helpers, createHelpers } from "./setup-helpers.js";
@@ -452,7 +453,7 @@ export const createClient = async <
     ): Promise<
       ResolvedJobChain<TJobId, TJobTypeDefinitions, JobTypeEntryNames<TJobTypeDefinitions>>[]
     > => {
-      const { ids, cascade, transactionHooks: _transactionHooks, ...txCtx } = options;
+      const { ids, cascade, transactionHooks, ...txCtx } = options;
 
       const deletedChainPairs = await helpers.stateAdapter.deleteJobChains({
         txCtx,
@@ -460,7 +461,7 @@ export const createClient = async <
         cascade,
       });
 
-      return deletedChainPairs.map(
+      const deletedChains = deletedChainPairs.map(
         (pair) =>
           mapStateJobPairToJobChain(pair) as ResolvedJobChain<
             TJobId,
@@ -468,6 +469,14 @@ export const createClient = async <
             JobTypeEntryNames<TJobTypeDefinitions>
           >,
       );
+
+      for (const pair of deletedChainPairs) {
+        bufferObservabilityEvent(transactionHooks, () => {
+          helpers.observabilityHelper.jobChainDeleted(pair[0]);
+        });
+      }
+
+      return deletedChains;
     },
 
     /** Trigger a pending job immediately by setting its scheduledAt to now. Throws {@link JobNotFoundError} if the job does not exist, {@link JobNotTriggerableError} if the job is not pending. */
@@ -494,6 +503,9 @@ export const createClient = async <
 
       const job = await helpers.stateAdapter.triggerJob({ txCtx, jobId: id });
       bufferNotifyJobScheduled(transactionHooks, helpers.notifyAdapter, job);
+      bufferObservabilityEvent(transactionHooks, () => {
+        helpers.observabilityHelper.jobTriggered(job);
+      });
       return mapStateJobToJob(job) as ResolvedJob<
         TJobId,
         TJobTypeDefinitions,

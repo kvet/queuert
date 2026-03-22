@@ -829,6 +829,90 @@ describe("Metrics", () => {
     const metricNames = await getMetricNames();
     expect(metricNames).toContain("queuert.notify_adapter.error");
   });
+
+  it("tracks metrics for job chain deletion", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    observabilityAdapter,
+    log,
+    expectMetrics,
+  }) => {
+    const jobTypeRegistry = defineJobTypeRegistry<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+    });
+
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+      ),
+    );
+
+    await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.deleteJobChains({ ...txCtx, transactionHooks, ids: [jobChain.id] }),
+      ),
+    );
+
+    await expectMetrics([
+      { method: "jobChainCreated", args: { typeName: "test" } },
+      { method: "jobCreated", args: { typeName: "test" } },
+      { method: "jobChainDeleted", args: { typeName: "test" } },
+    ]);
+  });
+
+  it("tracks metrics for job trigger", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    observabilityAdapter,
+    log,
+    expectMetrics,
+  }) => {
+    const jobTypeRegistry = defineJobTypeRegistry<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+    });
+
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: null,
+          schedule: { afterMs: 60 * 60 * 1000 },
+        }),
+      ),
+    );
+
+    await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.triggerJob({ ...txCtx, transactionHooks, id: jobChain.id }),
+      ),
+    );
+
+    await expectMetrics([
+      { method: "jobChainCreated", args: { typeName: "test" } },
+      { method: "jobCreated", args: { typeName: "test" } },
+      { method: "jobTriggered", args: { typeName: "test" } },
+    ]);
+  });
 });
 
 describe("Spans", () => {

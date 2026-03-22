@@ -136,6 +136,14 @@ type JobChainCompletedLogEntry = LogEntry<
   "Job chain completed",
   { output: unknown } & JobChainData
 >;
+type JobChainDeletedLogEntry = LogEntry<
+  "job_chain_deleted",
+  "info",
+  "Job chain deleted",
+  JobChainData
+>;
+
+type JobTriggeredLogEntry = LogEntry<"job_triggered", "info", "Job triggered", JobBasicData>;
 
 type JobBlockedLogEntry = LogEntry<
   "job_blocked",
@@ -194,6 +202,9 @@ type TypedLogEntry =
   // job chain
   | JobChainCreatedLogEntry
   | JobChainCompletedLogEntry
+  | JobChainDeletedLogEntry
+  // trigger
+  | JobTriggeredLogEntry
   // blockers
   | JobBlockedLogEntry
   | JobUnblockedLogEntry

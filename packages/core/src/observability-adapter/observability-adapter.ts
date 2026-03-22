@@ -174,6 +174,10 @@ export type ObservabilityAdapter = {
   // job chain
   jobChainCreated: (data: JobChainData & { input: unknown }) => void;
   jobChainCompleted: (data: JobChainData & { output: unknown }) => void;
+  jobChainDeleted: (data: JobChainData) => void;
+
+  // trigger
+  jobTriggered: (data: JobBasicData) => void;
 
   // blockers
   jobBlocked: (data: JobBasicData & { blockedByChains: JobChainData[] }) => void;

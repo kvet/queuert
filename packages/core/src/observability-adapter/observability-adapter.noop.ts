@@ -19,6 +19,9 @@ export const createNoopObservabilityAdapter = (): ObservabilityAdapter => ({
 
   jobChainCreated: () => {},
   jobChainCompleted: () => {},
+  jobChainDeleted: () => {},
+
+  jobTriggered: () => {},
 
   jobBlocked: () => {},
   jobUnblocked: () => {},

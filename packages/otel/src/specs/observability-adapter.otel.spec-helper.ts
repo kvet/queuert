@@ -34,6 +34,8 @@ const methodToMetricName: Record<string, string> = {
   jobReaped: "queuert.job.reaped",
   jobChainCreated: "queuert.job_chain.created",
   jobChainCompleted: "queuert.job_chain.completed",
+  jobChainDeleted: "queuert.job_chain.deleted",
+  jobTriggered: "queuert.job.triggered",
   jobBlocked: "queuert.job.blocked",
   jobUnblocked: "queuert.job.unblocked",
   notifyAdapterError: "queuert.notify_adapter.error",

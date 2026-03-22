@@ -1,8 +1,5 @@
 # Short term
 
-- [REVIEW] Review `addJobBlocker` design — see `design/add-job-blocker.md`
-- [REF] Add input and output filtering
-- [REF] Reset jobs in chains + dashboard
 - [REF] Plugins
   - Attempt middleware plugin
     - Hook into prepare
@@ -11,20 +8,17 @@
   - Job definition amend
   - Job processors amend
 - [TASK,COMPLEX] Job cleanup utility
-- [REF] Vacuum (full vacuum)
-- [EPIC] Dashboard
-  - [TASK,COMPLEX] Better UI
-  - [?,REF] Add inputs for date range filtering in chains and jobs views
-  - [REF] Fix stale cursor race condition on filter change in ChainList/JobList
-- [TASK] Use transactionHooks in `deleteJobChains` to buffer post-delete side effects (e.g., observability events)
-- [TASK] Use transactionHooks in `triggerJob` to buffer post-delete side effects (e.g., observability events)
+- [TASK,COMPLEX] Better dashboard UI
 - [?,TASK] Review `allowEmptyWorker` flag in job-process.ts staged mode — currently set when `prepareTransactionContext.status === "pending"`, may be removable
+- [REVIEW] Review `addJobBlocker` design — see `design/add-job-blocker.md`
 - [EPIC] Docs website enhancements
   - [TASK] Add interactive examples / live demos
   - [TASK] Custom branding and styling
+- [REF] Add input and output filtering
 
 # Medium term
 
+- [REF] Reset jobs in chains + dashboard
 - [EPIC,COMPLEX] Processing throughput (~10x) — currently 4 DB round-trips per job (acquire, getBlockers, renewLease, complete)
   - [REF] Batch job acquisition — acquire N jobs per query instead of 1, amortize loop + transaction overhead
   - [REF] Skip `getJobBlockers` when job type declares no blockers — saves 1 round-trip per job

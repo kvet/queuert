@@ -1586,4 +1586,91 @@ describe("Logging rollback", () => {
     expect(continuationCreated).toHaveLength(1);
     expect(attemptFailedCount).toBe(1);
   });
+
+  it("logs job chain deletion", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    observabilityAdapter,
+    log,
+    expectLogs,
+  }) => {
+    const jobTypeRegistry = defineJobTypeRegistry<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+    });
+
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+      ),
+    );
+
+    await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.deleteJobChains({ ...txCtx, transactionHooks, ids: [jobChain.id] }),
+      ),
+    );
+
+    expectLogs([
+      { type: "job_chain_created", data: { typeName: "test" } },
+      { type: "job_created", data: { typeName: "test" } },
+      { type: "job_chain_deleted", data: { id: jobChain.id, typeName: "test" } },
+    ]);
+  });
+
+  it("logs job trigger", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    observabilityAdapter,
+    log,
+    expectLogs,
+  }) => {
+    const jobTypeRegistry = defineJobTypeRegistry<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+    });
+
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: null,
+          schedule: { afterMs: 60 * 60 * 1000 },
+        }),
+      ),
+    );
+
+    await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.triggerJob({ ...txCtx, transactionHooks, id: jobChain.id }),
+      ),
+    );
+
+    expectLogs([
+      { type: "job_chain_created", data: { typeName: "test" } },
+      { type: "job_created", data: { typeName: "test" } },
+      {
+        type: "job_triggered",
+        data: { id: jobChain.id, typeName: "test", chainId: jobChain.id, chainTypeName: "test" },
+      },
+    ]);
+  });
 });

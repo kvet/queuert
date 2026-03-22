@@ -70,6 +70,9 @@ export const createOtelObservabilityAdapter = async ({
 
   const jobChainCreatedCounter = meter?.createCounter("queuert.job_chain.created");
   const jobChainCompletedCounter = meter?.createCounter("queuert.job_chain.completed");
+  const jobChainDeletedCounter = meter?.createCounter("queuert.job_chain.deleted");
+
+  const jobTriggeredCounter = meter?.createCounter("queuert.job.triggered");
 
   const jobBlockedCounter = meter?.createCounter("queuert.job.blocked");
   const jobUnblockedCounter = meter?.createCounter("queuert.job.unblocked");
@@ -177,6 +180,13 @@ export const createOtelObservabilityAdapter = async ({
     },
     jobChainCompleted: ({ typeName }) => {
       jobChainCompletedCounter?.add(1, { chainTypeName: typeName });
+    },
+    jobChainDeleted: ({ typeName }) => {
+      jobChainDeletedCounter?.add(1, { chainTypeName: typeName });
+    },
+
+    jobTriggered: ({ typeName, chainTypeName }) => {
+      jobTriggeredCounter?.add(1, { typeName, chainTypeName });
     },
 
     jobBlocked: ({ typeName, chainTypeName }) => {
