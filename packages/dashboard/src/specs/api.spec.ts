@@ -262,6 +262,46 @@ describe("Dashboard API", () => {
       expect(body.blockers).toEqual([]);
     });
 
+    it("returns continuation for job in chain", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      const root = await createJob(stateAdapter, "chain-type", { step: 1 });
+      const cont = await createContinuation(
+        stateAdapter,
+        "chain-step2",
+        root.chainId,
+        "chain-type",
+        1,
+        { step: 2 },
+      );
+
+      const res = await request(`/api/jobs/${root.id}`);
+      const body = await parseBody(res);
+
+      expect(res.status).toBe(200);
+      expect(body.continuation).not.toBeNull();
+      expect(body.continuation.id).toBe(cont.id);
+      expect(body.continuation.chainIndex).toBe(1);
+    });
+
+    it("returns null continuation for last job in chain", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      const root = await createJob(stateAdapter, "chain-type", { step: 1 });
+      const cont = await createContinuation(
+        stateAdapter,
+        "chain-step2",
+        root.chainId,
+        "chain-type",
+        1,
+        { step: 2 },
+      );
+
+      const res = await request(`/api/jobs/${cont.id}`);
+      const body = await parseBody(res);
+
+      expect(res.status).toBe(200);
+      expect(body.continuation).toBeNull();
+    });
+
     it("returns 404 for missing job", async () => {
       const { request } = await createTestDashboard();
       const res = await request("/api/jobs/nonexistent");

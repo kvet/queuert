@@ -15,8 +15,6 @@
 - [EPIC] Dashboard
   - [TASK,COMPLEX] Better UI
   - [?,REF] Add inputs for date range filtering in chains and jobs views
-  - [?,REF] Add job creation, deletion and completion
-  - [REF] Fix job detail: fetches all chain jobs to find continuation — use targeted query
   - [REF] Fix stale cursor race condition on filter change in ChainList/JobList
 - [TASK] Use transactionHooks in `deleteJobChains` to buffer post-delete side effects (e.g., observability events)
 - [?,TASK] Review `allowEmptyWorker` flag in job-process.ts staged mode — currently set when `prepareTransactionContext.status === "pending"`, may be removable
