@@ -231,7 +231,7 @@ export type ResolvedJobChain<
           TJobId,
           TJobTypeName,
           JobTypeProperty<TJobTypeDefinitions, K, "input">,
-          JobTypeProperty<TJobTypeDefinitions, K, "output">
+          Exclude<JobTypeProperty<TJobTypeDefinitions, K, "output">, undefined>
         >;
       }[TChainTypeNames]
     : never;

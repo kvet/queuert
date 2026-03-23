@@ -172,10 +172,9 @@ void completed;
 `;
 };
 
-const generateMiddleware = (registryVar: string): string =>
+const generateMiddleware = (): string =>
   `const middleware: JobAttemptMiddleware<
-  ReturnType<typeof createInProcessStateAdapter>,
-  JobTypeRegistryDefinitions<typeof ${registryVar}>
+  ReturnType<typeof createInProcessStateAdapter>
 > = async ({ job }, next) => {
   void job.typeName;
   return next();
@@ -186,9 +185,9 @@ const wrapInScenario = (defs: JobTypeDef[]): string => {
   const typeStrings = defs.map(defToTypeString);
   const processors = generateProcessors(defs, "client");
   const clientCalls = generateClientCalls(defs);
-  const middleware = generateMiddleware("jobTypeRegistry");
+  const middleware = generateMiddleware();
 
-  return `import { defineJobTypeRegistry, createJobTypeProcessorRegistry, createInProcessWorker, createClient, createTransactionHooks, type JobAttemptMiddleware, type JobTypeRegistryDefinitions } from "queuert";
+  return `import { defineJobTypeRegistry, createJobTypeProcessorRegistry, createInProcessWorker, createClient, createTransactionHooks, type JobAttemptMiddleware } from "queuert";
 import { createInProcessStateAdapter, createInProcessNotifyAdapter } from "queuert/internal";
 
 type Defs = {
@@ -239,9 +238,9 @@ const ${slice.name}Registry = defineJobTypeRegistry<${slice.name}Defs>();`;
   const processorNames = slices.map((s) => `${s.name}Processors`);
   const allDefs = slices.flatMap((s) => s.defs);
   const clientCalls = generateClientCalls(allDefs);
-  const middleware = generateMiddleware("mergedJobTypeRegistry");
+  const middleware = generateMiddleware();
 
-  return `import { defineJobTypeRegistry, createJobTypeProcessorRegistry, createInProcessWorker, createClient, createTransactionHooks, mergeJobTypeRegistries, type JobAttemptMiddleware, type JobTypeRegistryDefinitions, mergeJobTypeProcessorRegistries } from "queuert";
+  return `import { defineJobTypeRegistry, createJobTypeProcessorRegistry, createInProcessWorker, createClient, createTransactionHooks, mergeJobTypeRegistries, type JobAttemptMiddleware, mergeJobTypeProcessorRegistries } from "queuert";
 import { createInProcessStateAdapter, createInProcessNotifyAdapter } from "queuert/internal";
 ${sliceTypeDecls.join("\n")}
 

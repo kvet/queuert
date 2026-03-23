@@ -43,14 +43,11 @@ import { type TransactionHooks, withTransactionHooks } from "../transaction-hook
 import { type LeaseConfig, createLeaseManager } from "./lease.js";
 
 /** Middleware that wraps each job attempt. Receives the running job context and a `next` function to invoke the inner handler. */
-export type JobAttemptMiddleware<
-  TStateAdapter extends StateAdapter<any, any>,
-  TJobTypeDefinitions extends BaseJobTypeDefinitions,
-> = <T>(
+export type JobAttemptMiddleware<TStateAdapter extends StateAdapter<any, any>> = <T>(
   context: {
     job: ResolvedJobWithBlockers<
       GetStateAdapterJobId<TStateAdapter>,
-      TJobTypeDefinitions,
+      BaseJobTypeDefinitions,
       string,
       string
     > & { status: "running" };
@@ -239,10 +236,7 @@ export const runJobProcess = async ({
   backoffConfig: BackoffConfig;
   leaseConfig: LeaseConfig;
   workerId: string;
-  attemptMiddlewares?: JobAttemptMiddleware<
-    StateAdapter<BaseTxContext, any>,
-    BaseJobTypeDefinitions
-  >[];
+  attemptMiddlewares?: JobAttemptMiddleware<StateAdapter<BaseTxContext, any>>[];
 }): Promise<void> => {
   let completeTransactionContext: TransactionContext<BaseTxContext> | null = null;
 

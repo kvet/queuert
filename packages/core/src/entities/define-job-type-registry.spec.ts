@@ -1,4 +1,5 @@
 import { describe, expectTypeOf, it } from "vitest";
+import { defineJobTypeRegistry } from "./define-job-type-registry.js";
 import {
   type ExternalJobTypeRegistryDefinitions,
   type JobTypeRegistryDefinitions,
@@ -14,7 +15,6 @@ import {
   type ResolvedJob,
   type ResolvedJobChain,
 } from "./job-type-registry.resolvers.js";
-import { defineJobTypeRegistry } from "./define-job-type-registry.js";
 
 describe("defineJobTypeRegistry", () => {
   describe("validation", () => {
@@ -1189,5 +1189,25 @@ describe("rest/variadic blocker slots", () => {
 
     type MainBlockers = BlockerChains<string, JobTypeRegistryDefinitions<typeof defs>, "main">;
     expectTypeOf<MainBlockers>().toBeArray();
+  });
+
+  it("ResolvedJobChain output excludes undefined from intermediate steps", () => {
+    type Defs = {
+      entry: {
+        entry: true;
+        input: { url: string };
+        output: undefined;
+        continueWith: { typeName: "finish" };
+      };
+      finish: {
+        input: { data: unknown };
+        output: { result: number };
+      };
+    };
+
+    type Chain = ResolvedJobChain<string, Defs, "entry">;
+    type Completed = Extract<Chain, { status: "completed" }>;
+
+    expectTypeOf<Completed["output"]>().toEqualTypeOf<{ result: number }>();
   });
 });

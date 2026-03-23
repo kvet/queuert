@@ -25,10 +25,7 @@ import {
 import { type LeaseConfig } from "./worker/lease.js";
 
 /** Default configuration applied to all job types unless overridden per-processor. */
-export type JobTypeProcessorDefaults<
-  TStateAdapter extends StateAdapter<any, any>,
-  TJobTypeDefinitions extends BaseJobTypeDefinitions,
-> = {
+export type JobTypeProcessorDefaults<TStateAdapter extends StateAdapter<any, any>> = {
   /** How often to poll for new jobs in milliseconds */
   pollIntervalMs?: number;
   /** Backoff configuration for failed job attempts */
@@ -36,7 +33,7 @@ export type JobTypeProcessorDefaults<
   /** Lease configuration for job ownership */
   leaseConfig?: LeaseConfig;
   /** Middlewares that wrap each job attempt */
-  attemptMiddlewares?: JobAttemptMiddleware<TStateAdapter, TJobTypeDefinitions>[];
+  attemptMiddlewares?: JobAttemptMiddleware<TStateAdapter>[];
 };
 
 const waitForNextJob = async ({
@@ -102,7 +99,7 @@ const performJob = async ({
   defaultBackoffConfig: BackoffConfig;
   defaultLeaseConfig: LeaseConfig;
   workerId: string;
-  attemptMiddlewares: JobAttemptMiddleware<any, any>[] | undefined;
+  attemptMiddlewares: JobAttemptMiddleware<any>[] | undefined;
 }): Promise<
   { job: null; hasMore: false } | { job: StateJob; hasMore: boolean; execute: () => Promise<void> }
 > => {
@@ -195,7 +192,7 @@ export const createInProcessWorker = async <
   workerId?: string;
   concurrency?: number;
   backoffConfig?: BackoffConfig;
-  jobTypeProcessorDefaults?: JobTypeProcessorDefaults<TStateAdapter, TProcessorJobTypeDefinitions>;
+  jobTypeProcessorDefaults?: JobTypeProcessorDefaults<TStateAdapter>;
   jobTypeProcessorRegistry: [
     Exclude<JobTypeNames<TProcessorJobTypeDefinitions>, JobTypeNames<TJobTypeDefinitions>>,
   ] extends [never]

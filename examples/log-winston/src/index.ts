@@ -1,7 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import {
   type JobAttemptMiddleware,
-  type JobTypeRegistryDefinitions,
   createClient,
   createInProcessWorker,
   createJobTypeProcessorRegistry,
@@ -87,10 +86,10 @@ const qrtClient = await createClient({
   jobTypeRegistry,
 });
 // 6. Create middleware that sets job context for the duration of job processing
-const contextualLoggingMiddleware: JobAttemptMiddleware<
-  typeof stateAdapter,
-  JobTypeRegistryDefinitions<typeof jobTypeRegistry>
-> = async ({ job, workerId }, next) => {
+const contextualLoggingMiddleware: JobAttemptMiddleware<typeof stateAdapter> = async (
+  { job, workerId },
+  next,
+) => {
   // Run the job processing within the AsyncLocalStorage context
   return jobContextStore.run(
     {
