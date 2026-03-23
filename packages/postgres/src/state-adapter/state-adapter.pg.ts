@@ -78,8 +78,8 @@ export const createPgStateAdapter = async <
   TIdType extends string = UUID,
 >({
   stateProvider,
-  schema = "queuert",
-  tablePrefix = "",
+  schema = "public",
+  tablePrefix = "queuert_",
   idType = "uuid",
   idDefault = "gen_random_uuid()",
 }: {

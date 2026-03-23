@@ -73,7 +73,6 @@ const stateProvider: PgStateProvider<DbContext> = {
 // 5. Create adapters and queuert client/worker
 const stateAdapter = await createPgStateAdapter({
   stateProvider,
-  schema: "public",
 });
 await stateAdapter.migrateToLatest();
 

@@ -13,8 +13,6 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 it("index");
 
 describe("PostgreSQL State Adapter Conformance - Default Config", () => {
-  const schema = "queuert";
-
   const conformanceIt = it.extend<{
     pool: Pool;
     stateAdapter: StateAdapter<{ $test: true }, string>;
@@ -32,12 +30,15 @@ describe("PostgreSQL State Adapter Conformance - Default Config", () => {
     stateAdapter: [
       async ({ pool }, use) => {
         const client = await pool.connect();
-        await client.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`).catch(() => {});
-        await client.query(`CREATE SCHEMA IF NOT EXISTS ${schema}`);
+        await client
+          .query(
+            `DROP TABLE IF EXISTS queuert_job_blocker, queuert_job, queuert_migration CASCADE; DROP TYPE IF EXISTS queuert_job_status CASCADE`,
+          )
+          .catch(() => {});
         client.release();
 
         const stateProvider = createPgPoolProvider({ pool });
-        const adapter = await createPgStateAdapter({ stateProvider, schema });
+        const adapter = await createPgStateAdapter({ stateProvider });
         await adapter.migrateToLatest();
         return use(adapter as unknown as StateAdapter<{ $test: true }, string>);
       },
@@ -62,13 +63,12 @@ describe("PostgreSQL State Adapter Conformance - Default Config", () => {
 
   conformanceIt("creates tables in correct schema", async ({ pool, stateAdapter: _ }) => {
     const result = await pool.query(
-      `SELECT table_name FROM information_schema.tables WHERE table_schema = $1`,
-      [schema],
+      `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'`,
     );
     const tableNames = result.rows.map((r) => r.table_name);
-    expect(tableNames).toContain("job");
-    expect(tableNames).toContain("job_blocker");
-    expect(tableNames).toContain("migration");
+    expect(tableNames).toContain("queuert_job");
+    expect(tableNames).toContain("queuert_job_blocker");
+    expect(tableNames).toContain("queuert_migration");
   });
 
   stateAdapterConformanceTestSuite({ it: conformanceIt });

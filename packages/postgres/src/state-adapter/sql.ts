@@ -710,7 +710,7 @@ export const triggerJobSql: TypedSql<readonly [NamedParameter<"id", string>], [D
   /* sql */ `
 UPDATE {{schema}}.{{table_prefix}}job
 SET scheduled_at = now()
-WHERE id = $1
+WHERE id = $1 AND status = 'pending'
 RETURNING *
 `,
   true,

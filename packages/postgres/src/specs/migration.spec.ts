@@ -13,8 +13,9 @@ const withFreshSchema = async <T>(
 ): Promise<T> => {
   const pool = new Pool({ connectionString: postgresConnectionString, idleTimeoutMillis: 0 });
   try {
-    await pool.query("DROP SCHEMA IF EXISTS queuert CASCADE");
-    await pool.query("CREATE SCHEMA queuert");
+    await pool.query(
+      "DROP TABLE IF EXISTS queuert_job_blocker, queuert_job, queuert_migration CASCADE; DROP TYPE IF EXISTS queuert_job_status CASCADE",
+    );
     return await fn(pool);
   } finally {
     await pool.end();
@@ -58,7 +59,7 @@ describe("PostgreSQL migrations", () => {
       await stateAdapter.migrateToLatest();
 
       await pool.query(
-        "INSERT INTO queuert.migration (name) VALUES ('20991231235959_future_migration')",
+        "INSERT INTO queuert_migration (name) VALUES ('20991231235959_future_migration')",
       );
 
       const result = await stateAdapter.migrateToLatest();

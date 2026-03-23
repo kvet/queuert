@@ -673,6 +673,7 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
     triggerJob: async ({ jobId }) => {
       const job = store.jobs.get(jobId);
       if (!job) throw new Error("Job not found");
+      if (job.status !== "pending") throw new Error("Job not found");
 
       const updatedJob: StateJob = {
         ...job,

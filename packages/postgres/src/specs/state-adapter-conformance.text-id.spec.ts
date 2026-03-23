@@ -71,9 +71,9 @@ describe("PostgreSQL State Adapter Conformance - Text ID Type", () => {
       [schema],
     );
     const tableNames = result.rows.map((r) => r.table_name);
-    expect(tableNames).toContain("job");
-    expect(tableNames).toContain("job_blocker");
-    expect(tableNames).toContain("migration");
+    expect(tableNames).toContain("queuert_job");
+    expect(tableNames).toContain("queuert_job_blocker");
+    expect(tableNames).toContain("queuert_migration");
   });
 
   stateAdapterConformanceTestSuite({ it: conformanceIt });

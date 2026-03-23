@@ -59,9 +59,13 @@ export const extendWithStatePostgres = <
     _dbMigrateToLatest: [
       async ({ statePool }, use) => {
         const client = await statePool.connect();
-        await client.query(`DROP SCHEMA IF EXISTS queuert CASCADE;`).catch(() => {
-          // ignore
-        });
+        await client
+          .query(
+            `DROP TABLE IF EXISTS queuert_job_blocker, queuert_job, queuert_migration CASCADE; DROP TYPE IF EXISTS queuert_job_status CASCADE;`,
+          )
+          .catch(() => {
+            // ignore
+          });
         client.release();
 
         const stateProvider = createPgPoolProvider({
@@ -71,13 +75,6 @@ export const extendWithStatePostgres = <
           stateProvider,
         });
 
-        // Run schema setup without context (will manage its own connection)
-        await stateProvider.executeSql({
-          sql: `
-            CREATE SCHEMA IF NOT EXISTS queuert;
-            GRANT USAGE ON SCHEMA queuert TO test;
-          `,
-        });
         await stateAdapter.migrateToLatest();
 
         await use();
@@ -89,8 +86,8 @@ export const extendWithStatePostgres = <
         await use();
 
         const client = await statePool.connect();
-        await client.query(`DELETE FROM queuert.job_blocker;`);
-        await client.query(`DELETE FROM queuert.job;`);
+        await client.query(`DELETE FROM queuert_job_blocker;`);
+        await client.query(`DELETE FROM queuert_job;`);
         client.release();
       },
       { scope: "test" },

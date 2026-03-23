@@ -25,14 +25,14 @@ const pgState = createPgStateModule({ stateProvider });
 What `pgState` exposes (all typed, all optional based on config):
 
 ```typescript
-pgState.clientAdapter        // StateClientAdapter — for createClient
-pgState.workerAdapter        // StateWorkerAdapter — for createInProcessWorker
+pgState.clientAdapter; // StateClientAdapter — for createClient
+pgState.workerAdapter; // StateWorkerAdapter — for createInProcessWorker
 
-pgState.maintenance          // Bundled maintenance capabilities
-pgState.maintenance.jobTypeRegistry    // Job types for cleanup + partitions
-pgState.maintenance.clientExtension    // methods + lifecycle: triggerCleanup(), onCreate
-pgState.maintenance.jobTypeProcessorRegistry        // Processor slice for maintenance worker
-pgState.maintenance.dashboardExtension // Dashboard pages for maintenance status
+pgState.maintenance; // Bundled maintenance capabilities
+pgState.maintenance.jobTypeRegistry; // Job types for cleanup + partitions
+pgState.maintenance.clientExtension; // methods + lifecycle: triggerCleanup(), onCreate
+pgState.maintenance.jobTypeProcessorRegistry; // Processor slice for maintenance worker
+pgState.maintenance.dashboardExtension; // Dashboard pages for maintenance status
 ```
 
 The user picks what they need at each site. Nothing is implicit.
@@ -53,14 +53,14 @@ The underlying implementation shares a connection pool; the split is at the inte
 
 ```typescript
 // Conceptual — exact boundaries TBD
-pgState.clientAdapter    // State operations for createClient
-pgState.workerAdapter    // State operations for createInProcessWorker
+pgState.clientAdapter; // State operations for createClient
+pgState.workerAdapter; // State operations for createInProcessWorker
 // Future: pgState.dashboardAdapter, pgState.statsAdapter, etc.
 
-redisNotify.clientAdapter   // Publish side (notify*)
-redisNotify.workerAdapter   // Subscribe side (listen*)
+redisNotify.clientAdapter; // Publish side (notify*)
+redisNotify.workerAdapter; // Subscribe side (listen*)
 
-otel.observabilityAdapter   // Unified for now — client and worker event types are disjoint
+otel.observabilityAdapter; // Unified for now — client and worker event types are disjoint
 ```
 
 ---
@@ -73,7 +73,7 @@ otel.observabilityAdapter   // Unified for now — client and worker event types
 const client = await createClient({
   // Singleton slots (exactly one each)
   stateAdapter: pgState.clientAdapter,
-  notifyAdapter: redisNotify.clientAdapter,       // optional, defaults to noop
+  notifyAdapter: redisNotify.clientAdapter, // optional, defaults to noop
   observabilityAdapter: otel.observabilityAdapter, // optional, defaults to noop
 
   // Job type registry (required)
@@ -96,7 +96,7 @@ Worker receives its own adapters directly — no digging into client internals. 
 const worker = await createInProcessWorker({
   // Worker's own adapters
   stateAdapter: pgState.workerAdapter,
-  notifyAdapter: redisNotify.workerAdapter,       // optional, defaults to noop
+  notifyAdapter: redisNotify.workerAdapter, // optional, defaults to noop
   observabilityAdapter: otel.observabilityAdapter, // optional, defaults to noop
 
   // Client reference (for processors)
@@ -327,7 +327,10 @@ export const orderJobTypeRegistry = defineJobTypeRegistry<
 import { createPgStateModule } from "@queuert/state-postgres";
 import { createRedisNotifyModule } from "@queuert/notify-redis";
 import { orderJobTypeRegistry, orderProcessors } from "./slice-orders/index.js";
-import { notificationJobTypeRegistry, notificationProcessors } from "./slice-notifications/index.js";
+import {
+  notificationJobTypeRegistry,
+  notificationProcessors,
+} from "./slice-notifications/index.js";
 
 const pgState = createPgStateModule({ stateProvider });
 const redisNotify = createRedisNotifyModule({ redis });
@@ -420,7 +423,7 @@ const client = await createClient({
   }),
   extensions: [
     pgState.maintenance.clientExtension, // client.triggerCleanup(), client.getMaintenanceStatus()
-    stats.clientExtension,               // client.getStats(), client.getStatsHistory()
+    stats.clientExtension, // client.getStats(), client.getStatsHistory()
   ],
 });
 
@@ -556,9 +559,7 @@ const pgState = createPgStateModule(config);
 
 pgState.maintenance.dashboardExtension = {
   name: "pg-maintenance",
-  pages: [
-    { path: "/maintenance", label: "Maintenance", component: MaintenancePage },
-  ],
+  pages: [{ path: "/maintenance", label: "Maintenance", component: MaintenancePage }],
   actions: [
     {
       label: "Trigger Cleanup",
@@ -609,8 +610,8 @@ const sqliteState = createSqliteStateModule({
 
 await sqliteState.migrateToLatest();
 
-sqliteState.clientAdapter              // StateClientAdapter<SqliteTxContext, string>
-sqliteState.workerAdapter              // StateWorkerAdapter<SqliteTxContext, string>
+sqliteState.clientAdapter; // StateClientAdapter<SqliteTxContext, string>
+sqliteState.workerAdapter; // StateWorkerAdapter<SqliteTxContext, string>
 // No maintenance — SQLite doesn't need partitions or background cleanup
 ```
 
@@ -618,12 +619,12 @@ sqliteState.workerAdapter              // StateWorkerAdapter<SqliteTxContext, st
 
 ```typescript
 const inProcessState = createInProcessStateModule();
-inProcessState.clientAdapter           // StateClientAdapter<InProcessContext, string>
-inProcessState.workerAdapter           // StateWorkerAdapter<InProcessContext, string>
+inProcessState.clientAdapter; // StateClientAdapter<InProcessContext, string>
+inProcessState.workerAdapter; // StateWorkerAdapter<InProcessContext, string>
 
 const inProcessNotify = createInProcessNotifyModule();
-inProcessNotify.clientAdapter          // NotifyClientAdapter
-inProcessNotify.workerAdapter          // NotifyWorkerAdapter
+inProcessNotify.clientAdapter; // NotifyClientAdapter
+inProcessNotify.workerAdapter; // NotifyWorkerAdapter
 ```
 
 ### @queuert/notify-redis
@@ -633,8 +634,8 @@ const redisNotify = createRedisNotifyModule({
   provider: RedisNotifyProvider,
 });
 
-redisNotify.clientAdapter              // NotifyClientAdapter
-redisNotify.workerAdapter              // NotifyWorkerAdapter
+redisNotify.clientAdapter; // NotifyClientAdapter
+redisNotify.workerAdapter; // NotifyWorkerAdapter
 ```
 
 ### @queuert/notify-postgres
@@ -644,8 +645,8 @@ const pgNotify = createPgNotifyModule({
   provider: PgNotifyProvider,
 });
 
-pgNotify.clientAdapter                 // NotifyClientAdapter
-pgNotify.workerAdapter                 // NotifyWorkerAdapter
+pgNotify.clientAdapter; // NotifyClientAdapter
+pgNotify.workerAdapter; // NotifyWorkerAdapter
 ```
 
 ### @queuert/otel
@@ -656,7 +657,7 @@ const otel = createOtelModule({
   tracer: Tracer,
 });
 
-otel.observabilityAdapter              // ObservabilityAdapter
+otel.observabilityAdapter; // ObservabilityAdapter
 // Not split — both client and worker emit through the same interface
 ```
 

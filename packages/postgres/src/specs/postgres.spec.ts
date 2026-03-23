@@ -32,9 +32,6 @@ it("should infer types correctly with custom ID", async ({ postgresConnectionStr
       $idType: undefined as unknown as `job.${UUID}`,
     });
 
-    await stateProvider.executeSql({
-      sql: "CREATE SCHEMA IF NOT EXISTS queuert;",
-    });
     await stateAdapter.migrateToLatest();
 
     const notifyAdapter = createInProcessNotifyAdapter();

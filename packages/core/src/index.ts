@@ -87,8 +87,6 @@ export {
 } from "./worker/job-process.js";
 export { createJobTypeProcessorRegistry } from "./worker/create-job-type-processor-registry.js";
 export {
-  processorDefinitionsSymbol,
-  processorExternalDefinitionsSymbol,
   type InProcessWorkerProcessor,
   type JobTypeProcessorRegistry,
   type ExternalJobTypeProcessorRegistryDefinitions,

@@ -6,7 +6,7 @@
  * Run this before `changeset publish` in the CI pipeline.
  */
 
-import { readFileSync, writeFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const packagesDir = join(import.meta.dirname, "..", "packages");

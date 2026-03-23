@@ -56,7 +56,6 @@ const stateAdapter = await createPgStateAdapter({
       }
     },
   },
-  schema: "public",
 });
 
 let listenClient: PoolClient | null = null;

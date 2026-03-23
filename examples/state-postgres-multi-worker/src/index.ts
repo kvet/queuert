@@ -90,7 +90,6 @@ const stateAdapter = await createPgStateAdapter({
       }
     },
   },
-  schema: "public",
 });
 await stateAdapter.migrateToLatest();
 

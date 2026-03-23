@@ -362,8 +362,8 @@ export type Client<
  *
  * @param options.stateAdapter - Database adapter for job persistence.
  * @param options.notifyAdapter - Optional pub/sub adapter for real-time notifications.
- * @param options.observabilityAdapter - Optional adapter for logging, metrics, and tracing.
- * @param options.registry - Job type registry (from {@link defineJobTypeRegistry} or {@link createJobTypeRegistry}).
+ * @param options.observabilityAdapter - Optional adapter for metrics and tracing.
+ * @param options.jobTypeRegistry - Job type registry (from {@link defineJobTypeRegistry} or {@link createJobTypeRegistry}).
  * @param options.log - Optional structured log function.
  */
 export const createClient = async <
@@ -488,7 +488,7 @@ export const createClient = async <
     ): Promise<ResolvedJob<TJobId, TJobTypeDefinitions, JobTypeNames<TJobTypeDefinitions>>> => {
       const { id, transactionHooks, ...txCtx } = options;
 
-      const existing = await helpers.stateAdapter.getJobById({ txCtx, jobId: id });
+      const existing = await helpers.stateAdapter.getJobForUpdate({ txCtx, jobId: id });
       if (!existing) {
         throw new JobNotFoundError(`Job with id ${String(id)} not found`, {
           jobId: id as string,

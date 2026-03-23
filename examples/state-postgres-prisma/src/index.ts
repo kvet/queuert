@@ -66,7 +66,6 @@ const stateProvider: PgStateProvider<DbContext> = {
 // 5. Create adapters and queuert client/worker
 const stateAdapter = await createPgStateAdapter({
   stateProvider,
-  schema: "public",
   // Prisma v4+ removed implicit type coercion, so $queryRawUnsafe doesn't cast
   // string parameters to UUID, causing "operator does not exist: uuid = text".
   // Using TEXT is the recommended workaround. See: https://github.com/prisma/prisma/issues/16969

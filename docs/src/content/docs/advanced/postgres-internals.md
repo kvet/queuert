@@ -11,7 +11,7 @@ This document describes the internal implementation of `@queuert/postgres` — t
 
 ## Schema
 
-The adapter creates its schema via `migrateToLatest()`. All objects live under a configurable PostgreSQL schema (default: `queuert`) and support an optional table prefix for multi-tenant deployments.
+The adapter creates its schema via `migrateToLatest()`. All objects live under a configurable PostgreSQL schema (default: `public`) with a table name prefix (default: `queuert_`) for namespace isolation.
 
 ### Custom Enum
 
@@ -193,10 +193,10 @@ Ordering by `ctid` ensures all concurrent deletions acquire locks in the same ph
 The adapter uses explicit `BEGIN`/`COMMIT`/`ROLLBACK` with savepoints for nested operations:
 
 ```sql
-SAVEPOINT queuert_user_cb
+SAVEPOINT queuert_sp
 -- user callback executes here
-RELEASE SAVEPOINT queuert_user_cb
--- or on error: ROLLBACK TO SAVEPOINT queuert_user_cb
+RELEASE SAVEPOINT queuert_sp
+-- or on error: ROLLBACK TO SAVEPOINT queuert_sp
 ```
 
 Savepoints enable partial rollback within a transaction — if a user callback fails, the savepoint rolls back its effects without aborting the entire transaction.

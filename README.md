@@ -101,10 +101,10 @@ npm install @queuert/nats      # NATS pub/sub (experimental)
 # Or use PostgreSQL LISTEN/NOTIFY via @queuert/postgres (no extra infra)
 
 # Dashboard (optional)
-npm install @queuert/dashboard  # Embeddable web UI for job observation
+npm install @queuert/dashboard  # Embeddable web UI for job observation (experimental)
 
 # Observability (optional)
-npm install @queuert/otel      # OpenTelemetry metrics and histograms
+npm install @queuert/otel      # OpenTelemetry metrics and tracing
 ```
 
 ## Learn More

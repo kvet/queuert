@@ -63,7 +63,6 @@ const stateProvider: PgStateProvider<{ db: Kysely<Database> }> = {
 // 6. Create adapters and queuert client/worker
 const stateAdapter = await createPgStateAdapter({
   stateProvider,
-  schema: "public",
 });
 await stateAdapter.migrateToLatest();
 

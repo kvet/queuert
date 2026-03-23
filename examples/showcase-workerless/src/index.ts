@@ -97,7 +97,7 @@ const stateProvider: PgStateProvider<DbContext> = {
   },
 };
 
-const stateAdapter = await createPgStateAdapter({ stateProvider, schema: "public" });
+const stateAdapter = await createPgStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 const notifyAdapter = createInProcessNotifyAdapter();
 

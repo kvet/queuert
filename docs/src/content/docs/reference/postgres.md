@@ -10,8 +10,8 @@ sidebar:
 ```typescript
 const stateAdapter = await createPgStateAdapter({
   stateProvider: PgStateProvider,  // You implement this
-  schema?: string,                 // PostgreSQL schema name (default: "queuert")
-  tablePrefix?: string,            // Table name prefix (default: "")
+  schema?: string,                 // PostgreSQL schema name (default: "public")
+  tablePrefix?: string,            // Table name prefix (default: "queuert_")
   idType?: string,                 // SQL type for job IDs (default: "uuid")
   idDefault?: string,              // SQL DEFAULT expression (default: "gen_random_uuid()")
 });
