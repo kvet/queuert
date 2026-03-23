@@ -1,5 +1,24 @@
 # @queuert/sqlite
 
+## 0.9.0
+
+### Minor Changes
+
+- ### Features
+  - Error messages stored for failed jobs now include the full stack trace and custom Error properties instead of just `[object Object]` or a bare message string.
+  - New observability events `jobChainDeleted` and `jobTriggered` are emitted through logging, OTel, and custom observability adapters.
+  - `triggerJob` now guards against non-pending jobs and uses row-level locking to prevent race conditions.
+
+  ### Breaking changes
+  - The Postgres adapter default schema is now `"public"` with table prefix `"queuert_"` (previously `"queuert"` schema with no prefix). Pass `{ schema: "queuert", tablePrefix: "" }` to `createPgStateAdapter` to preserve existing behavior.
+  - Several internal type exports have been removed: `NavigationMap`, `BaseNavigationMap`, `BaseNavigationEntry`, `JobTypeRegistryNavigation`, `ChainJobTypeNames`, `ContinuationJobTypes`, `EntryJobTypeDefinitions`, `BlockedJobTypeNames`, `ChainTypesReaching`, `JobTypeProcessorRegistryNavigation`, `processorNavigationSymbol`. Use `JobTypeNames`, `JobTypeEntryNames`, and `JobTypeProperty` as replacements where applicable.
+  - Merged registry definitions are now a union type instead of an intersection.
+
+### Patch Changes
+
+- Updated dependencies
+  - queuert@0.9.0
+
 ## 0.8.1
 
 ### Patch Changes
