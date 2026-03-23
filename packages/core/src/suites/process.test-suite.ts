@@ -215,7 +215,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
               expect(job.attempt).toBeGreaterThan(0);
               if (job.attempt > 1) {
                 expect(job.lastAttemptAt).toBeInstanceOf(Date);
-                expect(job.lastAttemptError).toBe("Error: Simulated failure");
+                expect(job.lastAttemptError).toContain("Error: Simulated failure");
               } else {
                 expect(job.lastAttemptAt).toBeNull();
                 expect(job.lastAttemptError).toBeNull();
@@ -324,9 +324,9 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     });
 
     expect(errors).toHaveLength(3);
-    expect(errors[0]).toBe("Error: Unexpected error");
-    expect(errors[1]).toBe("Error: Unexpected error");
-    expect(errors[2]).toBe("Error: Unexpected error");
+    expect(errors[0]).toContain("Error: Unexpected error");
+    expect(errors[1]).toContain("Error: Unexpected error");
+    expect(errors[2]).toContain("Error: Unexpected error");
   });
 
   it("executes jobs", async ({

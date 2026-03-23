@@ -7,6 +7,7 @@ import {
 } from "../errors.js";
 import { type BackoffConfig, calculateBackoffMs } from "../helpers/backoff.js";
 import { bufferObservabilityEvent } from "../helpers/observability-hooks.js";
+import { serializeError } from "../helpers/serialize-error.js";
 import { type Helpers } from "../setup-helpers.js";
 import { type BaseTxContext, type StateJob } from "../state-adapter/state-adapter.js";
 import { type TransactionHooks } from "../transaction-hooks.js";
@@ -43,7 +44,7 @@ export const handleJobHandlerError = async (
   const schedule: ScheduleOptions = isRescheduled
     ? error.schedule
     : { afterMs: calculateBackoffMs(job.attempt, backoffConfig) };
-  const errorString = isRescheduled ? String(error.cause) : String(error);
+  const errorString = isRescheduled ? serializeError(error.cause) : serializeError(error);
 
   bufferObservabilityEvent(transactionHooks, () => {
     helpers.observabilityHelper.jobAttemptFailed(job, {

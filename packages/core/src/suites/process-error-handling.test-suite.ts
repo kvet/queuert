@@ -60,7 +60,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
             backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
             attemptHandler: async ({ job, prepare, complete }) => {
               if (job.attempt > 1) {
-                expect(job.lastAttemptError).toBe("Error: Simulated prepare error");
+                expect(job.lastAttemptError).toContain("Error: Simulated prepare error");
               }
               await prepare({ mode: "atomic" }, async () => {
                 if (job.attempt === 1) {
@@ -150,7 +150,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
             backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
             attemptHandler: async ({ job, prepare, complete }) => {
               if (job.attempt > 1) {
-                expect(job.lastAttemptError).toBe("Error: Simulated prepare error");
+                expect(job.lastAttemptError).toContain("Error: Simulated prepare error");
               }
               await prepare({ mode: "staged" }, async () => {
                 if (job.attempt === 1) {
@@ -240,7 +240,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
             backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
             attemptHandler: async ({ job, prepare, complete }) => {
               if (job.attempt > 1) {
-                expect(job.lastAttemptError).toBe("Error: Simulated process error");
+                expect(job.lastAttemptError).toContain("Error: Simulated process error");
               }
               await prepare({ mode: "atomic" });
               if (job.attempt === 1) {
@@ -328,7 +328,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
             backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
             attemptHandler: async ({ job, prepare, complete }) => {
               if (job.attempt > 1) {
-                expect(job.lastAttemptError).toBe("Error: Simulated process error");
+                expect(job.lastAttemptError).toContain("Error: Simulated process error");
               }
               await prepare({ mode: "staged" });
               await sleep(1);
@@ -425,7 +425,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
             backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
             attemptHandler: async ({ job, prepare, complete }) => {
               if (job.attempt > 1) {
-                expect(job.lastAttemptError).toBe("Error: Simulated complete error");
+                expect(job.lastAttemptError).toContain("Error: Simulated complete error");
               }
               await prepare({ mode: "atomic" });
               return complete(async () => {
@@ -516,7 +516,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
             backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
             attemptHandler: async ({ job, prepare, complete }) => {
               if (job.attempt > 1) {
-                expect(job.lastAttemptError).toBe("Error: Simulated complete error");
+                expect(job.lastAttemptError).toContain("Error: Simulated complete error");
               }
               await prepare({ mode: "staged" });
               await sleep(1);
@@ -618,7 +618,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
             attemptHandler: async ({ job, prepare, complete }) => {
               attempts++;
               if (job.attempt > 1) {
-                expect(job.lastAttemptError).toBe("Error: Error after complete");
+                expect(job.lastAttemptError).toContain("Error: Error after complete");
               }
               await prepare({ mode: "atomic" });
               const result = await complete(async () => ({ result: job.input.value * 2 }));
@@ -720,7 +720,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
             attemptHandler: async ({ job, prepare, complete }) => {
               attempts++;
               if (job.attempt > 1) {
-                expect(job.lastAttemptError).toBe("Error: Error after complete");
+                expect(job.lastAttemptError).toContain("Error: Error after complete");
               }
               await prepare({ mode: "staged" });
               await sleep(1);
@@ -1596,5 +1596,91 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     });
 
     expect(blockerAttempts).toBe(2);
+  });
+
+  it("serializes various error types in lastAttemptError", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const errorsByAttempt: Record<number, unknown> = {
+      1: new Error("plain error"),
+      2: { code: "ETIMEOUT", detail: "connection lost" },
+      3: "string error",
+    };
+
+    const recordedErrors: (string | null)[] = [];
+
+    const jobTypeRegistry = defineJobTypeRegistry<{
+      test: {
+        entry: true;
+        input: null;
+        output: null;
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          test: {
+            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+            attemptHandler: async ({ job, complete }) => {
+              if (job.lastAttemptError != null) {
+                recordedErrors.push(job.lastAttemptError);
+              }
+
+              const errorToThrow = errorsByAttempt[job.attempt];
+              if (errorToThrow != null) {
+                throw errorToThrow;
+              }
+
+              return complete(async () => null);
+            },
+          },
+        },
+      }),
+    });
+
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: null,
+        }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitJobChain(jobChain, completionOptions);
+    });
+
+    expect(recordedErrors).toHaveLength(3);
+
+    expect(recordedErrors[0]).toContain("plain error");
+    expect(recordedErrors[0]).toMatch(/at\s/);
+    expect(recordedErrors[0]).not.toBe("[object Object]");
+
+    expect(recordedErrors[1]).toContain("ETIMEOUT");
+    expect(recordedErrors[1]).toContain("connection lost");
+    expect(recordedErrors[1]).not.toBe("[object Object]");
+
+    expect(recordedErrors[2]).toBe("string error");
   });
 };
