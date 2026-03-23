@@ -1,5 +1,13 @@
 # @queuert/postgres
 
+## 0.9.3
+
+### Patch Changes
+
+- Simplified `JobAttemptMiddleware` type signature — the second type parameter (`TJobTypeDefinitions`) has been removed from `JobAttemptMiddleware` and `JobTypeProcessorDefaults`. Middleware definitions are now simpler: use `JobAttemptMiddleware<typeof stateAdapter>` instead of `JobAttemptMiddleware<typeof stateAdapter, JobTypeRegistryDefinitions<typeof registry>>`. Additionally, `ResolvedJobChain` now correctly excludes `undefined` from the output type of intermediate chain steps.
+- Updated dependencies
+  - queuert@0.9.3
+
 ## 0.9.2
 
 ### Patch Changes
