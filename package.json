@@ -26,8 +26,7 @@
     "version": "changeset version",
     "docs:dev": "bun run --filter @queuert/docs dev",
     "docs:build": "bun run --filter @queuert/docs build",
-    "docs:preview": "bun run --filter @queuert/docs preview",
-    "release": "bun run build && changeset publish"
+    "docs:preview": "bun run --filter @queuert/docs preview"
   },
   "devDependencies": {
     "@changesets/cli": "^2.29.8",

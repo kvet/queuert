@@ -31,5 +31,8 @@ jobs:
       - name: Upgrade npm for OIDC trusted publishing
         run: npm install -g npm@latest
 
+      - name: Resolve workspace dependencies
+        run: node scripts/resolve-workspace-deps.mjs
+
       - name: Publish packages
         run: npx changeset publish --access public --no-git-checks --provenance
