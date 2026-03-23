@@ -1,5 +1,13 @@
 # @queuert/postgres
 
+## 0.9.1
+
+### Patch Changes
+
+- Fix broken package exports in published npm packages
+- Updated dependencies
+  - queuert@0.9.1
+
 ## 0.9.0
 
 ### Minor Changes
