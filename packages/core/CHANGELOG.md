@@ -1,5 +1,11 @@
 # queuert
 
+## 0.9.2
+
+### Patch Changes
+
+- Fix broken package exports in published npm packages
+
 ## 0.9.1
 
 ### Patch Changes
