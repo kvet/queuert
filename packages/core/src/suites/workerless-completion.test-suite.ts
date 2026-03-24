@@ -2,6 +2,7 @@ import { type TestAPI, expectTypeOf, vi } from "vitest";
 import { sleep } from "../helpers/sleep.js";
 import {
   JobTypeMismatchError,
+  TransactionContextRequiredError,
   createClient,
   createInProcessWorker,
   createJobTypeProcessorRegistry,
@@ -590,6 +591,54 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         }),
       ),
     );
+  });
+
+  it("completeJobChain throws when called without transaction context", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypeRegistry = defineJobTypeRegistry<{
+      test: {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+    });
+
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: { value: 42 },
+        }),
+      ),
+    );
+
+    await expect(
+      withTransactionHooks(async (transactionHooks) =>
+        // @ts-expect-error missing txCtx
+        client.completeJobChain({
+          transactionHooks,
+          typeName: "test",
+          id: jobChain.id,
+          complete: async ({ job, complete }) => complete(job, async () => ({ result: 84 })),
+        }),
+      ),
+    ).rejects.toThrow(TransactionContextRequiredError);
   });
 
   it("completeJobChain throws on typeName mismatch", async ({

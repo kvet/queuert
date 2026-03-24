@@ -4,7 +4,7 @@ import {
   JobNotTriggerableError,
   withTransactionHooks,
 } from "queuert";
-import { encodeCursor } from "queuert/internal";
+import { encodeCursor, helpersSymbol } from "queuert/internal";
 import { serovalResponse } from "../response.js";
 import { parseCursor, parseLimit, parseStatusFilter, parseTypeNameFilter } from "./params.js";
 
@@ -71,8 +71,11 @@ export const handleJobTrigger = async (
   jobId: string,
 ): Promise<Response> => {
   try {
-    const job = await withTransactionHooks(async (transactionHooks) =>
-      client.triggerJob({ id: jobId, transactionHooks }),
+    const { stateAdapter } = client[helpersSymbol];
+    const job = await stateAdapter.runInTransaction(async (txCtx) =>
+      withTransactionHooks(async (transactionHooks) =>
+        client.triggerJob({ id: jobId, transactionHooks, ...txCtx }),
+      ),
     );
     return serovalResponse({ job });
   } catch (err) {

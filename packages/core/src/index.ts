@@ -50,6 +50,7 @@ export {
   JobTypeMismatchError,
   JobTypeValidationError,
   RescheduleJobError,
+  TransactionContextRequiredError,
   WaitChainTimeoutError,
   rescheduleJob,
   type JobTypeValidationErrorCode,

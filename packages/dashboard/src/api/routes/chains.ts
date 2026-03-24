@@ -1,4 +1,5 @@
 import { BlockerReferenceError, type Client, withTransactionHooks } from "queuert";
+import { helpersSymbol } from "queuert/internal";
 import { serovalResponse } from "../response.js";
 import { parseCursor, parseLimit, parseStatusFilter, parseTypeNameFilter } from "./params.js";
 
@@ -70,8 +71,11 @@ export const handleChainDelete = async (
   }
 
   try {
-    const deleted = await withTransactionHooks(async (transactionHooks) =>
-      client.deleteJobChains({ ids: [chainId], transactionHooks }),
+    const { stateAdapter } = client[helpersSymbol];
+    const deleted = await stateAdapter.runInTransaction(async (txCtx) =>
+      withTransactionHooks(async (transactionHooks) =>
+        client.deleteJobChains({ ids: [chainId], transactionHooks, ...txCtx }),
+      ),
     );
     return serovalResponse({ deleted });
   } catch (err) {

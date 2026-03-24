@@ -41,6 +41,7 @@ import {
   JobNotFoundError,
   JobNotTriggerableError,
   JobTypeMismatchError,
+  TransactionContextRequiredError,
   WaitChainTimeoutError,
 } from "./errors.js";
 import { bufferNotifyJobOwnershipLost, bufferNotifyJobScheduled } from "./helpers/notify-hooks.js";
@@ -56,6 +57,15 @@ export const helpersSymbol: unique symbol = Symbol("queuert.helpers");
 
 const normalizeTxCtx = <T extends Record<string, unknown>>(rest: T): T | undefined =>
   Object.keys(rest).length > 0 ? rest : undefined;
+
+const requireTxCtx = <T extends Record<string, unknown>>(rest: T): T => {
+  if (Object.keys(rest).length === 0) {
+    throw new TransactionContextRequiredError(
+      "Mutating client methods require a transaction context from runInTransaction",
+    );
+  }
+  return rest;
+};
 
 type _JobChainCompleteOptions<
   TStateAdapter extends StateAdapter<any, any>,
@@ -414,8 +424,9 @@ export const createClient = async <
         deduplicated: boolean;
       }
     > => {
-      const { input, typeName, deduplication, schedule, blockers, transactionHooks, ...txCtx } =
+      const { input, typeName, deduplication, schedule, blockers, transactionHooks, ...rest } =
         options;
+      const txCtx = requireTxCtx(rest);
       const [result] = await startJobChains(helpers, {
         jobChains: [{ typeName, input, deduplication, schedule, blockers }],
         txCtx,
@@ -435,7 +446,8 @@ export const createClient = async <
         transactionHooks: TransactionHooks;
       } & GetStateAdapterTxContext<TStateAdapter>,
     ): Promise<_StartJobChainsResult<TJobId, TJobTypeDefinitions, TChains>> => {
-      const { items, transactionHooks, ...txCtx } = options;
+      const { items, transactionHooks, ...rest } = options;
+      const txCtx = requireTxCtx(rest);
       return (await startJobChains(helpers, {
         jobChains: items,
         txCtx,
@@ -453,7 +465,8 @@ export const createClient = async <
     ): Promise<
       ResolvedJobChain<TJobId, TJobTypeDefinitions, JobTypeEntryNames<TJobTypeDefinitions>>[]
     > => {
-      const { ids, cascade, transactionHooks, ...txCtx } = options;
+      const { ids, cascade, transactionHooks, ...rest } = options;
+      const txCtx = requireTxCtx(rest);
 
       const deletedChainPairs = await helpers.stateAdapter.deleteJobChains({
         txCtx,
@@ -486,7 +499,8 @@ export const createClient = async <
         transactionHooks: TransactionHooks;
       } & GetStateAdapterTxContext<TStateAdapter>,
     ): Promise<ResolvedJob<TJobId, TJobTypeDefinitions, JobTypeNames<TJobTypeDefinitions>>> => {
-      const { id, transactionHooks, ...txCtx } = options;
+      const { id, transactionHooks, ...rest } = options;
+      const txCtx = requireTxCtx(rest);
 
       const existing = await helpers.stateAdapter.getJobForUpdate({ txCtx, jobId: id });
       if (!existing) {
@@ -532,7 +546,8 @@ export const createClient = async <
     ): Promise<
       _CompleteJobChainResult<TStateAdapter, TJobTypeDefinitions, TChainTypeName, TCompleteReturn>
     > => {
-      const { id, typeName, complete: completeCallback, transactionHooks, ...txCtx } = options;
+      const { id, typeName, complete: completeCallback, transactionHooks, ...rest } = options;
+      const txCtx = requireTxCtx(rest);
       const currentJob = await helpers.stateAdapter.getLatestChainJobForUpdate({
         txCtx,
         chainId: id,

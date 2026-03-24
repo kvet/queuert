@@ -3,6 +3,7 @@ import { sleep } from "../helpers/sleep.js";
 import {
   BlockerReferenceError,
   type JobChain,
+  TransactionContextRequiredError,
   createClient,
   createInProcessWorker,
   createJobTypeProcessorRegistry,
@@ -1007,6 +1008,49 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     );
 
     expect(deletedChains).toHaveLength(3);
+  });
+
+  it("throws when called without transaction context", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypeRegistry = defineJobTypeRegistry<{
+      test: {
+        entry: true;
+        input: null;
+        output: null;
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+    });
+
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: null,
+        }),
+      ),
+    );
+
+    await expect(
+      withTransactionHooks(async (transactionHooks) =>
+        // @ts-expect-error missing txCtx
+        client.deleteJobChains({ transactionHooks, ids: [jobChain.id] }),
+      ),
+    ).rejects.toThrow(TransactionContextRequiredError);
   });
 
   it("cascade deletes batch-created diamond dependencies", async ({

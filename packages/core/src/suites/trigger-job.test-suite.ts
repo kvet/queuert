@@ -2,6 +2,7 @@ import { type TestAPI } from "vitest";
 import {
   JobNotFoundError,
   JobNotTriggerableError,
+  TransactionContextRequiredError,
   createClient,
   createInProcessWorker,
   createJobTypeProcessorRegistry,
@@ -227,6 +228,50 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         ),
       ),
     ).rejects.toThrow(JobNotTriggerableError);
+  });
+
+  it("throws when called without transaction context", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypeRegistry = defineJobTypeRegistry<{
+      report: {
+        entry: true;
+        input: { type: string };
+        output: { generatedAt: string };
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+    });
+
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "report",
+          input: { type: "daily" },
+          schedule: { afterMs: 60_000 },
+        }),
+      ),
+    );
+
+    await expect(
+      withTransactionHooks(async (transactionHooks) =>
+        // @ts-expect-error missing txCtx
+        client.triggerJob({ transactionHooks, id: jobChain.id }),
+      ),
+    ).rejects.toThrow(TransactionContextRequiredError);
   });
 
   it("throws JobNotTriggerableError for blocked job", async ({

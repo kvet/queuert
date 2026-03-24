@@ -1,5 +1,6 @@
 import { type TestAPI, describe } from "vitest";
 import {
+  TransactionContextRequiredError,
   createClient,
   createInProcessWorker,
   createJobTypeProcessorRegistry,
@@ -186,6 +187,33 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       );
 
       expect(jobChain.status).toBe("pending");
+    });
+
+    it("throws when called without transaction context", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      expect,
+    }) => {
+      const jobTypeRegistry = defineJobTypeRegistry<{
+        test: { entry: true; input: { value: number }; output: null };
+      }>();
+
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypeRegistry,
+      });
+
+      await expect(
+        withTransactionHooks(async (transactionHooks) =>
+          // @ts-expect-error missing txCtx
+          client.startJobChain({ transactionHooks, typeName: "test", input: { value: 1 } }),
+        ),
+      ).rejects.toThrow(TransactionContextRequiredError);
     });
 
     it("rejects wrong input type at compile time", async ({
@@ -785,6 +813,36 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         expect(results[1].output).toEqual({ result: 40 });
         expect(results[2].output).toEqual({ result: 60 });
       });
+    });
+
+    it("throws when called without transaction context", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      expect,
+    }) => {
+      const jobTypeRegistry = defineJobTypeRegistry<{
+        test: { entry: true; input: { value: number }; output: null };
+      }>();
+
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypeRegistry,
+      });
+
+      await expect(
+        withTransactionHooks(async (transactionHooks) =>
+          // @ts-expect-error missing txCtx
+          client.startJobChains({
+            transactionHooks,
+            items: [{ typeName: "test", input: { value: 1 } }],
+          }),
+        ),
+      ).rejects.toThrow(TransactionContextRequiredError);
     });
 
     it("rejects non-entry type name in batch at compile time", async ({
