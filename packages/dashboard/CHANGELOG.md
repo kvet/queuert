@@ -1,5 +1,13 @@
 # @queuert/dashboard
 
+## 0.9.4
+
+### Patch Changes
+
+- Mutating client methods (`startJobChain`, `startJobChains`, `deleteJobChains`, `triggerJob`, `completeJobChain`) now enforce that a transaction context from `runInTransaction` is provided at runtime, throwing `TransactionContextRequiredError` if omitted. This matches the existing TypeScript type requirements and ensures consistent behavior for JavaScript callers.
+- Updated dependencies
+  - queuert@0.9.4
+
 ## 0.9.3
 
 ### Patch Changes
