@@ -180,6 +180,11 @@ export const createPgStateAdapter = async <
           jobs.map((j) => j.deduplication?.key ?? null),
           jobs.map((j) => (j.deduplication ? (j.deduplication.scope ?? "incomplete") : null)),
           jobs.map((j) => j.deduplication?.windowMs ?? null),
+          jobs.map((j) =>
+            j.deduplication?.excludeJobChainIds
+              ? JSON.stringify(j.deduplication.excludeJobChainIds)
+              : null,
+          ),
           jobs.map((j) => j.schedule?.at?.toISOString() ?? null),
           jobs.map((j) => j.schedule?.afterMs ?? null),
           jobs.map((j) => j.chainTraceContext ?? null),

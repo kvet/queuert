@@ -27,7 +27,7 @@ export const createStateJobs = async (
       isChainStart: boolean;
       originChainTraceContext?: string | null;
       originTraceContext?: string | null;
-      deduplication?: DeduplicationOptions;
+      deduplication?: DeduplicationOptions<string>;
       schedule?: ScheduleOptions;
     }[];
     txCtx: BaseTxContext;

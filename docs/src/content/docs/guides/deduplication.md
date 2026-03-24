@@ -74,4 +74,26 @@ await withTransactionHooks(async (transactionHooks) =>
 );
 ```
 
+## Excluding Chains
+
+Use `excludeJobChainIds` to skip specific chains during deduplication matching. This is essential for recurring jobs that self-schedule within a completion callback — the current chain is still incomplete at that point, so without exclusion the new chain would be deduplicated against it.
+
+```ts
+// Inside a processor's completion callback
+return complete(async ({ sql, transactionHooks }) => {
+  await client.startJobChain({
+    sql,
+    transactionHooks,
+    typeName: 'health-check',
+    input: { serviceId: job.input.serviceId },
+    schedule: { afterMs: 5 * 60 * 1000 },
+    deduplication: {
+      key: `health:${job.input.serviceId}`,
+      excludeJobChainIds: [job.chainId],
+    },
+  });
+  return { checkedAt: new Date().toISOString() };
+});
+```
+
 See [examples/showcase-scheduling](https://github.com/kvet/queuert/tree/main/examples/showcase-scheduling) for a complete working example demonstrating deduplication with recurring jobs. See also [Scheduling](../scheduling/) and [Transaction Hooks](../transaction-hooks/).

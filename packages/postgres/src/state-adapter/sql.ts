@@ -212,76 +212,6 @@ export const recordMigrationSql: TypedSql<readonly [NamedParameter<"name", strin
   false,
 );
 
-export const createJobSql: TypedSql<
-  readonly [
-    NamedParameter<"type_name", string>,
-    NamedParameter<"chain_id", string | undefined>,
-    NamedParameter<"chain_type_name", string>,
-    NamedParameter<"input", unknown>,
-    NamedParameter<"deduplication_key", string | null | undefined>,
-    NamedParameter<"deduplication_scope", "incomplete" | "any" | null | undefined>,
-    NamedParameter<"deduplication_window_ms", number | null | undefined>,
-    NamedParameter<"scheduled_at", Date | null>,
-    NamedParameter<"schedule_after_ms", number | null>,
-    NamedParameter<"chain_trace_context", string | null>,
-    NamedParameter<"trace_context", string | null>,
-    NamedParameter<"chain_index", number>,
-  ],
-  [DbJob & { deduplicated: boolean }]
-> = sql(
-  /* sql */ `
-WITH new_id AS (SELECT {{id_default}} AS id),
-existing_continuation AS (
-  SELECT *, TRUE AS deduplicated
-  FROM {{schema}}.{{table_prefix}}job
-  WHERE $2::{{id_type}} IS NOT NULL
-    AND chain_id = $2::{{id_type}}
-    AND chain_index = $12::integer
-    AND id != chain_id
-  LIMIT 1
-),
-existing_deduplicated AS (
-  SELECT j.*, TRUE AS deduplicated
-  FROM {{schema}}.{{table_prefix}}job j
-  WHERE $5::text IS NOT NULL
-    AND j.deduplication_key = $5
-    AND j.chain_index = 0
-    AND j.chain_type_name = $3
-    AND (
-      $6::text IS NULL
-      OR ($6::text = 'incomplete' AND j.status != 'completed')
-      OR ($6::text = 'any')
-    )
-    AND (
-      $7::bigint IS NULL
-      OR j.created_at >= now() - ($7::bigint || ' milliseconds')::interval
-    )
-  ORDER BY j.created_at DESC
-  LIMIT 1
-),
-inserted_job AS (
-  INSERT INTO {{schema}}.{{table_prefix}}job (id, type_name, chain_id, chain_type_name, chain_index, input, deduplication_key, scheduled_at, chain_trace_context, trace_context)
-  SELECT id, $1, COALESCE($2, id), $3,
-    $12::integer,
-    $4, $5,
-    COALESCE($8::timestamptz, now() + ($9::bigint || ' milliseconds')::interval, now()),
-    $10, $11
-  FROM new_id
-  WHERE NOT EXISTS (SELECT 1 FROM existing_continuation)
-    AND NOT EXISTS (SELECT 1 FROM existing_deduplicated)
-  ON CONFLICT (chain_id, chain_index) DO UPDATE SET id = {{schema}}.{{table_prefix}}job.id
-  RETURNING *, (id != (SELECT id FROM new_id)) AS deduplicated
-)
-SELECT * FROM existing_continuation
-UNION ALL
-SELECT * FROM existing_deduplicated
-UNION ALL
-SELECT * FROM inserted_job
-LIMIT 1
-`,
-  true,
-);
-
 export const addJobBlockersSql: TypedSql<
   readonly [
     NamedParameter<"job_id", string[]>,
@@ -363,6 +293,7 @@ export const createJobsSql: TypedSql<
     NamedParameter<"deduplication_keys", (string | null)[]>,
     NamedParameter<"deduplication_scopes", (string | null)[]>,
     NamedParameter<"deduplication_window_ms", (number | null)[]>,
+    NamedParameter<"deduplication_exclude_chain_ids", (string | null)[]>,
     NamedParameter<"scheduled_ats", (string | null)[]>,
     NamedParameter<"schedule_after_ms", (number | null)[]>,
     NamedParameter<"chain_trace_contexts", (string | null)[]>,
@@ -378,17 +309,18 @@ WITH generated_ids AS (
 input_data AS (
   SELECT
     gi.id, type_name, chain_id, chain_type_name, chain_index,
-    input, dedup_key, dedup_scope, dedup_window_ms,
+    input, dedup_key, dedup_scope, dedup_window_ms, dedup_exclude_chain_ids,
     scheduled_at, schedule_after_ms,
     chain_trace_context, trace_context, gi.ord
   FROM unnest(
     $2::text[], $3::{{id_type}}[], $4::text[], $5::integer[],
     $6::jsonb[], $7::text[], $8::text[], $9::bigint[],
-    $10::timestamptz[], $11::bigint[],
-    $12::text[], $13::text[]
+    $10::text[],
+    $11::timestamptz[], $12::bigint[],
+    $13::text[], $14::text[]
   ) WITH ORDINALITY AS t(
     type_name, chain_id, chain_type_name, chain_index,
-    input, dedup_key, dedup_scope, dedup_window_ms,
+    input, dedup_key, dedup_scope, dedup_window_ms, dedup_exclude_chain_ids,
     scheduled_at, schedule_after_ms,
     chain_trace_context, trace_context, ord
   )
@@ -420,6 +352,10 @@ existing_deduplicated AS (
     AND (
       id2.dedup_window_ms IS NULL
       OR j.created_at >= now() - (id2.dedup_window_ms || ' milliseconds')::interval
+    )
+    AND (
+      id2.dedup_exclude_chain_ids IS NULL
+      OR j.chain_id != ALL(ARRAY(SELECT jsonb_array_elements_text(id2.dedup_exclude_chain_ids::jsonb))::{{id_type}}[])
     )
   WHERE NOT EXISTS (SELECT 1 FROM existing_continuations ec WHERE ec.ord = id2.ord)
   ORDER BY id2.ord, j.created_at DESC

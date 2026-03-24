@@ -276,6 +276,9 @@ export const createSqliteStateAdapter = async <
         const deduplicationKey = deduplication?.key ?? null;
         const deduplicationScope = deduplication ? (deduplication.scope ?? "incomplete") : null;
         const deduplicationWindowMs = deduplication?.windowMs ?? null;
+        const deduplicationExcludeChainIds = deduplication?.excludeJobChainIds
+          ? JSON.stringify(deduplication.excludeJobChainIds)
+          : null;
 
         if (chainId) {
           const [existingContinuation] = await executeTypedSql({
@@ -308,6 +311,8 @@ export const createSqliteStateAdapter = async <
               deduplicationScope,
               deduplicationWindowMs,
               deduplicationWindowMs,
+              deduplicationExcludeChainIds,
+              deduplicationExcludeChainIds,
             ],
           });
 

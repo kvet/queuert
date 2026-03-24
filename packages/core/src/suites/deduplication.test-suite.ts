@@ -640,6 +640,77 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expect(chain2.id).toBe(chain1.id);
   });
 
+  it("excludeJobChainIds skips specified chains during deduplication", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypeRegistry = defineJobTypeRegistry<{
+      test: {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+    });
+
+    const chain1 = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: { value: 1 },
+          deduplication: { key: "exclude-key" },
+        }),
+      ),
+    );
+
+    expect(chain1.deduplicated).toBe(false);
+
+    // Without excludeJobChainIds — deduplicates against chain1
+    const chain2 = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: { value: 2 },
+          deduplication: { key: "exclude-key" },
+        }),
+      ),
+    );
+
+    expect(chain2.deduplicated).toBe(true);
+    expect(chain2.id).toBe(chain1.id);
+
+    // With excludeJobChainIds — skips chain1, creates new chain
+    const chain3 = await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: { value: 3 },
+          deduplication: { key: "exclude-key", excludeJobChainIds: [chain1.id] },
+        }),
+      ),
+    );
+
+    expect(chain3.deduplicated).toBe(false);
+    expect(chain3.id).not.toBe(chain1.id);
+  });
+
   it("does not deduplicate across different chain types with the same key", async ({
     stateAdapter,
     notifyAdapter,

@@ -139,7 +139,7 @@ type _StartJobChainEntry<
 > = {
   typeName: TTypeName;
   input: JobTypeProperty<TJobTypeDefinitions, TTypeName, "input">;
-  deduplication?: DeduplicationOptions;
+  deduplication?: DeduplicationOptions<TJobId>;
   schedule?: ScheduleOptions;
 } & (JobTypeHasBlockers<TJobTypeDefinitions, TTypeName> extends true
   ? { blockers: BlockerChains<TJobId, TJobTypeDefinitions, TTypeName> }
@@ -411,7 +411,7 @@ export const createClient = async <
         typeName: TChainTypeName;
         input: JobTypeProperty<TJobTypeDefinitions, TChainTypeName, "input">;
         transactionHooks: TransactionHooks;
-        deduplication?: DeduplicationOptions;
+        deduplication?: DeduplicationOptions<TJobId>;
         schedule?: ScheduleOptions;
       } & (JobTypeHasBlockers<TJobTypeDefinitions, TChainTypeName> extends true
         ? {

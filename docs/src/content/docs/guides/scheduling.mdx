@@ -82,6 +82,10 @@ const jobTypeRegistry = defineJobTypeRegistry<{
           typeName: 'daily-digest',
           input: { userId: job.input.userId },
           schedule: { afterMs: 24 * 60 * 60 * 1000 }, // Run again tomorrow
+          deduplication: {
+            key: `digest:${job.input.userId}`,
+            excludeJobChainIds: [job.chainId], // Skip the completing chain
+          },
         });
       }
       return { sentAt: new Date().toISOString() };

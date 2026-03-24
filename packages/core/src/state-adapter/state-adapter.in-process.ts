@@ -168,7 +168,7 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
 
   const findDeduplicatedJob = (
     chainTypeName: string,
-    deduplication: DeduplicationOptions,
+    deduplication: DeduplicationOptions<string>,
   ): StateJob | undefined => {
     if (!deduplication.key) return undefined;
 
@@ -180,6 +180,8 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       if (job.deduplicationKey !== deduplication.key) continue;
       if (job.id !== job.chainId) continue; // Only first jobs in chain
       if (job.chainTypeName !== chainTypeName) continue;
+
+      if (deduplication.excludeJobChainIds?.includes(job.chainId)) continue;
 
       if (scope === "incomplete" && job.status === "completed") continue;
 

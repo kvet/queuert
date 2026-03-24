@@ -252,6 +252,8 @@ export const findDeduplicatedJobSql: TypedSql<
     NamedParameter<"deduplication_scope_3", "incomplete" | "any" | null>,
     NamedParameter<"deduplication_window_ms_1", number | null>,
     NamedParameter<"deduplication_window_ms_2", number | null>,
+    NamedParameter<"deduplication_exclude_chain_ids_1", string | null>,
+    NamedParameter<"deduplication_exclude_chain_ids_2", string | null>,
   ],
   [DbJob & { deduplicated: number }]
 > = sql(
@@ -270,6 +272,10 @@ WHERE ? IS NOT NULL
   AND (
     ? IS NULL
     OR created_at >= datetime('now', 'subsec', '-' || (? / 1000.0) || ' seconds')
+  )
+  AND (
+    ? IS NULL
+    OR chain_id NOT IN (SELECT value FROM json_each(?))
   )
 ORDER BY created_at DESC
 LIMIT 1

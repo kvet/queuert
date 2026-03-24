@@ -10,7 +10,7 @@ type JobChainInput = {
   typeName: string;
   input: unknown;
   blockers?: JobChain<any, any, any, any>[];
-  deduplication?: DeduplicationOptions;
+  deduplication?: DeduplicationOptions<string>;
   schedule?: ScheduleOptions;
 };
 

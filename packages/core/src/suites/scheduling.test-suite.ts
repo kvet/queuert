@@ -398,6 +398,93 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
   });
 
+  it("recurring job self-schedules using deduplication with excludeJobChainIds", async ({
+    stateAdapter,
+    notifyAdapter,
+    runInTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypeRegistry = defineJobTypeRegistry<{
+      recurring: {
+        entry: true;
+        input: null;
+        output: null;
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+    });
+
+    let completionCount = 0;
+    const allDone = Promise.withResolvers<void>();
+
+    const worker = await createInProcessWorker({
+      client,
+      workerId: "worker",
+      concurrency: 1,
+      jobTypeProcessorDefaults: { pollIntervalMs: 50 },
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          recurring: {
+            attemptHandler: async ({ job, complete }) => {
+              return complete(async ({ transactionHooks, ...txCtx }) => {
+                completionCount++;
+                if (completionCount < 3) {
+                  await client.startJobChain({
+                    ...txCtx,
+                    transactionHooks,
+                    typeName: "recurring",
+                    input: null,
+                    deduplication: {
+                      key: "recurring",
+                      excludeJobChainIds: [job.chainId],
+                    },
+                  });
+                } else {
+                  allDone.resolve();
+                }
+                return null;
+              });
+            },
+          },
+        },
+      }),
+    });
+
+    await withTransactionHooks(async (transactionHooks) =>
+      runInTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "recurring",
+          input: null,
+          deduplication: { key: "recurring" },
+        }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await allDone.promise;
+
+      const { items: chains } = await client.listJobChains({
+        filter: { typeName: ["recurring"] },
+        limit: 10,
+      });
+      expect(chains).toHaveLength(3);
+      expect(completionCount).toBe(3);
+    });
+  });
+
   it("rescheduleJob with schedule.at defers job retry", async ({
     stateAdapter,
     notifyAdapter,

@@ -204,6 +204,10 @@ const worker = await createInProcessWorker({
                   checkNumber: job.input.checkNumber + 1,
                 },
                 schedule: { afterMs: HEALTH_CHECK_INTERVAL_MS },
+                deduplication: {
+                  key: `health:${job.input.serviceId}`,
+                  excludeJobChainIds: [job.chainId],
+                },
               });
             } else {
               console.log(`  Service stopped or max checks reached. Stopping.`);

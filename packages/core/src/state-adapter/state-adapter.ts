@@ -81,7 +81,12 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
       chainTypeName: string;
       chainIndex: number;
       input: unknown;
-      deduplication?: { key: string; scope?: "incomplete" | "any"; windowMs?: number };
+      deduplication?: {
+        key: string;
+        scope?: "incomplete" | "any";
+        windowMs?: number;
+        excludeJobChainIds?: TJobId[];
+      };
       schedule?: ScheduleOptions;
       chainTraceContext?: string | null;
       traceContext?: string | null;

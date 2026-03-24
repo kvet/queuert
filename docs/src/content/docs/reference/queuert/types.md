@@ -248,10 +248,11 @@ Deferred job scheduling. The two fields are mutually exclusive.
 ### DeduplicationOptions
 
 ```typescript
-type DeduplicationOptions = {
+type DeduplicationOptions<TJobId> = {
   key: string; // Deduplication key
   scope?: "incomplete" | "any"; // Match incomplete chains only or all (default: "incomplete")
   windowMs?: number; // Time window for "any" scope
+  excludeJobChainIds?: TJobId[]; // Chain IDs to skip during matching
 };
 ```
 
@@ -260,6 +261,7 @@ Chain deduplication configuration passed to `startJobChain`.
 - **key** -- identifies the logical operation
 - **scope** -- match incomplete chains only (`"incomplete"`, the default) or all chains within the time window (`"any"`)
 - **windowMs** -- required when scope is `"any"`
+- **excludeJobChainIds** -- chain IDs to exclude from deduplication matching; useful for recurring jobs that self-schedule within a completion callback where the current chain is still incomplete
 
 ### BackoffConfig
 
