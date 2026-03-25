@@ -9,6 +9,7 @@
 
 # Medium term
 
+- [REF] Handle routing with seroval on dashboard instead of path-based routing (e.g. `/chains/${chainId}` → `/chain?chainId=${chainId}`) — simplifies dashboard API and allows more flexible UI patterns (modals, nested views)
 - [REVIEW] Review `addJobBlocker` design — see `design/add-job-blocker.md`
 - [TASK,COMPLEX] Better dashboard UI
 - [REF] Add input and output filtering

@@ -4,11 +4,12 @@ export function ConfirmDeleteDialog(props: {
   chainId: string;
   open: boolean;
   onClose: () => void;
-  onConfirm: () => void;
+  onConfirm: (options: { cascade: boolean }) => void;
   deleting: boolean;
   error: string | null;
 }) {
   const [input, setInput] = createSignal("");
+  const [cascade, setCascade] = createSignal(false);
 
   const matches = () => input() === props.chainId;
 
@@ -38,9 +39,19 @@ export function ConfirmDeleteDialog(props: {
             value={input()}
             onInput={(e) => setInput(e.currentTarget.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && matches() && !props.deleting) props.onConfirm();
+              if (e.key === "Enter" && matches() && !props.deleting)
+                props.onConfirm({ cascade: cascade() });
             }}
           />
+          <label class="dialog-cascade-label">
+            <input
+              type="checkbox"
+              checked={cascade()}
+              onChange={(e) => setCascade(e.currentTarget.checked)}
+              disabled={props.deleting}
+            />
+            Cascade delete (include all blocker chains)
+          </label>
           <Show when={props.error}>
             <div class="error-text">{props.error}</div>
           </Show>
@@ -58,7 +69,7 @@ export function ConfirmDeleteDialog(props: {
               class="dialog-btn-delete"
               disabled={!matches() || props.deleting}
               onClick={() => {
-                props.onConfirm();
+                props.onConfirm({ cascade: cascade() });
               }}
             >
               {props.deleting ? "Deleting..." : "Delete"}

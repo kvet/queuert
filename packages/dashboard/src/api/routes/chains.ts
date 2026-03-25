@@ -64,6 +64,7 @@ export const handleChainDetail = async (
 export const handleChainDelete = async (
   client: Client<any, any>,
   chainId: string,
+  options?: { cascade?: boolean },
 ): Promise<Response> => {
   const jobChain = await client.getJobChain({ id: chainId });
   if (!jobChain) {
@@ -74,7 +75,12 @@ export const handleChainDelete = async (
     const { stateAdapter } = client[helpersSymbol];
     const deleted = await stateAdapter.runInTransaction(async (txCtx) =>
       withTransactionHooks(async (transactionHooks) =>
-        client.deleteJobChains({ ids: [chainId], transactionHooks, ...txCtx }),
+        client.deleteJobChains({
+          ids: [chainId],
+          cascade: options?.cascade,
+          transactionHooks,
+          ...txCtx,
+        }),
       ),
     );
     return serovalResponse({ deleted });

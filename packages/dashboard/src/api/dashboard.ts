@@ -63,7 +63,10 @@ export const createDashboard = <
     if (match) return handleChainBlocking(url, client, match[1]);
 
     match = localPath.match(/^\/api\/chains\/([^/]+)$/);
-    if (match && request.method === "DELETE") return handleChainDelete(client, match[1]);
+    if (match && request.method === "DELETE")
+      return handleChainDelete(client, match[1], {
+        cascade: url.searchParams.get("cascade") === "true",
+      });
     if (match) return handleChainDetail(url, client, match[1]);
 
     if (localPath === "/api/chains") return handleChainsList(url, client);

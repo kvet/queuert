@@ -69,7 +69,7 @@ Returns the root job, last job, all jobs in the chain ordered by chain index, an
 
 ### Chain Mutation Endpoints
 
-**`DELETE /api/chains/{chainId}`** — Delete a job chain and all its jobs. Returns the deleted chain and jobs on success. Returns 404 if the chain does not exist. Returns 409 if other jobs depend on this chain as a blocker (`BlockerReferenceError`).
+**`DELETE /api/chains/{chainId}?cascade=true`** — Delete a job chain and all its jobs. Pass `cascade=true` to also delete all transitive blocker chains. Returns the deleted chains on success. Returns 404 if the chain does not exist. Returns 409 if other jobs depend on the resolved deletion set as a blocker (`BlockerReferenceError`).
 
 ### Asset Serving
 

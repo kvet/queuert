@@ -87,8 +87,12 @@ export const triggerJob = async (jobId: string): Promise<UnknownJob> => {
   return job;
 };
 
-export const deleteChain = async (chainId: string): Promise<void> => {
-  await fetchSeroval(`/chains/${chainId}`, { method: "DELETE" });
+export const deleteChain = async (
+  chainId: string,
+  options?: { cascade?: boolean },
+): Promise<void> => {
+  const qs = options?.cascade ? "?cascade=true" : "";
+  await fetchSeroval(`/chains/${chainId}${qs}`, { method: "DELETE" });
 };
 
 export const getJobDetail = async (

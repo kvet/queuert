@@ -451,6 +451,16 @@ a:hover {
   margin-bottom: 12px;
 }
 
+.dialog-cascade-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  margin-bottom: 12px;
+}
+
 .dialog-actions {
   display: flex;
   justify-content: flex-end;

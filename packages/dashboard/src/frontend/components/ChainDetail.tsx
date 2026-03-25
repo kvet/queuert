@@ -15,11 +15,11 @@ export function ChainDetail() {
   const [deleting, setDeleting] = createSignal(false);
   const [deleteError, setDeleteError] = createSignal<string | null>(null);
 
-  const handleDelete = async () => {
+  const handleDelete = async (options: { cascade: boolean }) => {
     setDeleting(true);
     setDeleteError(null);
     try {
-      await deleteChain(params.id);
+      await deleteChain(params.id, { cascade: options.cascade });
       navigate("/");
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : String(err));
@@ -58,7 +58,7 @@ export function ChainDetail() {
                   setShowDelete(false);
                   setDeleteError(null);
                 }}
-                onConfirm={() => void handleDelete()}
+                onConfirm={(options) => void handleDelete(options)}
                 deleting={deleting()}
                 error={deleteError()}
               />

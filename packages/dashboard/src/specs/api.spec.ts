@@ -195,6 +195,70 @@ describe("Dashboard API", () => {
       expect(res.status).toBe(409);
       expect(body.error).toContain("blocker");
     });
+
+    it("cascade deletes chain and its blockers", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      const blockerChain = await createJob(stateAdapter, "blocker-type", null);
+      const mainJob = await createJob(stateAdapter, "main-type", null);
+
+      await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.addJobsBlockers({
+          txCtx,
+          jobBlockers: [{ jobId: mainJob.id, blockedByChainIds: [blockerChain.chainId] }],
+        }),
+      );
+
+      const res = await request(`/api/chains/${mainJob.chainId}?cascade=true`, {
+        method: "DELETE",
+      });
+      const body = await parseBody(res);
+
+      expect(res.status).toBe(200);
+      expect(body.deleted).toHaveLength(2);
+
+      const mainDetail = await request(`/api/chains/${mainJob.chainId}`);
+      expect(mainDetail.status).toBe(404);
+
+      const blockerDetail = await request(`/api/chains/${blockerChain.chainId}`);
+      expect(blockerDetail.status).toBe(404);
+    });
+
+    it("cascade delete without blockers deletes only the target chain", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      const root = await createJob(stateAdapter, "test-type", null);
+
+      const res = await request(`/api/chains/${root.chainId}?cascade=true`, {
+        method: "DELETE",
+      });
+      const body = await parseBody(res);
+
+      expect(res.status).toBe(200);
+      expect(body.deleted).toHaveLength(1);
+    });
+
+    it("cascade delete still fails when resolved set has external dependents", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      const sharedBlocker = await createJob(stateAdapter, "shared-blocker", null);
+      const chainA = await createJob(stateAdapter, "chain-a", null);
+      const chainB = await createJob(stateAdapter, "chain-b", null);
+
+      await stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.addJobsBlockers({
+          txCtx,
+          jobBlockers: [
+            { jobId: chainA.id, blockedByChainIds: [sharedBlocker.chainId] },
+            { jobId: chainB.id, blockedByChainIds: [sharedBlocker.chainId] },
+          ],
+        }),
+      );
+
+      const res = await request(`/api/chains/${chainA.chainId}?cascade=true`, {
+        method: "DELETE",
+      });
+
+      expect(res.status).toBe(409);
+      expect((await parseBody(res)).error).toContain("blocker");
+    });
   });
 
   describe("GET /api/jobs", () => {
