@@ -1,5 +1,5 @@
 // oxlint-disable no-empty-pattern
-import { it as baseIt, describe } from "vitest";
+import { it as baseIt, describe, expect } from "vitest";
 import { sleep } from "../helpers/sleep.js";
 import {
   type NotifyAdapter,
@@ -24,7 +24,7 @@ const it = extendWithNotifyInProcess(extendWithCommon(extendWithStateInProcess(b
   expectLogs: ExpectLogs;
 }>({
   expectLogs: [
-    async ({ log, expect }, use) => {
+    async ({ log }, use) => {
       await use((expected) => {
         expect(log.mock.calls.map((call) => call[0])).toEqual(
           expected.map((entry) => {

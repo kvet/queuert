@@ -14,19 +14,18 @@
     "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
-    "@testcontainers/nats": "^11.11.0",
-    "@testcontainers/postgresql": "^11.11.0",
-    "@testcontainers/redis": "^11.11.0",
-    "dockerode": "^4.0.9",
-    "pg": "^8.18.0",
-    "proper-lockfile": "^4.1.2",
-    "testcontainers": "^11.11.0"
+    "@testcontainers/nats": "11.13.0",
+    "@testcontainers/postgresql": "11.13.0",
+    "@testcontainers/redis": "11.13.0",
+    "dockerode": "4.0.10",
+    "pg": "8.20.0",
+    "proper-lockfile": "4.1.2",
+    "testcontainers": "11.13.0"
   },
   "devDependencies": {
     "@queuert/tsconfig": "workspace:*",
-    "@types/dockerode": "^4.0.1",
-    "@types/node": "^22.19.11",
-    "@types/pg": "^8.16.0",
-    "@types/proper-lockfile": "^4.1.4"
+    "@types/dockerode": "4.0.1",
+    "@types/pg": "8.20.0",
+    "@types/proper-lockfile": "4.1.4"
   }
 }

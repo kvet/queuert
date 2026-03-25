@@ -13,7 +13,7 @@ import {
   SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
 import { type ObservabilityAdapter } from "queuert";
-import { type TestAPI } from "vitest";
+import { type TestAPI, expect } from "vitest";
 import { createOtelObservabilityAdapter } from "../observability-adapter/observability-adapter.otel.js";
 
 // Map method names to OTEL metric names
@@ -151,7 +151,7 @@ export const extendWithObservabilityOtel = <T extends {}>(
       { scope: "test" },
     ],
     expectMetrics: [
-      async ({ _otelReader, _otelExporter, expect }, use) => {
+      async ({ _otelReader, _otelExporter }, use) => {
         await use(async (expected) => {
           await _otelReader.forceFlush();
           const lastExport = _otelExporter.getMetrics().at(-1);
@@ -191,7 +191,7 @@ export const extendWithObservabilityOtel = <T extends {}>(
       { scope: "test" },
     ],
     expectHistograms: [
-      async ({ _otelReader, _otelExporter, expect }, use) => {
+      async ({ _otelReader, _otelExporter }, use) => {
         await use(async (expected) => {
           await _otelReader.forceFlush();
           const lastExport = _otelExporter.getMetrics().at(-1);
@@ -222,7 +222,7 @@ export const extendWithObservabilityOtel = <T extends {}>(
       { scope: "test" },
     ],
     expectGauges: [
-      async ({ _otelReader, _otelExporter, expect }, use) => {
+      async ({ _otelReader, _otelExporter }, use) => {
         // Track cumulative expected values per metric (keyed by "metricName:typeName")
         const cumulativeExpected = new Map<string, number>();
 
@@ -232,7 +232,7 @@ export const extendWithObservabilityOtel = <T extends {}>(
           // Sum expected deltas into cumulative values (grouped by typeName)
           for (const [method, calls] of Object.entries(expected) as [
             "jobTypeIdleChange" | "jobTypeProcessingChange",
-            Array<{ delta: number; typeName?: string; workerId?: string }> | undefined,
+            { delta: number; typeName?: string; workerId?: string }[] | undefined,
           ][]) {
             if (!calls) continue;
             const metricName = methodToMetricName[method];
@@ -271,7 +271,7 @@ export const extendWithObservabilityOtel = <T extends {}>(
       { scope: "test" },
     ],
     expectSpans: [
-      async ({ _otelTraceExporter, expect }, use) => {
+      async ({ _otelTraceExporter }, use) => {
         await use(async (expected) => {
           const spans = _otelTraceExporter.getFinishedSpans();
 

@@ -58,66 +58,81 @@ const stateAdapter = await createPgStateAdapter({
   },
 });
 
-let listenClient: PoolClient | null = null;
-let connectingPromise: Promise<PoolClient> | null = null;
-let closed = false;
-const handlers = new Map<string, (message: string) => void>();
+const { notifyProvider, close: closeNotify } = (() => {
+  let listenClient: PoolClient | null = null;
+  let connectingPromise: Promise<PoolClient> | null = null;
+  let closed = false;
+  const handlers = new Map<string, (message: string) => void>();
+  let queryQueue: Promise<void> = Promise.resolve();
 
-const releaseListenClient = (): void => {
-  if (listenClient) {
-    listenClient.removeAllListeners("notification");
-    listenClient.release();
-    listenClient = null;
-  }
-};
+  const enqueueQuery = async (fn: () => Promise<unknown>): Promise<void> => {
+    const result = queryQueue.then(fn, fn);
+    queryQueue = result.then(
+      () => {},
+      () => {},
+    );
+    return result.then(() => {});
+  };
 
-const notifyProvider: PgNotifyProvider = {
-  publish: async (channel, message) => {
-    const client = await pool.connect();
-    try {
-      await client.query("SELECT pg_notify($1, $2)", [channel, message]);
-    } finally {
-      client.release();
+  const releaseListenClient = (): void => {
+    if (listenClient) {
+      listenClient.removeAllListeners("notification");
+      listenClient.release();
+      listenClient = null;
     }
-  },
-  subscribe: async (channel, onMessage) => {
-    if (closed) throw new Error("Provider is closed");
+  };
 
-    if (!listenClient && !connectingPromise) {
-      connectingPromise = pool.connect().then((client) => {
-        connectingPromise = null;
-        if (closed) {
-          client.release();
-          throw new Error("Provider is closed");
-        }
-        listenClient = client;
-        listenClient.on("notification", (msg: { channel: string; payload?: string }) => {
-          handlers.get(msg.channel)?.(msg.payload ?? "");
-        });
-        return listenClient;
-      });
-    }
-
-    const client = listenClient ?? (await connectingPromise!);
-    handlers.set(channel, onMessage);
-    await client.query(`LISTEN "${channel}"`);
-
-    return async () => {
-      handlers.delete(channel);
+  const notifyProvider: PgNotifyProvider = {
+    publish: async (channel, message) => {
+      const client = await pool.connect();
       try {
-        await client.query(`UNLISTEN "${channel}"`);
+        await client.query("SELECT pg_notify($1, $2)", [channel, message]);
       } finally {
-        if (handlers.size === 0) releaseListenClient();
+        client.release();
       }
-    };
-  },
-};
+    },
+    subscribe: async (channel, onMessage) => {
+      if (closed) throw new Error("Provider is closed");
 
-const closeNotify = (): void => {
-  closed = true;
-  releaseListenClient();
-  handlers.clear();
-};
+      if (!listenClient && !connectingPromise) {
+        connectingPromise = pool.connect().then((client) => {
+          connectingPromise = null;
+          if (closed) {
+            client.release();
+            throw new Error("Provider is closed");
+          }
+          listenClient = client;
+          listenClient.on("notification", (msg: { channel: string; payload?: string }) => {
+            handlers.get(msg.channel)?.(msg.payload ?? "");
+          });
+          return listenClient;
+        });
+      }
+
+      const client = listenClient ?? (await connectingPromise!);
+      handlers.set(channel, onMessage);
+      await enqueueQuery(async () => client.query(`LISTEN "${channel}"`));
+
+      return async () => {
+        handlers.delete(channel);
+        try {
+          await enqueueQuery(async () => client.query(`UNLISTEN "${channel}"`));
+        } finally {
+          if (handlers.size === 0) releaseListenClient();
+        }
+      };
+    },
+  };
+
+  return {
+    notifyProvider,
+    close: (): void => {
+      closed = true;
+      releaseListenClient();
+      handlers.clear();
+    },
+  };
+})();
 
 const notifyAdapter = await createPgNotifyAdapter({ provider: notifyProvider });
 

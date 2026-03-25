@@ -50,8 +50,7 @@
   "devDependencies": {
     "@queuert/testcontainers": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
-    "@types/node": "^22.19.11",
-    "nats": "^2.29.3",
+    "nats": "2.29.3",
     "queuert": "workspace:*"
   },
   "peerDependencies": {

@@ -1,7 +1,7 @@
 import { Pool } from "pg";
 import { type NotifyAdapter } from "queuert";
 import { type TestSuiteContext, createFlakyBatchGenerator } from "queuert/testing";
-import { type TestAPI } from "vitest";
+import { type TestAPI, expect } from "vitest";
 import { createPgNotifyAdapter } from "../notify-adapter/notify-adapter.pg.js";
 import { createPgPoolNotifyProvider } from "./notify-provider.pg-pool.js";
 
@@ -45,7 +45,7 @@ export const extendWithNotifyPostgres = <
       { scope: "test" },
     ],
     flakyNotifyAdapter: [
-      async ({ notifyAdapter, expect }, use) => {
+      async ({ notifyAdapter }, use) => {
         let totalCalls = 0;
         let errorCalls = 0;
         const shouldError = createFlakyBatchGenerator();

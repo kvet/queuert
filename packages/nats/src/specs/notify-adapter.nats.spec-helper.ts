@@ -2,7 +2,7 @@ import { type NatsConnectionOptions } from "@queuert/testcontainers";
 import { connect } from "nats";
 import { type NotifyAdapter } from "queuert";
 import { type TestSuiteContext, createFlakyBatchGenerator } from "queuert/testing";
-import { type TestAPI } from "vitest";
+import { type TestAPI, expect } from "vitest";
 import { createNatsNotifyAdapter } from "../notify-adapter/notify-adapter.nats.js";
 
 export const extendWithNotifyNats = <
@@ -39,7 +39,7 @@ export const extendWithNotifyNats = <
       { scope: "test" },
     ],
     flakyNotifyAdapter: [
-      async ({ notifyAdapter, expect }, use) => {
+      async ({ notifyAdapter }, use) => {
         let totalCalls = 0;
         let errorCalls = 0;
         const shouldError = createFlakyBatchGenerator();

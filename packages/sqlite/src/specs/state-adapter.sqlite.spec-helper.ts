@@ -2,7 +2,7 @@ import Database from "better-sqlite3";
 import { type UUID } from "node:crypto";
 import { type StateAdapter } from "queuert";
 import { createFlakyBatchGenerator } from "queuert/testing";
-import { type TestAPI } from "vitest";
+import { type TestAPI, expect } from "vitest";
 import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
 import {
   type BetterSqlite3Provider,
@@ -86,7 +86,7 @@ export const extendWithStateSqlite = <T>(
       { scope: "test" },
     ],
     flakyStateProvider: [
-      async ({ stateProvider, expect }, use) => {
+      async ({ stateProvider }, use) => {
         let queryCount = 0;
         let errorCount = 0;
         const shouldError = createFlakyBatchGenerator();
@@ -142,7 +142,7 @@ export const extendWithStateSqlite = <T>(
       { scope: "test" },
     ],
     flakyDbStateProvider: [
-      async ({ stateProvider, expect }, use) => {
+      async ({ stateProvider }, use) => {
         let enabled = true;
         let queryCount = 0;
         let errorCount = 0;

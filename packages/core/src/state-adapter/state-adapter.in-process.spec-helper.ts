@@ -1,4 +1,4 @@
-import { type TestAPI } from "vitest";
+import { type TestAPI, expect } from "vitest";
 import { createFlakyBatchGenerator } from "../suites/flaky-test-helper.spec-helper.js";
 import {
   type InProcessContext,
@@ -37,7 +37,7 @@ export const extendWithStateInProcess = <T>(
       { scope: "test" },
     ],
     flakyStateAdapter: [
-      async ({ stateAdapter, expect }, use) => {
+      async ({ stateAdapter }, use) => {
         let queryCount = 0;
         let errorCount = 0;
         let enabled = true;

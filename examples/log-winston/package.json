@@ -9,11 +9,10 @@
   },
   "dependencies": {
     "queuert": "workspace:*",
-    "winston": "^3.19.0"
+    "winston": "3.19.0"
   },
   "devDependencies": {
     "@queuert/tsconfig": "workspace:*",
-    "@types/node": "^22.19.11",
-    "tsx": "^4.21.0"
+    "tsx": "4.21.0"
   }
 }

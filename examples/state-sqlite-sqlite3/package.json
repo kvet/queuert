@@ -17,9 +17,8 @@
   "devDependencies": {
     "@queuert/sqlite": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
-    "@types/node": "^22.19.11",
     "queuert": "workspace:*",
-    "sqlite3": "^5.1.7",
-    "tsx": "^4.21.0"
+    "sqlite3": "6.0.1",
+    "tsx": "4.21.0"
   }
 }

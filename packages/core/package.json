@@ -54,7 +54,7 @@
   },
   "devDependencies": {
     "@queuert/tsconfig": "workspace:*",
-    "@types/node": "^22.19.11"
+    "@types/node": "22.19.15"
   },
   "engines": {
     "node": ">=22"

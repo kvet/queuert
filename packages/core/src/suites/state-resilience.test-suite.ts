@@ -88,16 +88,14 @@ export const stateResilienceTestSuite = ({
 
     const jobChains = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
-        Promise.all(
-          Array.from({ length: 20 }, async (_, i) =>
-            client.startJobChain({
-              ...txCtx,
-              transactionHooks,
-              typeName: "test",
-              input: { value: i, atomic: i % 2 === 0 },
-            }),
-          ),
-        ),
+        client.startJobChains({
+          ...txCtx,
+          transactionHooks,
+          items: Array.from({ length: 20 }, (_, i) => ({
+            typeName: "test",
+            input: { value: i, atomic: i % 2 === 0 },
+          })),
+        }),
       ),
     );
 
@@ -182,16 +180,14 @@ export const stateResilienceTestSuite = ({
 
       const jobChains = await withTransactionHooks(async (transactionHooks) =>
         runInTransaction(async (txCtx) =>
-          Promise.all(
-            Array.from({ length: 20 }, async (_, i) =>
-              client.startJobChain({
-                ...txCtx,
-                transactionHooks,
-                typeName: "test",
-                input: { value: i, atomic: i % 2 === 0 },
-              }),
-            ),
-          ),
+          client.startJobChains({
+            ...txCtx,
+            transactionHooks,
+            items: Array.from({ length: 20 }, (_, i) => ({
+              typeName: "test",
+              input: { value: i, atomic: i % 2 === 0 },
+            })),
+          }),
         ),
       );
 
@@ -261,7 +257,7 @@ export const stateResilienceTestSuite = ({
             maxDelayMs: 1,
           },
         },
-      } as const;
+      };
       const flakyWorker1 = await createInProcessWorker({
         ...workerConfig,
         jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
@@ -295,16 +291,14 @@ export const stateResilienceTestSuite = ({
 
       const jobChains = await withTransactionHooks(async (transactionHooks) =>
         runInTransaction(async (txCtx) =>
-          Promise.all(
-            Array.from({ length: 20 }, async (_, i) =>
-              client.startJobChain({
-                ...txCtx,
-                transactionHooks,
-                typeName: "test",
-                input: { value: i, atomic: i % 2 === 0 },
-              }),
-            ),
-          ),
+          client.startJobChains({
+            ...txCtx,
+            transactionHooks,
+            items: Array.from({ length: 20 }, (_, i) => ({
+              typeName: "test",
+              input: { value: i, atomic: i % 2 === 0 },
+            })),
+          }),
         ),
       );
 
@@ -386,16 +380,14 @@ export const stateResilienceTestSuite = ({
 
     const jobChains = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) =>
-        Promise.all(
-          Array.from({ length: 20 }, async (_, i) =>
-            client.startJobChain({
-              ...txCtx,
-              transactionHooks,
-              typeName: "test",
-              input: { value: i, atomic: i % 2 === 0 },
-            }),
-          ),
-        ),
+        client.startJobChains({
+          ...txCtx,
+          transactionHooks,
+          items: Array.from({ length: 20 }, (_, i) => ({
+            typeName: "test",
+            input: { value: i, atomic: i % 2 === 0 },
+          })),
+        }),
       ),
     );
 
@@ -478,16 +470,14 @@ export const stateResilienceTestSuite = ({
 
       const jobChains = await withTransactionHooks(async (transactionHooks) =>
         runInTransaction(async (txCtx) =>
-          Promise.all(
-            Array.from({ length: 20 }, async (_, i) =>
-              client.startJobChain({
-                ...txCtx,
-                transactionHooks,
-                typeName: "test",
-                input: { value: i, atomic: i % 2 === 0 },
-              }),
-            ),
-          ),
+          client.startJobChains({
+            ...txCtx,
+            transactionHooks,
+            items: Array.from({ length: 20 }, (_, i) => ({
+              typeName: "test",
+              input: { value: i, atomic: i % 2 === 0 },
+            })),
+          }),
         ),
       );
 
@@ -555,7 +545,7 @@ export const stateResilienceTestSuite = ({
             maxDelayMs: 1,
           },
         },
-      } as const;
+      };
       const flakyWorker1 = await createInProcessWorker({
         ...workerConfig,
         jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
@@ -589,16 +579,14 @@ export const stateResilienceTestSuite = ({
 
       const jobChains = await withTransactionHooks(async (transactionHooks) =>
         runInTransaction(async (txCtx) =>
-          Promise.all(
-            Array.from({ length: 20 }, async (_, i) =>
-              client.startJobChain({
-                ...txCtx,
-                transactionHooks,
-                typeName: "test",
-                input: { value: i, atomic: i % 2 === 0 },
-              }),
-            ),
-          ),
+          client.startJobChains({
+            ...txCtx,
+            transactionHooks,
+            items: Array.from({ length: 20 }, (_, i) => ({
+              typeName: "test",
+              input: { value: i, atomic: i % 2 === 0 },
+            })),
+          }),
         ),
       );
 

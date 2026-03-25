@@ -10,11 +10,11 @@
   },
   "dependencies": {
     "queuert": "workspace:*",
-    "zod": "^4.3.6"
+    "zod": "4.3.6"
   },
   "devDependencies": {
     "@queuert/tsconfig": "workspace:*",
-    "@types/node": "^22.19.11",
-    "tsx": "^4.21.0"
+    "@types/node": "22.19.15",
+    "tsx": "4.21.0"
   }
 }

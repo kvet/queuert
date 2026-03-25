@@ -16,16 +16,15 @@
     "typecheck": "prisma generate && tsgo --noEmit"
   },
   "devDependencies": {
-    "@prisma/adapter-pg": "^7.4.0",
-    "@prisma/client": "^7.4.0",
+    "@prisma/adapter-pg": "7.5.0",
+    "@prisma/client": "7.5.0",
     "@queuert/postgres": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
-    "@testcontainers/postgresql": "^11.11.0",
-    "@types/node": "^22.19.11",
-    "pg": "^8.16.0",
-    "prisma": "^7.4.0",
+    "@testcontainers/postgresql": "11.13.0",
+    "pg": "8.20.0",
+    "prisma": "7.5.0",
     "queuert": "workspace:*",
-    "testcontainers": "^11.11.0",
-    "tsx": "^4.21.0"
+    "testcontainers": "11.13.0",
+    "tsx": "4.21.0"
   }
 }

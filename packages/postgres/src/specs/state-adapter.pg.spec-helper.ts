@@ -1,7 +1,7 @@
 import { Pool } from "pg";
 import { type StateAdapter } from "queuert";
 import { createFlakyBatchGenerator } from "queuert/testing";
-import { type TestAPI } from "vitest";
+import { type TestAPI, expect } from "vitest";
 import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.js";
 import {
   type PgPoolContext,
@@ -104,7 +104,7 @@ export const extendWithStatePostgres = <
       { scope: "test" },
     ],
     flakyStateProvider: [
-      async ({ stateProvider, expect }, use) => {
+      async ({ stateProvider }, use) => {
         let queryCount = 0;
         let errorCount = 0;
         const shouldError = createFlakyBatchGenerator();
@@ -161,7 +161,7 @@ export const extendWithStatePostgres = <
       { scope: "test" },
     ],
     flakyDbStateProvider: [
-      async ({ stateProvider, expect }, use) => {
+      async ({ stateProvider }, use) => {
         let enabled = true;
         let queryCount = 0;
         let errorCount = 0;

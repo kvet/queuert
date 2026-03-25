@@ -9,20 +9,19 @@
     "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
-    "@opentelemetry/api": "^1.9.0",
-    "@opentelemetry/exporter-metrics-otlp-http": "^0.212.0",
-    "@opentelemetry/exporter-trace-otlp-http": "^0.212.0",
-    "@opentelemetry/resources": "^2.5.1",
-    "@opentelemetry/sdk-metrics": "^2.5.1",
-    "@opentelemetry/sdk-trace-base": "^2.5.1",
-    "@opentelemetry/sdk-trace-node": "^2.5.1",
-    "@opentelemetry/semantic-conventions": "^1.39.0",
+    "@opentelemetry/api": "1.9.1",
+    "@opentelemetry/exporter-metrics-otlp-http": "0.214.0",
+    "@opentelemetry/exporter-trace-otlp-http": "0.214.0",
+    "@opentelemetry/resources": "2.6.1",
+    "@opentelemetry/sdk-metrics": "2.6.1",
+    "@opentelemetry/sdk-trace-base": "2.6.1",
+    "@opentelemetry/sdk-trace-node": "2.6.1",
+    "@opentelemetry/semantic-conventions": "1.40.0",
     "@queuert/otel": "workspace:*",
     "queuert": "workspace:*"
   },
   "devDependencies": {
     "@queuert/tsconfig": "workspace:*",
-    "@types/node": "^22.19.11",
-    "tsx": "^4.21.0"
+    "tsx": "4.21.0"
   }
 }

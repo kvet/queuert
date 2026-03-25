@@ -17,11 +17,10 @@
   "devDependencies": {
     "@queuert/redis": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
-    "@testcontainers/redis": "^11.11.0",
-    "@types/node": "^22.19.11",
-    "ioredis": "^5.9.3",
+    "@testcontainers/redis": "11.13.0",
+    "ioredis": "5.10.1",
     "queuert": "workspace:*",
-    "testcontainers": "^11.11.0",
-    "tsx": "^4.21.0"
+    "testcontainers": "11.13.0",
+    "tsx": "4.21.0"
   }
 }

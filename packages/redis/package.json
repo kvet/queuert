@@ -50,9 +50,8 @@
   "devDependencies": {
     "@queuert/testcontainers": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
-    "@types/node": "^22.19.11",
     "queuert": "workspace:*",
-    "redis": "^5.10.0"
+    "redis": "5.11.0"
   },
   "peerDependencies": {
     "queuert": "workspace:*"

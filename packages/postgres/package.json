@@ -54,9 +54,8 @@
     "@queuert/testcontainers": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
     "@queuert/typed-sql": "workspace:*",
-    "@types/node": "^22.19.11",
-    "@types/pg": "^8.16.0",
-    "pg": "^8.18.0",
+    "@types/pg": "8.20.0",
+    "pg": "8.20.0",
     "queuert": "workspace:*"
   },
   "peerDependencies": {

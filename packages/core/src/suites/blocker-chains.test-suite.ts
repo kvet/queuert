@@ -484,16 +484,14 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
       runInTransaction(async (txCtx) => {
-        const blockerChains = await Promise.all(
-          Array.from({ length: 5 }, async (_, i) =>
-            client.startJobChain({
-              ...txCtx,
-              transactionHooks,
-              typeName: "blocker",
-              input: { value: i + 1 },
-            }),
-          ),
-        );
+        const blockerChains = await client.startJobChains({
+          ...txCtx,
+          transactionHooks,
+          items: Array.from({ length: 5 }, (_, i) => ({
+            typeName: "blocker",
+            input: { value: i + 1 },
+          })),
+        });
         return client.startJobChain({
           ...txCtx,
           transactionHooks,

@@ -46,13 +46,13 @@
   },
   "devDependencies": {
     "@queuert/tsconfig": "workspace:*",
-    "@solidjs/router": "^0.15.4",
-    "@types/node": "^22.19.11",
+    "@solidjs/router": "0.15.4",
+    "@types/node": "22.19.15",
     "queuert": "workspace:*",
-    "seroval": "^1.5.1",
-    "solid-js": "^1.9.11",
-    "vite": "^7.3.1",
-    "vite-plugin-solid": "^2.11.10"
+    "seroval": "1.5.1",
+    "solid-js": "1.9.12",
+    "vite": "7.3.1",
+    "vite-plugin-solid": "2.11.11"
   },
   "peerDependencies": {
     "queuert": "workspace:*"

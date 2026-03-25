@@ -125,32 +125,16 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     const [prepareJobChain, completeJobChain, prepareAfterAutoSetupJobChain, continueWithJobChain] =
       await withTransactionHooks(async (transactionHooks) =>
         runInTransaction(async (txCtx) =>
-          Promise.all([
-            client.startJobChain({
-              ...txCtx,
-              transactionHooks,
-              typeName: "test-prepare-twice",
-              input: null,
-            }),
-            client.startJobChain({
-              ...txCtx,
-              transactionHooks,
-              typeName: "test-complete-twice",
-              input: null,
-            }),
-            client.startJobChain({
-              ...txCtx,
-              transactionHooks,
-              typeName: "test-prepare-after-auto-setup",
-              input: null,
-            }),
-            client.startJobChain({
-              ...txCtx,
-              transactionHooks,
-              typeName: "test-continueWith-twice",
-              input: null,
-            }),
-          ]),
+          client.startJobChains({
+            ...txCtx,
+            transactionHooks,
+            items: [
+              { typeName: "test-prepare-twice", input: null },
+              { typeName: "test-complete-twice", input: null },
+              { typeName: "test-prepare-after-auto-setup", input: null },
+              { typeName: "test-continueWith-twice", input: null },
+            ],
+          }),
         ),
       );
 

@@ -17,11 +17,10 @@
   "devDependencies": {
     "@queuert/sqlite": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
-    "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "^22.19.11",
-    "better-sqlite3": "^12.6.2",
-    "kysely": "^0.28.11",
+    "@types/better-sqlite3": "7.6.13",
+    "better-sqlite3": "12.8.0",
+    "kysely": "0.28.14",
     "queuert": "workspace:*",
-    "tsx": "^4.21.0"
+    "tsx": "4.21.0"
   }
 }

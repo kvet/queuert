@@ -11,6 +11,16 @@ export const createPgPoolNotifyProvider = ({ pool }: { pool: Pool }): PgPoolNoti
   let closed = false;
 
   const handlers = new Map<string, (message: string) => void>();
+  let queryQueue: Promise<void> = Promise.resolve();
+
+  const enqueueQuery = async (fn: () => Promise<unknown>): Promise<void> => {
+    const result = queryQueue.then(fn, fn);
+    queryQueue = result.then(
+      () => {},
+      () => {},
+    );
+    return result.then(() => {});
+  };
 
   const releaseListenClient = (): void => {
     if (listenClient) {
@@ -65,12 +75,12 @@ export const createPgPoolNotifyProvider = ({ pool }: { pool: Pool }): PgPoolNoti
     subscribe: async (channel, onMessage) => {
       const client = await ensureListenClient();
       handlers.set(channel, onMessage);
-      await client.query(`LISTEN "${channel}"`);
+      await enqueueQuery(async () => client.query(`LISTEN "${channel}"`));
 
       return async () => {
         handlers.delete(channel);
         try {
-          await client.query(`UNLISTEN "${channel}"`);
+          await enqueueQuery(async () => client.query(`UNLISTEN "${channel}"`));
         } finally {
           if (handlers.size === 0) {
             releaseListenClient();

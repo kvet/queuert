@@ -17,11 +17,10 @@
   "devDependencies": {
     "@queuert/postgres": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
-    "@testcontainers/postgresql": "^11.11.0",
-    "@types/node": "^22.19.11",
-    "postgres": "^3.4.8",
+    "@testcontainers/postgresql": "11.13.0",
+    "postgres": "3.4.8",
     "queuert": "workspace:*",
-    "testcontainers": "^11.11.0",
-    "tsx": "^4.21.0"
+    "testcontainers": "11.13.0",
+    "tsx": "4.21.0"
   }
 }

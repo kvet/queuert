@@ -1,7 +1,7 @@
 import { type NotifyAdapter } from "queuert";
 import { type TestSuiteContext, createFlakyBatchGenerator } from "queuert/testing";
 import { type RedisClientType, createClient } from "redis";
-import { type TestAPI } from "vitest";
+import { type TestAPI, expect } from "vitest";
 import { createRedisNotifyAdapter } from "../notify-adapter/notify-adapter.redis.js";
 import { createNodeRedisNotifyProvider } from "./notify-provider.node-redis.js";
 
@@ -37,7 +37,7 @@ export const extendWithNotifyRedis = <
       { scope: "test" },
     ],
     flakyNotifyAdapter: [
-      async ({ notifyAdapter, expect }, use) => {
+      async ({ notifyAdapter }, use) => {
         let totalCalls = 0;
         let errorCalls = 0;
         const shouldError = createFlakyBatchGenerator();

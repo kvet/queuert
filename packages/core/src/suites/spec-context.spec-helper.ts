@@ -1,6 +1,6 @@
 // oxlint-disable no-empty-pattern
 import inspector from "node:inspector";
-import { type MockedFunction, type TestAPI, vi } from "vitest";
+import { type MockedFunction, type TestAPI, expect, vi } from "vitest";
 import {
   type Log,
   type NotifyAdapter,
@@ -90,7 +90,7 @@ export const extendWithNotifyInProcess = <T extends {}>(
       { scope: "test" },
     ],
     flakyNotifyAdapter: [
-      async ({ notifyAdapter, expect }, use) => {
+      async ({ notifyAdapter }, use) => {
         if (!notifyAdapter) {
           throw new Error("notifyAdapter is required for flaky notify tests");
         }

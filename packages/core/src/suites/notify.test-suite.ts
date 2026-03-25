@@ -119,16 +119,14 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       async () => {
         const jobChains = await withTransactionHooks(async (transactionHooks) =>
           runInTransaction(async (txCtx) =>
-            Promise.all(
-              Array.from({ length: 5 }, async (_, i) =>
-                client.startJobChain({
-                  ...txCtx,
-                  transactionHooks,
-                  typeName: "test",
-                  input: { value: i },
-                }),
-              ),
-            ),
+            client.startJobChains({
+              ...txCtx,
+              transactionHooks,
+              items: Array.from({ length: 5 }, (_, i) => ({
+                typeName: "test",
+                input: { value: i },
+              })),
+            }),
           ),
         );
 
