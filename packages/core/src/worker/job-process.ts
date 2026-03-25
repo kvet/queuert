@@ -263,7 +263,6 @@ export const runJobProcess = async ({
     await refetchJobForUpdateImpl(helpers, {
       txCtx,
       job,
-      allowEmptyWorker: prepareTransactionContext.status === "pending",
       workerId,
     }).catch((error: unknown) => {
       if (!abortController.signal.aborted) {

@@ -1,14 +1,8 @@
 # Short term
 
-- [REF] Plugins
-  - Attempt middleware plugin
-    - Hook into prepare
-    - Hook into complete
-  - Client amend
-  - Job definition amend
-  - Job processors amend
-- [TASK,COMPLEX] Job cleanup utility
-- [?,TASK] Review `allowEmptyWorker` flag in job-process.ts staged mode — currently set when `prepareTransactionContext.status === "pending"`, may be removable
+- [EPIC] Modules
+  - [TASK,COMPLEX] Job cleanup
+  - [TASK,COMPLEX] Postgres partitioning
 - [EPIC] Multi-driver support (postgres.js, sqlite3) — branch `feat/multi-driver-support`. Experimental; needs review before merge (type safety regression in executeTypedSql, missing resilience test coverage for postgres.js, JSON serialization verification)
 - [EPIC] multi-driver support for notify adapter
 - [EPIC] test against bun and its built-in sqlite, postgres clients

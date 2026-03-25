@@ -12,12 +12,10 @@ export const refetchJobForUpdate = async (
     txCtx,
     job,
     workerId,
-    allowEmptyWorker,
   }: {
     txCtx: BaseTxContext;
     job: StateJob;
     workerId: string;
-    allowEmptyWorker: boolean;
   },
 ): Promise<StateJob> => {
   const fetchedJob = await helpers.stateAdapter.getJobForUpdate({
@@ -38,10 +36,7 @@ export const refetchJobForUpdate = async (
     });
   }
 
-  if (
-    fetchedJob.leasedBy !== workerId &&
-    !(allowEmptyWorker ? fetchedJob.leasedBy === null : false)
-  ) {
+  if (fetchedJob.leasedBy !== workerId) {
     helpers.observabilityHelper.jobAttemptTakenByAnotherWorker(fetchedJob, { workerId });
     throw new JobTakenByAnotherWorkerError(`Job taken by another worker`, {
       jobId: fetchedJob.id,
