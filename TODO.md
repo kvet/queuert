@@ -8,16 +8,19 @@
   - Job definition amend
   - Job processors amend
 - [TASK,COMPLEX] Job cleanup utility
-- [TASK,COMPLEX] Better dashboard UI
 - [?,TASK] Review `allowEmptyWorker` flag in job-process.ts staged mode — currently set when `prepareTransactionContext.status === "pending"`, may be removable
-- [REVIEW] Review `addJobBlocker` design — see `design/add-job-blocker.md`
-- [EPIC] Docs website enhancements
-  - [TASK] Add interactive examples / live demos
-  - [TASK] Custom branding and styling
-- [REF] Add input and output filtering
+- [EPIC] Multi-driver support (postgres.js, sqlite3) — branch `feat/multi-driver-support`. Experimental; needs review before merge (type safety regression in executeTypedSql, missing resilience test coverage for postgres.js, JSON serialization verification)
+- [EPIC] multi-driver support for notify adapter
+- [EPIC] test against bun and its built-in sqlite, postgres clients
 
 # Medium term
 
+- [REVIEW] Review `addJobBlocker` design — see `design/add-job-blocker.md`
+- [TASK,COMPLEX] Better dashboard UI
+- [REF] Add input and output filtering
+- [EPIC] Docs website enhancements
+  - [TASK] Add interactive examples / live demos
+  - [TASK] Custom branding and styling
 - [REF] Reset jobs in chains + dashboard
 - [EPIC,COMPLEX] Processing throughput (~10x) — currently 4 DB round-trips per job (acquire, getBlockers, renewLease, complete)
   - [REF] Batch job acquisition — acquire N jobs per query instead of 1, amortize loop + transaction overhead
@@ -36,7 +39,6 @@
   - [TASK,EASY] get rid of skipConcurrencyTests flag in resilience tests (separate test suite?)
   - [REF] `deleteJobChains` race condition under WAL mode — check-then-delete without row locking; document single-writer assumption or use `BEGIN IMMEDIATE` transactions
 - [EPIC] MySQL/MariaDB adapter
-- [?,TASK] test against bun and its built-in sqlite, postgres clients
 - [?,TASK,MEDIUM] update lease in one operation (currently two: getForUpdate + update)
 - [?,REF] Skip unnecessary state adapter calls per processing mode (atomic: no renewJobLease; staged: no getJobForUpdate before complete). Processor-level change, no adapter interface changes needed. See: `process-modes.test-suite.ts` TODOs
 
