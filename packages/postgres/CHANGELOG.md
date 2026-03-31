@@ -1,5 +1,18 @@
 # @queuert/postgres
 
+## 0.9.5
+
+### Patch Changes
+
+- - Add `excludeJobChainIds` option to deduplication, allowing callers to skip specific chains during deduplication matching
+  - Improve Client type covariance: `Client<A | B>` is now assignable to `Client<A>`
+  - Add compile-time validation that `createJobTypeProcessorRegistry` receives a client with all required job types
+  - Export `BaseTxContext`, `HookDef`, and `TransactionHooksSavepoint` from the public API
+  - Add cascade delete option for job chains in the dashboard UI and API
+  - BREAKING: `createDashboard` is now async and must be awaited
+- Updated dependencies
+  - queuert@0.9.5
+
 ## 0.9.4
 
 ### Patch Changes
