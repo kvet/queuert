@@ -1,6 +1,5 @@
 # Short term
 
-- [TASK] tsdown unbundled mode
 - [TASK] Support triggering multiple jobs
 - [?,TASK] Simplify `mergeJobTypeProcessorRegistries` and `mergeJobTypeRegistries` to not use slices as a named parameter
 - [?,TASK] For update locking in list methods (e.g. `listJobChainsForCleanup`), add option to skip locking when the method is used in a context where concurrent modifications are not a concern (e.g. cleanup job listing its own completed chains for deletion)

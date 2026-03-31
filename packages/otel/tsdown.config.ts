@@ -10,14 +10,15 @@ export default defineConfig({
   exports: {
     devExports: true,
   },
-  // TODO: rework later
-  external: [
-    "@opentelemetry/api",
-    "@opentelemetry/sdk-metrics",
-    "@opentelemetry/sdk-trace-base",
-    "@opentelemetry/core",
-    "@opentelemetry/semantic-conventions",
-    "@opentelemetry/resources",
-    "vitest",
-  ],
+  deps: {
+    neverBundle: [
+      "@opentelemetry/api",
+      "@opentelemetry/sdk-metrics",
+      "@opentelemetry/sdk-trace-base",
+      "@opentelemetry/core",
+      "@opentelemetry/semantic-conventions",
+      "@opentelemetry/resources",
+      "vitest",
+    ],
+  },
 });

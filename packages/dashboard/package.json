@@ -60,6 +60,9 @@
   "engines": {
     "node": ">=22"
   },
+  "inlinedDependencies": {
+    "seroval": "1.5.1"
+  },
   "x-examples": "https://github.com/kvet/queuert/tree/main/examples",
   "x-llms-txt": "https://kvet.github.io/queuert/llms-full.txt"
 }

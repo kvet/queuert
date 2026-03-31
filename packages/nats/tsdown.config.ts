@@ -10,5 +10,7 @@ export default defineConfig({
   exports: {
     devExports: true,
   },
-  external: ["vitest", "nats", "@queuert/testcontainers"],
+  deps: {
+    neverBundle: ["vitest", "nats", "@queuert/testcontainers"],
+  },
 });

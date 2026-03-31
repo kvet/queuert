@@ -10,6 +10,7 @@ export default defineConfig({
   exports: {
     devExports: true,
   },
-  // TODO: rework later
-  external: ["vitest", "pg", "@queuert/testcontainers"],
+  deps: {
+    neverBundle: ["vitest", "pg", "@queuert/testcontainers"],
+  },
 });
