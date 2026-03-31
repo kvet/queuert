@@ -75,13 +75,8 @@ const pgContainer = await new PostgreSqlContainer("postgres:18").withExposedPort
 const sql = postgres(pgContainer.getConnectionUri(), { max: 10 });
 
 const stateProvider: PgStateProvider<DbContext> = {
-  runInTransaction: async (cb) => {
-    let result: any;
-    await sql.begin(async (txSql) => {
-      result = await cb({ sql: txSql as TransactionSql });
-    });
-    return result;
-  },
+  runInTransaction: async (cb) =>
+    sql.begin(async (txSql) => cb({ sql: txSql as TransactionSql }) as any),
   executeSql: async ({ txCtx, sql: query, params }) => {
     const client = txCtx?.sql ?? sql;
     return client.unsafe(

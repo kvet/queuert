@@ -19,13 +19,8 @@ const sql = postgres(pgContainer.getConnectionUri(), { max: 20 });
 
 type DbContext = { sql: typeof sql };
 const stateProvider: PgStateProvider<DbContext> = {
-  runInTransaction: async (cb) => {
-    let result: unknown;
-    await sql.begin(async (txSql) => {
-      result = await cb({ sql: txSql as unknown as typeof sql });
-    });
-    return result as never;
-  },
+  runInTransaction: async (cb) =>
+    sql.begin(async (txSql) => cb({ sql: txSql as unknown as typeof sql }) as any),
   executeSql: async ({ txCtx, sql: query, params }) => {
     const sqlClient = txCtx?.sql ?? sql;
     const normalizedParams = params ? params.map((p) => (p === undefined ? null : p)) : [];
