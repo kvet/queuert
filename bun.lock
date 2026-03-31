@@ -278,6 +278,20 @@
         "tsx": "4.21.0",
       },
     },
+    "examples/showcase-cleanup": {
+      "name": "example-showcase-cleanup",
+      "version": "0.0.1",
+      "dependencies": {
+        "@queuert/postgres": "workspace:*",
+        "postgres": "3.4.8",
+        "queuert": "workspace:*",
+      },
+      "devDependencies": {
+        "@queuert/tsconfig": "workspace:*",
+        "@testcontainers/postgresql": "11.13.0",
+        "tsx": "4.21.0",
+      },
+    },
     "examples/showcase-error-handling": {
       "name": "example-showcase-error-handling",
       "version": "0.0.1",
@@ -1815,6 +1829,8 @@
     "example-showcase-chain-deletion": ["example-showcase-chain-deletion@workspace:examples/showcase-chain-deletion"],
 
     "example-showcase-chain-patterns": ["example-showcase-chain-patterns@workspace:examples/showcase-chain-patterns"],
+
+    "example-showcase-cleanup": ["example-showcase-cleanup@workspace:examples/showcase-cleanup"],
 
     "example-showcase-error-handling": ["example-showcase-error-handling@workspace:examples/showcase-error-handling"],
 

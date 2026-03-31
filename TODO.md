@@ -1,8 +1,11 @@
 # Short term
 
-- [EPIC] Modules
-  - [TASK,COMPLEX] Job cleanup
-  - [TASK,COMPLEX] Postgres partitioning
+- [TASK] tsdown unbundled mode
+- [TASK] Enforce json-serializable inputs and outputs (like no Date in job definitions)
+- [TASK] Support triggering multiple jobs
+- [TASK] Name internal types properly. No underscore
+- [TASK] Simplify `mergeJobTypeProcessorRegistries` and `mergeJobTypeRegistries` to not use slices as a named parameter
+- [?,TASK] For update locking in list methods (e.g. `listJobChainsForCleanup`), add option to skip locking when the method is used in a context where concurrent modifications are not a concern (e.g. cleanup job listing its own completed chains for deletion)
 - [EPIC] Multi-driver support (postgres.js, sqlite3) — branch `feat/multi-driver-support`. Experimental; needs review before merge (type safety regression in executeTypedSql, missing resilience test coverage for postgres.js, JSON serialization verification)
 - [EPIC] multi-driver support for notify adapter
 - [EPIC] test against bun and its built-in sqlite, postgres clients

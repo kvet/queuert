@@ -35,6 +35,7 @@ type MergedDefs<
  * });
  */
 export const createJobTypeProcessorRegistry = <
+  TClientJobTypeDefinitions extends BaseJobTypeDefinitions,
   TStateAdapter extends StateAdapter<any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TExternalJobTypeDefinitions extends BaseJobTypeDefinitions,
@@ -44,7 +45,9 @@ export const createJobTypeProcessorRegistry = <
     TExternalJobTypeDefinitions
   >,
 >(options: {
-  client: Client<any, TStateAdapter>;
+  client: [TJobTypeDefinitions] extends [TClientJobTypeDefinitions]
+    ? Client<TClientJobTypeDefinitions, TStateAdapter>
+    : `Error: client is missing required job types: ${Exclude<keyof TJobTypeDefinitions & string, keyof TClientJobTypeDefinitions & string>}`;
   jobTypeRegistry: JobTypeRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions, false>;
   processors: {
     [K in TProcessors]: InProcessWorkerProcessor<TStateAdapter, TMergedJobTypeDefinitions, K>;

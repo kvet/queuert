@@ -25,14 +25,19 @@ type NotificationDefs = {
   "notifications.send": { entry: true; input: { to: string }; output: { sent: boolean } };
 };
 
+type BillingDefs = {
+  "billing.charge": { entry: true; input: { amount: number }; output: { charged: boolean } };
+};
+
 const orderJobTypeRegistry = defineJobTypeRegistry<OrderDefs>();
 const notificationJobTypeRegistry = defineJobTypeRegistry<NotificationDefs>();
+const billingJobTypeRegistry = defineJobTypeRegistry<BillingDefs>();
 
 const stateAdapter = createInProcessStateAdapter();
 const client = await createClient({
   stateAdapter,
   jobTypeRegistry: mergeJobTypeRegistries({
-    slices: [orderJobTypeRegistry, notificationJobTypeRegistry],
+    slices: [orderJobTypeRegistry, notificationJobTypeRegistry, billingJobTypeRegistry],
   }),
 });
 
@@ -60,6 +65,36 @@ const notificationJobTypeProcessorRegistry = createJobTypeProcessorRegistry({
 });
 
 describe("createJobTypeProcessorRegistry", () => {
+  it("accepts merged client for a slice registry", () => {
+    createJobTypeProcessorRegistry({
+      client,
+      jobTypeRegistry: orderJobTypeRegistry,
+      processors: {
+        "orders.create": {
+          attemptHandler: async ({ complete }) => complete(async () => ({ orderId: "1" })),
+        },
+      },
+    });
+  });
+
+  it("rejects client missing required job types", async () => {
+    const orderOnlyClient = await createClient({
+      stateAdapter,
+      jobTypeRegistry: orderJobTypeRegistry,
+    });
+
+    createJobTypeProcessorRegistry({
+      // @ts-expect-error — client does not include BillingDefs
+      client: orderOnlyClient,
+      jobTypeRegistry: billingJobTypeRegistry,
+      processors: {
+        "billing.charge": {
+          attemptHandler: async ({ complete }) => complete(async () => ({ charged: true })),
+        },
+      },
+    });
+  });
+
   it("rejects unknown keys at compile time", () => {
     createJobTypeProcessorRegistry({
       client,
@@ -193,10 +228,6 @@ describe("mergeJobTypeProcessorRegistries", () => {
   });
 
   it("merges three processor slices", () => {
-    const billingJobTypeRegistry = defineJobTypeRegistry<{
-      "billing.charge": { entry: true; input: { amount: number }; output: { charged: boolean } };
-    }>();
-
     const billingJobTypeProcessorRegistry = createJobTypeProcessorRegistry({
       client,
       jobTypeRegistry: billingJobTypeRegistry,
@@ -442,10 +473,6 @@ describe("cross-slice blocker type resolution", () => {
 
 describe("2-level merge (merge of merges)", () => {
   it("preserves processor registries through nested merges", async () => {
-    const billingJobTypeRegistry = defineJobTypeRegistry<{
-      "billing.charge": { entry: true; input: { amount: number }; output: { charged: boolean } };
-    }>();
-
     const billingJobTypeProcessorRegistry = createJobTypeProcessorRegistry({
       client,
       jobTypeRegistry: billingJobTypeRegistry,

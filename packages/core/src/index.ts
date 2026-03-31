@@ -1,5 +1,6 @@
 export { createClient, type Client } from "./client.js";
 export { type DeduplicationOptions } from "./entities/deduplication.js";
+export { defineJobTypeRegistry } from "./entities/define-job-type-registry.js";
 export {
   type CompletedJobChain,
   type JobChain,
@@ -12,16 +13,6 @@ export {
   type JobTypeRegistryConfig,
   type JobTypeRegistryDefinitions,
 } from "./entities/job-type-registry.js";
-export { defineJobTypeRegistry } from "./entities/define-job-type-registry.js";
-export {
-  type BaseJobTypeDefinition,
-  type BaseJobTypeDefinitions,
-  type DefineJobTypes,
-  type JobTypeReference,
-  type NominalJobTypeReference,
-  type ResolvedJobTypeReference,
-  type StructuralJobTypeReference,
-} from "./entities/job-type.js";
 export {
   type BlockerChains,
   type JobTypeEntryNames,
@@ -31,6 +22,15 @@ export {
   type ResolvedJob,
   type ResolvedJobChain,
 } from "./entities/job-type-registry.resolvers.js";
+export {
+  type BaseJobTypeDefinition,
+  type BaseJobTypeDefinitions,
+  type DefineJobTypes,
+  type JobTypeReference,
+  type NominalJobTypeReference,
+  type ResolvedJobTypeReference,
+  type StructuralJobTypeReference,
+} from "./entities/job-type.js";
 export {
   type JobTypeDefinitionErrors,
   type ValidatedJobTypeDefinitions,
@@ -75,6 +75,7 @@ export {
   type TransactionHooks,
   type TransactionHooksHandle,
 } from "./transaction-hooks.js";
+export { createJobTypeProcessorRegistry } from "./worker/create-job-type-processor-registry.js";
 export {
   type AttemptComplete,
   type AttemptCompleteCallback,
@@ -86,11 +87,10 @@ export {
   type JobAbortReason,
   type JobAttemptMiddleware,
 } from "./worker/job-process.js";
-export { createJobTypeProcessorRegistry } from "./worker/create-job-type-processor-registry.js";
 export {
+  type ExternalJobTypeProcessorRegistryDefinitions,
   type InProcessWorkerProcessor,
   type JobTypeProcessorRegistry,
-  type ExternalJobTypeProcessorRegistryDefinitions,
   type JobTypeProcessorRegistryDefinitions,
 } from "./worker/job-type-processor-registry.js";
 export { type LeaseConfig } from "./worker/lease.js";
