@@ -10,6 +10,7 @@
  * 3. Cross-slice blockers — external references let one slice declare blockers from another
  */
 
+import assert from "node:assert/strict";
 import {
   createInProcessWorker,
   mergeJobTypeProcessorRegistries,
@@ -54,6 +55,8 @@ const orderChain = await withTransactionHooks(async (transactionHooks) =>
 
 const orderResult = await client.awaitJobChain(orderChain, { timeoutMs: 10000 });
 console.log(`Order completed: #${orderResult.output.orderId} at ${orderResult.output.fulfilledAt}`);
+assert.ok(orderResult.output.orderId > 0);
+assert.ok(orderResult.output.fulfilledAt);
 
 // ---------------------------------------------------------------------------
 // Pattern 2: Fire-and-forget
@@ -87,6 +90,7 @@ console.log(
   `Order completed: #${orderResult2.output.orderId} at ${orderResult2.output.fulfilledAt}`,
 );
 console.log("(A notification was fired in the background by the create-order processor)");
+assert.ok(orderResult2.output.orderId > 0);
 
 // ---------------------------------------------------------------------------
 // Pattern 3: Cross-slice blockers with external references
@@ -123,6 +127,8 @@ const placeOrderResult = await client.awaitJobChain(placeOrderChain, { timeoutMs
 console.log(
   `Order confirmed: #${placeOrderResult.output.orderId} at ${placeOrderResult.output.confirmedAt}`,
 );
+assert.ok(placeOrderResult.output.orderId > 0);
+assert.ok(placeOrderResult.output.confirmedAt);
 
 await stopWorker();
 await stopContainer();

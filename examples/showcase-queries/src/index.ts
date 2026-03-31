@@ -10,6 +10,7 @@
  * 4. Blocker Queries: Inspect blocker relationships from both directions
  */
 
+import assert from "node:assert/strict";
 import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import postgres, {
@@ -218,6 +219,7 @@ if (job) {
 
 const missing = await client.getJobChain({ id: "00000000-0000-0000-0000-000000000000" as any });
 console.log("Missing chain:", missing);
+assert.equal(missing, undefined);
 
 // Scenario 2: Paginated lists with filters
 console.log("\n--- Scenario 2: Paginated Lists ---\n");
@@ -227,6 +229,7 @@ const completedChains = await client.listJobChains({
   limit: 3,
 });
 console.log(`Completed chains (page 1, limit 3): ${completedChains.items.length} items`);
+assert.ok(completedChains.items.length <= 3);
 for (const c of completedChains.items) {
   console.log(`  "${c.typeName}" — ${c.status}`);
 }
@@ -250,6 +253,7 @@ console.log(`\nNotification jobs: ${notifyJobs.items.length}`);
 for (const j of notifyJobs.items) {
   console.log(`  ${j.typeName} for ${j.input.userId} — ${j.status}`);
 }
+assert.equal(notifyJobs.items.length, 2);
 
 // Scenario 3: List jobs within a chain
 console.log("\n--- Scenario 3: Chain Jobs ---\n");
@@ -277,6 +281,7 @@ for (const b of blockers) {
     console.log(`    Output: ${JSON.stringify(b.output)}`);
   }
 }
+assert.equal(blockers.length, 2);
 
 const blockedByValidate = await client.listBlockedJobs({
   jobChainId: validateChain.id,

@@ -10,6 +10,7 @@
  * 4. Cascade Deletion: Automatically resolve and delete transitive dependencies
  */
 
+import assert from "node:assert/strict";
 import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import postgres, {
@@ -176,6 +177,8 @@ const deleted = await withTransactionHooks(async (transactionHooks) =>
 
 console.log(`Deleted ${deleted.length} chain(s)`);
 console.log(`  Chain "${deleted[0].typeName}" (status: ${deleted[0].status})`);
+assert.equal(deleted.length, 1);
+assert.equal(deleted[0].typeName, "standalone-task");
 
 // Scenario 2: Blocker safety — deletion rejected
 console.log("\n--- Scenario 2: Blocker Safety ---");
@@ -221,6 +224,8 @@ try {
     console.log(`Deletion rejected: ${err.message}`);
     console.log(`  ${err.references.length} external reference(s) found`);
   }
+  assert.ok(err instanceof BlockerReferenceError);
+  assert.ok(err.references.length > 0);
 }
 
 // Scenario 3: Co-deletion — delete chain with its blockers
@@ -242,6 +247,7 @@ console.log(`Deleted ${coDeleted.length} chain(s):`);
 for (const chain of coDeleted) {
   console.log(`  "${chain.typeName}" (${chain.id})`);
 }
+assert.equal(coDeleted.length, 3);
 
 // Scenario 4: Cascade deletion
 console.log("\n--- Scenario 4: Cascade Deletion ---");
@@ -288,6 +294,7 @@ console.log(`Cascade deleted ${cascadeDeleted.length} chain(s):`);
 for (const chain of cascadeDeleted) {
   console.log(`  "${chain.typeName}" (${chain.id})`);
 }
+assert.equal(cascadeDeleted.length, 4);
 
 await stopWorker();
 await sql.end();

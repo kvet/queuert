@@ -8,6 +8,7 @@
  * 2. Fixed Slots: Job requires exactly two specific prerequisite jobs
  */
 
+import assert from "node:assert/strict";
 import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import postgres, {
@@ -200,6 +201,8 @@ const aggregateChain = await withTransactionHooks(async (transactionHooks) =>
 
 const result1 = await client.awaitJobChain(aggregateChain, { timeoutMs: 10000 });
 console.log(`\nResult: ${result1.output.totalSources} sources → "${result1.output.combinedData}"`);
+assert.equal(result1.output.totalSources, 3);
+assert.equal(result1.output.reportId, "report-001");
 
 // Scenario 2: Fixed blocker slots
 console.log("\n--- Scenario 2: Fixed Blocker Slots ---");
@@ -228,6 +231,9 @@ const actionChain = await withTransactionHooks(async (transactionHooks) =>
 
 const result2 = await client.awaitJobChain(actionChain, { timeoutMs: 10000 });
 console.log(`\nResult: "${result2.output.result}"`);
+assert.equal(result2.output.actionId, "action-001");
+assert.ok(result2.output.result.includes("admin"));
+assert.ok(result2.output.result.includes("production"));
 
 await stopWorker();
 await sql.end();

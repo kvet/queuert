@@ -8,6 +8,7 @@
  * 2. Hard Timeout: Using leaseConfig for automatic job reclamation
  */
 
+import assert from "node:assert/strict";
 import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import postgres, {
@@ -162,6 +163,7 @@ const fetch1 = await withTransactionHooks(async (transactionHooks) =>
 );
 const result1 = await client.awaitJobChain(fetch1, { timeoutMs: 5000 });
 console.log(`Result: ${JSON.stringify(result1.output)}`);
+assert.ok("data" in result1.output);
 
 // Scenario 1b: Cooperative timeout - times out
 console.log("\n--- Scenario 1b: Cooperative Timeout (Timeout) ---");
@@ -180,6 +182,7 @@ const fetch2 = await withTransactionHooks(async (transactionHooks) =>
 );
 const result2 = await client.awaitJobChain(fetch2, { timeoutMs: 5000 });
 console.log(`Result: ${JSON.stringify(result2.output)}`);
+assert.ok("timedOut" in result2.output);
 
 // Scenario 2: Hard timeout via lease (completes in time)
 console.log("\n--- Scenario 2: Hard Timeout via Lease ---");
@@ -198,6 +201,8 @@ const longJob = await withTransactionHooks(async (transactionHooks) =>
 );
 const result3 = await client.awaitJobChain(longJob, { timeoutMs: 5000 });
 console.log(`Result: ${JSON.stringify(result3.output)}`);
+assert.ok("completed" in result3.output);
+assert.equal(result3.output.attempt, 1);
 
 await stopWorker();
 await sql.end();

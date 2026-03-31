@@ -9,6 +9,7 @@
  * 3. Auto-Setup Staged: Async work before complete() without explicit prepare()
  */
 
+import assert from "node:assert/strict";
 import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import postgres, {
@@ -236,6 +237,9 @@ console.log(`Order status: ${finalOrder.status}`);
 console.log(`Product stock: ${finalProduct.stock} (was 5, ordered 2)`);
 console.log(`Payment ID: ${finalOrder.payment_id}`);
 console.log(`Confirmed at: ${result.output.confirmedAt}`);
+assert.equal(finalOrder.status, "confirmed");
+assert.equal(finalProduct.stock, 3);
+assert.ok(finalOrder.payment_id.startsWith("pay_"));
 
 await stopWorker();
 await sql.end();

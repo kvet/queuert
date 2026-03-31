@@ -9,6 +9,7 @@
  * 3. Explicit Rescheduling: Rate-limited API calls with rescheduleJob
  */
 
+import assert from "node:assert/strict";
 import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import postgres, {
@@ -224,6 +225,7 @@ const result1 = await client.awaitJobChain(payment1, { timeoutMs: 5000 });
 console.log(
   `Result: ${result1.output.success ? `SUCCESS (${result1.output.transactionId})` : `FAILED (${result1.output.error})`}`,
 );
+assert.equal(result1.output.success, true);
 
 const payment2 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (_sql) => {
@@ -240,6 +242,7 @@ const result2 = await client.awaitJobChain(payment2, { timeoutMs: 5000 });
 console.log(
   `Result: ${result2.output.success ? `SUCCESS (${result2.output.transactionId})` : `FAILED (${result2.output.error})`}`,
 );
+assert.equal(result2.output.success, false);
 
 // Scenario 2: Compensation pattern - success path
 console.log("\n--- Scenario 2a: Compensation Pattern (Success) ---");
@@ -259,6 +262,7 @@ const order1 = await withTransactionHooks(async (transactionHooks) =>
 );
 const orderResult1 = await client.awaitJobChain(order1, { timeoutMs: 5000 });
 console.log(`Final output: ${JSON.stringify(orderResult1.output)}`);
+assert.ok("shipped" in orderResult1.output);
 
 // Scenario 2: Compensation pattern - failure path
 console.log("\n--- Scenario 2b: Compensation Pattern (Failure -> Refund) ---");
@@ -278,6 +282,7 @@ const order2 = await withTransactionHooks(async (transactionHooks) =>
 );
 const orderResult2 = await client.awaitJobChain(order2, { timeoutMs: 5000 });
 console.log(`Final output: ${JSON.stringify(orderResult2.output)}`);
+assert.ok("refunded" in orderResult2.output);
 
 // Scenario 3: Explicit rescheduling
 console.log("\n--- Scenario 3: Explicit Rescheduling ---");
@@ -297,6 +302,7 @@ const apiCall = await withTransactionHooks(async (transactionHooks) =>
 );
 const apiResult = await client.awaitJobChain(apiCall, { timeoutMs: 5000 });
 console.log(`Final output: ${JSON.stringify(apiResult.output)}`);
+assert.ok("data" in apiResult.output);
 
 await stopWorker();
 await sql.end();

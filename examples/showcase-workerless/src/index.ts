@@ -8,6 +8,7 @@
  * 2. Deferred Start with Early Completion: Scheduled timeout with early action option
  */
 
+import assert from "node:assert/strict";
 import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import postgres, {
@@ -178,6 +179,7 @@ await withTransactionHooks(async (transactionHooks) =>
 
 const result1 = await client.awaitJobChain(approval1, { timeoutMs: 10000 });
 console.log(`Result: ${JSON.stringify(result1.output)}`);
+assert.ok("processed" in result1.output);
 
 // Scenario 1b: Approval workflow - rejected externally
 console.log("\n--- Scenario 1b: Approval Workflow (Rejected) ---");
@@ -216,6 +218,8 @@ await withTransactionHooks(async (transactionHooks) =>
 
 const result2 = await client.awaitJobChain(approval2, { timeoutMs: 10000 });
 console.log(`Result: ${JSON.stringify(result2.output)}`);
+assert.ok("rejected" in result2.output);
+assert.equal(result2.output.reason, "manager_denied");
 
 // Scenario 2: Deferred start with early completion
 console.log("\n--- Scenario 2: Deferred Start with Early Completion ---");
@@ -254,6 +258,8 @@ await withTransactionHooks(async (transactionHooks) =>
 
 const result3 = await client.awaitJobChain(action, { timeoutMs: 10000 });
 console.log(`Result: ${JSON.stringify(result3.output)}`);
+assert.ok("completed" in result3.output);
+assert.ok(result3.output.result.includes("confirm"));
 
 await stopWorker();
 await sql.end();

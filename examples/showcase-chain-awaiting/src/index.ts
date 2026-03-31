@@ -10,6 +10,7 @@
  * 4. Abort Signal: Cancel awaiting with an AbortSignal
  */
 
+import assert from "node:assert/strict";
 import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import postgres, {
@@ -158,6 +159,8 @@ const priceChain = await withTransactionHooks(async (transactionHooks) =>
 const result = await client.awaitJobChain(priceChain, { timeoutMs: 10000 });
 console.log(`\nResult: ${result.output.productId} → $${result.output.finalPrice}`);
 console.log(`Completed at: ${result.completedAt.toISOString()}`);
+assert.equal(result.output.productId, "widget");
+assert.equal(result.output.finalPrice, 26.99);
 
 // Scenario 2: Parallel awaiting
 console.log("\n--- Scenario 2: Parallel Awaiting ---");
@@ -186,6 +189,8 @@ console.log("\nAll prices:");
 for (const r of results) {
   console.log(`  ${r.output.productId}: $${r.output.finalPrice}`);
 }
+assert.equal(results.length, 3);
+assert.deepEqual(results.map((r) => r.output.productId).sort(), ["gadget", "gizmo", "widget"]);
 
 // Scenario 3: Timeout handling
 console.log("\n--- Scenario 3: Timeout Handling ---");
@@ -209,6 +214,7 @@ try {
   if (err instanceof WaitChainTimeoutError) {
     console.log(`Timeout: ${err.message}`);
   }
+  assert.ok(err instanceof WaitChainTimeoutError);
 }
 
 // Scenario 4: Abort signal
@@ -241,6 +247,7 @@ try {
   if (err instanceof WaitChainTimeoutError) {
     console.log(`Aborted: ${err.message}`);
   }
+  assert.ok(err instanceof WaitChainTimeoutError);
 }
 
 await stopWorker();

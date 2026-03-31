@@ -10,6 +10,7 @@
  * 4. Go-To: Jobs can jump to earlier or different types
  */
 
+import assert from "node:assert/strict";
 import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import postgres, {
@@ -357,6 +358,10 @@ console.log(`Total charged: $${Number(sub1.total_charged).toFixed(2)}`);
 console.log(
   `Cancelled at: ${"cancelledAt" in result1.output ? result1.output.cancelledAt : "N/A"}`,
 );
+assert.equal(sub1.status, "cancelled");
+assert.equal(sub1.current_cycle, MAX_BILLING_CYCLES);
+assert.equal(Number(sub1.total_charged), PRICE_PER_CYCLE * MAX_BILLING_CYCLES);
+assert.ok("cancelledAt" in result1.output);
 
 // Scenario 2: User lets trial expire
 console.log("\n--- Scenario 2: User Lets Trial Expire ---");
@@ -393,6 +398,10 @@ console.log(`Final status: ${sub2.status}`);
 console.log(`Billing cycles completed: ${sub2.current_cycle}`);
 console.log(`Total charged: $${Number(sub2.total_charged).toFixed(2)}`);
 console.log(`Expired at: ${"expiredAt" in result2.output ? result2.output.expiredAt : "N/A"}`);
+assert.equal(sub2.status, "expired");
+assert.equal(sub2.current_cycle, 0);
+assert.equal(Number(sub2.total_charged), 0);
+assert.ok("expiredAt" in result2.output);
 
 await stopWorker();
 await sql.end();

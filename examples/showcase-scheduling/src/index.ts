@@ -9,6 +9,7 @@
  * 3. Time-Windowed: Rate-limit job creation with windowMs
  */
 
+import assert from "node:assert/strict";
 import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import postgres, {
@@ -281,6 +282,7 @@ console.log("\n" + "-".repeat(40));
 console.log("SCENARIO 1 COMPLETED");
 console.log("-".repeat(40));
 console.log(`Total digests sent: ${digestCount.count}`);
+assert.equal(Number(digestCount.count), MAX_DIGEST_ITERATIONS);
 
 // Scenario 2: Health Check with Deduplication
 console.log("\n--- Scenario 2: Health Check with Deduplication ---");
@@ -306,6 +308,7 @@ const healthChain1 = await withTransactionHooks(async (transactionHooks) =>
 );
 console.log(`Started health check chain: ${healthChain1.id}`);
 console.log(`Deduplicated: ${healthChain1.deduplicated}`);
+assert.equal(healthChain1.deduplicated, false);
 
 // Try to start another health check - should be deduplicated
 const healthChain2 = await withTransactionHooks(async (transactionHooks) =>
@@ -325,6 +328,8 @@ const healthChain2 = await withTransactionHooks(async (transactionHooks) =>
 );
 console.log(`\nAttempted duplicate health check: ${healthChain2.id}`);
 console.log(`Deduplicated: ${healthChain2.deduplicated} (returned existing chain)`);
+assert.equal(healthChain2.deduplicated, true);
+assert.equal(healthChain2.id, healthChain1.id);
 
 await waitForRows(
   () =>
@@ -342,6 +347,7 @@ console.log("\n" + "-".repeat(40));
 console.log("SCENARIO 2 COMPLETED");
 console.log("-".repeat(40));
 console.log(`Total health checks: ${healthCount.count}`);
+assert.equal(Number(healthCount.count), MAX_HEALTH_CHECKS);
 
 // Scenario 3: Time-Windowed Deduplication
 console.log("\n--- Scenario 3: Time-Windowed Deduplication ---");
@@ -366,6 +372,7 @@ const sync1 = await withTransactionHooks(async (transactionHooks) =>
 );
 console.log(`First sync started: ${sync1.id}`);
 console.log(`Deduplicated: ${sync1.deduplicated}`);
+assert.equal(sync1.deduplicated, false);
 
 await client.awaitJobChain(sync1, { timeoutMs: 5000 });
 
@@ -388,6 +395,7 @@ const sync2 = await withTransactionHooks(async (transactionHooks) =>
 );
 console.log(`\nSecond sync (within window): ${sync2.id}`);
 console.log(`Deduplicated: ${sync2.deduplicated} (rate-limited)`);
+assert.equal(sync2.deduplicated, true);
 
 // Wait for window to expire
 console.log(`\nWaiting ${SYNC_WINDOW_MS}ms for window to expire...`);
@@ -412,6 +420,7 @@ const sync3 = await withTransactionHooks(async (transactionHooks) =>
 );
 console.log(`\nThird sync (after window): ${sync3.id}`);
 console.log(`Deduplicated: ${sync3.deduplicated} (new chain created)`);
+assert.equal(sync3.deduplicated, false);
 
 await client.awaitJobChain(sync3, { timeoutMs: 5000 });
 
@@ -423,6 +432,7 @@ console.log("\n" + "-".repeat(40));
 console.log("SCENARIO 3 COMPLETED");
 console.log("-".repeat(40));
 console.log(`Total syncs executed: ${syncCount.count} (2 out of 3 attempts)`);
+assert.equal(Number(syncCount.count), 2);
 
 await stopWorker();
 await sql.end();
