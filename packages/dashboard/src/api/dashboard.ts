@@ -15,8 +15,8 @@ let cachedAssets: Assets | null | undefined;
 const loadAssets = async (): Promise<Assets | null> => {
   if (cachedAssets !== undefined) return cachedAssets;
   try {
-    const mod = await import("./routes/assets.generated.js");
-    cachedAssets = mod.assets;
+    const assetsModule = await import("./routes/assets.generated.js");
+    cachedAssets = assetsModule.assets;
   } catch {
     cachedAssets = null;
   }
@@ -31,19 +31,19 @@ const loadAssets = async (): Promise<Assets | null> => {
  *
  * @example
  * ```ts
- * const dashboard = createDashboard({ client, basePath: '/internal/queuert' });
+ * const dashboard = await createDashboard({ client, basePath: '/internal/queuert' });
  * ```
  *
  * @experimental
  */
-export const createDashboard = <
+export const createDashboard = async <
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TStateAdapter extends StateAdapter<any, any>,
 >(options: {
   client: Client<TJobTypeDefinitions, TStateAdapter>;
   /** Mount prefix without trailing slash (e.g. `'/internal/queuert'`). Defaults to `''` (root). */
   basePath?: string;
-}): { fetch: (request: Request) => Response | Promise<Response> } => {
+}): Promise<{ fetch: (request: Request) => Response | Promise<Response> }> => {
   const client = options.client as unknown as Client<any, any>;
   const basePath = options.basePath?.replace(/\/+$/, "") ?? "";
 

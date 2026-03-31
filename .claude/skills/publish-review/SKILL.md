@@ -255,6 +255,17 @@ The following items have been reviewed and accepted as intentional design decisi
 - **`testing` export declared in `publishConfig` but files excluded**: Testing utilities are workspace-only, not shipped to npm. The `publishConfig.exports` entry is overridden by the `files` exclusion. Accepted.
 - **NATS notify adapter lacks provider abstraction**: NATS is experimental. A provider abstraction will be added when the API stabilizes. Accepted.
 - **NATS package exports no types from index.ts**: NATS is experimental. Types will be exported when the API stabilizes. Accepted.
+- **NATS notify adapter uses `nc`/`kv` instead of `provider`**: NATS is experimental. Will standardize to provider pattern when API stabilizes. Accepted.
+- **NATS notify adapter uses `subjectPrefix` while PG and Redis use `channelPrefix`**: Each adapter uses its transport's idiomatic terminology. Accepted.
+- **State adapter factory options differ between PG and SQLite for ID generation**: Intentional — each adapter uses the most natural approach for its database (`idDefault` SQL expression for PG, `idGenerator` JS function for SQLite). Accepted.
+- **`TransactionContextRequiredError` does not accept `cause`**: This error signals API misuse (calling mutating methods without `runInTransaction`), never caused by another error. Accepted.
+- **OTEL `workerError` does not record error details**: Counter attributes should remain low-cardinality per OTEL best practices. Error details are captured via the Log adapter. Accepted.
+- **`getNextJobAvailableInMsSql` uses `FOR UPDATE SKIP LOCKED`**: Tracked in TODO.md for future cleanup. Accepted for now.
+- **SQLite `checkExternalBlockerRefsSql` lacks row locking**: SQLite serializes writes via exclusive transaction locking, providing equivalent safety. Accepted.
+- **`listJobChains` status filter applies post-join**: Acceptable for dashboard queries with pagination. A denormalized chain status column can be added if performance becomes an issue. Accepted.
+- **SQLite `createJobs` performs per-job queries (O(n) round-trips)**: Documented and accepted SQLite trade-off. Tracked in TODO.md. Accepted.
+- **SQLite `addJobsBlockers` performs per-job-blocker-group loop (O(n) round-trips)**: Same accepted SQLite trade-off. Tracked in TODO.md. Accepted.
+- **Package READMEs are minimal**: Package READMEs link to the docs site for API documentation. This is the intended pattern. Accepted.
 
 ## Severity Definitions
 

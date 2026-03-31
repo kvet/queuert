@@ -182,7 +182,10 @@ export type AttemptPrepare<TStateAdapter extends StateAdapter<BaseTxContext, any
  * Handler function called for each job attempt.
  *
  * Receives `signal` (abort signal), `job` (the running job with blockers), `prepare` (transaction setup), and `complete` (finalization).
- * If `prepare` is not called, the worker auto-calls `prepare({ mode: "staged" })`.
+ *
+ * Processing mode is inferred automatically:
+ * - If `complete` is called synchronously (no prior `await`), `prepare` is skipped and the job runs in **atomic** mode (single transaction).
+ * - If neither `prepare` nor `complete` is called synchronously, the worker auto-calls `prepare({ mode: "staged" })`.
  */
 export type AttemptHandler<
   TStateAdapter extends StateAdapter<BaseTxContext, any>,

@@ -8,9 +8,9 @@ export type UnknownJobChain = CoreJobChain<string, string, unknown, unknown>;
 const BASE = "./api";
 
 const fetchSeroval = async <T>(path: string, init?: RequestInit): Promise<T> => {
-  const res = await fetch(`${BASE}${path}`, init);
-  const body = deserialize<T & { error?: string }>(await res.text());
-  if (!res.ok) throw new Error(body.error ?? `${res.status} ${res.statusText}`);
+  const response = await fetch(`${BASE}${path}`, init);
+  const body = deserialize<T & { error?: string }>(await response.text());
+  if (!response.ok) throw new Error(body.error ?? `${response.status} ${response.statusText}`);
   return body;
 };
 
@@ -31,18 +31,21 @@ export const listJobChains = async (
     signal?: AbortSignal;
   } = {},
 ): Promise<PageResult<UnknownJobChain>> => {
-  const qs = new URLSearchParams();
-  if (params.typeName) qs.set("typeName", params.typeName);
-  if (params.status) qs.set("status", params.status);
-  if (params.root === false) qs.set("root", "false");
-  if (params.id) qs.set("id", params.id);
-  if (params.jobId) qs.set("jobId", params.jobId);
-  if (params.cursor) qs.set("cursor", params.cursor);
-  if (params.limit) qs.set("limit", String(params.limit));
-  const q = qs.toString();
-  return fetchSeroval<PageResult<UnknownJobChain>>(`/chains${q ? `?${q}` : ""}`, {
-    signal: params.signal,
-  });
+  const searchParams = new URLSearchParams();
+  if (params.typeName) searchParams.set("typeName", params.typeName);
+  if (params.status) searchParams.set("status", params.status);
+  if (params.root === false) searchParams.set("root", "false");
+  if (params.id) searchParams.set("id", params.id);
+  if (params.jobId) searchParams.set("jobId", params.jobId);
+  if (params.cursor) searchParams.set("cursor", params.cursor);
+  if (params.limit) searchParams.set("limit", String(params.limit));
+  const queryString = searchParams.toString();
+  return fetchSeroval<PageResult<UnknownJobChain>>(
+    `/chains${queryString ? `?${queryString}` : ""}`,
+    {
+      signal: params.signal,
+    },
+  );
 };
 
 export const listJobs = async (
@@ -56,15 +59,15 @@ export const listJobs = async (
     signal?: AbortSignal;
   } = {},
 ): Promise<PageResult<UnknownJob>> => {
-  const qs = new URLSearchParams();
-  if (params.status) qs.set("status", params.status);
-  if (params.typeName) qs.set("typeName", params.typeName);
-  if (params.chainId) qs.set("chainId", params.chainId);
-  if (params.id) qs.set("id", params.id);
-  if (params.cursor) qs.set("cursor", params.cursor);
-  if (params.limit) qs.set("limit", String(params.limit));
-  const q = qs.toString();
-  return fetchSeroval<PageResult<UnknownJob>>(`/jobs${q ? `?${q}` : ""}`, {
+  const searchParams = new URLSearchParams();
+  if (params.status) searchParams.set("status", params.status);
+  if (params.typeName) searchParams.set("typeName", params.typeName);
+  if (params.chainId) searchParams.set("chainId", params.chainId);
+  if (params.id) searchParams.set("id", params.id);
+  if (params.cursor) searchParams.set("cursor", params.cursor);
+  if (params.limit) searchParams.set("limit", String(params.limit));
+  const queryString = searchParams.toString();
+  return fetchSeroval<PageResult<UnknownJob>>(`/jobs${queryString ? `?${queryString}` : ""}`, {
     signal: params.signal,
   });
 };
@@ -91,8 +94,8 @@ export const deleteChain = async (
   chainId: string,
   options?: { cascade?: boolean },
 ): Promise<void> => {
-  const qs = options?.cascade ? "?cascade=true" : "";
-  await fetchSeroval(`/chains/${chainId}${qs}`, { method: "DELETE" });
+  const queryString = options?.cascade ? "?cascade=true" : "";
+  await fetchSeroval(`/chains/${chainId}${queryString}`, { method: "DELETE" });
 };
 
 export const getJobDetail = async (

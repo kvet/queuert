@@ -1,6 +1,10 @@
 import { type Log } from "./log.js";
 
-/** Create a {@link Log} implementation that writes to `console`. */
+/**
+ * Create a {@link Log} implementation that writes to `console`.
+ *
+ * Output format: `[ISO timestamp] [LEVEL] [type] message data [error]`
+ */
 export const createConsoleLog = (): Log => {
   return (entry) => {
     const { type, level, message, data } = entry;

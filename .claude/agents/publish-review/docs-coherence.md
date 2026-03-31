@@ -15,7 +15,7 @@ Read and analyze these files:
 
 **TSDoc:** All public exports in `packages/*/src/**/*.ts` have TSDoc comments (primary API documentation)
 
-**Package READMEs:** All `packages/*/README.md` files
+**Package READMEs:** All `packages/*/README.md` files (these are intentionally minimal — they link to the docs site for API documentation)
 
 ## Checks to Perform
 
@@ -36,7 +36,7 @@ Read and analyze these files:
 
 - Design docs should cover architectural context for all major features (not API signatures — those are in TSDoc)
 - TSDoc should exist on all public exports with accurate descriptions
-- Package READMEs should document all exports and configuration options
+- Package READMEs should link to docs site (they are intentionally minimal)
 - README.md should give accurate overview matching design docs
 
 **Example issues to find:**

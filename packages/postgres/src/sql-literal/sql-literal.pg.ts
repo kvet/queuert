@@ -39,72 +39,34 @@
  * @throws {Error} If string contains null bytes (PostgreSQL rejects them in text types)
  */
 export const pgLiteral = (value: unknown): string => {
-  // 1. Handle null/undefined
-  if (value === null || value === undefined) {
-    return "NULL";
-  }
+  if (value === null || value === undefined) return "NULL";
 
-  // 2. Handle booleans
-  if (typeof value === "boolean") {
-    return value ? "'t'" : "'f'";
-  }
+  if (typeof value === "boolean") return value ? "'t'" : "'f'";
 
-  // 3. Handle numbers
   if (typeof value === "number") {
-    if (Number.isNaN(value)) {
-      return "'NaN'";
-    }
-    if (!Number.isFinite(value)) {
-      return value > 0 ? "'Infinity'" : "'-Infinity'";
-    }
+    if (Number.isNaN(value)) return "'NaN'";
+    if (!Number.isFinite(value)) return value > 0 ? "'Infinity'" : "'-Infinity'";
     return String(value);
   }
 
-  // 4. Handle BigInt
-  if (typeof value === "bigint") {
-    return String(value);
-  }
+  if (typeof value === "bigint") return String(value);
 
-  // 5. Handle Date
   if (value instanceof Date) {
-    // Convert to ISO format: '2024-01-15 10:30:00.123+00'
-    // PostgreSQL accepts ISO 8601, but we format it to PostgreSQL's preferred style
-    const iso = value.toISOString();
-    // Replace 'T' with space and 'Z' with '+00'
-    const formatted = iso.replace("T", " ").replace("Z", "+00");
+    const formatted = value.toISOString().replace("T", " ").replace("Z", "+00");
     return "'" + formatted + "'";
   }
 
-  // 6. Handle Buffer/Uint8Array (bytea)
-  if (value instanceof Uint8Array) {
-    const hex = bufferToHex(value);
-    return "E'\\\\x" + hex + "'";
-  }
+  if (value instanceof Uint8Array) return "E'\\\\x" + bufferToHex(value) + "'";
 
-  // 7. Handle arrays
-  if (Array.isArray(value)) {
-    return "ARRAY[" + value.map(pgLiteral).join(", ") + "]";
-  }
+  if (Array.isArray(value)) return "ARRAY[" + value.map(pgLiteral).join(", ") + "]";
 
-  // 8. Handle objects (as JSON)
-  if (typeof value === "object") {
-    return pgLiteral(JSON.stringify(value)) + "::jsonb";
-  }
+  if (typeof value === "object") return pgLiteral(JSON.stringify(value)) + "::jsonb";
 
-  // 9. Handle strings (explicit check for type safety)
-  if (typeof value === "string") {
-    return escapeString(value);
-  }
+  if (typeof value === "string") return escapeString(value);
 
-  // 10. Handle symbols as their string representation
-  if (typeof value === "symbol") {
-    return escapeString(value.toString());
-  }
+  if (typeof value === "symbol") return escapeString(value.toString());
 
-  // 11. Handle functions as their string representation
-  if (typeof value === "function") {
-    return escapeString(value.toString());
-  }
+  if (typeof value === "function") return escapeString(value.toString());
 
   throw new Error("Unable to convert value to PostgreSQL literal");
 };

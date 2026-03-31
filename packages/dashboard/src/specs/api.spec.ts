@@ -10,7 +10,7 @@ const parseBody = async (res: Response) => deserialize(await res.text());
 const createTestDashboard = async (basePath?: string) => {
   const stateAdapter = createInProcessStateAdapter();
   const client = await createClient({ stateAdapter, jobTypeRegistry: defineJobTypeRegistry() });
-  const dashboard = createDashboard({ client, basePath });
+  const dashboard = await createDashboard({ client, basePath });
   const prefix = basePath ?? "";
   const request = async (path: string, init?: RequestInit) =>
     dashboard.fetch(new Request(`http://test${prefix}${path}`, init));
@@ -443,7 +443,7 @@ describe("Dashboard API", () => {
     });
 
     it("returns 404 for requests outside basePath", async () => {
-      const dashboard = createDashboard({
+      const dashboard = await createDashboard({
         client: await createClient({
           stateAdapter: createInProcessStateAdapter(),
           jobTypeRegistry: defineJobTypeRegistry(),
@@ -455,7 +455,7 @@ describe("Dashboard API", () => {
     });
 
     it("returns 404 for paths that share a prefix with basePath", async () => {
-      const dashboard = createDashboard({
+      const dashboard = await createDashboard({
         client: await createClient({
           stateAdapter: createInProcessStateAdapter(),
           jobTypeRegistry: defineJobTypeRegistry(),

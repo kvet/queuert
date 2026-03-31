@@ -37,65 +37,31 @@
  * @experimental
  */
 export const sqliteLiteral = (value: unknown): string => {
-  // 1. Handle null/undefined
-  if (value === null || value === undefined) {
-    return "NULL";
-  }
+  if (value === null || value === undefined) return "NULL";
 
-  // 2. Handle booleans (SQLite uses 0/1)
-  if (typeof value === "boolean") {
-    return value ? "1" : "0";
-  }
+  if (typeof value === "boolean") return value ? "1" : "0";
 
-  // 3. Handle numbers
   if (typeof value === "number") {
-    // SQLite doesn't support NaN or Infinity - return NULL
-    if (Number.isNaN(value) || !Number.isFinite(value)) {
-      return "NULL";
-    }
+    // NaN and Infinity are not supported in SQLite
+    if (Number.isNaN(value) || !Number.isFinite(value)) return "NULL";
     return String(value);
   }
 
-  // 4. Handle BigInt
-  if (typeof value === "bigint") {
-    return String(value);
-  }
+  if (typeof value === "bigint") return String(value);
 
-  // 5. Handle Date (store as ISO string)
-  if (value instanceof Date) {
-    return "'" + value.toISOString() + "'";
-  }
+  if (value instanceof Date) return "'" + value.toISOString() + "'";
 
-  // 6. Handle Buffer/Uint8Array (blob)
-  if (value instanceof Uint8Array) {
-    const hex = bufferToHex(value);
-    return "X'" + hex + "'";
-  }
+  if (value instanceof Uint8Array) return "X'" + bufferToHex(value) + "'";
 
-  // 7. Handle arrays (as JSON)
-  if (Array.isArray(value)) {
-    return escapeString(JSON.stringify(value));
-  }
+  if (Array.isArray(value)) return escapeString(JSON.stringify(value));
 
-  // 8. Handle objects (as JSON)
-  if (typeof value === "object") {
-    return escapeString(JSON.stringify(value));
-  }
+  if (typeof value === "object") return escapeString(JSON.stringify(value));
 
-  // 9. Handle strings (explicit check for type safety)
-  if (typeof value === "string") {
-    return escapeString(value);
-  }
+  if (typeof value === "string") return escapeString(value);
 
-  // 10. Handle symbols as their string representation
-  if (typeof value === "symbol") {
-    return escapeString(value.toString());
-  }
+  if (typeof value === "symbol") return escapeString(value.toString());
 
-  // 11. Handle functions as their string representation
-  if (typeof value === "function") {
-    return escapeString(value.toString());
-  }
+  if (typeof value === "function") return escapeString(value.toString());
 
   throw new Error("Unable to convert value to SQLite literal");
 };

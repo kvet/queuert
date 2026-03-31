@@ -51,6 +51,8 @@ Key differences from PostgreSQL:
 
 The `chain_id` column references `job(id)`. SQLite has foreign keys disabled by default — the adapter issues `PRAGMA foreign_keys = ON` at connection time. This must be done on every connection; it is not persisted.
 
+The `checkForeignKeys` option (default: `true`) causes `migrateToLatest()` to verify that `PRAGMA foreign_keys` is enabled and throws with a clear error message if not. Disable this check only if foreign key enforcement is managed externally.
+
 ### Job Blocker Table
 
 The `{tablePrefix}job_blocker` table is structurally identical to PostgreSQL:

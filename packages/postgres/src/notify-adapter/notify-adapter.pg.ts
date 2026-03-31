@@ -29,8 +29,8 @@ const createSharedListener = (
 
         const unsubscribe = await provider.subscribe(channel, (payload) => {
           if (state.status === "running") {
-            for (const cb of state.callbacks) {
-              cb(payload);
+            for (const callback of state.callbacks) {
+              callback(payload);
             }
           }
         });

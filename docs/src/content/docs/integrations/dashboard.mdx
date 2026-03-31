@@ -28,7 +28,7 @@ import { Aside, Badge, Steps } from "@astrojs/starlight/components";
    ```ts
    import { createDashboard } from "@queuert/dashboard";
 
-   const dashboard = createDashboard({ client });
+   const dashboard = await createDashboard({ client });
    ```
 
 3. Mount it on your server:
@@ -41,7 +41,7 @@ import { Aside, Badge, Steps } from "@astrojs/starlight/components";
    When mounting at a sub-path, set `basePath`:
 
    ```ts
-   const dashboard = createDashboard({
+   const dashboard = await createDashboard({
      client,
      basePath: "/internal/queuert",
    });

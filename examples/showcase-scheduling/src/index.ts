@@ -68,7 +68,7 @@ const jobTypeRegistry = defineJobTypeRegistry<{
 // Using short intervals for demo purposes
 const DIGEST_INTERVAL_MS = 200;
 const HEALTH_CHECK_INTERVAL_MS = 150;
-const SYNC_WINDOW_MS = 500;
+const SYNC_WINDOW_MS = 2_000;
 
 const MAX_DIGEST_ITERATIONS = 3;
 const MAX_HEALTH_CHECKS = 3;

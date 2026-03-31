@@ -1,14 +1,15 @@
 # Short term
 
 - [TASK] tsdown unbundled mode
-- [TASK] Enforce json-serializable inputs and outputs (like no Date in job definitions)
 - [TASK] Support triggering multiple jobs
-- [TASK] Name internal types properly. No underscore
-- [TASK] Simplify `mergeJobTypeProcessorRegistries` and `mergeJobTypeRegistries` to not use slices as a named parameter
+- [?,TASK] Simplify `mergeJobTypeProcessorRegistries` and `mergeJobTypeRegistries` to not use slices as a named parameter
 - [?,TASK] For update locking in list methods (e.g. `listJobChainsForCleanup`), add option to skip locking when the method is used in a context where concurrent modifications are not a concern (e.g. cleanup job listing its own completed chains for deletion)
+- [REF] Extract `SharedListenerState`/`createSharedListener` from PG, Redis, and NATS notify adapters into a shared utility in `queuert/internal`
 - [EPIC] Multi-driver support (postgres.js, sqlite3) — branch `feat/multi-driver-support`. Experimental; needs review before merge (type safety regression in executeTypedSql, missing resilience test coverage for postgres.js, JSON serialization verification)
 - [EPIC] multi-driver support for notify adapter
 - [EPIC] test against bun and its built-in sqlite, postgres clients
+- [TASK] Name internal types properly. No underscore. Add to code-style guide.
+- [TASK] Enforce json-serializable inputs and outputs (like no Date in job definitions)
 
 # Medium term
 

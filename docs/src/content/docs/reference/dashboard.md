@@ -12,7 +12,7 @@ This package is experimental and may change without notice.
 ## createDashboard
 
 ```typescript
-const dashboard = createDashboard({
+const dashboard = await createDashboard({
   client: Client, // Queuert client from createClient()
   basePath?: string, // Mount prefix without trailing slash (e.g. '/internal/queuert')
 });
@@ -31,7 +31,7 @@ The state adapter must implement dashboard listing methods (`listJobChains`, `li
 Mount prefix for sub-path deployments. Set this when the dashboard is served behind a reverse proxy or framework router at a path other than `/`. The value should not include a trailing slash.
 
 ```typescript
-const dashboard = createDashboard({
+const dashboard = await createDashboard({
   client,
   basePath: "/internal/queuert",
 });

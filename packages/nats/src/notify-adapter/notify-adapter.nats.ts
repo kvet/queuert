@@ -31,11 +31,11 @@ const createSharedListener = (
         state = { status: "starting", readyPromise };
 
         const subscription = nc.subscribe(subject, {
-          callback: (_err, msg) => {
+          callback: (_error, message) => {
             if (state.status === "running") {
-              const payload = decoder.decode(msg.data);
-              for (const cb of state.callbacks) {
-                cb(payload);
+              const payload = decoder.decode(message.data);
+              for (const callback of state.callbacks) {
+                callback(payload);
               }
             }
           },

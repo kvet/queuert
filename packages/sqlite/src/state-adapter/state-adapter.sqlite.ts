@@ -162,10 +162,15 @@ export const createSqliteStateAdapter = async <
   idGenerator = () => crypto.randomUUID() as TIdType,
   checkForeignKeys = true,
 }: {
+  /** SQLite state provider wrapping the database connection. */
   stateProvider: SqliteStateProvider<TTxContext>;
+  /** Prefix for all table names. @defaultValue `"queuert_"` */
   tablePrefix?: string;
+  /** SQL type for the primary key column. @defaultValue `"TEXT"` */
   idType?: string;
+  /** Function to generate new job IDs. @defaultValue `() => crypto.randomUUID()` */
   idGenerator?: () => TIdType;
+  /** Whether `migrateToLatest()` verifies that `PRAGMA foreign_keys = ON` is set. Disable only if foreign keys are managed externally. @defaultValue `true` */
   checkForeignKeys?: boolean;
 }): Promise<
   StateAdapter<TTxContext, TIdType> & {

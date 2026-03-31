@@ -68,12 +68,14 @@ export { createConsoleLog } from "./observability-adapter/log.console.js";
 export { type Log } from "./observability-adapter/log.js";
 export { type ObservabilityAdapter } from "./observability-adapter/observability-adapter.js";
 export { type OrderDirection, type Page } from "./pagination.js";
-export { type StateAdapter } from "./state-adapter/state-adapter.js";
+export { type BaseTxContext, type StateAdapter } from "./state-adapter/state-adapter.js";
 export {
   createTransactionHooks,
   withTransactionHooks,
+  type HookDef,
   type TransactionHooks,
   type TransactionHooksHandle,
+  type TransactionHooksSavepoint,
 } from "./transaction-hooks.js";
 export { createJobTypeProcessorRegistry } from "./worker/create-job-type-processor-registry.js";
 export {

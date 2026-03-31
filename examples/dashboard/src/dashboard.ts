@@ -14,7 +14,7 @@ import { client, db } from "./client.js";
 
 const PORT = 3333;
 
-const dashboard = createDashboard({ client });
+const dashboard = await createDashboard({ client });
 
 const server = createServer((req, res) => {
   void Promise.resolve(

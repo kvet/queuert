@@ -83,11 +83,17 @@ export const createPgStateAdapter = async <
   idType = "uuid",
   idDefault = "gen_random_uuid()",
 }: {
+  /** PostgreSQL state provider wrapping the database connection. */
   stateProvider: PgStateProvider<TTxContext>;
+  /** PostgreSQL schema for all tables. @defaultValue `"public"` */
   schema?: string;
+  /** Prefix for all table names. @defaultValue `"queuert_"` */
   tablePrefix?: string;
+  /** SQL type for the primary key column. @defaultValue `"uuid"` */
   idType?: string;
+  /** SQL expression for the default primary key value. @defaultValue `"gen_random_uuid()"` */
   idDefault?: string;
+  /** Phantom property for generic type inference of the ID type. Not used at runtime. */
   $idType?: TIdType;
 }): Promise<
   StateAdapter<TTxContext, TIdType> & {
