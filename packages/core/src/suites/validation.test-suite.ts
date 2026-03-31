@@ -1,4 +1,5 @@
 import { type TestAPI } from "vitest";
+
 import {
   type BaseJobTypeDefinitions,
   JobTypeValidationError,

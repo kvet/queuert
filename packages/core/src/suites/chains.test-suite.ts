@@ -1,4 +1,5 @@
 import { type TestAPI, expectTypeOf } from "vitest";
+
 import {
   type CompletedJobChain,
   createClient,
@@ -737,6 +738,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         client.awaitJobChain(parentChain, completionOptions),
         // Wait for independent chain using a polling approach since we don't have its reference yet
         (async () => {
+          // oxlint-disable-next-line no-unmodified-loop-condition -- modified asynchronously via event handler
           while (!independentChainId) {
             await new Promise((resolve) => setTimeout(resolve, 50));
           }

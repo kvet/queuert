@@ -16,6 +16,7 @@ import {
 } from "queuert";
 import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
 import { z } from "zod";
+
 import { createZodJobTypeRegistry } from "./zod-adapter.js";
 
 // 1. Define job types with Zod schemas

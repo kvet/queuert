@@ -10,6 +10,7 @@
  */
 
 import assert from "node:assert/strict";
+
 import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import postgres, {
@@ -145,7 +146,7 @@ const worker = await createInProcessWorker({
 
             return continueWith({
               typeName: "charge-payment",
-              input: { orderId: job.input.orderId, amount: Number(order.price) * order.quantity },
+              input: { orderId: job.input.orderId, amount: order.price * order.quantity },
             });
           });
         },

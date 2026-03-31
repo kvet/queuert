@@ -1,6 +1,8 @@
 // oxlint-disable no-empty-pattern
 import inspector from "node:inspector";
+
 import { type MockedFunction, type TestAPI, expect, vi } from "vitest";
+
 import {
   type Log,
   type NotifyAdapter,

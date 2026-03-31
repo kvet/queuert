@@ -1,7 +1,8 @@
+import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import postgres from "postgres";
-import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
 import { createInProcessNotifyAdapter } from "queuert/internal";
+
 import { parseConcurrency, printHeader, runBenchmark } from "./utils.js";
 
 printHeader("PROCESSING CAPACITY — POSTGRESQL");

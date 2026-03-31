@@ -10,6 +10,7 @@
  */
 
 import assert from "node:assert/strict";
+
 import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import postgres, {

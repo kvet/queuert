@@ -1,4 +1,5 @@
 import { createJobTypeProcessorRegistry } from "queuert";
+
 import { client } from "./client.js";
 import { notificationJobTypeRegistry } from "./slice-notifications-definitions.js";
 

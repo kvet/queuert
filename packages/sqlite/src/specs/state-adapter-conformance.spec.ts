@@ -2,6 +2,7 @@ import Database from "better-sqlite3";
 import { type StateAdapter } from "queuert";
 import { stateAdapterConformanceTestSuite } from "queuert/testing";
 import { describe, expect, it } from "vitest";
+
 import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
 import { createBetterSqlite3Provider } from "./state-provider.better-sqlite3.js";
 

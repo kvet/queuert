@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+
 import { sqliteLiteral } from "./sql-literal.sqlite.js";
 
 describe("sqliteLiteral", () => {

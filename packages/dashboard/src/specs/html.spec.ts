@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { renderHtml } from "../api/html.js";
 
 const MOCK_HTML = [

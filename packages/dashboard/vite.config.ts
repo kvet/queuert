@@ -1,5 +1,7 @@
+/* oxlint-disable unicorn/prefer-module -- __dirname is standard in vite config files */
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
+
 import { type Plugin, defineConfig } from "vite";
 import solidPlugin from "vite-plugin-solid";
 

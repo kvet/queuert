@@ -20,6 +20,7 @@ export const bufferObservabilityEvent = (
             firstError ??= error;
           }
         }
+        // oxlint-disable-next-line typescript/only-throw-error -- re-throwing caught error
         if (firstError) throw firstError;
       },
       checkpoint: (state) => {
@@ -51,6 +52,7 @@ export const bufferObservabilityRollback = (
             firstError ??= error;
           }
         }
+        // oxlint-disable-next-line typescript/only-throw-error -- re-throwing caught error
         if (firstError) throw firstError;
       },
       checkpoint: (state) => {

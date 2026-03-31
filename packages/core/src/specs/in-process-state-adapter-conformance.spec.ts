@@ -1,7 +1,8 @@
 import { type StateAdapter } from "queuert";
-import { stateAdapterConformanceTestSuite } from "../suites/state-adapter-conformance.test-suite.js";
 import { describe, it } from "vitest";
+
 import { createInProcessStateAdapter } from "../state-adapter/state-adapter.in-process.js";
+import { stateAdapterConformanceTestSuite } from "../suites/state-adapter-conformance.test-suite.js";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

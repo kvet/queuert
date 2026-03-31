@@ -1,4 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
+
 import { HookNotRegisteredError } from "./errors.js";
 import {
   bufferObservabilityEvent as bufferOnCommit,

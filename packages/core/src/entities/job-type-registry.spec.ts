@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+
 import { JobTypeValidationError } from "../errors.js";
 import {
   type JobTypeRegistryConfig,

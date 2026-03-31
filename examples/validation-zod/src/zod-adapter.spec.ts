@@ -10,6 +10,7 @@ import {
 import { createInProcessStateAdapter } from "queuert/internal";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { z } from "zod";
+
 import { createZodJobTypeRegistry } from "./zod-adapter.js";
 
 describe("createZodJobTypeRegistry", () => {

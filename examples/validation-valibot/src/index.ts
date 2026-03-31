@@ -16,6 +16,7 @@ import {
 } from "queuert";
 import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
 import * as v from "valibot";
+
 import { createValibotJobTypeRegistry } from "./valibot-adapter.js";
 
 // 1. Define job types with Valibot schemas

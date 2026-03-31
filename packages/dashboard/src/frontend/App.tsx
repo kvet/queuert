@@ -1,5 +1,6 @@
 import { A, useLocation } from "@solidjs/router";
 import { type ParentProps } from "solid-js";
+
 import { basePath } from "./base.js";
 
 export function App(props: ParentProps) {

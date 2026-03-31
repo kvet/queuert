@@ -1,8 +1,10 @@
-import Database from "better-sqlite3";
 import { type UUID } from "node:crypto";
+
+import Database from "better-sqlite3";
 import { type StateAdapter } from "queuert";
 import { createFlakyBatchGenerator } from "queuert/testing";
 import { type TestAPI, expect } from "vitest";
+
 import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
 import {
   type BetterSqlite3Provider,

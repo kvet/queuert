@@ -1,17 +1,18 @@
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
+
 import { DuplicateJobTypeError, JobTypeValidationError } from "../errors.js";
+import { defineJobTypeRegistry } from "./define-job-type-registry.js";
 import {
   type JobTypeRegistryConfig,
   type JobTypeRegistryDefinitions,
   createJobTypeRegistry,
 } from "./job-type-registry.js";
-import { defineJobTypeRegistry } from "./define-job-type-registry.js";
-import { type BaseJobTypeDefinitions } from "./job-type.js";
 import {
   type JobTypeContinuation,
   type JobTypeEntryNames,
   type JobTypeProperty,
 } from "./job-type-registry.resolvers.js";
+import { type BaseJobTypeDefinitions } from "./job-type.js";
 import { mergeJobTypeRegistries } from "./merge-job-type-registries.js";
 
 const createValidatedRegistry = <T extends BaseJobTypeDefinitions>(typeNames: string[]) => {

@@ -1,4 +1,5 @@
 import { type NotifyAdapter } from "queuert";
+
 import { type PgNotifyProvider } from "../notify-provider/notify-provider.pg.js";
 
 type SharedListenerState =

@@ -1,5 +1,5 @@
-import { type BaseJobTypeDefinitions } from "./job-type.js";
 import { type JobTypeRegistry, createNoopJobTypeRegistry } from "./job-type-registry.js";
+import { type BaseJobTypeDefinitions } from "./job-type.js";
 import { type ValidatedJobTypeDefinitions } from "./job-type.validation.js";
 
 /**

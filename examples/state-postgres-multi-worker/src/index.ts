@@ -1,12 +1,13 @@
+import { type ChildProcess, fork } from "node:child_process";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import {
   type PgNotifyProvider,
   createPgNotifyAdapter,
   createPgStateAdapter,
 } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
-import { type ChildProcess, fork } from "node:child_process";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { Pool, type PoolClient } from "pg";
 import { createClient, defineJobTypeRegistry, withTransactionHooks } from "queuert";
 

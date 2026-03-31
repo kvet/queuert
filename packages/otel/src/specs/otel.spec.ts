@@ -13,6 +13,7 @@ import {
   extendWithStateInProcess,
 } from "queuert/testing";
 import { it as baseIt, describe } from "vitest";
+
 import { extendWithObservabilityOtel } from "./observability-adapter.otel.spec-helper.js";
 
 const it = extendWithObservabilityOtel(

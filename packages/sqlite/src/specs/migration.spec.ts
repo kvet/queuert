@@ -1,7 +1,8 @@
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
-import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
+
 import { migrations } from "../state-adapter/sql.js";
+import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
 import { createBetterSqlite3Provider } from "./state-provider.better-sqlite3.js";
 
 describe("SQLite migrations", () => {

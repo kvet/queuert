@@ -1,6 +1,6 @@
 import { describe, it } from "vitest";
+
 import { extendWithStateInProcess } from "../state-adapter/state-adapter.in-process.spec-helper.js";
-import { startChainsTestSuite } from "../suites/start-chains.test-suite.js";
 import { blockerChainsTestSuite } from "../suites/blocker-chains.test-suite.js";
 import { chainsTestSuite } from "../suites/chains.test-suite.js";
 import { deduplicationTestSuite } from "../suites/deduplication.test-suite.js";
@@ -11,9 +11,10 @@ import {
   extendWithNotifyNoop,
   extendWithResourceLeakDetection,
 } from "../suites/spec-context.spec-helper.js";
+import { startChainsTestSuite } from "../suites/start-chains.test-suite.js";
+import { triggerJobTestSuite } from "../suites/trigger-job.test-suite.js";
 import { validationTestSuite } from "../suites/validation.test-suite.js";
 import { waitChainCompletionTestSuite } from "../suites/wait-chain-completion.test-suite.js";
-import { triggerJobTestSuite } from "../suites/trigger-job.test-suite.js";
 import { workerlessCompletionTestSuite } from "../suites/workerless-completion.test-suite.js";
 import { stateResilienceTestSuite } from "../testing.js";
 

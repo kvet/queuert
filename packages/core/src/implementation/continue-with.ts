@@ -1,12 +1,13 @@
 import { type JobChain } from "../entities/job-chain.js";
-import { type BaseJobTypeDefinitions } from "../entities/job-type.js";
 import { type ResolvedJob } from "../entities/job-type-registry.resolvers.js";
+import { type BaseJobTypeDefinitions } from "../entities/job-type.js";
 import { mapStateJobToJob } from "../entities/job.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
-import { type TransactionHooks } from "../transaction-hooks.js";
 import { type Helpers } from "../setup-helpers.js";
+import { type TransactionHooks } from "../transaction-hooks.js";
 import { createStateJobs } from "./create-state-jobs.js";
 
+// oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- TInput preserves type inference at call sites
 export const continueWith = async <TJobTypeName extends string, TInput>(
   helpers: Helpers,
   {

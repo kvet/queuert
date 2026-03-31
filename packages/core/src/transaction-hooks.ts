@@ -19,6 +19,7 @@ export type TransactionHooks = {
   /** Get the hook state for the given key, creating it with `factory` if absent. */
   getOrInsert<T>(key: symbol, factory: () => HookDef<T>): T;
   /** Get the hook state for the given key. Throws {@link HookNotRegisteredError} if not found. */
+  // oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- intentional: caller specifies T for type-safe cast
   get<T>(key: symbol): T;
   /** Check whether a hook is registered for the given key. */
   has(key: symbol): boolean;
@@ -105,6 +106,7 @@ export const createTransactionHooks = (): TransactionHooksHandle => {
       }
       return hooks.get(key)!.state as T;
     },
+    // oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- intentional: caller specifies T for type-safe cast
     get: <T>(key: symbol): T => {
       const hook = hooks.get(key);
       if (!hook) {
@@ -157,6 +159,7 @@ export const createTransactionHooks = (): TransactionHooksHandle => {
         firstError ??= error;
       }
     }
+    // oxlint-disable-next-line typescript/only-throw-error -- re-throwing caught error
     if (firstError) throw firstError;
   };
 
@@ -172,6 +175,7 @@ export const createTransactionHooks = (): TransactionHooksHandle => {
         firstError ??= error;
       }
     }
+    // oxlint-disable-next-line typescript/only-throw-error -- re-throwing caught error
     if (firstError) throw firstError;
   };
 

@@ -1,13 +1,14 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
+
 import { createClient } from "../client.js";
 import { defineJobTypeRegistry } from "../entities/define-job-type-registry.js";
+import { type JobTypeRegistryDefinitions } from "../entities/job-type-registry.js";
+import { type JobTypeProperty } from "../entities/job-type-registry.resolvers.js";
 import { mergeJobTypeRegistries } from "../entities/merge-job-type-registries.js";
 import { DuplicateJobTypeError } from "../errors.js";
 import { createInProcessWorker } from "../in-process-worker.js";
 import { createInProcessStateAdapter } from "../state-adapter/state-adapter.in-process.js";
-import { type JobTypeRegistryDefinitions } from "../entities/job-type-registry.js";
 import { createJobTypeProcessorRegistry } from "./create-job-type-processor-registry.js";
-import { type JobTypeProperty } from "../entities/job-type-registry.resolvers.js";
 import {
   type ExternalJobTypeProcessorRegistryDefinitions,
   type JobTypeProcessorRegistryDefinitions,

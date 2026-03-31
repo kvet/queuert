@@ -1,4 +1,5 @@
 import { type TestAPI, expectTypeOf, vi } from "vitest";
+
 import { sleep } from "../helpers/sleep.js";
 import {
   JobTypeMismatchError,

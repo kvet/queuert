@@ -5,6 +5,7 @@ import {
   notifyAdapterConformanceTestSuite,
 } from "queuert/testing";
 import { it as baseIt, describe } from "vitest";
+
 import { createPgNotifyAdapter } from "../notify-adapter/notify-adapter.pg.js";
 import { createPgPoolNotifyProvider } from "./notify-provider.pg-pool.js";
 

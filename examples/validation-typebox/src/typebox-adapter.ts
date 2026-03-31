@@ -6,6 +6,8 @@
  * or any other validation library.
  */
 
+import { type Static, type TSchema } from "@sinclair/typebox";
+import { Value } from "@sinclair/typebox/value";
 import {
   type BaseJobTypeDefinitions,
   type JobTypeDefinitionErrors,
@@ -14,8 +16,6 @@ import {
   type ValidatedJobTypeDefinitions,
   createJobTypeRegistry,
 } from "queuert";
-import { type Static, type TSchema } from "@sinclair/typebox";
-import { Value } from "@sinclair/typebox/value";
 
 /**
  * Schema definition for a single job type using TypeBox.

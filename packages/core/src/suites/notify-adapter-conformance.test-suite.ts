@@ -1,4 +1,5 @@
 import { type TestAPI, describe } from "vitest";
+
 import { sleep } from "../helpers/sleep.js";
 import { type NotifyAdapter } from "../notify-adapter/notify-adapter.js";
 

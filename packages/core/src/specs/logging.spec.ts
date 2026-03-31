@@ -1,5 +1,6 @@
 // oxlint-disable no-empty-pattern
 import { it as baseIt, describe, expect } from "vitest";
+
 import { sleep } from "../helpers/sleep.js";
 import {
   type NotifyAdapter,

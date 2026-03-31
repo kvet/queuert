@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { serializeError } from "./serialize-error.js";
 
 describe("serializeError", () => {
@@ -40,6 +41,7 @@ describe("serializeError", () => {
 
   it("includes custom properties from Error subclasses", () => {
     class DbError extends Error {
+      override name = "DbError";
       code = "PG_CONN";
       detail = "connection refused";
     }
@@ -59,6 +61,7 @@ describe("serializeError", () => {
 
   it("falls back to stack when Error custom properties are circular", () => {
     class BadError extends Error {
+      override name = "BadError";
       ref: unknown;
     }
     const err = new BadError("circular props");

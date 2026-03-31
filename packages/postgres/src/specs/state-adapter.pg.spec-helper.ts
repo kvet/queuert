@@ -2,6 +2,7 @@ import { Pool } from "pg";
 import { type StateAdapter } from "queuert";
 import { createFlakyBatchGenerator } from "queuert/testing";
 import { type TestAPI, expect } from "vitest";
+
 import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.js";
 import {
   type PgPoolContext,

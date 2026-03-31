@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+
 import { createParallelExecutor } from "./parallel-executor.js";
 
 describe("createParallelExecutor", () => {

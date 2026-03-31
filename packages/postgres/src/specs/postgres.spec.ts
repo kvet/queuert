@@ -1,5 +1,6 @@
-import { TESTCONTAINER_RESOURCE_TYPES, extendWithPostgres } from "@queuert/testcontainers";
 import { type UUID } from "node:crypto";
+
+import { TESTCONTAINER_RESOURCE_TYPES, extendWithPostgres } from "@queuert/testcontainers";
 import { Pool, type PoolClient } from "pg";
 import {
   createClient,
@@ -11,6 +12,7 @@ import {
 import { createInProcessNotifyAdapter } from "queuert/internal";
 import { extendWithResourceLeakDetection, withWorkers } from "queuert/testing";
 import { it as baseIt, expectTypeOf, vi } from "vitest";
+
 import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.js";
 import { createPgPoolProvider } from "./state-provider.pg-pool.js";
 

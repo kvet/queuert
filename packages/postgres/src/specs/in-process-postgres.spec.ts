@@ -7,6 +7,7 @@ import {
   notifyTestSuite,
 } from "queuert/testing";
 import { describe, it } from "vitest";
+
 import { extendWithNotifyPostgres } from "./notify-adapter.pg.spec-helper.js";
 
 const inProcessPostgresIt = extendWithResourceLeakDetection(

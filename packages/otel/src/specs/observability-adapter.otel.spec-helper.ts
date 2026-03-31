@@ -14,6 +14,7 @@ import {
 } from "@opentelemetry/sdk-trace-base";
 import { type ObservabilityAdapter } from "queuert";
 import { type TestAPI, expect } from "vitest";
+
 import { createOtelObservabilityAdapter } from "../observability-adapter/observability-adapter.otel.js";
 
 // Map method names to OTEL metric names

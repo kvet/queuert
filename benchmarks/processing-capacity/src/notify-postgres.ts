@@ -6,6 +6,7 @@ import {
 } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import postgres from "postgres";
+
 import { parseConcurrency, printHeader, runBenchmark } from "./utils.js";
 
 printHeader("PROCESSING CAPACITY — PG NOTIFY");

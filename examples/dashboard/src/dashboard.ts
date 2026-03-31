@@ -8,8 +8,10 @@
  * Then open http://localhost:3333 in your browser.
  */
 
-import { createDashboard } from "@queuert/dashboard";
 import { createServer } from "node:http";
+
+import { createDashboard } from "@queuert/dashboard";
+
 import { client, db } from "./client.js";
 
 const PORT = 3333;

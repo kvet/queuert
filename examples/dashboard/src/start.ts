@@ -13,6 +13,7 @@ import {
   createJobTypeProcessorRegistry,
   withTransactionHooks,
 } from "queuert";
+
 import { client, db, jobTypeRegistry, stateAdapter } from "./client.js";
 
 const worker = await createInProcessWorker({

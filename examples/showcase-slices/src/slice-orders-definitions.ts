@@ -1,4 +1,5 @@
 import { type JobTypeRegistryDefinitions, defineJobTypeRegistry } from "queuert";
+
 import { type notificationJobTypeRegistry } from "./slice-notifications-definitions.js";
 
 export const orderJobTypeRegistry = defineJobTypeRegistry<

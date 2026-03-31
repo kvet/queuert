@@ -1,7 +1,8 @@
+import { execSync } from "node:child_process";
+
 import { PrismaPg } from "@prisma/adapter-pg";
 import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
-import { execSync } from "node:child_process";
 import {
   createClient,
   createInProcessWorker,

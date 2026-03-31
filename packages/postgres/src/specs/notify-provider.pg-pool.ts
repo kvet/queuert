@@ -1,4 +1,5 @@
 import { type Pool, type PoolClient } from "pg";
+
 import { type PgNotifyProvider } from "../notify-provider/notify-provider.pg.js";
 
 export type PgPoolNotifyProvider = PgNotifyProvider & {

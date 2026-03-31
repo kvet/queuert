@@ -10,6 +10,7 @@ import {
 import { createInProcessStateAdapter } from "queuert/internal";
 import { withWorkers } from "queuert/testing";
 import { it as baseIt, vi } from "vitest";
+
 import { createNatsNotifyAdapter } from "../notify-adapter/notify-adapter.nats.js";
 
 const it = extendWithNats(baseIt, import.meta.url);

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+
 import { pgLiteral } from "./sql-literal.pg.js";
 
 describe("pgLiteral", () => {

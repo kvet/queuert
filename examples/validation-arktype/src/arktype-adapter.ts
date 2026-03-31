@@ -6,6 +6,7 @@
  * or any other validation library.
  */
 
+import { type Type } from "arktype";
 import {
   type BaseJobTypeDefinitions,
   type JobTypeDefinitionErrors,
@@ -14,7 +15,6 @@ import {
   type ValidatedJobTypeDefinitions,
   createJobTypeRegistry,
 } from "queuert";
-import { type Type } from "arktype";
 
 /**
  * Schema definition for a single job type using ArkType.

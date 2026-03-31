@@ -1,10 +1,11 @@
-import { For, Show, createResource, createSignal } from "solid-js";
 import { A, useNavigate, useParams } from "@solidjs/router";
+import { For, Show, createResource, createSignal } from "solid-js";
+
 import { deleteChain, getChainBlocking, getChainDetail } from "../api.js";
-import { StatusBadge } from "./StatusBadge.js";
-import { JsonView } from "./JsonView.js";
-import { TimeAgo } from "./TimeAgo.js";
 import { ConfirmDeleteDialog } from "./ConfirmDeleteDialog.js";
+import { JsonView } from "./JsonView.js";
+import { StatusBadge } from "./StatusBadge.js";
+import { TimeAgo } from "./TimeAgo.js";
 
 export function ChainDetail() {
   const navigate = useNavigate();

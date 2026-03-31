@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+
 import { calculateBackoffMs } from "./backoff.js";
 
 describe("calculateBackoffMs", () => {

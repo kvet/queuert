@@ -1,5 +1,6 @@
 import { useNavigate, useSearchParams } from "@solidjs/router";
 import { For, Show, createResource, createSignal } from "solid-js";
+
 import { type UnknownJobChain, listJobChains } from "../api.js";
 import { StatusBadge } from "./StatusBadge.js";
 import { TimeAgo } from "./TimeAgo.js";

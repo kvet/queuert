@@ -4,6 +4,7 @@ import {
   type StartedNatsContainer,
 } from "@testcontainers/nats";
 import { type TestAPI } from "vitest";
+
 import { withContainerLock } from "./with-container-lock.js";
 
 const CONTAINER_NAME = "queuert-nats-test";

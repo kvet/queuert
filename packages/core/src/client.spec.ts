@@ -1,4 +1,5 @@
 import { describe, expectTypeOf, it } from "vitest";
+
 import { type Client, createClient } from "./client.js";
 import { defineJobTypeRegistry } from "./entities/define-job-type-registry.js";
 import { mergeJobTypeRegistries } from "./entities/merge-job-type-registries.js";

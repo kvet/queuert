@@ -10,6 +10,7 @@ import {
 import { createInProcessStateAdapter } from "queuert/internal";
 import * as v from "valibot";
 import { describe, expect, expectTypeOf, it } from "vitest";
+
 import { createValibotJobTypeRegistry } from "./valibot-adapter.js";
 
 describe("createValibotJobTypeRegistry", () => {

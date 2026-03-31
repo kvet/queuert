@@ -16,6 +16,7 @@ import {
   workerlessCompletionTestSuite,
 } from "queuert/testing";
 import { describe, it } from "vitest";
+
 import { extendWithStateSqlite } from "./state-adapter.sqlite.spec-helper.js";
 
 const sqliteInProcessIt = extendWithResourceLeakDetection(

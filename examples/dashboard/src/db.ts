@@ -1,6 +1,7 @@
+import { join } from "node:path";
+
 import { type SqliteStateProvider, createAsyncLock } from "@queuert/sqlite";
 import Database from "better-sqlite3";
-import { join } from "node:path";
 
 const DB_PATH = join(import.meta.dirname, "..", "data.db");
 

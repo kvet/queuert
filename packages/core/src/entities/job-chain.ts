@@ -1,7 +1,7 @@
 import { type StateJob } from "../state-adapter/state-adapter.js";
 import { type JobChain } from "./job-chain.types.js";
 
-export * from "./job-chain.types.js";
+export type * from "./job-chain.types.js";
 
 export const mapStateJobPairToJobChain = (
   stateJobPair: [StateJob, StateJob | undefined],

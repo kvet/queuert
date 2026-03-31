@@ -1,4 +1,5 @@
 import { describe, expectTypeOf, it } from "vitest";
+
 import { defineJobTypeRegistry } from "./define-job-type-registry.js";
 import {
   type ExternalJobTypeRegistryDefinitions,

@@ -17,6 +17,7 @@ import {
   workerlessCompletionTestSuite,
 } from "queuert/testing";
 import { describe, it } from "vitest";
+
 import { extendWithStatePostgres } from "./state-adapter.pg.spec-helper.js";
 
 const postgresInProcessIt = extendWithResourceLeakDetection(

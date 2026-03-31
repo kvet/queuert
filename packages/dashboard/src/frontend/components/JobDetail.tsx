@@ -1,8 +1,9 @@
-import { For, Show, createResource, createSignal } from "solid-js";
 import { A, useParams } from "@solidjs/router";
+import { For, Show, createResource, createSignal } from "solid-js";
+
 import { getJobDetail, triggerJob } from "../api.js";
-import { StatusBadge } from "./StatusBadge.js";
 import { JsonView } from "./JsonView.js";
+import { StatusBadge } from "./StatusBadge.js";
 import { TimeAgo } from "./TimeAgo.js";
 
 const dtf = new Intl.DateTimeFormat(undefined, {

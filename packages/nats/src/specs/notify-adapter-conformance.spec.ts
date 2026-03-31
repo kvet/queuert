@@ -5,6 +5,7 @@ import {
   notifyAdapterConformanceTestSuite,
 } from "queuert/testing";
 import { it as baseIt, describe } from "vitest";
+
 import { createNatsNotifyAdapter } from "../notify-adapter/notify-adapter.nats.js";
 
 const it = extendWithNats(baseIt, import.meta.url);

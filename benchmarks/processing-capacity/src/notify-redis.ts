@@ -1,8 +1,9 @@
-import { createSqliteStateAdapter } from "@queuert/sqlite";
 import { type RedisNotifyProvider, createRedisNotifyAdapter } from "@queuert/redis";
+import { createSqliteStateAdapter } from "@queuert/sqlite";
 import { RedisContainer } from "@testcontainers/redis";
 import Database from "better-sqlite3";
 import { createClient as createRedisClient } from "redis";
+
 import { createSqliteStateProvider } from "./sqlite-state-provider.js";
 import { parseConcurrency, printHeader, runBenchmark } from "./utils.js";
 

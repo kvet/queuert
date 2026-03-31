@@ -1,4 +1,5 @@
 import { type UUID } from "node:crypto";
+
 import {
   createClient,
   createInProcessWorker,
@@ -9,6 +10,7 @@ import {
 import { createInProcessNotifyAdapter } from "queuert/internal";
 import { withWorkers } from "queuert/testing";
 import { it as baseIt, expectTypeOf, vi } from "vitest";
+
 import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
 import { extendWithStateSqlite } from "../testing.js";
 import { createBetterSqlite3Provider } from "./state-provider.better-sqlite3.js";

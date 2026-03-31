@@ -1,4 +1,5 @@
 import { describe, it } from "vitest";
+
 import { extendWithStateInProcess } from "../state-adapter/state-adapter.in-process.spec-helper.js";
 import { processErrorHandlingTestSuite } from "../suites/process-error-handling.test-suite.js";
 import { processModesTestSuite } from "../suites/process-modes.test-suite.js";

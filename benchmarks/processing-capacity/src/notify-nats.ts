@@ -1,8 +1,9 @@
-import { createSqliteStateAdapter } from "@queuert/sqlite";
 import { createNatsNotifyAdapter } from "@queuert/nats";
+import { createSqliteStateAdapter } from "@queuert/sqlite";
 import { NatsContainer } from "@testcontainers/nats";
 import Database from "better-sqlite3";
 import { connect } from "nats";
+
 import { createSqliteStateProvider } from "./sqlite-state-provider.js";
 import { parseConcurrency, printHeader, runBenchmark } from "./utils.js";
 

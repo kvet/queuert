@@ -2,6 +2,7 @@ import { type NotifyAdapter } from "queuert";
 import { type TestSuiteContext, createFlakyBatchGenerator } from "queuert/testing";
 import { type RedisClientType, createClient } from "redis";
 import { type TestAPI, expect } from "vitest";
+
 import { createRedisNotifyAdapter } from "../notify-adapter/notify-adapter.redis.js";
 import { createNodeRedisNotifyProvider } from "./notify-provider.node-redis.js";
 

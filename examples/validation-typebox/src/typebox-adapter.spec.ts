@@ -1,3 +1,4 @@
+import { Type } from "@sinclair/typebox";
 import {
   type ExternalJobTypeRegistryDefinitions,
   type JobTypeRegistryDefinitions,
@@ -9,7 +10,7 @@ import {
 } from "queuert";
 import { createInProcessStateAdapter } from "queuert/internal";
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { Type } from "@sinclair/typebox";
+
 import { createTypeBoxJobTypeRegistry } from "./typebox-adapter.js";
 
 describe("createTypeBoxJobTypeRegistry", () => {

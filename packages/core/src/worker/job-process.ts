@@ -71,6 +71,7 @@ export type AttemptCompleteOptions<
   TChainTypeName extends string,
 > = {
   continueWith: <
+    // oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- TContinueJobTypeNames drives conditional type inference
     TContinueJobTypeNames extends JobTypeContinuation<TJobTypeDefinitions, TJobTypeName> & string,
   >(
     options: TContinueJobTypeNames extends infer TContinueJobTypeName extends string

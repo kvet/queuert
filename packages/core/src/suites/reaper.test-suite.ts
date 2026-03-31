@@ -1,4 +1,5 @@
 import { type TestAPI } from "vitest";
+
 import { JobAlreadyCompletedError, JobTakenByAnotherWorkerError } from "../errors.js";
 import { sleep } from "../helpers/sleep.js";
 import {

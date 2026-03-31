@@ -1,7 +1,7 @@
 import { type StateJob } from "../state-adapter/state-adapter.js";
 import { type Job } from "./job.types.js";
 
-export * from "./job.types.js";
+export type * from "./job.types.js";
 
 export const mapStateJobToJob = (stateJob: StateJob): Job<any, any, any, any, any> => {
   const base = {

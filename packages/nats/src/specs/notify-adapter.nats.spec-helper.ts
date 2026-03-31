@@ -3,6 +3,7 @@ import { connect } from "nats";
 import { type NotifyAdapter } from "queuert";
 import { type TestSuiteContext, createFlakyBatchGenerator } from "queuert/testing";
 import { type TestAPI, expect } from "vitest";
+
 import { createNatsNotifyAdapter } from "../notify-adapter/notify-adapter.nats.js";
 
 export const extendWithNotifyNats = <

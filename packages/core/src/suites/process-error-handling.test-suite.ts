@@ -1,4 +1,5 @@
 import { type TestAPI } from "vitest";
+
 import { sleep } from "../helpers/sleep.js";
 import {
   createClient,
@@ -1646,6 +1647,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
               const errorToThrow = errorsByAttempt[job.attempt];
               if (errorToThrow != null) {
+                // oxlint-disable-next-line typescript/only-throw-error -- test intentionally throws non-Error values
                 throw errorToThrow;
               }
 

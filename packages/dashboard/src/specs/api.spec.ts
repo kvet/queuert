@@ -3,6 +3,7 @@ import { createInProcessStateAdapter } from "queuert/internal";
 // @ts-expect-error tsgo doesn't resolve export * re-exports from seroval
 import { deserialize } from "seroval";
 import { describe, expect, it } from "vitest";
+
 import { createDashboard } from "../api/dashboard.js";
 
 const parseBody = async (res: Response) => deserialize(await res.text());

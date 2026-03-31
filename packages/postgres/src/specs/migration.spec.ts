@@ -1,8 +1,9 @@
 import { extendWithPostgres } from "@queuert/testcontainers";
 import { Pool } from "pg";
 import { it as baseIt, describe, expect } from "vitest";
-import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.js";
+
 import { migrations } from "../state-adapter/sql.js";
+import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.js";
 import { createPgPoolProvider } from "./state-provider.pg-pool.js";
 
 const it = extendWithPostgres(baseIt, import.meta.url);

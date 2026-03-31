@@ -3,6 +3,7 @@ import { Pool } from "pg";
 import { type StateAdapter } from "queuert";
 import { stateAdapterConformanceTestSuite } from "queuert/testing";
 import { it as baseIt, describe, expect } from "vitest";
+
 import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.js";
 import { type PgPoolContext, createPgPoolProvider } from "./state-provider.pg-pool.js";
 
