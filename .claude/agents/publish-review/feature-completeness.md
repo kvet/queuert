@@ -38,6 +38,7 @@ Check all example directories in `examples/`:
 - Does each example have working code and dependencies?
 - Are there stub or placeholder examples that aren't functional?
 - Do examples cover all major adapter combinations?
+- Is every `examples/` directory listed in `docs/src/content/docs/examples.md`?
 - See CLAUDE.md for the expected example naming conventions
 
 ### 4. Package Readiness

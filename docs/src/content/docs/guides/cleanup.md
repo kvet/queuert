@@ -152,6 +152,8 @@ Since this is your own job type, you can adapt the logic freely:
 - **Metrics** — emit the `deletedChainCount` output to your observability system
 - **Alerting** — fail the cleanup job if deletion count exceeds a threshold
 
+See [examples/showcase-cleanup](https://github.com/kvet/queuert/tree/main/examples/showcase-cleanup) for a complete working example demonstrating automatic cleanup of completed job chains.
+
 ## See Also
 
 - [Scheduling](/guides/scheduling/) — Deferred start and recurring job patterns

@@ -60,6 +60,7 @@ Job chain patterns, error handling, scheduling, and other core features.
 | [showcase-queries](https://github.com/kvet/queuert/tree/main/examples/showcase-queries)                   | Querying jobs and chains                             |
 | [showcase-timeouts](https://github.com/kvet/queuert/tree/main/examples/showcase-timeouts)                 | Job and chain timeouts                               |
 | [showcase-slices](https://github.com/kvet/queuert/tree/main/examples/showcase-slices)                     | Feature slices with merged registries and processors |
+| [showcase-cleanup](https://github.com/kvet/queuert/tree/main/examples/showcase-cleanup)                   | Automatic cleanup of completed job chains            |
 | [showcase-workerless](https://github.com/kvet/queuert/tree/main/examples/showcase-workerless)             | Running without a worker (polling only)              |
 
 ## Logging

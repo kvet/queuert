@@ -63,11 +63,15 @@ Read and analyze these files:
 - Links between docs should be valid
 - Referenced file paths should exist
 - Test suite references in README should match actual file names
+- Every `examples/showcase-*` directory should have a corresponding entry in `docs/src/content/docs/examples.md`
+- Every guide in `docs/src/content/docs/guides/` that has a matching `examples/showcase-*` directory should link to it (other guides use the pattern `See [examples/showcase-...](https://github.com/kvet/queuert/tree/main/examples/showcase-...)`)
 
 **Example issues to find:**
 
 - Link to a reference doc that doesn't exist
 - Reference to `process.test-suite.ts` but file is `process.test-suite.spec.ts`
+- `examples/showcase-cleanup` exists but is not listed in `examples.md`
+- Guide `cleanup.md` has a matching `showcase-cleanup` example but doesn't link to it
 
 ### 5. Completeness Gaps
 
