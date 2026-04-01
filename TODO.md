@@ -1,9 +1,8 @@
 # Short term
 
+- [TASK] Change attemptMiddleware to wrapAttemptHandler, wrapPrepare, wrapCompleteHandler, etc. to allow more flexible middleware that can add additional parameters (e.g. context) and is not limited to the acquire+execute+complete flow
 - [TASK] Support triggering multiple jobs
 - [?,TASK] Simplify `mergeJobTypeProcessorRegistries` and `mergeJobTypeRegistries` to not use slices as a named parameter
-- [?,TASK] For update locking in list methods (e.g. `listJobChainsForCleanup`), add option to skip locking when the method is used in a context where concurrent modifications are not a concern (e.g. cleanup job listing its own completed chains for deletion)
-- [REF] Extract `SharedListenerState`/`createSharedListener` from PG, Redis, and NATS notify adapters into a shared utility in `queuert/internal`
 - [EPIC] Multi-driver support (postgres.js, sqlite3) — branch `feat/multi-driver-support`. Experimental; needs review before merge (type safety regression in executeTypedSql, missing resilience test coverage for postgres.js, JSON serialization verification)
 - [EPIC] multi-driver support for notify adapter
 - [EPIC] test against bun and its built-in sqlite, postgres clients
@@ -12,6 +11,8 @@
 
 # Medium term
 
+- [?,REF] For update locking in list methods (e.g. `listJobChainsForCleanup`), add option to skip locking when the method is used in a context where concurrent modifications are not a concern (e.g. cleanup job listing its own completed chains for deletion)
+  - [?,REF] Change complete job chain to something more empirical?
 - [REF] Handle routing with seroval on dashboard instead of path-based routing (e.g. `/chains/${chainId}` → `/chain?chainId=${chainId}`) — simplifies dashboard API and allows more flexible UI patterns (modals, nested views)
 - [REVIEW] Review `addJobBlocker` design — see `design/add-job-blocker.md`
 - [TASK,COMPLEX] Better dashboard UI

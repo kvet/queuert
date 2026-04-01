@@ -264,6 +264,33 @@ export const notifyAdapterConformanceTestSuite = <T extends NotifyAdapterConform
     });
   });
 
+  describe("delivery timeliness", () => {
+    it("notifications are delivered during publish loop, not batched at end", async ({
+      notifyAdapter,
+      expect,
+    }) => {
+      const count = 50;
+      let received = 0;
+      const chainIds = Array.from({ length: count }, (_, i) => `chain-flush-${i}`);
+
+      const unsubscribes = await Promise.all(
+        chainIds.map(async (id) =>
+          notifyAdapter.listenJobChainCompleted(id, () => {
+            received++;
+          }),
+        ),
+      );
+
+      for (const id of chainIds) {
+        await notifyAdapter.notifyJobChainCompleted(id);
+      }
+
+      expect(received).toBeGreaterThanOrEqual(count - 1);
+
+      await Promise.all(unsubscribes.map(async (u) => u()));
+    });
+  });
+
   describe("cross-cutting behavior", () => {
     it("listen methods return async unsubscribe functions", async ({ notifyAdapter, expect }) => {
       const unsubscribe1 = await notifyAdapter.listenJobScheduled(["type-a"], () => {});

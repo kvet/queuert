@@ -149,6 +149,7 @@ export const createNatsNotifyAdapter = async ({
       }
 
       nc.publish(jobScheduledSubject, encoder.encode(payload));
+      await nc.flush();
     },
 
     listenJobScheduled: async (typeNames, onNotification) => {
@@ -178,6 +179,7 @@ export const createNatsNotifyAdapter = async ({
 
     notifyJobChainCompleted: async (chainId) => {
       nc.publish(chainCompletedSubject, encoder.encode(chainId));
+      await nc.flush();
     },
 
     listenJobChainCompleted: async (chainId, onNotification) => {
@@ -190,6 +192,7 @@ export const createNatsNotifyAdapter = async ({
 
     notifyJobOwnershipLost: async (jobId) => {
       nc.publish(ownershipLostSubject, encoder.encode(jobId));
+      await nc.flush();
     },
 
     listenJobOwnershipLost: async (jobId, onNotification) => {
