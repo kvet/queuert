@@ -53,7 +53,11 @@ const cleanupJobTypeRegistry = defineJobTypeRegistry<{
     entry: true;
     input: { cutoffDate?: string; deletedChainCount?: number };
     output: { deletedChainCount: number };
-    continueWith: { typeName: "queuert.cleanup" };
+    continueWith: { typeName: "queuert.cleanup" } | { typeName: "queuert.cleanup.vacuum" };
+  };
+  "queuert.cleanup.vacuum": {
+    input: { deletedChainCount: number };
+    output: { deletedChainCount: number };
   };
 }>();
 
@@ -153,8 +157,17 @@ const cleanupProcessorRegistry = createJobTypeProcessorRegistry({
             schedule: { afterMs: CLEANUP_INTERVAL_MS },
           });
 
-          return { deletedChainCount };
+          return continueWith({
+            typeName: "queuert.cleanup.vacuum",
+            input: { deletedChainCount },
+          });
         }),
+    },
+    "queuert.cleanup.vacuum": {
+      attemptHandler: async ({ job, complete }) => {
+        await stateAdapter.vacuum();
+        return complete(async () => ({ deletedChainCount: job.input.deletedChainCount }));
+      },
     },
   },
 });

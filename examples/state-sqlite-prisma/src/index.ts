@@ -9,6 +9,7 @@ import {
   createAsyncLock,
   createSqliteStateAdapter,
 } from "@queuert/sqlite";
+import Database from "better-sqlite3";
 import {
   createClient,
   createInProcessWorker,
@@ -22,7 +23,14 @@ import { createInProcessNotifyAdapter } from "queuert/internal";
 const tempDir = mkdtempSync(join(tmpdir(), "queuert-sqlite-prisma-"));
 const dbPath = join(tempDir, "test.db");
 
-// 2. Push Prisma schema to database and generate client
+// 2. Initialize database with required pragmas before Prisma creates tables.
+// auto_vacuum must be set before any tables exist; Prisma has no hook for this,
+// so we create the file first with better-sqlite3.
+const initDb = new Database(dbPath);
+initDb.pragma("auto_vacuum = INCREMENTAL");
+initDb.close();
+
+// 3. Push Prisma schema to database and generate client
 process.env.DATABASE_URL = `file:${dbPath}`;
 execSync("npx prisma db push", {
   stdio: "inherit",
@@ -34,10 +42,10 @@ const { PrismaClient } = await import("../prisma/generated/prisma/client.js");
 const adapter = new PrismaBetterSqlite3({ url: `file:${dbPath}` });
 const prisma = new PrismaClient({ adapter });
 
-// 3. Create async lock for write serialization (SQLite requirement)
+// 4. Create async lock for write serialization (SQLite requirement)
 const lock = createAsyncLock();
 
-// 4. Define job types
+// 5. Define job types
 const jobTypeRegistry = defineJobTypeRegistry<{
   send_welcome_email: {
     entry: true;
@@ -46,7 +54,7 @@ const jobTypeRegistry = defineJobTypeRegistry<{
   };
 }>();
 
-// 5. Create state provider for Prisma
+// 6. Create state provider for Prisma
 type PrismaTransactionClient = Omit<
   InstanceType<typeof PrismaClient>,
   "$connect" | "$disconnect" | "$on" | "$transaction" | "$extends"
@@ -98,7 +106,7 @@ const stateProvider: SqliteStateProvider<DbContext> = {
   },
 };
 
-// 6. Create adapters and queuert client/worker
+// 7. Create adapters and queuert client/worker
 const stateAdapter = await createSqliteStateAdapter({
   stateProvider,
 });
@@ -112,7 +120,7 @@ const qrtClient = await createClient({
   jobTypeRegistry,
 });
 
-// 7. Create and start qrtWorker
+// 8. Create and start qrtWorker
 const qrtWorker = await createInProcessWorker({
   client: qrtClient,
   jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
@@ -135,7 +143,7 @@ const qrtWorker = await createInProcessWorker({
 
 const stopWorker = await qrtWorker.start();
 
-// 8. Register a new user and queue welcome email atomically
+// 9. Register a new user and queue welcome email atomically
 const jobChain = await withTransactionHooks(async (transactionHooks) => {
   await lock.acquire();
   try {
@@ -157,11 +165,11 @@ const jobChain = await withTransactionHooks(async (transactionHooks) => {
   }
 });
 
-// 9. Wait for the job chain to complete
+// 10. Wait for the job chain to complete
 const result = await qrtClient.awaitJobChain(jobChain, { timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);
 
-// 10. Cleanup
+// 11. Cleanup
 await stopWorker();
 await prisma.$disconnect();
 rmSync(tempDir, { recursive: true, force: true });

@@ -188,6 +188,24 @@ SQLite has no built-in notification mechanism like PostgreSQL's `LISTEN`/`NOTIFY
 
 For multi-process deployments, an external notify adapter (Redis or NATS) can be paired with the SQLite state adapter.
 
+## Vacuum
+
+SQLite does not reclaim disk space from deleted rows automatically by default. The adapter exposes a `vacuum()` method that runs `PRAGMA incremental_vacuum` to free reclaimable pages without rewriting the entire database:
+
+```typescript
+await stateAdapter.vacuum();
+```
+
+This requires `PRAGMA auto_vacuum = INCREMENTAL` to be set on the database before any tables are created:
+
+```typescript
+const db = new Database("queue.db");
+db.pragma("auto_vacuum = INCREMENTAL");
+db.pragma("foreign_keys = ON");
+```
+
+Incremental vacuum frees pages that are already marked as free by prior DELETE operations. It does not rewrite the database or defragment it — it only returns free pages to the OS. This makes it safe to call frequently (e.g., after each cleanup run) without blocking other operations for extended periods.
+
 ## Listing Queries and Locking
 
 `listJobChains` joins each root row with the last job in the chain. The `status` filter applies to the joined last job and cannot use an index — only `typeName` and date range filters narrow the scan before the join. Without these filters, every root row is scanned and joined. On deployments with frequent writes, unfiltered scans over large tables can extend write queue wait times because the read lock is held longer.

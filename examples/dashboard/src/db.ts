@@ -9,6 +9,7 @@ type DbContext = { db: Database.Database };
 
 export const createDatabase = (): Database.Database => {
   const db = new Database(DB_PATH);
+  db.pragma("auto_vacuum = INCREMENTAL");
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
   return db;

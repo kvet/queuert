@@ -42,6 +42,7 @@ const promisify = {
 const db = new sqlite3.Database(":memory:");
 
 // Configure foreign keys
+await promisify.exec(db, "PRAGMA auto_vacuum = INCREMENTAL");
 await promisify.exec(db, "PRAGMA foreign_keys = ON");
 
 // 2. Create users table

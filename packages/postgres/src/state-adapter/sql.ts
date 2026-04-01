@@ -186,6 +186,32 @@ ON {{schema}}.{{table_prefix}}job (type_name, created_at DESC) WHERE chain_index
       },
     ],
   },
+  {
+    name: "20240102000000_vacuum_tuning",
+    statements: [
+      {
+        sql: sql(
+          /* sql */ `
+ALTER TABLE {{schema}}.{{table_prefix}}job SET (
+  fillfactor = 75,
+  autovacuum_vacuum_scale_factor = 0.02,
+  autovacuum_analyze_scale_factor = 0.02,
+  autovacuum_vacuum_cost_delay = 0
+)`,
+          false,
+        ),
+      },
+      {
+        sql: sql(
+          /* sql */ `
+ALTER TABLE {{schema}}.{{table_prefix}}job_blocker SET (
+  autovacuum_vacuum_cost_delay = 0
+)`,
+          false,
+        ),
+      },
+    ],
+  },
 ];
 
 export type DbMigration = {

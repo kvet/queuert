@@ -15,6 +15,7 @@ import { createInProcessNotifyAdapter } from "queuert/internal";
 
 // 1. Create in-memory SQLite database
 const db = new Database(":memory:");
+db.pragma("auto_vacuum = INCREMENTAL");
 db.pragma("foreign_keys = ON");
 
 // 2. Create application schema

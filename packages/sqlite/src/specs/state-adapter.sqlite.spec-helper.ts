@@ -48,6 +48,7 @@ export const extendWithStateSqlite = <T>(
       async ({}, use) => {
         const db = new Database(":memory:");
         db.pragma("journal_mode = WAL");
+        db.pragma("auto_vacuum = INCREMENTAL");
         db.pragma("foreign_keys = ON");
 
         await use(db);

@@ -245,11 +245,53 @@ The adapter uses CTEs (Common Table Expressions) extensively to perform multi-st
 
 All writeable CTEs use `RETURNING` to propagate results between steps without additional round-trips.
 
+## Vacuum Tuning
+
+The adapter configures aggressive autovacuum and storage settings on the job tables via the `vacuum_tuning` migration:
+
+### Fillfactor
+
+```sql
+ALTER TABLE job SET (fillfactor = 75);
+```
+
+Fillfactor reserves 25% free space per heap page. Jobs go through multiple in-place status updates (pending → running → completed, plus lease renewals), and PostgreSQL can perform these as HOT (Heap-Only Tuple) updates when free space is available in the same page. HOT updates avoid creating new index entries, reducing both index bloat and vacuum workload.
+
+The `job_blocker` table does not set a fillfactor because blockers are inserted and deleted without intermediate updates.
+
+### Autovacuum
+
+```sql
+ALTER TABLE job SET (
+  autovacuum_vacuum_scale_factor = 0.02,
+  autovacuum_analyze_scale_factor = 0.02,
+  autovacuum_vacuum_cost_delay = 0
+);
+```
+
+| Setting                           | Default   | Configured | Effect                                              |
+| --------------------------------- | --------- | ---------- | --------------------------------------------------- |
+| `autovacuum_vacuum_scale_factor`  | 0.2 (20%) | 0.02 (2%)  | Triggers vacuum after 2% dead tuples instead of 20% |
+| `autovacuum_analyze_scale_factor` | 0.1 (10%) | 0.02 (2%)  | Re-analyzes planner statistics after 2% row changes |
+| `autovacuum_vacuum_cost_delay`    | 2ms       | 0          | Removes I/O throttling — vacuum runs at full speed  |
+
+These settings are applied per-table (not server-wide) to the `job` table. The `job_blocker` table sets only `autovacuum_vacuum_cost_delay = 0` since blockers are inserted and deleted without intermediate updates, producing less churn than the job table.
+
+### On-Demand Vacuum
+
+The adapter also exposes a `vacuum()` method that runs `VACUUM` on both job tables:
+
+```typescript
+await stateAdapter.vacuum();
+```
+
+PostgreSQL's `VACUUM` (without `FULL`) does not block reads or writes — it reclaims dead tuples while the tables remain accessible. This complements autovacuum for cases where immediate reclamation is desired (e.g., after a large batch deletion in the cleanup job).
+
 ## Listing Queries and Vacuum
 
 `listJobChains` joins each root row with the last job in the chain via a lateral subquery. The `status` filter applies to the joined last job and cannot use an index — only `typeName` and date range filters narrow the scan before the join. Without these filters, every root row is scanned and joined.
 
-Listing queries hold an MVCC snapshot for their duration. On tables with frequent writes, unfiltered scans hold snapshots longer, preventing autovacuum from reclaiming dead tuples and causing table bloat over time.
+Listing queries hold an MVCC snapshot for their duration. On tables with frequent writes, unfiltered scans hold snapshots longer, preventing autovacuum from reclaiming dead tuples and causing table bloat over time. The aggressive autovacuum settings above help mitigate this by reclaiming dead tuples more frequently between listing scans.
 
 `listJobs` uses straightforward indexed scans without a join and is efficient at any scale.
 

@@ -163,6 +163,7 @@ export const createSqliteStateAdapter = async <
   idType = "TEXT",
   idGenerator = () => crypto.randomUUID() as TIdType,
   checkForeignKeys = true,
+  checkAutoVacuum = true,
 }: {
   /** SQLite state provider wrapping the database connection. */
   stateProvider: SqliteStateProvider<TTxContext>;
@@ -174,9 +175,12 @@ export const createSqliteStateAdapter = async <
   idGenerator?: () => TIdType;
   /** Whether `migrateToLatest()` verifies that `PRAGMA foreign_keys = ON` is set. Disable only if foreign keys are managed externally. @defaultValue `true` */
   checkForeignKeys?: boolean;
+  /** Whether `migrateToLatest()` verifies that `PRAGMA auto_vacuum = INCREMENTAL` is set. Required for `vacuum()` to reclaim disk space. @defaultValue `true` */
+  checkAutoVacuum?: boolean;
 }): Promise<
   StateAdapter<TTxContext, TIdType> & {
     migrateToLatest: () => Promise<MigrationResult>;
+    vacuum: () => Promise<void>;
   }
 > => {
   const applyTemplate = createTemplateApplier(
@@ -896,6 +900,20 @@ export const createSqliteStateAdapter = async <
         });
       }
 
+      if (checkAutoVacuum) {
+        const [avResult] = (await stateProvider.executeSql({
+          sql: "PRAGMA auto_vacuum",
+          returns: true,
+        })) as { auto_vacuum: number }[];
+        if (!avResult || avResult.auto_vacuum !== 2) {
+          throw new Error(
+            "SQLite auto_vacuum pragma is not set to INCREMENTAL. " +
+              "Enable it with PRAGMA auto_vacuum = INCREMENTAL before creating tables. " +
+              "Incremental auto-vacuum is required for vacuum() to reclaim disk space.",
+          );
+        }
+      }
+
       const runMigrations = await executeMigrations<TTxContext>({
         migrations,
         getAppliedMigrationNames: async (txCtx) => {
@@ -932,11 +950,14 @@ export const createSqliteStateAdapter = async <
 
       return stateProvider.runInTransaction(runMigrations);
     },
+    vacuum: async () => {
+      await stateProvider.executeSql({ sql: "PRAGMA incremental_vacuum", returns: false });
+    },
   };
 };
 
 /**
- * SQLite state adapter type. Includes `migrateToLatest` for schema migrations.
+ * SQLite state adapter type. Includes `migrateToLatest` for schema migrations and `vacuum` for reclaiming disk space.
  * @experimental
  */
 export type SqliteStateAdapter<
@@ -944,4 +965,5 @@ export type SqliteStateAdapter<
   TJobId extends string = UUID,
 > = StateAdapter<TTxContext, TJobId> & {
   migrateToLatest: () => Promise<MigrationResult>;
+  vacuum: () => Promise<void>;
 };

@@ -100,6 +100,7 @@ export const createPgStateAdapter = async <
 }): Promise<
   StateAdapter<TTxContext, TIdType> & {
     migrateToLatest: () => Promise<MigrationResult>;
+    vacuum: () => Promise<void>;
   }
 > => {
   const applyTemplate = createTemplateApplier({
@@ -676,13 +677,18 @@ export const createPgStateAdapter = async <
 
       return stateProvider.runInTransaction(runMigrations);
     },
+    vacuum: async () => {
+      await stateProvider.executeSql({ sql: `VACUUM ${schema}.${tablePrefix}job` });
+      await stateProvider.executeSql({ sql: `VACUUM ${schema}.${tablePrefix}job_blocker` });
+    },
   };
 };
 
-/** PostgreSQL state adapter type. Includes `migrateToLatest` for schema migrations. */
+/** PostgreSQL state adapter type. Includes `migrateToLatest` for schema migrations and `vacuum` for on-demand dead tuple reclamation. */
 export type PgStateAdapter<
   TTxContext extends BaseTxContext,
   TJobId extends string = UUID,
 > = StateAdapter<TTxContext, TJobId> & {
   migrateToLatest: () => Promise<MigrationResult>;
+  vacuum: () => Promise<void>;
 };

@@ -143,6 +143,24 @@ await withTransactionHooks(async (transactionHooks) =>
 
 After the first run completes, the cleanup job automatically schedules its next run.
 
+## Reclaiming Disk Space
+
+Deleting rows frees logical space but doesn't always return it to the OS immediately.
+
+### PostgreSQL
+
+The adapter configures aggressive autovacuum on the job tables (2% dead-tuple threshold, no I/O throttle) and sets `fillfactor = 75` on the job table to enable HOT updates. No application-level action is needed — PostgreSQL's autovacuum handles space reclamation automatically. See [PostgreSQL Internals](/advanced/postgres-internals/#vacuum-tuning) for details.
+
+### SQLite
+
+SQLite does not reclaim space automatically. Call `stateAdapter.vacuum()` after cleanup to free reclaimable pages via incremental vacuum:
+
+```ts
+await stateAdapter.vacuum();
+```
+
+This requires `PRAGMA auto_vacuum = INCREMENTAL` to be set on the database before table creation. See [SQLite Internals](/advanced/sqlite-internals/#vacuum) for details.
+
 ## Customization Ideas
 
 Since this is your own job type, you can adapt the logic freely:

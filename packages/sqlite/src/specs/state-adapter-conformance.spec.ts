@@ -23,6 +23,7 @@ describe("SQLite State Adapter Conformance - Default Config", () => {
       async ({}, use) => {
         const db = new Database(":memory:");
         db.pragma("journal_mode = WAL");
+        db.pragma("auto_vacuum = INCREMENTAL");
         db.pragma("foreign_keys = ON");
         await use(db);
         db.close();
@@ -71,6 +72,7 @@ describe("SQLite State Adapter Conformance - Custom Table Prefix", () => {
       async ({}, use) => {
         const db = new Database(":memory:");
         db.pragma("journal_mode = WAL");
+        db.pragma("auto_vacuum = INCREMENTAL");
         db.pragma("foreign_keys = ON");
         await use(db);
         db.close();
@@ -121,6 +123,7 @@ describe("SQLite State Adapter Conformance - Custom ID Generator", () => {
       async ({}, use) => {
         const db = new Database(":memory:");
         db.pragma("journal_mode = WAL");
+        db.pragma("auto_vacuum = INCREMENTAL");
         db.pragma("foreign_keys = ON");
         await use(db);
         db.close();
@@ -171,6 +174,7 @@ describe("SQLite State Adapter Conformance - All Custom Options", () => {
       async ({}, use) => {
         const db = new Database(":memory:");
         db.pragma("journal_mode = WAL");
+        db.pragma("auto_vacuum = INCREMENTAL");
         db.pragma("foreign_keys = ON");
         await use(db);
         db.close();

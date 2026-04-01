@@ -18,6 +18,7 @@ import { createInProcessNotifyAdapter } from "queuert/internal";
 
 // 1. Create in-memory SQLite database
 const sqlite = new Database(":memory:");
+sqlite.pragma("auto_vacuum = INCREMENTAL");
 sqlite.pragma("foreign_keys = ON");
 
 // 2. Define Drizzle schema
