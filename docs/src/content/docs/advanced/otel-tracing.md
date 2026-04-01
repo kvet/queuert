@@ -199,48 +199,48 @@ PRODUCER create chain.process-user [0ms] ─────────────
 
 ### Chain Attributes
 
-| Attribute | Type | Description |
-| --- | --- | --- |
-| `queuert.chain.id` | string | Job chain ID |
-| `queuert.chain.type` | string | Job chain type name |
+| Attribute                    | Type    | Description                        |
+| ---------------------------- | ------- | ---------------------------------- |
+| `queuert.chain.id`           | string  | Job chain ID                       |
+| `queuert.chain.type`         | string  | Job chain type name                |
 | `queuert.chain.deduplicated` | boolean | `true` when chain was deduplicated |
 
 ### Job Attributes
 
-| Attribute | Type | Description |
-| --- | --- | --- |
-| `queuert.job.id` | string | Job ID |
-| `queuert.job.type` | string | Job type name |
+| Attribute             | Type   | Description                       |
+| --------------------- | ------ | --------------------------------- |
+| `queuert.job.id`      | string | Job ID                            |
+| `queuert.job.type`    | string | Job type name                     |
 | `queuert.job.attempt` | number | Attempt number (on attempt spans) |
 
 ### Worker Attributes
 
-| Attribute | Type | Description |
-| --- | --- | --- |
+| Attribute           | Type   | Description                      |
+| ------------------- | ------ | -------------------------------- |
 | `queuert.worker.id` | string | Worker ID processing the attempt |
 
 ### Attempt Result Attributes
 
-| Attribute | Type | Description |
-| --- | --- | --- |
-| `queuert.attempt.result` | string | `"completed"` or `"failed"` |
-| `queuert.rescheduled_at` | string | ISO 8601 timestamp of next retry (on failure) |
-| `queuert.rescheduled_after_ms` | number | Delay in ms before next retry (on failure) |
+| Attribute                      | Type   | Description                                   |
+| ------------------------------ | ------ | --------------------------------------------- |
+| `queuert.attempt.result`       | string | `"completed"` or `"failed"`                   |
+| `queuert.rescheduled_at`       | string | ISO 8601 timestamp of next retry (on failure) |
+| `queuert.rescheduled_after_ms` | number | Delay in ms before next retry (on failure)    |
 
 ### Continuation Attributes
 
-| Attribute | Type | Description |
-| --- | --- | --- |
-| `queuert.continued_with.job_id` | string | ID of the continuation job |
+| Attribute                         | Type   | Description                       |
+| --------------------------------- | ------ | --------------------------------- |
+| `queuert.continued_with.job_id`   | string | ID of the continuation job        |
 | `queuert.continued_with.job_type` | string | Type name of the continuation job |
 
 ### Blocker Attributes
 
-| Attribute | Type | Description |
-| --- | --- | --- |
-| `queuert.blocker.chain.id` | string | Blocker chain ID |
-| `queuert.blocker.chain.type` | string | Blocker chain type name |
-| `queuert.blocker.index` | number | Index of the blocker in the blockers array |
+| Attribute                    | Type   | Description                                |
+| ---------------------------- | ------ | ------------------------------------------ |
+| `queuert.blocker.chain.id`   | string | Blocker chain ID                           |
+| `queuert.blocker.chain.type` | string | Blocker chain type name                    |
+| `queuert.blocker.index`      | number | Index of the blocker in the blockers array |
 
 ## See Also
 

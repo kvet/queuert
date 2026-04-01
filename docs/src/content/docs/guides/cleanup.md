@@ -51,8 +51,7 @@ const cleanupProcessorRegistry = createJobTypeProcessorRegistry({
           });
 
           const chainsToDelete = page.items.filter(
-            (chain) =>
-              chain.id !== job.chainId && chain.status === "completed",
+            (chain) => chain.id !== job.chainId && chain.status === "completed",
           );
 
           if (chainsToDelete.length > 0) {

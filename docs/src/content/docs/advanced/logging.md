@@ -46,56 +46,56 @@ All entries are strongly typed — the `type` field determines the exact shape o
 
 ### Worker Lifecycle
 
-| Type | Level | Message | Data |
-| --- | --- | --- | --- |
-| `worker_started` | `info` | Started worker | `workerId`, `jobTypeNames` |
-| `worker_error` | `error` | Worker error | `workerId`, `error` |
-| `worker_stopping` | `info` | Stopping worker... | `workerId` |
-| `worker_stopped` | `info` | Worker has been stopped | `workerId` |
+| Type              | Level   | Message                 | Data                       |
+| ----------------- | ------- | ----------------------- | -------------------------- |
+| `worker_started`  | `info`  | Started worker          | `workerId`, `jobTypeNames` |
+| `worker_error`    | `error` | Worker error            | `workerId`, `error`        |
+| `worker_stopping` | `info`  | Stopping worker...      | `workerId`                 |
+| `worker_stopped`  | `info`  | Worker has been stopped | `workerId`                 |
 
 ### Job Lifecycle
 
-| Type | Level | Message | Data |
-| --- | --- | --- | --- |
-| `job_created` | `info` | Job created | `id`, `typeName`, `chainId`, `chainTypeName`, `input`, `blockers`, `scheduledAt?`, `scheduleAfterMs?` |
-| `job_completed` | `info` | Job completed | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `output?`, `continuedWith?`, `workerId` |
-| `job_reaped` | `info` | Reaped expired job lease | `id`, `typeName`, `chainId`, `chainTypeName`, `leasedBy`, `leasedUntil`, `workerId` |
-| `job_blocked` | `info` | Job blocked by incomplete chains | `id`, `typeName`, `chainId`, `chainTypeName`, `blockedByChains` |
-| `job_triggered` | `info` | Job triggered | `id`, `typeName`, `chainId`, `chainTypeName` |
-| `job_unblocked` | `info` | Job unblocked | `id`, `typeName`, `chainId`, `chainTypeName`, `unblockedByChain` |
+| Type            | Level  | Message                          | Data                                                                                                       |
+| --------------- | ------ | -------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `job_created`   | `info` | Job created                      | `id`, `typeName`, `chainId`, `chainTypeName`, `input`, `blockers`, `scheduledAt?`, `scheduleAfterMs?`      |
+| `job_completed` | `info` | Job completed                    | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `output?`, `continuedWith?`, `workerId` |
+| `job_reaped`    | `info` | Reaped expired job lease         | `id`, `typeName`, `chainId`, `chainTypeName`, `leasedBy`, `leasedUntil`, `workerId`                        |
+| `job_blocked`   | `info` | Job blocked by incomplete chains | `id`, `typeName`, `chainId`, `chainTypeName`, `blockedByChains`                                            |
+| `job_triggered` | `info` | Job triggered                    | `id`, `typeName`, `chainId`, `chainTypeName`                                                               |
+| `job_unblocked` | `info` | Job unblocked                    | `id`, `typeName`, `chainId`, `chainTypeName`, `unblockedByChain`                                           |
 
 ### Attempt Lifecycle
 
-| Type | Level | Message | Data |
-| --- | --- | --- | --- |
-| `job_attempt_started` | `info` | Job attempt started | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `workerId` |
-| `job_attempt_completed` | `info` | Job attempt completed | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `output?`, `continuedWith?`, `workerId` |
-| `job_attempt_failed` | `error` | Job attempt failed | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `rescheduledAfterMs?`, `rescheduledAt?`, `workerId`, `error` |
-| `job_attempt_taken_by_another_worker` | `warn` | Job taken by another worker | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `leasedBy`, `leasedUntil`, `workerId` |
-| `job_attempt_already_completed` | `warn` | Job already completed by another worker | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `completedBy`, `workerId` |
-| `job_attempt_lease_expired` | `warn` | Job lease expired | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `leasedBy`, `leasedUntil`, `workerId` |
-| `job_attempt_lease_renewed` | `info` | Job lease renewed | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `leasedBy`, `leasedUntil`, `workerId` |
+| Type                                  | Level   | Message                                 | Data                                                                                                                            |
+| ------------------------------------- | ------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `job_attempt_started`                 | `info`  | Job attempt started                     | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `workerId`                                                   |
+| `job_attempt_completed`               | `info`  | Job attempt completed                   | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `output?`, `continuedWith?`, `workerId`                      |
+| `job_attempt_failed`                  | `error` | Job attempt failed                      | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `rescheduledAfterMs?`, `rescheduledAt?`, `workerId`, `error` |
+| `job_attempt_taken_by_another_worker` | `warn`  | Job taken by another worker             | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `leasedBy`, `leasedUntil`, `workerId`                        |
+| `job_attempt_already_completed`       | `warn`  | Job already completed by another worker | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `completedBy`, `workerId`                                    |
+| `job_attempt_lease_expired`           | `warn`  | Job lease expired                       | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `leasedBy`, `leasedUntil`, `workerId`                        |
+| `job_attempt_lease_renewed`           | `info`  | Job lease renewed                       | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `leasedBy`, `leasedUntil`, `workerId`                        |
 
 ### Job Chain Lifecycle
 
-| Type | Level | Message | Data |
-| --- | --- | --- | --- |
-| `job_chain_created` | `info` | Job chain created | `id`, `typeName`, `input` |
+| Type                  | Level  | Message             | Data                       |
+| --------------------- | ------ | ------------------- | -------------------------- |
+| `job_chain_created`   | `info` | Job chain created   | `id`, `typeName`, `input`  |
 | `job_chain_completed` | `info` | Job chain completed | `id`, `typeName`, `output` |
-| `job_chain_deleted` | `info` | Job chain deleted | `id`, `typeName` |
+| `job_chain_deleted`   | `info` | Job chain deleted   | `id`, `typeName`           |
 
 ### Adapter Errors
 
-| Type | Level | Message | Data |
-| --- | --- | --- | --- |
+| Type                   | Level  | Message              | Data                 |
+| ---------------------- | ------ | -------------------- | -------------------- |
 | `notify_adapter_error` | `warn` | Notify adapter error | `operation`, `error` |
-| `state_adapter_error` | `warn` | State adapter error | `operation`, `error` |
+| `state_adapter_error`  | `warn` | State adapter error  | `operation`, `error` |
 
 ### Validation Errors
 
-| Type | Level | Message | Data |
-| --- | --- | --- | --- |
-| `job_type_validation_error` | `error` | *(dynamic)* | `code`, `typeName`, `error`, plus error-specific details |
+| Type                        | Level   | Message     | Data                                                     |
+| --------------------------- | ------- | ----------- | -------------------------------------------------------- |
+| `job_type_validation_error` | `error` | _(dynamic)_ | `code`, `typeName`, `error`, plus error-specific details |
 
 ## Data Shapes
 

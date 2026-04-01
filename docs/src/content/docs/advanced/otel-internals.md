@@ -48,11 +48,11 @@ Queuert persists trace context in the database so spans can be linked across pro
 
 Each job stores two trace contexts as W3C traceparent strings:
 
-| Field | Stored On | Purpose |
-| --- | --- | --- |
-| `chainTraceContext` | `job` table | Chain-level span context — used for chain completion and blocker linking |
-| `traceContext` | `job` table | Job-level span context — used for attempt spans and continuation linking |
-| `trace_context` | `job_blocker` table | Blocker PRODUCER span context — used to create CONSUMER span on resolution |
+| Field               | Stored On           | Purpose                                                                    |
+| ------------------- | ------------------- | -------------------------------------------------------------------------- |
+| `chainTraceContext` | `job` table         | Chain-level span context — used for chain completion and blocker linking   |
+| `traceContext`      | `job` table         | Job-level span context — used for attempt spans and continuation linking   |
+| `trace_context`     | `job_blocker` table | Blocker PRODUCER span context — used to create CONSUMER span on resolution |
 
 ### W3C Traceparent Format
 

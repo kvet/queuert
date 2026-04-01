@@ -31,15 +31,15 @@ All API endpoints are read-only except `POST /api/jobs/{jobId}/trigger` and `DEL
 
 **`GET /api/chains`** — List job chains with filtering and pagination.
 
-| Parameter | Type | Description |
-| --- | --- | --- |
-| `typeName` | query | Filter by chain type name |
-| `status` | query | Filter by status |
-| `rootOnly` | query | Return only root jobs |
-| `id` | query | Filter by chain ID |
-| `jobId` | query | Filter by job ID within chain |
-| `cursor` | query | Pagination cursor |
-| `limit` | query | Page size |
+| Parameter  | Type  | Description                   |
+| ---------- | ----- | ----------------------------- |
+| `typeName` | query | Filter by chain type name     |
+| `status`   | query | Filter by status              |
+| `rootOnly` | query | Return only root jobs         |
+| `id`       | query | Filter by chain ID            |
+| `jobId`    | query | Filter by job ID within chain |
+| `cursor`   | query | Pagination cursor             |
+| `limit`    | query | Page size                     |
 
 Returns an array of `[rootJob, lastJob]` pairs and a `nextCursor` for pagination.
 
@@ -53,15 +53,15 @@ Returns the root job, last job, all jobs in the chain ordered by chain index, an
 
 **`GET /api/jobs`** — List individual jobs with filtering and pagination.
 
-| Parameter | Type | Description |
-| --- | --- | --- |
-| `status` | query | Filter by status |
-| `typeName` | query | Filter by job type name |
+| Parameter       | Type  | Description               |
+| --------------- | ----- | ------------------------- |
+| `status`        | query | Filter by status          |
+| `typeName`      | query | Filter by job type name   |
 | `chainTypeName` | query | Filter by chain type name |
-| `chainId` | query | Filter by chain ID |
-| `id` | query | Filter by job ID |
-| `cursor` | query | Pagination cursor |
-| `limit` | query | Page size |
+| `chainId`       | query | Filter by chain ID        |
+| `id`            | query | Filter by job ID          |
+| `cursor`        | query | Pagination cursor         |
+| `limit`         | query | Page size                 |
 
 **`GET /api/jobs/{jobId}`** — Get job detail with continuation and blockers.
 

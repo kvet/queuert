@@ -25,28 +25,28 @@ PostgreSQL enums provide type safety at the database level — invalid status va
 
 The `job` table stores all job state:
 
-| Column | Type | Description |
-| --- | --- | --- |
-| `id` | configurable (default: `uuid`) | Primary key. Type and default expression are set via `idType` / `idDefault` |
-| `type_name` | `text` | Job type identifier |
-| `chain_id` | same as `id` | Foreign key to root job — every job in a chain points to the root |
-| `chain_type_name` | `text` | Type name of the chain (copied from root for query efficiency) |
-| `chain_index` | `integer` | Position in chain (0 for root, incrementing for continuations) |
-| `input` | `jsonb` | Job input data |
-| `output` | `jsonb` | Completion output (null until completed) |
-| `status` | `job_status` | Current state: blocked, pending, running, or completed |
-| `created_at` | `timestamptz` | When the job was created |
-| `scheduled_at` | `timestamptz` | Earliest time the job can be acquired |
-| `completed_at` | `timestamptz` | When the job completed (null until completed) |
-| `completed_by` | `text` | Worker ID that completed the job (null for workerless) |
-| `attempt` | `integer` | Number of processing attempts (starts at 0) |
-| `last_attempt_at` | `timestamptz` | When the last attempt started |
-| `last_attempt_error` | `jsonb` | Error from last failed attempt |
-| `leased_by` | `text` | Worker ID holding the lease |
-| `leased_until` | `timestamptz` | Lease expiry time |
-| `deduplication_key` | `text` | Key for chain deduplication |
-| `chain_trace_context` | `text` | W3C traceparent for chain-level spans |
-| `trace_context` | `text` | W3C traceparent for job-level spans |
+| Column                | Type                           | Description                                                                 |
+| --------------------- | ------------------------------ | --------------------------------------------------------------------------- |
+| `id`                  | configurable (default: `uuid`) | Primary key. Type and default expression are set via `idType` / `idDefault` |
+| `type_name`           | `text`                         | Job type identifier                                                         |
+| `chain_id`            | same as `id`                   | Foreign key to root job — every job in a chain points to the root           |
+| `chain_type_name`     | `text`                         | Type name of the chain (copied from root for query efficiency)              |
+| `chain_index`         | `integer`                      | Position in chain (0 for root, incrementing for continuations)              |
+| `input`               | `jsonb`                        | Job input data                                                              |
+| `output`              | `jsonb`                        | Completion output (null until completed)                                    |
+| `status`              | `job_status`                   | Current state: blocked, pending, running, or completed                      |
+| `created_at`          | `timestamptz`                  | When the job was created                                                    |
+| `scheduled_at`        | `timestamptz`                  | Earliest time the job can be acquired                                       |
+| `completed_at`        | `timestamptz`                  | When the job completed (null until completed)                               |
+| `completed_by`        | `text`                         | Worker ID that completed the job (null for workerless)                      |
+| `attempt`             | `integer`                      | Number of processing attempts (starts at 0)                                 |
+| `last_attempt_at`     | `timestamptz`                  | When the last attempt started                                               |
+| `last_attempt_error`  | `jsonb`                        | Error from last failed attempt                                              |
+| `leased_by`           | `text`                         | Worker ID holding the lease                                                 |
+| `leased_until`        | `timestamptz`                  | Lease expiry time                                                           |
+| `deduplication_key`   | `text`                         | Key for chain deduplication                                                 |
+| `chain_trace_context` | `text`                         | W3C traceparent for chain-level spans                                       |
+| `trace_context`       | `text`                         | W3C traceparent for job-level spans                                         |
 
 The `chain_id` foreign key references `job(id)`, forming a self-referential relationship where all jobs in a chain point to the root job (chain_index = 0).
 
@@ -54,12 +54,12 @@ The `chain_id` foreign key references `job(id)`, forming a self-referential rela
 
 The `job_blocker` table tracks dependencies between jobs and chains:
 
-| Column | Type | Description |
-| --- | --- | --- |
-| `job_id` | foreign key to `job(id)` | The blocked job |
-| `blocked_by_chain_id` | foreign key to `job(id)` | Root job ID of the blocker chain |
-| `index` | `integer` | Position in the blockers array |
-| `trace_context` | `text` | PRODUCER span context for blocker resolution |
+| Column                | Type                     | Description                                  |
+| --------------------- | ------------------------ | -------------------------------------------- |
+| `job_id`              | foreign key to `job(id)` | The blocked job                              |
+| `blocked_by_chain_id` | foreign key to `job(id)` | Root job ID of the blocker chain             |
+| `index`               | `integer`                | Position in the blockers array               |
+| `trace_context`       | `text`                   | PRODUCER span context for blocker resolution |
 
 Primary key: `(job_id, blocked_by_chain_id)` — each job–blocker pair is unique.
 
@@ -67,10 +67,10 @@ Primary key: `(job_id, blocked_by_chain_id)` — each job–blocker pair is uniq
 
 The `migration` table tracks applied schema migrations:
 
-| Column | Type | Description |
-| --- | --- | --- |
-| `name` | `text` | Migration identifier (e.g., `20240101000000_initial_schema`) |
-| `applied_at` | `timestamptz` | When the migration was applied |
+| Column       | Type          | Description                                                  |
+| ------------ | ------------- | ------------------------------------------------------------ |
+| `name`       | `text`        | Migration identifier (e.g., `20240101000000_initial_schema`) |
+| `applied_at` | `timestamptz` | When the migration was applied                               |
 
 ## Indexes
 
@@ -209,11 +209,11 @@ PostgreSQL's built-in `LISTEN`/`NOTIFY` mechanism provides low-latency event del
 
 The adapter uses three notification channels (configurable prefix, default `queuert`):
 
-| Channel | Published When | Payload | Purpose |
-| --- | --- | --- | --- |
-| `{prefix}_sched` | Jobs become pending | Job type name | Wake idle workers |
-| `{prefix}_chainc` | Chain completes | Chain ID | Wake clients awaiting chain results |
-| `{prefix}_owls` | Lease expires and job is reaped | Job ID | Notify workers of ownership loss |
+| Channel           | Published When                  | Payload       | Purpose                             |
+| ----------------- | ------------------------------- | ------------- | ----------------------------------- |
+| `{prefix}_sched`  | Jobs become pending             | Job type name | Wake idle workers                   |
+| `{prefix}_chainc` | Chain completes                 | Chain ID      | Wake clients awaiting chain results |
+| `{prefix}_owls`   | Lease expires and job is reaped | Job ID        | Notify workers of ownership loss    |
 
 ### Publishing
 

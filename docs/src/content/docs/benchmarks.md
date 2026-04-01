@@ -65,13 +65,13 @@ Queuert's type-level machinery scales linearly across chain topologies (prebuilt
 
 ### Practical limits
 
-| Configuration                              | Status            |
-| ------------------------------------------ | ----------------- |
-| Up to 100 types in a single linear chain   | OK, <1s (tsc)     |
-| Branched chains up to 2w x 6d (~127 types) | OK, ~1.1s (tsc)   |
-| Blockers: up to 25 steps, 3 blockers each  | OK, <1s (tsc)     |
-| Loops: up to 50 self-referencing steps     | OK, <1s (tsc)     |
-| Merging 10 slices of 50 types (500 total)  | OK, ~2.2s (tsc)   |
-| Merging 50 slices of 50 types (2500 total) | OK, ~8.9s (tsc)   |
+| Configuration                              | Status          |
+| ------------------------------------------ | --------------- |
+| Up to 100 types in a single linear chain   | OK, <1s (tsc)   |
+| Branched chains up to 2w x 6d (~127 types) | OK, ~1.1s (tsc) |
+| Blockers: up to 25 steps, 3 blockers each  | OK, <1s (tsc)   |
+| Loops: up to 50 self-referencing steps     | OK, <1s (tsc)   |
+| Merging 10 slices of 50 types (500 total)  | OK, ~2.2s (tsc) |
+| Merging 50 slices of 50 types (2500 total) | OK, ~8.9s (tsc) |
 
 See [type-complexity](https://github.com/kvet/queuert/tree/main/benchmarks/type-complexity) for the full benchmark tool and detailed results.

@@ -40,7 +40,11 @@ For CPU-heavy work, spawn each worker in its own thread so they get true paralle
 ```ts title="image-worker-thread.ts"
 // Each thread runs independently with its own database connection
 const stateAdapter = await createPgStateAdapter({ stateProvider });
-const client = await createClient({ stateAdapter, notifyAdapter, jobTypeRegistry: imageJobTypeRegistry });
+const client = await createClient({
+  stateAdapter,
+  notifyAdapter,
+  jobTypeRegistry: imageJobTypeRegistry,
+});
 
 const worker = await createInProcessWorker({
   client,

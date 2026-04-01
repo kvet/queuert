@@ -13,11 +13,11 @@ This document describes the internal implementation of `@queuert/nats`. Like Red
 
 Three NATS subjects carry notifications (configurable prefix, default `queuert`):
 
-| Subject | Published When | Payload Format | Purpose |
-| --- | --- | --- | --- |
-| `{prefix}.sched` | Jobs become pending | `{hintId}:{typeName}` | Wake idle workers |
-| `{prefix}.chainc` | Chain completes | `{chainId}` | Wake clients awaiting results |
-| `{prefix}.owls` | Lease reaped | `{jobId}` | Notify ownership loss |
+| Subject           | Published When      | Payload Format        | Purpose                       |
+| ----------------- | ------------------- | --------------------- | ----------------------------- |
+| `{prefix}.sched`  | Jobs become pending | `{hintId}:{typeName}` | Wake idle workers             |
+| `{prefix}.chainc` | Chain completes     | `{chainId}`           | Wake clients awaiting results |
+| `{prefix}.owls`   | Lease reaped        | `{jobId}`             | Notify ownership loss         |
 
 NATS core pub/sub is fire-and-forget — messages are delivered to currently connected subscribers only.
 
@@ -101,10 +101,10 @@ NATS uses a single connection (`NatsConnection`) for both publishing and subscri
 
 ```typescript
 createNatsNotifyAdapter({
-  nc,                    // NatsConnection
-  kv,                    // Optional: JetStream KV bucket
-  subjectPrefix,         // Optional: default "queuert"
-})
+  nc, // NatsConnection
+  kv, // Optional: JetStream KV bucket
+  subjectPrefix, // Optional: default "queuert"
+});
 ```
 
 ## See Also

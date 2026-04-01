@@ -84,7 +84,7 @@ return complete(async ({ sql, transactionHooks }) => {
   await client.startJobChain({
     sql,
     transactionHooks,
-    typeName: 'health-check',
+    typeName: "health-check",
     input: { serviceId: job.input.serviceId },
     schedule: { afterMs: 5 * 60 * 1000 },
     deduplication: {
