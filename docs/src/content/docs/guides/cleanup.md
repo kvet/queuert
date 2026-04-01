@@ -104,7 +104,7 @@ Key patterns used:
 
 ## Merge and Start
 
-Merge the cleanup registry with your application registries using [slices](/guides/slices/):
+Merge the cleanup registry with your application registries using [slices](/queuert/guides/slices/):
 
 ```ts
 const client = await createClient({
@@ -149,7 +149,7 @@ Deleting rows frees logical space but doesn't always return it to the OS immedia
 
 ### PostgreSQL
 
-The adapter configures aggressive autovacuum on the job tables (2% dead-tuple threshold, no I/O throttle) and sets `fillfactor = 75` on the job table to enable HOT updates. No application-level action is needed — PostgreSQL's autovacuum handles space reclamation automatically. See [PostgreSQL Internals](/advanced/postgres-internals/#vacuum-tuning) for details.
+The adapter configures aggressive autovacuum on the job tables (2% dead-tuple threshold, no I/O throttle) and sets `fillfactor = 75` on the job table to enable HOT updates. No application-level action is needed — PostgreSQL's autovacuum handles space reclamation automatically. See [PostgreSQL Internals](/queuert/advanced/postgres-internals/#vacuum-tuning) for details.
 
 ### SQLite
 
@@ -159,7 +159,7 @@ SQLite does not reclaim space automatically. Call `stateAdapter.vacuum()` after 
 await stateAdapter.vacuum();
 ```
 
-This requires `PRAGMA auto_vacuum = INCREMENTAL` to be set on the database before table creation. See [SQLite Internals](/advanced/sqlite-internals/#vacuum) for details.
+This requires `PRAGMA auto_vacuum = INCREMENTAL` to be set on the database before table creation. See [SQLite Internals](/queuert/advanced/sqlite-internals/#vacuum) for details.
 
 ## Customization Ideas
 
@@ -174,6 +174,6 @@ See [examples/showcase-cleanup](https://github.com/kvet/queuert/tree/main/exampl
 
 ## See Also
 
-- [Scheduling](/guides/scheduling/) — Deferred start and recurring job patterns
-- [Chain Deletion](/guides/chain-deletion/) — Manual chain deletion and blocker safety
-- [Slices](/guides/slices/) — Merging job type and processor registries
+- [Scheduling](/queuert/guides/scheduling/) — Deferred start and recurring job patterns
+- [Chain Deletion](/queuert/guides/chain-deletion/) — Manual chain deletion and blocker safety
+- [Slices](/queuert/guides/slices/) — Merging job type and processor registries
