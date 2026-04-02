@@ -12,8 +12,9 @@ printHeader("PROCESSING CAPACITY — NATS NOTIFY");
 const concurrency = parseConcurrency();
 
 const db = new Database(":memory:");
-db.pragma("foreign_keys = ON");
 db.pragma("journal_mode = WAL");
+db.pragma("auto_vacuum = INCREMENTAL");
+db.pragma("foreign_keys = ON");
 
 const stateProvider = createSqliteStateProvider(db);
 const stateAdapter = await createSqliteStateAdapter({ stateProvider });

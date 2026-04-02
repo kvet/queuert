@@ -33,6 +33,7 @@ type DbContext = { db: Database.Database };
 
 const [beforeDb, afterDb, db] = await measureMemory(async () => {
   const db = new Database(":memory:");
+  db.pragma("auto_vacuum = INCREMENTAL");
   db.pragma("foreign_keys = ON");
   return db;
 });
