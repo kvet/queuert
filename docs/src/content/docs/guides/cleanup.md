@@ -17,12 +17,16 @@ const cleanupJobTypeRegistry = defineJobTypeRegistry<{
     entry: true;
     input: { cutoffDate?: string; deletedChainCount?: number };
     output: { deletedChainCount: number };
-    continueWith: { typeName: "queuert.cleanup" };
+    continueWith: { typeName: "queuert.cleanup" } | { typeName: "queuert.cleanup.vacuum" };
+  };
+  "queuert.cleanup.vacuum": {
+    input: { deletedChainCount: number };
+    output: { deletedChainCount: number };
   };
 }>();
 ```
 
-The `continueWith` self-reference allows the cleanup job to process chains in batches — each batch completes the current job and continues with the next.
+The `continueWith` self-reference allows the cleanup job to process chains in batches — each batch completes the current job and continues with the next. When all batches are processed, the chain continues to a vacuum step that reclaims disk space.
 
 ## Write the Processor
 
@@ -86,8 +90,19 @@ const cleanupProcessorRegistry = createJobTypeProcessorRegistry({
             schedule: { afterMs: CLEANUP_INTERVAL_MS },
           });
 
-          return { deletedChainCount };
+          return continueWith({
+            typeName: "queuert.cleanup.vacuum",
+            input: { deletedChainCount },
+          });
         }),
+    },
+    "queuert.cleanup.vacuum": {
+      attemptHandler: async ({ job, complete }) => {
+        await stateAdapter.vacuum();
+        return complete(async () => ({
+          deletedChainCount: job.input.deletedChainCount,
+        }));
+      },
     },
   },
 });
@@ -97,7 +112,8 @@ Key patterns used:
 
 - **Retention cutoff** — `CLEANUP_RETENTION_MS` controls how long completed chains are kept before deletion
 - **Self-exclusion filter** — the cleanup chain filters itself out of the deletion list to avoid deleting its own chain
-- **`continueWith`** — processes chains in bounded batches instead of one unbounded loop
+- **`continueWith`** — processes chains in bounded batches instead of one unbounded loop, then hands off to a vacuum step
+- **Vacuum step** — a separate `queuert.cleanup.vacuum` job reclaims disk space after deletion completes
 - **`deduplication`** with `scope: "incomplete"` — ensures only one cleanup chain is active at a time
 - **`excludeJobChainIds`** — prevents the finishing cleanup chain from deduplicating against itself
 - **`schedule`** — defers the next run by `intervalMs`
@@ -145,21 +161,15 @@ After the first run completes, the cleanup job automatically schedules its next 
 
 ## Reclaiming Disk Space
 
-Deleting rows frees logical space but doesn't always return it to the OS immediately.
+The `queuert.cleanup.vacuum` step calls `stateAdapter.vacuum()` after all batches are deleted. This reclaims disk space as part of the cleanup chain rather than requiring a separate manual call.
 
 ### PostgreSQL
 
-The adapter configures aggressive autovacuum on the job tables (2% dead-tuple threshold, no I/O throttle) and sets `fillfactor = 75` on the job table to enable HOT updates. No application-level action is needed — PostgreSQL's autovacuum handles space reclamation automatically. See [PostgreSQL Internals](/queuert/advanced/postgres-internals/#vacuum-tuning) for details.
+The adapter configures aggressive autovacuum on the job tables (2% dead-tuple threshold, no I/O throttle) and sets `fillfactor = 75` on the job table to enable HOT updates. PostgreSQL's autovacuum handles most space reclamation automatically, but the explicit vacuum step ensures timely cleanup after large deletions. See [PostgreSQL Internals](/queuert/advanced/postgres-internals/#vacuum-tuning) for details.
 
 ### SQLite
 
-SQLite does not reclaim space automatically. Call `stateAdapter.vacuum()` after cleanup to free reclaimable pages via incremental vacuum:
-
-```ts
-await stateAdapter.vacuum();
-```
-
-This requires `PRAGMA auto_vacuum = INCREMENTAL` to be set on the database before table creation. See [SQLite Internals](/queuert/advanced/sqlite-internals/#vacuum) for details.
+SQLite does not reclaim space automatically. The vacuum step frees reclaimable pages via incremental vacuum. This requires `PRAGMA auto_vacuum = INCREMENTAL` to be set on the database before table creation. See [SQLite Internals](/queuert/advanced/sqlite-internals/#vacuum) for details.
 
 ## Customization Ideas
 
