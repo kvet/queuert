@@ -1,5 +1,14 @@
 # queuert
 
+## 0.10.0
+
+### Minor Changes
+
+- - Add `vacuum()` method to Postgres state adapter for on-demand dead-tuple reclamation on job tables. New `vacuum_tuning` migration configures fillfactor and aggressive autovacuum settings to reduce table bloat automatically
+  - Add `vacuum()` method to SQLite state adapter for on-demand page reclamation via incremental vacuum. `migrateToLatest()` now validates that `auto_vacuum = INCREMENTAL` is set on the database
+  - Fix NATS notification buffering: flush the connection after each publish to ensure timely delivery
+  - Relax `@opentelemetry/api` peer dependency from `^1.9.0` to `^1.0.0`
+
 ## 0.9.5
 
 ### Patch Changes
