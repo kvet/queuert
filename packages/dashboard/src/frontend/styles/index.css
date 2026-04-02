@@ -378,6 +378,8 @@ a:hover {
 .error-text {
   color: #ef4444;
   font-size: 12px;
+  text-wrap: auto;
+  word-break: break-word;
 }
 
 .delete-btn {

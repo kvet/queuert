@@ -145,7 +145,7 @@ export function JobDetail() {
               <Show when={job.lastAttemptError}>
                 <div class="section">
                   <h3>Error</h3>
-                  <div class="error-text">{String(job.lastAttemptError)}</div>
+                  <pre class="error-text">{String(job.lastAttemptError)}</pre>
                 </div>
               </Show>
             </>
