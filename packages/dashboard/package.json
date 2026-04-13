@@ -48,10 +48,10 @@
     "@queuert/tsconfig": "workspace:*",
     "@solidjs/router": "0.16.1",
     "queuert": "workspace:*",
-    "seroval": "1.5.1",
+    "seroval": "1.5.2",
     "solid-js": "1.9.12",
-    "vite": "8.0.3",
-    "vite-plugin-solid": "2.11.11"
+    "vite": "8.0.8",
+    "vite-plugin-solid": "2.11.12"
   },
   "peerDependencies": {
     "queuert": "workspace:*"
@@ -60,7 +60,7 @@
     "node": ">=22"
   },
   "inlinedDependencies": {
-    "seroval": "1.5.1"
+    "seroval": "1.5.2"
   },
   "x-examples": "https://github.com/kvet/queuert/tree/main/examples",
   "x-llms-txt": "https://kvet.github.io/queuert/llms-full.txt"

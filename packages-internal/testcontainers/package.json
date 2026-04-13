@@ -14,13 +14,13 @@
     "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
-    "@testcontainers/nats": "11.13.0",
-    "@testcontainers/postgresql": "11.13.0",
-    "@testcontainers/redis": "11.13.0",
+    "@testcontainers/nats": "11.14.0",
+    "@testcontainers/postgresql": "11.14.0",
+    "@testcontainers/redis": "11.14.0",
     "dockerode": "4.0.10",
     "pg": "8.20.0",
     "proper-lockfile": "4.1.2",
-    "testcontainers": "11.13.0"
+    "testcontainers": "11.14.0"
   },
   "devDependencies": {
     "@queuert/tsconfig": "workspace:*",
