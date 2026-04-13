@@ -29,7 +29,7 @@ describe("Metrics", () => {
   it("tracks metrics and histograms for simple job lifecycle", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -70,7 +70,7 @@ describe("Metrics", () => {
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -106,7 +106,7 @@ describe("Metrics", () => {
   it("tracks error metrics on retry", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -154,7 +154,7 @@ describe("Metrics", () => {
     });
 
     const job = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -190,7 +190,7 @@ describe("Metrics", () => {
   it("tracks metrics for chain continuations", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -256,7 +256,7 @@ describe("Metrics", () => {
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -304,7 +304,7 @@ describe("Metrics", () => {
   it("tracks metrics for blocker chains", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -367,7 +367,7 @@ describe("Metrics", () => {
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) => {
+      withTransaction(async (txCtx) => {
         const dependencyJobChain = await client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -417,7 +417,7 @@ describe("Metrics", () => {
   it("tracks workerless completion metrics", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expectMetrics,
@@ -439,7 +439,7 @@ describe("Metrics", () => {
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -450,7 +450,7 @@ describe("Metrics", () => {
     );
 
     await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.completeJobChain({
           ...txCtx,
           transactionHooks,
@@ -474,7 +474,7 @@ describe("Metrics", () => {
   it("tracks lease renewal metric", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -513,7 +513,7 @@ describe("Metrics", () => {
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
@@ -529,7 +529,7 @@ describe("Metrics", () => {
   it("tracks lease expiration metric", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -568,7 +568,7 @@ describe("Metrics", () => {
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
@@ -584,7 +584,7 @@ describe("Metrics", () => {
   it("tracks reaper metrics", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -662,7 +662,7 @@ describe("Metrics", () => {
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
@@ -672,7 +672,7 @@ describe("Metrics", () => {
       await sleep(10);
 
       const successJob = await withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
         ),
       );
@@ -695,7 +695,7 @@ describe("Metrics", () => {
   it("tracks state adapter and worker error metrics", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -753,7 +753,7 @@ describe("Metrics", () => {
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
@@ -770,7 +770,7 @@ describe("Metrics", () => {
   it("tracks notify adapter error metric", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -815,7 +815,7 @@ describe("Metrics", () => {
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
@@ -834,7 +834,7 @@ describe("Metrics", () => {
   it("tracks metrics for job chain deletion", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expectMetrics,
@@ -852,13 +852,13 @@ describe("Metrics", () => {
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
     await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.deleteJobChains({ ...txCtx, transactionHooks, ids: [jobChain.id] }),
       ),
     );
@@ -873,7 +873,7 @@ describe("Metrics", () => {
   it("tracks metrics for job trigger", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expectMetrics,
@@ -891,7 +891,7 @@ describe("Metrics", () => {
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -903,7 +903,7 @@ describe("Metrics", () => {
     );
 
     await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.triggerJob({ ...txCtx, transactionHooks, id: jobChain.id }),
       ),
     );
@@ -920,7 +920,7 @@ describe("Spans", () => {
   it("tracks spans for simple job lifecycle", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -959,7 +959,7 @@ describe("Spans", () => {
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -991,7 +991,7 @@ describe("Spans", () => {
   it("tracks error spans on retry", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -1039,7 +1039,7 @@ describe("Spans", () => {
     });
 
     const job = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -1098,7 +1098,7 @@ describe("Spans", () => {
   it("tracks spans for chain continuations with origin links", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -1163,7 +1163,7 @@ describe("Spans", () => {
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -1221,7 +1221,7 @@ describe("Spans", () => {
   it("tracks spans for blocker chains with blocker links", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -1284,7 +1284,7 @@ describe("Spans", () => {
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) => {
+      withTransaction(async (txCtx) => {
         const dependencyJobChain = await client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -1348,7 +1348,7 @@ describe("Spans", () => {
   it("tracks blocker spans when blocker chain is already completed", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -1403,7 +1403,7 @@ describe("Spans", () => {
 
     // Create and complete the blocker chain first
     const dependencyJobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -1419,7 +1419,7 @@ describe("Spans", () => {
 
     // Now create main chain with already-completed blocker
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -1466,7 +1466,7 @@ describe("Spans", () => {
   it("tracks deduplication attributes on spans", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expectSpans,
@@ -1488,7 +1488,7 @@ describe("Spans", () => {
     });
 
     await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) => [
+      withTransaction(async (txCtx) => [
         await client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -1537,7 +1537,7 @@ describe("Spans", () => {
   it("tracks workerless completion spans", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expectSpans,
@@ -1559,7 +1559,7 @@ describe("Spans", () => {
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -1570,7 +1570,7 @@ describe("Spans", () => {
     );
 
     await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.completeJobChain({
           ...txCtx,
           transactionHooks,
@@ -1594,7 +1594,7 @@ describe("Spans", () => {
   it("tracks complex workerless completion spans", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expectSpans,
@@ -1621,7 +1621,7 @@ describe("Spans", () => {
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -1632,7 +1632,7 @@ describe("Spans", () => {
     );
 
     const completedChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.completeJobChain({
           ...txCtx,
           transactionHooks,
@@ -1692,7 +1692,7 @@ describe("Gauges", () => {
   it("tracks idle and processing gauges", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -1730,7 +1730,7 @@ describe("Gauges", () => {
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -1770,7 +1770,7 @@ describe("Gauges", () => {
   it("tracks gauges for multiple job types", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -1815,7 +1815,7 @@ describe("Gauges", () => {
     });
 
     const emailJob = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -1825,7 +1825,7 @@ describe("Gauges", () => {
       ),
     );
     const smsJob = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -1882,7 +1882,7 @@ describe("Rollback", () => {
   it("discards creation metrics and spans on rollback", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     getMetricNames,
@@ -1902,7 +1902,7 @@ describe("Rollback", () => {
     });
 
     await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) => {
+      withTransaction(async (txCtx) => {
         await client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null });
         throw new Error("simulated rollback");
       }),
@@ -1924,7 +1924,7 @@ describe("Rollback", () => {
   it("discards creation metrics and spans with blockers on rollback", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     getMetricNames,
@@ -1950,7 +1950,7 @@ describe("Rollback", () => {
     });
 
     await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) => {
+      withTransaction(async (txCtx) => {
         const blocker = await client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -1991,7 +1991,7 @@ describe("Rollback", () => {
   it("discards workerless completion metrics and spans on rollback", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expectMetrics,
@@ -2010,13 +2010,13 @@ describe("Rollback", () => {
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
     await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) => {
+      withTransaction(async (txCtx) => {
         await client.completeJobChain({
           ...txCtx,
           transactionHooks,
@@ -2039,7 +2039,7 @@ describe("Rollback", () => {
   it("discards completion metrics on worker complete rollback", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -2094,7 +2094,7 @@ describe("Rollback", () => {
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
@@ -2122,7 +2122,7 @@ describe("Rollback", () => {
   it("discards error-handling metrics on reschedule rollback", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -2184,7 +2184,7 @@ describe("Rollback", () => {
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
@@ -2212,7 +2212,7 @@ describe("Rollback", () => {
   it("discards continuation metrics when user callback throws after continueWith", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -2269,7 +2269,7 @@ describe("Rollback", () => {
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({ ...txCtx, transactionHooks, typeName: "linear", input: null }),
       ),
     );
@@ -2300,7 +2300,7 @@ describe("Rollback", () => {
   it("discards completion metrics on unblockJobs rollback", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -2355,7 +2355,7 @@ describe("Rollback", () => {
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
@@ -2383,7 +2383,7 @@ describe("Rollback", () => {
   it("discards workerless completion metrics on finishJob internal failure", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expectMetrics,
@@ -2420,14 +2420,14 @@ describe("Rollback", () => {
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
     // First attempt: unblockJobs fails inside finishJob → entire transaction rolls back
     await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         erroringClient.completeJobChain({
           ...txCtx,
           transactionHooks,
@@ -2440,7 +2440,7 @@ describe("Rollback", () => {
 
     // Second attempt: succeeds
     await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.completeJobChain({
           ...txCtx,
           transactionHooks,
@@ -2463,7 +2463,7 @@ describe("Rollback", () => {
   it("discards continuation metrics on createJob rollback", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -2532,7 +2532,7 @@ describe("Rollback", () => {
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({ ...txCtx, transactionHooks, typeName: "linear", input: null }),
       ),
     );
@@ -2564,7 +2564,7 @@ describe("Rollback", () => {
   it("ends job spans when transaction rolls back", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expectSpans,
@@ -2582,7 +2582,7 @@ describe("Rollback", () => {
     });
 
     await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) => {
+      withTransaction(async (txCtx) => {
         await client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null });
         throw new Error("simulated rollback");
       }),
@@ -2606,7 +2606,7 @@ describe("Rollback", () => {
   it("ends rolled-back continuation span when user callback throws after continueWith", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -2663,7 +2663,7 @@ describe("Rollback", () => {
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({ ...txCtx, transactionHooks, typeName: "linear", input: null }),
       ),
     );
@@ -2726,7 +2726,7 @@ describe("Rollback", () => {
   it("ends rolled-back startJobChain spans when handler throws after complete returns", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -2782,7 +2782,7 @@ describe("Rollback", () => {
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );

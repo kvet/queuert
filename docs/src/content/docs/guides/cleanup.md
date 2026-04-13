@@ -52,7 +52,7 @@ const cleanupProcessorRegistry = createJobTypeProcessorRegistry({
 
           if (jobChainsToDelete.length > 0) {
             const deleted = await withTransactionHooks(async (transactionHooks) =>
-              stateProvider.runInTransaction(async (txCtx) =>
+              stateProvider.withTransaction(async (txCtx) =>
                 client.deleteJobChains({
                   ...txCtx,
                   transactionHooks,
@@ -127,7 +127,7 @@ Schedule the initial cleanup at application startup. Deduplication makes this id
 
 ```ts
 await withTransactionHooks(async (transactionHooks) =>
-  stateProvider.runInTransaction(async (txCtx) =>
+  stateProvider.withTransaction(async (txCtx) =>
     client.startJobChain({
       ...txCtx,
       transactionHooks,

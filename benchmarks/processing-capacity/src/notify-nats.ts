@@ -30,7 +30,7 @@ console.log("SQLite + NATS ready.");
 await runBenchmark({
   stateAdapter,
   notifyAdapter,
-  runInTransaction: stateProvider.runInTransaction,
+  withTransaction: stateProvider.withTransaction,
   concurrency,
 });
 

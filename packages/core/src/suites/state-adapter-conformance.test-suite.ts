@@ -17,7 +17,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 }): void => {
   describe("createJobs", () => {
     it("generates valid job IDs", async ({ stateAdapter, validateId, expect }) => {
-      const [{ job }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -37,7 +37,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("assigns chainId correctly for new jobs", async ({ stateAdapter, validateId, expect }) => {
-      const [{ job }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -57,7 +57,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("preserves provided chainId", async ({ stateAdapter, validateId, expect }) => {
-      const [{ job: rootJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: rootJob }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -72,7 +72,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const [{ job: childJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: childJob }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -94,7 +94,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("generates unique job IDs", async ({ stateAdapter, expect }) => {
-      const jobs = await stateAdapter.runInTransaction(async (txCtx) => {
+      const jobs = await stateAdapter.withTransaction(async (txCtx) => {
         const results: StateJob[] = [];
         for (let i = 0; i < 10; i++) {
           const [{ job }] = await stateAdapter.createJobs({
@@ -121,7 +121,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
     it("persists and retrieves jobs correctly", async ({ stateAdapter, expect }) => {
       const input = { nested: { value: 42 }, array: [1, 2, 3] };
-      const [{ job: created }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -146,7 +146,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("handles null values correctly", async ({ stateAdapter, expect }) => {
-      const [{ job }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -191,7 +191,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         emptyArray: [],
       };
 
-      const [{ job }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -211,7 +211,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("deduplicates jobs with same deduplication key", async ({ stateAdapter, expect }) => {
-      const [{ job: first }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: first }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -227,7 +227,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const [{ job: second, deduplicated }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: second, deduplicated }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -246,7 +246,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       expect(deduplicated).toBe(true);
       expect(second.id).toBe(first.id);
 
-      const [{ deduplicated: notDeduped }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ deduplicated: notDeduped }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -266,7 +266,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("deduplicates continuation with same chain_index", async ({ stateAdapter, expect }) => {
-      const [{ job: rootJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: rootJob }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -283,7 +283,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
       expect(rootJob.chainIndex).toBe(0);
 
-      const [{ job: continuation1, deduplicated: dedup1 }] = await stateAdapter.runInTransaction(
+      const [{ job: continuation1, deduplicated: dedup1 }] = await stateAdapter.withTransaction(
         async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -302,7 +302,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       expect(dedup1).toBe(false);
       expect(continuation1.chainIndex).toBe(1);
 
-      const [{ job: continuation2, deduplicated: dedup2 }] = await stateAdapter.runInTransaction(
+      const [{ job: continuation2, deduplicated: dedup2 }] = await stateAdapter.withTransaction(
         async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -327,7 +327,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       stateAdapter,
       expect,
     }) => {
-      const [{ job: rootJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: rootJob }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -343,7 +343,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       );
 
       const [[result1], [result2]] = await Promise.all([
-        stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
@@ -357,7 +357,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
             ],
           }),
         ),
-        stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
@@ -378,7 +378,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("assigns sequential chain_index values", async ({ stateAdapter, expect }) => {
-      const [{ job: rootJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: rootJob }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -394,7 +394,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       );
       expect(rootJob.chainIndex).toBe(0);
 
-      const [{ job: cont1 }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: cont1 }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -410,11 +410,11 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       );
       expect(cont1.chainIndex).toBe(1);
 
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.completeJob({ txCtx, jobId: cont1.id, output: null, workerId: null }),
       );
 
-      const [{ job: cont2 }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: cont2 }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -435,7 +435,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       stateAdapter,
       expect,
     }) => {
-      const [{ job: first }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: first }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -451,7 +451,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.completeJob({
           txCtx,
           jobId: first.id,
@@ -460,7 +460,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const [{ deduplicated: incompleteDeduped }] = await stateAdapter.runInTransaction(
+      const [{ deduplicated: incompleteDeduped }] = await stateAdapter.withTransaction(
         async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -479,7 +479,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
       expect(incompleteDeduped).toBe(false);
 
-      const [{ job: anyFirst }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: anyFirst }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -495,7 +495,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.completeJob({
           txCtx,
           jobId: anyFirst.id,
@@ -504,7 +504,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const [{ deduplicated: anyDeduped }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ deduplicated: anyDeduped }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -527,7 +527,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       stateAdapter,
       expect,
     }) => {
-      const [{ job: first }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: first }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -544,27 +544,26 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       );
 
       // Without exclude — deduplicates
-      const [{ deduplicated: withoutExclude }] = await stateAdapter.runInTransaction(
-        async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              {
-                typeName: "exclude-test",
-                chainId: undefined,
-                chainIndex: 0,
-                chainTypeName: "exclude-test",
-                input: null,
-                deduplication: { key: "exclude-key" },
-              },
-            ],
-          }),
+      const [{ deduplicated: withoutExclude }] = await stateAdapter.withTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
+          txCtx,
+          jobs: [
+            {
+              typeName: "exclude-test",
+              chainId: undefined,
+              chainIndex: 0,
+              chainTypeName: "exclude-test",
+              input: null,
+              deduplication: { key: "exclude-key" },
+            },
+          ],
+        }),
       );
 
       expect(withoutExclude).toBe(true);
 
       // With exclude — creates new chain
-      const [{ job: second, deduplicated: withExclude }] = await stateAdapter.runInTransaction(
+      const [{ job: second, deduplicated: withExclude }] = await stateAdapter.withTransaction(
         async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -587,7 +586,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
     it("creates job with schedule options", async ({ stateAdapter, expect }) => {
       const before = Date.now();
-      const [{ job: afterMsJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: afterMsJob }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -608,7 +607,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       expect(afterMsDiff).toBeLessThan(6000);
 
       const futureDate = new Date(Date.now() + 60_000);
-      const [{ job: atJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: atJob }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -633,7 +632,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     }) => {
       const chainTraceContext = "00-abc123-chain111-01";
       const traceContext = "00-abc123-job222-01";
-      const [{ job }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -656,7 +655,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("stores and retrieves dates correctly", async ({ stateAdapter, expect }) => {
-      const [{ job }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -679,7 +678,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("creates multiple jobs in a single batch", async ({ stateAdapter, validateId, expect }) => {
-      const results = await stateAdapter.runInTransaction(async (txCtx) =>
+      const results = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -724,7 +723,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("handles per-row deduplication in a batch", async ({ stateAdapter, expect }) => {
-      const [{ job: existingJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: existingJob }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -740,7 +739,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const results = await stateAdapter.runInTransaction(async (txCtx) =>
+      const results = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -775,7 +774,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       stateAdapter,
       expect,
     }) => {
-      const [{ job: rootJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: rootJob }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -790,7 +789,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const [{ job: existingContinuation }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: existingContinuation }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -805,7 +804,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const results = await stateAdapter.runInTransaction(async (txCtx) =>
+      const results = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -835,7 +834,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("returns empty array for empty input", async ({ stateAdapter, expect }) => {
-      const results = await stateAdapter.runInTransaction(async (txCtx) =>
+      const results = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({ txCtx, jobs: [] }),
       );
 
@@ -843,9 +842,9 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
   });
 
-  describe("runInTransaction", () => {
+  describe("withTransaction", () => {
     it("maintains transaction isolation", async ({ stateAdapter, expect }) => {
-      const [{ job }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -862,7 +861,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
       let rolledBackJobId: string | undefined;
       try {
-        await stateAdapter.runInTransaction(async (txCtx) => {
+        await stateAdapter.withTransaction(async (txCtx) => {
           const [{ job: innerJob }] = await stateAdapter.createJobs({
             txCtx,
             jobs: [
@@ -894,7 +893,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
   describe("getJobChainById", () => {
     it("handles job chain relationships correctly", async ({ stateAdapter, expect }) => {
-      const [{ job: rootJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: rootJob }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -917,7 +916,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("returns [rootJob, lastJob] for multi-job chain", async ({ stateAdapter, expect }) => {
-      const [{ job: rootJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: rootJob }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -932,7 +931,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const [{ job: continuation }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: continuation }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -960,7 +959,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       stateAdapter,
       expect,
     }) => {
-      const [{ job: blockerJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: blockerJob }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -975,7 +974,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const [{ job: mainJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: mainJob }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -991,7 +990,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       );
 
       const [{ job: updatedMain, incompleteBlockerChainIds, blockerChainTraceContexts }] =
-        await stateAdapter.runInTransaction(async (txCtx) =>
+        await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.addJobsBlockers({
             txCtx,
             jobBlockers: [{ jobId: mainJob.id, blockedByChainIds: [blockerJob.chainId] }],
@@ -1008,7 +1007,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       stateAdapter,
       expect,
     }) => {
-      const [{ job: blockerJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: blockerJob }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -1023,7 +1022,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.completeJob({
           txCtx,
           jobId: blockerJob.id,
@@ -1032,7 +1031,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const [{ job: mainJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: mainJob }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -1048,7 +1047,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       );
 
       const [{ job: updatedMain, incompleteBlockerChainIds, blockerChainTraceContexts }] =
-        await stateAdapter.runInTransaction(async (txCtx) =>
+        await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.addJobsBlockers({
             txCtx,
             jobBlockers: [{ jobId: mainJob.id, blockedByChainIds: [blockerJob.chainId] }],
@@ -1062,7 +1061,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("adds blockers to multiple jobs in a single batch", async ({ stateAdapter, expect }) => {
-      const [{ job: blocker1 }, { job: blocker2 }] = await stateAdapter.runInTransaction(
+      const [{ job: blocker1 }, { job: blocker2 }] = await stateAdapter.withTransaction(
         async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -1085,7 +1084,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           }),
       );
 
-      const [{ job: main1 }, { job: main2 }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: main1 }, { job: main2 }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -1107,7 +1106,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const results = await stateAdapter.runInTransaction(async (txCtx) =>
+      const results = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.addJobsBlockers({
           txCtx,
           jobBlockers: [
@@ -1129,7 +1128,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("batch handles mix of blocked and unblocked jobs", async ({ stateAdapter, expect }) => {
-      const [{ job: completedBlocker }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: completedBlocker }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -1143,7 +1142,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           ],
         }),
       );
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.completeJob({
           txCtx,
           jobId: completedBlocker.id,
@@ -1152,7 +1151,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const [{ job: incompleteBlocker }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: incompleteBlocker }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -1167,7 +1166,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const [{ job: main1 }, { job: main2 }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: main1 }, { job: main2 }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -1189,7 +1188,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const results = await stateAdapter.runInTransaction(async (txCtx) =>
+      const results = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.addJobsBlockers({
           txCtx,
           jobBlockers: [
@@ -1212,7 +1211,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
   describe("unblockJobs", () => {
     it("schedules blocked jobs when all blockers complete", async ({ stateAdapter, expect }) => {
-      const [{ job: blockerJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: blockerJob }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -1227,7 +1226,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const [{ job: mainJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: mainJob }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -1242,14 +1241,14 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.addJobsBlockers({
           txCtx,
           jobBlockers: [{ jobId: mainJob.id, blockedByChainIds: [blockerJob.chainId] }],
         }),
       );
 
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.completeJob({
           txCtx,
           jobId: blockerJob.id,
@@ -1258,7 +1257,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const { unblockedJobs } = await stateAdapter.runInTransaction(async (txCtx) =>
+      const { unblockedJobs } = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.unblockJobs({
           txCtx,
           blockedByChainId: blockerJob.chainId,
@@ -1274,7 +1273,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       stateAdapter,
       expect,
     }) => {
-      const [{ job: blockerA }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: blockerA }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -1289,7 +1288,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const [{ job: blockerB }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: blockerB }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -1304,7 +1303,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const [{ job: mainJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: mainJob }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -1319,7 +1318,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.addJobsBlockers({
           txCtx,
           jobBlockers: [
@@ -1328,7 +1327,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.completeJob({
           txCtx,
           jobId: blockerA.id,
@@ -1337,7 +1336,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const { unblockedJobs } = await stateAdapter.runInTransaction(async (txCtx) =>
+      const { unblockedJobs } = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.unblockJobs({
           txCtx,
           blockedByChainId: blockerA.chainId,
@@ -1354,7 +1353,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       stateAdapter,
       expect,
     }) => {
-      const [{ job }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -1369,7 +1368,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const { unblockedJobs } = await stateAdapter.runInTransaction(async (txCtx) =>
+      const { unblockedJobs } = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.unblockJobs({
           txCtx,
           blockedByChainId: job.chainId,
@@ -1383,7 +1382,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       stateAdapter,
       expect,
     }) => {
-      const [{ job: blockerJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: blockerJob }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -1398,7 +1397,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const [{ job: mainJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: mainJob }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -1415,7 +1414,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
       const traceContext = "00-test-span-123-01";
 
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.addJobsBlockers({
           txCtx,
           jobBlockers: [
@@ -1428,7 +1427,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const { blockerTraceContexts } = await stateAdapter.runInTransaction(async (txCtx) =>
+      const { blockerTraceContexts } = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.unblockJobs({
           txCtx,
           blockedByChainId: blockerJob.chainId,
@@ -1443,7 +1442,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       stateAdapter,
       expect,
     }) => {
-      const [{ job }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -1458,7 +1457,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const { blockerTraceContexts } = await stateAdapter.runInTransaction(async (txCtx) =>
+      const { blockerTraceContexts } = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.unblockJobs({
           txCtx,
           blockedByChainId: job.chainId,
@@ -1472,7 +1471,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       stateAdapter,
       expect,
     }) => {
-      const [{ job: blockerJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: blockerJob }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -1487,7 +1486,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const [{ job: mainJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: mainJob }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -1502,14 +1501,14 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.addJobsBlockers({
           txCtx,
           jobBlockers: [{ jobId: mainJob.id, blockedByChainIds: [blockerJob.chainId] }],
         }),
       );
 
-      const { blockerTraceContexts } = await stateAdapter.runInTransaction(async (txCtx) =>
+      const { blockerTraceContexts } = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.unblockJobs({
           txCtx,
           blockedByChainId: blockerJob.chainId,
@@ -1526,7 +1525,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       expect,
     }) => {
       const blockerChainTraceContext = "00-test123-chain456-01";
-      const [{ job: blockerJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: blockerJob }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -1542,7 +1541,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const [{ job: mainJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: mainJob }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -1557,7 +1556,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const [{ blockerChainTraceContexts }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ blockerChainTraceContexts }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.addJobsBlockers({
           txCtx,
           jobBlockers: [{ jobId: mainJob.id, blockedByChainIds: [blockerJob.chainId] }],
@@ -1575,7 +1574,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       const chainTraceA = "00-aaa111-chain-aaa-01";
       const chainTraceB = "00-bbb222-chain-bbb-01";
 
-      const [{ job: blockerA }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: blockerA }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -1591,7 +1590,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const [{ job: blockerB }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: blockerB }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -1607,7 +1606,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const [{ job: mainJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: mainJob }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -1622,7 +1621,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const [{ blockerChainTraceContexts }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ blockerChainTraceContexts }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.addJobsBlockers({
           txCtx,
           jobBlockers: [
@@ -1639,7 +1638,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
   describe("getJobBlockers", () => {
     it("returns blocker chain pairs for a job", async ({ stateAdapter, expect }) => {
-      const [{ job: blockerA }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: blockerA }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -1654,7 +1653,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const [{ job: blockerB }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: blockerB }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -1669,7 +1668,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const [{ job: mainJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: mainJob }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -1684,7 +1683,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.addJobsBlockers({
           txCtx,
           jobBlockers: [
@@ -1711,7 +1710,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       stateAdapter,
       expect,
     }) => {
-      const [{ job: blockerRoot }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: blockerRoot }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -1726,7 +1725,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.completeJob({
           txCtx,
           jobId: blockerRoot.id,
@@ -1735,7 +1734,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const [{ job: blockerContinuation }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: blockerContinuation }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -1750,7 +1749,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const [{ job: mainJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: mainJob }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -1765,7 +1764,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.addJobsBlockers({
           txCtx,
           jobBlockers: [{ jobId: mainJob.id, blockedByChainIds: [blockerRoot.chainId] }],
@@ -1782,7 +1781,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("returns empty array for job with no blockers", async ({ stateAdapter, expect }) => {
-      const [{ job }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -1804,7 +1803,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
   describe("getNextJobAvailableInMs", () => {
     it("returns 0 for immediately available pending job", async ({ stateAdapter, expect }) => {
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -1824,7 +1823,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("returns milliseconds until next scheduled job", async ({ stateAdapter, expect }) => {
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -1857,7 +1856,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
   describe("acquireJob", () => {
     it("acquires oldest eligible pending job", async ({ stateAdapter, expect }) => {
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -1872,7 +1871,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -1887,7 +1886,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const { job } = await stateAdapter.runInTransaction(async (txCtx) =>
+      const { job } = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.acquireJob({ txCtx, typeNames: ["acquire-test"] }),
       );
 
@@ -1898,7 +1897,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("returns hasMore when additional eligible jobs exist", async ({ stateAdapter, expect }) => {
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -1913,7 +1912,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -1928,20 +1927,20 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const { job: job1, hasMore: hasMore1 } = await stateAdapter.runInTransaction(async (txCtx) =>
+      const { job: job1, hasMore: hasMore1 } = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.acquireJob({ txCtx, typeNames: ["hasmore-test"] }),
       );
       expect(job1).toBeDefined();
       expect(hasMore1).toBe(true);
 
-      const { job: job2 } = await stateAdapter.runInTransaction(async (txCtx) =>
+      const { job: job2 } = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.acquireJob({ txCtx, typeNames: ["hasmore-test"] }),
       );
       expect(job2).toBeDefined();
     });
 
     it("returns undefined when no eligible jobs exist", async ({ stateAdapter, expect }) => {
-      const { job, hasMore } = await stateAdapter.runInTransaction(async (txCtx) =>
+      const { job, hasMore } = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.acquireJob({ txCtx, typeNames: ["nonexistent-type"] }),
       );
 
@@ -1950,7 +1949,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("does not acquire jobs scheduled in the future", async ({ stateAdapter, expect }) => {
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -1966,7 +1965,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const { job } = await stateAdapter.runInTransaction(async (txCtx) =>
+      const { job } = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.acquireJob({ txCtx, typeNames: ["future-acquire"] }),
       );
 
@@ -1976,7 +1975,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
   describe("renewJobLease", () => {
     it("renews lease on a running job", async ({ stateAdapter, expect }) => {
-      const [{ job: created }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -1991,12 +1990,12 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.acquireJob({ txCtx, typeNames: ["lease-test"] }),
       );
 
       const before = Date.now();
-      const renewed = await stateAdapter.runInTransaction(async (txCtx) =>
+      const renewed = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.renewJobLease({
           txCtx,
           jobId: created.id,
@@ -2013,7 +2012,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("updates leasedUntil on subsequent renewals", async ({ stateAdapter, expect }) => {
-      const [{ job: created }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -2028,11 +2027,11 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.acquireJob({ txCtx, typeNames: ["re-lease-test"] }),
       );
 
-      const first = await stateAdapter.runInTransaction(async (txCtx) =>
+      const first = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.renewJobLease({
           txCtx,
           jobId: created.id,
@@ -2041,7 +2040,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const second = await stateAdapter.runInTransaction(async (txCtx) =>
+      const second = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.renewJobLease({
           txCtx,
           jobId: created.id,
@@ -2056,7 +2055,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
   describe("rescheduleJob", () => {
     it("reschedules a running job to pending with afterMs", async ({ stateAdapter, expect }) => {
-      const [{ job: created }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -2071,11 +2070,11 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.acquireJob({ txCtx, typeNames: ["resched-test"] }),
       );
 
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.renewJobLease({
           txCtx,
           jobId: created.id,
@@ -2085,7 +2084,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       );
 
       const before = Date.now();
-      const rescheduled = await stateAdapter.runInTransaction(async (txCtx) =>
+      const rescheduled = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.rescheduleJob({
           txCtx,
           jobId: created.id,
@@ -2106,7 +2105,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       stateAdapter,
       expect,
     }) => {
-      const [{ job: created }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -2121,12 +2120,12 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.acquireJob({ txCtx, typeNames: ["resched-at-test"] }),
       );
 
       const futureDate = new Date(Date.now() + 30_000);
-      const rescheduled = await stateAdapter.runInTransaction(async (txCtx) =>
+      const rescheduled = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.rescheduleJob({
           txCtx,
           jobId: created.id,
@@ -2143,7 +2142,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
   describe("triggerJob", () => {
     it("sets scheduledAt to now on a pending job", async ({ stateAdapter, expect }) => {
       const futureDate = new Date(Date.now() + 60_000);
-      const [{ job: created }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -2162,7 +2161,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       expect(Math.abs(created.scheduledAt.getTime() - futureDate.getTime())).toBeLessThan(1000);
 
       const before = Date.now();
-      const triggered = await stateAdapter.runInTransaction(async (txCtx) =>
+      const triggered = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.triggerJob({ txCtx, jobId: created.id }),
       );
 
@@ -2173,7 +2172,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
     it("makes a future-scheduled job acquirable", async ({ stateAdapter, expect }) => {
       const futureDate = new Date(Date.now() + 60_000);
-      const [{ job: created }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -2189,16 +2188,16 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const beforeTrigger = await stateAdapter.runInTransaction(async (txCtx) =>
+      const beforeTrigger = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.acquireJob({ txCtx, typeNames: ["trigger-acquire"] }),
       );
       expect(beforeTrigger.job).toBeUndefined();
 
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.triggerJob({ txCtx, jobId: created.id }),
       );
 
-      const afterTrigger = await stateAdapter.runInTransaction(async (txCtx) =>
+      const afterTrigger = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.acquireJob({ txCtx, typeNames: ["trigger-acquire"] }),
       );
       expect(afterTrigger.job).toBeDefined();
@@ -2207,7 +2206,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
     it("preserves other job fields", async ({ stateAdapter, expect }) => {
       const futureDate = new Date(Date.now() + 60_000);
-      const [{ job: created }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -2223,7 +2222,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const triggered = await stateAdapter.runInTransaction(async (txCtx) =>
+      const triggered = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.triggerJob({ txCtx, jobId: created.id }),
       );
 
@@ -2237,7 +2236,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
   describe("completeJob", () => {
     it("completes a job with output", async ({ stateAdapter, expect }) => {
-      const [{ job: created }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -2252,11 +2251,11 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.acquireJob({ txCtx, typeNames: ["complete-test"] }),
       );
 
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.renewJobLease({
           txCtx,
           jobId: created.id,
@@ -2265,7 +2264,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const completed = await stateAdapter.runInTransaction(async (txCtx) =>
+      const completed = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.completeJob({
           txCtx,
           jobId: created.id,
@@ -2283,7 +2282,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("completes a job with null workerId (workerless)", async ({ stateAdapter, expect }) => {
-      const [{ job: created }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -2298,7 +2297,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const completed = await stateAdapter.runInTransaction(async (txCtx) =>
+      const completed = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.completeJob({
           txCtx,
           jobId: created.id,
@@ -2314,7 +2313,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
   describe("reapExpiredJobLease", () => {
     it("removes expired lease and resets job to pending", async ({ stateAdapter, expect }) => {
-      const [{ job: created }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -2329,11 +2328,11 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.acquireJob({ txCtx, typeNames: ["expire-test"] }),
       );
 
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.renewJobLease({
           txCtx,
           jobId: created.id,
@@ -2344,7 +2343,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
       await sleep(10);
 
-      const expired = await stateAdapter.runInTransaction(async (txCtx) =>
+      const expired = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.reapExpiredJobLease({ txCtx, typeNames: ["expire-test"] }),
       );
 
@@ -2356,7 +2355,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("returns undefined when no expired leases exist", async ({ stateAdapter, expect }) => {
-      const [{ job: created }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -2371,11 +2370,11 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.acquireJob({ txCtx, typeNames: ["no-expire-test"] }),
       );
 
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.renewJobLease({
           txCtx,
           jobId: created.id,
@@ -2384,7 +2383,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const expired = await stateAdapter.runInTransaction(async (txCtx) =>
+      const expired = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.reapExpiredJobLease({ txCtx, typeNames: ["no-expire-test"] }),
       );
 
@@ -2392,7 +2391,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("respects ignoredJobIds in reapExpiredJobLease", async ({ stateAdapter, expect }) => {
-      const [{ job: jobA }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: jobA }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -2407,7 +2406,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const [{ job: jobB }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: jobB }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -2422,14 +2421,14 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.acquireJob({ txCtx, typeNames: ["ignore-test"] }),
       );
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.acquireJob({ txCtx, typeNames: ["ignore-test"] }),
       );
 
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.renewJobLease({
           txCtx,
           jobId: jobA.id,
@@ -2437,7 +2436,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           leaseDurationMs: 1,
         }),
       );
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.renewJobLease({
           txCtx,
           jobId: jobB.id,
@@ -2448,7 +2447,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
       await sleep(10);
 
-      const expired = await stateAdapter.runInTransaction(async (txCtx) =>
+      const expired = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.reapExpiredJobLease({
           txCtx,
           typeNames: ["ignore-test"],
@@ -2463,7 +2462,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
   describe("deleteJobChains", () => {
     it("deletes all jobs in the given chains", async ({ stateAdapter, expect }) => {
-      const [{ job }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -2478,7 +2477,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const deleted = await stateAdapter.runInTransaction(async (txCtx) =>
+      const deleted = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.deleteJobChains({
           txCtx,
           chainIds: [job.chainId],
@@ -2492,7 +2491,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("does not delete jobs from other chains", async ({ stateAdapter, expect }) => {
-      const [{ job: jobA }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: jobA }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -2507,7 +2506,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const [{ job: jobB }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: jobB }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -2522,7 +2521,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.deleteJobChains({
           txCtx,
           chainIds: [jobA.chainId],
@@ -2537,7 +2536,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       stateAdapter,
       expect,
     }) => {
-      const [{ job: blockerJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: blockerJob }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -2552,7 +2551,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const [{ job: mainJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: mainJob }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -2567,7 +2566,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.addJobsBlockers({
           txCtx,
           jobBlockers: [{ jobId: mainJob.id, blockedByChainIds: [blockerJob.chainId] }],
@@ -2575,7 +2574,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       );
 
       await expect(
-        stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.deleteJobChains({
             txCtx,
             chainIds: [blockerJob.chainId],
@@ -2584,7 +2583,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       ).rejects.toThrow(BlockerReferenceError);
 
       // Deleting both together should succeed
-      const deleted = await stateAdapter.runInTransaction(async (txCtx) =>
+      const deleted = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.deleteJobChains({
           txCtx,
           chainIds: [mainJob.chainId, blockerJob.chainId],
@@ -2595,7 +2594,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("cascade deletes chain and its dependencies", async ({ stateAdapter, expect }) => {
-      const [{ job: blockerJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: blockerJob }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -2610,7 +2609,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const [{ job: mainJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: mainJob }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -2625,14 +2624,14 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.addJobsBlockers({
           txCtx,
           jobBlockers: [{ jobId: mainJob.id, blockedByChainIds: [blockerJob.chainId] }],
         }),
       );
 
-      const deleted = await stateAdapter.runInTransaction(async (txCtx) =>
+      const deleted = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.deleteJobChains({
           txCtx,
           chainIds: [mainJob.chainId],
@@ -2649,7 +2648,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       stateAdapter,
       expect,
     }) => {
-      const [{ job: blockerJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: blockerJob }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -2664,7 +2663,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const [{ job: mainJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: mainJob }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -2679,7 +2678,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.addJobsBlockers({
           txCtx,
           jobBlockers: [{ jobId: mainJob.id, blockedByChainIds: [blockerJob.chainId] }],
@@ -2687,7 +2686,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       );
 
       await expect(
-        stateAdapter.runInTransaction(async (txCtx) =>
+        stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.deleteJobChains({
             txCtx,
             chainIds: [blockerJob.chainId],
@@ -2699,7 +2698,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
     it("cascade resolves transitive dependencies", async ({ stateAdapter, expect }) => {
       // A ← B ← C (C depends on B, B depends on A)
-      const [{ job: jobA }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: jobA }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -2714,7 +2713,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const [{ job: jobB }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: jobB }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -2729,7 +2728,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const [{ job: jobC }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: jobC }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -2744,14 +2743,14 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.addJobsBlockers({
           txCtx,
           jobBlockers: [{ jobId: jobB.id, blockedByChainIds: [jobA.chainId] }],
         }),
       );
 
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.addJobsBlockers({
           txCtx,
           jobBlockers: [{ jobId: jobC.id, blockedByChainIds: [jobB.chainId] }],
@@ -2759,7 +2758,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       );
 
       // Delete from C (topmost dependent) — cascades down to B and A
-      const deleted = await stateAdapter.runInTransaction(async (txCtx) =>
+      const deleted = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.deleteJobChains({
           txCtx,
           chainIds: [jobC.chainId],
@@ -2779,7 +2778,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       //   B   C
       //    \ /
       //     A
-      const [{ job: jobA }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: jobA }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -2794,7 +2793,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const [{ job: jobB }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: jobB }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -2809,7 +2808,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const [{ job: jobC }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: jobC }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -2824,7 +2823,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const [{ job: jobD }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: jobD }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -2839,28 +2838,28 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.addJobsBlockers({
           txCtx,
           jobBlockers: [{ jobId: jobB.id, blockedByChainIds: [jobA.chainId] }],
         }),
       );
 
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.addJobsBlockers({
           txCtx,
           jobBlockers: [{ jobId: jobC.id, blockedByChainIds: [jobA.chainId] }],
         }),
       );
 
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.addJobsBlockers({
           txCtx,
           jobBlockers: [{ jobId: jobD.id, blockedByChainIds: [jobB.chainId, jobC.chainId] }],
         }),
       );
 
-      const deleted = await stateAdapter.runInTransaction(async (txCtx) =>
+      const deleted = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.deleteJobChains({
           txCtx,
           chainIds: [jobD.chainId],
@@ -2879,7 +2878,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       stateAdapter,
       expect,
     }) => {
-      const [{ job: jobA }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: jobA }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -2894,7 +2893,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const [{ job: jobB }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: jobB }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -2909,7 +2908,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const deleted = await stateAdapter.runInTransaction(async (txCtx) =>
+      const deleted = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.deleteJobChains({
           txCtx,
           chainIds: [jobA.chainId],
@@ -2926,7 +2925,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
   describe("getJobForUpdate", () => {
     it("returns job by ID via getJobForUpdate", async ({ stateAdapter, expect }) => {
-      const [{ job: created }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -2941,7 +2940,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const retrieved = await stateAdapter.runInTransaction(async (txCtx) =>
+      const retrieved = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.getJobForUpdate({ txCtx, jobId: created.id }),
       );
 
@@ -2954,7 +2953,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       stateAdapter,
       expect,
     }) => {
-      const retrieved = await stateAdapter.runInTransaction(async (txCtx) =>
+      const retrieved = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.getJobForUpdate({ txCtx, jobId: crypto.randomUUID() }),
       );
 
@@ -2967,7 +2966,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       stateAdapter,
       expect,
     }) => {
-      const [{ job: rootJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: rootJob }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -2982,7 +2981,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const [{ job: continuation }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: continuation }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -2997,7 +2996,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
 
-      const current = await stateAdapter.runInTransaction(async (txCtx) =>
+      const current = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.getLatestChainJobForUpdate({ txCtx, chainId: rootJob.chainId }),
       );
 
@@ -3009,7 +3008,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       stateAdapter,
       expect,
     }) => {
-      const current = await stateAdapter.runInTransaction(async (txCtx) =>
+      const current = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.getLatestChainJobForUpdate({ txCtx, chainId: crypto.randomUUID() }),
       );
 
@@ -3030,7 +3029,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     stateAdapter,
     expect,
   }) => {
-    const [{ job: mainChain }] = await stateAdapter.runInTransaction(async (txCtx) =>
+    const [{ job: mainChain }] = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -3045,7 +3044,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       }),
     );
 
-    const [{ job: blockerChain }] = await stateAdapter.runInTransaction(async (txCtx) =>
+    const [{ job: blockerChain }] = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -3060,7 +3059,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       }),
     );
 
-    await stateAdapter.runInTransaction(async (txCtx) =>
+    await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.addJobsBlockers({
         txCtx,
         jobBlockers: [{ jobId: mainChain.id, blockedByChainIds: [blockerChain.chainId] }],
@@ -3086,7 +3085,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     stateAdapter,
     expect,
   }) => {
-    const [{ job: root }] = await stateAdapter.runInTransaction(async (txCtx) =>
+    const [{ job: root }] = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -3101,7 +3100,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       }),
     );
 
-    const [{ job: continuation }] = await stateAdapter.runInTransaction(async (txCtx) =>
+    const [{ job: continuation }] = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -3129,7 +3128,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
   });
 
   it("listJobChains filters by typeName", async ({ stateAdapter, expect }) => {
-    await stateAdapter.runInTransaction(async (txCtx) =>
+    await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -3143,7 +3142,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         ],
       }),
     );
-    await stateAdapter.runInTransaction(async (txCtx) =>
+    await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -3157,7 +3156,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         ],
       }),
     );
-    await stateAdapter.runInTransaction(async (txCtx) =>
+    await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -3184,7 +3183,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
   });
 
   it("listJobChains sorts by createdAt desc by default", async ({ stateAdapter, expect }) => {
-    const [{ job: job1 }] = await stateAdapter.runInTransaction(async (txCtx) =>
+    const [{ job: job1 }] = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -3199,7 +3198,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       }),
     );
     await sleep(5);
-    const [{ job: job2 }] = await stateAdapter.runInTransaction(async (txCtx) =>
+    const [{ job: job2 }] = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -3214,7 +3213,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       }),
     );
     await sleep(5);
-    const [{ job: job3 }] = await stateAdapter.runInTransaction(async (txCtx) =>
+    const [{ job: job3 }] = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -3242,7 +3241,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
   it("listJobChains paginates with cursor", async ({ stateAdapter, expect }) => {
     const jobs = [];
     for (let i = 0; i < 5; i++) {
-      const [{ job }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -3286,7 +3285,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
   });
 
   it("listJobChains filters by id matching chain ID", async ({ stateAdapter, expect }) => {
-    const [{ job: chain1 }] = await stateAdapter.runInTransaction(async (txCtx) =>
+    const [{ job: chain1 }] = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -3300,7 +3299,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         ],
       }),
     );
-    await stateAdapter.runInTransaction(async (txCtx) =>
+    await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -3325,7 +3324,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
   });
 
   it("listJobChains sorts asc when orderDirection is asc", async ({ stateAdapter, expect }) => {
-    const [{ job: job1 }] = await stateAdapter.runInTransaction(async (txCtx) =>
+    const [{ job: job1 }] = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -3340,7 +3339,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       }),
     );
     await sleep(5);
-    const [{ job: job2 }] = await stateAdapter.runInTransaction(async (txCtx) =>
+    const [{ job: job2 }] = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -3366,7 +3365,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
   it("listJobChains paginates correctly in asc order", async ({ stateAdapter, expect }) => {
     for (let i = 0; i < 3; i++) {
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -3402,7 +3401,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
   });
 
   it("listJobChains filters by from/to date range", async ({ stateAdapter, expect }) => {
-    await stateAdapter.runInTransaction(async (txCtx) =>
+    await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -3419,7 +3418,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     await sleep(50);
     const midpoint = new Date();
     await sleep(50);
-    await stateAdapter.runInTransaction(async (txCtx) =>
+    await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -3452,7 +3451,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
   });
 
   it("listJobChains filters by jobId", async ({ stateAdapter, expect }) => {
-    const [{ job: root }] = await stateAdapter.runInTransaction(async (txCtx) =>
+    const [{ job: root }] = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -3466,7 +3465,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         ],
       }),
     );
-    const [{ job: continuation }] = await stateAdapter.runInTransaction(async (txCtx) =>
+    const [{ job: continuation }] = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -3480,7 +3479,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         ],
       }),
     );
-    await stateAdapter.runInTransaction(async (txCtx) =>
+    await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -3505,7 +3504,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
   });
 
   it("listJobChains filters by status", async ({ stateAdapter, expect }) => {
-    const [{ job: chain1 }] = await stateAdapter.runInTransaction(async (txCtx) =>
+    const [{ job: chain1 }] = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -3519,7 +3518,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         ],
       }),
     );
-    await stateAdapter.runInTransaction(async (txCtx) =>
+    await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -3534,10 +3533,10 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       }),
     );
 
-    await stateAdapter.runInTransaction(async (txCtx) =>
+    await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.acquireJob({ txCtx, typeNames: ["test-type"] }),
     );
-    await stateAdapter.runInTransaction(async (txCtx) =>
+    await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.completeJob({ txCtx, jobId: chain1.id, output: null, workerId: "w1" }),
     );
 
@@ -3564,7 +3563,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
   });
 
   it("listJobs returns all jobs across chains", async ({ stateAdapter, expect }) => {
-    const [{ job: root }] = await stateAdapter.runInTransaction(async (txCtx) =>
+    const [{ job: root }] = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -3578,7 +3577,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         ],
       }),
     );
-    await stateAdapter.runInTransaction(async (txCtx) =>
+    await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -3592,7 +3591,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         ],
       }),
     );
-    await stateAdapter.runInTransaction(async (txCtx) =>
+    await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -3612,7 +3611,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
   });
 
   it("listJobs filters by chainId", async ({ stateAdapter, expect }) => {
-    const [{ job: root }] = await stateAdapter.runInTransaction(async (txCtx) =>
+    const [{ job: root }] = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -3626,7 +3625,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         ],
       }),
     );
-    await stateAdapter.runInTransaction(async (txCtx) =>
+    await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -3640,7 +3639,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         ],
       }),
     );
-    await stateAdapter.runInTransaction(async (txCtx) =>
+    await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -3667,7 +3666,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
   });
 
   it("listJobs filters by status", async ({ stateAdapter, expect }) => {
-    const [{ job }] = await stateAdapter.runInTransaction(async (txCtx) =>
+    const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -3681,7 +3680,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         ],
       }),
     );
-    await stateAdapter.runInTransaction(async (txCtx) =>
+    await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -3696,10 +3695,10 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       }),
     );
 
-    await stateAdapter.runInTransaction(async (txCtx) =>
+    await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.acquireJob({ txCtx, typeNames: ["test-type"] }),
     );
-    await stateAdapter.runInTransaction(async (txCtx) =>
+    await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.completeJob({ txCtx, jobId: job.id, output: null, workerId: "w1" }),
     );
 
@@ -3713,7 +3712,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
   });
 
   it("listJobs filters by typeName", async ({ stateAdapter, expect }) => {
-    await stateAdapter.runInTransaction(async (txCtx) =>
+    await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -3727,7 +3726,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         ],
       }),
     );
-    await stateAdapter.runInTransaction(async (txCtx) =>
+    await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -3752,7 +3751,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
   });
 
   it("listJobs filters by chainTypeName", async ({ stateAdapter, expect }) => {
-    await stateAdapter.runInTransaction(async (txCtx) =>
+    await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -3766,7 +3765,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         ],
       }),
     );
-    const [{ job: rootB }] = await stateAdapter.runInTransaction(async (txCtx) =>
+    const [{ job: rootB }] = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -3780,7 +3779,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         ],
       }),
     );
-    await stateAdapter.runInTransaction(async (txCtx) =>
+    await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -3807,7 +3806,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
   });
 
   it("listJobs filters by id matching job ID", async ({ stateAdapter, expect }) => {
-    const [{ job: job1 }] = await stateAdapter.runInTransaction(async (txCtx) =>
+    const [{ job: job1 }] = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -3821,7 +3820,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         ],
       }),
     );
-    await stateAdapter.runInTransaction(async (txCtx) =>
+    await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -3847,7 +3846,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
   it("listJobs paginates with cursor", async ({ stateAdapter, expect }) => {
     for (let i = 0; i < 4; i++) {
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -3879,7 +3878,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
   });
 
   it("listJobs sorts asc when orderDirection is asc", async ({ stateAdapter, expect }) => {
-    const [{ job: job1 }] = await stateAdapter.runInTransaction(async (txCtx) =>
+    const [{ job: job1 }] = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -3894,7 +3893,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       }),
     );
     await sleep(5);
-    const [{ job: job2 }] = await stateAdapter.runInTransaction(async (txCtx) =>
+    const [{ job: job2 }] = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -3919,7 +3918,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
   });
 
   it("listJobs filters by from/to date range", async ({ stateAdapter, expect }) => {
-    await stateAdapter.runInTransaction(async (txCtx) =>
+    await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -3936,7 +3935,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     await sleep(50);
     const midpoint = new Date();
     await sleep(50);
-    await stateAdapter.runInTransaction(async (txCtx) =>
+    await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -3980,7 +3979,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("returns jobs ordered by chainIndex asc by default", async ({ stateAdapter, expect }) => {
-      const [{ job: root }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: root }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -3994,7 +3993,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           ],
         }),
       );
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -4008,7 +4007,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           ],
         }),
       );
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -4035,7 +4034,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("respects orderDirection desc", async ({ stateAdapter, expect }) => {
-      const [{ job: root }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: root }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -4049,7 +4048,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           ],
         }),
       );
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -4075,7 +4074,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("paginates with cursor", async ({ stateAdapter, expect }) => {
-      const [{ job: root }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: root }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -4090,7 +4089,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
       for (let i = 1; i < 5; i++) {
-        await stateAdapter.runInTransaction(async (txCtx) =>
+        await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
@@ -4136,7 +4135,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("only returns jobs from specified chain", async ({ stateAdapter, expect }) => {
-      const [{ job: chain1Root }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job: chain1Root }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -4150,7 +4149,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
           ],
         }),
       );
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -4176,7 +4175,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
   });
 
   it("listBlockedJobs returns jobs blocked by a chain", async ({ stateAdapter, expect }) => {
-    const [{ job: blockerChain }] = await stateAdapter.runInTransaction(async (txCtx) =>
+    const [{ job: blockerChain }] = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -4190,7 +4189,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         ],
       }),
     );
-    const [{ job: blockedJob }] = await stateAdapter.runInTransaction(async (txCtx) =>
+    const [{ job: blockedJob }] = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -4204,7 +4203,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         ],
       }),
     );
-    await stateAdapter.runInTransaction(async (txCtx) =>
+    await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -4219,7 +4218,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       }),
     );
 
-    await stateAdapter.runInTransaction(async (txCtx) =>
+    await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.addJobsBlockers({
         txCtx,
         jobBlockers: [{ jobId: blockedJob.id, blockedByChainIds: [blockerChain.chainId] }],
@@ -4240,7 +4239,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     stateAdapter,
     expect,
   }) => {
-    const [{ job: chain }] = await stateAdapter.runInTransaction(async (txCtx) =>
+    const [{ job: chain }] = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -4264,7 +4263,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
   });
 
   it("listBlockedJobs sorts asc when orderDirection is asc", async ({ stateAdapter, expect }) => {
-    const [{ job: blockerChain }] = await stateAdapter.runInTransaction(async (txCtx) =>
+    const [{ job: blockerChain }] = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -4278,7 +4277,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         ],
       }),
     );
-    const [{ job: blockedJob1 }] = await stateAdapter.runInTransaction(async (txCtx) =>
+    const [{ job: blockedJob1 }] = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -4293,7 +4292,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       }),
     );
     await sleep(5);
-    const [{ job: blockedJob2 }] = await stateAdapter.runInTransaction(async (txCtx) =>
+    const [{ job: blockedJob2 }] = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -4308,13 +4307,13 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
       }),
     );
 
-    await stateAdapter.runInTransaction(async (txCtx) =>
+    await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.addJobsBlockers({
         txCtx,
         jobBlockers: [{ jobId: blockedJob1.id, blockedByChainIds: [blockerChain.chainId] }],
       }),
     );
-    await stateAdapter.runInTransaction(async (txCtx) =>
+    await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.addJobsBlockers({
         txCtx,
         jobBlockers: [{ jobId: blockedJob2.id, blockedByChainIds: [blockerChain.chainId] }],
@@ -4341,7 +4340,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
   });
 
   it("listBlockedJobs paginates with cursor", async ({ stateAdapter, expect }) => {
-    const [{ job: blockerChain }] = await stateAdapter.runInTransaction(async (txCtx) =>
+    const [{ job: blockerChain }] = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [
@@ -4357,7 +4356,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     );
     const blockedJobs = [];
     for (let i = 0; i < 4; i++) {
-      const [{ job }] = await stateAdapter.runInTransaction(async (txCtx) =>
+      const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -4372,7 +4371,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
         }),
       );
       blockedJobs.push(job);
-      await stateAdapter.runInTransaction(async (txCtx) =>
+      await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.addJobsBlockers({
           txCtx,
           jobBlockers: [{ jobId: job.id, blockedByChainIds: [blockerChain.chainId] }],
@@ -4402,7 +4401,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
 
   describe("withSavepoint", () => {
     it("commits changes on success", async ({ stateAdapter, expect }) => {
-      const [{ job }] = await stateAdapter.runInTransaction(async (txCtx) => {
+      const [{ job }] = await stateAdapter.withTransaction(async (txCtx) => {
         const results = await stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -4434,7 +4433,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("rolls back changes on error", async ({ stateAdapter, expect }) => {
-      const [{ job }] = await stateAdapter.runInTransaction(async (txCtx) => {
+      const [{ job }] = await stateAdapter.withTransaction(async (txCtx) => {
         const results = await stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -4469,7 +4468,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("does not affect outer transaction on rollback", async ({ stateAdapter, expect }) => {
-      const jobs = await stateAdapter.runInTransaction(async (txCtx) => {
+      const jobs = await stateAdapter.withTransaction(async (txCtx) => {
         const [{ job: job1 }] = await stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -4526,7 +4525,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("supports nested savepoints", async ({ stateAdapter, expect }) => {
-      const [{ job }] = await stateAdapter.runInTransaction(async (txCtx) => {
+      const [{ job }] = await stateAdapter.withTransaction(async (txCtx) => {
         const results = await stateAdapter.createJobs({
           txCtx,
           jobs: [
@@ -4571,7 +4570,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     });
 
     it("re-throws the original error", async ({ stateAdapter, expect }) => {
-      await stateAdapter.runInTransaction(async (txCtx) => {
+      await stateAdapter.withTransaction(async (txCtx) => {
         await expect(
           stateAdapter.withSavepoint(txCtx, async () => {
             throw new Error("original error");
@@ -4588,7 +4587,7 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
     }) => {
       if (!poisonTransaction) return skip();
 
-      const [{ job: jobBefore }, { job: jobAfter }] = await stateAdapter.runInTransaction(
+      const [{ job: jobBefore }, { job: jobAfter }] = await stateAdapter.withTransaction(
         async (txCtx) => {
           const [{ job: jobBefore }] = await stateAdapter.createJobs({
             txCtx,

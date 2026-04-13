@@ -115,7 +115,7 @@ Test suites are reusable test collections exported as functions. They receive Vi
 ```typescript
 // Define a test suite
 export const myFeatureTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
-  it("does something", async ({ stateAdapter, runInTransaction, expect }) => {
+  it("does something", async ({ stateAdapter, withTransaction, expect }) => {
     // test implementation
   });
 
@@ -196,7 +196,7 @@ state-sqlite-kysely         # Kysely
 
 ```
 
-Each implements a state provider (`PgStateProvider` or `SqliteStateProvider`) with `runInTransaction` and `executeSql` methods specific to that client library.
+Each implements a state provider (`PgStateProvider` or `SqliteStateProvider`) with `withTransaction` and `executeSql` methods specific to that client library.
 
 ### Notify Examples
 
@@ -249,7 +249,7 @@ Production deployments should use the database-backed adapters from their respec
 Examples should follow these conventions for clarity and readability:
 
 - **Top-level await**: Use top-level await directly, not wrapped in `main().catch()` or similar
-- **Direct transaction patterns**: Use database client transactions directly (e.g., `db.transaction()`, `sql.begin()`) instead of abstracting through `stateProvider.runInTransaction()` in the demonstration code
+- **Direct transaction patterns**: Use database client transactions directly (e.g., `db.transaction()`, `sql.begin()`) instead of abstracting through `stateProvider.withTransaction()` in the demonstration code
 - **Simple patterns**: Prefer straightforward code over abstraction layers — examples should be copy-paste friendly
 - **No obvious comments**: Users are smart
 - **Workflow visualization**: Examples with job chains should include ASCII workflow diagrams as comments inside the `defineJobTypeRegistry` generic, directly above the relevant job type definitions

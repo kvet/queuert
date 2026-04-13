@@ -123,7 +123,7 @@ executeSql: async ({ txCtx, sql, params }) => {
 ```
 
 - **Outside a transaction**: Every SQL execution acquires the lock
-- **Inside a transaction**: The lock was already acquired by `runInTransaction`, so individual operations skip it
+- **Inside a transaction**: The lock was already acquired by `withTransaction`, so individual operations skip it
 
 Custom `SqliteStateProvider` implementations must use `createAsyncLock()` to ensure correct serialization.
 

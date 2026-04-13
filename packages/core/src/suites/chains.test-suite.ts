@@ -19,7 +19,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
   it("handles chained jobs", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -116,7 +116,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) => {
+      withTransaction(async (txCtx) => {
         return client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -146,7 +146,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
   it("handles branched chains", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -218,7 +218,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     const evenJobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -228,7 +228,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       ),
     );
     const oddJobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -264,7 +264,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
   it("handles branched chains with different inputs", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -351,7 +351,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     const evenJobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -361,7 +361,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       ),
     );
     const oddJobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -393,7 +393,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
   it("handles loops", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -444,7 +444,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -466,7 +466,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
   it("handles go-to", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -538,7 +538,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -562,7 +562,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
   it("correctly types chainTypeName for jobs reachable from multiple chains", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -621,7 +621,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     const chainA = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -631,7 +631,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       ),
     );
     const chainB = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -654,7 +654,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
   it("independent chains created during job processing do not inherit context", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -693,7 +693,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             attemptHandler: async ({ job, complete }) => {
               // Create an independent chain during job processing
               const independentChain = await withTransactionHooks(async (transactionHooks) =>
-                runInTransaction(async (txCtx) =>
+                withTransaction(async (txCtx) =>
                   client.startJobChain({
                     ...txCtx,
                     transactionHooks,
@@ -722,7 +722,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     const parentChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,

@@ -70,6 +70,42 @@ For more control, call `prepare` explicitly:
 - **Atomic mode**: Prepare and complete run in the same transaction. Rarely needed since calling `complete` directly achieves the same result with less ceremony.
 - **Staged mode**: Prepare runs in one transaction, long-running work happens outside, then complete runs in another transaction. The worker automatically renews the job lease between phases. Implement the processing phase idempotently as it may retry if the worker crashes.
 
+## Error Recovery and Savepoints
+
+Both the `prepare` and `complete` callbacks run inside database savepoints. This is the mechanism that keeps jobs safe when user code throws.
+
+### Why Savepoints
+
+A naive approach would run user callbacks directly inside the job's transaction. The problem: if user code throws after executing partial SQL, the transaction is **poisoned** — most databases reject further statements on a transaction that has seen an error. The engine couldn't even reschedule the job because the reschedule SQL would fail on the same broken transaction.
+
+Savepoints solve this. A savepoint is a checkpoint within a transaction. If code inside the savepoint throws, the database rolls back to that checkpoint — undoing the partial work — while the outer transaction remains healthy. The engine can then reschedule the job and commit normally.
+
+### How It Works
+
+```
+┌─ Transaction (acquires job) ──────────────────────────────┐
+│                                                           │
+│   ┌─ Savepoint (prepare callback) ──┐                    │
+│   │  User SQL...                    │ ← throws? rollback  │
+│   │  User SQL...                    │   to savepoint      │
+│   └─────────────────────────────────┘                     │
+│                                                           │
+│   ... async work (staged mode only) ...                   │
+│                                                           │
+│   ┌─ Savepoint (complete callback) ─┐                    │
+│   │  User SQL...                    │ ← throws? rollback  │
+│   │  completeJob / continueWith     │   to savepoint      │
+│   └─────────────────────────────────┘                     │
+│                                                           │
+│   On error: reschedule with backoff  ← always succeeds    │
+│   On success: commit                                      │
+└───────────────────────────────────────────────────────────┘
+```
+
+On any unhandled error the job is rescheduled with exponential backoff (default: 10 s → 20 s → 40 s → ... capped at 300 s). There is no maximum retry count — jobs retry indefinitely. Use [discriminated unions or compensation patterns](../../guides/error-handling/) to handle permanently failing jobs.
+
+See [Job Processing Reliability](../../guides/processing-reliability/) for per-phase error scenarios with code examples.
+
 ## Timeouts
 
 Queuert does not provide built-in soft timeout functionality. This is intentional:
@@ -91,6 +127,7 @@ For hard timeouts (forceful termination), the lease mechanism already handles th
 
 ## See Also
 
+- [Job Processing Reliability](../../guides/processing-reliability/) — Savepoint protection, automatic rollback
 - [Client API](/queuert/reference/queuert/client/) — Mutation methods, query methods, awaitJobChain
 - [In-Process Worker](../in-process-worker/) — Worker lifecycle, leasing, reaper
 - [Adapters](../adapters/) — StateAdapter context architecture

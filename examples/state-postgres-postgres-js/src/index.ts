@@ -53,8 +53,10 @@ type TransactionSql = _TransactionSql & {
 type DbContext = { sql: TransactionSql };
 
 const stateProvider: PgStateProvider<DbContext> = {
-  runInTransaction: async (cb) =>
+  withTransaction: async (cb) =>
     sql.begin(async (txSql) => cb({ sql: txSql as TransactionSql }) as any),
+  withSavepoint: async (txCtx, fn) =>
+    txCtx.sql.savepoint(async (savepointSql) => fn({ sql: savepointSql as TransactionSql })) as any,
   executeSql: async ({ txCtx, sql: query, params }) => {
     const sqlClient = txCtx?.sql ?? sql;
     const normalizedParams = params

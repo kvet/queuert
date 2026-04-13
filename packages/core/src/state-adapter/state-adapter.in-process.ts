@@ -199,7 +199,7 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
   };
 
   const adapter: InProcessStateAdapter = {
-    runInTransaction: async (fn) => {
+    withTransaction: async (fn) => {
       await lock.acquire();
 
       const snapshot = deepCloneStore(store);

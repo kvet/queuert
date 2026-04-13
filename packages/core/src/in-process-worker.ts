@@ -105,7 +105,7 @@ const performJob = async ({
   { job: null; hasMore: false } | { job: StateJob; hasMore: boolean; execute: () => Promise<void> }
 > => {
   const prepareTransactionContext = await createTransactionContext(
-    helpers.stateAdapter.runInTransaction,
+    helpers.stateAdapter.withTransaction,
   );
 
   let job: StateJob | undefined;

@@ -19,7 +19,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
   it("throws error when prepare, complete, or continueWith called incorrectly", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -125,7 +125,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
 
     const [prepareJobChain, completeJobChain, prepareAfterAutoSetupJobChain, continueWithJobChain] =
       await withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChains({
             ...txCtx,
             transactionHooks,
@@ -152,7 +152,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
   it("provides attempt information to job process", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -220,7 +220,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -239,7 +239,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
   it("uses exponential backoff progression for repeated failures", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -294,7 +294,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     });
 
     const job = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -317,7 +317,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
   it("executes jobs", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -390,7 +390,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,

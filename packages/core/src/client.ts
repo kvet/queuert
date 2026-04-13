@@ -60,7 +60,7 @@ const normalizeTxCtx = <T extends Record<string, unknown>>(rest: T): T | undefin
 const requireTxCtx = <T extends Record<string, unknown>>(rest: T): T => {
   if (Object.keys(rest).length === 0) {
     throw new TransactionContextRequiredError(
-      "Mutating client methods require a transaction context from runInTransaction",
+      "Mutating client methods require a transaction context from withTransaction",
     );
   }
   return rest;

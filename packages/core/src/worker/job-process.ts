@@ -312,7 +312,7 @@ export const runJobProcess = async ({
     }
 
     return withTransactionHooks(async (transactionHooks) =>
-      helpers.stateAdapter.runInTransaction(async (txCtx) => {
+      helpers.stateAdapter.withTransaction(async (txCtx) => {
         await refetchJobForUpdate(txCtx);
         return cb(txCtx, transactionHooks);
       }),
@@ -451,7 +451,7 @@ export const runJobProcess = async ({
       const completeSpan = attemptSpanHandle?.startComplete();
       if (prepareTransactionContext.status !== "pending") {
         completeTransactionContext = await createTransactionContext(
-          helpers.stateAdapter.runInTransaction,
+          helpers.stateAdapter.withTransaction,
         );
         await completeTransactionContext.run(async (txCtx) => {
           await refetchJobForUpdate(txCtx);

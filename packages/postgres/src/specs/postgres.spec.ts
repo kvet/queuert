@@ -69,7 +69,7 @@ it("should infer types correctly with custom ID", async ({ postgresConnectionStr
       }),
     });
 
-    const runInTransaction = async <T>(fn: (poolClient: PoolClient) => Promise<T>): Promise<T> => {
+    const withTransaction = async <T>(fn: (poolClient: PoolClient) => Promise<T>): Promise<T> => {
       const poolClient = await pool.connect();
       try {
         await poolClient.query("BEGIN");
@@ -85,7 +85,7 @@ it("should infer types correctly with custom ID", async ({ postgresConnectionStr
     };
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (poolClient) =>
+      withTransaction(async (poolClient) =>
         client.startJobChain({
           poolClient,
           transactionHooks,

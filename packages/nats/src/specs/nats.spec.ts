@@ -60,7 +60,7 @@ it("should work end-to-end with NATS notify adapter", async ({ natsConnectionOpt
   });
 
   const jobChain = await withTransactionHooks(async (transactionHooks) =>
-    stateAdapter.runInTransaction(async (txCtx) =>
+    stateAdapter.withTransaction(async (txCtx) =>
       client.startJobChain({
         ...txCtx,
         transactionHooks,
@@ -118,7 +118,7 @@ it("should work end-to-end without JetStream KV", async ({ natsConnectionOptions
   });
 
   const jobChain = await withTransactionHooks(async (transactionHooks) =>
-    stateAdapter.runInTransaction(async (txCtx) =>
+    stateAdapter.withTransaction(async (txCtx) =>
       client.startJobChain({
         ...txCtx,
         transactionHooks,

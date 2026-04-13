@@ -76,7 +76,7 @@ const convertBigInts = (rows: unknown[]): unknown[] => {
 };
 
 const stateProvider: SqliteStateProvider<DbContext> = {
-  runInTransaction: async (cb) => {
+  withTransaction: async (cb) => {
     await lock.acquire();
     try {
       return await prisma.$transaction(async (prisma) => cb({ prisma }));

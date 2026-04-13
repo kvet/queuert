@@ -17,7 +17,7 @@ import { createFlakyBatchGenerator } from "./flaky-test-helper.spec-helper.js";
 export type TestSuiteContext = {
   stateAdapter: StateAdapter<{ $test: true }, string>;
   notifyAdapter: NotifyAdapter | undefined;
-  runInTransaction: <T>(cb: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
+  withTransaction: <T>(cb: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
   poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
   poisonExecute:
     | ((cb: (adapter: StateAdapter<{ $test: true }, string>) => Promise<void>) => Promise<void>)
@@ -35,15 +35,15 @@ export const extendWithCommon = <
 >(
   it: TestAPI<T>,
 ): TestAPI<
-  T & Pick<TestSuiteContext, "runInTransaction" | "withWorkers" | "log" | "observabilityAdapter">
+  T & Pick<TestSuiteContext, "withTransaction" | "withWorkers" | "log" | "observabilityAdapter">
 > =>
   it.extend<
-    Pick<TestSuiteContext, "runInTransaction" | "withWorkers" | "log" | "observabilityAdapter">
+    Pick<TestSuiteContext, "withTransaction" | "withWorkers" | "log" | "observabilityAdapter">
   >({
-    runInTransaction: [
+    withTransaction: [
       async ({ stateAdapter }, use) => {
         await use(async (cb) => {
-          return stateAdapter.runInTransaction(cb);
+          return stateAdapter.withTransaction(cb);
         });
       },
       { scope: "test" },

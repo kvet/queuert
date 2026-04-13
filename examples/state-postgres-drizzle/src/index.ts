@@ -59,7 +59,7 @@ type DbTransaction = PgTransaction<
 type DbContext = { tx: DbTransaction };
 
 const stateProvider: PgStateProvider<DbContext> = {
-  runInTransaction: async (cb) => {
+  withTransaction: async (cb) => {
     return db.transaction(async (tx) => cb({ tx }));
   },
   executeSql: async ({ txCtx, sql, params }) => {

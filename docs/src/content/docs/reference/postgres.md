@@ -35,7 +35,8 @@ type PgStateAdapter = StateAdapter & {
 
 ```typescript
 type PgStateProvider<TTxContext> = {
-  runInTransaction: <T>(fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
+  withTransaction: <T>(fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
+  withSavepoint?: <T>(txCtx: TTxContext, fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
   executeSql: (options: {
     txCtx?: TTxContext;
     sql: string;
@@ -43,6 +44,8 @@ type PgStateProvider<TTxContext> = {
   }) => Promise<unknown[]>;
 };
 ```
+
+`withSavepoint` is optional. When not provided, the adapter uses raw `SAVEPOINT` SQL via `executeSql`. Override it when your driver tracks transaction state client-side (e.g. `postgres.js` — use `txCtx.sql.savepoint()`).
 
 ## createPgNotifyAdapter
 

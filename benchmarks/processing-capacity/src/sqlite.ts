@@ -22,7 +22,7 @@ console.log("SQLite ready (in-memory).");
 await runBenchmark({
   stateAdapter,
   notifyAdapter: createInProcessNotifyAdapter(),
-  runInTransaction: stateProvider.runInTransaction,
+  withTransaction: stateProvider.withTransaction,
   concurrency,
 });
 

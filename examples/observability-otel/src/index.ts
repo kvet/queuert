@@ -240,7 +240,7 @@ console.log("Optional: Run `pnpm tui` in another terminal to view traces\n");
 console.log("--- Scenario 1: Single Job ---");
 console.log("One chain, one job, one attempt. Simplest trace structure.\n");
 const greetJob = await withTransactionHooks(async (transactionHooks) =>
-  stateAdapter.runInTransaction(async (ctx) =>
+  stateAdapter.withTransaction(async (ctx) =>
     client.startJobChain({ ...ctx, transactionHooks, typeName: "greet", input: { name: "World" } }),
   ),
 );
@@ -251,7 +251,7 @@ console.log("Result:", greetResult.output);
 console.log("\n--- Scenario 2: Continuations ---");
 console.log("validate → process → complete. Chain span contains 3 sequential job spans.\n");
 const orderJob = await withTransactionHooks(async (transactionHooks) =>
-  stateAdapter.runInTransaction(async (ctx) =>
+  stateAdapter.withTransaction(async (ctx) =>
     client.startJobChain({
       ...ctx,
       transactionHooks,
@@ -267,7 +267,7 @@ console.log("Result:", orderResult.output);
 console.log("\n--- Scenario 3: Blockers ---");
 console.log("Two blockers run in parallel, main job waits. Traces linked across chains.\n");
 const blockerJob = await withTransactionHooks(async (transactionHooks) =>
-  stateAdapter.runInTransaction(async (ctx) => {
+  stateAdapter.withTransaction(async (ctx) => {
     const userBlocker = await client.startJobChain({
       ...ctx,
       transactionHooks,
@@ -296,7 +296,7 @@ console.log("Result:", blockerResult.output);
 console.log("\n--- Scenario 4: Retries ---");
 console.log("First attempt fails, second succeeds. Job span shows multiple attempt spans.\n");
 const retryJob = await withTransactionHooks(async (transactionHooks) =>
-  stateAdapter.runInTransaction(async (ctx) =>
+  stateAdapter.withTransaction(async (ctx) =>
     client.startJobChain({
       ...ctx,
       transactionHooks,
@@ -312,7 +312,7 @@ console.log("Result:", retryResult.output);
 console.log("\n--- Scenario 5: Workerless Completion ---");
 console.log("Job completed externally without a worker. CONSUMER job span, no attempt spans.\n");
 const approvalJob = await withTransactionHooks(async (transactionHooks) =>
-  stateAdapter.runInTransaction(async (ctx) =>
+  stateAdapter.withTransaction(async (ctx) =>
     client.startJobChain({
       ...ctx,
       transactionHooks,
@@ -322,7 +322,7 @@ const approvalJob = await withTransactionHooks(async (transactionHooks) =>
   ),
 );
 const approvalResult = await withTransactionHooks(async (transactionHooks) =>
-  stateAdapter.runInTransaction(async (ctx) =>
+  stateAdapter.withTransaction(async (ctx) =>
     client.completeJobChain({
       ...ctx,
       transactionHooks,

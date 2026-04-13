@@ -73,7 +73,7 @@ export const handleJobTrigger = async (
 ): Promise<Response> => {
   try {
     const { stateAdapter } = client[helpersSymbol];
-    const job = await stateAdapter.runInTransaction(async (txCtx) =>
+    const job = await stateAdapter.withTransaction(async (txCtx) =>
       withTransactionHooks(async (transactionHooks) =>
         client.triggerJob({ id: jobId, transactionHooks, ...txCtx }),
       ),

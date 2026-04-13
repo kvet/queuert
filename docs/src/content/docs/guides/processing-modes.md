@@ -5,8 +5,6 @@ sidebar:
   order: 2
 ---
 
-import { Aside } from "@astrojs/starlight/components";
-
 ## Atomic Mode
 
 Most jobs don't need `prepare`. Call `complete` directly and you get atomic mode automatically — one transaction for all reads and writes:
@@ -90,9 +88,9 @@ This means even without `prepare`, you can get staged behavior by doing async wo
 
 ## Anti-Patterns
 
-<Aside type="danger" title="Using staged mode with nothing between prepare and complete">
-  Staged mode adds a round-trip and loses read consistency for no benefit. Put everything in
-  `complete()` instead.
+:::danger[Using staged mode with nothing between prepare and complete]
+Staged mode adds a round-trip and loses read consistency for no benefit. Put everything in
+`complete()` instead.
 
 ```ts
 attemptHandler: async ({ job, prepare, complete }) => {
@@ -106,10 +104,10 @@ attemptHandler: async ({ job, prepare, complete }) => {
 };
 ```
 
-</Aside>
+:::
 
-<Aside type="danger" title="Using prepare({ mode: 'atomic' }) when complete alone suffices">
-  This is the same as calling `complete()` directly, but with extra ceremony.
+:::danger[Using prepare({ mode: 'atomic' }) when complete alone suffices]
+This is the same as calling `complete()` directly, but with extra ceremony.
 
 ```ts
 attemptHandler: async ({ job, prepare, complete }) => {
@@ -123,10 +121,10 @@ attemptHandler: async ({ job, prepare, complete }) => {
 };
 ```
 
-</Aside>
+:::
 
 The exception is dynamic handlers where the mode is determined at runtime — explicit `prepare` is the right choice there since auto-setup can't express conditional logic.
 
 ## See Also
 
-See [examples/showcase-processing-modes](https://github.com/kvet/queuert/tree/main/examples/showcase-processing-modes) for a complete working example. See also [Error Handling](../error-handling/), [Timeouts](../timeouts/), and [Job Processing](/queuert/advanced/job-processing/) reference.
+See [examples/showcase-processing-modes](https://github.com/kvet/queuert/tree/main/examples/showcase-processing-modes) for a complete working example. See also [Job Processing Reliability](../processing-reliability/), [Error Handling](../error-handling/), [Timeouts](../timeouts/), and [Job Processing](/queuert/advanced/job-processing/) reference.

@@ -50,7 +50,7 @@ export const createBetterSqlite3Provider = ({
         lock.release();
       }
     },
-    runInTransaction: async (fn) => {
+    withTransaction: async (fn) => {
       await lock.acquire();
       try {
         db.exec("BEGIN IMMEDIATE");

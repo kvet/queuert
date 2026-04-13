@@ -216,7 +216,7 @@ export const createSqliteStateAdapter = async <
   };
 
   const rawAdapter: StateAdapter<TTxContext, TIdType> = {
-    runInTransaction: stateProvider.runInTransaction,
+    withTransaction: stateProvider.withTransaction,
 
     withSavepoint: async (txCtx, fn) => {
       await stateProvider.executeSql({ txCtx, sql: "SAVEPOINT queuert_sp", returns: false });
@@ -884,7 +884,7 @@ export const createSqliteStateAdapter = async <
     ...rawAdapter,
     migrateToLatest: async () => {
       if (checkForeignKeys) {
-        await stateProvider.runInTransaction(async (txCtx) => {
+        await stateProvider.withTransaction(async (txCtx) => {
           const [fkResult] = (await stateProvider.executeSql({
             txCtx,
             sql: "PRAGMA foreign_keys",
@@ -948,7 +948,7 @@ export const createSqliteStateAdapter = async <
         },
       });
 
-      return stateProvider.runInTransaction(runMigrations);
+      return stateProvider.withTransaction(runMigrations);
     },
     vacuum: async () => {
       await stateProvider.executeSql({ sql: "PRAGMA incremental_vacuum", returns: false });

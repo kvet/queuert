@@ -41,10 +41,10 @@ export const createSpyStateAdapter = <TTxContext extends BaseTxContext, TJobId e
   return {
     calls,
 
-    runInTransaction: async (fn) => {
-      const call = record({ txCtx: undefined, name: "runInTransaction" });
+    withTransaction: async (fn) => {
+      const call = record({ txCtx: undefined, name: "withTransaction" });
       try {
-        const result = await stateAdapter.runInTransaction(async (txCtx) => {
+        const result = await stateAdapter.withTransaction(async (txCtx) => {
           const spyRef = Symbol();
           weakMap.set(spyRef, call);
           return fn({ ...txCtx, spyRef });

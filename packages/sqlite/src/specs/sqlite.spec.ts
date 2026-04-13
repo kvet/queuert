@@ -62,7 +62,7 @@ it("should infer types correctly with custom ID", async ({ db }) => {
   });
 
   const outerDb = db;
-  const runInTransaction = async <T>(fn: (db: typeof outerDb) => Promise<T>): Promise<T> => {
+  const withTransaction = async <T>(fn: (db: typeof outerDb) => Promise<T>): Promise<T> => {
     db.exec("BEGIN IMMEDIATE");
     try {
       const result = await fn(outerDb);
@@ -75,7 +75,7 @@ it("should infer types correctly with custom ID", async ({ db }) => {
   };
 
   const jobChain = await withTransactionHooks(async (transactionHooks) =>
-    runInTransaction(async (db) =>
+    withTransaction(async (db) =>
       client.startJobChain({
         db,
         transactionHooks,

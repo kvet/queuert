@@ -5,8 +5,6 @@ sidebar:
   order: 7
 ---
 
-import { Aside } from "@astrojs/starlight/components";
-
 Queuert provides only job completion -- there is no built-in "failure" state. This is intentional: you control how errors are represented in your job outputs.
 
 ## Discriminated Union
@@ -24,10 +22,10 @@ const jobTypeRegistry = defineJobTypeRegistry<{
 }>();
 ```
 
-<Aside type="tip">
-  This is the simplest approach and works well for most jobs. Prefer it when the caller needs to
-  react to the outcome, or when you want the error to be part of the chain's permanent record.
-</Aside>
+:::tip
+This is the simplest approach and works well for most jobs. Prefer it when the caller needs to
+react to the outcome, or when you want the error to be part of the chain's permanent record.
+:::
 
 ## Compensation
 
@@ -102,4 +100,25 @@ rescheduleJob({ at: new Date("2026-06-15T09:00:00Z") }); // specific time
 rescheduleJob({ afterMs: 60_000 }, originalError); // with cause for logging
 ```
 
-See [examples/showcase-error-handling](https://github.com/kvet/queuert/tree/main/examples/showcase-error-handling) for a complete working example demonstrating discriminated unions, compensation patterns, and explicit rescheduling. See also [Timeouts](../timeouts/) and [Job Processing Modes](../processing-modes/).
+## lastAttemptError
+
+On retry, `job.lastAttemptError` contains the serialized error from the previous attempt. Use it for logging or to adjust retry behavior:
+
+```ts
+attemptHandler: async ({ job, complete }) => {
+  if (job.lastAttemptError != null) {
+    console.log(`Previous attempt failed: ${job.lastAttemptError}`);
+  }
+  // ...
+},
+```
+
+| Thrown value   | Stored as                                                                   |
+| -------------- | --------------------------------------------------------------------------- |
+| `Error` object | Stack trace (includes message). Own enumerable properties appended as JSON. |
+| Plain object   | JSON-stringified                                                            |
+| String         | Stored as-is                                                                |
+
+Values are truncated to 10,000 characters.
+
+See [examples/showcase-error-handling](https://github.com/kvet/queuert/tree/main/examples/showcase-error-handling) for a complete working example demonstrating discriminated unions, compensation patterns, and explicit rescheduling. See also [Job Processing Reliability](../processing-reliability/) for engine-level safety guarantees (savepoints, automatic rollback), [Timeouts](../timeouts/), and [Job Processing Modes](../processing-modes/).

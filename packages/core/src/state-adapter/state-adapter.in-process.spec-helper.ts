@@ -68,9 +68,9 @@ export const extendWithStateInProcess = <T>(
           }) as unknown as T;
 
         const flakyStateAdapter: InProcessStateAdapter = {
-          runInTransaction: async (fn) => {
+          withTransaction: async (fn) => {
             maybeThrow();
-            return stateAdapter.runInTransaction(fn);
+            return stateAdapter.withTransaction(fn);
           },
           withSavepoint: async (txCtx, fn) => {
             maybeThrow();

@@ -154,7 +154,7 @@ const stopWorker = await qrtWorker.start();
 // 8. Run successful job
 logger.info("--- Running successful job ---");
 const successJob = await withTransactionHooks(async (transactionHooks) =>
-  stateAdapter.runInTransaction(async (ctx) =>
+  stateAdapter.withTransaction(async (ctx) =>
     qrtClient.startJobChain({
       ...ctx,
       transactionHooks,
@@ -172,7 +172,7 @@ logger.info("Successful job completed", { output: successCompleted.output });
 // 9. Run job that fails then succeeds (demonstrates error logging with stack trace)
 logger.info("--- Running job that fails first attempt ---");
 const failThenSucceedJob = await withTransactionHooks(async (transactionHooks) =>
-  stateAdapter.runInTransaction(async (ctx) =>
+  stateAdapter.withTransaction(async (ctx) =>
     qrtClient.startJobChain({
       ...ctx,
       transactionHooks,

@@ -60,7 +60,7 @@ State adapters abstract database operations for job persistence. They handle job
 
 A State Provider bridges your database client (Kysely, Drizzle, Prisma, raw drivers, etc.) with the state adapter. You implement a simple interface that provides transaction handling and SQL execution:
 
-- **`runInTransaction`** -- Manages connection acquisition and transaction lifecycle. The callback receives a transaction context representing an active transaction.
+- **`withTransaction`** -- Manages connection acquisition and transaction lifecycle. The callback receives a transaction context representing an active transaction.
 - **`executeSql`** -- Executes SQL statements. When a transaction context is provided, uses that connection; when omitted, acquires and releases its own connection from the pool.
 
 Each example linked above demonstrates a complete State Provider implementation for its corresponding ORM or driver.

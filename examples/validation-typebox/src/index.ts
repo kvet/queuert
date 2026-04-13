@@ -145,7 +145,7 @@ const stopWorker = await qrtWorker.start();
 // 4. Run a chain
 console.log("\n=== Running fetch-data chain ===");
 const jobChain = await withTransactionHooks(async (transactionHooks) =>
-  stateAdapter.runInTransaction(async (ctx) =>
+  stateAdapter.withTransaction(async (ctx) =>
     qrtClient.startJobChain({
       ...ctx,
       transactionHooks,

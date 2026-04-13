@@ -140,7 +140,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
   it("accepts valid input at chain start", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expect,
@@ -154,7 +154,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -171,7 +171,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
   it("rejects non-entry type at chain start", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expect,
@@ -186,7 +186,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
 
     await expect(
       withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChain({
             ...txCtx,
             transactionHooks,
@@ -202,7 +202,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
   it("rejects invalid input at chain start", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expect,
@@ -217,7 +217,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
 
     await expect(
       withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChain({
             ...txCtx,
             transactionHooks,
@@ -233,7 +233,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
   it("rejects invalid blockers at chain start", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expect,
@@ -248,7 +248,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
 
     await expect(
       withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           // @ts-expect-error testing runtime validation - no blockers
           client.startJobChain({
             ...txCtx,
@@ -264,7 +264,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
   it("accepts valid output during worker completion", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -292,7 +292,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -311,7 +311,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
   it("rejects invalid output during worker completion", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -349,7 +349,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -368,7 +368,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
   it("accepts valid continueWith during worker completion", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -402,7 +402,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -421,7 +421,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
   it("rejects invalid continueWith during worker completion", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -463,7 +463,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -482,7 +482,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
   it("accepts valid output during workerless completion", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expect,
@@ -496,7 +496,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -507,7 +507,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     );
 
     const completedChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.completeJobChain({
           ...txCtx,
           transactionHooks,
@@ -525,7 +525,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
   it("rejects invalid output during workerless completion", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expect,
@@ -539,7 +539,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -551,7 +551,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
 
     await expect(
       withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.completeJobChain({
             ...txCtx,
             transactionHooks,
@@ -569,7 +569,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
   it("accepts valid continueWith during workerless completion", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -597,7 +597,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -608,7 +608,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     );
 
     const partialChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.completeJobChain({
           ...txCtx,
           transactionHooks,
@@ -636,7 +636,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
   it("rejects invalid continueWith during workerless completion", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expect,
@@ -650,7 +650,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -662,7 +662,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
 
     await expect(
       withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.completeJobChain({
             ...txCtx,
             transactionHooks,

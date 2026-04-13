@@ -55,7 +55,7 @@ const jobTypeRegistry = defineJobTypeRegistry<{
 const lock = createAsyncLock();
 
 const stateProvider: SqliteStateProvider<{ db: Kysely<Database> }> = {
-  runInTransaction: async (cb) => {
+  withTransaction: async (cb) => {
     await lock.acquire();
     try {
       return await db.transaction().execute(async (txDb) => cb({ db: txDb }));

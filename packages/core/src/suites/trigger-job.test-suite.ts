@@ -16,7 +16,7 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
   it("triggers a future-scheduled pending job to run now", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expect,
@@ -38,7 +38,7 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -55,7 +55,7 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
 
     const before = Date.now();
     const triggered = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.triggerJob({ ...txCtx, transactionHooks, id: jobChain.id }),
       ),
     );
@@ -70,7 +70,7 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
   it("triggered job is picked up by worker", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -108,7 +108,7 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -120,7 +120,7 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     );
 
     await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.triggerJob({ ...txCtx, transactionHooks, id: jobChain.id }),
       ),
     );
@@ -139,7 +139,7 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
   it("throws JobNotFoundError for nonexistent job", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expect,
@@ -157,20 +157,20 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({ ...txCtx, transactionHooks, typeName: "task", input: null }),
       ),
     );
 
     await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.deleteJobChains({ ...txCtx, transactionHooks, ids: [chain.id] }),
       ),
     );
 
     await expect(
       withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.triggerJob({ ...txCtx, transactionHooks, id: chain.id }),
         ),
       ),
@@ -180,7 +180,7 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
   it("throws JobNotTriggerableError for completed job", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -213,7 +213,7 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({ ...txCtx, transactionHooks, typeName: "task", input: null }),
       ),
     );
@@ -224,7 +224,7 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
 
     await expect(
       withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.triggerJob({ ...txCtx, transactionHooks, id: jobChain.id }),
         ),
       ),
@@ -234,7 +234,7 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
   it("throws when called without transaction context", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expect,
@@ -256,7 +256,7 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -278,7 +278,7 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
   it("throws JobNotTriggerableError for blocked job", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expect,
@@ -302,13 +302,13 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     const blockerChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({ ...txCtx, transactionHooks, typeName: "blocker", input: null }),
       ),
     );
 
     const blockedChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -324,7 +324,7 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
 
     await expect(
       withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.triggerJob({ ...txCtx, transactionHooks, id: blockedChain.id }),
         ),
       ),

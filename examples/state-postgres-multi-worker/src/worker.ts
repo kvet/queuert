@@ -28,7 +28,7 @@ type DbContext = { poolClient: PoolClient };
 
 const stateAdapter = await createPgStateAdapter({
   stateProvider: {
-    runInTransaction: async (cb) => {
+    withTransaction: async (cb) => {
       const poolClient = await pool.connect();
       try {
         await poolClient.query("BEGIN");

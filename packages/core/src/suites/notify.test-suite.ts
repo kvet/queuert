@@ -17,7 +17,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     observabilityAdapter,
     log,
     withWorkers,
-    runInTransaction,
+    withTransaction,
     expect,
   }) => {
     const jobTypeRegistry = defineJobTypeRegistry<{
@@ -54,7 +54,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
     await withWorkers([await worker.start()], async () => {
       const jobChain = await withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChain({
             ...txCtx,
             transactionHooks,
@@ -78,7 +78,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     observabilityAdapter,
     log,
     withWorkers,
-    runInTransaction,
+    withTransaction,
     expect,
   }) => {
     const jobTypeRegistry = defineJobTypeRegistry<{
@@ -119,7 +119,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       await Promise.all(Array.from({ length: 5 }, async () => (await createWorker()).start())),
       async () => {
         const jobChains = await withTransactionHooks(async (transactionHooks) =>
-          runInTransaction(async (txCtx) =>
+          withTransaction(async (txCtx) =>
             client.startJobChains({
               ...txCtx,
               transactionHooks,
@@ -148,7 +148,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     observabilityAdapter,
     log,
     withWorkers,
-    runInTransaction,
+    withTransaction,
     expect,
   }) => {
     const jobTypeRegistry = defineJobTypeRegistry<{
@@ -207,7 +207,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
     await withWorkers([await worker1.start(), await worker2.start()], async () => {
       const jobChain = await withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) => {
+        withTransaction(async (txCtx) => {
           const blockerChain = await client.startJobChain({
             ...txCtx,
             transactionHooks,
@@ -241,7 +241,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     observabilityAdapter,
     log,
     withWorkers,
-    runInTransaction,
+    withTransaction,
     expect,
   }) => {
     const jobTypeRegistry = defineJobTypeRegistry<{
@@ -303,7 +303,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
     await withWorkers([await worker1.start(), await worker2.start()], async () => {
       const jobChain = await withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChain({
             ...txCtx,
             transactionHooks,
@@ -330,7 +330,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     observabilityAdapter,
     log,
     withWorkers,
-    runInTransaction,
+    withTransaction,
     expect,
   }) => {
     const jobTypeRegistry = defineJobTypeRegistry<{
@@ -379,7 +379,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
     await withWorkers([await worker.start()], async () => {
       const jobChain = await withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChain({
             ...txCtx,
             transactionHooks,
@@ -392,7 +392,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       await jobStarted.promise;
 
       await withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.completeJobChain({
             ...txCtx,
             transactionHooks,
@@ -415,7 +415,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     observabilityAdapter,
     log,
     withWorkers,
-    runInTransaction,
+    withTransaction,
     expect,
   }) => {
     const jobTypeRegistry = defineJobTypeRegistry<{
@@ -473,7 +473,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
     await withWorkers([await (await createWorker()).start()], async () => {
       const jobChain = await withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChain({
             ...txCtx,
             transactionHooks,

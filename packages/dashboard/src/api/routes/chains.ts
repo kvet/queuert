@@ -74,7 +74,7 @@ export const handleChainDelete = async (
 
   try {
     const { stateAdapter } = client[helpersSymbol];
-    const deleted = await stateAdapter.runInTransaction(async (txCtx) =>
+    const deleted = await stateAdapter.withTransaction(async (txCtx) =>
       withTransactionHooks(async (transactionHooks) =>
         client.deleteJobChains({
           ids: [chainId],

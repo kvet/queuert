@@ -43,7 +43,7 @@ diffMemory(beforeDb, afterDb);
 const lock = createAsyncLock();
 
 const stateProvider: SqliteStateProvider<DbContext> = {
-  runInTransaction: async (fn) => {
+  withTransaction: async (fn) => {
     await lock.acquire();
     try {
       db.exec("BEGIN IMMEDIATE");
@@ -122,7 +122,7 @@ const [beforeProcessing, afterProcessing] = await measureMemory(async () => {
   const promises = [];
   for (let i = 0; i < 100; i++) {
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      stateProvider.runInTransaction(async (ctx) =>
+      stateProvider.withTransaction(async (ctx) =>
         qrtClient.startJobChain({
           ...ctx,
           transactionHooks,

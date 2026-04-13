@@ -22,10 +22,10 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     notifyAdapter,
     observabilityAdapter,
     log,
-    runInTransaction,
+    withTransaction,
   }: Pick<
     TestSuiteContext,
-    "stateAdapter" | "notifyAdapter" | "observabilityAdapter" | "log" | "runInTransaction"
+    "stateAdapter" | "notifyAdapter" | "observabilityAdapter" | "log" | "withTransaction"
   >) => {
     const jobTypeRegistry = defineJobTypeRegistry<{
       order: {
@@ -65,7 +65,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       blockers?: [{ id: string }],
     ) =>
       withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) => {
+        withTransaction(async (txCtx) => {
           const base = { ...txCtx, transactionHooks };
           if (typeName === "report") {
             return client.startJobChain({
@@ -99,7 +99,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client } = await createContext({
@@ -107,7 +107,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
 
       const jobChain = await client.getJobChain({
@@ -123,7 +123,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client, startChain } = await createContext({
@@ -131,7 +131,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
       const created = await startChain("order", { amount: 42 });
 
@@ -149,7 +149,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client, startChain } = await createContext({
@@ -157,7 +157,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
       const created = await startChain("notification", { message: "hello" });
 
@@ -172,7 +172,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client, startChain } = await createContext({
@@ -180,7 +180,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
       const created = await startChain("order", { amount: 42 });
 
@@ -195,7 +195,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client, startChain } = await createContext({
@@ -203,7 +203,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
       const created = await startChain("order", { amount: 42 });
 
@@ -219,7 +219,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client } = await createContext({
@@ -227,7 +227,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
 
       const job = await client.getJob({
@@ -243,7 +243,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client, startChain } = await createContext({
@@ -251,7 +251,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
       const jobChain = await startChain("notification", { message: "hello" });
 
@@ -269,7 +269,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client, startChain } = await createContext({
@@ -277,7 +277,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
       const jobChain = await startChain("notification", { message: "hello" });
 
@@ -292,7 +292,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client, startChain } = await createContext({
@@ -300,7 +300,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
       const jobChain = await startChain("notification", { message: "hello" });
 
@@ -316,7 +316,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client } = await createContext({
@@ -324,7 +324,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
 
       const page = await client.listJobChains({});
@@ -338,7 +338,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client, startChain } = await createContext({
@@ -346,7 +346,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
       const chain1 = await startChain("order", { amount: 100 });
       const chain2 = await startChain("notification", { message: "hi" });
@@ -364,7 +364,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client, startChain } = await createContext({
@@ -372,7 +372,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
       await startChain("order", { amount: 100 });
       const notif = await startChain("notification", { message: "hi" });
@@ -391,7 +391,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client, startChain } = await createContext({
@@ -399,7 +399,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
       const chain1 = await startChain("order", { amount: 100 });
       await startChain("notification", { message: "hi" });
@@ -417,7 +417,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client, startChain } = await createContext({
@@ -425,7 +425,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
       const order = await startChain("order", { amount: 50 });
       await startChain("report", { type: "summary" }, [order]);
@@ -443,7 +443,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client, startChain } = await createContext({
@@ -451,7 +451,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
       const order = await startChain("order", { amount: 50 });
       await startChain("notification", { message: "hi" });
@@ -470,7 +470,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client, startChain } = await createContext({
@@ -478,7 +478,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
       await startChain("order", { amount: 1 });
       await sleep(5);
@@ -498,7 +498,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client, startChain } = await createContext({
@@ -506,7 +506,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
       await startChain("order", { amount: 1 });
       await startChain("order", { amount: 2 });
@@ -529,7 +529,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client, startChain } = await createContext({
@@ -537,7 +537,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
       await startChain("order", { amount: 1 });
       await startChain("order", { amount: 2 });
@@ -559,7 +559,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client, startChain } = await createContext({
@@ -567,7 +567,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
       const chain1 = await startChain("order", { amount: 100 });
       await startChain("notification", { message: "hi" });
@@ -585,7 +585,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client, startChain } = await createContext({
@@ -593,7 +593,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
       const jobChain = await startChain("order", { amount: 42 });
 
@@ -616,7 +616,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client } = await createContext({
@@ -624,7 +624,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
 
       const page = await client.listJobs({});
@@ -638,7 +638,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client, startChain } = await createContext({
@@ -646,7 +646,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
       await startChain("order", { amount: 100 });
       await startChain("notification", { message: "hi" });
@@ -661,7 +661,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client, startChain } = await createContext({
@@ -669,7 +669,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
       await startChain("order", { amount: 100 });
       await startChain("notification", { message: "hi" });
@@ -687,7 +687,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client, startChain } = await createContext({
@@ -695,7 +695,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
       await startChain("order", { amount: 100 });
       await startChain("notification", { message: "hi" });
@@ -722,7 +722,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client, startChain } = await createContext({
@@ -730,7 +730,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
       const jobChain = await startChain("order", { amount: 100 });
       await startChain("notification", { message: "hi" });
@@ -748,7 +748,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client, startChain } = await createContext({
@@ -756,7 +756,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
       const order = await startChain("order", { amount: 50 });
       await startChain("notification", { message: "hi" });
@@ -775,7 +775,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client, startChain } = await createContext({
@@ -783,7 +783,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
       await startChain("order", { amount: 1 });
       await sleep(5);
@@ -803,7 +803,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client, startChain } = await createContext({
@@ -811,7 +811,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
       await startChain("order", { amount: 1 });
       await startChain("order", { amount: 2 });
@@ -831,7 +831,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client, startChain } = await createContext({
@@ -839,7 +839,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
       await startChain("order", { amount: 1 });
       await startChain("order", { amount: 2 });
@@ -865,7 +865,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client, startChain } = await createContext({
@@ -873,7 +873,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
       await startChain("notification", { message: "test" });
 
@@ -896,7 +896,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client } = await createContext({
@@ -904,7 +904,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
 
       const page = await client.listJobChainJobs({
@@ -917,7 +917,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     it("listJobChainJobs returns jobs in chain ordered by chainIndex", async ({
       stateAdapter,
       notifyAdapter,
-      runInTransaction,
+      withTransaction,
       withWorkers,
       observabilityAdapter,
       log,
@@ -960,7 +960,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       });
 
       const jobChain = await withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChain({ ...txCtx, transactionHooks, typeName: "step", input: { n: 0 } }),
         ),
       );
@@ -987,7 +987,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     it("listJobChainJobs orders descending", async ({
       stateAdapter,
       notifyAdapter,
-      runInTransaction,
+      withTransaction,
       withWorkers,
       observabilityAdapter,
       log,
@@ -1030,7 +1030,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       });
 
       const jobChain = await withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChain({ ...txCtx, transactionHooks, typeName: "step", input: { n: 0 } }),
         ),
       );
@@ -1054,7 +1054,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     it("listJobChainJobs paginates", async ({
       stateAdapter,
       notifyAdapter,
-      runInTransaction,
+      withTransaction,
       withWorkers,
       observabilityAdapter,
       log,
@@ -1097,7 +1097,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       });
 
       const jobChain = await withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChain({ ...txCtx, transactionHooks, typeName: "step", input: { n: 0 } }),
         ),
       );
@@ -1127,7 +1127,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client, startChain } = await createContext({
@@ -1135,7 +1135,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
       const chain1 = await startChain("order", { amount: 1 });
       await startChain("notification", { message: "hi" });
@@ -1151,7 +1151,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client, startChain } = await createContext({
@@ -1159,7 +1159,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
       const jobChain = await startChain("order", { amount: 42 });
 
@@ -1176,7 +1176,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client, startChain } = await createContext({
@@ -1184,7 +1184,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
       const jobChain = await startChain("order", { amount: 42 });
 
@@ -1200,7 +1200,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client, startChain } = await createContext({
@@ -1208,7 +1208,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
       const jobChain = await startChain("order", { amount: 100 });
 
@@ -1222,7 +1222,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client, startChain } = await createContext({
@@ -1230,7 +1230,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
       const order = await startChain("order", { amount: 50 });
       const report = await startChain("report", { type: "summary" }, [order]);
@@ -1248,7 +1248,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client, startChain } = await createContext({
@@ -1256,7 +1256,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
       const order = await startChain("order", { amount: 50 });
       const report = await startChain("report", { type: "summary" }, [order]);
@@ -1278,7 +1278,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client, startChain } = await createContext({
@@ -1286,7 +1286,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
       const order = await startChain("order", { amount: 50 });
       const report = await startChain("report", { type: "summary" }, [order]);
@@ -1299,7 +1299,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     it("getJobBlockers reflects blocker completion status", async ({
       stateAdapter,
       notifyAdapter,
-      runInTransaction,
+      withTransaction,
       withWorkers,
       observabilityAdapter,
       log,
@@ -1345,7 +1345,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       });
 
       const { mainChain } = await withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) => {
+        withTransaction(async (txCtx) => {
           const depChain = await client.startJobChain({
             ...txCtx,
             transactionHooks,
@@ -1381,7 +1381,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client, startChain } = await createContext({
@@ -1389,7 +1389,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
       const jobChain = await startChain("order", { amount: 100 });
 
@@ -1404,7 +1404,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client, startChain } = await createContext({
@@ -1412,7 +1412,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
       const order = await startChain("order", { amount: 50 });
       const report = await startChain("report", { type: "summary" }, [order]);
@@ -1430,7 +1430,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client, startChain } = await createContext({
@@ -1438,7 +1438,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
       const order = await startChain("order", { amount: 50 });
       await startChain("report", { type: "a" }, [order]);
@@ -1463,7 +1463,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client, startChain } = await createContext({
@@ -1471,7 +1471,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
       const order = await startChain("order", { amount: 50 });
       const report = await startChain("report", { type: "summary" }, [order]);
@@ -1494,7 +1494,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client, startChain } = await createContext({
@@ -1502,7 +1502,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
       const order = await startChain("order", { amount: 50 });
       await startChain("report", { type: "summary" }, [order]);
@@ -1517,7 +1517,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client, startChain } = await createContext({
@@ -1525,7 +1525,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
       const order = await startChain("order", { amount: 50 });
       await startChain("report", { type: "a" }, [order]);
@@ -1546,7 +1546,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     it("query methods return consistent data after chain completion", async ({
       stateAdapter,
       notifyAdapter,
-      runInTransaction,
+      withTransaction,
       withWorkers,
       observabilityAdapter,
       log,
@@ -1595,7 +1595,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       });
 
       const jobChain = await withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChain({ ...txCtx, transactionHooks, typeName: "task", input: { n: 1 } }),
         ),
       );
@@ -1627,7 +1627,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     it("query methods work with blockers across chains", async ({
       stateAdapter,
       notifyAdapter,
-      runInTransaction,
+      withTransaction,
       withWorkers,
       observabilityAdapter,
       log,
@@ -1673,7 +1673,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       });
 
       const { depChain, mainChain } = await withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) => {
+        withTransaction(async (txCtx) => {
           const depChain = await client.startJobChain({
             ...txCtx,
             transactionHooks,
@@ -1718,7 +1718,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
       expect,
     }) => {
       const { client, startChain } = await createContext({
@@ -1726,7 +1726,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         notifyAdapter,
         observabilityAdapter,
         log,
-        runInTransaction,
+        withTransaction,
       });
       await startChain("order", { amount: 1 });
 

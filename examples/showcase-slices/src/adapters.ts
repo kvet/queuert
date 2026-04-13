@@ -20,8 +20,10 @@ const pgContainer = await new PostgreSqlContainer("postgres:18").withExposedPort
 export const sql = postgres(pgContainer.getConnectionUri(), { max: 10 });
 
 const stateProvider: PgStateProvider<DbContext> = {
-  runInTransaction: async (cb) =>
+  withTransaction: async (cb) =>
     sql.begin(async (txSql) => cb({ sql: txSql as TransactionSql }) as any),
+  withSavepoint: async (txCtx, fn) =>
+    txCtx.sql.savepoint(async (savepointSql) => fn({ sql: savepointSql as TransactionSql })) as any,
   executeSql: async ({ txCtx, sql: query, params }) => {
     const client = txCtx?.sql ?? sql;
     return client.unsafe(

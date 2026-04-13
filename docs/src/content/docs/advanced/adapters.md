@@ -13,7 +13,7 @@ This document describes the design philosophy behind Queuert's adapter system, i
 
 Queuert uses a two-layer abstraction for external integrations:
 
-- **Provider** — a minimal interface that users implement to wrap their chosen database or messaging client. It contains only low-level operations (`executeSql`, `runInTransaction`, `publish`/`subscribe`). Each driver library (pg, better-sqlite3, ioredis, etc.) gets its own provider implementation.
+- **Provider** — a minimal interface that users implement to wrap their chosen database or messaging client. It contains only low-level operations (`executeSql`, `withTransaction`, `publish`/`subscribe`). Each driver library (pg, better-sqlite3, ioredis, etc.) gets its own provider implementation.
 - **Adapter** — a high-level interface that Queuert builds from a provider via a `create*` factory function. Adapters contain the full domain logic (job lifecycle, state transitions, notification semantics) and are what `createClient` and `createInProcessWorker` consume.
 
 The factory transforms a provider into an adapter:
@@ -56,7 +56,7 @@ This principle ensures predictable performance and proper atomicity. Use batch S
 
 The `StateAdapter` type accepts two generic parameters: `TTxContext` (transaction context containing database client/session info) and `TJobId` (the job ID type for input parameters).
 
-The context is named `TTxContext` (transaction context) because it's exclusively used within transactions. When you call `runInTransaction`, the callback receives a context that represents an active transaction.
+The context is named `TTxContext` (transaction context) because it's exclusively used within transactions. When you call `withTransaction`, the callback receives a context that represents an active transaction.
 
 ### StateProvider Interface
 
@@ -65,7 +65,7 @@ Users create a `StateProvider` implementation to integrate with their database c
 ```typescript
 interface PgStateProvider<TTxContext> {
   // Manages connection and transaction - called for transactional operations
-  runInTransaction: <T>(fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
+  withTransaction: <T>(fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
 
   // Execute SQL - when txCtx is provided uses it, when omitted manages own connection
   executeSql: (options: {
@@ -80,7 +80,7 @@ interface PgStateProvider<TTxContext> {
 
 All `StateAdapter` operation methods accept an optional `txCtx` parameter:
 
-- **With txCtx**: Uses the provided transaction connection (must come from a `runInTransaction` callback)
+- **With txCtx**: Uses the provided transaction connection (must come from a `withTransaction` callback)
 - **Without txCtx**: Acquires its own connection from the pool, executes, and releases
 
 This enables transactional operations, standalone operations, and DDL operations (like `CREATE INDEX CONCURRENTLY`) that cannot run inside transactions.

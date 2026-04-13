@@ -41,7 +41,7 @@ diffMemory(beforeConnection, afterConnection);
 
 type DbContext = { sql: typeof sql };
 const stateProvider: PgStateProvider<DbContext> = {
-  runInTransaction: async (cb) =>
+  withTransaction: async (cb) =>
     sql.begin(async (txSql) => cb({ sql: txSql as unknown as typeof sql }) as any),
   executeSql: async ({ txCtx, sql: query, params }) => {
     const sqlClient = txCtx?.sql ?? sql;
@@ -91,7 +91,7 @@ const [beforeProcessing, afterProcessing] = await measureMemory(async () => {
   const promises = [];
   for (let i = 0; i < 100; i++) {
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      stateProvider.runInTransaction(async (ctx) =>
+      stateProvider.withTransaction(async (ctx) =>
         qrtClient.startJobChain({
           ...ctx,
           transactionHooks,

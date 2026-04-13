@@ -19,7 +19,7 @@ export const notifyResilienceTestSuite = ({
     stateAdapter,
     flakyNotifyAdapter,
     withWorkers,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
   }) => {
@@ -75,7 +75,7 @@ export const notifyResilienceTestSuite = ({
     await withWorkers([await worker.start()], async () => {
       // at least one notify pushes worker to process jobs
       const jobChains = await withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChains({
             ...txCtx,
             transactionHooks,

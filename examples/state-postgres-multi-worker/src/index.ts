@@ -63,7 +63,7 @@ const pool = new Pool({ connectionString, max: 10 });
 
 const stateAdapter = await createPgStateAdapter({
   stateProvider: {
-    runInTransaction: async (cb) => {
+    withTransaction: async (cb) => {
       const poolClient = await pool.connect();
       try {
         await poolClient.query("BEGIN");
@@ -222,7 +222,7 @@ console.log(`\nQueueing ${JOBS_TO_PROCESS} orders...\n`);
 
 const products = ["Widget", "Gadget", "Gizmo", "Doohickey", "Thingamajig", "Contraption"];
 const jobChains = await withTransactionHooks(async (transactionHooks) =>
-  stateAdapter.runInTransaction(async (ctx) =>
+  stateAdapter.withTransaction(async (ctx) =>
     qrtClient.startJobChains({
       ...ctx,
       transactionHooks,

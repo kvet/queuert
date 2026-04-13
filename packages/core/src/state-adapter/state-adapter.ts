@@ -41,7 +41,7 @@ export type BaseTxContext = {};
  * Handles job creation, status transitions, leasing, and queries.
  *
  * All operation methods have an optional `txCtx` parameter:
- * - When txCtx is provided (from within `runInTransaction`), operations use that transaction
+ * - When txCtx is provided (from within `withTransaction`), operations use that transaction
  * - When txCtx is omitted, the adapter acquires its own connection, executes, and releases
  *
  * @typeParam TTxContext - The transaction context type containing database client/session info
@@ -53,7 +53,7 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
    * Acquires a connection, starts a transaction, executes the callback,
    * commits on success, rolls back on error, and releases the connection.
    */
-  runInTransaction: <T>(fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
+  withTransaction: <T>(fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
 
   /**
    * Wraps a callback in a savepoint within an existing transaction.

@@ -45,7 +45,7 @@ type PrismaTransactionClient = Omit<
 type DbContext = { prisma: PrismaTransactionClient };
 
 const stateProvider: PgStateProvider<DbContext> = {
-  runInTransaction: async (cb) => {
+  withTransaction: async (cb) => {
     return prisma.$transaction(async (prisma) => cb({ prisma }));
   },
   executeSql: async ({ txCtx, sql, params }) => {

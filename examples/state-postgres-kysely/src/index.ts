@@ -50,7 +50,7 @@ const jobTypeRegistry = defineJobTypeRegistry<{
 
 // 5. Create state provider for Kysely
 const stateProvider: PgStateProvider<{ db: Kysely<Database> }> = {
-  runInTransaction: async (cb) => db.transaction().execute(async (txDb) => cb({ db: txDb })),
+  withTransaction: async (cb) => db.transaction().execute(async (txDb) => cb({ db: txDb })),
   executeSql: async ({ txCtx, sql, params }) => {
     if (txCtx && !txCtx.db.isTransaction) {
       throw new Error("Provided context is not in a transaction");

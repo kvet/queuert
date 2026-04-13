@@ -14,7 +14,7 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
   it("handles already completed chains", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expect,
@@ -36,13 +36,13 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
     await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.completeJobChain({
           ...txCtx,
           transactionHooks,
@@ -68,7 +68,7 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
   it("throws timeout error when chain does not complete in time with abort signal", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expect,
@@ -90,7 +90,7 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
@@ -110,7 +110,7 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
   it("throws timeout error when chain does not complete in time", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expect,
@@ -132,7 +132,7 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );

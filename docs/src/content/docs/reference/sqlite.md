@@ -39,7 +39,7 @@ type SqliteStateAdapter = StateAdapter & {
 
 ```typescript
 type SqliteStateProvider<TTxContext> = {
-  runInTransaction: <T>(fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
+  withTransaction: <T>(fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
   executeSql: (options: {
     txCtx?: TTxContext;
     sql: string;

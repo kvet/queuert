@@ -16,7 +16,7 @@ const sql = postgres(pgContainer.getConnectionUri(), { max: 20 });
 
 type DbContext = { sql: typeof sql };
 const stateProvider: PgStateProvider<DbContext> = {
-  runInTransaction: async (cb) =>
+  withTransaction: async (cb) =>
     sql.begin(async (txSql) => cb({ sql: txSql as unknown as typeof sql }) as any),
   executeSql: async ({ txCtx, sql: query, params }) => {
     const sqlClient = txCtx?.sql ?? sql;
@@ -33,7 +33,7 @@ console.log("PostgreSQL ready.");
 await runBenchmark({
   stateAdapter,
   notifyAdapter: createInProcessNotifyAdapter(),
-  runInTransaction: stateProvider.runInTransaction,
+  withTransaction: stateProvider.withTransaction,
   concurrency,
 });
 

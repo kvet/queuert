@@ -13,12 +13,12 @@ describe("createTransactionContext", () => {
     const mockTx = { client: "mock-client", id: 42 };
     let transactionEnded = false;
 
-    const runInTransaction = async (callback: (txCtx: typeof mockTx) => Promise<void>) => {
+    const withTransaction = async (callback: (txCtx: typeof mockTx) => Promise<void>) => {
       await callback(mockTx);
       transactionEnded = true;
     };
 
-    const ctx = await createTransactionContext(runInTransaction);
+    const ctx = await createTransactionContext(withTransaction);
     expect(ctx.status).toBe("pending");
     expect(transactionEnded).toBe(false);
 
@@ -66,7 +66,7 @@ describe("createTransactionContext", () => {
   test("reject lifecycle: propagates errors and rolls back", async () => {
     let transactionError: unknown;
 
-    const runInTransaction = async (callback: (txCtx: unknown) => Promise<void>) => {
+    const withTransaction = async (callback: (txCtx: unknown) => Promise<void>) => {
       try {
         await callback(undefined);
       } catch (err) {
@@ -75,7 +75,7 @@ describe("createTransactionContext", () => {
       }
     };
 
-    const ctx = await createTransactionContext(runInTransaction);
+    const ctx = await createTransactionContext(withTransaction);
 
     await expect(
       ctx.run(async () => {
@@ -90,14 +90,14 @@ describe("createTransactionContext", () => {
     expect(transactionError).toEqual(new Error("rollback"));
   });
 
-  test("propagates runInTransaction setup failure instead of hanging", async () => {
+  test("propagates withTransaction setup failure instead of hanging", async () => {
     const setupError = new Error("connection reset");
 
-    const runInTransaction = async () => {
+    const withTransaction = async () => {
       throw setupError;
     };
 
-    await expect(createTransactionContext(runInTransaction)).rejects.toThrow("connection reset");
+    await expect(createTransactionContext(withTransaction)).rejects.toThrow("connection reset");
   });
 
   test("terminal state: idempotent resolve/reject, run rejects after close", async () => {
@@ -135,12 +135,12 @@ describe("createTransactionContext", () => {
     const flushed: string[] = [];
     let transactionCommitted = false;
 
-    const runInTransaction = async (callback: (txCtx: unknown) => Promise<void>) => {
+    const withTransaction = async (callback: (txCtx: unknown) => Promise<void>) => {
       await callback(undefined);
       transactionCommitted = true;
     };
 
-    const ctx = await createTransactionContext(runInTransaction);
+    const ctx = await createTransactionContext(withTransaction);
     const hookKey = Symbol("test");
 
     await ctx.run(async (_txCtx, transactionHooks) => {

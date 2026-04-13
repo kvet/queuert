@@ -19,7 +19,7 @@ export const createStateProvider = (db: Database.Database): SqliteStateProvider<
   const lock = createAsyncLock();
 
   return {
-    runInTransaction: async (fn) => {
+    withTransaction: async (fn) => {
       await lock.acquire();
       try {
         db.exec("BEGIN IMMEDIATE");

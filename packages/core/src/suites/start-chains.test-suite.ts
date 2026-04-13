@@ -20,7 +20,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
     it("creates a single job chain", async ({
       stateAdapter,
       notifyAdapter,
-      runInTransaction,
+      withTransaction,
       observabilityAdapter,
       log,
       expect,
@@ -38,7 +38,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       });
 
       const jobChain = await withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChain({
             ...txCtx,
             transactionHooks,
@@ -57,7 +57,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
     it("creates a chain with deduplication", async ({
       stateAdapter,
       notifyAdapter,
-      runInTransaction,
+      withTransaction,
       observabilityAdapter,
       log,
       expect,
@@ -75,7 +75,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       });
 
       const first = await withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChain({
             ...txCtx,
             transactionHooks,
@@ -87,7 +87,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       );
 
       const second = await withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChain({
             ...txCtx,
             transactionHooks,
@@ -106,7 +106,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
     it("creates a chain with blockers", async ({
       stateAdapter,
       notifyAdapter,
-      runInTransaction,
+      withTransaction,
       observabilityAdapter,
       log,
       expect,
@@ -130,7 +130,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       });
 
       const dep = await withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChain({
             ...txCtx,
             transactionHooks,
@@ -141,7 +141,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       );
 
       const main = await withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChain({
             ...txCtx,
             transactionHooks,
@@ -158,7 +158,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
     it("creates a chain with scheduling", async ({
       stateAdapter,
       notifyAdapter,
-      runInTransaction,
+      withTransaction,
       observabilityAdapter,
       log,
       expect,
@@ -176,7 +176,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       });
 
       const jobChain = await withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChain({
             ...txCtx,
             transactionHooks,
@@ -222,7 +222,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
     }) => {
       const jobTypeRegistry = defineJobTypeRegistry<{
         test: { entry: true; input: { value: number }; output: null };
@@ -237,7 +237,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       });
 
       void withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChain({
             ...txCtx,
             transactionHooks,
@@ -254,7 +254,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
     }) => {
       const jobTypeRegistry = defineJobTypeRegistry<{
         test: { entry: true; input: { value: number }; output: null };
@@ -269,7 +269,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       });
 
       void withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChain({
             ...txCtx,
             transactionHooks,
@@ -286,7 +286,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
     }) => {
       const jobTypeRegistry = defineJobTypeRegistry<{
         dep: { entry: true; input: null; output: null };
@@ -307,7 +307,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       });
 
       void withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           // @ts-expect-error missing required blockers
           client.startJobChain({
             ...txCtx,
@@ -324,7 +324,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
     it("creates multiple job chains in a single batch", async ({
       stateAdapter,
       notifyAdapter,
-      runInTransaction,
+      withTransaction,
       observabilityAdapter,
       log,
       expect,
@@ -342,7 +342,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       });
 
       const jobChains = await withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChains({
             ...txCtx,
             transactionHooks,
@@ -370,7 +370,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
     it("returns empty array for empty batch", async ({
       stateAdapter,
       notifyAdapter,
-      runInTransaction,
+      withTransaction,
       observabilityAdapter,
       log,
       expect,
@@ -388,7 +388,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       });
 
       const jobChains = await withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChains({
             ...txCtx,
             transactionHooks,
@@ -403,7 +403,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
     it("handles deduplication in batch", async ({
       stateAdapter,
       notifyAdapter,
-      runInTransaction,
+      withTransaction,
       observabilityAdapter,
       log,
       expect,
@@ -421,7 +421,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       });
 
       const existingJobChain = await withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChain({
             ...txCtx,
             transactionHooks,
@@ -433,7 +433,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       );
 
       const jobChains = await withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChains({
             ...txCtx,
             transactionHooks,
@@ -463,7 +463,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
     it("handles batch with blockers", async ({
       stateAdapter,
       notifyAdapter,
-      runInTransaction,
+      withTransaction,
       observabilityAdapter,
       log,
       expect,
@@ -487,7 +487,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       });
 
       const depJobChain = await withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChain({
             ...txCtx,
             transactionHooks,
@@ -498,7 +498,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       );
 
       const jobChains = await withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChains({
             ...txCtx,
             transactionHooks,
@@ -526,7 +526,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
     it("handles batch with scheduling", async ({
       stateAdapter,
       notifyAdapter,
-      runInTransaction,
+      withTransaction,
       observabilityAdapter,
       log,
       expect,
@@ -545,7 +545,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
 
       const futureDate = new Date(Date.now() + 60_000);
       const jobChains = await withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChains({
             ...txCtx,
             transactionHooks,
@@ -567,7 +567,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
     it("batch with mixed types", async ({
       stateAdapter,
       notifyAdapter,
-      runInTransaction,
+      withTransaction,
       observabilityAdapter,
       log,
       expect,
@@ -586,7 +586,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       });
 
       const [chainA, chainB] = await withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChains({
             ...txCtx,
             transactionHooks,
@@ -608,7 +608,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
     it("batch with mix of blocked and unblocked chains", async ({
       stateAdapter,
       notifyAdapter,
-      runInTransaction,
+      withTransaction,
       observabilityAdapter,
       log,
       expect,
@@ -633,7 +633,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       });
 
       const dep = await withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChain({
             ...txCtx,
             transactionHooks,
@@ -644,7 +644,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       );
 
       const [blockedChain, unblockedChain] = await withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChains({
             ...txCtx,
             transactionHooks,
@@ -663,7 +663,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
     it("workers unblock and process batch-created blocked chains", async ({
       stateAdapter,
       notifyAdapter,
-      runInTransaction,
+      withTransaction,
       withWorkers,
       observabilityAdapter,
       log,
@@ -692,7 +692,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       });
 
       const blocker = await withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChain({
             ...txCtx,
             transactionHooks,
@@ -703,7 +703,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       );
 
       const chains = await withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChains({
             ...txCtx,
             transactionHooks,
@@ -757,7 +757,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
     it("workers process all batch-created chains", async ({
       stateAdapter,
       notifyAdapter,
-      runInTransaction,
+      withTransaction,
       withWorkers,
       observabilityAdapter,
       log,
@@ -776,7 +776,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       });
 
       const jobChains = await withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChains({
             ...txCtx,
             transactionHooks,
@@ -851,7 +851,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
     }) => {
       const jobTypeRegistry = defineJobTypeRegistry<{
         test: { entry: true; input: { value: number }; output: null };
@@ -866,7 +866,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       });
 
       void withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChains({
             ...txCtx,
             transactionHooks,
@@ -884,7 +884,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
     }) => {
       const jobTypeRegistry = defineJobTypeRegistry<{
         test: { entry: true; input: { value: number }; output: null };
@@ -899,7 +899,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       });
 
       void withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChains({
             ...txCtx,
             transactionHooks,
@@ -917,7 +917,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       notifyAdapter,
       observabilityAdapter,
       log,
-      runInTransaction,
+      withTransaction,
     }) => {
       const jobTypeRegistry = defineJobTypeRegistry<{
         dep: { entry: true; input: null; output: null };
@@ -938,7 +938,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       });
 
       void withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChains({
             ...txCtx,
             transactionHooks,

@@ -21,7 +21,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
   it("allows to extend job lease after lease expiration if wasn't grabbed by another worker", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -64,7 +64,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -89,7 +89,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
   it("reaps abandoned jobs on lease renewal", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -185,7 +185,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     const failJobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -200,7 +200,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       await sleep(10);
 
       const successJobChain = await withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChain({
             ...txCtx,
             transactionHooks,
@@ -228,7 +228,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
   it("reaps abandoned jobs on complete", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -330,7 +330,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     const failJobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -345,7 +345,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       await sleep(10);
 
       const successJobChain = await withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChain({
             ...txCtx,
             transactionHooks,
@@ -373,7 +373,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
   it("does not reap its own in-progress jobs with concurrent slots", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -429,7 +429,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     const jobChain1 = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -445,7 +445,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       await sleep(leaseConfig.leaseMs * 5);
 
       const jobChain2 = await withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChain({
             ...txCtx,
             transactionHooks,

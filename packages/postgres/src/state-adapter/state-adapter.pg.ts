@@ -133,21 +133,23 @@ export const createPgStateAdapter = async <
   };
 
   const rawAdapter: StateAdapter<TTxContext, TIdType> = {
-    runInTransaction: stateProvider.runInTransaction,
+    withTransaction: stateProvider.withTransaction,
 
-    withSavepoint: async (txCtx, fn) => {
-      await stateProvider.executeSql({ txCtx, sql: "SAVEPOINT queuert_sp" });
-      try {
-        const result = await fn(txCtx);
-        await stateProvider.executeSql({ txCtx, sql: "RELEASE SAVEPOINT queuert_sp" });
-        return result;
-      } catch (error) {
-        await stateProvider
-          .executeSql({ txCtx, sql: "ROLLBACK TO SAVEPOINT queuert_sp" })
-          .catch(() => {});
-        throw error;
-      }
-    },
+    withSavepoint:
+      stateProvider.withSavepoint ??
+      (async (txCtx, fn) => {
+        await stateProvider.executeSql({ txCtx, sql: "SAVEPOINT queuert_sp" });
+        try {
+          const result = await fn(txCtx);
+          await stateProvider.executeSql({ txCtx, sql: "RELEASE SAVEPOINT queuert_sp" });
+          return result;
+        } catch (error) {
+          await stateProvider
+            .executeSql({ txCtx, sql: "ROLLBACK TO SAVEPOINT queuert_sp" })
+            .catch(() => {});
+          throw error;
+        }
+      }),
 
     getJobChainById: async ({ txCtx, chainId }) => {
       const [jobChain] = await executeTypedSql({
@@ -675,7 +677,7 @@ export const createPgStateAdapter = async <
         },
       });
 
-      return stateProvider.runInTransaction(runMigrations);
+      return stateProvider.withTransaction(runMigrations);
     },
     vacuum: async () => {
       await stateProvider.executeSql({ sql: `VACUUM ${schema}.${tablePrefix}job` });

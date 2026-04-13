@@ -8,7 +8,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
   it("deduplicates job chains with same deduplication key", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expect,
@@ -30,7 +30,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     });
 
     const [chain1, chain2, chain3] = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) => [
+      withTransaction(async (txCtx) => [
         await client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -62,7 +62,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expect(chain3.id).not.toBe(chain1.id);
 
     const completed1 = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.completeJobChain({
           ...txCtx,
           transactionHooks,
@@ -75,7 +75,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     );
 
     const completed3 = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.completeJobChain({
           ...txCtx,
           transactionHooks,
@@ -91,7 +91,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expect(completed3.output).toEqual({ result: 3 });
 
     // chain2 was deduplicated to chain1, so it should have the same output
-    const fetched2 = await runInTransaction(async (txCtx) =>
+    const fetched2 = await withTransaction(async (txCtx) =>
       client.getJobChain({ ...txCtx, ...chain2 }),
     );
     expect("output" in fetched2! && fetched2.output).toEqual({ result: 1 });
@@ -100,7 +100,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
   it("deduplication scopes: 'any' vs 'incomplete'", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     log,
     observabilityAdapter,
     expect,
@@ -123,7 +123,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     // Test 'any' scope - deduplicates against completed jobs
     const allChain1 = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -135,7 +135,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     );
 
     await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.completeJobChain({
           ...txCtx,
           transactionHooks,
@@ -148,7 +148,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     );
 
     const allChain2 = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -164,7 +164,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     // Test 'incomplete' scope - does NOT deduplicate against completed jobs
     const completedChain1 = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -176,7 +176,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     );
 
     await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.completeJobChain({
           ...txCtx,
           transactionHooks,
@@ -189,7 +189,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     );
 
     const completedChain2 = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -204,7 +204,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expect(completedChain2.id).not.toBe(completedChain1.id);
 
     const completed2 = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.completeJobChain({
           ...txCtx,
           transactionHooks,
@@ -221,7 +221,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
   it("deduplication with windowMs respects time window", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expect,
@@ -244,7 +244,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     // Test 'any' scope with windowMs
     const allChain1 = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -260,7 +260,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     await sleep(100);
 
     const allChain2 = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -276,7 +276,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     // Test 'incomplete' scope with windowMs
     const completedChain1 = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -288,7 +288,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     );
 
     await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.completeJobChain({
           ...txCtx,
           transactionHooks,
@@ -303,7 +303,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     await sleep(100);
 
     const completedChain2 = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -321,7 +321,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
   it("does not deduplicate across different chain types with the same key", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expect,
@@ -348,7 +348,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     });
 
     const [chainA, chainB] = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) => [
+      withTransaction(async (txCtx) => [
         await client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -374,7 +374,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
   it("deduplicates within a batch", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expect,
@@ -396,7 +396,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     });
 
     const [chain1, chain2, chain3] = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChains({
           ...txCtx,
           transactionHooks,
@@ -419,7 +419,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
   it("deduplicates against pre-existing chains", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expect,
@@ -441,7 +441,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     });
 
     const existing = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -453,7 +453,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     );
 
     const [chain1, chain2] = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChains({
           ...txCtx,
           transactionHooks,
@@ -474,7 +474,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
   it("deduplication scopes: 'any' vs 'incomplete'", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     log,
     observabilityAdapter,
     expect,
@@ -497,7 +497,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     // Create and complete a chain with 'any' scope key
     const anyChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -509,7 +509,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     );
 
     await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.completeJobChain({
           ...txCtx,
           transactionHooks,
@@ -523,7 +523,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     // Create and complete a chain with 'incomplete' scope key
     const incompleteChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -535,7 +535,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     );
 
     await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.completeJobChain({
           ...txCtx,
           transactionHooks,
@@ -549,7 +549,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     // Batch: 'any' should dedup against completed, 'incomplete' should not
     const [anyResult, incompleteResult] = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChains({
           ...txCtx,
           transactionHooks,
@@ -578,7 +578,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
   it("deduplication with windowMs respects time window", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expect,
@@ -600,7 +600,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     });
 
     await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -614,7 +614,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     await sleep(100);
 
     const [chain1, chain2] = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChains({
           ...txCtx,
           transactionHooks,
@@ -644,7 +644,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
   it("excludeJobChainIds skips specified chains during deduplication", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expect,
@@ -666,7 +666,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     });
 
     const chain1 = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -681,7 +681,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     // Without excludeJobChainIds — deduplicates against chain1
     const chain2 = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -697,7 +697,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     // With excludeJobChainIds — skips chain1, creates new chain
     const chain3 = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -715,7 +715,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
   it("does not deduplicate across different chain types with the same key", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expect,
@@ -742,7 +742,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     });
 
     const [chainA, chainB] = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChains({
           ...txCtx,
           transactionHooks,

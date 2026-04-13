@@ -102,7 +102,7 @@ const stopWorker = await qrtWorker.start();
 
 console.log("Requesting sales report...");
 const jobChain = await withTransactionHooks(async (transactionHooks) =>
-  stateAdapter.runInTransaction(async (ctx) =>
+  stateAdapter.withTransaction(async (ctx) =>
     qrtClient.startJobChain({
       ...ctx,
       transactionHooks,

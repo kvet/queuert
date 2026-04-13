@@ -40,7 +40,7 @@ const jobTypeRegistry = defineJobTypeRegistry<{
 type DbContext = { poolClient: PoolClient };
 
 const stateProvider: PgStateProvider<DbContext> = {
-  runInTransaction: async (cb) => {
+  withTransaction: async (cb) => {
     const poolClient = await db.connect();
     try {
       await poolClient.query("BEGIN");

@@ -20,7 +20,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
   it("picks up job that was added while it was offline", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -57,7 +57,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -75,7 +75,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
   it("processes multiple job types with proper gauge attribution", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -119,7 +119,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     const emailJob = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -129,7 +129,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       ),
     );
     const smsJob = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -154,7 +154,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
   it("picks up job that is added while it is online", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -195,7 +195,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
     await withWorkers([await worker.start()], async () => {
       const jobChain = await withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.startJobChain({
             ...txCtx,
             transactionHooks,
@@ -212,7 +212,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
   it("processes jobs in order", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -258,7 +258,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     for (let i = 0; i < 5; i++) {
       jobChains.push(
         await withTransactionHooks(async (transactionHooks) =>
-          runInTransaction(async (txCtx) =>
+          withTransaction(async (txCtx) =>
             client.startJobChain({
               ...txCtx,
               transactionHooks,
@@ -282,7 +282,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
   it("calls attemptMiddlewares with job context and composes them correctly", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -345,7 +345,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,

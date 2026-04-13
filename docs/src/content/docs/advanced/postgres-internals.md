@@ -223,7 +223,7 @@ Notifications are published via `pg_notify()`:
 SELECT pg_notify($1, $2)
 ```
 
-When called inside `runInTransaction`, the notification is delivered after the transaction commits — PostgreSQL guarantees this atomicity.
+When called inside `withTransaction`, the notification is delivered after the transaction commits — PostgreSQL guarantees this atomicity.
 
 ### Subscribing
 

@@ -20,7 +20,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
   it("completes job atomically without prepare", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -70,7 +70,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -87,7 +87,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
 
     const expected = [
       expect.objectContaining({
-        name: "runInTransaction",
+        name: "withTransaction",
         status: "committed",
         children: [
           expect.objectContaining({ name: "acquireJob" }),
@@ -114,7 +114,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
   it("completes job in staged mode without prepare", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -165,7 +165,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -182,7 +182,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
 
     const expected = [
       expect.objectContaining({
-        name: "runInTransaction",
+        name: "withTransaction",
         status: "committed",
         children: [
           expect.objectContaining({ name: "acquireJob" }),
@@ -194,7 +194,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         name: "getNextJobAvailableInMs",
       }),
       expect.objectContaining({
-        name: "runInTransaction",
+        name: "withTransaction",
         status: "committed",
         children: [
           expect.objectContaining({ name: "getJobForUpdate" }), // TODO: why do we need it?
@@ -217,7 +217,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
   it("completes job with staged prepare and callback", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -271,7 +271,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -288,7 +288,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
 
     const expected = [
       expect.objectContaining({
-        name: "runInTransaction",
+        name: "withTransaction",
         status: "committed",
         children: [
           expect.objectContaining({ name: "acquireJob" }),
@@ -305,7 +305,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         name: "getNextJobAvailableInMs",
       }),
       expect.objectContaining({
-        name: "runInTransaction",
+        name: "withTransaction",
         status: "committed",
         children: [
           expect.objectContaining({ name: "getJobForUpdate" }), // TODO: why do we need it?
@@ -328,7 +328,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
   it("completes job with staged prepare without callback", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -379,7 +379,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -396,7 +396,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
 
     const expected = [
       expect.objectContaining({
-        name: "runInTransaction",
+        name: "withTransaction",
         status: "committed",
         children: [
           expect.objectContaining({ name: "acquireJob" }),
@@ -408,7 +408,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         name: "getNextJobAvailableInMs",
       }),
       expect.objectContaining({
-        name: "runInTransaction",
+        name: "withTransaction",
         status: "committed",
         children: [
           expect.objectContaining({ name: "getJobForUpdate" }), // TODO: why do we need it?
@@ -431,7 +431,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
   it("completes job with atomic prepare and callback", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -485,7 +485,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -502,7 +502,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
 
     const expected = [
       expect.objectContaining({
-        name: "runInTransaction",
+        name: "withTransaction",
         status: "committed",
         children: [
           expect.objectContaining({ name: "acquireJob" }),
@@ -534,7 +534,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
   it("completes job with atomic prepare without callback", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -585,7 +585,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -602,7 +602,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
 
     const expected = [
       expect.objectContaining({
-        name: "runInTransaction",
+        name: "withTransaction",
         status: "committed",
         children: [
           expect.objectContaining({ name: "acquireJob" }),

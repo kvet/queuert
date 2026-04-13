@@ -20,7 +20,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
   it("reschedules when prepare callback throws in atomic mode", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -76,7 +76,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -93,7 +93,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const expected = [
       expect.objectContaining({
-        name: "runInTransaction",
+        name: "withTransaction",
         status: "committed",
         children: [
           expect.objectContaining({ name: "acquireJob" }),
@@ -110,7 +110,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
   it("reschedules when prepare callback throws in staged mode", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -166,7 +166,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -183,7 +183,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const expected = [
       expect.objectContaining({
-        name: "runInTransaction",
+        name: "withTransaction",
         status: "committed",
         children: [
           expect.objectContaining({ name: "acquireJob" }),
@@ -200,7 +200,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
   it("reschedules when handler throws between prepare and complete in atomic mode", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -255,7 +255,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -272,7 +272,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const expected = [
       expect.objectContaining({
-        name: "runInTransaction",
+        name: "withTransaction",
         status: "committed",
         children: [
           expect.objectContaining({ name: "acquireJob" }),
@@ -288,7 +288,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
   it("reschedules when handler throws between prepare and complete in staged mode", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -344,7 +344,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -361,7 +361,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const expected = [
       expect.objectContaining({
-        name: "runInTransaction",
+        name: "withTransaction",
         status: "committed",
         children: [
           expect.objectContaining({ name: "acquireJob" }),
@@ -371,7 +371,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
       expect.objectContaining({ name: "getNextJobAvailableInMs" }),
       expect.objectContaining({
-        name: "runInTransaction",
+        name: "withTransaction",
         status: "committed",
         children: [
           expect.objectContaining({ name: "getJobForUpdate" }),
@@ -385,7 +385,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
   it("reschedules when complete callback throws in atomic mode", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -442,7 +442,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -459,7 +459,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const expected = [
       expect.objectContaining({
-        name: "runInTransaction",
+        name: "withTransaction",
         status: "committed",
         children: [
           expect.objectContaining({ name: "acquireJob" }),
@@ -476,7 +476,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
   it("reschedules when complete callback throws in staged mode", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -534,7 +534,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -551,7 +551,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const expected = [
       expect.objectContaining({
-        name: "runInTransaction",
+        name: "withTransaction",
         status: "committed",
         children: [
           expect.objectContaining({ name: "acquireJob" }),
@@ -561,7 +561,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
       expect.objectContaining({ name: "getNextJobAvailableInMs" }),
       expect.objectContaining({
-        name: "runInTransaction",
+        name: "withTransaction",
         status: "committed",
         children: [
           expect.objectContaining({ name: "getJobForUpdate" }),
@@ -576,7 +576,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
   it("reschedules when handler throws after complete in atomic mode", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -634,7 +634,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -653,7 +653,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const expected = [
       expect.objectContaining({
-        name: "runInTransaction",
+        name: "withTransaction",
         status: "committed",
         children: [
           expect.objectContaining({ name: "acquireJob" }),
@@ -678,7 +678,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
   it("reschedules when handler throws after complete in staged mode", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -737,7 +737,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -756,7 +756,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const expected = [
       expect.objectContaining({
-        name: "runInTransaction",
+        name: "withTransaction",
         status: "committed",
         children: [
           expect.objectContaining({ name: "acquireJob" }),
@@ -766,7 +766,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
       expect.objectContaining({ name: "getNextJobAvailableInMs" }),
       expect.objectContaining({
-        name: "runInTransaction",
+        name: "withTransaction",
         status: "committed",
         children: [
           expect.objectContaining({ name: "getJobForUpdate" }),
@@ -789,7 +789,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
   it("recovers when user code poisons transaction in prepare callback (atomic mode)", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     poisonTransaction,
     withWorkers,
     observabilityAdapter,
@@ -847,7 +847,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -864,7 +864,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const expected = [
       expect.objectContaining({
-        name: "runInTransaction",
+        name: "withTransaction",
         status: "committed",
         children: [
           expect.objectContaining({ name: "acquireJob" }),
@@ -885,7 +885,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
   it("recovers when user code poisons transaction in prepare callback (staged mode)", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     poisonTransaction,
     withWorkers,
     observabilityAdapter,
@@ -943,7 +943,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -960,7 +960,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const expected = [
       expect.objectContaining({
-        name: "runInTransaction",
+        name: "withTransaction",
         status: "committed",
         children: [
           expect.objectContaining({ name: "acquireJob" }),
@@ -981,7 +981,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
   it("recovers when user code poisons transaction in complete callback (atomic mode)", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     poisonTransaction,
     withWorkers,
     observabilityAdapter,
@@ -1040,7 +1040,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -1057,7 +1057,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const expected = [
       expect.objectContaining({
-        name: "runInTransaction",
+        name: "withTransaction",
         status: "committed",
         children: [
           expect.objectContaining({ name: "acquireJob" }),
@@ -1078,7 +1078,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
   it("recovers when user code poisons transaction in complete callback (staged mode)", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     poisonTransaction,
     withWorkers,
     observabilityAdapter,
@@ -1138,7 +1138,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -1155,7 +1155,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const expected = [
       expect.objectContaining({
-        name: "runInTransaction",
+        name: "withTransaction",
         status: "committed",
         children: [
           expect.objectContaining({ name: "acquireJob" }),
@@ -1165,7 +1165,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
       expect.objectContaining({ name: "getNextJobAvailableInMs" }),
       expect.objectContaining({
-        name: "runInTransaction",
+        name: "withTransaction",
         status: "committed",
         children: [
           expect.objectContaining({ name: "getJobForUpdate" }),
@@ -1184,7 +1184,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
   it("rolls back continuation job when handler throws after complete with continueWith (atomic mode)", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -1250,7 +1250,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -1272,7 +1272,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const expected = [
       expect.objectContaining({
-        name: "runInTransaction",
+        name: "withTransaction",
         status: "committed",
         children: [
           expect.objectContaining({ name: "acquireJob" }),
@@ -1296,7 +1296,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
   it("rolls back continuation job when handler throws after complete with continueWith (staged mode)", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -1363,7 +1363,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -1385,7 +1385,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const expected = [
       expect.objectContaining({
-        name: "runInTransaction",
+        name: "withTransaction",
         status: "committed",
         children: [
           expect.objectContaining({ name: "acquireJob" }),
@@ -1395,7 +1395,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
       expect.objectContaining({ name: "getNextJobAvailableInMs" }),
       expect.objectContaining({
-        name: "runInTransaction",
+        name: "withTransaction",
         status: "committed",
         children: [
           expect.objectContaining({ name: "getJobForUpdate" }),
@@ -1417,7 +1417,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
   it("blocked job remains blocked when blocker handler throws after complete (atomic mode)", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -1477,7 +1477,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     });
 
     const blockerChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -1487,7 +1487,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       ),
     );
     const dependentChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -1509,7 +1509,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
   it("blocked job remains blocked when blocker handler throws after complete (staged mode)", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -1570,7 +1570,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     });
 
     const blockerChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -1580,7 +1580,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       ),
     );
     const dependentChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -1602,7 +1602,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
   it("serializes various error types in lastAttemptError", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -1659,7 +1659,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,

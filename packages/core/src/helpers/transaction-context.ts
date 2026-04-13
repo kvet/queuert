@@ -1,7 +1,7 @@
 import { type TransactionHooks, createTransactionHooks } from "../transaction-hooks.js";
 
 export const createTransactionContext = async <TTxContext>(
-  runInTransaction: (callback: (txCtx: TTxContext) => Promise<void>) => Promise<void>,
+  withTransaction: (callback: (txCtx: TTxContext) => Promise<void>) => Promise<void>,
 ): Promise<{
   readonly status: "pending" | "resolved" | "rejected";
   run: <TReturn>(
@@ -19,7 +19,7 @@ export const createTransactionContext = async <TTxContext>(
     cb: (txCtx: TTxContext, transactionHooks: TransactionHooks) => Promise<T>,
   ) => Promise<T>;
 
-  const transactionContext = runInTransaction(async (txCtx) => {
+  const transactionContext = withTransaction(async (txCtx) => {
     runInContext = async <T>(
       cb: (transactionContext: TTxContext, transactionHooks: TransactionHooks) => Promise<T>,
     ) => cb(txCtx, transactionHooks);

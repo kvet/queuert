@@ -50,7 +50,7 @@ console.log("SQLite + Redis ready.");
 await runBenchmark({
   stateAdapter,
   notifyAdapter,
-  runInTransaction: stateProvider.runInTransaction,
+  withTransaction: stateProvider.withTransaction,
   concurrency,
 });
 

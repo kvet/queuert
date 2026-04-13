@@ -63,7 +63,7 @@ const [beforeProcessing, afterProcessing] = await measureMemory(async () => {
   const promises = [];
   for (let i = 0; i < 100; i++) {
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      stateAdapter.runInTransaction(async (ctx) =>
+      stateAdapter.withTransaction(async (ctx) =>
         qrtClient.startJobChain({
           ...ctx,
           transactionHooks,

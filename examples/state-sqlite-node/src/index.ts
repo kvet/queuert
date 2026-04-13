@@ -42,7 +42,7 @@ type DbContext = { db: DatabaseSync };
 const lock = createAsyncLock();
 
 const stateProvider: SqliteStateProvider<DbContext> = {
-  runInTransaction: async (fn) => {
+  withTransaction: async (fn) => {
     await lock.acquire();
     try {
       db.exec("BEGIN IMMEDIATE");

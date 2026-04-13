@@ -17,7 +17,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
   it("deletes job chain and all jobs in the tree", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expect,
@@ -39,7 +39,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -50,7 +50,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     );
 
     const deletedChains = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.deleteJobChains({
           ...txCtx,
           transactionHooks,
@@ -67,7 +67,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       status: "pending",
     });
 
-    await runInTransaction(async (txCtx) => {
+    await withTransaction(async (txCtx) => {
       const fetchedJobChain = await client.getJobChain({
         ...txCtx,
         id: jobChain.id,
@@ -80,7 +80,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
   it("returns correct chain status for chain with continuation", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expect,
@@ -106,7 +106,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -117,7 +117,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     );
 
     await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.completeJobChain({
           ...txCtx,
           transactionHooks,
@@ -135,7 +135,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     );
 
     const deletedChains = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.deleteJobChains({
           ...txCtx,
           transactionHooks,
@@ -156,7 +156,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
   it("running job receives deletion signal", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -206,7 +206,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -220,7 +220,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       await jobStarted.promise;
 
       const deletedChains = await withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.deleteJobChains({
             ...txCtx,
             transactionHooks,
@@ -244,7 +244,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
   it("throws error when deleting chain referenced as a blocker", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expect,
@@ -273,7 +273,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
 
     let blockerChain: JobChain<string, "blocker", { value: number }, { result: number }>;
     const mainChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) => {
+      withTransaction(async (txCtx) => {
         blockerChain = await client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -295,7 +295,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     // Deleting blocker chain alone should fail — main chain depends on it
     await expect(
       withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.deleteJobChains({
             ...txCtx,
             transactionHooks,
@@ -307,7 +307,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
 
     // Deleting both together should succeed
     const deletedChains = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.deleteJobChains({
           ...txCtx,
           transactionHooks,
@@ -331,7 +331,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       status: "blocked",
     });
 
-    await runInTransaction(async (txCtx) => {
+    await withTransaction(async (txCtx) => {
       const fetchedBlocker = await client.getJobChain({
         ...txCtx,
         id: blockerChain!.id,
@@ -351,7 +351,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
   it("cascade throws when deleting chain referenced as blocker", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expect,
@@ -380,7 +380,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
 
     let blockerChain: JobChain<string, "blocker", { value: number }, { result: number }>;
     await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) => {
+      withTransaction(async (txCtx) => {
         blockerChain = await client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -401,7 +401,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     // Blocker has no dependencies, so the set is just [blocker] — main still references it
     await expect(
       withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.deleteJobChains({
             ...txCtx,
             transactionHooks,
@@ -416,7 +416,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
   it("cascade deletes chain and its dependencies", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expect,
@@ -446,7 +446,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     let blockerChain: JobChain<string, "blocker", { value: number }, { result: number }>;
     let mainChain: JobChain<string, "main", null, { finalResult: number }>;
     await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) => {
+      withTransaction(async (txCtx) => {
         blockerChain = await client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -465,7 +465,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
 
     // Cascade from the dependent includes its blocker dependency
     const deletedChains = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.deleteJobChains({
           ...txCtx,
           transactionHooks,
@@ -481,7 +481,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
   it("cascade resolves transitive dependencies", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expect,
@@ -512,7 +512,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     let chainA: JobChain<string, "root", { label: string }, null>;
     let chainB: JobChain<string, "dependent", { label: string }, null>;
     const chainC = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) => {
+      withTransaction(async (txCtx) => {
         chainA = await client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -538,7 +538,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
 
     // Cascade from the leaf deletes the entire dependency chain
     const deletedChains = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.deleteJobChains({
           ...txCtx,
           transactionHooks,
@@ -558,7 +558,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
   it("cascade deduplicates diamond dependencies", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expect,
@@ -600,7 +600,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     let chainB: JobChain<string, "mid", { label: string }, null>;
     let chainC: JobChain<string, "mid", { label: string }, null>;
     const chainD = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) => {
+      withTransaction(async (txCtx) => {
         chainA = await client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -632,7 +632,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     );
 
     const deletedChains = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.deleteJobChains({
           ...txCtx,
           transactionHooks,
@@ -653,7 +653,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
   it("cascade with no dependencies behaves like normal delete", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expect,
@@ -675,7 +675,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -686,7 +686,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     );
 
     const deletedChains = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.deleteJobChains({
           ...txCtx,
           transactionHooks,
@@ -703,7 +703,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
   it("cascade throws when dependency has external dependents", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expect,
@@ -734,7 +734,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     let sharedChain: JobChain<string, "shared", null, null>;
     let consumerA: JobChain<string, "consumer", { label: string }, null>;
     await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) => {
+      withTransaction(async (txCtx) => {
         sharedChain = await client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -761,7 +761,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     // Cascade from consumerA includes shared (dependency), but consumerB also depends on shared
     await expect(
       withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.deleteJobChains({
             ...txCtx,
             transactionHooks,
@@ -776,7 +776,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
   it("deleted job during complete is handled gracefully", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -827,7 +827,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -841,7 +841,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       await jobStarted.promise;
 
       const deletedChains = await withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.deleteJobChains({
             ...txCtx,
             transactionHooks,
@@ -870,7 +870,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
   it("deletes batch-created chains", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expect,
@@ -892,7 +892,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     });
 
     const chains = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChains({
           ...txCtx,
           transactionHooks,
@@ -906,7 +906,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     );
 
     const deletedChains = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.deleteJobChains({
           ...txCtx,
           transactionHooks,
@@ -922,7 +922,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     }
 
     for (const chain of chains) {
-      const fetched = await runInTransaction(async (txCtx) =>
+      const fetched = await withTransaction(async (txCtx) =>
         client.getJobChain({ ...txCtx, id: chain.id }),
       );
       expect(fetched).toBeUndefined();
@@ -932,7 +932,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
   it("throws when deleting batch-created blocker", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expect,
@@ -960,7 +960,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     });
 
     const blocker = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -971,7 +971,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     );
 
     const [mainA, mainB] = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChains({
           ...txCtx,
           transactionHooks,
@@ -988,7 +988,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
 
     await expect(
       withTransactionHooks(async (transactionHooks) =>
-        runInTransaction(async (txCtx) =>
+        withTransaction(async (txCtx) =>
           client.deleteJobChains({
             ...txCtx,
             transactionHooks,
@@ -999,7 +999,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     ).rejects.toThrow(BlockerReferenceError);
 
     const deletedChains = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.deleteJobChains({
           ...txCtx,
           transactionHooks,
@@ -1014,7 +1014,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
   it("throws when called without transaction context", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expect,
@@ -1036,7 +1036,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -1057,7 +1057,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
   it("cascade deletes batch-created diamond dependencies", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     observabilityAdapter,
     log,
     expect,
@@ -1096,7 +1096,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     //    \ /
     //     A
     const chainA = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -1107,7 +1107,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     );
 
     const [chainB, chainC] = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChains({
           ...txCtx,
           transactionHooks,
@@ -1120,7 +1120,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     );
 
     const chainD = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -1132,7 +1132,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     );
 
     const deletedChains = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.deleteJobChains({
           ...txCtx,
           transactionHooks,

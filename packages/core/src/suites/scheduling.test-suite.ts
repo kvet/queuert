@@ -14,7 +14,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
   it("startJobChain with schedule.afterMs defers job processing", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -54,7 +54,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -80,7 +80,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
   it("startJobChain with schedule.at defers job processing", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -120,7 +120,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -146,7 +146,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
   it("continueWith with schedule.afterMs defers continuation job", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -208,7 +208,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -235,7 +235,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
   it("continueWith with schedule.at defers continuation job", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -297,7 +297,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -324,7 +324,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
   it("rescheduleJob with schedule.afterMs defers job retry", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -373,7 +373,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -402,7 +402,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
   it("recurring job self-schedules using deduplication with excludeJobChainIds", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -463,7 +463,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,
@@ -489,7 +489,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
   it("rescheduleJob with schedule.at defers job retry", async ({
     stateAdapter,
     notifyAdapter,
-    runInTransaction,
+    withTransaction,
     withWorkers,
     observabilityAdapter,
     log,
@@ -538,7 +538,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,

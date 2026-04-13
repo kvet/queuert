@@ -20,7 +20,7 @@ export const createPgPoolProvider = ({ pool }: { pool: Pool }): PgPoolProvider =
         poolClient.release();
       }
     },
-    runInTransaction: async (fn) => {
+    withTransaction: async (fn) => {
       const poolClient = await pool.connect();
       try {
         await poolClient.query("BEGIN");

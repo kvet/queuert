@@ -42,12 +42,12 @@ export const printHeader = (title: string): void => {
 export const runBenchmark = async ({
   stateAdapter,
   notifyAdapter,
-  runInTransaction,
+  withTransaction,
   concurrency,
 }: {
   stateAdapter: BenchmarkStateAdapter;
   notifyAdapter: NotifyAdapter;
-  runInTransaction: <T>(fn: (txCtx: Record<string, unknown>) => Promise<T>) => Promise<T>;
+  withTransaction: <T>(fn: (txCtx: Record<string, unknown>) => Promise<T>) => Promise<T>;
   concurrency: number;
 }): Promise<void> => {
   const client: Client<any, any> = await createClient({
@@ -80,7 +80,7 @@ export const runBenchmark = async ({
 
   for (let i = 0; i < JOB_COUNT; i++) {
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      runInTransaction(async (txCtx) =>
+      withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
           transactionHooks,

@@ -121,7 +121,7 @@ console.log("\n=== Dashboard Job Populator ===\n");
 // Scenario 1: Single Job
 console.log("--- Scenario 1: Single Job ---");
 const greetJob = await withTransactionHooks(async (transactionHooks) =>
-  stateAdapter.runInTransaction(async (ctx) =>
+  stateAdapter.withTransaction(async (ctx) =>
     client.startJobChain({ ...ctx, transactionHooks, typeName: "greet", input: { name: "World" } }),
   ),
 );
@@ -131,7 +131,7 @@ console.log("Result:", greetResult.output);
 // Scenario 2: Continuations
 console.log("\n--- Scenario 2: Continuations ---");
 const orderJob = await withTransactionHooks(async (transactionHooks) =>
-  stateAdapter.runInTransaction(async (ctx) =>
+  stateAdapter.withTransaction(async (ctx) =>
     client.startJobChain({
       ...ctx,
       transactionHooks,
@@ -146,7 +146,7 @@ console.log("Result:", orderResult.output);
 // Scenario 3: Blockers (fan-out/fan-in)
 console.log("\n--- Scenario 3: Blockers ---");
 const blockerJob = await withTransactionHooks(async (transactionHooks) =>
-  stateAdapter.runInTransaction(async (ctx) => {
+  stateAdapter.withTransaction(async (ctx) => {
     const userBlocker = await client.startJobChain({
       ...ctx,
       transactionHooks,
@@ -174,7 +174,7 @@ console.log("Result:", blockerResult.output);
 // Scenario 4: Retries
 console.log("\n--- Scenario 4: Retries ---");
 const retryJob = await withTransactionHooks(async (transactionHooks) =>
-  stateAdapter.runInTransaction(async (ctx) =>
+  stateAdapter.withTransaction(async (ctx) =>
     client.startJobChain({
       ...ctx,
       transactionHooks,
@@ -189,7 +189,7 @@ console.log("Result:", retryResult.output);
 // Scenario 5: Scheduled Job (1 hour in the future — trigger it from the dashboard)
 console.log("\n--- Scenario 5: Scheduled Job ---");
 await withTransactionHooks(async (transactionHooks) =>
-  stateAdapter.runInTransaction(async (ctx) =>
+  stateAdapter.withTransaction(async (ctx) =>
     client.startJobChain({
       ...ctx,
       transactionHooks,
