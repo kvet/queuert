@@ -7,7 +7,7 @@
 - [EPIC] multi-driver support for notify adapter
 - [EPIC] test against bun and its built-in sqlite, postgres, redis clients
 - [TASK] Name internal types properly. No underscore. Add to code-style guide.
-- [TASK] Enforce json-serializable inputs and outputs (like no Date in job definitions)
+- [TASK] Enforce json-serializable inputs and outputs (like no Date in job definitions) — see `design/json-serializable-types.md`
 
 # Medium term
 
