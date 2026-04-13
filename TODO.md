@@ -2,7 +2,6 @@
 
 - [TASK] Change attemptMiddleware to wrapAttemptHandler, wrapPrepare, wrapCompleteHandler, etc. to allow more flexible middleware that can add additional parameters (e.g. context) and is not limited to the acquire+execute+complete flow — see `design/handler-wrapping.md`
 - [TASK] Support triggering multiple jobs
-- [?,TASK] Simplify `mergeJobTypeProcessorRegistries` and `mergeJobTypeRegistries` to not use slices as a named parameter
 - [EPIC] Multi-driver support (postgres.js) — branch `feat/multi-driver-support`. Experimental; needs review before merge (type safety regression in executeTypedSql, missing resilience test coverage for postgres.js, JSON serialization verification)
 - [EPIC] multi-driver support for notify adapter
 - [EPIC] test against bun and its built-in sqlite, postgres, redis clients

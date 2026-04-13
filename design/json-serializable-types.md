@@ -47,7 +47,10 @@ Rather than just banning `Date`, support a codec pattern where:
 
 ```ts
 // Example: Zod codec
-const dateCodec = z.string().datetime().transform(s => new Date(s));
+const dateCodec = z
+  .string()
+  .datetime()
+  .transform((s) => new Date(s));
 // z.input<typeof dateCodec>  → string  (JSON-safe, stored in DB)
 // z.output<typeof dateCodec> → Date    (runtime, passed to handler)
 ```
@@ -78,14 +81,14 @@ The `JsonSerializable` constraint would apply to `z.input<Schema>` (serialized f
 
 ## Files
 
-| File | Role |
-|------|------|
-| `packages/core/src/entities/job-type.ts` | `BaseJobTypeDefinition` — `input: unknown` |
-| `packages/core/src/entities/job-type.validation.ts` | `ValidateJobType`, `NoVoidOrUndefined` — enforcement point |
-| `packages/core/src/entities/define-job-type-registry.ts` | Public API entry point |
-| `packages/core/src/entities/job-type-registry.resolvers.ts` | `JobTypeProperty` — distributes types to all call sites |
-| `packages/core/src/entities/define-job-type-registry.spec.ts` | Type specs, `unknown` usage at lines 935–1204 |
-| `packages/sqlite/src/state-adapter/state-adapter.sqlite.ts` | `JSON.stringify(input)` at line 348, `JSON.parse()` at lines 65/78 |
-| `packages/postgres/src/state-adapter/state-adapter.pg.ts` | Input passed to pg driver at line 188 |
-| `examples/validation-zod/src/zod-adapter.ts` | Zod integration pattern |
-| `benchmarks/type-complexity/src/index.ts` | Type-checking benchmark |
+| File                                                          | Role                                                               |
+| ------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `packages/core/src/entities/job-type.ts`                      | `BaseJobTypeDefinition` — `input: unknown`                         |
+| `packages/core/src/entities/job-type.validation.ts`           | `ValidateJobType`, `NoVoidOrUndefined` — enforcement point         |
+| `packages/core/src/entities/define-job-type-registry.ts`      | Public API entry point                                             |
+| `packages/core/src/entities/job-type-registry.resolvers.ts`   | `JobTypeProperty` — distributes types to all call sites            |
+| `packages/core/src/entities/define-job-type-registry.spec.ts` | Type specs, `unknown` usage at lines 935–1204                      |
+| `packages/sqlite/src/state-adapter/state-adapter.sqlite.ts`   | `JSON.stringify(input)` at line 348, `JSON.parse()` at lines 65/78 |
+| `packages/postgres/src/state-adapter/state-adapter.pg.ts`     | Input passed to pg driver at line 188                              |
+| `examples/validation-zod/src/zod-adapter.ts`                  | Zod integration pattern                                            |
+| `benchmarks/type-complexity/src/index.ts`                     | Type-checking benchmark                                            |
