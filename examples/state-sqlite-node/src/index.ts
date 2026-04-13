@@ -1,3 +1,5 @@
+import { type SQLInputValue, DatabaseSync } from "node:sqlite";
+
 import {
   type SqliteStateProvider,
   createAsyncLock,
@@ -11,51 +13,20 @@ import {
   withTransactionHooks,
 } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
-import sqlite3 from "sqlite3";
-
-// Promisify sqlite3 callback-based methods
-const promisify = {
-  run: async (db: sqlite3.Database, sql: string, params?: unknown[]): Promise<sqlite3.RunResult> =>
-    new Promise((resolve, reject) => {
-      db.run(sql, params ?? [], function (err) {
-        if (err) reject(err);
-        else resolve(this);
-      });
-    }),
-  all: async <T>(db: sqlite3.Database, sql: string, params?: unknown[]): Promise<T[]> =>
-    new Promise((resolve, reject) => {
-      db.all(sql, params ?? [], (err, rows) => {
-        if (err) reject(err);
-        else resolve(rows as T[]);
-      });
-    }),
-  exec: async (db: sqlite3.Database, sql: string): Promise<void> =>
-    new Promise((resolve, reject) => {
-      db.exec(sql, (err) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    }),
-};
 
 // 1. Create in-memory SQLite database
-const db = new sqlite3.Database(":memory:");
+const db = new DatabaseSync(":memory:");
+db.exec("PRAGMA auto_vacuum = INCREMENTAL");
+db.exec("PRAGMA foreign_keys = ON");
 
-// Configure foreign keys
-await promisify.exec(db, "PRAGMA auto_vacuum = INCREMENTAL");
-await promisify.exec(db, "PRAGMA foreign_keys = ON");
-
-// 2. Create users table
-await promisify.exec(
-  db,
-  `
+// 2. Create application schema
+db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     email TEXT NOT NULL
   );
-`,
-);
+`);
 
 // 3. Define job types
 const jobTypeRegistry = defineJobTypeRegistry<{
@@ -66,40 +37,63 @@ const jobTypeRegistry = defineJobTypeRegistry<{
   };
 }>();
 
-// 4. Create async lock for write serialization (required for SQLite)
+// 4. Create state provider for node:sqlite
+type DbContext = { db: DatabaseSync };
 const lock = createAsyncLock();
-
-// 5. Create state provider for sqlite3
-type DbContext = { db: sqlite3.Database };
 
 const stateProvider: SqliteStateProvider<DbContext> = {
   runInTransaction: async (fn) => {
     await lock.acquire();
     try {
-      await promisify.exec(db, "BEGIN IMMEDIATE");
+      db.exec("BEGIN IMMEDIATE");
+      const result = await fn({ db });
+      db.exec("COMMIT");
+      return result;
+    } catch (error) {
       try {
-        const result = await fn({ db });
-        await promisify.exec(db, "COMMIT");
-        return result;
-      } catch (error) {
-        await promisify.exec(db, "ROLLBACK").catch(() => {});
-        throw error;
+        db.exec("ROLLBACK");
+      } catch {
+        // ignore rollback errors
       }
+      throw error;
     } finally {
       lock.release();
     }
   },
   executeSql: async ({ txCtx, sql, params, returns }) => {
     const database = txCtx?.db ?? db;
-    if (returns) {
-      return promisify.all(database, sql, params);
+
+    const sqlParams = (params ?? []) as SQLInputValue[];
+
+    const execute = (database: DatabaseSync) => {
+      if (returns) {
+        const stmt = database.prepare(sql);
+        return stmt.all(...sqlParams) as unknown[];
+      }
+
+      if (sqlParams.length > 0) {
+        const stmt = database.prepare(sql);
+        stmt.run(...sqlParams);
+      } else {
+        database.exec(sql);
+      }
+      return [];
+    };
+
+    if (txCtx) {
+      return execute(database);
     }
-    await promisify.run(database, sql, params);
-    return [];
+
+    await lock.acquire();
+    try {
+      return execute(database);
+    } finally {
+      lock.release();
+    }
   },
 };
 
-// 6. Create adapters and queuert client/worker
+// 5. Create adapters and queuert client/worker
 const stateAdapter = await createSqliteStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 
@@ -111,7 +105,7 @@ const qrtClient = await createClient({
   jobTypeRegistry,
 });
 
-// 7. Create and start qrtWorker
+// 6. Create and start qrtWorker
 const qrtWorker = await createInProcessWorker({
   client: qrtClient,
   jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
@@ -134,22 +128,18 @@ const qrtWorker = await createInProcessWorker({
 
 const stopWorker = await qrtWorker.start();
 
-// 8. Register a new user and queue welcome email atomically
+// 7. Register a new user and queue welcome email atomically
 const jobChain = await withTransactionHooks(async (transactionHooks) => {
   await lock.acquire();
   try {
-    await promisify.exec(db, "BEGIN IMMEDIATE");
+    db.exec("BEGIN IMMEDIATE");
 
-    await promisify.run(db, "INSERT INTO users (name, email) VALUES (?, ?)", [
-      "Alice",
-      "alice@example.com",
-    ]);
-    const users = await promisify.all<{ id: number; name: string; email: string }>(
-      db,
-      "SELECT * FROM users WHERE email = ?",
-      ["alice@example.com"],
-    );
-    const user = users[0];
+    const insertStmt = db.prepare("INSERT INTO users (name, email) VALUES (?, ?) RETURNING *");
+    const user = insertStmt.get("Alice", "alice@example.com") as {
+      id: number;
+      name: string;
+      email: string;
+    };
 
     // Queue welcome email - if user creation fails, no email job is created
     const result = await qrtClient.startJobChain({
@@ -159,25 +149,24 @@ const jobChain = await withTransactionHooks(async (transactionHooks) => {
       input: { userId: user.id, email: user.email, name: user.name },
     });
 
-    await promisify.exec(db, "COMMIT");
+    db.exec("COMMIT");
     return result;
   } catch (error) {
-    await promisify.exec(db, "ROLLBACK").catch(() => {});
+    try {
+      db.exec("ROLLBACK");
+    } catch {
+      // ignore rollback errors
+    }
     throw error;
   } finally {
     lock.release();
   }
 });
 
-// 9. Wait for the job chain to complete
+// 8. Wait for the job chain to complete
 const result = await qrtClient.awaitJobChain(jobChain, { timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);
 
-// 10. Cleanup
+// 9. Cleanup
 await stopWorker();
-await new Promise<void>((resolve, reject) => {
-  db.close((err) => {
-    if (err) reject(err);
-    else resolve();
-  });
-});
+db.close();

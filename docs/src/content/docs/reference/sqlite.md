@@ -35,7 +35,7 @@ type SqliteStateAdapter = StateAdapter & {
 
 ## SqliteStateProvider
 
-**SqliteStateProvider** — you implement this to bridge your SQLite client. Note the extra `returns` parameter compared to `PgStateProvider`:
+**SqliteStateProvider** — you implement this to bridge your SQLite client (`node:sqlite`, `better-sqlite3`, ORMs, etc.). Note the extra `returns` parameter compared to `PgStateProvider`:
 
 ```typescript
 type SqliteStateProvider<TTxContext> = {

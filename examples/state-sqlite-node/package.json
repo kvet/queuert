@@ -1,8 +1,8 @@
 {
-  "name": "example-state-sqlite-sqlite3",
+  "name": "example-state-sqlite-node",
   "version": "0.0.1",
   "private": true,
-  "description": "An example demonstrating the SQLite state adapter with async sqlite3 driver.",
+  "description": "An example demonstrating the SQLite state adapter with the built-in node:sqlite module.",
   "license": "MIT",
   "author": "kvet",
   "repository": {
@@ -11,14 +11,13 @@
   },
   "type": "module",
   "scripts": {
-    "start": "tsx src/index.ts",
+    "start": "tsx --no-warnings=ExperimentalWarning src/index.ts",
     "typecheck": "tsgo --noEmit"
   },
   "devDependencies": {
     "@queuert/sqlite": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
     "queuert": "workspace:*",
-    "sqlite3": "6.0.1",
     "tsx": "4.21.0"
   }
 }

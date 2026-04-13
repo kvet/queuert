@@ -1,18 +1,18 @@
-# SQLite State Adapter (sqlite3)
+# SQLite State Adapter (node:sqlite)
 
-This example demonstrates the SQLite state adapter with the async sqlite3 driver.
+This example demonstrates the SQLite state adapter with the built-in `node:sqlite` module (Node.js >= 22.13.0). No external SQLite dependencies required.
 
 ## What it demonstrates
 
 - SQLite state storage via `@queuert/sqlite`
-- Integration with async sqlite3 driver for database operations
+- Integration with Node.js built-in `DatabaseSync` from `node:sqlite`
 - Atomic job creation within SQLite transactions
-- Write serialization using `createAsyncLock()` for concurrent access
+- Write serialization using `createAsyncLock()`
 
 ## What it does
 
 1. Creates an in-memory SQLite database
-2. Creates the users table and runs schema migrations
+2. Creates a users table for application data
 3. Sets up Queuert with SQLite state adapter
 4. Starts a worker that processes `send_welcome_email` jobs
 5. Registers a new user and queues a welcome email job (atomically in one transaction)
@@ -25,5 +25,5 @@ This example demonstrates the SQLite state adapter with the async sqlite3 driver
 pnpm install
 
 # Run the example
-pnpm --filter example-state-sqlite-sqlite3 start
+pnpm --filter example-state-sqlite-node start
 ```

@@ -24,13 +24,13 @@ How to connect Queuert to your database using different ORMs and drivers.
 
 ### SQLite
 
-| Example                                                                                                       | ORM / Driver    |
-| ------------------------------------------------------------------------------------------------------------- | --------------- |
-| [state-sqlite-better-sqlite3](https://github.com/kvet/queuert/tree/main/examples/state-sqlite-better-sqlite3) | better-sqlite3  |
-| [state-sqlite-kysely](https://github.com/kvet/queuert/tree/main/examples/state-sqlite-kysely)                 | Kysely          |
-| [state-sqlite-drizzle](https://github.com/kvet/queuert/tree/main/examples/state-sqlite-drizzle)               | Drizzle ORM     |
-| [state-sqlite-prisma](https://github.com/kvet/queuert/tree/main/examples/state-sqlite-prisma)                 | Prisma          |
-| [state-sqlite-sqlite3](https://github.com/kvet/queuert/tree/main/examples/state-sqlite-sqlite3)               | sqlite3 (async) |
+| Example                                                                                                       | ORM / Driver   |
+| ------------------------------------------------------------------------------------------------------------- | -------------- |
+| [state-sqlite-node](https://github.com/kvet/queuert/tree/main/examples/state-sqlite-node)                     | node:sqlite    |
+| [state-sqlite-better-sqlite3](https://github.com/kvet/queuert/tree/main/examples/state-sqlite-better-sqlite3) | better-sqlite3 |
+| [state-sqlite-kysely](https://github.com/kvet/queuert/tree/main/examples/state-sqlite-kysely)                 | Kysely         |
+| [state-sqlite-drizzle](https://github.com/kvet/queuert/tree/main/examples/state-sqlite-drizzle)               | Drizzle ORM    |
+| [state-sqlite-prisma](https://github.com/kvet/queuert/tree/main/examples/state-sqlite-prisma)                 | Prisma         |
 
 ## Notify Adapters
 
