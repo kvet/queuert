@@ -32,9 +32,9 @@
     "@changesets/cli": "2.30.0",
     "@types/node": "22.19.15",
     "@typescript/native-preview": "7.0.0-dev.20260413.1",
-    "oxfmt": "0.43.0",
-    "oxlint": "1.58.0",
-    "oxlint-tsgolint": "0.18.1",
+    "oxfmt": "0.45.0",
+    "oxlint": "1.60.0",
+    "oxlint-tsgolint": "0.20.0",
     "tsdown": "0.21.8",
     "vitest": "4.1.4"
   },

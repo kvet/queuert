@@ -318,13 +318,13 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
 
     expect(deletedChains).toHaveLength(2);
     const deletedByType = Object.fromEntries(deletedChains.map((c) => [c.typeName, c]));
-    expect(deletedByType["blocker"]).toMatchObject({
+    expect(deletedByType.blocker).toMatchObject({
       id: blockerChain!.id,
       typeName: "blocker",
       input: { value: 1 },
       status: "pending",
     });
-    expect(deletedByType["main"]).toMatchObject({
+    expect(deletedByType.main).toMatchObject({
       id: mainChain.id,
       typeName: "main",
       input: null,

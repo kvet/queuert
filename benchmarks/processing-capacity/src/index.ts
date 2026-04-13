@@ -45,16 +45,10 @@ const runBenchmarkInChildProcess = async (name: string, extraArgs: string[]): Pr
 const main = async (): Promise<void> => {
   const passthrough = args.filter((a) => a.startsWith("--concurrency="));
 
-  let toRun: string[] = [];
-
   const knownFlags = Object.keys(benchmarkModules);
   const selected = knownFlags.filter((name) => args.includes(`--${name}`));
 
-  if (args.includes("--all") || selected.length === 0) {
-    toRun = knownFlags;
-  } else {
-    toRun = selected;
-  }
+  const toRun = args.includes("--all") || selected.length === 0 ? knownFlags : selected;
 
   for (const name of toRun) {
     console.log(`\n>>> Running benchmark: ${name} (in child process)\n`);
