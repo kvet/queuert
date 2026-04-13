@@ -47,7 +47,6 @@
   "devDependencies": {
     "@queuert/tsconfig": "workspace:*",
     "@solidjs/router": "0.16.1",
-    "@types/node": "22.19.15",
     "queuert": "workspace:*",
     "seroval": "1.5.1",
     "solid-js": "1.9.12",

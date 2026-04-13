@@ -1,2 +1,2 @@
 const base = document.querySelector("base")?.getAttribute("href") ?? "/";
-export const basePath = base.replace(/\/$/, "");
+export const basePath: string = base.replace(/\/$/, "");

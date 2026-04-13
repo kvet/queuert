@@ -1,5 +1,6 @@
 # Short term
 
+- [TASK] Rework cleanup example to have a single job
 - [TASK] Support embeded sqlite in node; add examples
 - [TASK] Change attemptMiddleware to wrapAttemptHandler, wrapPrepare, wrapCompleteHandler, etc. to allow more flexible middleware that can add additional parameters (e.g. context) and is not limited to the acquire+execute+complete flow — see `design/handler-wrapping.md`
 - [TASK] Support triggering multiple jobs

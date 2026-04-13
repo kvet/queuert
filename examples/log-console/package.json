@@ -12,7 +12,6 @@
   },
   "devDependencies": {
     "@queuert/tsconfig": "workspace:*",
-    "@types/node": "22.19.15",
     "tsx": "4.21.0"
   }
 }
