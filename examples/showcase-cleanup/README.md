@@ -4,14 +4,14 @@ Demonstrates how to implement automatic cleanup of completed job chains as a cus
 
 ## What it shows
 
-1. Defining a self-referencing cleanup job type that processes chains in batches via `continueWith`
-2. Deleting completed chains older than a cutoff date using `listJobChains` and `deleteJobChains`
-3. Automatically scheduling the next cleanup run after all batches are processed
+1. Defining a cleanup job that deletes completed chains in batches using cursor pagination
+2. Reclaiming disk space with `stateAdapter.vacuum()` after deletion
+3. Automatically scheduling the next cleanup run
 4. Idempotent scheduling with `deduplication` — multiple schedule calls return the same chain
 
 ## Key files
 
-- `src/index.ts` - Full cleanup implementation with three scenarios: basic cleanup, batch processing, and idempotent scheduling
+- `src/index.ts` - Full cleanup implementation with scenarios: basic cleanup and idempotent scheduling
 
 ## Running the example
 

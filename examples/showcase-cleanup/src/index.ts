@@ -6,8 +6,7 @@
  *
  * Scenarios:
  * 1. Basic cleanup: Completed chains older than retention are deleted
- * 2. Batch processing: Large numbers of chains are cleaned up in batches via continueWith
- * 3. Idempotent scheduling: Multiple schedule calls create only one cleanup chain
+ * 2. Idempotent scheduling: Multiple schedule calls create only one cleanup chain
  */
 
 import assert from "node:assert/strict";
@@ -51,13 +50,8 @@ const CLEANUP_INTERVAL_MS = 1000;
 const cleanupJobTypeRegistry = defineJobTypeRegistry<{
   "queuert.cleanup": {
     entry: true;
-    input: { cutoffDate?: string; deletedChainCount?: number };
-    output: { deletedChainCount: number };
-    continueWith: { typeName: "queuert.cleanup" } | { typeName: "queuert.cleanup.vacuum" };
-  };
-  "queuert.cleanup.vacuum": {
-    input: { deletedChainCount: number };
-    output: { deletedChainCount: number };
+    input: null;
+    output: null;
   };
 }>();
 
@@ -110,63 +104,59 @@ const cleanupProcessorRegistry = createJobTypeProcessorRegistry({
   jobTypeRegistry: cleanupJobTypeRegistry,
   processors: {
     "queuert.cleanup": {
-      attemptHandler: async ({ job, complete }) =>
-        complete(async ({ transactionHooks, continueWith, sql }) => {
-          const cutoffDate = job.input.cutoffDate
-            ? new Date(job.input.cutoffDate)
-            : new Date(Date.now() - CLEANUP_RETENTION_MS);
-          let deletedChainCount = job.input.deletedChainCount ?? 0;
+      attemptHandler: async ({ job, complete }) => {
+        const cutoffDate = new Date(Date.now() - CLEANUP_RETENTION_MS);
+        let deletedChainCount = 0;
+        let cursor: string | undefined;
 
+        do {
           const page = await client.listJobChains({
-            sql,
             filter: { root: true, to: cutoffDate },
             orderDirection: "asc",
             limit: CLEANUP_BATCH_SIZE,
+            ...(cursor != null ? { cursor } : {}),
           });
 
-          const chainsToDelete = page.items.filter(
-            (chain) => chain.id !== job.chainId && chain.status === "completed",
+          const jobChainsToDelete = page.items.filter(
+            (jobChain) => jobChain.id !== job.chainId && jobChain.status === "completed",
           );
 
-          if (chainsToDelete.length > 0) {
-            const deleted = await client.deleteJobChains({
-              sql,
-              transactionHooks,
-              ids: chainsToDelete.map((chain) => chain.id),
-            });
+          if (jobChainsToDelete.length > 0) {
+            const deleted = await withTransactionHooks(async (transactionHooks) =>
+              sql.begin(async (_sql) =>
+                client.deleteJobChains({
+                  sql: _sql as TransactionSql,
+                  transactionHooks,
+                  ids: jobChainsToDelete.map((jobChain) => jobChain.id),
+                }),
+              ),
+            );
             deletedChainCount += deleted.length;
           }
 
-          if (page.nextCursor != null) {
-            return continueWith({
-              typeName: "queuert.cleanup",
-              input: { cutoffDate: cutoffDate.toISOString(), deletedChainCount },
-            });
-          }
+          cursor = page.nextCursor ?? undefined;
+        } while (cursor);
 
+        console.log(`[queuert.cleanup] Deleted ${deletedChainCount} chain(s)`);
+
+        await stateAdapter.vacuum();
+
+        return complete(async ({ sql, transactionHooks }) => {
           await client.startJobChain({
             sql,
             transactionHooks,
             typeName: "queuert.cleanup",
-            input: {},
+            input: null,
+            schedule: { afterMs: CLEANUP_INTERVAL_MS },
             deduplication: {
               key: "queuert.cleanup",
               scope: "incomplete",
               excludeJobChainIds: [job.chainId],
             },
-            schedule: { afterMs: CLEANUP_INTERVAL_MS },
           });
 
-          return continueWith({
-            typeName: "queuert.cleanup.vacuum",
-            input: { deletedChainCount },
-          });
-        }),
-    },
-    "queuert.cleanup.vacuum": {
-      attemptHandler: async ({ job, complete }) => {
-        await stateAdapter.vacuum();
-        return complete(async () => ({ deletedChainCount: job.input.deletedChainCount }));
+          return null;
+        });
       },
     },
   },
@@ -198,7 +188,7 @@ const stopWorker = await worker.start();
 // --- Scenario 1: Create and complete some work chains ---
 console.log("\n--- Scenario 1: Create work chains ---\n");
 
-const chains = await withTransactionHooks(async (transactionHooks) =>
+const jobChains = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (_sql) => {
     const txSql = _sql as TransactionSql;
     return client.startJobChains({
@@ -216,13 +206,15 @@ const chains = await withTransactionHooks(async (transactionHooks) =>
   }),
 );
 
-console.log(`Created ${chains.length} work chains`);
-assert.equal(chains.length, 6);
+console.log(`Created ${jobChains.length} work chains`);
+assert.equal(jobChains.length, 6);
 
 // Wait for immediate work chains to complete (chain #6 is scheduled in the future)
-const immediateChains = chains.slice(0, 5);
-await Promise.all(immediateChains.map(async (c) => client.awaitJobChain(c, { timeoutMs: 10000 })));
-console.log(`${immediateChains.length} work chains completed, 1 scheduled for later`);
+const immediateJobChains = jobChains.slice(0, 5);
+await Promise.all(
+  immediateJobChains.map(async (jobChain) => client.awaitJobChain(jobChain, { timeoutMs: 10000 })),
+);
+console.log(`${immediateJobChains.length} work chains completed, 1 scheduled for later`);
 
 // Check chain count before cleanup
 const beforeCleanup = await client.listJobChains({
@@ -242,26 +234,26 @@ const scheduleCleanup = async () =>
         sql: _sql as TransactionSql,
         transactionHooks,
         typeName: "queuert.cleanup",
-        input: {},
+        input: null,
         deduplication: { key: "queuert.cleanup", scope: "incomplete" },
       }),
     ),
   );
 
-const cleanupChain = await scheduleCleanup();
-console.log(`Cleanup chain started: ${cleanupChain.id}`);
-console.log(`Deduplicated: ${cleanupChain.deduplicated}`);
-assert.equal(cleanupChain.deduplicated, false);
+const cleanupJobChain = await scheduleCleanup();
+console.log(`Cleanup chain started: ${cleanupJobChain.id}`);
+console.log(`Deduplicated: ${cleanupJobChain.deduplicated}`);
+assert.equal(cleanupJobChain.deduplicated, false);
 
-// --- Scenario 3: Idempotent scheduling ---
+// --- Idempotent scheduling ---
 const duplicate = await scheduleCleanup();
 console.log(`\nSecond schedule attempt: ${duplicate.id}`);
 console.log(`Deduplicated: ${duplicate.deduplicated} (same chain returned)`);
 assert.equal(duplicate.deduplicated, true);
-assert.equal(duplicate.id, cleanupChain.id);
+assert.equal(duplicate.id, cleanupJobChain.id);
 
 // Wait for cleanup to finish
-await client.awaitJobChain({ id: cleanupChain.id }, { timeoutMs: 10000 });
+await client.awaitJobChain({ id: cleanupJobChain.id }, { timeoutMs: 10000 });
 console.log("\nCleanup completed!");
 
 // Check chain count after cleanup
