@@ -265,11 +265,12 @@ export const notifyAdapterConformanceTestSuite = <T extends NotifyAdapterConform
   });
 
   describe("delivery timeliness", () => {
-    it("notifications are delivered during publish loop, not batched at end", async ({
+    it("notifications dispatch during publish loop, not batched at end", async ({
       notifyAdapter,
       expect,
     }) => {
       const count = 50;
+      const half = count / 2;
       let received = 0;
       const chainIds = Array.from({ length: count }, (_, i) => `chain-flush-${i}`);
 
@@ -281,11 +282,20 @@ export const notifyAdapterConformanceTestSuite = <T extends NotifyAdapterConform
         ),
       );
 
-      for (const id of chainIds) {
-        await notifyAdapter.notifyJobChainCompleted(id);
+      for (let i = 0; i < half; i++) {
+        await notifyAdapter.notifyJobChainCompleted(chainIds[i]);
+      }
+      // Let fire-and-forget transports drain already-published messages.
+      // A batch-at-end impl would show 0 here; an incremental impl makes progress.
+      await sleep(100);
+      const receivedMidLoop = received;
+
+      for (let i = half; i < count; i++) {
+        await notifyAdapter.notifyJobChainCompleted(chainIds[i]);
       }
 
-      expect(received).toBeGreaterThanOrEqual(count - 1);
+      await expect.poll(() => received, { timeout: 2000 }).toBe(count);
+      expect(receivedMidLoop).toBeGreaterThan(0);
 
       await Promise.all(unsubscribes.map(async (u) => u()));
     });

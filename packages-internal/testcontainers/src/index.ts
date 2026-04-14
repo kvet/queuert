@@ -1,6 +1,7 @@
 export { extendWithNats, type NatsConnectionOptions } from "./nats.js";
 export { extendWithPostgres } from "./postgres.js";
 export { extendWithRedis } from "./redis.js";
+export { extendWithRedisCluster, type RedisClusterConnection } from "./redis-cluster.js";
 
 // Resource types used by testcontainer connections that should be allowed in leak detection
 export const TESTCONTAINER_RESOURCE_TYPES: string[] = [

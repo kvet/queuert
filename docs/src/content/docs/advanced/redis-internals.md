@@ -49,15 +49,17 @@ Atomically creates a hint counter and publishes the notification:
 
 ```lua
 redis.call('SET', KEYS[1], ARGV[1], 'EX', 60)
-redis.call('PUBLISH', KEYS[2], ARGV[2])
+redis.call('PUBLISH', ARGV[2], ARGV[3])
 ```
 
 - `KEYS[1]`: Hint key (e.g., `queuert:hint:{hintId}`)
-- `KEYS[2]`: Channel (e.g., `queuert:sched`)
 - `ARGV[1]`: Job count
-- `ARGV[2]`: Message payload (`{hintId}:{typeName}`)
+- `ARGV[2]`: Channel (e.g., `queuert:sched`)
+- `ARGV[3]`: Message payload (`{hintId}:{typeName}`)
 
 Atomicity prevents a race where a worker receives the notification before the hint counter exists.
+
+The channel is passed via `ARGV` rather than `KEYS` so the script declares only one key. On Redis Cluster, all `KEYS[]` declared by an `EVAL` must hash to the same slot; the server rejects the script pre-execution otherwise (`CROSSSLOT`). `PUBLISH` is slot-agnostic — it broadcasts across the cluster — so the channel name does not need to participate in slot routing, and declaring it as a key would only cause spurious cross-slot rejections.
 
 ### Decrement If Positive
 

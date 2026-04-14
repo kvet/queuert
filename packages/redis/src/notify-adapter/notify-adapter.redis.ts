@@ -13,6 +13,13 @@ type SharedListenerState =
     }
   | { status: "stopping"; stoppedPromise: Promise<void> };
 
+/**
+ * Multiplexes many application-level listeners onto a single Redis SUBSCRIBE
+ * per channel. Opens the underlying subscription lazily on first listener,
+ * reuses it for all subsequent listeners, and tears it down when the last
+ * listener unsubscribes. The returned `subscribe` resolves with an
+ * unsubscribe function scoped to that one callback.
+ */
 const createSharedListener = (
   provider: RedisNotifyProvider,
   channel: string,
@@ -21,6 +28,13 @@ const createSharedListener = (
 } => {
   let state: SharedListenerState = { status: "idle" };
 
+  /**
+   * Returns the callback set for the running subscription, opening it if
+   * needed. Concurrent callers either win the idle→starting transition and
+   * open the subscription, or wait on an in-flight `starting`/`stopping`
+   * transition and retry — so only one `provider.subscribe` is ever in
+   * flight at a time for this channel.
+   */
   const ensureRunning = async (): Promise<Set<(payload: string) => void>> => {
     while (true) {
       if (state.status === "idle") {
@@ -60,6 +74,11 @@ const createSharedListener = (
     }
   };
 
+  /**
+   * Tears down the subscription when the last listener leaves. No-op if
+   * other listeners remain, or if we're mid-transition (`ensureRunning`
+   * handles the race).
+   */
   const stopIfEmpty = async (): Promise<void> => {
     if (state.status !== "running") return;
     if (state.callbacks.size > 0) return;
@@ -85,14 +104,42 @@ const createSharedListener = (
   };
 };
 
+/**
+ * Serializes provider subscribe/unsubscribe calls across channels so
+ * concurrent setup/teardown from different shared listeners can't race each
+ * other on transports that don't tolerate parallel pub/sub state changes
+ * (e.g. node-redis cluster tearing down its shared pub/sub socket on
+ * last-unsubscribe, which crashes with "The client is closed" when another
+ * unsubscribe is in flight). These calls are setup-time, not hot-path, so the
+ * serialization cost is negligible.
+ */
+const serializeSubscribeCalls = (provider: RedisNotifyProvider): RedisNotifyProvider => {
+  let chain: Promise<unknown> = Promise.resolve();
+  const run = async <R>(fn: () => Promise<R>): Promise<R> => {
+    const next = chain.then(fn, fn);
+    chain = next.catch(() => undefined);
+    return next;
+  };
+  return {
+    ...provider,
+    subscribe: async (channel, onMessage) => {
+      const unsubscribe = await run(async () => provider.subscribe(channel, onMessage));
+      return async () => {
+        await run(async () => unsubscribe());
+      };
+    },
+  };
+};
+
 /** Create a notify adapter backed by Redis pub/sub. */
 export const createRedisNotifyAdapter = async ({
-  provider,
+  provider: rawProvider,
   channelPrefix = "queuert",
 }: {
   provider: RedisNotifyProvider;
   channelPrefix?: string;
 }): Promise<NotifyAdapter> => {
+  const provider = serializeSubscribeCalls(rawProvider);
   const jobScheduledChannel = `${channelPrefix}:sched`;
   const chainCompletedChannel = `${channelPrefix}:chainc`;
   const ownershipLostChannel = `${channelPrefix}:owls`;
@@ -109,8 +156,8 @@ export const createRedisNotifyAdapter = async ({
 
       await provider.eval(
         SET_AND_PUBLISH_SCRIPT,
-        [hintKey, jobScheduledChannel],
-        [String(count), `${hintId}:${typeName}`],
+        [hintKey],
+        [String(count), jobScheduledChannel, `${hintId}:${typeName}`],
       );
     },
 

@@ -2,13 +2,19 @@
  * Atomically sets a hint counter and publishes a notification.
  *
  * KEYS[1] = hint key (e.g., "queuert:hint:{hintId}")
- * KEYS[2] = channel (e.g., "queuert:sched")
  * ARGV[1] = count (number of jobs scheduled)
- * ARGV[2] = hintId (message to publish)
+ * ARGV[2] = channel (e.g., "queuert:sched")
+ * ARGV[3] = message to publish (`{hintId}:{typeName}`)
+ *
+ * The channel is passed via ARGV rather than KEYS so the EVAL declares only
+ * one key. On Redis Cluster, all KEYS[] must hash to the same slot, but
+ * PUBLISH is slot-agnostic — broadcasting a channel name via ARGV avoids the
+ * CROSSSLOT rejection that would otherwise occur when the hint key and the
+ * channel name hash to different slots.
  */
 export const SET_AND_PUBLISH_SCRIPT = `
 redis.call('SET', KEYS[1], ARGV[1], 'EX', 60)
-redis.call('PUBLISH', KEYS[2], ARGV[2])
+redis.call('PUBLISH', ARGV[2], ARGV[3])
 `;
 
 /**
