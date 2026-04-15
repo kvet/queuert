@@ -19,6 +19,16 @@ export type SqliteStateProvider<TTxContext extends BaseTxContext> = {
   withTransaction: <T>(fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
 
   /**
+   * Executes a callback within a savepoint inside an existing transaction.
+   * Creates a savepoint, executes the callback, releases on success,
+   * rolls back to the savepoint on error.
+   *
+   * Optional. When not provided, the adapter uses raw SAVEPOINT SQL via executeSql.
+   * Override when the driver tracks transaction state client-side.
+   */
+  withSavepoint?: <T>(txCtx: TTxContext, fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
+
+  /**
    * Executes a SQL query.
    * When txCtx is provided, uses that transaction connection.
    * When txCtx is omitted, acquires a connection, executes, and releases.

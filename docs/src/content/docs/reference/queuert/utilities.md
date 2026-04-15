@@ -60,7 +60,7 @@ const registry = createJobTypeRegistry<MyJobTypes>({
 
 Creates a registry with runtime validation for input/output parsing. Each callback is invoked at the appropriate lifecycle point. Use this when you need schema validation (e.g. with Zod) beyond compile-time checks. Accepts an optional `TExternal` type parameter for cross-slice blocker reference validation (compile-time only, same as `defineJobTypeRegistry`).
 
-- **getTypeNames** -- returns the known job type names; used by `mergeJobTypeRegistries` for runtime duplicate detection and deterministic routing
+- **getTypeNames** — returns the known job type names; used by `mergeJobTypeRegistries` for runtime duplicate detection and deterministic routing
 
 ## mergeJobTypeRegistries
 
@@ -70,11 +70,11 @@ const registry = mergeJobTypeRegistries({ slices: [ordersRegistry, notifications
 
 Merges multiple `JobTypeRegistry` instances into a single registry. Accepts an options bag with a `slices` array of two or more registries.
 
-- **Compile-time duplicate detection** -- overlapping job type names produce a type error
-- **Runtime duplicate detection** -- validated registries with overlapping type names throw `DuplicateJobTypeError`
+- **Compile-time duplicate detection** — overlapping job type names produce a type error
+- **Runtime duplicate detection** — validated registries with overlapping type names throw `DuplicateJobTypeError`
 - **Noop registries** (from `defineJobTypeRegistry`) merge trivially with no runtime overhead
-- **Deterministic routing** -- validated registries use `getTypeNames()` to route calls directly, so validation errors propagate correctly
-- **Mixed** -- validated registries are routed deterministically; noop types pass through as fallback
+- **Deterministic routing** — validated registries use `getTypeNames()` to route calls directly, so validation errors propagate correctly
+- **Mixed** — validated registries are routed deterministically; noop types pass through as fallback
 
 ```typescript
 const ordersRegistry = defineJobTypeRegistry<OrderJobTypes>();
@@ -102,10 +102,10 @@ const orderJobTypeProcessorRegistry = createJobTypeProcessorRegistry({
 
 Defines a processor registry for a job type slice with full type inference. Handlers are type-checked against the slice's definitions (including external references from `TExternal`). Returns a `JobTypeProcessorRegistry` that carries the slice's type definitions via phantom symbol properties.
 
-- **client** -- a `Client` instance, used to infer the state adapter type for proper handler typing
-- **jobTypeRegistry** -- a `JobTypeRegistry` (from `defineJobTypeRegistry` or `createJobTypeRegistry`), used for type inference
-- **processors** -- the processor map, typed against the registry's definitions
-- **Return type** -- a `JobTypeProcessorRegistry` carrying definitions and external definitions via phantom symbol properties
+- **client** — a `Client` instance, used to infer the state adapter type for proper handler typing
+- **jobTypeRegistry** — a `JobTypeRegistry` (from `defineJobTypeRegistry` or `createJobTypeRegistry`), used for type inference
+- **processors** — the processor map, typed against the registry's definitions
+- **Return type** — a `JobTypeProcessorRegistry` carrying definitions and external definitions via phantom symbol properties
 
 ## mergeJobTypeProcessorRegistries
 
@@ -117,8 +117,8 @@ const jobTypeProcessorRegistry = mergeJobTypeProcessorRegistries({
 
 Merges processor registries from multiple slices into a single registry. Accepts an options bag with a `slices` array of `JobTypeProcessorRegistry` instances.
 
-- **Runtime duplicate detection** -- overlapping processor keys throw `DuplicateJobTypeError`
-- **Merged return type** -- a `JobTypeProcessorRegistry` with unioned definitions, external definitions, and processor keys
+- **Runtime duplicate detection** — overlapping processor keys throw `DuplicateJobTypeError`
+- **Merged return type** — a `JobTypeProcessorRegistry` with unioned definitions, external definitions, and processor keys
 
 Each slice defines processors using `createJobTypeProcessorRegistry`, typed against its own job type definitions. This allows co-locating job type definitions and processor handlers per feature module.
 

@@ -49,8 +49,8 @@ type TransactionHooks = {
 
 The hooks container passed to all mutating client methods. Manages keyed hook definitions that buffer side effects during a transaction.
 
-- **withSavepoint** -- runs `fn` inside a savepoint. Automatically rolls back buffered hook state on error and releases on success.
-- **createSavepoint** -- creates a manual savepoint for fine-grained control. Returns a `TransactionHooksSavepoint` handle.
+- **withSavepoint** — runs `fn` inside a savepoint. Automatically rolls back buffered hook state on error and releases on success.
+- **createSavepoint** — creates a manual savepoint for fine-grained control. Returns a `TransactionHooksSavepoint` handle.
 
 ## TransactionHooksSavepoint
 
@@ -77,10 +77,10 @@ type HookDef<T> = {
 
 Defines a single hook's state and lifecycle callbacks.
 
-- **state** -- mutable state accumulated during the transaction
-- **flush** -- called with the accumulated state after the transaction commits
-- **discard** -- called on rollback to clean up without executing side effects
-- **checkpoint** -- called when a savepoint is created. Returns a rollback function that restores the state to the checkpoint. Used by `withSavepoint` and `createSavepoint` to support partial rollback of hook state.
+- **state** — mutable state accumulated during the transaction
+- **flush** — called with the accumulated state after the transaction commits
+- **discard** — called on rollback to clean up without executing side effects
+- **checkpoint** — called when a savepoint is created. Returns a rollback function that restores the state to the checkpoint. Used by `withSavepoint` and `createSavepoint` to support partial rollback of hook state.
 
 ## TransactionHooksHandle
 

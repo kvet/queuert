@@ -19,11 +19,11 @@ const client = await createClient({
 
 Returns `Promise<Client>`.
 
-- **stateAdapter** -- database adapter for job persistence
-- **notifyAdapter** -- optional pub/sub adapter for real-time notifications between client and workers
-- **observabilityAdapter** -- optional adapter for metrics and tracing
-- **jobTypeRegistry** -- job type registry created by `defineJobTypeRegistry()` or `createJobTypeRegistry()`
-- **log** -- optional structured logger
+- **stateAdapter** — database adapter for job persistence
+- **notifyAdapter** — optional pub/sub adapter for real-time notifications between client and workers
+- **observabilityAdapter** — optional adapter for metrics and tracing
+- **jobTypeRegistry** — job type registry created by `defineJobTypeRegistry()` or `createJobTypeRegistry()`
+- **log** — optional structured logger
 
 ## Client — Mutating Methods
 
@@ -158,9 +158,9 @@ Returns `CompletedJobChain`.
 
 Waits for the specified chain to complete.
 
-- **timeoutMs** -- required, maximum wait time
-- **pollIntervalMs** -- polling fallback interval (default: `15_000`)
-- **signal** -- optional `AbortSignal` for external cancellation
+- **timeoutMs** — required, maximum wait time
+- **pollIntervalMs** — polling fallback interval (default: `15_000`)
+- **signal** — optional `AbortSignal` for external cancellation
 
 Throws `WaitChainTimeoutError` on timeout or abort, `JobChainNotFoundError`, or `JobTypeMismatchError`.
 

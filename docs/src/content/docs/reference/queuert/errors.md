@@ -90,9 +90,9 @@ type JobTypeValidationErrorCode =
 
 Thrown by `createJobTypeRegistry` when runtime validation fails.
 
-- **code** -- identifies the specific validation failure
-- **typeName** -- the job type that failed validation
-- **details** -- additional context about the failure
+- **code** — identifies the specific validation failure
+- **typeName** — the job type that failed validation
+- **details** — additional context about the failure
 
 ## WaitChainTimeoutError
 
@@ -149,6 +149,14 @@ class HookNotRegisteredError extends Error {
 ```
 
 Thrown when a transaction hook is accessed before being registered.
+
+## TransactionContextRequiredError
+
+```typescript
+class TransactionContextRequiredError extends Error {}
+```
+
+Thrown when a mutating client method (e.g. `startJobChain`, `triggerJob`, `deleteJobChains`) is called without a `tx` provided by `withTransaction`. Mutations must run inside a transaction so the transactional outbox pattern holds.
 
 ## See Also
 

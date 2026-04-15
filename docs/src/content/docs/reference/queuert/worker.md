@@ -20,12 +20,12 @@ const worker = await createInProcessWorker({
 
 Returns `Promise<InProcessWorker>`.
 
-- **client** -- the Queuert client to process jobs for
-- **workerId** -- unique identifier for this worker (default: random UUID)
-- **concurrency** -- maximum number of jobs to process in parallel (default: 1)
-- **backoffConfig** -- recovery backoff for the worker loop itself, not individual job retries
-- **jobTypeProcessorDefaults** -- default configuration applied to all job types
-- **jobTypeProcessorRegistry** -- a `JobTypeProcessorRegistry` from `createJobTypeProcessorRegistry` or `mergeJobTypeProcessorRegistries`. The registry's definitions must be a subset of the client's registry definitions.
+- **client** — the Queuert client to process jobs for
+- **workerId** — unique identifier for this worker (default: random UUID)
+- **concurrency** — maximum number of jobs to process in parallel (default: 1)
+- **backoffConfig** — recovery backoff for the worker loop itself, not individual job retries
+- **jobTypeProcessorDefaults** — default configuration applied to all job types
+- **jobTypeProcessorRegistry** — a `JobTypeProcessorRegistry` from `createJobTypeProcessorRegistry` or `mergeJobTypeProcessorRegistries`. The registry's definitions must be a subset of the client's registry definitions.
 
 ## InProcessWorker
 
@@ -35,7 +35,7 @@ type InProcessWorker = {
 };
 ```
 
-Call `start()` to begin processing. It returns a `stop` function for graceful shutdown -- signals the worker to stop spawning new jobs, waits for in-flight jobs to finish, then resolves.
+Call `start()` to begin processing. It returns a `stop` function for graceful shutdown — signals the worker to stop spawning new jobs, waits for in-flight jobs to finish, then resolves.
 
 ## JobTypeProcessorDefaults
 
@@ -50,10 +50,10 @@ type JobTypeProcessorDefaults = {
 };
 ```
 
-- **pollIntervalMs** -- how often to poll for new jobs when no notify adapter is active (default: 60s)
-- **backoffConfig** -- backoff for failed job attempts (default: 10s initial, 2x multiplier, 5min max)
-- **leaseConfig** -- lease duration and renewal interval for job ownership (default: 60s lease, 30s renewal)
-- **attemptMiddlewares** -- middlewares wrapping each job attempt
+- **pollIntervalMs** — how often to poll for new jobs when no notify adapter is active (default: 60s)
+- **backoffConfig** — backoff for failed job attempts (default: 10s initial, 2x multiplier, 5min max)
+- **leaseConfig** — lease duration and renewal interval for job ownership (default: 60s lease, 30s renewal)
+- **attemptMiddlewares** — middlewares wrapping each job attempt
 
 ## InProcessWorkerProcessor
 
@@ -80,26 +80,26 @@ type AttemptHandler = (options: {
 }) => Promise<(ResolvedJobWithBlockers & { status: "completed" }) | ContinuationJobs>;
 ```
 
-**signal** -- a typed `AbortSignal` whose `reason` is a `JobAbortReason`: `"taken_by_another_worker"`, `"error"`, `"not_found"`, or `"already_completed"`. Check `signal.aborted` for early termination.
+**signal** — a typed `AbortSignal` whose `reason` is a `JobAbortReason`: `"taken_by_another_worker"`, `"error"`, `"not_found"`, or `"already_completed"`. Check `signal.aborted` for early termination.
 
-**job** -- the running job with its typed input and resolved blockers (as `CompletedJobChain[]`).
+**job** — the running job with its typed input and resolved blockers (as `CompletedJobChain[]`).
 
-**prepare** -- controls the processing mode. If never accessed, the worker auto-calls `prepare({ mode: "staged" })`.
+**prepare** — controls the processing mode. If never accessed, the worker infers the mode from how `complete` is called: synchronous `return complete(...)` → atomic; any `await` before `return complete(...)` → staged. See [Job Processing Modes](/queuert/guides/processing-modes/).
 
 ```typescript
-// Staged mode (default) -- prepare commits first, complete runs in a new transaction
-await prepare({ mode: "staged" });
-
-// Atomic mode -- prepare and complete share the same transaction
+// Atomic mode — prepare and complete share the same transaction
 await prepare({ mode: "atomic" });
 
-// With a callback -- runs within the prepare transaction
+// Staged mode — prepare commits first, complete runs in a new transaction
+await prepare({ mode: "staged" });
+
+// With a callback — runs within the prepare transaction
 const data = await prepare({ mode: "staged" }, async (tx) => {
   return await db.query("SELECT ...", { tx });
 });
 ```
 
-**complete** -- finalizes the job. Either return the output to complete the chain, or call `continueWith` to extend it.
+**complete** — finalizes the job. Either return the output to complete the chain, or call `continueWith` to extend it.
 
 ```typescript
 // Complete the chain with output
@@ -156,12 +156,12 @@ Defines a processor registry for a job type slice with full type inference. See 
 
 The following types are exported for use in type annotations:
 
-- **AttemptComplete** -- the typed `complete` function in `attemptHandler`
-- **AttemptCompleteCallback** -- the callback passed to `complete()`
-- **AttemptCompleteOptions** -- options received by the complete callback (`continueWith`, `transactionHooks`, tx context)
-- **AttemptPrepare** -- the typed `prepare` function in `attemptHandler`
-- **AttemptPrepareCallback** -- the callback passed to `prepare(options, callback)`
-- **AttemptPrepareOptions** -- `{ mode: "atomic" | "staged" }`
+- **AttemptComplete** — the typed `complete` function in `attemptHandler`
+- **AttemptCompleteCallback** — the callback passed to `complete()`
+- **AttemptCompleteOptions** — options received by the complete callback (`continueWith`, `transactionHooks`, tx context)
+- **AttemptPrepare** — the typed `prepare` function in `attemptHandler`
+- **AttemptPrepareCallback** — the callback passed to `prepare(options, callback)`
+- **AttemptPrepareOptions** — `{ mode: "atomic" | "staged" }`
 
 These are generic types parameterized over the state adapter and job type definitions.
 
@@ -188,10 +188,10 @@ type LeaseConfig = {
 
 ## See Also
 
-- [Client](/queuert/reference/queuert/client/) -- Client API reference
-- [Types](/queuert/reference/queuert/types/) -- Job, JobChain, and configuration types
-- [Utilities](/queuert/reference/queuert/utilities/) -- Composition helpers and utility functions
-- [Errors](/queuert/reference/queuert/errors/) -- Error classes reference
-- [In-Process Worker](/queuert/advanced/in-process-worker/) -- Worker lifecycle and concurrency model
-- [Job Processing](/queuert/advanced/job-processing/) -- Transactional design and prepare/complete pattern
-- [Processing Modes](/queuert/guides/processing-modes/) -- Atomic vs staged processing guide
+- [Client](/queuert/reference/queuert/client/) — Client API reference
+- [Types](/queuert/reference/queuert/types/) — Job, JobChain, and configuration types
+- [Utilities](/queuert/reference/queuert/utilities/) — Composition helpers and utility functions
+- [Errors](/queuert/reference/queuert/errors/) — Error classes reference
+- [In-Process Worker](/queuert/advanced/in-process-worker/) — Worker lifecycle and concurrency model
+- [Job Processing](/queuert/advanced/job-processing/) — Transactional design and prepare/complete pattern
+- [Processing Modes](/queuert/guides/processing-modes/) — Atomic vs staged processing guide

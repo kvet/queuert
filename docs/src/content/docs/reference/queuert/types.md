@@ -29,10 +29,10 @@ type JobTypeRegistry<
 
 The registry object accepted by `createClient` and `createInProcessWorker`.
 
-- **getTypeNames** -- returns the known type names; noop registries return `[]`, validated registries delegate to the config
-- **validateEntry** -- throws if the type name is not marked as an entry point
-- **parseInput** / **parseOutput** -- parse and return validated data, throwing on invalid shapes
-- **validateContinueWith** / **validateBlockers** -- verify chain-flow references at runtime
+- **getTypeNames** — returns the known type names; noop registries return `[]`, validated registries delegate to the config
+- **validateEntry** — throws if the type name is not marked as an entry point
+- **parseInput** / **parseOutput** — parse and return validated data, throwing on invalid shapes
+- **validateContinueWith** / **validateBlockers** — verify chain-flow references at runtime
 
 ### BaseJobTypeDefinition
 
@@ -48,11 +48,11 @@ type BaseJobTypeDefinition = {
 
 The shape of each job type in the type map passed to `defineJobTypeRegistry` or `createJobTypeRegistry`.
 
-- **entry** -- marks the type as a valid chain entry point
-- **input** -- required for every job type
-- **output** -- present on terminal jobs that produce a result
-- **continueWith** -- names the next job type in the chain
-- **blockers** -- declares external chain dependencies that must complete before the job runs
+- **entry** — marks the type as a valid chain entry point
+- **input** — required for every job type
+- **output** — present on terminal jobs that produce a result
+- **continueWith** — names the next job type in the chain
+- **blockers** — declares external chain dependencies that must complete before the job runs
 
 ### JobTypeRegistryDefinitions
 
@@ -242,8 +242,8 @@ type ScheduleOptions = { at: Date; afterMs?: never } | { at?: never; afterMs: nu
 
 Deferred job scheduling. The two fields are mutually exclusive.
 
-- **at** -- schedules for an absolute timestamp
-- **afterMs** -- schedules relative to the current time
+- **at** — schedules for an absolute timestamp
+- **afterMs** — schedules relative to the current time
 
 ### DeduplicationOptions
 
@@ -258,10 +258,10 @@ type DeduplicationOptions<TJobId> = {
 
 Chain deduplication configuration passed to `startJobChain`.
 
-- **key** -- identifies the logical operation
-- **scope** -- match incomplete chains only (`"incomplete"`, the default) or all chains within the time window (`"any"`)
-- **windowMs** -- required when scope is `"any"`
-- **excludeJobChainIds** -- chain IDs to exclude from deduplication matching; useful for recurring jobs that self-schedule within a completion callback where the current chain is still incomplete
+- **key** — identifies the logical operation
+- **scope** — match incomplete chains only (`"incomplete"`, the default) or all chains within the time window (`"any"`)
+- **windowMs** — required when scope is `"any"`
+- **excludeJobChainIds** — chain IDs to exclude from deduplication matching; useful for recurring jobs that self-schedule within a completion callback where the current chain is still incomplete
 
 ### BackoffConfig
 
@@ -275,9 +275,9 @@ type BackoffConfig = {
 
 Exponential backoff parameters.
 
-- **initialDelayMs** -- delay after the first failure
-- **maxDelayMs** -- caps the delay
-- **multiplier** -- controls exponential growth (default: `2.0`)
+- **initialDelayMs** — delay after the first failure
+- **maxDelayMs** — caps the delay
+- **multiplier** — controls exponential growth (default: `2.0`)
 
 ### RetryConfig
 
@@ -300,8 +300,8 @@ type LeaseConfig = {
 
 Controls job lease duration and renewal.
 
-- **leaseMs** -- total lease time granted to a worker
-- **renewIntervalMs** -- how often the worker renews the lease before it expires
+- **leaseMs** — total lease time granted to a worker
+- **renewIntervalMs** — how often the worker renews the lease before it expires
 
 ### TypedAbortSignal
 
@@ -321,10 +321,10 @@ type JobAbortReason = "taken_by_another_worker" | "error" | "not_found" | "alrea
 
 The possible abort reasons passed through `TypedAbortSignal` in worker job handlers.
 
-- **taken_by_another_worker** -- the lease was lost to another worker
-- **error** -- an internal failure occurred
-- **not_found** -- the job no longer exists
-- **already_completed** -- the job was already completed
+- **taken_by_another_worker** — the lease was lost to another worker
+- **error** — an internal failure occurred
+- **not_found** — the job no longer exists
+- **already_completed** — the job was already completed
 
 ## Logging
 
@@ -359,10 +359,10 @@ type HookDef<T> = {
 
 Exported from `@queuert/core`. Defines a single hook's state and lifecycle callbacks for use with `TransactionHooks`.
 
-- **state** -- mutable state accumulated during the transaction
-- **flush** -- executes the buffered side effects after the transaction commits
-- **discard** -- cleans up without executing side effects on rollback
-- **checkpoint** -- captures the current state for savepoint support. Returns a rollback function that restores the state to the checkpoint
+- **state** — mutable state accumulated during the transaction
+- **flush** — executes the buffered side effects after the transaction commits
+- **discard** — cleans up without executing side effects on rollback
+- **checkpoint** — captures the current state for savepoint support. Returns a rollback function that restores the state to the checkpoint
 
 See [Transaction Hooks Reference](/queuert/reference/queuert/transaction-hooks/) for `TransactionHooks`, `TransactionHooksSavepoint`, and usage details.
 

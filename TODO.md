@@ -6,7 +6,9 @@
 - [EPIC] multi-driver support for notify adapter
 - [EPIC] test against bun and its built-in sqlite, postgres, redis clients
 - [TASK] Name internal types properly. No underscore. Add to code-style guide.
+- [?,REF] Investigate `job_deduplication_idx` missing `chain_type_name` — dedup query scans all dedup matches across chain types before post-filtering. Likely fine under typical load, but worth measuring on a cross-type heavy workload. See publish readiness report Schema W1.
 - [TASK] Enforce json-serializable inputs and outputs (like no Date in job definitions) — see `design/json-serializable-types.md`
+- [?,REF] Investigate uuid7 (to support PG partitioning) in a separate partitioned adapter
 
 # Medium term
 
