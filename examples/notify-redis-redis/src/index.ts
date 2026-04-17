@@ -1,4 +1,4 @@
-import { type RedisNotifyProvider, createRedisNotifyAdapter } from "@queuert/redis";
+import { createRedisNotifyAdapter } from "@queuert/redis";
 import { RedisContainer } from "@testcontainers/redis";
 import {
   createClient,
@@ -8,7 +8,9 @@ import {
   withTransactionHooks,
 } from "queuert";
 import { createInProcessStateAdapter } from "queuert/internal";
-import { createClient as createRedisClient } from "redis";
+import { type RedisClientType, createClient as createRedisClient } from "redis";
+
+import { createNodeRedisNotifyProvider } from "./provider.js";
 
 // 1. Start Redis using testcontainers
 console.log("Starting Redis...");
@@ -16,33 +18,23 @@ const redisContainer = await new RedisContainer("redis:8").withExposedPorts(6379
 const redisUrl = redisContainer.getConnectionUrl();
 
 // 2. Create Redis connections
-const redis = createRedisClient({ url: redisUrl });
+const redis = createRedisClient({ url: redisUrl }) as RedisClientType;
 redis.on("error", (err) => {
   console.error("Redis Client Error", err);
 });
 await redis.connect();
 
-const redisSubscription = createRedisClient({ url: redisUrl });
+const redisSubscription = createRedisClient({ url: redisUrl }) as RedisClientType;
 redisSubscription.on("error", (err) => {
   console.error("Redis Subscription Error", err);
 });
 await redisSubscription.connect();
 
 // 3. Create the notify provider using node-redis
-const notifyProvider: RedisNotifyProvider = {
-  publish: async (channel, message) => {
-    await redis.publish(channel, message);
-  },
-  subscribe: async (channel, onMessage) => {
-    await redisSubscription.subscribe(channel, onMessage);
-    return async () => {
-      await redisSubscription.unsubscribe(channel);
-    };
-  },
-  eval: async (script, keys, args) => {
-    return redis.eval(script, { keys, arguments: args });
-  },
-};
+const notifyProvider = createNodeRedisNotifyProvider({
+  client: redis,
+  subscribeClient: redisSubscription,
+});
 
 // 4. Define job types
 const jobTypeRegistry = defineJobTypeRegistry<{

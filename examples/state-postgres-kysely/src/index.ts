@@ -1,4 +1,4 @@
-import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
+import { createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import { CompiledQuery, type Generated, Kysely, PostgresDialect } from "kysely";
 import { Pool } from "pg";
@@ -10,6 +10,8 @@ import {
   withTransactionHooks,
 } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
+
+import { createKyselyPgStateProvider } from "./provider.js";
 
 // 1. Start PostgreSQL using testcontainers
 const pgContainer = await new PostgreSqlContainer("postgres:18").withExposedPorts(5432).start();
@@ -49,16 +51,7 @@ const jobTypeRegistry = defineJobTypeRegistry<{
 }>();
 
 // 5. Create state provider for Kysely
-const stateProvider: PgStateProvider<{ db: Kysely<Database> }> = {
-  withTransaction: async (cb) => db.transaction().execute(async (txDb) => cb({ db: txDb })),
-  executeSql: async ({ txCtx, sql, params }) => {
-    if (txCtx && !txCtx.db.isTransaction) {
-      throw new Error("Provided context is not in a transaction");
-    }
-    const result = await (txCtx?.db ?? db).executeQuery(CompiledQuery.raw(sql, params));
-    return result.rows;
-  },
-};
+const stateProvider = createKyselyPgStateProvider({ db });
 
 // 6. Create adapters and queuert client/worker
 const stateAdapter = await createPgStateAdapter({

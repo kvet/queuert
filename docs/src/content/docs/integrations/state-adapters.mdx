@@ -65,6 +65,27 @@ A State Provider bridges your database client (Kysely, Drizzle, Prisma, raw driv
 
 Each example linked above demonstrates a complete State Provider implementation for its corresponding ORM or driver.
 
+You're not limited to the ORMs and drivers listed here — you can write a provider for any database client that supports the same semantics, or implement the `StateAdapter` interface from scratch for an entirely different database engine. See [Custom Adapters](/queuert/advanced/custom-adapters/) for a walkthrough.
+
+## Verify your provider
+
+Queuert ships a conformance runner that exercises the 106-case state adapter suite against any provider you build. Embed it in a single `test()` block from your test framework to validate correctness:
+
+```ts
+import { runStateAdapterConformance } from "queuert/conformance";
+
+test("my provider passes state adapter conformance", async () => {
+  await runStateAdapterConformance(async () => ({
+    stateAdapter,
+    poisonTransaction,
+    reset: async () => { /* truncate tables */ },
+    dispose: async () => { /* close connections */ },
+  }));
+}, 300_000);
+```
+
+Every example's `src/provider.spec.ts` is a working template. See the [Custom Adapters](/queuert/advanced/custom-adapters/) guide for a full walkthrough and the [Conformance reference](/queuert/reference/queuert/conformance/) for the complete API.
+
 ## Multi-worker deployment
 
 For horizontal scaling, multiple worker processes can share the same PostgreSQL database. Workers coordinate via `FOR UPDATE SKIP LOCKED` -- no external coordination required.

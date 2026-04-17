@@ -1,6 +1,6 @@
-import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
+import { createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
-import { Pool, type PoolClient } from "pg";
+import { Pool } from "pg";
 import {
   createClient,
   createInProcessWorker,
@@ -9,6 +9,8 @@ import {
   withTransactionHooks,
 } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
+
+import { createPgPoolStateProvider } from "./provider.js";
 
 // 1. Start PostgreSQL using testcontainers
 const pgContainer = await new PostgreSqlContainer("postgres:18").withExposedPorts(5432).start();
@@ -37,37 +39,7 @@ const jobTypeRegistry = defineJobTypeRegistry<{
 }>();
 
 // 4. Create state provider for pg
-type DbContext = { poolClient: PoolClient };
-
-const stateProvider: PgStateProvider<DbContext> = {
-  withTransaction: async (cb) => {
-    const poolClient = await db.connect();
-    try {
-      await poolClient.query("BEGIN");
-      const result = await cb({ poolClient });
-      await poolClient.query("COMMIT");
-      return result;
-    } catch (error) {
-      await poolClient.query("ROLLBACK").catch(() => {});
-      throw error;
-    } finally {
-      poolClient.release();
-    }
-  },
-  executeSql: async ({ txCtx, sql, params }) => {
-    if (txCtx) {
-      const result = await txCtx.poolClient.query(sql, params);
-      return result.rows;
-    }
-    const poolClient = await db.connect();
-    try {
-      const result = await poolClient.query(sql, params);
-      return result.rows;
-    } finally {
-      poolClient.release();
-    }
-  },
-};
+const stateProvider = createPgPoolStateProvider({ pool: db });
 
 // 5. Create adapters and queuert client/worker
 const stateAdapter = await createPgStateAdapter({

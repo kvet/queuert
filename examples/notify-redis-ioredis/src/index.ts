@@ -1,4 +1,4 @@
-import { type RedisNotifyProvider, createRedisNotifyAdapter } from "@queuert/redis";
+import { createRedisNotifyAdapter } from "@queuert/redis";
 import { RedisContainer } from "@testcontainers/redis";
 import { Redis } from "ioredis";
 import {
@@ -9,6 +9,8 @@ import {
   withTransactionHooks,
 } from "queuert";
 import { createInProcessStateAdapter } from "queuert/internal";
+
+import { createIoredisNotifyProvider } from "./provider.js";
 
 // 1. Start Redis using testcontainers
 console.log("Starting Redis...");
@@ -27,32 +29,10 @@ redisSubscription.on("error", (err: Error) => {
 });
 
 // 3. Create the notify provider using ioredis
-// ioredis uses a single 'message' event for all subscriptions
-const channelHandlers = new Map<string, (message: string) => void>();
-
-redisSubscription.on("message", (channel: string, message: string) => {
-  const handler = channelHandlers.get(channel);
-  if (handler) {
-    handler(message);
-  }
+const notifyProvider = createIoredisNotifyProvider({
+  client: redis,
+  subscribeClient: redisSubscription,
 });
-
-const notifyProvider: RedisNotifyProvider = {
-  publish: async (channel, message) => {
-    await redis.publish(channel, message);
-  },
-  subscribe: async (channel, onMessage) => {
-    channelHandlers.set(channel, onMessage);
-    await redisSubscription.subscribe(channel);
-    return async () => {
-      await redisSubscription.unsubscribe(channel);
-      channelHandlers.delete(channel);
-    };
-  },
-  eval: async (script, keys, args) => {
-    return redis.eval(script, keys.length, ...keys, ...args);
-  },
-};
 
 // 4. Define job types
 const jobTypeRegistry = defineJobTypeRegistry<{

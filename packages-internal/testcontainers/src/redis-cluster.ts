@@ -8,7 +8,6 @@ const CONTAINER_NAME = "queuert-redis-cluster-test";
 /**
  * Port layout used by `grokzen/redis-cluster`:
  *   - Redis client ports: INITIAL_PORT .. INITIAL_PORT+5  (6 nodes: 3 masters + 3 replicas)
- *   - Cluster bus ports:  INITIAL_PORT+10000 .. (+5)      (required so nodes can gossip)
  *
  * The image advertises nodes using the value of $IP. Setting IP=0.0.0.0 lets us rewrite
  * advertised addresses via node-redis's `nodeAddressMap` so the cluster is reachable
@@ -16,7 +15,6 @@ const CONTAINER_NAME = "queuert-redis-cluster-test";
  */
 const INITIAL_PORT = 7000;
 const NODE_PORTS = [0, 1, 2, 3, 4, 5].map((i) => INITIAL_PORT + i);
-const BUS_PORTS = NODE_PORTS.map((p) => p + 10000);
 
 export type RedisClusterConnection = {
   /** Root node URLs with host-reachable ports, suitable for `createCluster`. */
@@ -42,14 +40,14 @@ export const extendWithRedisCluster = <T>(
         new GenericContainer("grokzen/redis-cluster:7.0.10")
           .withName(CONTAINER_NAME)
           .withLabels({ label: CONTAINER_NAME })
-          .withExposedPorts(...NODE_PORTS, ...BUS_PORTS)
+          .withExposedPorts(...NODE_PORTS)
           .withEnvironment({
             IP: "0.0.0.0",
             INITIAL_PORT: String(INITIAL_PORT),
             MASTERS: "3",
             SLAVES_PER_MASTER: "1",
           })
-          .withWaitStrategy(Wait.forLogMessage(/Cluster state changed: ok/i, 3))
+          .withWaitStrategy(Wait.forLogMessage(/Cluster state changed: ok/i, 6))
           .withStartupTimeout(120_000)
           .withReuse()
           .start(),

@@ -1,14 +1,15 @@
 # Short term
 
+- [TASK] Write a guide on achieving job prioritization without a built-in priority field — specialized workers per tier (current recommended pattern), tradeoffs vs. a single worker pool, interaction with chains/blockers/dedup, and when to reach for multiple clients vs. multiple job types on one client
+- [TASK] Publish an in-process notify adapter (mirror of `createInProcessStateAdapter`) so single-process apps don't need pg/redis for notification; not internals use in examples
 - [TASK] Change attemptMiddleware to wrapAttemptHandler, wrapPrepare, wrapCompleteHandler, etc. to allow more flexible middleware that can add additional parameters (e.g. context) and is not limited to the acquire+execute+complete flow — see `design/handler-wrapping.md`
 - [TASK] Support `triggerJobs` (plural) and `deleteJobChain` (singular) — see `design/trigger-jobs-delete-job-chain.md`
-- [EPIC] Multi-driver support (postgres.js) — branch `feat/multi-driver-support`. Experimental; needs review before merge (type safety regression in executeTypedSql, missing resilience test coverage for postgres.js)
-- [EPIC] multi-driver support for notify adapter
 - [EPIC] test against bun and its built-in sqlite, postgres, redis clients
 - [TASK] Name internal types properly. No underscore. Add to code-style guide.
 - [?,REF] Investigate `job_deduplication_idx` missing `chain_type_name` — dedup query scans all dedup matches across chain types before post-filtering. Likely fine under typical load, but worth measuring on a cross-type heavy workload. See publish readiness report Schema W1.
 - [TASK] Enforce json-serializable inputs and outputs (like no Date in job definitions) — see `design/json-serializable-types.md`
 - [?,REF] Investigate uuid7 (to support PG partitioning) in a separate partitioned adapter
+- [?,REF] Investigate adding `close()` to all provider interfaces (Pg/Sqlite state, Pg/Redis notify) and propagating it to the adapter. Today only `PgPoolNotifyProvider` exposes `close()` as an intersection type; callers have to know which provider variant they hold to release internally-held resources (dedicated LISTEN clients, prepared-statement caches, background pollers). Lifting it to the base interface would make teardown uniform — but only if there's a real resource to release (postgres.js doesn't need it since `sql` is caller-owned). Decide: keep opt-in intersection vs. base contract that's a no-op for pass-through providers
 
 # Medium term
 
@@ -30,16 +31,21 @@
 - [TASK,COMPLEX] Optimized batched lease renewal
 - [EPIC] MCP server
 - [EPIC] Sqlite ready:
+  - [TASK,EASY] Add `example-state-sqlite-multi-worker` — mirror of `state-postgres-multi-worker` using sqlite (probably file-backed WAL so workers share a DB)
   - [REF] Cache prepared statements in examples — `executeSql` calls `database.prepare(sql)` on every invocation; cache by SQL string to avoid re-parsing
   - [REF] Batch `createJobs` deduplication/continuation checks — currently loops per-job with `findExistingContinuationSql`/`findDeduplicatedJobSql`, O(N) round-trips
   - [REF] Batch `addJobsBlockers` — currently 3-4 sequential queries per jobBlocker entry, O(N) round-trips
   - [REF] Better concurrency handling - WAL mode, busy timeout, retries
   - [REF] Separate read/write connection pools (single writer, multiple readers)
-  - [REF] usage of db without pool is incorrect
+  - [REF] Stop prescribing `createAsyncLock` as the sqlite transaction model. Every sqlite example currently wires a shared async lock between the provider's `withTransaction` and user-initiated transactions on the same connection — because they share one `better-sqlite3`/`node:sqlite` connection and SQLite allows only one active tx per connection. This is boilerplate users rewrite (and get wrong: better-sqlite3 example had the lock split across instances, kysely example omits the lock on the user-side `db.transaction()` entirely — latent race). The provider contract is just "`withTransaction` gives exclusive atomic access"; how the user achieves that is their concern (pool, WAL + connection-per-tx, ORM-native transactions, etc.). Concretely:
+    - Rewrite sqlite examples to show production-realistic patterns: file DB + `journal_mode=WAL` + `busy_timeout`, and either connection-per-transaction or a small pool. No `createAsyncLock` in user-facing code.
+    - Remove/soften the docs prescription at `docs/src/content/docs/advanced/sqlite-internals.md` ("Custom `SqliteStateProvider` implementations must use `createAsyncLock()`") — describe the contract, not one implementation strategy.
+    - Stop re-exporting `createAsyncLock` from `@queuert/sqlite` (or mark internal). Keeping it exported signals that it's part of the intended extension path.
   - [TASK,EASY] Validate `PRAGMA foreign_keys = ON` at adapter init (FK on `job_blocker.blocked_by_chain_id` requires it)
   - [TASK,EASY] get rid of skipConcurrencyTests flag in resilience tests (separate test suite?)
   - [REF] `deleteJobChains` race condition under WAL mode — check-then-delete without row locking; document single-writer assumption or use `BEGIN IMMEDIATE` transactions
 - [EPIC] MySQL/MariaDB adapter
+- [EPIC] Built-in job priority — add `priority` field to job schema + secondary sort in acquisition query (composite index `(type_name, priority DESC, scheduled_at ASC) WHERE status = 'pending'`). Design decisions: starvation mitigation (aging? document footgun?), dedup + priority interaction (upgrade semantics when re-enqueuing existing dedup key at higher priority), chain priority inheritance, API surface on `createJob`/`triggerJob`. Backward compatible via `DEFAULT 0`
 - [?,TASK,MEDIUM] update lease in one operation (currently two: getForUpdate + update)
 - [?,REF] Skip unnecessary state adapter calls per processing mode (atomic: no renewJobLease; staged: no getJobForUpdate before complete). Processor-level change, no adapter interface changes needed. See: `process-modes.test-suite.ts` TODOs
 

@@ -1,8 +1,8 @@
-import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
+import { createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
-import { type ExtractTablesWithRelations, sql } from "drizzle-orm";
-import { type NodePgQueryResultHKT, drizzle } from "drizzle-orm/node-postgres";
-import { type PgTransaction, pgTable, serial, text } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { pgTable, serial, text } from "drizzle-orm/pg-core";
 import { Pool } from "pg";
 import {
   createClient,
@@ -12,6 +12,8 @@ import {
   withTransactionHooks,
 } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
+
+import { createDrizzlePgStateProvider } from "./provider.js";
 
 // 1. Start PostgreSQL using testcontainers
 const pgContainer = await new PostgreSqlContainer("postgres:18").withExposedPorts(5432).start();
@@ -51,25 +53,7 @@ const jobTypeRegistry = defineJobTypeRegistry<{
 }>();
 
 // 5. Create state provider for Drizzle
-type DbTransaction = PgTransaction<
-  NodePgQueryResultHKT,
-  typeof schema,
-  ExtractTablesWithRelations<typeof schema>
->;
-type DbContext = { tx: DbTransaction };
-
-const stateProvider: PgStateProvider<DbContext> = {
-  withTransaction: async (cb) => {
-    return db.transaction(async (tx) => cb({ tx }));
-  },
-  executeSql: async ({ txCtx, sql, params }) => {
-    // Inside transaction: access Drizzle's internal pg client
-    // Outside transaction (migrations): use db.$client (the pool)
-    const client = txCtx ? (txCtx.tx as any).session.client : (db as any).$client;
-    const result = await client.query(sql, params);
-    return result.rows;
-  },
-};
+const stateProvider = createDrizzlePgStateProvider({ db });
 
 // 6. Create adapters and queuert client/worker
 const stateAdapter = await createPgStateAdapter({

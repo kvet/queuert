@@ -83,12 +83,10 @@ Adapter packages use their domain-specific prefixes (not "Queuert"):
 | `@queuert/postgres`  | `createPgNotifyAdapter`          | -                     |
 | `@queuert/postgres`  | -                                | `PgStateProvider`     |
 | `@queuert/postgres`  | -                                | `PgNotifyProvider`    |
-| `@queuert/postgres`  | `pgLiteral`                      | -                     |
 | `@queuert/postgres`  | -                                | `MigrationResult`     |
 | `@queuert/sqlite`    | `createSqliteStateAdapter`       | `SqliteStateAdapter`  |
 | `@queuert/sqlite`    | -                                | `SqliteStateProvider` |
 | `@queuert/sqlite`    | `createAsyncLock`                | `AsyncLock`           |
-| `@queuert/sqlite`    | `sqliteLiteral`                  | -                     |
 | `@queuert/sqlite`    | -                                | `MigrationResult`     |
 | `@queuert/redis`     | `createRedisNotifyAdapter`       | `RedisNotifyProvider` |
 | `@queuert/nats`      | `createNatsNotifyAdapter`        | -                     |

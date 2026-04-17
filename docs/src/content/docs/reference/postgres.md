@@ -72,18 +72,6 @@ type PgNotifyProvider = {
 };
 ```
 
-## pgLiteral
-
-:::caution
-This API is experimental and may change without notice.
-:::
-
-**pgLiteral** — SQL literal escaping. Use when ORMs require raw SQL strings (e.g., Prisma's `$queryRawUnsafe`, Drizzle's `sql.raw()`):
-
-```typescript
-function pgLiteral(value: unknown): string;
-```
-
 ## MigrationResult
 
 ```typescript

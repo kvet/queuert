@@ -1,3 +1,4 @@
+import { type RuntimeType } from "@queuert/typed-sql";
 import { type BaseTxContext } from "queuert";
 
 /**
@@ -32,12 +33,14 @@ export type SqliteStateProvider<TTxContext extends BaseTxContext> = {
    * Executes a SQL query.
    * When txCtx is provided, uses that transaction connection.
    * When txCtx is omitted, acquires a connection, executes, and releases.
-   * @param options.returns - Whether the query returns rows
+   *
+   * When `columnTypes` is non-empty the query returns rows (use `.all()`);
+   * when empty the query is a mutation (use `.run()` / `.exec()`).
    */
   executeSql: (options: {
     txCtx?: TTxContext;
     sql: string;
     params?: unknown[];
-    returns: boolean;
+    columnTypes: Record<string, RuntimeType>;
   }) => Promise<unknown[]>;
 };

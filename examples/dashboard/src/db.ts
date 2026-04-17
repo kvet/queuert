@@ -1,11 +1,10 @@
 import { join } from "node:path";
 
-import { type SqliteStateProvider, createAsyncLock } from "@queuert/sqlite";
+import { createAsyncLock } from "@queuert/sqlite";
 import Database from "better-sqlite3";
+import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
 
 const DB_PATH = join(import.meta.dirname, "..", "data.db");
-
-type DbContext = { db: Database.Database };
 
 export const createDatabase = (): Database.Database => {
   const db = new Database(DB_PATH);
@@ -15,66 +14,7 @@ export const createDatabase = (): Database.Database => {
   return db;
 };
 
-export const createStateProvider = (db: Database.Database): SqliteStateProvider<DbContext> => {
+export const createStateProvider = (db: Database.Database) => {
   const lock = createAsyncLock();
-
-  return {
-    withTransaction: async (fn) => {
-      await lock.acquire();
-      try {
-        db.exec("BEGIN IMMEDIATE");
-        const result = await fn({ db });
-        db.exec("COMMIT");
-        return result;
-      } catch (error) {
-        if (db.inTransaction) {
-          try {
-            db.exec("ROLLBACK");
-          } catch {
-            // ignore rollback errors
-          }
-        }
-        throw error;
-      } finally {
-        lock.release();
-      }
-    },
-    executeSql: async ({ txCtx, sql, params, returns }) => {
-      const executeRaw = ({
-        database,
-        sql,
-        params,
-        returns,
-      }: {
-        database: Database.Database;
-        sql: string;
-        params?: unknown[];
-        returns: boolean;
-      }) => {
-        if (returns) {
-          const stmt = database.prepare(sql);
-          return stmt.all(...(params ?? []));
-        } else {
-          if (params && params.length > 0) {
-            const stmt = database.prepare(sql);
-            stmt.run(...params);
-          } else {
-            database.exec(sql);
-          }
-          return [];
-        }
-      };
-
-      if (txCtx) {
-        return executeRaw({ database: txCtx.db, sql, params, returns });
-      }
-
-      await lock.acquire();
-      try {
-        return executeRaw({ database: db, sql, params, returns });
-      } finally {
-        lock.release();
-      }
-    },
-  };
+  return createBetterSqlite3StateProvider({ db, lock });
 };

@@ -1,5 +1,6 @@
-import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
+import { createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
+import { createPostgresJsStateProvider } from "example-state-postgres-postgres-js/provider";
 import postgres from "postgres";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 
@@ -13,18 +14,7 @@ console.log("\nStarting PostgreSQL container...");
 const pgContainer = await new PostgreSqlContainer("postgres:18").withExposedPorts(5432).start();
 
 const sql = postgres(pgContainer.getConnectionUri(), { max: 20 });
-
-type DbContext = { sql: typeof sql };
-const stateProvider: PgStateProvider<DbContext> = {
-  withTransaction: async (cb) =>
-    sql.begin(async (txSql) => cb({ sql: txSql as unknown as typeof sql }) as any),
-  executeSql: async ({ txCtx, sql: query, params }) => {
-    const sqlClient = txCtx?.sql ?? sql;
-    const normalizedParams = params ? params.map((p) => (p === undefined ? null : p)) : [];
-    const result = await sqlClient.unsafe(query, normalizedParams as never[]);
-    return result as Record<string, unknown>[];
-  },
-};
+const stateProvider = createPostgresJsStateProvider({ sql });
 
 const stateAdapter = await createPgStateAdapter({ stateProvider, schema: "public" });
 await stateAdapter.migrateToLatest();

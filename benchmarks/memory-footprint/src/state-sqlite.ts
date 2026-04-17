@@ -2,19 +2,16 @@
  * SQLite State Adapter Memory Measurement
  */
 
-import {
-  type SqliteStateProvider,
-  createAsyncLock,
-  createSqliteStateAdapter,
-} from "@queuert/sqlite";
+import { createSqliteStateAdapter } from "@queuert/sqlite";
 import Database from "better-sqlite3";
+import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
 import {
   createClient,
   createInProcessWorker,
   createJobTypeProcessorRegistry,
   withTransactionHooks,
 } from "queuert";
-import { createInProcessNotifyAdapter } from "queuert/internal";
+import { createAsyncLock, createInProcessNotifyAdapter } from "queuert/internal";
 
 import {
   diffMemory,
@@ -29,8 +26,6 @@ printHeader("SQLITE STATE ADAPTER");
 
 const baseline = await measureBaseline();
 
-type DbContext = { db: Database.Database };
-
 const [beforeDb, afterDb, db] = await measureMemory(async () => {
   const db = new Database(":memory:");
   db.pragma("auto_vacuum = INCREMENTAL");
@@ -40,47 +35,7 @@ const [beforeDb, afterDb, db] = await measureMemory(async () => {
 console.log("\nAfter creating better-sqlite3 database:");
 diffMemory(beforeDb, afterDb);
 
-const lock = createAsyncLock();
-
-const stateProvider: SqliteStateProvider<DbContext> = {
-  withTransaction: async (fn) => {
-    await lock.acquire();
-    try {
-      db.exec("BEGIN IMMEDIATE");
-      try {
-        const result = await fn({ db });
-        db.exec("COMMIT");
-        return result;
-      } catch (error) {
-        if (db.inTransaction) {
-          try {
-            db.exec("ROLLBACK");
-          } catch {
-            // ignore rollback errors
-          }
-        }
-        throw error;
-      }
-    } finally {
-      lock.release();
-    }
-  },
-  executeSql: async ({ txCtx, sql, params, returns }) => {
-    const database = txCtx?.db ?? db;
-    if (returns) {
-      const stmt = database.prepare(sql);
-      return stmt.all(...(params ?? [])) as Record<string, unknown>[];
-    } else {
-      if (params && params.length > 0) {
-        const stmt = database.prepare(sql);
-        stmt.run(...params);
-      } else {
-        database.exec(sql);
-      }
-      return [];
-    }
-  },
-};
+const stateProvider = createBetterSqlite3StateProvider({ db, lock: createAsyncLock() });
 
 const notifyAdapter = createInProcessNotifyAdapter();
 const [beforeAdapter, afterAdapter, stateAdapter] = await measureMemory(async () => {

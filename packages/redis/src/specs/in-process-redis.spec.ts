@@ -1,4 +1,4 @@
-import { TESTCONTAINER_RESOURCE_TYPES, extendWithRedis } from "@queuert/testcontainers";
+import { TESTCONTAINERS_RESOURCE_TYPES, extendWithRedis } from "@queuert/testcontainers";
 import {
   extendWithCommon,
   extendWithResourceLeakDetection,
@@ -8,13 +8,13 @@ import {
 } from "queuert/testing";
 import { describe, it } from "vitest";
 
-import { extendWithNotifyRedis } from "./notify-adapter.redis.spec-helper.js";
+import { extendWithNotifyRedis } from "./notify-adapter.node-redis.spec-helper.js";
 
 const inProcessInProcessIt = extendWithResourceLeakDetection(
   extendWithNotifyRedis(
     extendWithRedis(extendWithCommon(extendWithStateInProcess(it)), import.meta.url),
   ),
-  { additionalAllowedTypes: TESTCONTAINER_RESOURCE_TYPES },
+  { additionalAllowedTypes: TESTCONTAINERS_RESOURCE_TYPES },
 );
 
 // NOTE: hack for vitest plugin

@@ -1,0 +1,30 @@
+{
+  "name": "example-notify-redis-cluster-ioredis",
+  "version": "0.0.1",
+  "private": true,
+  "description": "An example demonstrating the Redis notify adapter with an ioredis cluster.",
+  "license": "MIT",
+  "author": "kvet",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kvet/queuert.git"
+  },
+  "type": "module",
+  "exports": {
+    "./provider": "./src/provider.ts"
+  },
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "test": "vitest --run",
+    "typecheck": "tsgo --noEmit"
+  },
+  "devDependencies": {
+    "@queuert/redis": "workspace:*",
+    "@queuert/tsconfig": "workspace:*",
+    "ioredis": "5.10.1",
+    "queuert": "workspace:*",
+    "testcontainers": "11.14.0",
+    "tsx": "4.21.0",
+    "vitest": "4.1.4"
+  }
+}

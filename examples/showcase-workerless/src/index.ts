@@ -10,13 +10,11 @@
 
 import assert from "node:assert/strict";
 
-import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
+import { createPgNotifyAdapter, createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
-import postgres, {
-  type PendingQuery,
-  type Row,
-  type TransactionSql as _TransactionSql,
-} from "postgres";
+import { createPostgresJsNotifyProvider } from "example-notify-postgres-postgres-js/provider";
+import { createPostgresJsStateProvider } from "example-state-postgres-postgres-js/provider";
+import postgres from "postgres";
 import {
   createClient,
   createInProcessWorker,
@@ -24,16 +22,6 @@ import {
   defineJobTypeRegistry,
   withTransactionHooks,
 } from "queuert";
-import { createInProcessNotifyAdapter } from "queuert/internal";
-
-type TransactionSql = _TransactionSql & {
-  <T extends readonly (object | undefined)[] = Row[]>(
-    template: TemplateStringsArray,
-    ...parameters: readonly postgres.ParameterOrFragment<never>[]
-  ): PendingQuery<T>;
-};
-
-type DbContext = { sql: TransactionSql };
 
 const jobTypeRegistry = defineJobTypeRegistry<{
   /*
@@ -77,28 +65,11 @@ const jobTypeRegistry = defineJobTypeRegistry<{
 const pgContainer = await new PostgreSqlContainer("postgres:18").withExposedPorts(5432).start();
 const sql = postgres(pgContainer.getConnectionUri(), { max: 10 });
 
-const stateProvider: PgStateProvider<DbContext> = {
-  withTransaction: async (cb) =>
-    sql.begin(async (txSql) => cb({ sql: txSql as TransactionSql }) as any),
-  withSavepoint: async (txCtx, fn) =>
-    txCtx.sql.savepoint(async (savepointSql) => fn({ sql: savepointSql as TransactionSql })) as any,
-  executeSql: async ({ txCtx, sql: query, params }) => {
-    const client = txCtx?.sql ?? sql;
-    return client.unsafe(
-      query,
-      (params ?? []).map((p) => (p === undefined ? null : p)) as (
-        | string
-        | number
-        | boolean
-        | null
-      )[],
-    );
-  },
-};
-
+const stateProvider = createPostgresJsStateProvider({ sql });
 const stateAdapter = await createPgStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
-const notifyAdapter = createInProcessNotifyAdapter();
+const notifyProvider = createPostgresJsNotifyProvider({ sql });
+const notifyAdapter = await createPgNotifyAdapter({ provider: notifyProvider });
 
 const client = await createClient({
   stateAdapter,
@@ -145,24 +116,22 @@ console.log("\n--- Scenario 1a: Approval Workflow (Approved) ---");
 console.log("Job is completed externally before worker timeout.\n");
 
 const approval1 = await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (_sql) => {
-    const txSql = _sql as TransactionSql;
-    return client.startJobChain({
+  sql.begin(async (txSql) =>
+    client.startJobChain({
       sql: txSql,
       transactionHooks,
       typeName: "await-approval",
       input: { requestId: "req-001", requester: "alice" },
       schedule: { afterMs: 5000 }, // Would auto-reject after 5s
-    });
-  }),
+    }),
+  ),
 );
 console.log(`Created approval request: ${approval1.id} (scheduled for 5s timeout)`);
 
 console.log(`Approving externally...`);
 await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (_sql) => {
-    const txSql = _sql as TransactionSql;
-    return client.completeJobChain({
+  sql.begin(async (txSql) =>
+    client.completeJobChain({
       sql: txSql,
       transactionHooks,
       id: approval1.id,
@@ -176,8 +145,8 @@ await withTransactionHooks(async (transactionHooks) =>
           }),
         );
       },
-    });
-  }),
+    }),
+  ),
 );
 
 const result1 = await client.awaitJobChain(approval1, { timeoutMs: 10000 });
@@ -189,24 +158,22 @@ console.log("\n--- Scenario 1b: Approval Workflow (Rejected) ---");
 console.log("Job is rejected externally.\n");
 
 const approval2 = await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (_sql) => {
-    const txSql = _sql as TransactionSql;
-    return client.startJobChain({
+  sql.begin(async (txSql) =>
+    client.startJobChain({
       sql: txSql,
       transactionHooks,
       typeName: "await-approval",
       input: { requestId: "req-002", requester: "bob" },
       schedule: { afterMs: 5000 },
-    });
-  }),
+    }),
+  ),
 );
 console.log(`Created approval request: ${approval2.id}`);
 
 console.log(`Rejecting externally...`);
 await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (_sql) => {
-    const txSql = _sql as TransactionSql;
-    return client.completeJobChain({
+  sql.begin(async (txSql) =>
+    client.completeJobChain({
       sql: txSql,
       transactionHooks,
       id: approval2.id,
@@ -215,8 +182,8 @@ await withTransactionHooks(async (transactionHooks) =>
         if (job.typeName !== "await-approval") return;
         await complete(job, async () => ({ rejected: true, reason: "manager_denied" }));
       },
-    });
-  }),
+    }),
+  ),
 );
 
 const result2 = await client.awaitJobChain(approval2, { timeoutMs: 10000 });
@@ -229,24 +196,22 @@ console.log("\n--- Scenario 2: Deferred Start with Early Completion ---");
 console.log("Job scheduled to expire, but completed early.\n");
 
 const action = await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (_sql) => {
-    const txSql = _sql as TransactionSql;
-    return client.startJobChain({
+  sql.begin(async (txSql) =>
+    client.startJobChain({
       sql: txSql,
       transactionHooks,
       typeName: "pending-action",
       input: { actionId: "action-001", expiresInMs: 5000 },
       schedule: { afterMs: 5000 }, // Would expire after 5s
-    });
-  }),
+    }),
+  ),
 );
 console.log(`Created pending action: ${action.id} (expires in 5s)`);
 
 console.log(`Completing early...`);
 await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (_sql) => {
-    const txSql = _sql as TransactionSql;
-    return client.completeJobChain({
+  sql.begin(async (txSql) =>
+    client.completeJobChain({
       sql: txSql,
       transactionHooks,
       id: action.id,
@@ -255,8 +220,8 @@ await withTransactionHooks(async (transactionHooks) =>
         if (job.typeName !== "pending-action") return;
         await complete(job, async () => ({ completed: true, result: "User clicked confirm" }));
       },
-    });
-  }),
+    }),
+  ),
 );
 
 const result3 = await client.awaitJobChain(action, { timeoutMs: 10000 });

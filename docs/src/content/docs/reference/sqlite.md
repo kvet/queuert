@@ -35,26 +35,19 @@ type SqliteStateAdapter = StateAdapter & {
 
 ## SqliteStateProvider
 
-**SqliteStateProvider** — you implement this to bridge your SQLite client (`node:sqlite`, `better-sqlite3`, ORMs, etc.). Note the extra `returns` parameter compared to `PgStateProvider`:
+**SqliteStateProvider** — you implement this to bridge your SQLite client (`node:sqlite`, `better-sqlite3`, ORMs, etc.). Note the extra `columnTypes` parameter compared to `PgStateProvider`:
 
 ```typescript
 type SqliteStateProvider<TTxContext> = {
   withTransaction: <T>(fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
+  withSavepoint?: <T>(txCtx: TTxContext, fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
   executeSql: (options: {
     txCtx?: TTxContext;
     sql: string;
     params?: unknown[];
-    returns: boolean; // Whether the SQL returns rows
+    columnTypes: Record<string, RuntimeType>; // Non-empty when the query returns rows
   }) => Promise<unknown[]>;
 };
-```
-
-## sqliteLiteral
-
-**sqliteLiteral** — SQL literal escaping for ORM compatibility:
-
-```typescript
-function sqliteLiteral(value: unknown): string;
 ```
 
 ## createAsyncLock / AsyncLock

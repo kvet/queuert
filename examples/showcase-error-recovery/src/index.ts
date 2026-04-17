@@ -12,13 +12,11 @@
 
 import assert from "node:assert/strict";
 
-import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
+import { createPgNotifyAdapter, createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
-import postgres, {
-  type PendingQuery,
-  type Row,
-  type TransactionSql as _TransactionSql,
-} from "postgres";
+import { createPostgresJsNotifyProvider } from "example-notify-postgres-postgres-js/provider";
+import { createPostgresJsStateProvider } from "example-state-postgres-postgres-js/provider";
+import postgres from "postgres";
 import {
   createClient,
   createInProcessWorker,
@@ -26,16 +24,6 @@ import {
   defineJobTypeRegistry,
   withTransactionHooks,
 } from "queuert";
-import { createInProcessNotifyAdapter } from "queuert/internal";
-
-type TransactionSql = _TransactionSql & {
-  <T extends readonly (object | undefined)[] = Row[]>(
-    template: TemplateStringsArray,
-    ...parameters: readonly postgres.ParameterOrFragment<never>[]
-  ): PendingQuery<T>;
-};
-
-type DbContext = { sql: TransactionSql };
 
 const jobTypeRegistry = defineJobTypeRegistry<{
   /*
@@ -88,28 +76,11 @@ let externalApiShouldFail = true;
 const pgContainer = await new PostgreSqlContainer("postgres:18").withExposedPorts(5432).start();
 const sql = postgres(pgContainer.getConnectionUri(), { max: 10 });
 
-const stateProvider: PgStateProvider<DbContext> = {
-  withTransaction: async (cb) =>
-    sql.begin(async (txSql) => cb({ sql: txSql as TransactionSql }) as any),
-  withSavepoint: async (txCtx, fn) =>
-    txCtx.sql.savepoint(async (savepointSql) => fn({ sql: savepointSql as TransactionSql })) as any,
-  executeSql: async ({ txCtx, sql: query, params }) => {
-    const client = txCtx?.sql ?? sql;
-    return client.unsafe(
-      query,
-      (params ?? []).map((p) => (p === undefined ? null : p)) as (
-        | string
-        | number
-        | boolean
-        | null
-      )[],
-    );
-  },
-};
-
+const stateProvider = createPostgresJsStateProvider({ sql });
 const stateAdapter = await createPgStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
-const notifyAdapter = createInProcessNotifyAdapter();
+const notifyProvider = createPostgresJsNotifyProvider({ sql });
+const notifyAdapter = await createPgNotifyAdapter({ provider: notifyProvider });
 
 await sql`
   CREATE TABLE IF NOT EXISTS accounts (
@@ -142,9 +113,9 @@ const worker = await createInProcessWorker({
             `  [transfer-funds] Attempt ${job.attempt}: transferring $${job.input.amount}`,
           );
 
-          return complete(async ({ sql: txSql }) => {
-            await txSql`UPDATE accounts SET balance = balance - ${job.input.amount} WHERE id = ${job.input.fromAccountId}`;
-            await txSql`UPDATE accounts SET balance = balance + ${job.input.amount} WHERE id = ${job.input.toAccountId}`;
+          return complete(async ({ sql }) => {
+            await sql`UPDATE accounts SET balance = balance - ${job.input.amount} WHERE id = ${job.input.fromAccountId}`;
+            await sql`UPDATE accounts SET balance = balance + ${job.input.amount} WHERE id = ${job.input.toAccountId}`;
             console.log(`  Transfer committed`);
             return { transferred: true };
           });
@@ -156,8 +127,8 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, complete }) => {
           console.log(`  [credit-account] Attempt ${job.attempt}: crediting $${job.input.amount}`);
 
-          const result = await complete(async ({ sql: txSql }) => {
-            await txSql`UPDATE accounts SET balance = balance + ${job.input.amount} WHERE id = ${job.input.accountId}`;
+          const result = await complete(async ({ sql }) => {
+            await sql`UPDATE accounts SET balance = balance + ${job.input.amount} WHERE id = ${job.input.accountId}`;
             console.log(`  Credit committed (will be rolled back if handler throws)`);
             return { credited: true };
           });
@@ -175,10 +146,11 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, prepare, complete }) => {
           console.log(`  [external-transfer] Attempt ${job.attempt}`);
 
-          const account = await prepare({ mode: "staged" }, async ({ sql: txSql }) => {
-            const [row] = await txSql<{ id: number; balance: number }[]>`
-              SELECT id, balance FROM accounts WHERE id = ${job.input.accountId}
-            `;
+          const account = await prepare({ mode: "staged" }, async ({ sql }) => {
+            const rows = await sql<
+              { id: number; balance: number }[]
+            >`SELECT id, balance FROM accounts WHERE id = ${job.input.accountId}`;
+            const row = rows[0];
             console.log(`  Prepare: read account ${row.id}, balance $${row.balance}`);
             return row;
           });
@@ -190,8 +162,8 @@ const worker = await createInProcessWorker({
           }
           console.log(`  External API succeeded`);
 
-          return complete(async ({ sql: txSql }) => {
-            await txSql`UPDATE accounts SET balance = balance + ${job.input.amount} WHERE id = ${account.id}`;
+          return complete(async ({ sql }) => {
+            await sql`UPDATE accounts SET balance = balance + ${job.input.amount} WHERE id = ${account.id}`;
             console.log(`  Complete: credited $${job.input.amount} to account ${account.id}`);
             return { confirmed: true };
           });
@@ -231,14 +203,14 @@ console.log(
 );
 
 const transfer = await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (_sql) => {
-    const txSql = _sql as TransactionSql;
-    return client.startJobChain({
+  sql.begin(async (txSql) => {
+    const result = await client.startJobChain({
       sql: txSql,
       transactionHooks,
       typeName: "transfer-funds",
       input: { fromAccountId: 2, toAccountId: 1, amount: 200 },
     });
+    return result;
   }),
 );
 
@@ -261,14 +233,14 @@ console.log("\n--- Scenario 2: Error After Complete ---");
 console.log("Credit $50 to Alice. Handler crashes after complete(), completion is rolled back.\n");
 
 const credit = await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (_sql) => {
-    const txSql = _sql as TransactionSql;
-    return client.startJobChain({
+  sql.begin(async (txSql) => {
+    const result = await client.startJobChain({
       sql: txSql,
       transactionHooks,
       typeName: "credit-account",
       input: { accountId: 1, amount: 50 },
     });
+    return result;
   }),
 );
 
@@ -285,14 +257,14 @@ console.log("External API fails between phases. Prepare committed, job retries.\
 
 externalApiShouldFail = true;
 const externalTransfer = await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (_sql) => {
-    const txSql = _sql as TransactionSql;
-    return client.startJobChain({
+  sql.begin(async (txSql) => {
+    const result = await client.startJobChain({
       sql: txSql,
       transactionHooks,
       typeName: "external-transfer",
       input: { accountId: 2, amount: 25 },
     });
+    return result;
   }),
 );
 
@@ -308,14 +280,14 @@ console.log("\n--- Scenario 4: lastAttemptError Inspection ---");
 console.log("Job throws different error types, inspects lastAttemptError on retry.\n");
 
 const flakyJob = await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (_sql) => {
-    const txSql = _sql as TransactionSql;
-    return client.startJobChain({
+  sql.begin(async (txSql) => {
+    const result = await client.startJobChain({
       sql: txSql,
       transactionHooks,
       typeName: "flaky-job",
       input: null,
     });
+    return result;
   }),
 );
 

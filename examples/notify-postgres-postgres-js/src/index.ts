@@ -1,4 +1,4 @@
-import { type PgNotifyProvider, createPgNotifyAdapter } from "@queuert/postgres";
+import { createPgNotifyAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import postgres from "postgres";
 import {
@@ -10,34 +10,17 @@ import {
 } from "queuert";
 import { createInProcessStateAdapter } from "queuert/internal";
 
+import { createPostgresJsNotifyProvider } from "./provider.js";
+
 // 1. Start PostgreSQL using testcontainers
 console.log("Starting PostgreSQL...");
 const pgContainer = await new PostgreSqlContainer("postgres:18").withExposedPorts(5432).start();
 
 // 2. Create postgres-js connection
-// postgres-js manages a dedicated connection for LISTEN automatically
 const sql = postgres(pgContainer.getConnectionUri(), { max: 10 });
 
 // 3. Create the notify provider using postgres-js
-// postgres-js has built-in support for LISTEN/NOTIFY via sql.listen() and sql.notify()
-const subscriptions = new Map<string, { unlisten: () => Promise<void> }>();
-
-const notifyProvider: PgNotifyProvider = {
-  publish: async (channel, message) => {
-    await sql.notify(channel, message);
-  },
-  subscribe: async (channel, onMessage) => {
-    // sql.listen returns a ListenMeta object with an unlisten method
-    const subscription = await sql.listen(channel, (payload) => {
-      onMessage(payload);
-    });
-    subscriptions.set(channel, subscription);
-    return async () => {
-      await subscription.unlisten();
-      subscriptions.delete(channel);
-    };
-  },
-};
+const notifyProvider = createPostgresJsNotifyProvider({ sql });
 
 // 4. Define job types
 const jobTypeRegistry = defineJobTypeRegistry<{

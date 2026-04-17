@@ -1,8 +1,4 @@
-import {
-  type SqliteStateProvider,
-  createAsyncLock,
-  createSqliteStateAdapter,
-} from "@queuert/sqlite";
+import { createAsyncLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import Database from "better-sqlite3";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
@@ -15,6 +11,8 @@ import {
   withTransactionHooks,
 } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
+
+import { createDrizzleSqliteStateProvider } from "./provider.js";
 
 // 1. Create in-memory SQLite database
 const sqlite = new Database(":memory:");
@@ -51,48 +49,8 @@ const jobTypeRegistry = defineJobTypeRegistry<{
 }>();
 
 // 5. Create state provider for Drizzle with better-sqlite3
-type DbContext = { db: Database.Database };
 const lock = createAsyncLock();
-
-const stateProvider: SqliteStateProvider<DbContext> = {
-  withTransaction: async (fn) => {
-    await lock.acquire();
-    try {
-      sqlite.exec("BEGIN IMMEDIATE");
-      try {
-        const result = await fn({ db: sqlite });
-        sqlite.exec("COMMIT");
-        return result;
-      } catch (error) {
-        if (sqlite.inTransaction) {
-          try {
-            sqlite.exec("ROLLBACK");
-          } catch {
-            // ignore rollback errors
-          }
-        }
-        throw error;
-      }
-    } finally {
-      lock.release();
-    }
-  },
-  executeSql: async ({ txCtx, sql: sqlStr, params, returns }) => {
-    const database = txCtx?.db ?? sqlite;
-    if (returns) {
-      const stmt = database.prepare(sqlStr);
-      return stmt.all(...(params ?? []));
-    } else {
-      if (params && params.length > 0) {
-        const stmt = database.prepare(sqlStr);
-        stmt.run(...params);
-      } else {
-        database.exec(sqlStr);
-      }
-      return [];
-    }
-  },
-};
+const stateProvider = createDrizzleSqliteStateProvider({ db: sqlite, lock });
 
 // 6. Create adapters and queuert client/worker
 const stateAdapter = await createSqliteStateAdapter({ stateProvider });

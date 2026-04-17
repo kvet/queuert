@@ -10,17 +10,23 @@
     "url": "git+https://github.com/kvet/queuert.git"
   },
   "type": "module",
+  "exports": {
+    "./provider": "./src/provider.ts"
+  },
   "scripts": {
     "start": "tsx src/index.ts",
+    "test": "vitest --run",
     "typecheck": "tsgo --noEmit"
   },
   "devDependencies": {
     "@queuert/postgres": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
+    "@queuert/typed-sql": "workspace:*",
     "@testcontainers/postgresql": "11.14.0",
     "postgres": "3.4.9",
     "queuert": "workspace:*",
     "testcontainers": "11.14.0",
-    "tsx": "4.21.0"
+    "tsx": "4.21.0",
+    "vitest": "4.1.4"
   }
 }

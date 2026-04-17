@@ -1,1 +1,1 @@
-export { extendWithNotifyRedis } from "./specs/notify-adapter.redis.spec-helper.js";
+export { extendWithNotifyRedis } from "./specs/notify-adapter.node-redis.spec-helper.js";

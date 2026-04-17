@@ -1,8 +1,4 @@
-import {
-  type SqliteStateProvider,
-  createAsyncLock,
-  createSqliteStateAdapter,
-} from "@queuert/sqlite";
+import { createAsyncLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import Database from "better-sqlite3";
 import {
   createClient,
@@ -12,6 +8,8 @@ import {
   withTransactionHooks,
 } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
+
+import { createBetterSqlite3StateProvider } from "./provider.js";
 
 // 1. Create in-memory SQLite database
 const db = new Database(":memory:");
@@ -36,71 +34,9 @@ const jobTypeRegistry = defineJobTypeRegistry<{
   };
 }>();
 
-// 4. Create state provider for better-sqlite3
-type DbContext = { db: Database.Database };
+// 4. Create providers and adapters
 const lock = createAsyncLock();
-
-const stateProvider: SqliteStateProvider<DbContext> = {
-  withTransaction: async (fn) => {
-    await lock.acquire();
-    try {
-      db.exec("BEGIN IMMEDIATE");
-      const result = await fn({ db });
-      db.exec("COMMIT");
-      return result;
-    } catch (error) {
-      if (db.inTransaction) {
-        try {
-          db.exec("ROLLBACK");
-        } catch {
-          // ignore rollback errors
-        }
-      }
-      throw error;
-    } finally {
-      lock.release();
-    }
-  },
-  executeSql: async ({ txCtx, sql, params, returns }) => {
-    const executeRaw = ({
-      database,
-      sql,
-      params,
-      returns,
-    }: {
-      database: Database.Database;
-      sql: string;
-      params?: unknown[];
-      returns: boolean;
-    }) => {
-      if (returns) {
-        const stmt = database.prepare(sql);
-        return stmt.all(...(params ?? []));
-      } else {
-        if (params && params.length > 0) {
-          const stmt = database.prepare(sql);
-          stmt.run(...params);
-        } else {
-          database.exec(sql);
-        }
-        return [];
-      }
-    };
-
-    if (txCtx) {
-      return executeRaw({ database: txCtx.db, sql, params, returns });
-    }
-
-    await lock.acquire();
-    try {
-      return executeRaw({ database: db, sql, params, returns });
-    } finally {
-      lock.release();
-    }
-  },
-};
-
-// 5. Create adapters and queuert client/worker
+const stateProvider = createBetterSqlite3StateProvider({ db, lock });
 const stateAdapter = await createSqliteStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 
@@ -112,7 +48,6 @@ const qrtClient = await createClient({
   jobTypeRegistry,
 });
 
-// 6. Create and start qrtWorker
 const qrtWorker = await createInProcessWorker({
   client: qrtClient,
   jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
@@ -121,7 +56,6 @@ const qrtWorker = await createInProcessWorker({
     processors: {
       send_welcome_email: {
         attemptHandler: async ({ job, complete }) => {
-          // Simulate sending email (in real app, call email service here)
           console.log(`Sending welcome email to ${job.input.email} for ${job.input.name}`);
 
           return complete(async () => ({
@@ -135,7 +69,7 @@ const qrtWorker = await createInProcessWorker({
 
 const stopWorker = await qrtWorker.start();
 
-// 7. Register a new user and queue welcome email atomically
+// 5. Register a new user and queue welcome email atomically
 const jobChain = await withTransactionHooks(async (transactionHooks) => {
   await lock.acquire();
   try {
@@ -148,7 +82,6 @@ const jobChain = await withTransactionHooks(async (transactionHooks) => {
       email: string;
     };
 
-    // Queue welcome email - if user creation fails, no email job is created
     const result = await qrtClient.startJobChain({
       db,
       transactionHooks,
@@ -172,10 +105,10 @@ const jobChain = await withTransactionHooks(async (transactionHooks) => {
   }
 });
 
-// 8. Wait for the job chain to complete
+// 6. Wait for the job chain to complete
 const result = await qrtClient.awaitJobChain(jobChain, { timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);
 
-// 9. Cleanup
+// 7. Cleanup
 await stopWorker();
 db.close();

@@ -29,6 +29,28 @@ Optional adapters:
 - [`@queuert/otel`](https://github.com/kvet/queuert/tree/main/packages/otel) — OpenTelemetry observability (metrics and tracing)
 - [`@queuert/dashboard`](https://github.com/kvet/queuert/tree/main/packages/dashboard) — Web dashboard for monitoring jobs _(experimental)_
 
+## Testing custom adapters
+
+Building a custom state or notify adapter? `queuert/conformance` exports a framework-agnostic runner that validates any adapter against the expected contract (106 state cases / 18 notify cases) from inside a single `test()` block:
+
+```ts
+import { runStateAdapterConformance } from "queuert/conformance";
+
+test("my adapter conforms", async () => {
+  await runStateAdapterConformance(async () => {
+    const adapter = await createMyStateAdapter();
+    await adapter.migrateToLatest();
+    return {
+      stateAdapter: adapter,
+      reset: async () => adapter.truncate(),
+      dispose: async () => adapter.close(),
+    };
+  });
+}, 300_000);
+```
+
+See the [Testing Custom Adapters guide](https://kvet.github.io/queuert/advanced/custom-adapters/) for details.
+
 ## Documentation
 
 - [Getting Started](https://kvet.github.io/queuert/getting-started/introduction/)

@@ -1,0 +1,38 @@
+import { type Pool, type PoolClient } from "pg";
+
+import { type PgStateProvider } from "./state-provider.pg.js";
+
+export type PgPoolContext = { poolClient: PoolClient };
+export type PgPoolProvider = PgStateProvider<PgPoolContext>;
+
+export const createPgPoolProvider = ({ pool }: { pool: Pool }): PgPoolProvider => {
+  return {
+    executeSql: async ({ txCtx, sql, params }) => {
+      if (txCtx) {
+        const result = await txCtx.poolClient.query(sql, params);
+        return result.rows as any;
+      }
+      const poolClient = await pool.connect();
+      try {
+        const result = await poolClient.query(sql, params);
+        return result.rows as any;
+      } finally {
+        poolClient.release();
+      }
+    },
+    withTransaction: async (fn) => {
+      const poolClient = await pool.connect();
+      try {
+        await poolClient.query("BEGIN");
+        const result = await fn({ poolClient });
+        await poolClient.query("COMMIT");
+        return result;
+      } catch (error) {
+        await poolClient.query("ROLLBACK").catch(() => {});
+        throw error;
+      } finally {
+        poolClient.release();
+      }
+    },
+  };
+};

@@ -66,6 +66,7 @@ export default defineConfig({
                 { label: "Types", slug: "reference/queuert/types" },
                 { label: "Transaction Hooks", slug: "reference/queuert/transaction-hooks" },
                 { label: "Errors", slug: "reference/queuert/errors" },
+                { label: "Conformance", slug: "reference/queuert/conformance" },
               ],
             },
             {

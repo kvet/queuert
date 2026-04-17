@@ -1,5 +1,5 @@
 import { type StateAdapter } from "queuert";
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { createInProcessStateAdapter } from "../state-adapter/state-adapter.in-process.js";
 import { stateAdapterConformanceTestSuite } from "../suites/state-adapter-conformance.test-suite.js";
@@ -11,7 +11,6 @@ it("index");
 describe("In-Process State Adapter Conformance", () => {
   const conformanceIt = it.extend<{
     stateAdapter: StateAdapter<{ $test: true }, string>;
-    validateId: (id: string) => boolean;
   }>({
     stateAdapter: [
       // oxlint-disable-next-line no-empty-pattern
@@ -22,11 +21,19 @@ describe("In-Process State Adapter Conformance", () => {
       },
       { scope: "test" },
     ],
-    validateId: [
-      // oxlint-disable-next-line no-empty-pattern
-      async ({}, use) => use((id: string) => UUID_PATTERN.test(id)),
-      { scope: "test" },
-    ],
+  });
+
+  conformanceIt("generates UUID job IDs", async ({ stateAdapter }) => {
+    const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
+      stateAdapter.createJobs({
+        txCtx,
+        jobs: [
+          { typeName: "t", chainId: undefined, chainIndex: 0, chainTypeName: "t", input: null },
+        ],
+      }),
+    );
+    expect(UUID_PATTERN.test(job.id)).toBe(true);
+    expect(UUID_PATTERN.test(job.chainId)).toBe(true);
   });
 
   stateAdapterConformanceTestSuite({ it: conformanceIt as any });

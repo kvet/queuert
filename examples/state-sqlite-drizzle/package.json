@@ -10,8 +10,12 @@
     "url": "git+https://github.com/kvet/queuert.git"
   },
   "type": "module",
+  "exports": {
+    "./provider": "./src/provider.ts"
+  },
   "scripts": {
     "start": "tsx src/index.ts",
+    "test": "vitest --run",
     "typecheck": "tsgo --noEmit"
   },
   "devDependencies": {
@@ -21,6 +25,7 @@
     "better-sqlite3": "12.9.0",
     "drizzle-orm": "0.45.2",
     "queuert": "workspace:*",
-    "tsx": "4.21.0"
+    "tsx": "4.21.0",
+    "vitest": "4.1.4"
   }
 }

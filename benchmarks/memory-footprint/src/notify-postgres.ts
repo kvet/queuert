@@ -2,8 +2,9 @@
  * PostgreSQL Notify Adapter Memory Measurement
  */
 
-import { type PgNotifyProvider, createPgNotifyAdapter } from "@queuert/postgres";
+import { createPgNotifyAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
+import { createPostgresJsNotifyProvider } from "example-notify-postgres-postgres-js/provider";
 import postgres from "postgres";
 import {
   createClient,
@@ -39,23 +40,7 @@ const [beforeConnection, afterConnection, sql] = await measureMemory(async () =>
 console.log("\nAfter creating postgres.js connection:");
 diffMemory(beforeConnection, afterConnection);
 
-const subscriptions = new Map<string, { unlisten: () => Promise<void> }>();
-
-const notifyProvider: PgNotifyProvider = {
-  publish: async (channel, message) => {
-    await sql.notify(channel, message);
-  },
-  subscribe: async (channel, onMessage) => {
-    const subscription = await sql.listen(channel, (payload) => {
-      onMessage(payload);
-    });
-    subscriptions.set(channel, subscription);
-    return async () => {
-      await subscription.unlisten();
-      subscriptions.delete(channel);
-    };
-  },
-};
+const notifyProvider = createPostgresJsNotifyProvider({ sql });
 
 const stateAdapter = createInProcessStateAdapter();
 const [beforeAdapter, afterAdapter, notifyAdapter] = await measureMemory(async () =>

@@ -19,6 +19,10 @@ yarn add @queuert/redis
 
 **Peer dependencies:** `queuert`
 
+## Testing custom providers
+
+Validate a custom `RedisNotifyProvider` against Queuert's conformance suite using the framework-agnostic runner from [`queuert/conformance`](https://kvet.github.io/queuert/reference/queuert/conformance/). See the [Testing Custom Adapters guide](https://kvet.github.io/queuert/advanced/custom-adapters/).
+
 ## Documentation
 
 - [Notify Adapters Guide](https://kvet.github.io/queuert/integrations/notify-adapters/)

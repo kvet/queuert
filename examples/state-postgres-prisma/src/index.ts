@@ -1,7 +1,7 @@
 import { execSync } from "node:child_process";
 
 import { PrismaPg } from "@prisma/adapter-pg";
-import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
+import { createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import {
   createClient,
@@ -11,6 +11,8 @@ import {
   withTransactionHooks,
 } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
+
+import { createPrismaPgStateProvider } from "./provider.js";
 
 // 1. Start PostgreSQL using testcontainers
 const pgContainer = await new PostgreSqlContainer("postgres:18").withExposedPorts(5432).start();
@@ -38,31 +40,7 @@ const jobTypeRegistry = defineJobTypeRegistry<{
 }>();
 
 // 4. Create state provider for Prisma
-type PrismaTransactionClient = Omit<
-  InstanceType<typeof PrismaClient>,
-  "$connect" | "$disconnect" | "$on" | "$transaction" | "$extends"
->;
-type DbContext = { prisma: PrismaTransactionClient };
-
-const stateProvider: PgStateProvider<DbContext> = {
-  withTransaction: async (cb) => {
-    return prisma.$transaction(async (prisma) => cb({ prisma }));
-  },
-  executeSql: async ({ txCtx, sql, params }) => {
-    const prismaClient = txCtx?.prisma ?? prisma;
-
-    if (params && params.length > 0) {
-      return (prismaClient as any).$queryRawUnsafe(sql, ...params);
-    }
-
-    const isSelect = /^\s*SELECT\b/i.test(sql);
-    if (isSelect) {
-      return (prismaClient as any).$queryRawUnsafe(sql);
-    }
-    await (prismaClient as any).$executeRawUnsafe(sql);
-    return [];
-  },
-};
+const stateProvider = createPrismaPgStateProvider({ prisma: prisma as any });
 
 // 5. Create adapters and queuert client/worker
 const stateAdapter = await createPgStateAdapter({

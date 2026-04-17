@@ -10,13 +10,11 @@
 
 import assert from "node:assert/strict";
 
-import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
+import { createPgNotifyAdapter, createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
-import postgres, {
-  type PendingQuery,
-  type Row,
-  type TransactionSql as _TransactionSql,
-} from "postgres";
+import { createPostgresJsNotifyProvider } from "example-notify-postgres-postgres-js/provider";
+import { createPostgresJsStateProvider } from "example-state-postgres-postgres-js/provider";
+import postgres from "postgres";
 import {
   createClient,
   createInProcessWorker,
@@ -24,16 +22,6 @@ import {
   defineJobTypeRegistry,
   withTransactionHooks,
 } from "queuert";
-import { createInProcessNotifyAdapter } from "queuert/internal";
-
-type TransactionSql = _TransactionSql & {
-  <T extends readonly (object | undefined)[] = Row[]>(
-    template: TemplateStringsArray,
-    ...parameters: readonly postgres.ParameterOrFragment<never>[]
-  ): PendingQuery<T>;
-};
-
-type DbContext = { sql: TransactionSql };
 
 const jobTypeRegistry = defineJobTypeRegistry<{
   /*
@@ -81,28 +69,11 @@ const jobTypeRegistry = defineJobTypeRegistry<{
 const pgContainer = await new PostgreSqlContainer("postgres:18").withExposedPorts(5432).start();
 const sql = postgres(pgContainer.getConnectionUri(), { max: 10 });
 
-const stateProvider: PgStateProvider<DbContext> = {
-  withTransaction: async (cb) =>
-    sql.begin(async (txSql) => cb({ sql: txSql as TransactionSql }) as any),
-  withSavepoint: async (txCtx, fn) =>
-    txCtx.sql.savepoint(async (savepointSql) => fn({ sql: savepointSql as TransactionSql })) as any,
-  executeSql: async ({ txCtx, sql: query, params }) => {
-    const client = txCtx?.sql ?? sql;
-    return client.unsafe(
-      query,
-      (params ?? []).map((p) => (p === undefined ? null : p)) as (
-        | string
-        | number
-        | boolean
-        | null
-      )[],
-    );
-  },
-};
-
+const stateProvider = createPostgresJsStateProvider({ sql });
 const stateAdapter = await createPgStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
-const notifyAdapter = createInProcessNotifyAdapter();
+const notifyProvider = createPostgresJsNotifyProvider({ sql });
+const notifyAdapter = await createPgNotifyAdapter({ provider: notifyProvider });
 
 const client = await createClient({
   stateAdapter,
@@ -181,8 +152,7 @@ console.log("\n--- Scenario 1: Fan-out/Fan-in ---");
 console.log("Three fetch jobs run in parallel, aggregate waits for all.\n");
 
 const aggregateChain = await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (_sql) => {
-    const txSql = _sql as TransactionSql;
+  sql.begin(async (txSql) => {
     const fetchBlockers = await client.startJobChains({
       sql: txSql,
       transactionHooks,
@@ -212,8 +182,7 @@ console.log("\n--- Scenario 2: Fixed Blocker Slots ---");
 console.log("Action requires exactly: validate-user + load-config.\n");
 
 const actionChain = await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (_sql) => {
-    const txSql = _sql as TransactionSql;
+  sql.begin(async (txSql) => {
     const [userBlocker, configBlocker] = await client.startJobChains({
       sql: txSql,
       transactionHooks,

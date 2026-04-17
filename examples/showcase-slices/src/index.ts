@@ -18,7 +18,7 @@ import {
   withTransactionHooks,
 } from "queuert";
 
-import { type DbContext, sql, stopContainer } from "./adapters.js";
+import { sql, stopContainer } from "./adapters.js";
 import { client } from "./client.js";
 import { notificationJobTypeProcessorRegistry } from "./slice-notifications-processors.js";
 import { orderJobTypeProcessorRegistry } from "./slice-orders-processors.js";
@@ -40,9 +40,8 @@ const stopWorker = await worker.start();
 console.log("\n--- Pattern 1: Independent Slices ---\n");
 
 const orderChain = await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (_sql) => {
-    const txSql = _sql as DbContext["sql"];
-    return client.startJobChain({
+  sql.begin(async (txSql) =>
+    client.startJobChain({
       sql: txSql,
       transactionHooks,
       typeName: "orders.create-order",
@@ -50,8 +49,8 @@ const orderChain = await withTransactionHooks(async (transactionHooks) =>
         userId: "user-10",
         items: [{ name: "Widget", price: 9.99 }],
       },
-    });
-  }),
+    }),
+  ),
 );
 
 const orderResult = await client.awaitJobChain(orderChain, { timeoutMs: 10000 });
@@ -69,9 +68,8 @@ assert.ok(orderResult.output.fulfilledAt);
 console.log("\n--- Pattern 2: Fire-and-forget ---\n");
 
 const orderChain2 = await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (_sql) => {
-    const txSql = _sql as DbContext["sql"];
-    return client.startJobChain({
+  sql.begin(async (txSql) =>
+    client.startJobChain({
       sql: txSql,
       transactionHooks,
       typeName: "orders.create-order",
@@ -82,8 +80,8 @@ const orderChain2 = await withTransactionHooks(async (transactionHooks) =>
           { name: "Gadget", price: 24.99 },
         ],
       },
-    });
-  }),
+    }),
+  ),
 );
 
 const orderResult2 = await client.awaitJobChain(orderChain2, { timeoutMs: 10000 });
@@ -107,9 +105,8 @@ assert.ok(orderResult2.output.orderId > 0);
 console.log("\n--- Pattern 3: Cross-slice Blockers ---\n");
 
 const placeOrderChain = await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (_sql) => {
-    const txSql = _sql as DbContext["sql"];
-    return client.startJobChain({
+  sql.begin(async (txSql) =>
+    client.startJobChain({
       sql: txSql,
       transactionHooks,
       typeName: "orders.place-order",
@@ -120,8 +117,8 @@ const placeOrderChain = await withTransactionHooks(async (transactionHooks) =>
           { name: "Deluxe Gadget", price: 79.99 },
         ],
       },
-    });
-  }),
+    }),
+  ),
 );
 
 const placeOrderResult = await client.awaitJobChain(placeOrderChain, { timeoutMs: 10000 });

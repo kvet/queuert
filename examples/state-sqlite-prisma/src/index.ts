@@ -4,11 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
-import {
-  type SqliteStateProvider,
-  createAsyncLock,
-  createSqliteStateAdapter,
-} from "@queuert/sqlite";
+import { createAsyncLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import Database from "better-sqlite3";
 import {
   createClient,
@@ -18,6 +14,8 @@ import {
   withTransactionHooks,
 } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
+
+import { createPrismaSqliteStateProvider } from "./provider.js";
 
 // 1. Create temp directory and set DATABASE_URL
 const tempDir = mkdtempSync(join(tmpdir(), "queuert-sqlite-prisma-"));
@@ -55,56 +53,7 @@ const jobTypeRegistry = defineJobTypeRegistry<{
 }>();
 
 // 6. Create state provider for Prisma
-type PrismaTransactionClient = Omit<
-  InstanceType<typeof PrismaClient>,
-  "$connect" | "$disconnect" | "$on" | "$transaction" | "$extends"
->;
-type DbContext = { prisma: PrismaTransactionClient };
-
-// Prisma returns BigInt for SQLite integers, but queuert expects numbers
-const convertBigInts = (rows: unknown[]): unknown[] => {
-  return rows.map((row) => {
-    if (row && typeof row === "object") {
-      const converted: Record<string, unknown> = {};
-      for (const [key, value] of Object.entries(row)) {
-        converted[key] = typeof value === "bigint" ? Number(value) : value;
-      }
-      return converted;
-    }
-    return row;
-  });
-};
-
-const stateProvider: SqliteStateProvider<DbContext> = {
-  withTransaction: async (cb) => {
-    await lock.acquire();
-    try {
-      return await prisma.$transaction(async (prisma) => cb({ prisma }));
-    } finally {
-      lock.release();
-    }
-  },
-  executeSql: async ({ txCtx, sql, params, returns }) => {
-    const prismaClient = txCtx?.prisma ?? prisma;
-
-    if (returns) {
-      let result: unknown[];
-      if (params && params.length > 0) {
-        result = await (prismaClient as any).$queryRawUnsafe(sql, ...params);
-      } else {
-        result = await (prismaClient as any).$queryRawUnsafe(sql);
-      }
-      return convertBigInts(result);
-    }
-
-    if (params && params.length > 0) {
-      await (prismaClient as any).$executeRawUnsafe(sql, ...params);
-    } else {
-      await (prismaClient as any).$executeRawUnsafe(sql);
-    }
-    return [];
-  },
-};
+const stateProvider = createPrismaSqliteStateProvider({ prisma: prisma as any, lock });
 
 // 7. Create adapters and queuert client/worker
 const stateAdapter = await createSqliteStateAdapter({

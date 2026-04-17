@@ -1,4 +1,11 @@
-import { type Migration, type NamedParameter, type TypedSql, sql } from "@queuert/typed-sql";
+import {
+  type DataType,
+  type Migration,
+  type RuntimeType,
+  type TypedSql,
+  sql,
+  t,
+} from "@queuert/typed-sql";
 
 export const jobColumns = [
   "id",
@@ -205,59 +212,288 @@ ON {{table_prefix}}job (type_name, created_at DESC) WHERE chain_index = 0`,
   },
 ];
 
-export type DbMigration = {
-  name: string;
-  applied_at: string;
+// ---------------------------------------------------------------------------
+// Column type aliases (used to annotate SqliteSqlDefinitions)
+// ---------------------------------------------------------------------------
+
+type Id<TRuntime extends RuntimeType> = DataType<TRuntime, string>;
+
+type SqliteDbJobCols<TRuntime extends RuntimeType> = {
+  readonly id: Id<TRuntime>;
+  readonly chain_id: Id<TRuntime>;
+  readonly type_name: DataType<"string", string>;
+  readonly chain_type_name: DataType<"string", string>;
+  readonly chain_index: DataType<"number", number>;
+  readonly input: DataType<"string?", string | null>;
+  readonly output: DataType<"string?", string | null>;
+  readonly status: DataType<"string", DbJob["status"]>;
+  readonly created_at: DataType<"string", string>;
+  readonly scheduled_at: DataType<"string", string>;
+  readonly completed_at: DataType<"string?", string | null>;
+  readonly completed_by: DataType<"string?", string | null>;
+  readonly attempt: DataType<"number", number>;
+  readonly last_attempt_error: DataType<"string?", string | null>;
+  readonly last_attempt_at: DataType<"string?", string | null>;
+  readonly leased_by: DataType<"string?", string | null>;
+  readonly leased_until: DataType<"string?", string | null>;
+  readonly deduplication_key: DataType<"string?", string | null>;
+  readonly chain_trace_context: DataType<"string?", string | null>;
+  readonly trace_context: DataType<"string?", string | null>;
 };
 
-export const createMigrationTableSql: TypedSql<[], void> = sql(
-  /* sql */ `
+type SqliteDbJobChainRowCols<TRuntime extends RuntimeType> = SqliteDbJobCols<TRuntime> & {
+  readonly lc_id: DataType<"string?", string | null>;
+  readonly lc_type_name: DataType<"string?", string | null>;
+  readonly lc_chain_id: DataType<"string?", string | null>;
+  readonly lc_chain_type_name: DataType<"string?", string | null>;
+  readonly lc_chain_index: DataType<"number?", number | null>;
+  readonly lc_input: DataType<"string?", string | null>;
+  readonly lc_output: DataType<"string?", string | null>;
+  readonly lc_status: DataType<"string?", DbJob["status"] | null>;
+  readonly lc_created_at: DataType<"string?", string | null>;
+  readonly lc_scheduled_at: DataType<"string?", string | null>;
+  readonly lc_completed_at: DataType<"string?", string | null>;
+  readonly lc_completed_by: DataType<"string?", string | null>;
+  readonly lc_attempt: DataType<"number?", number | null>;
+  readonly lc_last_attempt_error: DataType<"string?", string | null>;
+  readonly lc_last_attempt_at: DataType<"string?", string | null>;
+  readonly lc_leased_by: DataType<"string?", string | null>;
+  readonly lc_leased_until: DataType<"string?", string | null>;
+  readonly lc_deduplication_key: DataType<"string?", string | null>;
+  readonly lc_chain_trace_context: DataType<"string?", string | null>;
+  readonly lc_trace_context: DataType<"string?", string | null>;
+};
+
+// ---------------------------------------------------------------------------
+// SqliteSqlDefinitions — explicit return type for createSqliteSqlDefinitions
+// ---------------------------------------------------------------------------
+
+export type SqliteSqlDefinitions<TRuntime extends RuntimeType = RuntimeType> = {
+  readonly dbJobColumns: SqliteDbJobCols<TRuntime>;
+  readonly dbJobChainRowColumns: SqliteDbJobChainRowCols<TRuntime>;
+  readonly createMigrationTableSql: TypedSql<readonly [], Record<string, never>>;
+  readonly getAppliedMigrationsSql: TypedSql<
+    readonly [],
+    { readonly name: DataType<"string", string>; readonly applied_at: DataType<"string", string> }
+  >;
+  readonly recordMigrationSql: TypedSql<
+    readonly [DataType<"string", string>],
+    Record<string, never>
+  >;
+  readonly findExistingContinuationSql: TypedSql<
+    readonly [Id<TRuntime>, DataType<"number", number>],
+    SqliteDbJobCols<TRuntime> & { readonly deduplicated: DataType<"number", number> }
+  >;
+  readonly findDeduplicatedJobSql: TypedSql<
+    readonly [
+      DataType<"string?", string | null>,
+      DataType<"string?", string | null>,
+      DataType<"string", string>,
+      DataType<"string?", string | null>,
+      DataType<"string?", string | null>,
+      DataType<"string?", string | null>,
+      DataType<"number?", number | null>,
+      DataType<"number?", number | null>,
+      DataType<"string?", string | null>,
+      DataType<"string?", string | null>,
+    ],
+    SqliteDbJobCols<TRuntime> & { readonly deduplicated: DataType<"number", number> }
+  >;
+  readonly insertJobsSql: TypedSql<
+    readonly [DataType<"string", string>],
+    SqliteDbJobCols<TRuntime>
+  >;
+  readonly insertJobBlockersSql: TypedSql<
+    readonly [Id<TRuntime>, DataType<"string", string>, DataType<"string", string>],
+    Record<string, never>
+  >;
+  readonly checkBlockersStatusSql: TypedSql<
+    readonly [Id<TRuntime>],
+    {
+      readonly job_id: Id<TRuntime>;
+      readonly blocked_by_chain_id: Id<TRuntime>;
+      readonly blocker_status: DataType<"string", string>;
+    }
+  >;
+  readonly updateJobToBlockedSql: TypedSql<readonly [Id<TRuntime>], SqliteDbJobCols<TRuntime>>;
+  readonly getJobByIdForBlockersSql: TypedSql<readonly [Id<TRuntime>], SqliteDbJobCols<TRuntime>>;
+  readonly completeJobSql: TypedSql<
+    readonly [DataType<"string?", string | null>, DataType<"string?", string | null>, Id<TRuntime>],
+    SqliteDbJobCols<TRuntime>
+  >;
+  readonly findReadyJobsSql: TypedSql<readonly [Id<TRuntime>], { readonly job_id: Id<TRuntime> }>;
+  readonly scheduleBlockedJobsSql: TypedSql<
+    readonly [DataType<"string", string>],
+    SqliteDbJobCols<TRuntime>
+  >;
+  readonly getJobBlockerTraceContextsSql: TypedSql<
+    readonly [Id<TRuntime>],
+    { readonly trace_context: DataType<"string?", string | null> }
+  >;
+  readonly getBlockerChainTraceContextsSql: TypedSql<
+    readonly [DataType<"string", string>],
+    {
+      readonly blocked_by_chain_id: Id<TRuntime>;
+      readonly chain_trace_context: DataType<"string?", string | null>;
+    }
+  >;
+  readonly getJobChainByIdSql: TypedSql<
+    readonly [Id<TRuntime>, Id<TRuntime>],
+    SqliteDbJobChainRowCols<TRuntime>
+  >;
+  readonly getJobBlockersSql: TypedSql<readonly [Id<TRuntime>], SqliteDbJobChainRowCols<TRuntime>>;
+  readonly getJobByIdSql: TypedSql<readonly [Id<TRuntime>], SqliteDbJobCols<TRuntime>>;
+  readonly rescheduleJobSql: TypedSql<
+    readonly [
+      DataType<"string?", string | null>,
+      DataType<"number?", number | null>,
+      DataType<"number?", number | null>,
+      DataType<"string", string>,
+      Id<TRuntime>,
+    ],
+    SqliteDbJobCols<TRuntime>
+  >;
+  readonly triggerJobSql: TypedSql<readonly [Id<TRuntime>], SqliteDbJobCols<TRuntime>>;
+  readonly renewJobLeaseSql: TypedSql<
+    readonly [DataType<"string", string>, DataType<"number", number>, Id<TRuntime>],
+    SqliteDbJobCols<TRuntime>
+  >;
+  readonly acquireJobSql: TypedSql<
+    readonly [DataType<"string", string>, DataType<"string", string>],
+    SqliteDbJobCols<TRuntime> & { readonly has_more: DataType<"number", number> }
+  >;
+  readonly getNextJobAvailableInMsSql: TypedSql<
+    readonly [DataType<"string", string>],
+    { readonly available_in_ms: DataType<"number", number> }
+  >;
+  readonly reapExpiredJobLeaseSql: TypedSql<
+    readonly [DataType<"string", string>, DataType<"string", string>],
+    SqliteDbJobCols<TRuntime>
+  >;
+  readonly getConnectedChainIdsSql: TypedSql<
+    readonly [DataType<"string", string>],
+    { readonly chain_id: Id<TRuntime> }
+  >;
+  readonly checkExternalBlockerRefsSql: TypedSql<
+    readonly [DataType<"string", string>, DataType<"string", string>],
+    { readonly job_id: Id<TRuntime>; readonly blocked_by_chain_id: Id<TRuntime> }
+  >;
+  readonly deleteBlockersByChainIdsSql: TypedSql<
+    readonly [DataType<"string", string>],
+    Record<string, never>
+  >;
+  readonly getJobChainsByChainIdsSql: TypedSql<
+    readonly [DataType<"string", string>],
+    SqliteDbJobChainRowCols<TRuntime>
+  >;
+  readonly deleteJobChainsSql: TypedSql<
+    readonly [DataType<"string", string>],
+    Record<string, never>
+  >;
+  readonly getJobForUpdateSql: TypedSql<readonly [Id<TRuntime>], SqliteDbJobCols<TRuntime>>;
+  readonly getLatestChainJobForUpdateSql: TypedSql<
+    readonly [Id<TRuntime>],
+    SqliteDbJobCols<TRuntime>
+  >;
+};
+
+export const createSqliteSqlDefinitions = <TRuntime extends RuntimeType>(
+  id: DataType<TRuntime, string>,
+): SqliteSqlDefinitions<TRuntime> => {
+  const dbJobColumns = {
+    id,
+    chain_id: id,
+    type_name: t.string(),
+    chain_type_name: t.string(),
+    chain_index: t.number(),
+    input: t["string?"](),
+    output: t["string?"](),
+    status: t.string<DbJob["status"]>(),
+    created_at: t.string(),
+    scheduled_at: t.string(),
+    completed_at: t["string?"](),
+    completed_by: t["string?"](),
+    attempt: t.number(),
+    last_attempt_error: t["string?"](),
+    last_attempt_at: t["string?"](),
+    leased_by: t["string?"](),
+    leased_until: t["string?"](),
+    deduplication_key: t["string?"](),
+    chain_trace_context: t["string?"](),
+    trace_context: t["string?"](),
+  } as const;
+
+  const dbJobChainRowColumns = {
+    ...dbJobColumns,
+    lc_id: t["string?"](),
+    lc_type_name: t["string?"](),
+    lc_chain_id: t["string?"](),
+    lc_chain_type_name: t["string?"](),
+    lc_chain_index: t["number?"](),
+    lc_input: t["string?"](),
+    lc_output: t["string?"](),
+    lc_status: t["string?"]<DbJob["status"]>(),
+    lc_created_at: t["string?"](),
+    lc_scheduled_at: t["string?"](),
+    lc_completed_at: t["string?"](),
+    lc_completed_by: t["string?"](),
+    lc_attempt: t["number?"](),
+    lc_last_attempt_error: t["string?"](),
+    lc_last_attempt_at: t["string?"](),
+    lc_leased_by: t["string?"](),
+    lc_leased_until: t["string?"](),
+    lc_deduplication_key: t["string?"](),
+    lc_chain_trace_context: t["string?"](),
+    lc_trace_context: t["string?"](),
+  } as const;
+
+  const createMigrationTableSql = sql(
+    /* sql */ `
 CREATE TABLE IF NOT EXISTS {{table_prefix}}migration (
   name TEXT PRIMARY KEY,
   applied_at TEXT NOT NULL DEFAULT (datetime('now', 'subsec'))
 )`,
-  false,
-);
+    false,
+    {
+      params: [],
+      columns: {},
+    },
+  );
 
-export const getAppliedMigrationsSql: TypedSql<[], DbMigration[]> = sql(
-  /* sql */ `SELECT name, applied_at FROM {{table_prefix}}migration ORDER BY name`,
-  true,
-);
+  const getAppliedMigrationsSql = sql(
+    /* sql */ `SELECT name, applied_at FROM {{table_prefix}}migration ORDER BY name`,
+    true,
+    {
+      params: [],
+      columns: { name: t.string(), applied_at: t.string() },
+    },
+  );
 
-export const recordMigrationSql: TypedSql<readonly [NamedParameter<"name", string>], void> = sql(
-  /* sql */ `INSERT INTO {{table_prefix}}migration (name) VALUES (?) ON CONFLICT (name) DO NOTHING`,
-  false,
-);
+  const recordMigrationSql = sql(
+    /* sql */ `INSERT INTO {{table_prefix}}migration (name) VALUES (?) ON CONFLICT (name) DO NOTHING`,
+    false,
+    {
+      params: [t.string()],
+      columns: {},
+    },
+  );
 
-export const findExistingContinuationSql: TypedSql<
-  [NamedParameter<"chain_id", string>, NamedParameter<"chain_index", number>],
-  [DbJob & { deduplicated: number }]
-> = sql(
-  /* sql */ `
+  const findExistingContinuationSql = sql(
+    /* sql */ `
 SELECT *, 1 AS deduplicated
 FROM {{table_prefix}}job
 WHERE chain_id = ? AND chain_index = ? AND id != chain_id
 LIMIT 1
 `,
-  true,
-);
+    true,
+    {
+      params: [id, t.number()],
+      columns: { ...dbJobColumns, deduplicated: t.number() },
+    },
+  );
 
-export const findDeduplicatedJobSql: TypedSql<
-  [
-    NamedParameter<"deduplication_key_1", string | null>,
-    NamedParameter<"deduplication_key_2", string | null>,
-    NamedParameter<"chain_type_name", string>,
-    NamedParameter<"deduplication_scope_1", "incomplete" | "any" | null>,
-    NamedParameter<"deduplication_scope_2", "incomplete" | "any" | null>,
-    NamedParameter<"deduplication_scope_3", "incomplete" | "any" | null>,
-    NamedParameter<"deduplication_window_ms_1", number | null>,
-    NamedParameter<"deduplication_window_ms_2", number | null>,
-    NamedParameter<"deduplication_exclude_chain_ids_1", string | null>,
-    NamedParameter<"deduplication_exclude_chain_ids_2", string | null>,
-  ],
-  [DbJob & { deduplicated: number }]
-> = sql(
-  /* sql */ `
+  const findDeduplicatedJobSql = sql(
+    /* sql */ `
 SELECT *, 1 AS deduplicated
 FROM {{table_prefix}}job
 WHERE ? IS NOT NULL
@@ -280,11 +516,26 @@ WHERE ? IS NOT NULL
 ORDER BY created_at DESC
 LIMIT 1
 `,
-  true,
-);
+    true,
+    {
+      params: [
+        t["string?"](),
+        t["string?"](),
+        t.string(),
+        t["string?"](),
+        t["string?"](),
+        t["string?"](),
+        t["number?"](),
+        t["number?"](),
+        t["string?"](),
+        t["string?"](),
+      ],
+      columns: { ...dbJobColumns, deduplicated: t.number() },
+    },
+  );
 
-export const insertJobsSql: TypedSql<readonly [NamedParameter<"jobs_json", string>], DbJob[]> = sql(
-  /* sql */ `
+  const insertJobsSql = sql(
+    /* sql */ `
 INSERT INTO {{table_prefix}}job (id, type_name, chain_id, chain_type_name, chain_index, input, deduplication_key, scheduled_at, chain_trace_context, trace_context)
 SELECT
   json_extract(je.value, '$.id'),
@@ -309,30 +560,28 @@ WHERE true
 ON CONFLICT (chain_id, chain_index) DO UPDATE SET id = {{table_prefix}}job.id
 RETURNING *
 `,
-  true,
-);
+    true,
+    {
+      params: [t.string()],
+      columns: { ...dbJobColumns },
+    },
+  );
 
-export const insertJobBlockersSql: TypedSql<
-  readonly [
-    NamedParameter<"job_id", string>,
-    NamedParameter<"trace_contexts_json", string>,
-    NamedParameter<"blocked_by_chain_ids_json", string>,
-  ],
-  void
-> = sql(
-  /* sql */ `
+  const insertJobBlockersSql = sql(
+    /* sql */ `
 INSERT INTO {{table_prefix}}job_blocker (job_id, blocked_by_chain_id, "index", trace_context)
 SELECT ?, je.value, je.key, json_extract(?, '$[' || je.key || ']')
 FROM json_each(?) AS je
 `,
-  false,
-);
+    false,
+    {
+      params: [id, t.string(), t.string()],
+      columns: {},
+    },
+  );
 
-export const checkBlockersStatusSql: TypedSql<
-  readonly [NamedParameter<"job_id", string>],
-  { job_id: string; blocked_by_chain_id: string; blocker_status: string }[]
-> = sql(
-  /* sql */ `
+  const checkBlockersStatusSql = sql(
+    /* sql */ `
 SELECT
   jb.job_id,
   jb.blocked_by_chain_id,
@@ -346,36 +595,38 @@ SELECT
 FROM {{table_prefix}}job_blocker jb
 WHERE jb.job_id = ?
 `,
-  true,
-);
+    true,
+    {
+      params: [id],
+      columns: { job_id: id, blocked_by_chain_id: id, blocker_status: t.string() },
+    },
+  );
 
-export const updateJobToBlockedSql: TypedSql<
-  readonly [NamedParameter<"job_id", string>],
-  [DbJob | undefined]
-> = sql(
-  /* sql */ `
+  const updateJobToBlockedSql = sql(
+    /* sql */ `
 UPDATE {{table_prefix}}job
 SET status = 'blocked'
 WHERE id = ? AND status = 'pending'
 RETURNING *
 `,
-  true,
-);
+    true,
+    {
+      params: [id],
+      columns: { ...dbJobColumns },
+    },
+  );
 
-export const getJobByIdForBlockersSql: TypedSql<
-  readonly [NamedParameter<"job_id", string>],
-  [DbJob]
-> = sql(/* sql */ `SELECT * FROM {{table_prefix}}job WHERE id = ?`, true);
+  const getJobByIdForBlockersSql = sql(
+    /* sql */ `SELECT * FROM {{table_prefix}}job WHERE id = ?`,
+    true,
+    {
+      params: [id],
+      columns: { ...dbJobColumns },
+    },
+  );
 
-export const completeJobSql: TypedSql<
-  readonly [
-    NamedParameter<"completed_by", string | null>,
-    NamedParameter<"output", string | null>,
-    NamedParameter<"id", string>,
-  ],
-  [DbJob]
-> = sql(
-  /* sql */ `
+  const completeJobSql = sql(
+    /* sql */ `
 UPDATE {{table_prefix}}job
 SET status = 'completed',
   completed_at = datetime('now', 'subsec'),
@@ -386,14 +637,15 @@ SET status = 'completed',
 WHERE id = ?
 RETURNING *
 `,
-  true,
-);
+    true,
+    {
+      params: [t["string?"](), t["string?"](), id],
+      columns: { ...dbJobColumns },
+    },
+  );
 
-export const findReadyJobsSql: TypedSql<
-  readonly [NamedParameter<"blocked_by_chain_id", string>],
-  { job_id: string }[]
-> = sql(
-  /* sql */ `
+  const findReadyJobsSql = sql(
+    /* sql */ `
 WITH direct_blocked AS (
   SELECT DISTINCT jb.job_id
   FROM {{table_prefix}}job_blocker jb
@@ -418,54 +670,58 @@ FROM blockers_status
 GROUP BY job_id
 HAVING MIN(CASE WHEN blocker_status = 'completed' THEN 1 ELSE 0 END) = 1
 `,
-  true,
-);
+    true,
+    {
+      params: [id],
+      columns: { job_id: id },
+    },
+  );
 
-export const scheduleBlockedJobsSql: TypedSql<
-  readonly [NamedParameter<"job_ids_json", string>],
-  DbJob[]
-> = sql(
-  /* sql */ `
+  const scheduleBlockedJobsSql = sql(
+    /* sql */ `
 UPDATE {{table_prefix}}job
 SET scheduled_at = datetime('now', 'subsec'),
     status = 'pending'
 WHERE id IN (SELECT value FROM json_each(?)) AND status = 'blocked'
 RETURNING *
 `,
-  true,
-);
+    true,
+    {
+      params: [t.string()],
+      columns: { ...dbJobColumns },
+    },
+  );
 
-export const getJobBlockerTraceContextsSql: TypedSql<
-  readonly [NamedParameter<"blocked_by_chain_id", string>],
-  { trace_context: string | null }[]
-> = sql(
-  /* sql */ `
+  const getJobBlockerTraceContextsSql = sql(
+    /* sql */ `
 SELECT jb.trace_context
 FROM {{table_prefix}}job_blocker jb
 WHERE jb.blocked_by_chain_id = ?
   AND jb.trace_context IS NOT NULL
 `,
-  true,
-);
+    true,
+    {
+      params: [id],
+      columns: { trace_context: t["string?"]() },
+    },
+  );
 
-export const getBlockerChainTraceContextsSql: TypedSql<
-  readonly [NamedParameter<"blocked_by_chain_ids_json", string>],
-  { blocked_by_chain_id: string; chain_trace_context: string | null }[]
-> = sql(
-  /* sql */ `
+  const getBlockerChainTraceContextsSql = sql(
+    /* sql */ `
 SELECT j.id AS blocked_by_chain_id, j.chain_trace_context
 FROM {{table_prefix}}job j
 WHERE j.id IN (SELECT value FROM json_each(?))
 ORDER BY j.id
 `,
-  true,
-);
+    true,
+    {
+      params: [t.string()],
+      columns: { blocked_by_chain_id: id, chain_trace_context: t["string?"]() },
+    },
+  );
 
-export const getJobChainByIdSql: TypedSql<
-  readonly [NamedParameter<"id_1", string>, NamedParameter<"id_2", string>],
-  [DbJobChainRow | undefined]
-> = sql(
-  /* sql */ `
+  const getJobChainByIdSql = sql(
+    /* sql */ `
 SELECT
   {{job_columns:j}},
   {{job_columns_prefixed:lc:lc_}}
@@ -479,11 +735,14 @@ LEFT JOIN (
 ) AS lc ON lc.chain_id = j.id
 WHERE j.id = ?
 `,
-  true,
-);
+    true,
+    {
+      params: [id, id],
+      columns: { ...dbJobChainRowColumns },
+    },
+  );
 
-export const getJobBlockersSql: TypedSql<readonly [NamedParameter<"id", string>], DbJobChainRow[]> =
-  sql(
+  const getJobBlockersSql = sql(
     /* sql */ `
 SELECT
   {{job_columns:j}},
@@ -502,29 +761,27 @@ WHERE b.job_id = ?
 ORDER BY b."index" ASC
 `,
     true,
+    {
+      params: [id],
+      columns: { ...dbJobChainRowColumns },
+    },
   );
 
-export const getJobByIdSql: TypedSql<readonly [NamedParameter<"id", string>], [DbJob | undefined]> =
-  sql(
+  const getJobByIdSql = sql(
     /* sql */ `
 SELECT *
 FROM {{table_prefix}}job
 WHERE id = ?
 `,
     true,
+    {
+      params: [id],
+      columns: { ...dbJobColumns },
+    },
   );
 
-export const rescheduleJobSql: TypedSql<
-  readonly [
-    NamedParameter<"scheduled_at", string | null>,
-    NamedParameter<"schedule_after_ms_check", number | null>,
-    NamedParameter<"schedule_after_ms", number | null>,
-    NamedParameter<"error", string>,
-    NamedParameter<"id", string>,
-  ],
-  [DbJob]
-> = sql(
-  /* sql */ `
+  const rescheduleJobSql = sql(
+    /* sql */ `
 UPDATE {{table_prefix}}job
 SET scheduled_at = COALESCE(?,
     CASE WHEN ? IS NOT NULL THEN datetime('now', 'subsec', '+' || (? / 1000.0) || ' seconds') ELSE NULL END,
@@ -537,28 +794,29 @@ SET scheduled_at = COALESCE(?,
 WHERE id = ?
 RETURNING *
 `,
-  true,
-);
+    true,
+    {
+      params: [t["string?"](), t["number?"](), t["number?"](), t.string(), id],
+      columns: { ...dbJobColumns },
+    },
+  );
 
-export const triggerJobSql: TypedSql<readonly [NamedParameter<"id", string>], [DbJob]> = sql(
-  /* sql */ `
+  const triggerJobSql = sql(
+    /* sql */ `
 UPDATE {{table_prefix}}job
 SET scheduled_at = datetime('now', 'subsec')
 WHERE id = ? AND status = 'pending'
 RETURNING *
 `,
-  true,
-);
+    true,
+    {
+      params: [id],
+      columns: { ...dbJobColumns },
+    },
+  );
 
-export const renewJobLeaseSql: TypedSql<
-  readonly [
-    NamedParameter<"leased_by", string>,
-    NamedParameter<"lease_duration_ms", number>,
-    NamedParameter<"id", string>,
-  ],
-  [DbJob]
-> = sql(
-  /* sql */ `
+  const renewJobLeaseSql = sql(
+    /* sql */ `
 UPDATE {{table_prefix}}job
 SET leased_by = ?,
   leased_until = datetime('now', 'subsec', '+' || (? / 1000.0) || ' seconds'),
@@ -566,19 +824,15 @@ SET leased_by = ?,
 WHERE id = ?
 RETURNING *
 `,
-  true,
-);
+    true,
+    {
+      params: [t.string(), t.number(), id],
+      columns: { ...dbJobColumns },
+    },
+  );
 
-export type DbJobWithHasMore = DbJob & { has_more: number };
-
-export const acquireJobSql: TypedSql<
-  readonly [
-    NamedParameter<"type_names_json_1", string>,
-    NamedParameter<"type_names_json_2", string>,
-  ],
-  [DbJobWithHasMore | undefined]
-> = sql(
-  /* sql */ `
+  const acquireJobSql = sql(
+    /* sql */ `
 UPDATE {{table_prefix}}job
 SET status = 'running',
     attempt = attempt + 1
@@ -601,14 +855,15 @@ RETURNING *,
     LIMIT 1
   ) AS has_more
 `,
-  true,
-);
+    true,
+    {
+      params: [t.string(), t.string()],
+      columns: { ...dbJobColumns, has_more: t.number() },
+    },
+  );
 
-export const getNextJobAvailableInMsSql: TypedSql<
-  readonly [NamedParameter<"type_names_json", string>],
-  [{ available_in_ms: number } | undefined]
-> = sql(
-  /* sql */ `
+  const getNextJobAvailableInMsSql = sql(
+    /* sql */ `
 SELECT
   MAX(0, CAST((julianday(job.scheduled_at) - julianday(datetime('now', 'subsec'))) * 86400000 AS INTEGER)) AS available_in_ms
 FROM {{table_prefix}}job as job
@@ -617,17 +872,15 @@ WHERE job.type_name IN (SELECT value FROM json_each(?))
 ORDER BY job.scheduled_at ASC
 LIMIT 1
 `,
-  true,
-);
+    true,
+    {
+      params: [t.string()],
+      columns: { available_in_ms: t.number() },
+    },
+  );
 
-export const reapExpiredJobLeaseSql: TypedSql<
-  readonly [
-    NamedParameter<"type_names_json", string>,
-    NamedParameter<"ignored_job_ids_json", string>,
-  ],
-  [DbJob | undefined]
-> = sql(
-  /* sql */ `
+  const reapExpiredJobLeaseSql = sql(
+    /* sql */ `
 UPDATE {{table_prefix}}job
 SET leased_by = NULL,
   leased_until = NULL,
@@ -645,14 +898,15 @@ WHERE id = (
 )
 RETURNING *
 `,
-  true,
-);
+    true,
+    {
+      params: [t.string(), t.string()],
+      columns: { ...dbJobColumns },
+    },
+  );
 
-export const getConnectedChainIdsSql: TypedSql<
-  readonly [NamedParameter<"seed_chain_ids_json", string>],
-  { chain_id: string }[]
-> = sql(
-  /* sql */ `
+  const getConnectedChainIdsSql = sql(
+    /* sql */ `
 WITH RECURSIVE connected(chain_id) AS (
   SELECT value AS chain_id FROM json_each(?)
   UNION
@@ -663,41 +917,44 @@ WITH RECURSIVE connected(chain_id) AS (
 )
 SELECT chain_id FROM connected
 `,
-  true,
-);
+    true,
+    {
+      params: [t.string()],
+      columns: { chain_id: id },
+    },
+  );
 
-export const checkExternalBlockerRefsSql: TypedSql<
-  readonly [NamedParameter<"chain_ids_json_1", string>, NamedParameter<"chain_ids_json_2", string>],
-  { job_id: string; blocked_by_chain_id: string }[]
-> = sql(
-  /* sql */ `
+  const checkExternalBlockerRefsSql = sql(
+    /* sql */ `
 SELECT jb.job_id, jb.blocked_by_chain_id
 FROM {{table_prefix}}job_blocker jb
 JOIN {{table_prefix}}job j ON j.id = jb.job_id
 WHERE jb.blocked_by_chain_id IN (SELECT value FROM json_each(?))
   AND j.chain_id NOT IN (SELECT value FROM json_each(?))
 `,
-  true,
-);
+    true,
+    {
+      params: [t.string(), t.string()],
+      columns: { job_id: id, blocked_by_chain_id: id },
+    },
+  );
 
-export const deleteBlockersByChainIdsSql: TypedSql<
-  readonly [NamedParameter<"chain_ids_json", string>],
-  []
-> = sql(
-  /* sql */ `
+  const deleteBlockersByChainIdsSql = sql(
+    /* sql */ `
 DELETE FROM {{table_prefix}}job_blocker
 WHERE job_id IN (
   SELECT id FROM {{table_prefix}}job WHERE chain_id IN (SELECT value FROM json_each(?))
 )
 `,
-  false,
-);
+    false,
+    {
+      params: [t.string()],
+      columns: {},
+    },
+  );
 
-export const getJobChainsByChainIdsSql: TypedSql<
-  readonly [NamedParameter<"chain_ids_json", string>],
-  DbJobChainRow[]
-> = sql(
-  /* sql */ `
+  const getJobChainsByChainIdsSql = sql(
+    /* sql */ `
 SELECT
   {{job_columns:j}},
   {{job_columns_prefixed:lc:lc_}}
@@ -711,40 +968,86 @@ LEFT JOIN {{table_prefix}}job AS lc
 WHERE j.id = j.chain_id
   AND j.chain_id IN (SELECT value FROM json_each(?))
 `,
-  true,
-);
+    true,
+    {
+      params: [t.string()],
+      columns: { ...dbJobChainRowColumns },
+    },
+  );
 
-export const deleteJobChainsSql: TypedSql<readonly [NamedParameter<"chain_ids_json", string>], []> =
-  sql(
+  const deleteJobChainsSql = sql(
     /* sql */ `
 DELETE FROM {{table_prefix}}job
 WHERE chain_id IN (SELECT value FROM json_each(?))
 `,
     false,
+    {
+      params: [t.string()],
+      columns: {},
+    },
   );
 
-export const getJobForUpdateSql: TypedSql<
-  readonly [NamedParameter<"id", string>],
-  [DbJob | undefined]
-> = sql(
-  /* sql */ `
+  const getJobForUpdateSql = sql(
+    /* sql */ `
 SELECT *
 FROM {{table_prefix}}job
 WHERE id = ?
 `,
-  true,
-);
+    true,
+    {
+      params: [id],
+      columns: { ...dbJobColumns },
+    },
+  );
 
-export const getLatestChainJobForUpdateSql: TypedSql<
-  readonly [NamedParameter<"chain_id", string>],
-  [DbJob | undefined]
-> = sql(
-  /* sql */ `
+  const getLatestChainJobForUpdateSql = sql(
+    /* sql */ `
 SELECT *
 FROM {{table_prefix}}job
 WHERE chain_id = ?
 ORDER BY chain_index DESC
 LIMIT 1
 `,
-  true,
-);
+    true,
+    {
+      params: [id],
+      columns: { ...dbJobColumns },
+    },
+  );
+
+  return {
+    dbJobColumns: dbJobColumns,
+    dbJobChainRowColumns: dbJobChainRowColumns,
+    createMigrationTableSql: createMigrationTableSql,
+    getAppliedMigrationsSql: getAppliedMigrationsSql,
+    recordMigrationSql: recordMigrationSql,
+    findExistingContinuationSql: findExistingContinuationSql,
+    findDeduplicatedJobSql: findDeduplicatedJobSql,
+    insertJobsSql: insertJobsSql,
+    insertJobBlockersSql: insertJobBlockersSql,
+    checkBlockersStatusSql: checkBlockersStatusSql,
+    updateJobToBlockedSql: updateJobToBlockedSql,
+    getJobByIdForBlockersSql: getJobByIdForBlockersSql,
+    completeJobSql: completeJobSql,
+    findReadyJobsSql: findReadyJobsSql,
+    scheduleBlockedJobsSql: scheduleBlockedJobsSql,
+    getJobBlockerTraceContextsSql: getJobBlockerTraceContextsSql,
+    getBlockerChainTraceContextsSql: getBlockerChainTraceContextsSql,
+    getJobChainByIdSql: getJobChainByIdSql,
+    getJobBlockersSql: getJobBlockersSql,
+    getJobByIdSql: getJobByIdSql,
+    rescheduleJobSql: rescheduleJobSql,
+    triggerJobSql: triggerJobSql,
+    renewJobLeaseSql: renewJobLeaseSql,
+    acquireJobSql: acquireJobSql,
+    getNextJobAvailableInMsSql: getNextJobAvailableInMsSql,
+    reapExpiredJobLeaseSql: reapExpiredJobLeaseSql,
+    getConnectedChainIdsSql: getConnectedChainIdsSql,
+    checkExternalBlockerRefsSql: checkExternalBlockerRefsSql,
+    deleteBlockersByChainIdsSql: deleteBlockersByChainIdsSql,
+    getJobChainsByChainIdsSql: getJobChainsByChainIdsSql,
+    deleteJobChainsSql: deleteJobChainsSql,
+    getJobForUpdateSql: getJobForUpdateSql,
+    getLatestChainJobForUpdateSql: getLatestChainJobForUpdateSql,
+  } as const;
+};

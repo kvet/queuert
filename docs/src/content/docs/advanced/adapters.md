@@ -28,6 +28,14 @@ RedisNotifyProvider  → createRedisNotifyAdapter()    → NotifyAdapter
 
 This separation keeps driver-specific code isolated in the provider while the adapter layer remains database-agnostic. Users only implement the provider; they never implement the adapter interface directly.
 
+## Conformance
+
+Because each `create*` factory produces an adapter with the same contract regardless of the provider underneath, Queuert ships a **conformance suite** that validates any provider-built adapter against that contract.
+
+The suite is exposed as a framework-agnostic runner under the `queuert/conformance` subpath. Users wire it into a single `test()` block from their framework of choice; internal Queuert specs go through the same case list via a thin vitest binding so there's no drift between end-user validation and internal coverage.
+
+See the [Conformance reference](/queuert/reference/queuert/conformance/) for the API and the [Custom Adapters](/queuert/advanced/custom-adapters/) guide for a walkthrough.
+
 ## Async Factory Pattern
 
 Public-facing adapter factories that may perform I/O are async for consistency. In-process and internal-only factories remain sync since they have no I/O.

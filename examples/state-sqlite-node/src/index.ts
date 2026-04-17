@@ -1,10 +1,6 @@
-import { type SQLInputValue, DatabaseSync } from "node:sqlite";
+import { DatabaseSync } from "node:sqlite";
 
-import {
-  type SqliteStateProvider,
-  createAsyncLock,
-  createSqliteStateAdapter,
-} from "@queuert/sqlite";
+import { createAsyncLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import {
   createClient,
   createInProcessWorker,
@@ -13,6 +9,8 @@ import {
   withTransactionHooks,
 } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
+
+import { createNodeSqliteStateProvider } from "./provider.js";
 
 // 1. Create in-memory SQLite database
 const db = new DatabaseSync(":memory:");
@@ -38,60 +36,8 @@ const jobTypeRegistry = defineJobTypeRegistry<{
 }>();
 
 // 4. Create state provider for node:sqlite
-type DbContext = { db: DatabaseSync };
 const lock = createAsyncLock();
-
-const stateProvider: SqliteStateProvider<DbContext> = {
-  withTransaction: async (fn) => {
-    await lock.acquire();
-    try {
-      db.exec("BEGIN IMMEDIATE");
-      const result = await fn({ db });
-      db.exec("COMMIT");
-      return result;
-    } catch (error) {
-      try {
-        db.exec("ROLLBACK");
-      } catch {
-        // ignore rollback errors
-      }
-      throw error;
-    } finally {
-      lock.release();
-    }
-  },
-  executeSql: async ({ txCtx, sql, params, returns }) => {
-    const database = txCtx?.db ?? db;
-
-    const sqlParams = (params ?? []) as SQLInputValue[];
-
-    const execute = (database: DatabaseSync) => {
-      if (returns) {
-        const stmt = database.prepare(sql);
-        return stmt.all(...sqlParams) as unknown[];
-      }
-
-      if (sqlParams.length > 0) {
-        const stmt = database.prepare(sql);
-        stmt.run(...sqlParams);
-      } else {
-        database.exec(sql);
-      }
-      return [];
-    };
-
-    if (txCtx) {
-      return execute(database);
-    }
-
-    await lock.acquire();
-    try {
-      return execute(database);
-    } finally {
-      lock.release();
-    }
-  },
-};
+const stateProvider = createNodeSqliteStateProvider({ db, lock });
 
 // 5. Create adapters and queuert client/worker
 const stateAdapter = await createSqliteStateAdapter({ stateProvider });
@@ -152,10 +98,12 @@ const jobChain = await withTransactionHooks(async (transactionHooks) => {
     db.exec("COMMIT");
     return result;
   } catch (error) {
-    try {
-      db.exec("ROLLBACK");
-    } catch {
-      // ignore rollback errors
+    if (db.isTransaction) {
+      try {
+        db.exec("ROLLBACK");
+      } catch {
+        // ignore rollback errors
+      }
     }
     throw error;
   } finally {

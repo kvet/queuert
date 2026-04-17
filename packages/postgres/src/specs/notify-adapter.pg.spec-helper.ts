@@ -4,7 +4,7 @@ import { type TestSuiteContext, createFlakyBatchGenerator } from "queuert/testin
 import { type TestAPI, expect } from "vitest";
 
 import { createPgNotifyAdapter } from "../notify-adapter/notify-adapter.pg.js";
-import { createPgPoolNotifyProvider } from "./notify-provider.pg-pool.js";
+import { createPgPoolNotifyProvider } from "../notify-provider/notify-provider.pg-pool.js";
 
 export const extendWithNotifyPostgres = <
   T extends {
@@ -41,7 +41,7 @@ export const extendWithNotifyPostgres = <
 
         await use(notifyAdapter);
 
-        provider.close();
+        await provider.close();
       },
       { scope: "test" },
     ],

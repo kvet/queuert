@@ -1,4 +1,4 @@
-import { TESTCONTAINER_RESOURCE_TYPES, extendWithPostgres } from "@queuert/testcontainers";
+import { TESTCONTAINERS_RESOURCE_TYPES, extendWithPostgres } from "@queuert/testcontainers";
 import {
   blockerChainsTestSuite,
   chainsTestSuite,
@@ -22,7 +22,7 @@ const postgresNoopIt = extendWithResourceLeakDetection(
   extendWithNotifyNoop(
     extendWithCommon(extendWithStatePostgres(extendWithPostgres(it, import.meta.url))),
   ),
-  { additionalAllowedTypes: TESTCONTAINER_RESOURCE_TYPES },
+  { additionalAllowedTypes: TESTCONTAINERS_RESOURCE_TYPES },
 );
 
 // NOTE: hack for vitest plugin

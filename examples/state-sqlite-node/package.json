@@ -10,14 +10,19 @@
     "url": "git+https://github.com/kvet/queuert.git"
   },
   "type": "module",
+  "exports": {
+    "./provider": "./src/provider.ts"
+  },
   "scripts": {
-    "start": "tsx --no-warnings=ExperimentalWarning src/index.ts",
+    "start": "tsx src/index.ts",
+    "test": "vitest --run",
     "typecheck": "tsgo --noEmit"
   },
   "devDependencies": {
     "@queuert/sqlite": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
     "queuert": "workspace:*",
-    "tsx": "4.21.0"
+    "tsx": "4.21.0",
+    "vitest": "4.1.4"
   }
 }

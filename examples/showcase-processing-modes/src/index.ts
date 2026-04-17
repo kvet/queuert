@@ -11,13 +11,11 @@
 
 import assert from "node:assert/strict";
 
-import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
+import { createPgNotifyAdapter, createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
-import postgres, {
-  type PendingQuery,
-  type Row,
-  type TransactionSql as _TransactionSql,
-} from "postgres";
+import { createPostgresJsNotifyProvider } from "example-notify-postgres-postgres-js/provider";
+import { createPostgresJsStateProvider } from "example-state-postgres-postgres-js/provider";
+import postgres from "postgres";
 import {
   createClient,
   createInProcessWorker,
@@ -25,16 +23,6 @@ import {
   defineJobTypeRegistry,
   withTransactionHooks,
 } from "queuert";
-import { createInProcessNotifyAdapter } from "queuert/internal";
-
-type TransactionSql = _TransactionSql & {
-  <T extends readonly (object | undefined)[] = Row[]>(
-    template: TemplateStringsArray,
-    ...parameters: readonly postgres.ParameterOrFragment<never>[]
-  ): PendingQuery<T>;
-};
-
-type DbContext = { sql: TransactionSql };
 
 const jobTypeRegistry = defineJobTypeRegistry<{
   /*
@@ -71,28 +59,11 @@ async function chargePaymentAPI(amount: number): Promise<{ paymentId: string }> 
 const pgContainer = await new PostgreSqlContainer("postgres:18").withExposedPorts(5432).start();
 const sql = postgres(pgContainer.getConnectionUri(), { max: 10 });
 
-const stateProvider: PgStateProvider<DbContext> = {
-  withTransaction: async (cb) =>
-    sql.begin(async (txSql) => cb({ sql: txSql as TransactionSql }) as any),
-  withSavepoint: async (txCtx, fn) =>
-    txCtx.sql.savepoint(async (savepointSql) => fn({ sql: savepointSql as TransactionSql })) as any,
-  executeSql: async ({ txCtx, sql: query, params }) => {
-    const client = txCtx?.sql ?? sql;
-    return client.unsafe(
-      query,
-      (params ?? []).map((p) => (p === undefined ? null : p)) as (
-        | string
-        | number
-        | boolean
-        | null
-      )[],
-    );
-  },
-};
-
+const stateProvider = createPostgresJsStateProvider({ sql });
 const stateAdapter = await createPgStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
-const notifyAdapter = createInProcessNotifyAdapter();
+const notifyProvider = createPostgresJsNotifyProvider({ sql });
+const notifyAdapter = await createPgNotifyAdapter({ provider: notifyProvider });
 
 // Create schema
 await sql`
@@ -132,18 +103,21 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, complete }) => {
           console.log(`\n[reserve-inventory] AUTO-SETUP ATOMIC mode`);
 
-          return complete(async ({ sql: txSql, continueWith }) => {
+          return complete(async ({ sql, continueWith }) => {
             console.log(`  Reading order, checking stock, and reserving...`);
-            const [order] = await txSql<{ quantity: number; stock: number; price: number }[]>`
-              SELECT o.quantity, p.stock, p.price
-              FROM orders o JOIN products p ON p.id = o.product_id
-              WHERE o.id = ${job.input.orderId}
-            `;
+            const rows = await sql<
+              {
+                quantity: number;
+                stock: number;
+                price: number;
+              }[]
+            >`SELECT o.quantity, p.stock, p.price FROM orders o JOIN products p ON p.id = o.product_id WHERE o.id = ${job.input.orderId}`;
+            const order = rows[0];
             if (order.stock < order.quantity) {
               throw new Error(`Insufficient stock: ${order.stock} < ${order.quantity}`);
             }
-            await txSql`UPDATE products SET stock = stock - ${order.quantity} WHERE id = (SELECT product_id FROM orders WHERE id = ${job.input.orderId})`;
-            await txSql`UPDATE orders SET status = 'reserved' WHERE id = ${job.input.orderId}`;
+            await sql`UPDATE products SET stock = stock - ${order.quantity} WHERE id = (SELECT product_id FROM orders WHERE id = ${job.input.orderId})`;
+            await sql`UPDATE orders SET status = 'reserved' WHERE id = ${job.input.orderId}`;
             console.log(`  Transaction committed!`);
 
             return continueWith({
@@ -158,11 +132,12 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, prepare, complete }) => {
           console.log(`\n[charge-payment] STAGED mode`);
 
-          const orderId = await prepare({ mode: "staged" }, async ({ sql: txSql }) => {
+          const orderId = await prepare({ mode: "staged" }, async ({ sql }) => {
             console.log(`  Loading order...`);
-            const [row] = await txSql<{ id: number; status: string }[]>`
-              SELECT id, status FROM orders WHERE id = ${job.input.orderId}
-            `;
+            const rows = await sql<
+              { id: number; status: string }[]
+            >`SELECT id, status FROM orders WHERE id = ${job.input.orderId}`;
+            const row = rows[0];
             if (row.status !== "reserved") throw new Error(`Invalid status: ${row.status}`);
             return row.id;
           });
@@ -171,9 +146,9 @@ const worker = await createInProcessWorker({
           const { paymentId } = await chargePaymentAPI(job.input.amount);
           console.log(`  Payment complete: ${paymentId}`);
 
-          return complete(async ({ sql: txSql, continueWith }) => {
+          return complete(async ({ sql, continueWith }) => {
             console.log(`  Recording payment...`);
-            await txSql`UPDATE orders SET status = 'paid', payment_id = ${paymentId} WHERE id = ${orderId}`;
+            await sql`UPDATE orders SET status = 'paid', payment_id = ${paymentId} WHERE id = ${orderId}`;
             console.log(`  Transaction committed!`);
 
             return continueWith({
@@ -191,8 +166,8 @@ const worker = await createInProcessWorker({
 
           await new Promise((r) => setTimeout(r, 100));
 
-          return complete(async ({ sql: txSql }) => {
-            await txSql`UPDATE orders SET status = 'confirmed' WHERE id = ${job.input.orderId}`;
+          return complete(async ({ sql }) => {
+            await sql`UPDATE orders SET status = 'confirmed' WHERE id = ${job.input.orderId}`;
             return { confirmedAt: new Date().toISOString() };
           });
         },
@@ -207,21 +182,19 @@ console.log("\n--- Processing Modes: Order Fulfillment Workflow ---");
 console.log("Auto-setup atomic -> Staged -> Auto-setup staged processing modes.\n");
 
 const jobChain = await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (_sql) => {
-    const txSql = _sql as TransactionSql;
-    const [order] = await txSql<{ id: number }[]>`
-      INSERT INTO orders (product_id, quantity, status)
-      VALUES (1, 2, 'pending')
-      RETURNING id
-    `;
+  sql.begin(async (txSql) => {
+    const [order] = await txSql<
+      { id: number }[]
+    >`INSERT INTO orders (product_id, quantity, status) VALUES (1, 2, 'pending') RETURNING id`;
     console.log(`Created order #${order.id} for 2x Widget Pro`);
 
-    return client.startJobChain({
+    const result = await client.startJobChain({
       sql: txSql,
       transactionHooks,
       typeName: "reserve-inventory",
       input: { orderId: order.id },
     });
+    return result;
   }),
 );
 

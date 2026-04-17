@@ -34,6 +34,7 @@
   "types": "./dist/index.d.mts",
   "exports": {
     ".": "./src/index.ts",
+    "./conformance": "./src/conformance.ts",
     "./internal": "./src/internal.ts",
     "./testing": "./src/testing.ts",
     "./package.json": "./package.json"
@@ -41,6 +42,7 @@
   "publishConfig": {
     "exports": {
       ".": "./dist/index.mjs",
+      "./conformance": "./dist/conformance.mjs",
       "./internal": "./dist/internal.mjs",
       "./testing": "./dist/testing.mjs",
       "./package.json": "./package.json"

@@ -10,7 +10,7 @@ import {
   type BetterSqlite3Provider,
   type SqliteContext,
   createBetterSqlite3Provider,
-} from "./state-provider.better-sqlite3.js";
+} from "../state-provider/state-provider.better-sqlite3.js";
 
 export type SqliteStateAdapter = StateAdapter<SqliteContext, UUID>;
 
@@ -97,7 +97,7 @@ export const extendWithStateSqlite = <T>(
         const originalExecuteSql = stateProvider.executeSql.bind(stateProvider);
         const flakyStateProvider: typeof stateProvider = {
           ...stateProvider,
-          executeSql: async ({ txCtx, sql, params, returns }) => {
+          executeSql: async ({ txCtx, sql, params, columnTypes }) => {
             queryCount++;
 
             if (shouldError()) {
@@ -109,7 +109,7 @@ export const extendWithStateSqlite = <T>(
               throw error;
             }
 
-            return originalExecuteSql({ txCtx, sql, params, returns });
+            return originalExecuteSql({ txCtx, sql, params, columnTypes });
           },
         };
 
@@ -154,7 +154,7 @@ export const extendWithStateSqlite = <T>(
         const originalExecuteSql = stateProvider.executeSql.bind(stateProvider);
         const flakyDbProvider: typeof stateProvider = {
           ...stateProvider,
-          executeSql: async ({ txCtx, sql, params, returns }) => {
+          executeSql: async ({ txCtx, sql, params, columnTypes }) => {
             queryCount++;
             const shouldFail = shouldError();
             if (enabled && !txCtx && shouldFail) {
@@ -162,10 +162,10 @@ export const extendWithStateSqlite = <T>(
               return originalExecuteSql({
                 txCtx,
                 sql: "SELECT 1 FROM nonexistent_table_queuert_poison_xyz",
-                returns: true,
+                columnTypes: { _: "number" },
               });
             }
-            return originalExecuteSql({ txCtx, sql, params, returns });
+            return originalExecuteSql({ txCtx, sql, params, columnTypes });
           },
         };
 
@@ -196,15 +196,15 @@ export const extendWithStateSqlite = <T>(
 
         const poisonableProvider: typeof stateProvider = {
           ...stateProvider,
-          executeSql: async ({ txCtx, sql, params, returns }) => {
+          executeSql: async ({ txCtx, sql, params, columnTypes }) => {
             if (poisoned && !txCtx) {
               return stateProvider.executeSql({
                 txCtx,
                 sql: "SELECT 1 FROM nonexistent_table_queuert_poison_xyz",
-                returns: true,
+                columnTypes: { _: "number" },
               });
             }
-            return stateProvider.executeSql({ txCtx, sql, params, returns });
+            return stateProvider.executeSql({ txCtx, sql, params, columnTypes });
           },
         };
 

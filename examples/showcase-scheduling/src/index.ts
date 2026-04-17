@@ -11,13 +11,11 @@
 
 import assert from "node:assert/strict";
 
-import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
+import { createPgNotifyAdapter, createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
-import postgres, {
-  type PendingQuery,
-  type Row,
-  type TransactionSql as _TransactionSql,
-} from "postgres";
+import { createPostgresJsNotifyProvider } from "example-notify-postgres-postgres-js/provider";
+import { createPostgresJsStateProvider } from "example-state-postgres-postgres-js/provider";
+import postgres from "postgres";
 import {
   createClient,
   createInProcessWorker,
@@ -25,16 +23,6 @@ import {
   defineJobTypeRegistry,
   withTransactionHooks,
 } from "queuert";
-import { createInProcessNotifyAdapter } from "queuert/internal";
-
-type TransactionSql = _TransactionSql & {
-  <T extends readonly (object | undefined)[] = Row[]>(
-    template: TemplateStringsArray,
-    ...parameters: readonly postgres.ParameterOrFragment<never>[]
-  ): PendingQuery<T>;
-};
-
-type DbContext = { sql: TransactionSql };
 
 const jobTypeRegistry = defineJobTypeRegistry<{
   /*
@@ -81,54 +69,37 @@ let serviceRunning = true;
 const pgContainer = await new PostgreSqlContainer("postgres:18").withExposedPorts(5432).start();
 const sql = postgres(pgContainer.getConnectionUri(), { max: 10 });
 
-const stateProvider: PgStateProvider<DbContext> = {
-  withTransaction: async (cb) =>
-    sql.begin(async (txSql) => cb({ sql: txSql as TransactionSql }) as any),
-  withSavepoint: async (txCtx, fn) =>
-    txCtx.sql.savepoint(async (savepointSql) => fn({ sql: savepointSql as TransactionSql })) as any,
-  executeSql: async ({ txCtx, sql: query, params }) => {
-    const client = txCtx?.sql ?? sql;
-    return client.unsafe(
-      query,
-      (params ?? []).map((p) => (p === undefined ? null : p)) as (
-        | string
-        | number
-        | boolean
-        | null
-      )[],
-    );
-  },
-};
-
+const stateProvider = createPostgresJsStateProvider({ sql });
 const stateAdapter = await createPgStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
-const notifyAdapter = createInProcessNotifyAdapter();
+const notifyProvider = createPostgresJsNotifyProvider({ sql });
+const notifyAdapter = await createPgNotifyAdapter({ provider: notifyProvider });
 
 // Create schema for tracking
-await sql`
+await sql.unsafe(`
   CREATE TABLE IF NOT EXISTS digest_logs (
     id SERIAL PRIMARY KEY,
     user_id TEXT NOT NULL,
     sent_at TIMESTAMP DEFAULT NOW()
   )
-`;
+`);
 
-await sql`
+await sql.unsafe(`
   CREATE TABLE IF NOT EXISTS health_logs (
     id SERIAL PRIMARY KEY,
     service_id TEXT NOT NULL,
     status TEXT NOT NULL,
     checked_at TIMESTAMP DEFAULT NOW()
   )
-`;
+`);
 
-await sql`
+await sql.unsafe(`
   CREATE TABLE IF NOT EXISTS sync_logs (
     id SERIAL PRIMARY KEY,
     source_id TEXT NOT NULL,
     synced_at TIMESTAMP DEFAULT NOW()
   )
-`;
+`);
 
 const client = await createClient({
   stateAdapter,
@@ -151,9 +122,7 @@ const worker = await createInProcessWorker({
           await new Promise((r) => setTimeout(r, 50));
 
           return complete(async ({ sql: txSql, transactionHooks }) => {
-            await txSql`
-              INSERT INTO digest_logs (user_id) VALUES (${job.input.userId})
-            `;
+            await txSql.unsafe("INSERT INTO digest_logs (user_id) VALUES ($1)", [job.input.userId]);
 
             const shouldContinue = userSubscribed && job.input.iteration < MAX_DIGEST_ITERATIONS;
 
@@ -185,10 +154,10 @@ const worker = await createInProcessWorker({
           console.log(`  Status: ${status}`);
 
           return complete(async ({ sql: txSql, transactionHooks }) => {
-            await txSql`
-              INSERT INTO health_logs (service_id, status)
-              VALUES (${job.input.serviceId}, ${status})
-            `;
+            await txSql.unsafe("INSERT INTO health_logs (service_id, status) VALUES ($1, $2)", [
+              job.input.serviceId,
+              status,
+            ]);
 
             const shouldContinue = serviceRunning && job.input.checkNumber < MAX_HEALTH_CHECKS;
 
@@ -224,9 +193,9 @@ const worker = await createInProcessWorker({
           await new Promise((r) => setTimeout(r, 100));
 
           return complete(async ({ sql: txSql }) => {
-            await txSql`
-              INSERT INTO sync_logs (source_id) VALUES (${job.input.sourceId})
-            `;
+            await txSql.unsafe("INSERT INTO sync_logs (source_id) VALUES ($1)", [
+              job.input.sourceId,
+            ]);
             const syncedAt = new Date().toISOString();
             console.log(`  Sync completed at ${syncedAt}`);
             return { syncedAt };
@@ -260,26 +229,26 @@ console.log("Each execution starts a new independent chain - no cron needed!\n")
 userSubscribed = true;
 
 await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (_sql) => {
-    const txSql = _sql as TransactionSql;
-    return client.startJobChain({
+  sql.begin(async (txSql) =>
+    client.startJobChain({
       sql: txSql,
       transactionHooks,
       typeName: "daily-digest",
       input: { userId: "user-123", iteration: 1 },
-    });
-  }),
+    }),
+  ),
 );
 
-await waitForRows(
-  () =>
-    sql<{ count: string }[]>`SELECT COUNT(*) as count FROM digest_logs WHERE user_id = 'user-123'`,
-  MAX_DIGEST_ITERATIONS,
-);
+await waitForRows(async () => {
+  const result = await sql.unsafe<{ count: string }[]>(
+    "SELECT COUNT(*) as count FROM digest_logs WHERE user_id = 'user-123'",
+  );
+  return result;
+}, MAX_DIGEST_ITERATIONS);
 
-const [digestCount] = await sql<{ count: string }[]>`
-  SELECT COUNT(*) as count FROM digest_logs WHERE user_id = 'user-123'
-`;
+const [digestCount] = await sql.unsafe<{ count: string }[]>(
+  "SELECT COUNT(*) as count FROM digest_logs WHERE user_id = 'user-123'",
+);
 
 console.log("\n" + "-".repeat(40));
 console.log("SCENARIO 1 COMPLETED");
@@ -295,9 +264,8 @@ serviceRunning = true;
 
 // Start first health check with deduplication
 const healthChain1 = await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (_sql) => {
-    const txSql = _sql as TransactionSql;
-    return client.startJobChain({
+  sql.begin(async (txSql) =>
+    client.startJobChain({
       sql: txSql,
       transactionHooks,
       typeName: "health-check",
@@ -306,8 +274,8 @@ const healthChain1 = await withTransactionHooks(async (transactionHooks) =>
         key: "health:api-server",
         scope: "incomplete", // Only one active instance at a time
       },
-    });
-  }),
+    }),
+  ),
 );
 console.log(`Started health check chain: ${healthChain1.id}`);
 console.log(`Deduplicated: ${healthChain1.deduplicated}`);
@@ -315,9 +283,8 @@ assert.equal(healthChain1.deduplicated, false);
 
 // Try to start another health check - should be deduplicated
 const healthChain2 = await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (_sql) => {
-    const txSql = _sql as TransactionSql;
-    return client.startJobChain({
+  sql.begin(async (txSql) =>
+    client.startJobChain({
       sql: txSql,
       transactionHooks,
       typeName: "health-check",
@@ -326,25 +293,24 @@ const healthChain2 = await withTransactionHooks(async (transactionHooks) =>
         key: "health:api-server",
         scope: "incomplete",
       },
-    });
-  }),
+    }),
+  ),
 );
 console.log(`\nAttempted duplicate health check: ${healthChain2.id}`);
 console.log(`Deduplicated: ${healthChain2.deduplicated} (returned existing chain)`);
 assert.equal(healthChain2.deduplicated, true);
 assert.equal(healthChain2.id, healthChain1.id);
 
-await waitForRows(
-  () =>
-    sql<
-      { count: string }[]
-    >`SELECT COUNT(*) as count FROM health_logs WHERE service_id = 'api-server'`,
-  MAX_HEALTH_CHECKS,
-);
+await waitForRows(async () => {
+  const result = await sql.unsafe<{ count: string }[]>(
+    "SELECT COUNT(*) as count FROM health_logs WHERE service_id = 'api-server'",
+  );
+  return result;
+}, MAX_HEALTH_CHECKS);
 
-const [healthCount] = await sql<{ count: string }[]>`
-  SELECT COUNT(*) as count FROM health_logs WHERE service_id = 'api-server'
-`;
+const [healthCount] = await sql.unsafe<{ count: string }[]>(
+  "SELECT COUNT(*) as count FROM health_logs WHERE service_id = 'api-server'",
+);
 
 console.log("\n" + "-".repeat(40));
 console.log("SCENARIO 2 COMPLETED");
@@ -358,9 +324,8 @@ console.log(`Rate-limiting syncs with ${SYNC_WINDOW_MS}ms window.\n`);
 
 // First sync - should succeed
 const sync1 = await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (_sql) => {
-    const txSql = _sql as TransactionSql;
-    return client.startJobChain({
+  sql.begin(async (txSql) =>
+    client.startJobChain({
       sql: txSql,
       transactionHooks,
       typeName: "sync-data",
@@ -370,8 +335,8 @@ const sync1 = await withTransactionHooks(async (transactionHooks) =>
         scope: "any",
         windowMs: SYNC_WINDOW_MS,
       },
-    });
-  }),
+    }),
+  ),
 );
 console.log(`First sync started: ${sync1.id}`);
 console.log(`Deduplicated: ${sync1.deduplicated}`);
@@ -381,9 +346,8 @@ await client.awaitJobChain(sync1, { timeoutMs: 5000 });
 
 // Second sync immediately after - should be deduplicated (within window)
 const sync2 = await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (_sql) => {
-    const txSql = _sql as TransactionSql;
-    return client.startJobChain({
+  sql.begin(async (txSql) =>
+    client.startJobChain({
       sql: txSql,
       transactionHooks,
       typeName: "sync-data",
@@ -393,8 +357,8 @@ const sync2 = await withTransactionHooks(async (transactionHooks) =>
         scope: "any",
         windowMs: SYNC_WINDOW_MS,
       },
-    });
-  }),
+    }),
+  ),
 );
 console.log(`\nSecond sync (within window): ${sync2.id}`);
 console.log(`Deduplicated: ${sync2.deduplicated} (rate-limited)`);
@@ -406,9 +370,8 @@ await new Promise((r) => setTimeout(r, SYNC_WINDOW_MS + 100));
 
 // Third sync after window - should succeed
 const sync3 = await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (_sql) => {
-    const txSql = _sql as TransactionSql;
-    return client.startJobChain({
+  sql.begin(async (txSql) =>
+    client.startJobChain({
       sql: txSql,
       transactionHooks,
       typeName: "sync-data",
@@ -418,8 +381,8 @@ const sync3 = await withTransactionHooks(async (transactionHooks) =>
         scope: "any",
         windowMs: SYNC_WINDOW_MS,
       },
-    });
-  }),
+    }),
+  ),
 );
 console.log(`\nThird sync (after window): ${sync3.id}`);
 console.log(`Deduplicated: ${sync3.deduplicated} (new chain created)`);
@@ -427,9 +390,9 @@ assert.equal(sync3.deduplicated, false);
 
 await client.awaitJobChain(sync3, { timeoutMs: 5000 });
 
-const [syncCount] = await sql<{ count: string }[]>`
-  SELECT COUNT(*) as count FROM sync_logs WHERE source_id = 'db-primary'
-`;
+const [syncCount] = await sql.unsafe<{ count: string }[]>(
+  "SELECT COUNT(*) as count FROM sync_logs WHERE source_id = 'db-primary'",
+);
 
 console.log("\n" + "-".repeat(40));
 console.log("SCENARIO 3 COMPLETED");

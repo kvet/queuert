@@ -12,13 +12,11 @@
 
 import assert from "node:assert/strict";
 
-import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
+import { createPgNotifyAdapter, createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
-import postgres, {
-  type PendingQuery,
-  type Row,
-  type TransactionSql as _TransactionSql,
-} from "postgres";
+import { createPostgresJsNotifyProvider } from "example-notify-postgres-postgres-js/provider";
+import { createPostgresJsStateProvider } from "example-state-postgres-postgres-js/provider";
+import postgres from "postgres";
 import {
   WaitChainTimeoutError,
   createClient,
@@ -27,16 +25,6 @@ import {
   defineJobTypeRegistry,
   withTransactionHooks,
 } from "queuert";
-import { createInProcessNotifyAdapter } from "queuert/internal";
-
-type TransactionSql = _TransactionSql & {
-  <T extends readonly (object | undefined)[] = Row[]>(
-    template: TemplateStringsArray,
-    ...parameters: readonly postgres.ParameterOrFragment<never>[]
-  ): PendingQuery<T>;
-};
-
-type DbContext = { sql: TransactionSql };
 
 const jobTypeRegistry = defineJobTypeRegistry<{
   /*
@@ -63,28 +51,11 @@ const jobTypeRegistry = defineJobTypeRegistry<{
 const pgContainer = await new PostgreSqlContainer("postgres:18").withExposedPorts(5432).start();
 const sql = postgres(pgContainer.getConnectionUri(), { max: 10 });
 
-const stateProvider: PgStateProvider<DbContext> = {
-  withTransaction: async (cb) =>
-    sql.begin(async (txSql) => cb({ sql: txSql as TransactionSql }) as any),
-  withSavepoint: async (txCtx, fn) =>
-    txCtx.sql.savepoint(async (savepointSql) => fn({ sql: savepointSql as TransactionSql })) as any,
-  executeSql: async ({ txCtx, sql: query, params }) => {
-    const client = txCtx?.sql ?? sql;
-    return client.unsafe(
-      query,
-      (params ?? []).map((p) => (p === undefined ? null : p)) as (
-        | string
-        | number
-        | boolean
-        | null
-      )[],
-    );
-  },
-};
-
+const stateProvider = createPostgresJsStateProvider({ sql });
 const stateAdapter = await createPgStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
-const notifyAdapter = createInProcessNotifyAdapter();
+const notifyProvider = createPostgresJsNotifyProvider({ sql });
+const notifyAdapter = await createPgNotifyAdapter({ provider: notifyProvider });
 
 const client = await createClient({
   stateAdapter,
@@ -148,15 +119,14 @@ console.log("\n--- Scenario 1: Basic Awaiting ---");
 console.log("Start a price lookup chain and await its result.\n");
 
 const priceChain = await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (_sql) => {
-    const txSql = _sql as TransactionSql;
-    return client.startJobChain({
+  sql.begin(async (txSql) =>
+    client.startJobChain({
       sql: txSql,
       transactionHooks,
       typeName: "fetch-price",
       input: { productId: "widget" },
-    });
-  }),
+    }),
+  ),
 );
 
 const result = await client.awaitJobChain(priceChain, { timeoutMs: 10000 });
@@ -170,9 +140,8 @@ console.log("\n--- Scenario 2: Parallel Awaiting ---");
 console.log("Await multiple chains concurrently with Promise.all.\n");
 
 const chains = await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (_sql) => {
-    const txSql = _sql as TransactionSql;
-    return client.startJobChains({
+  sql.begin(async (txSql) =>
+    client.startJobChains({
       sql: txSql,
       transactionHooks,
       items: [
@@ -180,8 +149,8 @@ const chains = await withTransactionHooks(async (transactionHooks) =>
         { typeName: "fetch-price", input: { productId: "gadget" } },
         { typeName: "fetch-price", input: { productId: "gizmo" } },
       ],
-    });
-  }),
+    }),
+  ),
 );
 
 const results = await Promise.all(
@@ -200,15 +169,14 @@ console.log("\n--- Scenario 3: Timeout Handling ---");
 console.log("Await a slow chain with a short timeout.\n");
 
 const slowChain = await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (_sql) => {
-    const txSql = _sql as TransactionSql;
-    return client.startJobChain({
+  sql.begin(async (txSql) =>
+    client.startJobChain({
       sql: txSql,
       transactionHooks,
       typeName: "long-running",
       input: { durationMs: 5000 },
-    });
-  }),
+    }),
+  ),
 );
 
 try {
@@ -225,15 +193,14 @@ console.log("\n--- Scenario 4: Abort Signal ---");
 console.log("Cancel awaiting with an AbortSignal.\n");
 
 const abortChain = await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (_sql) => {
-    const txSql = _sql as TransactionSql;
-    return client.startJobChain({
+  sql.begin(async (txSql) =>
+    client.startJobChain({
       sql: txSql,
       transactionHooks,
       typeName: "long-running",
       input: { durationMs: 5000 },
-    });
-  }),
+    }),
+  ),
 );
 
 const controller = new AbortController();

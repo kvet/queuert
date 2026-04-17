@@ -24,10 +24,12 @@ Notify adapters handle pub/sub notifications for efficient job scheduling. When 
 
     ### Supported clients
 
-    | Client     | Example                                                                                         |
-    | ---------- | ----------------------------------------------------------------------------------------------- |
-    | node-redis | [notify-redis-redis](https://github.com/kvet/queuert/tree/main/examples/notify-redis-redis)     |
-    | ioredis    | [notify-redis-ioredis](https://github.com/kvet/queuert/tree/main/examples/notify-redis-ioredis) |
+    | Client             | Example                                                                                                                 |
+    | ------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+    | node-redis         | [notify-redis-redis](https://github.com/kvet/queuert/tree/main/examples/notify-redis-redis)                             |
+    | ioredis            | [notify-redis-ioredis](https://github.com/kvet/queuert/tree/main/examples/notify-redis-ioredis)                         |
+    | node-redis cluster | [notify-redis-cluster-node-redis](https://github.com/kvet/queuert/tree/main/examples/notify-redis-cluster-node-redis)   |
+    | ioredis cluster    | [notify-redis-cluster-ioredis](https://github.com/kvet/queuert/tree/main/examples/notify-redis-cluster-ioredis)         |
 
   </TabItem>
   <TabItem label="NATS">
@@ -85,6 +87,25 @@ A Notify Provider bridges your pub/sub client (Redis, NATS, PostgreSQL, etc.) wi
 - **`subscribe`** -- Listens on a channel and invokes a callback when messages arrive. Returns a dispose function to unsubscribe.
 
 The provider maintains a dedicated connection for subscriptions and acquires/releases connections for publish operations automatically. Each example linked above demonstrates a complete Notify Provider implementation for its corresponding client.
+
+You're not limited to the clients listed here — you can write a provider for any pub/sub client that supports the same semantics, or implement the `NotifyAdapter` interface from scratch for an entirely different message broker. See [Custom Adapters](/queuert/advanced/custom-adapters/) for a walkthrough.
+
+## Verify your provider
+
+Queuert ships a conformance runner that exercises the 18-case notify adapter suite against any provider you build. Embed it in a single `test()` block from your test framework to validate correctness:
+
+```ts
+import { runNotifyAdapterConformance } from "queuert/conformance";
+
+test("my provider passes notify adapter conformance", async () => {
+  await runNotifyAdapterConformance(async () => ({
+    notifyAdapter,
+    dispose: async () => { /* close connections */ },
+  }));
+}, 60_000);
+```
+
+Every example's `src/provider.spec.ts` is a working template. See the [Custom Adapters](/queuert/advanced/custom-adapters/) guide for a full walkthrough and the [Conformance reference](/queuert/reference/queuert/conformance/) for the complete API.
 
 ## See Also
 

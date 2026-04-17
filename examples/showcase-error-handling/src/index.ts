@@ -11,13 +11,11 @@
 
 import assert from "node:assert/strict";
 
-import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
+import { createPgNotifyAdapter, createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
-import postgres, {
-  type PendingQuery,
-  type Row,
-  type TransactionSql as _TransactionSql,
-} from "postgres";
+import { createPostgresJsNotifyProvider } from "example-notify-postgres-postgres-js/provider";
+import { createPostgresJsStateProvider } from "example-state-postgres-postgres-js/provider";
+import postgres from "postgres";
 import {
   createClient,
   createInProcessWorker,
@@ -26,16 +24,6 @@ import {
   rescheduleJob,
   withTransactionHooks,
 } from "queuert";
-import { createInProcessNotifyAdapter } from "queuert/internal";
-
-type TransactionSql = _TransactionSql & {
-  <T extends readonly (object | undefined)[] = Row[]>(
-    template: TemplateStringsArray,
-    ...parameters: readonly postgres.ParameterOrFragment<never>[]
-  ): PendingQuery<T>;
-};
-
-type DbContext = { sql: TransactionSql };
 
 const jobTypeRegistry = defineJobTypeRegistry<{
   /*
@@ -96,28 +84,11 @@ let apiRateLimited = true;
 const pgContainer = await new PostgreSqlContainer("postgres:18").withExposedPorts(5432).start();
 const sql = postgres(pgContainer.getConnectionUri(), { max: 10 });
 
-const stateProvider: PgStateProvider<DbContext> = {
-  withTransaction: async (cb) =>
-    sql.begin(async (txSql) => cb({ sql: txSql as TransactionSql }) as any),
-  withSavepoint: async (txCtx, fn) =>
-    txCtx.sql.savepoint(async (savepointSql) => fn({ sql: savepointSql as TransactionSql })) as any,
-  executeSql: async ({ txCtx, sql: query, params }) => {
-    const client = txCtx?.sql ?? sql;
-    return client.unsafe(
-      query,
-      (params ?? []).map((p) => (p === undefined ? null : p)) as (
-        | string
-        | number
-        | boolean
-        | null
-      )[],
-    );
-  },
-};
-
+const stateProvider = createPostgresJsStateProvider({ sql });
 const stateAdapter = await createPgStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
-const notifyAdapter = createInProcessNotifyAdapter();
+const notifyProvider = createPostgresJsNotifyProvider({ sql });
+const notifyAdapter = await createPgNotifyAdapter({ provider: notifyProvider });
 
 const client = await createClient({
   stateAdapter,
@@ -214,14 +185,14 @@ console.log("\n--- Scenario 1: Discriminated Union Outputs ---");
 console.log("Payment results are typed as success | failure.\n");
 
 const payment1 = await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (_sql) => {
-    const txSql = _sql as TransactionSql;
-    return client.startJobChain({
+  sql.begin(async (txSql) => {
+    const result = await client.startJobChain({
       sql: txSql,
       transactionHooks,
       typeName: "process-payment",
       input: { orderId: "order-1", amount: 500 },
     });
+    return result;
   }),
 );
 const result1 = await client.awaitJobChain(payment1, { timeoutMs: 5000 });
@@ -231,14 +202,14 @@ console.log(
 assert.equal(result1.output.success, true);
 
 const payment2 = await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (_sql) => {
-    const txSql = _sql as TransactionSql;
-    return client.startJobChain({
+  sql.begin(async (txSql) => {
+    const result = await client.startJobChain({
       sql: txSql,
       transactionHooks,
       typeName: "process-payment",
       input: { orderId: "order-2", amount: 1500 },
     });
+    return result;
   }),
 );
 const result2 = await client.awaitJobChain(payment2, { timeoutMs: 5000 });
@@ -253,14 +224,14 @@ console.log("Charge -> Ship succeeds.\n");
 
 shipmentShouldFail = false;
 const order1 = await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (_sql) => {
-    const txSql = _sql as TransactionSql;
-    return client.startJobChain({
+  sql.begin(async (txSql) => {
+    const result = await client.startJobChain({
       sql: txSql,
       transactionHooks,
       typeName: "charge-card",
       input: { orderId: "order-3", amount: 100 },
     });
+    return result;
   }),
 );
 const orderResult1 = await client.awaitJobChain(order1, { timeoutMs: 5000 });
@@ -273,14 +244,14 @@ console.log("Charge -> Ship fails -> Refund.\n");
 
 shipmentShouldFail = true;
 const order2 = await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (_sql) => {
-    const txSql = _sql as TransactionSql;
-    return client.startJobChain({
+  sql.begin(async (txSql) => {
+    const result = await client.startJobChain({
       sql: txSql,
       transactionHooks,
       typeName: "charge-card",
       input: { orderId: "order-4", amount: 100 },
     });
+    return result;
   }),
 );
 const orderResult2 = await client.awaitJobChain(order2, { timeoutMs: 5000 });
@@ -293,14 +264,14 @@ console.log("API is rate-limited, job reschedules itself.\n");
 
 apiRateLimited = true;
 const apiCall = await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (_sql) => {
-    const txSql = _sql as TransactionSql;
-    return client.startJobChain({
+  sql.begin(async (txSql) => {
+    const result = await client.startJobChain({
       sql: txSql,
       transactionHooks,
       typeName: "call-rate-limited-api",
       input: { endpoint: "/api/data" },
     });
+    return result;
   }),
 );
 const apiResult = await client.awaitJobChain(apiCall, { timeoutMs: 5000 });

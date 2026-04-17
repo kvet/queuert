@@ -8,7 +8,7 @@ import {
   type PgPoolContext,
   type PgPoolProvider,
   createPgPoolProvider,
-} from "./state-provider.pg-pool.js";
+} from "../state-provider/state-provider.pg-pool.js";
 
 export type PgStateAdapter = StateAdapter<PgPoolContext, string>;
 
@@ -113,7 +113,7 @@ export const extendWithStatePostgres = <
         const originalExecuteSql = stateProvider.executeSql.bind(stateProvider);
         const flakyStateProvider: typeof stateProvider = {
           ...stateProvider,
-          executeSql: async ({ txCtx, sql, params }) => {
+          executeSql: async ({ txCtx, sql, params, paramTypes, columnTypes }) => {
             queryCount++;
 
             if (shouldError()) {
@@ -123,7 +123,7 @@ export const extendWithStatePostgres = <
               throw error;
             }
 
-            return originalExecuteSql({ txCtx, sql, params });
+            return originalExecuteSql({ txCtx, sql, params, paramTypes, columnTypes });
           },
         };
 
@@ -171,7 +171,7 @@ export const extendWithStatePostgres = <
         const originalExecuteSql = stateProvider.executeSql.bind(stateProvider);
         const flakyDbProvider: typeof stateProvider = {
           ...stateProvider,
-          executeSql: async ({ txCtx, sql, params }) => {
+          executeSql: async ({ txCtx, sql, params, paramTypes, columnTypes }) => {
             queryCount++;
             const shouldFail = shouldError();
             if (enabled && !txCtx && shouldFail) {
@@ -179,9 +179,11 @@ export const extendWithStatePostgres = <
               return originalExecuteSql({
                 txCtx,
                 sql: "SELECT 1 FROM nonexistent_table_queuert_poison_xyz",
+                paramTypes: {},
+                columnTypes: {},
               });
             }
-            return originalExecuteSql({ txCtx, sql, params });
+            return originalExecuteSql({ txCtx, sql, params, paramTypes, columnTypes });
           },
         };
 
@@ -212,14 +214,16 @@ export const extendWithStatePostgres = <
 
         const poisonableProvider: typeof stateProvider = {
           ...stateProvider,
-          executeSql: async ({ txCtx, sql, params }) => {
+          executeSql: async ({ txCtx, sql, params, paramTypes, columnTypes }) => {
             if (poisoned && !txCtx) {
               return stateProvider.executeSql({
                 txCtx,
                 sql: "SELECT 1 FROM nonexistent_table_queuert_poison_xyz",
+                paramTypes: {},
+                columnTypes: {},
               });
             }
-            return stateProvider.executeSql({ txCtx, sql, params });
+            return stateProvider.executeSql({ txCtx, sql, params, paramTypes, columnTypes });
           },
         };
 

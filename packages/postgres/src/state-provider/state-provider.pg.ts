@@ -1,4 +1,5 @@
-import { type BaseTxContext } from "queuert";
+import { type RuntimeType } from "@queuert/typed-sql";
+import { type BaseTxContext } from "queuert/internal";
 
 /**
  * PostgreSQL state provider interface.
@@ -31,10 +32,16 @@ export type PgStateProvider<TTxContext extends BaseTxContext> = {
    * Executes a SQL query.
    * When txCtx is provided, uses that transaction connection.
    * When txCtx is omitted, acquires a connection from the pool, executes, and releases.
+   *
+   * Type hints enable drivers that don't auto-serialize/parse (e.g. postgres.js `unsafe()`)
+   * to handle json/jsonb columns and array parameters correctly.
+   * Drivers that handle these natively (e.g. `pg`) can ignore the hints.
    */
   executeSql: (options: {
     txCtx?: TTxContext;
     sql: string;
     params?: unknown[];
+    paramTypes: Record<number, RuntimeType>;
+    columnTypes: Record<string, RuntimeType>;
   }) => Promise<unknown[]>;
 };

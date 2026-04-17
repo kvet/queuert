@@ -50,6 +50,7 @@
   "devDependencies": {
     "@queuert/testcontainers": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
+    "ioredis": "5.10.1",
     "queuert": "workspace:*",
     "redis": "5.11.0"
   },

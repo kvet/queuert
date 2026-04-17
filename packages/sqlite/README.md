@@ -22,6 +22,10 @@ yarn add @queuert/sqlite
 
 **Peer dependencies:** `queuert`
 
+## Testing custom providers
+
+Validate a custom `SqliteStateProvider` against Queuert's conformance suite using the framework-agnostic runner from [`queuert/conformance`](https://kvet.github.io/queuert/reference/queuert/conformance/). See the [Testing Custom Adapters guide](https://kvet.github.io/queuert/advanced/custom-adapters/).
+
 ## Documentation
 
 - [State Adapters Guide](https://kvet.github.io/queuert/integrations/state-adapters/)

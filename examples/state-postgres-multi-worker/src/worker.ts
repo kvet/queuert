@@ -1,9 +1,7 @@
-import {
-  type PgNotifyProvider,
-  createPgNotifyAdapter,
-  createPgStateAdapter,
-} from "@queuert/postgres";
-import { Pool, type PoolClient } from "pg";
+import { createPgNotifyAdapter, createPgStateAdapter } from "@queuert/postgres";
+import { createPgPoolNotifyProvider } from "example-notify-postgres-pg/provider";
+import { createPgPoolStateProvider } from "example-state-postgres-pg/provider";
+import { Pool } from "pg";
 import {
   createClient,
   createInProcessWorker,
@@ -24,116 +22,10 @@ const workerId = process.env.WORKER_ID!;
 
 const pool = new Pool({ connectionString, max: 5 });
 
-type DbContext = { poolClient: PoolClient };
+const stateProvider = createPgPoolStateProvider({ pool });
+const stateAdapter = await createPgStateAdapter({ stateProvider });
 
-const stateAdapter = await createPgStateAdapter({
-  stateProvider: {
-    withTransaction: async (cb) => {
-      const poolClient = await pool.connect();
-      try {
-        await poolClient.query("BEGIN");
-        const result = await cb({ poolClient });
-        await poolClient.query("COMMIT");
-        return result;
-      } catch (error) {
-        await poolClient.query("ROLLBACK").catch(() => {});
-        throw error;
-      } finally {
-        poolClient.release();
-      }
-    },
-    executeSql: async ({ txCtx, sql, params }) => {
-      if (txCtx) {
-        const result = await (txCtx as DbContext).poolClient.query(sql, params);
-        return result.rows;
-      }
-      const poolClient = await pool.connect();
-      try {
-        const result = await poolClient.query(sql, params);
-        return result.rows;
-      } finally {
-        poolClient.release();
-      }
-    },
-  },
-});
-
-const { notifyProvider, close: closeNotify } = (() => {
-  let listenClient: PoolClient | null = null;
-  let connectingPromise: Promise<PoolClient> | null = null;
-  let closed = false;
-  const handlers = new Map<string, (message: string) => void>();
-  let queryQueue: Promise<void> = Promise.resolve();
-
-  const enqueueQuery = async (fn: () => Promise<unknown>): Promise<void> => {
-    const result = queryQueue.then(fn, fn);
-    queryQueue = result.then(
-      () => {},
-      () => {},
-    );
-    return result.then(() => {});
-  };
-
-  const releaseListenClient = (): void => {
-    if (listenClient) {
-      listenClient.removeAllListeners("notification");
-      listenClient.release();
-      listenClient = null;
-    }
-  };
-
-  const notifyProvider: PgNotifyProvider = {
-    publish: async (channel, message) => {
-      const client = await pool.connect();
-      try {
-        await client.query("SELECT pg_notify($1, $2)", [channel, message]);
-      } finally {
-        client.release();
-      }
-    },
-    subscribe: async (channel, onMessage) => {
-      if (closed) throw new Error("Provider is closed");
-
-      if (!listenClient && !connectingPromise) {
-        connectingPromise = pool.connect().then((client) => {
-          connectingPromise = null;
-          if (closed) {
-            client.release();
-            throw new Error("Provider is closed");
-          }
-          listenClient = client;
-          listenClient.on("notification", (msg: { channel: string; payload?: string }) => {
-            handlers.get(msg.channel)?.(msg.payload ?? "");
-          });
-          return listenClient;
-        });
-      }
-
-      const client = listenClient ?? (await connectingPromise!);
-      handlers.set(channel, onMessage);
-      await enqueueQuery(async () => client.query(`LISTEN "${channel}"`));
-
-      return async () => {
-        handlers.delete(channel);
-        try {
-          await enqueueQuery(async () => client.query(`UNLISTEN "${channel}"`));
-        } finally {
-          if (handlers.size === 0) releaseListenClient();
-        }
-      };
-    },
-  };
-
-  return {
-    notifyProvider,
-    close: (): void => {
-      closed = true;
-      releaseListenClient();
-      handlers.clear();
-    },
-  };
-})();
-
+const notifyProvider = createPgPoolNotifyProvider({ pool });
 const notifyAdapter = await createPgNotifyAdapter({ provider: notifyProvider });
 
 const client = await createClient({ stateAdapter, notifyAdapter, jobTypeRegistry });
@@ -174,7 +66,7 @@ process.on("message", (msg) => {
   if (msg === "stop") {
     void (async () => {
       await stop();
-      closeNotify();
+      await notifyProvider.close();
       await pool.end();
       process.send!({ type: "stopped" });
       process.exit(0);

@@ -1,6 +1,6 @@
-import { type PgNotifyProvider, createPgNotifyAdapter } from "@queuert/postgres";
+import { createPgNotifyAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
-import { Pool, type PoolClient } from "pg";
+import { Pool } from "pg";
 import {
   createClient,
   createInProcessWorker,
@@ -9,6 +9,8 @@ import {
   withTransactionHooks,
 } from "queuert";
 import { createInProcessStateAdapter } from "queuert/internal";
+
+import { createPgPoolNotifyProvider } from "./provider.js";
 
 // 1. Start PostgreSQL using testcontainers
 console.log("Starting PostgreSQL...");
@@ -19,88 +21,7 @@ const connectionString = pgContainer.getConnectionUri();
 const pool = new Pool({ connectionString, max: 10 });
 
 // 3. Create the notify provider using pg
-// Uses a dedicated connection for LISTEN and the pool for NOTIFY
-const { notifyProvider, close: closeProvider } = (() => {
-  let listenClient: PoolClient | null = null;
-  let connectingPromise: Promise<PoolClient> | null = null;
-  let closed = false;
-
-  const handlers = new Map<string, (message: string) => void>();
-  let queryQueue: Promise<void> = Promise.resolve();
-
-  const enqueueQuery = async (fn: () => Promise<unknown>): Promise<void> => {
-    const result = queryQueue.then(fn, fn);
-    queryQueue = result.then(
-      () => {},
-      () => {},
-    );
-    return result.then(() => {});
-  };
-
-  const releaseListenClient = (): void => {
-    if (listenClient) {
-      listenClient.removeAllListeners("notification");
-      listenClient.release();
-      listenClient = null;
-    }
-  };
-
-  const ensureListenClient = async (): Promise<PoolClient> => {
-    if (closed) throw new Error("Provider is closed");
-    if (listenClient) return listenClient;
-    if (connectingPromise) return connectingPromise;
-
-    connectingPromise = pool.connect().then((client) => {
-      connectingPromise = null;
-      if (closed) {
-        client.release();
-        throw new Error("Provider is closed");
-      }
-      listenClient = client;
-      listenClient.on("notification", (msg: { channel: string; payload?: string }) => {
-        handlers.get(msg.channel)?.(msg.payload ?? "");
-      });
-      return listenClient;
-    });
-
-    return connectingPromise;
-  };
-
-  const notifyProvider: PgNotifyProvider = {
-    publish: async (channel, message) => {
-      const client = await pool.connect();
-      try {
-        await client.query("SELECT pg_notify($1, $2)", [channel, message]);
-      } finally {
-        client.release();
-      }
-    },
-    subscribe: async (channel, onMessage) => {
-      const client = await ensureListenClient();
-      handlers.set(channel, onMessage);
-      await enqueueQuery(async () => client.query(`LISTEN "${channel}"`));
-      return async () => {
-        handlers.delete(channel);
-        try {
-          await enqueueQuery(async () => client.query(`UNLISTEN "${channel}"`));
-        } finally {
-          if (handlers.size === 0) {
-            releaseListenClient();
-          }
-        }
-      };
-    },
-  };
-
-  return {
-    notifyProvider,
-    close: (): void => {
-      closed = true;
-      releaseListenClient();
-      handlers.clear();
-    },
-  };
-})();
+const notifyProvider = createPgPoolNotifyProvider({ pool });
 
 // 4. Define job types
 const jobTypeRegistry = defineJobTypeRegistry<{
@@ -174,7 +95,7 @@ console.log(`Report ready! ID: ${result.output.reportId}, Rows: ${result.output.
 
 // 10. Cleanup
 await stopWorker();
-closeProvider();
+await notifyProvider.close();
 await pool.end();
 await pgContainer.stop();
 console.log("Done!");

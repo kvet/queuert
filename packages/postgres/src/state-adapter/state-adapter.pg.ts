@@ -1,12 +1,17 @@
-import { type UUID } from "node:crypto";
+import { randomUUID, type UUID } from "node:crypto";
 
 import {
+  type DataType,
+  type InferColumns,
+  type InferParams,
   type MigrationResult,
-  type NamedParameter,
+  type RuntimeType,
   type TypedSql,
-  type UnwrapNamedParameters,
   createTemplateApplier,
   executeMigrations,
+  extractColumnTypes,
+  extractParamTypes,
+  t,
 } from "@queuert/typed-sql";
 import { BlockerReferenceError, type StateAdapter } from "queuert";
 import {
@@ -18,31 +23,26 @@ import {
 } from "queuert/internal";
 
 import { type PgStateProvider } from "../state-provider/state-provider.pg.js";
-import {
-  type DbJob,
-  acquireJobSql,
-  addJobsBlockersSql,
-  checkExternalBlockerRefsSql,
-  completeJobSql,
-  createJobsSql,
-  createMigrationTableSql,
-  deleteJobChainsSql,
-  getAppliedMigrationsSql,
-  getConnectedChainIdsSql,
-  getJobBlockersSql,
-  getJobByIdSql,
-  getJobChainByIdSql,
-  getJobForUpdateSql,
-  getLatestChainJobForUpdateSql,
-  getNextJobAvailableInMsSql,
-  migrations,
-  reapExpiredJobLeaseSql,
-  recordMigrationSql,
-  renewJobLeaseSql,
-  rescheduleJobSql,
-  triggerJobSql,
-  unblockJobsSql,
-} from "./sql.js";
+import { type DbJob, createPgSqlDefinitions, migrations } from "./sql.js";
+
+const SQL_IDENTIFIER_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+const SQL_EXPRESSION_DENY = /[;"\\]|--|\/\*|\*\//;
+
+const validateSqlIdentifier = (value: string, name: string): void => {
+  if (!SQL_IDENTIFIER_PATTERN.test(value)) {
+    throw new Error(
+      `Invalid ${name}: "${value}". Must match /^[a-zA-Z_][a-zA-Z0-9_]*$/ to prevent SQL injection.`,
+    );
+  }
+};
+
+const validateSqlExpression = (value: string, name: string): void => {
+  if (SQL_EXPRESSION_DENY.test(value)) {
+    throw new Error(
+      `Invalid ${name}: "${value}". Must not contain ; " \\ -- or /* */ to prevent SQL injection.`,
+    );
+  }
+};
 
 const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
   return {
@@ -101,8 +101,14 @@ export const createPgStateAdapter = async <
   StateAdapter<TTxContext, TIdType> & {
     migrateToLatest: () => Promise<MigrationResult>;
     vacuum: () => Promise<void>;
+    truncate: () => Promise<void>;
   }
 > => {
+  validateSqlIdentifier(schema, "schema");
+  validateSqlIdentifier(tablePrefix, "tablePrefix");
+  validateSqlIdentifier(idType, "idType");
+  validateSqlExpression(idDefault, "idDefault");
+
   const applyTemplate = createTemplateApplier({
     schema,
     table_prefix: tablePrefix,
@@ -110,26 +116,30 @@ export const createPgStateAdapter = async <
     id_default: idDefault,
   });
 
+  const idDataType = idType === "uuid" ? t.uuid() : t.string();
+  const defs = createPgSqlDefinitions(idDataType);
+
   const executeTypedSql = async <
-    TParams extends
-      | readonly [NamedParameter<string, unknown>, ...NamedParameter<string, unknown>[]]
-      | readonly [],
-    TResult,
+    TParams extends readonly DataType[],
+    TColumns extends Record<string, DataType>,
   >({
     txCtx,
-    sql,
+    sql: typedSql,
     params,
   }: {
     txCtx?: TTxContext;
-    sql: TypedSql<TParams, TResult>;
+    sql: TypedSql<TParams, TColumns>;
   } & (TParams extends readonly []
     ? { params?: undefined }
-    : { params: UnwrapNamedParameters<TParams> })): Promise<TResult> => {
+    : { params: [...InferParams<TParams>] })): Promise<InferColumns<TColumns>[]> => {
+    const resolved = applyTemplate(typedSql);
     return stateProvider.executeSql({
       txCtx,
-      sql: applyTemplate(sql).sql,
-      params,
-    }) as Promise<TResult>;
+      sql: resolved.sql,
+      params: params!,
+      paramTypes: extractParamTypes(resolved.params),
+      columnTypes: extractColumnTypes(resolved.columns),
+    }) as Promise<InferColumns<TColumns>[]>;
   };
 
   const rawAdapter: StateAdapter<TTxContext, TIdType> = {
@@ -138,14 +148,30 @@ export const createPgStateAdapter = async <
     withSavepoint:
       stateProvider.withSavepoint ??
       (async (txCtx, fn) => {
-        await stateProvider.executeSql({ txCtx, sql: "SAVEPOINT queuert_sp" });
+        const sp = `queuert_sp_${randomUUID().replace(/-/g, "_")}`;
+        await stateProvider.executeSql({
+          txCtx,
+          sql: `SAVEPOINT ${sp}`,
+          paramTypes: {},
+          columnTypes: {},
+        });
         try {
           const result = await fn(txCtx);
-          await stateProvider.executeSql({ txCtx, sql: "RELEASE SAVEPOINT queuert_sp" });
+          await stateProvider.executeSql({
+            txCtx,
+            sql: `RELEASE SAVEPOINT ${sp}`,
+            paramTypes: {},
+            columnTypes: {},
+          });
           return result;
         } catch (error) {
           await stateProvider
-            .executeSql({ txCtx, sql: "ROLLBACK TO SAVEPOINT queuert_sp" })
+            .executeSql({
+              txCtx,
+              sql: `ROLLBACK TO SAVEPOINT ${sp}`,
+              paramTypes: {},
+              columnTypes: {},
+            })
             .catch(() => {});
           throw error;
         }
@@ -154,7 +180,7 @@ export const createPgStateAdapter = async <
     getJobChainById: async ({ txCtx, chainId }) => {
       const [jobChain] = await executeTypedSql({
         txCtx,
-        sql: getJobChainByIdSql,
+        sql: defs.getJobChainByIdSql,
         params: [chainId],
       });
 
@@ -168,7 +194,7 @@ export const createPgStateAdapter = async <
     getJobById: async ({ txCtx, jobId }) => {
       const [job] = await executeTypedSql({
         txCtx,
-        sql: getJobByIdSql,
+        sql: defs.getJobByIdSql,
         params: [jobId],
       });
 
@@ -180,7 +206,7 @@ export const createPgStateAdapter = async <
 
       const results = await executeTypedSql({
         txCtx,
-        sql: createJobsSql,
+        sql: defs.createJobsSql,
         params: [
           jobs.length,
           jobs.map((j) => j.typeName),
@@ -228,7 +254,7 @@ export const createPgStateAdapter = async <
 
       const results = await executeTypedSql({
         txCtx,
-        sql: addJobsBlockersSql,
+        sql: defs.addJobsBlockersSql,
         params: [flatJobIds, flatBlockedByChainIds, flatTraceContexts, flatIndexes],
       });
 
@@ -253,7 +279,7 @@ export const createPgStateAdapter = async <
     unblockJobs: async ({ txCtx, blockedByChainId }) => {
       const [result] = await executeTypedSql({
         txCtx,
-        sql: unblockJobsSql,
+        sql: defs.unblockJobsSql,
         params: [blockedByChainId],
       });
       return {
@@ -264,7 +290,7 @@ export const createPgStateAdapter = async <
     getJobBlockers: async ({ txCtx, jobId }) => {
       const jobChains = await executeTypedSql({
         txCtx,
-        sql: getJobBlockersSql,
+        sql: defs.getJobBlockersSql,
         params: [jobId],
       });
 
@@ -277,7 +303,7 @@ export const createPgStateAdapter = async <
     getNextJobAvailableInMs: async ({ txCtx, typeNames }) => {
       const [result] = await executeTypedSql({
         txCtx,
-        sql: getNextJobAvailableInMsSql,
+        sql: defs.getNextJobAvailableInMsSql,
         params: [typeNames],
       });
       return result ? result.available_in_ms : null;
@@ -285,7 +311,7 @@ export const createPgStateAdapter = async <
     acquireJob: async ({ txCtx, typeNames }) => {
       const [result] = await executeTypedSql({
         txCtx,
-        sql: acquireJobSql,
+        sql: defs.acquireJobSql,
         params: [typeNames],
       });
 
@@ -296,7 +322,7 @@ export const createPgStateAdapter = async <
     renewJobLease: async ({ txCtx, jobId, workerId, leaseDurationMs }) => {
       const [job] = await executeTypedSql({
         txCtx,
-        sql: renewJobLeaseSql,
+        sql: defs.renewJobLeaseSql,
         params: [jobId, workerId, leaseDurationMs],
       });
 
@@ -305,8 +331,13 @@ export const createPgStateAdapter = async <
     rescheduleJob: async ({ txCtx, jobId, schedule, error }) => {
       const [job] = await executeTypedSql({
         txCtx,
-        sql: rescheduleJobSql,
-        params: [jobId, schedule.at ?? null, schedule.afterMs ?? null, JSON.stringify(error)],
+        sql: defs.rescheduleJobSql,
+        params: [
+          jobId,
+          schedule.at?.toISOString() ?? null,
+          schedule.afterMs ?? null,
+          JSON.stringify(error),
+        ],
       });
 
       return mapDbJobToStateJob(job);
@@ -314,7 +345,7 @@ export const createPgStateAdapter = async <
     completeJob: async ({ txCtx, jobId, output, workerId }) => {
       const [job] = await executeTypedSql({
         txCtx,
-        sql: completeJobSql,
+        sql: defs.completeJobSql,
         params: [jobId, output, workerId],
       });
 
@@ -323,7 +354,7 @@ export const createPgStateAdapter = async <
     reapExpiredJobLease: async ({ txCtx, typeNames, ignoredJobIds }) => {
       const [job] = await executeTypedSql({
         txCtx,
-        sql: reapExpiredJobLeaseSql,
+        sql: defs.reapExpiredJobLeaseSql,
         params: [typeNames, ignoredJobIds ?? []],
       });
       return job ? mapDbJobToStateJob(job) : undefined;
@@ -333,14 +364,14 @@ export const createPgStateAdapter = async <
       if (cascade) {
         const connected = await executeTypedSql({
           txCtx,
-          sql: getConnectedChainIdsSql,
+          sql: defs.getConnectedChainIdsSql,
           params: [chainIds],
         });
         effectiveChainIds = connected.map((r) => r.chain_id) as typeof chainIds;
       }
       const refs = await executeTypedSql({
         txCtx,
-        sql: checkExternalBlockerRefsSql,
+        sql: defs.checkExternalBlockerRefsSql,
         params: [effectiveChainIds, effectiveChainIds],
       });
       if (refs.length > 0) {
@@ -356,7 +387,7 @@ export const createPgStateAdapter = async <
       }
       const rows = await executeTypedSql({
         txCtx,
-        sql: deleteJobChainsSql,
+        sql: defs.deleteJobChainsSql,
         params: [effectiveChainIds],
       });
       return rows.map((row) => [
@@ -369,7 +400,7 @@ export const createPgStateAdapter = async <
     getJobForUpdate: async ({ txCtx, jobId }) => {
       const [job] = await executeTypedSql({
         txCtx,
-        sql: getJobForUpdateSql,
+        sql: defs.getJobForUpdateSql,
         params: [jobId],
       });
       return job ? mapDbJobToStateJob(job) : undefined;
@@ -377,7 +408,7 @@ export const createPgStateAdapter = async <
     getLatestChainJobForUpdate: async ({ txCtx, chainId }) => {
       const [job] = await executeTypedSql({
         txCtx,
-        sql: getLatestChainJobForUpdateSql,
+        sql: defs.getLatestChainJobForUpdateSql,
         params: [chainId],
       });
       return job ? mapDbJobToStateJob(job) : undefined;
@@ -387,11 +418,13 @@ export const createPgStateAdapter = async <
       const cursor = page.cursor ? decodeCreatedAtCursor(page.cursor) : null;
       const conditions: string[] = ["root_job.chain_index = 0"];
       const params: unknown[] = [];
+      const paramTypes: Record<number, RuntimeType> = {};
       let p = 1;
 
       if (filter?.typeName?.length) {
         conditions.push(`root_job.type_name = ANY($${p}::text[])`);
         params.push(filter.typeName);
+        paramTypes[p - 1] = "array";
         p++;
       }
       if (filter?.rootOnly) {
@@ -402,6 +435,7 @@ export const createPgStateAdapter = async <
       if (filter?.chainId?.length) {
         conditions.push(`root_job.chain_id = ANY($${p}::${idType}[])`);
         params.push(filter.chainId);
+        paramTypes[p - 1] = "array";
         p++;
       }
       if (filter?.jobId?.length) {
@@ -409,11 +443,13 @@ export const createPgStateAdapter = async <
           `root_job.chain_id IN (SELECT chain_id FROM ${schema}.${tablePrefix}job WHERE id = ANY($${p}::${idType}[]))`,
         );
         params.push(filter.jobId);
+        paramTypes[p - 1] = "array";
         p++;
       }
       if (filter?.status?.length) {
         conditions.push(`last_job.status = ANY($${p}::${schema}.${tablePrefix}job_status[])`);
         params.push(filter.status);
+        paramTypes[p - 1] = "array";
         p++;
       }
       if (filter?.from) {
@@ -443,6 +479,8 @@ export const createPgStateAdapter = async <
         txCtx,
         sql: sqlStr,
         params,
+        paramTypes,
+        columnTypes: extractColumnTypes(defs.rowToJsonJobColumns),
       })) as { root_job: DbJob; last_chain_job: DbJob | null }[];
 
       const hasMore = rows.length > page.limit;
@@ -474,31 +512,37 @@ export const createPgStateAdapter = async <
       const cursor = page.cursor ? decodeCreatedAtCursor(page.cursor) : null;
       const conditions: string[] = [];
       const params: unknown[] = [];
+      const paramTypes: Record<number, RuntimeType> = {};
       let p = 1;
 
       if (filter?.status?.length) {
         conditions.push(`j.status = ANY($${p}::${schema}.${tablePrefix}job_status[])`);
         params.push(filter.status);
+        paramTypes[p - 1] = "array";
         p++;
       }
       if (filter?.typeName?.length) {
         conditions.push(`j.type_name = ANY($${p}::text[])`);
         params.push(filter.typeName);
+        paramTypes[p - 1] = "array";
         p++;
       }
       if (filter?.chainTypeName?.length) {
         conditions.push(`j.chain_type_name = ANY($${p}::text[])`);
         params.push(filter.chainTypeName);
+        paramTypes[p - 1] = "array";
         p++;
       }
       if (filter?.chainId?.length) {
         conditions.push(`j.chain_id = ANY($${p}::${idType}[])`);
         params.push(filter.chainId);
+        paramTypes[p - 1] = "array";
         p++;
       }
       if (filter?.jobId?.length) {
         conditions.push(`j.id = ANY($${p}::${idType}[])`);
         params.push(filter.jobId);
+        paramTypes[p - 1] = "array";
         p++;
       }
       if (filter?.from) {
@@ -529,6 +573,8 @@ export const createPgStateAdapter = async <
         txCtx,
         sql: sqlStr,
         params,
+        paramTypes,
+        columnTypes: extractColumnTypes(defs.dbJobColumns),
       })) as DbJob[];
 
       const hasMore = rows.length > page.limit;
@@ -552,6 +598,7 @@ export const createPgStateAdapter = async <
       const cursor = page.cursor ? decodeChainIndexCursor(page.cursor) : null;
       const conditions: string[] = [`j.chain_id = $1::${idType}`];
       const params: unknown[] = [chainId];
+      const paramTypes: Record<number, RuntimeType> = {};
       let p = 2;
 
       const cmp = orderDirection === "asc" ? ">" : "<";
@@ -571,6 +618,8 @@ export const createPgStateAdapter = async <
         txCtx,
         sql: sqlStr,
         params,
+        paramTypes,
+        columnTypes: extractColumnTypes(defs.dbJobColumns),
       })) as DbJob[];
 
       const hasMore = rows.length > page.limit;
@@ -593,7 +642,7 @@ export const createPgStateAdapter = async <
     triggerJob: async ({ txCtx, jobId }) => {
       const [job] = await executeTypedSql({
         txCtx,
-        sql: triggerJobSql,
+        sql: defs.triggerJobSql,
         params: [jobId],
       });
       return mapDbJobToStateJob(job);
@@ -605,6 +654,7 @@ export const createPgStateAdapter = async <
         `j.id IN (SELECT jb.job_id FROM ${schema}.${tablePrefix}job_blocker jb WHERE jb.blocked_by_chain_id = $1::${idType})`,
       ];
       const params: unknown[] = [chainId];
+      const paramTypes: Record<number, RuntimeType> = {};
       let p = 2;
 
       const cmp = orderDirection === "desc" ? "<" : ">";
@@ -624,6 +674,8 @@ export const createPgStateAdapter = async <
         txCtx,
         sql: sqlStr,
         params,
+        paramTypes,
+        columnTypes: extractColumnTypes(defs.dbJobColumns),
       })) as DbJob[];
 
       const hasMore = rows.length > page.limit;
@@ -652,11 +704,15 @@ export const createPgStateAdapter = async <
         getAppliedMigrationNames: async (txCtx) => {
           await stateProvider.executeSql({
             txCtx,
-            sql: applyTemplate(createMigrationTableSql).sql,
+            sql: applyTemplate(defs.createMigrationTableSql).sql,
+            paramTypes: {},
+            columnTypes: {},
           });
           const applied = (await stateProvider.executeSql({
             txCtx,
-            sql: applyTemplate(getAppliedMigrationsSql).sql,
+            sql: applyTemplate(defs.getAppliedMigrationsSql).sql,
+            paramTypes: {},
+            columnTypes: {},
           })) as { name: string }[];
           return applied.map((m) => m.name);
         },
@@ -665,14 +721,18 @@ export const createPgStateAdapter = async <
             await stateProvider.executeSql({
               txCtx,
               sql: applyTemplate(stmt.sql).sql,
+              paramTypes: {},
+              columnTypes: {},
             });
           }
         },
         recordMigration: async (txCtx, name) => {
           await stateProvider.executeSql({
             txCtx,
-            sql: applyTemplate(recordMigrationSql).sql,
+            sql: applyTemplate(defs.recordMigrationSql).sql,
             params: [name],
+            paramTypes: {},
+            columnTypes: {},
           });
         },
       });
@@ -680,17 +740,33 @@ export const createPgStateAdapter = async <
       return stateProvider.withTransaction(runMigrations);
     },
     vacuum: async () => {
-      await stateProvider.executeSql({ sql: `VACUUM ${schema}.${tablePrefix}job` });
-      await stateProvider.executeSql({ sql: `VACUUM ${schema}.${tablePrefix}job_blocker` });
+      await stateProvider.executeSql({
+        sql: `VACUUM ${schema}.${tablePrefix}job`,
+        paramTypes: {},
+        columnTypes: {},
+      });
+      await stateProvider.executeSql({
+        sql: `VACUUM ${schema}.${tablePrefix}job_blocker`,
+        paramTypes: {},
+        columnTypes: {},
+      });
+    },
+    truncate: async () => {
+      await stateProvider.executeSql({
+        sql: `TRUNCATE ${schema}.${tablePrefix}job_blocker, ${schema}.${tablePrefix}job CASCADE`,
+        paramTypes: {},
+        columnTypes: {},
+      });
     },
   };
 };
 
-/** PostgreSQL state adapter type. Includes `migrateToLatest` for schema migrations and `vacuum` for on-demand dead tuple reclamation. */
+/** PostgreSQL state adapter type. Includes `migrateToLatest` for schema migrations, `vacuum` for on-demand dead tuple reclamation, and `truncate` for clearing all job data. */
 export type PgStateAdapter<
   TTxContext extends BaseTxContext,
   TJobId extends string = UUID,
 > = StateAdapter<TTxContext, TJobId> & {
   migrateToLatest: () => Promise<MigrationResult>;
   vacuum: () => Promise<void>;
+  truncate: () => Promise<void>;
 };

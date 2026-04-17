@@ -1,10 +1,6 @@
-import {
-  type SqliteStateProvider,
-  createAsyncLock,
-  createSqliteStateAdapter,
-} from "@queuert/sqlite";
+import { createAsyncLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import BetterSqlite3 from "better-sqlite3";
-import { CompiledQuery, type Generated, Kysely, SqliteDialect, sql } from "kysely";
+import { type Generated, Kysely, SqliteDialect, sql } from "kysely";
 import {
   createClient,
   createInProcessWorker,
@@ -13,6 +9,8 @@ import {
   withTransactionHooks,
 } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
+
+import { createKyselySqliteStateProvider } from "./provider.js";
 
 // 1. Create in-memory SQLite database
 const sqliteDb = new BetterSqlite3(":memory:");
@@ -53,22 +51,7 @@ const jobTypeRegistry = defineJobTypeRegistry<{
 
 // 6. Create state provider for Kysely with write serialization
 const lock = createAsyncLock();
-
-const stateProvider: SqliteStateProvider<{ db: Kysely<Database> }> = {
-  withTransaction: async (cb) => {
-    await lock.acquire();
-    try {
-      return await db.transaction().execute(async (txDb) => cb({ db: txDb }));
-    } finally {
-      lock.release();
-    }
-  },
-  executeSql: async ({ txCtx, sql: sqlStr, params, returns }) => {
-    const database = txCtx?.db ?? db;
-    const result = await database.executeQuery(CompiledQuery.raw(sqlStr, params));
-    return returns ? result.rows : [];
-  },
-};
+const stateProvider = createKyselySqliteStateProvider({ db, lock });
 
 // 7. Create adapters and queuert client/worker
 const stateAdapter = await createSqliteStateAdapter({

@@ -12,13 +12,11 @@
 
 import assert from "node:assert/strict";
 
-import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
+import { createPgNotifyAdapter, createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
-import postgres, {
-  type PendingQuery,
-  type Row,
-  type TransactionSql as _TransactionSql,
-} from "postgres";
+import { createPostgresJsNotifyProvider } from "example-notify-postgres-postgres-js/provider";
+import { createPostgresJsStateProvider } from "example-state-postgres-postgres-js/provider";
+import postgres from "postgres";
 import {
   createClient,
   createInProcessWorker,
@@ -26,16 +24,6 @@ import {
   defineJobTypeRegistry,
   withTransactionHooks,
 } from "queuert";
-import { createInProcessNotifyAdapter } from "queuert/internal";
-
-type TransactionSql = _TransactionSql & {
-  <T extends readonly (object | undefined)[] = Row[]>(
-    template: TemplateStringsArray,
-    ...parameters: readonly postgres.ParameterOrFragment<never>[]
-  ): PendingQuery<T>;
-};
-
-type DbContext = { sql: TransactionSql };
 
 const jobTypeRegistry = defineJobTypeRegistry<{
   /*
@@ -101,28 +89,11 @@ let userConverts = true;
 const pgContainer = await new PostgreSqlContainer("postgres:18").withExposedPorts(5432).start();
 const sql = postgres(pgContainer.getConnectionUri(), { max: 10 });
 
-const stateProvider: PgStateProvider<DbContext> = {
-  withTransaction: async (cb) =>
-    sql.begin(async (txSql) => cb({ sql: txSql as TransactionSql }) as any),
-  withSavepoint: async (txCtx, fn) =>
-    txCtx.sql.savepoint(async (savepointSql) => fn({ sql: savepointSql as TransactionSql })) as any,
-  executeSql: async ({ txCtx, sql: query, params }) => {
-    const client = txCtx?.sql ?? sql;
-    return client.unsafe(
-      query,
-      (params ?? []).map((p) => (p === undefined ? null : p)) as (
-        | string
-        | number
-        | boolean
-        | null
-      )[],
-    );
-  },
-};
-
+const stateProvider = createPostgresJsStateProvider({ sql });
 const stateAdapter = await createPgStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
-const notifyAdapter = createInProcessNotifyAdapter();
+const notifyProvider = createPostgresJsNotifyProvider({ sql });
+const notifyAdapter = await createPgNotifyAdapter({ provider: notifyProvider });
 
 // Create schema
 await sql`
@@ -155,12 +126,11 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, complete }) => {
           console.log(`\n[create-subscription] Creating subscription for user ${job.input.userId}`);
 
-          return complete(async ({ sql: txSql, continueWith }) => {
-            const [sub] = await txSql<{ id: number }[]>`
-              INSERT INTO subscriptions (user_id, plan_id, status)
-              VALUES (${job.input.userId}, ${job.input.planId}, 'pending')
-              RETURNING id
-            `;
+          return complete(async ({ sql, continueWith }) => {
+            const [sub] = (await sql.unsafe(
+              "INSERT INTO subscriptions (user_id, plan_id, status) VALUES ($1, $2, 'pending') RETURNING id",
+              [job.input.userId, job.input.planId],
+            )) as { id: number }[];
             console.log(`  Created subscription #${sub.id}`);
 
             return continueWith({
@@ -175,13 +145,12 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, complete }) => {
           console.log(`\n[activate-trial] Activating ${job.input.trialDays}-day trial`);
 
-          return complete(async ({ sql: txSql, continueWith }) => {
+          return complete(async ({ sql, continueWith }) => {
             const trialEndsAt = new Date(Date.now() + job.input.trialDays * 24 * 60 * 60 * 1000);
-            await txSql`
-              UPDATE subscriptions
-              SET status = 'trial', trial_ends_at = ${trialEndsAt.toISOString()}
-              WHERE id = ${job.input.subscriptionId}
-            `;
+            await sql.unsafe(
+              "UPDATE subscriptions SET status = 'trial', trial_ends_at = $1 WHERE id = $2",
+              [trialEndsAt.toISOString(), job.input.subscriptionId],
+            );
             console.log(`  Trial activated until ${trialEndsAt.toISOString()}`);
 
             return continueWith({
@@ -223,12 +192,10 @@ const worker = await createInProcessWorker({
             `\n[expire-trial] Trial expired for subscription #${job.input.subscriptionId}`,
           );
 
-          return complete(async ({ sql: txSql }) => {
-            await txSql`
-              UPDATE subscriptions
-              SET status = 'expired'
-              WHERE id = ${job.input.subscriptionId}
-            `;
+          return complete(async ({ sql }) => {
+            await sql.unsafe("UPDATE subscriptions SET status = 'expired' WHERE id = $1", [
+              job.input.subscriptionId,
+            ]);
             const expiredAt = new Date().toISOString();
             console.log(`  Subscription expired at ${expiredAt}`);
 
@@ -243,12 +210,10 @@ const worker = await createInProcessWorker({
             `\n[convert-to-paid] Converting subscription #${job.input.subscriptionId} to paid`,
           );
 
-          return complete(async ({ sql: txSql, continueWith }) => {
-            await txSql`
-              UPDATE subscriptions
-              SET status = 'active'
-              WHERE id = ${job.input.subscriptionId}
-            `;
+          return complete(async ({ sql, continueWith }) => {
+            await sql.unsafe("UPDATE subscriptions SET status = 'active' WHERE id = $1", [
+              job.input.subscriptionId,
+            ]);
             console.log(`  Subscription is now active!`);
 
             return continueWith({
@@ -266,14 +231,11 @@ const worker = await createInProcessWorker({
           await new Promise((r) => setTimeout(r, 100));
           console.log(`  Charged $${PRICE_PER_CYCLE} for cycle ${job.input.cycle}`);
 
-          return complete(async ({ sql: txSql, continueWith }) => {
-            const [sub] = await txSql<{ total_charged: string }[]>`
-              UPDATE subscriptions
-              SET current_cycle = ${job.input.cycle},
-                  total_charged = total_charged + ${PRICE_PER_CYCLE}
-              WHERE id = ${job.input.subscriptionId}
-              RETURNING total_charged
-            `;
+          return complete(async ({ sql, continueWith }) => {
+            const [sub] = (await sql.unsafe(
+              "UPDATE subscriptions SET current_cycle = $1, total_charged = total_charged + $2 WHERE id = $3 RETURNING total_charged",
+              [job.input.cycle, PRICE_PER_CYCLE, job.input.subscriptionId],
+            )) as { total_charged: string }[];
 
             const totalCharged = Number(sub.total_charged);
             console.log(`  Total charged so far: $${totalCharged.toFixed(2)}`);
@@ -305,13 +267,12 @@ const worker = await createInProcessWorker({
           );
           console.log(`  Reason: ${job.input.reason}`);
 
-          return complete(async ({ sql: txSql }) => {
+          return complete(async ({ sql }) => {
             const cancelledAt = new Date().toISOString();
-            await txSql`
-              UPDATE subscriptions
-              SET status = 'cancelled', cancelled_at = ${cancelledAt}
-              WHERE id = ${job.input.subscriptionId}
-            `;
+            await sql.unsafe(
+              "UPDATE subscriptions SET status = 'cancelled', cancelled_at = $1 WHERE id = $2",
+              [cancelledAt, job.input.subscriptionId],
+            );
             console.log(`  Subscription cancelled at ${cancelledAt}`);
 
             return { cancelledAt };
@@ -331,26 +292,21 @@ console.log("Linear -> Branched (convert) -> Loop (billing) -> Go-To (cancel)\n"
 userConverts = true;
 
 const chain1 = await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (_sql) => {
-    const txSql = _sql as TransactionSql;
-    return client.startJobChain({
+  sql.begin(async (txSql) =>
+    client.startJobChain({
       sql: txSql,
       transactionHooks,
       typeName: "create-subscription",
       input: { userId: "user-123", planId: "pro-monthly" },
-    });
-  }),
+    }),
+  ),
 );
 
 const result1 = await client.awaitJobChain(chain1, { timeoutMs: 10000 });
 
-const [sub1] = await sql<
-  {
-    status: string;
-    current_cycle: number;
-    total_charged: string;
-  }[]
->`SELECT status, current_cycle, total_charged FROM subscriptions WHERE id = 1`;
+const [sub1] = (await sql.unsafe(
+  "SELECT status, current_cycle, total_charged FROM subscriptions WHERE id = 1",
+)) as { status: string; current_cycle: number; total_charged: string }[];
 
 console.log("\n" + "-".repeat(40));
 console.log("SCENARIO 1 COMPLETED");
@@ -373,26 +329,21 @@ console.log("Linear -> Branched (expire) -> Terminal\n");
 userConverts = false;
 
 const chain2 = await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (_sql) => {
-    const txSql = _sql as TransactionSql;
-    return client.startJobChain({
+  sql.begin(async (txSql) =>
+    client.startJobChain({
       sql: txSql,
       transactionHooks,
       typeName: "create-subscription",
       input: { userId: "user-456", planId: "pro-monthly" },
-    });
-  }),
+    }),
+  ),
 );
 
 const result2 = await client.awaitJobChain(chain2, { timeoutMs: 10000 });
 
-const [sub2] = await sql<
-  {
-    status: string;
-    current_cycle: number;
-    total_charged: string;
-  }[]
->`SELECT status, current_cycle, total_charged FROM subscriptions WHERE id = 2`;
+const [sub2] = (await sql.unsafe(
+  "SELECT status, current_cycle, total_charged FROM subscriptions WHERE id = 2",
+)) as { status: string; current_cycle: number; total_charged: string }[];
 
 console.log("\n" + "-".repeat(40));
 console.log("SCENARIO 2 COMPLETED");

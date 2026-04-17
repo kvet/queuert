@@ -1,10 +1,6 @@
-import { type PgStateProvider, createPgStateAdapter } from "@queuert/postgres";
+import { createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
-import postgres, {
-  type PendingQuery,
-  type Row,
-  type TransactionSql as _TransactionSql,
-} from "postgres";
+import postgres from "postgres";
 import {
   createClient,
   createInProcessWorker,
@@ -14,13 +10,13 @@ import {
 } from "queuert";
 import { createInProcessNotifyAdapter } from "queuert/internal";
 
+import { createPostgresJsStateProvider } from "./provider.js";
+
 // 1. Start PostgreSQL using testcontainers
 const pgContainer = await new PostgreSqlContainer("postgres:18").withExposedPorts(5432).start();
 
 // 2. Create database connection and schema
-const sql = postgres(pgContainer.getConnectionUri(), {
-  max: 10,
-});
+const sql = postgres(pgContainer.getConnectionUri(), { max: 10 });
 
 await sql`
   CREATE TABLE IF NOT EXISTS users (
@@ -39,38 +35,9 @@ const jobTypeRegistry = defineJobTypeRegistry<{
   };
 }>();
 
-// 4. Create state provider for postgres.js
-// TransactionSql loses its call signature due to TypeScript's Omit limitation.
-// We restore it by intersecting with the tagged template call signature.
-// See: https://github.com/microsoft/TypeScript/issues/41362
-type TransactionSql = _TransactionSql & {
-  <T extends readonly (object | undefined)[] = Row[]>(
-    template: TemplateStringsArray,
-    ...parameters: readonly postgres.ParameterOrFragment<never>[]
-  ): PendingQuery<T>;
-};
-
-type DbContext = { sql: TransactionSql };
-
-const stateProvider: PgStateProvider<DbContext> = {
-  withTransaction: async (cb) =>
-    sql.begin(async (txSql) => cb({ sql: txSql as TransactionSql }) as any),
-  withSavepoint: async (txCtx, fn) =>
-    txCtx.sql.savepoint(async (savepointSql) => fn({ sql: savepointSql as TransactionSql })) as any,
-  executeSql: async ({ txCtx, sql: query, params }) => {
-    const sqlClient = txCtx?.sql ?? sql;
-    const normalizedParams = params
-      ? (params as any[]).map((p) => (p === undefined ? null : p))
-      : [];
-    const result = await sqlClient.unsafe(query, normalizedParams);
-    return result as any;
-  },
-};
-
-// 5. Create adapters and queuert client/worker
-const stateAdapter = await createPgStateAdapter({
-  stateProvider,
-});
+// 4. Create providers and adapters
+const stateProvider = createPostgresJsStateProvider({ sql });
+const stateAdapter = await createPgStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 
 const notifyAdapter = createInProcessNotifyAdapter();
@@ -80,7 +47,7 @@ const qrtClient = await createClient({
   notifyAdapter,
   jobTypeRegistry,
 });
-// 6. Create and start qrtWorker
+
 const qrtWorker = await createInProcessWorker({
   client: qrtClient,
   jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
@@ -89,7 +56,6 @@ const qrtWorker = await createInProcessWorker({
     processors: {
       send_welcome_email: {
         attemptHandler: async ({ job, complete }) => {
-          // Simulate sending email (in real app, call email service here)
           console.log(`Sending welcome email to ${job.input.email} for ${job.input.name}`);
 
           return complete(async () => ({
@@ -103,17 +69,14 @@ const qrtWorker = await createInProcessWorker({
 
 const stopWorker = await qrtWorker.start();
 
-// 7. Register a new user and queue welcome email atomically
+// 5. Register a new user and queue welcome email atomically
 const jobChain = await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (_sql) => {
-    const txSql = _sql as TransactionSql;
-    const [user] = await txSql<{ id: number; name: string; email: string }[]>`
-      INSERT INTO users (name, email)
-      VALUES ('Alice', 'alice@example.com')
-      RETURNING *
-    `;
+  sql.begin(async (txSql) => {
+    const [user] = (await txSql.unsafe(
+      "INSERT INTO users (name, email) VALUES ($1, $2) RETURNING *",
+      ["Alice", "alice@example.com"],
+    )) as { id: number; name: string; email: string }[];
 
-    // Queue welcome email - if user creation fails, no email job is created
     return qrtClient.startJobChain({
       sql: txSql,
       transactionHooks,
@@ -123,11 +86,11 @@ const jobChain = await withTransactionHooks(async (transactionHooks) =>
   }),
 );
 
-// 8. Wait for the job chain to complete
+// 6. Wait for the job chain to complete
 const result = await qrtClient.awaitJobChain(jobChain, { timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);
 
-// 9. Cleanup
+// 7. Cleanup
 await stopWorker();
 await sql.end();
 await pgContainer.stop();

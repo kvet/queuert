@@ -18,7 +18,12 @@
     "@queuert/redis": "workspace:*",
     "@queuert/sqlite": "workspace:*",
     "better-sqlite3": "12.9.0",
+    "example-notify-postgres-pg": "workspace:*",
+    "example-state-postgres-pg": "workspace:*",
+    "example-state-postgres-postgres-js": "workspace:*",
+    "example-state-sqlite-better-sqlite3": "workspace:*",
     "nats": "2.29.3",
+    "pg": "8.20.0",
     "postgres": "3.4.9",
     "queuert": "workspace:*",
     "redis": "5.11.0"
@@ -29,6 +34,7 @@
     "@testcontainers/postgresql": "11.14.0",
     "@testcontainers/redis": "11.14.0",
     "@types/better-sqlite3": "7.6.13",
+    "@types/pg": "8.20.0",
     "tsx": "4.21.0"
   }
 }
