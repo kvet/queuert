@@ -1,0 +1,22 @@
+{
+  "name": "example-showcase-multiworker-prioritization",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "typecheck": "tsgo --noEmit"
+  },
+  "dependencies": {
+    "@queuert/postgres": "workspace:*",
+    "example-notify-postgres-postgres-js": "workspace:*",
+    "example-state-postgres-postgres-js": "workspace:*",
+    "postgres": "3.4.9",
+    "queuert": "workspace:*"
+  },
+  "devDependencies": {
+    "@queuert/testcontainers": "workspace:*",
+    "@queuert/tsconfig": "workspace:*",
+    "tsx": "4.21.0"
+  }
+}

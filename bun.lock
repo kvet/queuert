@@ -370,6 +370,22 @@
         "tsx": "4.21.0",
       },
     },
+    "examples/showcase-multiworker-prioritization": {
+      "name": "example-showcase-multiworker-prioritization",
+      "version": "0.0.1",
+      "dependencies": {
+        "@queuert/postgres": "workspace:*",
+        "example-notify-postgres-postgres-js": "workspace:*",
+        "example-state-postgres-postgres-js": "workspace:*",
+        "postgres": "3.4.9",
+        "queuert": "workspace:*",
+      },
+      "devDependencies": {
+        "@queuert/testcontainers": "workspace:*",
+        "@queuert/tsconfig": "workspace:*",
+        "tsx": "4.21.0",
+      },
+    },
     "examples/showcase-processing-modes": {
       "name": "example-showcase-processing-modes",
       "version": "0.0.1",
@@ -1920,6 +1936,8 @@
     "example-showcase-error-handling": ["example-showcase-error-handling@workspace:examples/showcase-error-handling"],
 
     "example-showcase-error-recovery": ["example-showcase-error-recovery@workspace:examples/showcase-error-recovery"],
+
+    "example-showcase-multiworker-prioritization": ["example-showcase-multiworker-prioritization@workspace:examples/showcase-multiworker-prioritization"],
 
     "example-showcase-processing-modes": ["example-showcase-processing-modes@workspace:examples/showcase-processing-modes"],
 

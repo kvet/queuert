@@ -33,7 +33,7 @@ Each worker needs a unique `workerId`. Workers compete for available jobs — wh
 
 ## Specialized Workers
 
-A worker only processes the job types in its processor registry. This lets you run different worker topologies optimized for different workloads — a worker that doesn't define a processor for a job type simply ignores it.
+A worker only processes the job types in its processor registry. This lets you run different worker topologies optimized for different workloads — a worker that doesn't define a processor for a job type simply ignores it. The same mechanism powers [prioritization](../prioritization/): reserve capacity for an urgent workload by giving it a worker of its own.
 
 For CPU-heavy work, spawn each worker in its own thread so they get true parallelism. Each thread creates its own client, state adapter, and worker — they share nothing except the database:
 
@@ -103,5 +103,6 @@ See [Feature Slices](../slices/) for organizing job types and processors into in
 ## See Also
 
 - [examples/state-postgres-multi-worker](https://github.com/kvet/queuert/tree/main/examples/state-postgres-multi-worker) — multiple workers sharing a PostgreSQL database
+- [Prioritization](../prioritization/) — reserving worker capacity for urgent workloads
 - [In-Process Worker](/queuert/advanced/in-process-worker/) — worker lifecycle and configuration
 - [State Adapters](/queuert/integrations/state-adapters/) — database adapter setup
