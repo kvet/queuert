@@ -43,6 +43,7 @@
     - Stop re-exporting `createAsyncLock` from `@queuert/sqlite` (or mark internal). Keeping it exported signals that it's part of the intended extension path.
   - [TASK,EASY] Validate `PRAGMA foreign_keys = ON` at adapter init (FK on `job_blocker.blocked_by_chain_id` requires it)
   - [TASK,EASY] get rid of skipConcurrencyTests flag in resilience tests (separate test suite?)
+- [TASK] Fix flaky `handles transient database errors gracefully with multiple workers` test in state-resilience suite — fails intermittently in CI even with `--retry 2`; investigate root cause (timing-sensitive concurrent workers + injected errors)
   - [REF] `deleteJobChains` race condition under WAL mode — check-then-delete without row locking; document single-writer assumption or use `BEGIN IMMEDIATE` transactions
 - [EPIC] MySQL/MariaDB adapter
 - [EPIC] Built-in job priority — add `priority` field to job schema + secondary sort in acquisition query (composite index `(type_name, priority DESC, scheduled_at ASC) WHERE status = 'pending'`). Design decisions: starvation mitigation (aging? document footgun?), dedup + priority interaction (upgrade semantics when re-enqueuing existing dedup key at higher priority), chain priority inheritance, API surface on `createJob`/`triggerJob`. Backward compatible via `DEFAULT 0`

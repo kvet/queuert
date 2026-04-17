@@ -1,5 +1,5 @@
 import { createPgStateAdapter } from "@queuert/postgres";
-import { PostgreSqlContainer } from "@testcontainers/postgresql";
+import { acquirePostgres } from "@queuert/testcontainers";
 import postgres from "postgres";
 import { runStateAdapterConformance } from "queuert/conformance";
 import { test } from "vitest";
@@ -7,9 +7,10 @@ import { test } from "vitest";
 import { type PostgresJsContext, createPostgresJsStateProvider } from "./provider.js";
 
 test("state-postgres-postgres-js provider passes state adapter conformance", async () => {
+  await using pg = await acquirePostgres("postgres:18", import.meta.url);
+
   await runStateAdapterConformance(async () => {
-    const container = await new PostgreSqlContainer("postgres:18").withExposedPorts(5432).start();
-    const sql = postgres(container.getConnectionUri(), { max: 10 });
+    const sql = postgres(pg.connectionString, { max: 10 });
 
     const stateProvider = createPostgresJsStateProvider({ sql });
     const adapter = await createPgStateAdapter({ stateProvider });
@@ -23,8 +24,7 @@ test("state-postgres-postgres-js provider passes state adapter conformance", asy
       reset: async () => adapter.truncate(),
       dispose: async () => {
         await sql.end();
-        await container.stop();
       },
     };
   });
-}, 300_000);
+}, 60_000);

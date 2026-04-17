@@ -51,7 +51,7 @@ type PgStateProvider<TTxContext> = {
 
 ```typescript
 const notifyAdapter = await createPgNotifyAdapter({
-  provider: PgNotifyProvider,     // You implement this
+  notifyProvider: PgNotifyProvider, // You implement this
   channelPrefix?: string,         // Channel prefix (default: "queuert")
 });
 ```

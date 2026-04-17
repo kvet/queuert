@@ -26,7 +26,7 @@ const stateProvider = createPgPoolStateProvider({ pool });
 const stateAdapter = await createPgStateAdapter({ stateProvider });
 
 const notifyProvider = createPgPoolNotifyProvider({ pool });
-const notifyAdapter = await createPgNotifyAdapter({ provider: notifyProvider });
+const notifyAdapter = await createPgNotifyAdapter({ notifyProvider });
 
 const client = await createClient({ stateAdapter, notifyAdapter, jobTypeRegistry });
 

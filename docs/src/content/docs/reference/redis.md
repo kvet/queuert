@@ -9,7 +9,7 @@ sidebar:
 
 ```typescript
 const notifyAdapter = await createRedisNotifyAdapter({
-  provider: RedisNotifyProvider,   // You implement this
+  notifyProvider: RedisNotifyProvider, // You implement this
   channelPrefix?: string,          // Channel prefix (default: "queuert")
 });
 ```

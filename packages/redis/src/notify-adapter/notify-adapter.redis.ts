@@ -104,57 +104,29 @@ const createSharedListener = (
   };
 };
 
-/**
- * Serializes provider subscribe/unsubscribe calls across channels so
- * concurrent setup/teardown from different shared listeners can't race each
- * other on transports that don't tolerate parallel pub/sub state changes
- * (e.g. node-redis cluster tearing down its shared pub/sub socket on
- * last-unsubscribe, which crashes with "The client is closed" when another
- * unsubscribe is in flight). These calls are setup-time, not hot-path, so the
- * serialization cost is negligible.
- */
-const serializeSubscribeCalls = (provider: RedisNotifyProvider): RedisNotifyProvider => {
-  let chain: Promise<unknown> = Promise.resolve();
-  const run = async <R>(fn: () => Promise<R>): Promise<R> => {
-    const next = chain.then(fn, fn);
-    chain = next.catch(() => undefined);
-    return next;
-  };
-  return {
-    ...provider,
-    subscribe: async (channel, onMessage) => {
-      const unsubscribe = await run(async () => provider.subscribe(channel, onMessage));
-      return async () => {
-        await run(async () => unsubscribe());
-      };
-    },
-  };
-};
-
 /** Create a notify adapter backed by Redis pub/sub. */
 export const createRedisNotifyAdapter = async ({
-  provider: rawProvider,
+  notifyProvider,
   channelPrefix = "queuert",
 }: {
-  provider: RedisNotifyProvider;
+  notifyProvider: RedisNotifyProvider;
   channelPrefix?: string;
 }): Promise<NotifyAdapter> => {
-  const provider = serializeSubscribeCalls(rawProvider);
   const jobScheduledChannel = `${channelPrefix}:sched`;
   const chainCompletedChannel = `${channelPrefix}:chainc`;
   const ownershipLostChannel = `${channelPrefix}:owls`;
   const hintKeyPrefix = `${channelPrefix}:hint:`;
 
-  const jobScheduledListener = createSharedListener(provider, jobScheduledChannel);
-  const chainCompletedListener = createSharedListener(provider, chainCompletedChannel);
-  const ownershipLostListener = createSharedListener(provider, ownershipLostChannel);
+  const jobScheduledListener = createSharedListener(notifyProvider, jobScheduledChannel);
+  const chainCompletedListener = createSharedListener(notifyProvider, chainCompletedChannel);
+  const ownershipLostListener = createSharedListener(notifyProvider, ownershipLostChannel);
 
   return {
     notifyJobScheduled: async (typeName, count) => {
       const hintId = crypto.randomUUID();
       const hintKey = `${hintKeyPrefix}${hintId}`;
 
-      await provider.eval(
+      await notifyProvider.eval(
         SET_AND_PUBLISH_SCRIPT,
         [hintKey],
         [String(count), jobScheduledChannel, `${hintId}:${typeName}`],
@@ -175,7 +147,7 @@ export const createRedisNotifyAdapter = async ({
 
         const hintKey = `${hintKeyPrefix}${hintId}`;
         void (async () => {
-          const result = await provider.eval(DECR_IF_POSITIVE_SCRIPT, [hintKey], []);
+          const result = await notifyProvider.eval(DECR_IF_POSITIVE_SCRIPT, [hintKey], []);
           if (result === 1) {
             onNotification(typeName);
           }
@@ -184,7 +156,7 @@ export const createRedisNotifyAdapter = async ({
     },
 
     notifyJobChainCompleted: async (chainId) => {
-      await provider.publish(chainCompletedChannel, chainId);
+      await notifyProvider.publish(chainCompletedChannel, chainId);
     },
 
     listenJobChainCompleted: async (chainId, onNotification) => {
@@ -196,7 +168,7 @@ export const createRedisNotifyAdapter = async ({
     },
 
     notifyJobOwnershipLost: async (jobId) => {
-      await provider.publish(ownershipLostChannel, jobId);
+      await notifyProvider.publish(ownershipLostChannel, jobId);
     },
 
     listenJobOwnershipLost: async (jobId, onNotification) => {

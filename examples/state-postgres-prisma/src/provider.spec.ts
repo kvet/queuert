@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 import { PrismaPg } from "@prisma/adapter-pg";
 import { createPgStateAdapter } from "@queuert/postgres";
-import { PostgreSqlContainer } from "@testcontainers/postgresql";
+import { acquirePostgres } from "@queuert/testcontainers";
 import { runStateAdapterConformance } from "queuert/conformance";
 import { test } from "vitest";
 
@@ -20,18 +20,17 @@ type PrismaLike = {
 };
 
 test("state-postgres-prisma provider passes state adapter conformance", async () => {
-  await runStateAdapterConformance(async () => {
-    const container = await new PostgreSqlContainer("postgres:18").withExposedPorts(5432).start();
-    const connectionString = container.getConnectionUri();
+  await using pg = await acquirePostgres("postgres:18", import.meta.url);
 
+  await runStateAdapterConformance(async () => {
     execSync("npx prisma db push", {
       cwd: EXAMPLE_DIR,
-      env: { ...process.env, DATABASE_URL: connectionString },
+      env: { ...process.env, DATABASE_URL: pg.connectionString },
       stdio: "inherit",
     });
 
     const { PrismaClient } = await import("../prisma/generated/prisma/client.js");
-    const prismaAdapter = new PrismaPg({ connectionString });
+    const prismaAdapter = new PrismaPg({ connectionString: pg.connectionString });
     const prisma = new PrismaClient({ adapter: prismaAdapter }) as unknown as PrismaLike;
 
     const stateProvider = createPrismaPgStateProvider<PrismaLike>({ prisma });
@@ -51,8 +50,7 @@ test("state-postgres-prisma provider passes state adapter conformance", async ()
       reset: async () => adapter.truncate(),
       dispose: async () => {
         await prisma.$disconnect();
-        await container.stop();
       },
     };
   });
-}, 300_000);
+}, 60_000);

@@ -20,12 +20,11 @@
   },
   "devDependencies": {
     "@queuert/postgres": "workspace:*",
+    "@queuert/testcontainers": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
     "@queuert/typed-sql": "workspace:*",
-    "@testcontainers/postgresql": "11.14.0",
     "postgres": "3.4.9",
     "queuert": "workspace:*",
-    "testcontainers": "11.14.0",
     "tsx": "4.21.0",
     "vitest": "4.1.4"
   }

@@ -45,7 +45,7 @@ const notifyProvider: RedisNotifyProvider = {
   },
 };
 
-const notifyAdapter = await createRedisNotifyAdapter({ provider: notifyProvider });
+const notifyAdapter = await createRedisNotifyAdapter({ notifyProvider });
 console.log("SQLite + Redis ready.");
 
 await runBenchmark({

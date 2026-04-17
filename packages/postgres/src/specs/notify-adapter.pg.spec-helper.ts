@@ -33,15 +33,15 @@ export const extendWithNotifyPostgres = <
     ],
     notifyAdapter: [
       async ({ notifyPool }, use) => {
-        const provider = createPgPoolNotifyProvider({ pool: notifyPool });
+        const notifyProvider = createPgPoolNotifyProvider({ pool: notifyPool });
         const notifyAdapter = await createPgNotifyAdapter({
-          provider,
+          notifyProvider,
           channelPrefix: `queuert_${Date.now()}_${Math.random().toString(36).slice(2)}`,
         });
 
         await use(notifyAdapter);
 
-        await provider.close();
+        await notifyProvider.close();
       },
       { scope: "test" },
     ],

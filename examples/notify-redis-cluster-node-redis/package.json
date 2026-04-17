@@ -20,10 +20,10 @@
   },
   "devDependencies": {
     "@queuert/redis": "workspace:*",
+    "@queuert/testcontainers": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
     "queuert": "workspace:*",
     "redis": "5.11.0",
-    "testcontainers": "11.14.0",
     "tsx": "4.21.0",
     "vitest": "4.1.4"
   }

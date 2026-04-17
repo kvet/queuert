@@ -93,7 +93,7 @@ it("infers custom ID types through the full stack", async ({ postgresConnectionS
 
     const notifyProvider = createPgPoolNotifyProvider({ pool });
     const notifyAdapter = await createPgNotifyAdapter({
-      provider: notifyProvider,
+      notifyProvider,
       channelPrefix: `spec_${Date.now()}_${Math.random().toString(36).slice(2)}`,
     });
 

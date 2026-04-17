@@ -3,8 +3,6 @@ import { type TestAPI, beforeAll } from "vitest";
 
 import { withContainerLock } from "./with-container-lock.js";
 
-const CONTAINER_NAME = "queuert-redis-cluster-test";
-
 /**
  * Port layout used by `grokzen/redis-cluster`:
  *   - Redis client ports: INITIAL_PORT .. INITIAL_PORT+5  (6 nodes: 3 masters + 3 replicas)
@@ -27,19 +25,23 @@ export type RedisClusterConnection = {
   nodeAddressMap: (address: string) => { host: string; port: number } | undefined;
 };
 
-export const extendWithRedisCluster = <T>(
-  api: TestAPI<T>,
-  _reuseId: string,
-): TestAPI<T & { redisClusterConnection: RedisClusterConnection }> => {
-  let container: StartedTestContainer;
+export type AcquiredRedisCluster = RedisClusterConnection & AsyncDisposable;
 
-  beforeAll(async () => {
-    container = await withContainerLock({
-      containerName: CONTAINER_NAME,
+const containerNameFromImage = (image: string): string =>
+  `queuert-redis-cluster-${image.replace(/[^a-z0-9]/gi, "-")}-test`;
+
+const containerPromises = new Map<string, Promise<StartedTestContainer>>();
+
+const startContainer = async (image: string): Promise<StartedTestContainer> => {
+  let promise = containerPromises.get(image);
+  if (!promise) {
+    const containerName = containerNameFromImage(image);
+    promise = withContainerLock({
+      containerName,
       start: async () =>
-        new GenericContainer("grokzen/redis-cluster:7.0.10")
-          .withName(CONTAINER_NAME)
-          .withLabels({ label: CONTAINER_NAME })
+        new GenericContainer(image)
+          .withName(containerName)
+          .withLabels({ label: containerName })
           .withExposedPorts(...NODE_PORTS)
           .withEnvironment({
             IP: "0.0.0.0",
@@ -52,30 +54,56 @@ export const extendWithRedisCluster = <T>(
           .withReuse()
           .start(),
     });
+    containerPromises.set(image, promise);
+  }
+  return promise;
+};
+
+const connectionFromContainer = (container: StartedTestContainer): RedisClusterConnection => {
+  const host = container.getHost();
+  const portMap = new Map<number, number>();
+  for (const internalPort of NODE_PORTS) {
+    portMap.set(internalPort, container.getMappedPort(internalPort));
+  }
+  const nodeAddressMap = (address: string): { host: string; port: number } | undefined => {
+    const portStr = address.split(":").pop();
+    if (!portStr) return undefined;
+    const internalPort = Number(portStr);
+    const mappedPort = portMap.get(internalPort);
+    if (mappedPort === undefined) return undefined;
+    return { host, port: mappedPort };
+  };
+  const rootNodes = NODE_PORTS.map((internalPort) => ({
+    url: `redis://${host}:${container.getMappedPort(internalPort)}`,
+  }));
+
+  return { rootNodes, nodeAddressMap };
+};
+
+export const acquireRedisCluster = async (image: string): Promise<AcquiredRedisCluster> => {
+  const container = await startContainer(image);
+
+  return {
+    ...connectionFromContainer(container),
+    [Symbol.asyncDispose]: async () => {},
+  };
+};
+
+export const extendWithRedisCluster = <T>(
+  api: TestAPI<T>,
+  _reuseId: string,
+): TestAPI<T & { redisClusterConnection: RedisClusterConnection }> => {
+  let container: StartedTestContainer;
+
+  beforeAll(async () => {
+    container = await startContainer("grokzen/redis-cluster:7.0.10");
   }, 180_000);
 
   return api.extend<{ redisClusterConnection: RedisClusterConnection }>({
     redisClusterConnection: [
       // eslint-disable-next-line no-empty-pattern
       async ({}, use) => {
-        const host = container.getHost();
-        const portMap = new Map<number, number>();
-        for (const internalPort of NODE_PORTS) {
-          portMap.set(internalPort, container.getMappedPort(internalPort));
-        }
-        const nodeAddressMap = (address: string): { host: string; port: number } | undefined => {
-          const portStr = address.split(":").pop();
-          if (!portStr) return undefined;
-          const internalPort = Number(portStr);
-          const mappedPort = portMap.get(internalPort);
-          if (mappedPort === undefined) return undefined;
-          return { host, port: mappedPort };
-        };
-        const rootNodes = NODE_PORTS.map((internalPort) => ({
-          url: `redis://${host}:${container.getMappedPort(internalPort)}`,
-        }));
-
-        await use({ rootNodes, nodeAddressMap });
+        await use(connectionFromContainer(container));
       },
       { scope: "worker" },
     ],

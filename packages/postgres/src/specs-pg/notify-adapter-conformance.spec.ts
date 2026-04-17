@@ -23,12 +23,12 @@ describe("PostgreSQL Notify Adapter Conformance - Default Channel Prefix", () =>
           idleTimeoutMillis: 0,
         });
 
-        const provider = createPgPoolNotifyProvider({ pool });
-        const notifyAdapter = await createPgNotifyAdapter({ provider });
+        const notifyProvider = createPgPoolNotifyProvider({ pool });
+        const notifyAdapter = await createPgNotifyAdapter({ notifyProvider });
 
         await use(notifyAdapter);
 
-        await provider.close();
+        await notifyProvider.close();
         await pool.end();
       },
       { scope: "test" },
@@ -47,15 +47,15 @@ describe("PostgreSQL Notify Adapter Conformance - Custom Channel Prefix", () => 
           idleTimeoutMillis: 0,
         });
 
-        const provider = createPgPoolNotifyProvider({ pool });
+        const notifyProvider = createPgPoolNotifyProvider({ pool });
         const notifyAdapter = await createPgNotifyAdapter({
-          provider,
+          notifyProvider,
           channelPrefix: "myapp_notifications",
         });
 
         await use(notifyAdapter);
 
-        await provider.close();
+        await notifyProvider.close();
         await pool.end();
       },
       { scope: "test" },

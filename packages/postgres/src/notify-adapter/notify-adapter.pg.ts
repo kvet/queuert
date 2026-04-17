@@ -107,53 +107,25 @@ const createSharedListener = (
   };
 };
 
-/**
- * Serializes provider subscribe/unsubscribe calls across channels so
- * concurrent setup/teardown from different shared listeners can't race each
- * other. PostgreSQL drivers generally don't tolerate parallel commands on
- * the same connection, and LISTEN/UNLISTEN for different channels are
- * independent shared-listener instances that would otherwise fire together.
- * These calls are setup-time, not hot-path, so the serialization cost is
- * negligible.
- */
-const serializeSubscribeCalls = (provider: PgNotifyProvider): PgNotifyProvider => {
-  let chain: Promise<unknown> = Promise.resolve();
-  const run = async <R>(fn: () => Promise<R>): Promise<R> => {
-    const next = chain.then(fn, fn);
-    chain = next.catch(() => undefined);
-    return next;
-  };
-  return {
-    ...provider,
-    subscribe: async (channel, onMessage) => {
-      const unsubscribe = await run(async () => provider.subscribe(channel, onMessage));
-      return async () => {
-        await run(async () => unsubscribe());
-      };
-    },
-  };
-};
-
 /** Create a notify adapter backed by PostgreSQL LISTEN/NOTIFY. */
 export const createPgNotifyAdapter = async ({
-  provider: rawProvider,
+  notifyProvider,
   channelPrefix = "queuert",
 }: {
-  provider: PgNotifyProvider;
+  notifyProvider: PgNotifyProvider;
   channelPrefix?: string;
 }): Promise<NotifyAdapter> => {
-  const provider = serializeSubscribeCalls(rawProvider);
   const jobScheduledChannel = `${channelPrefix}_sched`;
   const chainCompletedChannel = `${channelPrefix}_chainc`;
   const ownershipLostChannel = `${channelPrefix}_owls`;
 
-  const jobScheduledListener = createSharedListener(provider, jobScheduledChannel);
-  const chainCompletedListener = createSharedListener(provider, chainCompletedChannel);
-  const ownershipLostListener = createSharedListener(provider, ownershipLostChannel);
+  const jobScheduledListener = createSharedListener(notifyProvider, jobScheduledChannel);
+  const chainCompletedListener = createSharedListener(notifyProvider, chainCompletedChannel);
+  const ownershipLostListener = createSharedListener(notifyProvider, ownershipLostChannel);
 
   return {
     notifyJobScheduled: async (typeName, _count) => {
-      await provider.publish(jobScheduledChannel, typeName);
+      await notifyProvider.publish(jobScheduledChannel, typeName);
     },
 
     listenJobScheduled: async (typeNames, onNotification) => {
@@ -166,7 +138,7 @@ export const createPgNotifyAdapter = async ({
     },
 
     notifyJobChainCompleted: async (chainId) => {
-      await provider.publish(chainCompletedChannel, chainId);
+      await notifyProvider.publish(chainCompletedChannel, chainId);
     },
 
     listenJobChainCompleted: async (chainId, onNotification) => {
@@ -178,7 +150,7 @@ export const createPgNotifyAdapter = async ({
     },
 
     notifyJobOwnershipLost: async (jobId) => {
-      await provider.publish(ownershipLostChannel, jobId);
+      await notifyProvider.publish(ownershipLostChannel, jobId);
     },
 
     listenJobOwnershipLost: async (jobId, onNotification) => {

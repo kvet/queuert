@@ -1,4 +1,5 @@
 import { createRedisNotifyAdapter } from "@queuert/redis";
+import { acquireRedisCluster } from "@queuert/testcontainers";
 import { Cluster } from "ioredis";
 import {
   createClient,
@@ -8,46 +9,21 @@ import {
   withTransactionHooks,
 } from "queuert";
 import { createInProcessStateAdapter } from "queuert/internal";
-import { GenericContainer, Wait } from "testcontainers";
 
 import { createIoredisClusterNotifyProvider } from "./provider.js";
 
-// grokzen/redis-cluster exposes 6 Redis nodes on 7000..7005.
-// IP=0.0.0.0 + natMap lets ioredis talk to the cluster through the mapped
-// host ports regardless of docker networking.
-const INITIAL_PORT = 7000;
-const NODE_PORTS = [0, 1, 2, 3, 4, 5].map((i) => INITIAL_PORT + i);
-
 // 1. Start a Redis Cluster using testcontainers
 console.log("Starting Redis Cluster...");
-const clusterContainer = await new GenericContainer("grokzen/redis-cluster:7.0.10")
-  .withExposedPorts(...NODE_PORTS)
-  .withEnvironment({
-    IP: "0.0.0.0",
-    INITIAL_PORT: String(INITIAL_PORT),
-    MASTERS: "3",
-    SLAVES_PER_MASTER: "1",
-  })
-  .withWaitStrategy(Wait.forLogMessage(/Cluster state changed: ok/i, 6))
-  .withStartupTimeout(120_000)
-  .start();
+await using rc = await acquireRedisCluster("grokzen/redis-cluster:7.0.10");
 
-const host = clusterContainer.getHost();
-const portMap = new Map<number, number>();
-for (const internalPort of NODE_PORTS) {
-  portMap.set(internalPort, clusterContainer.getMappedPort(internalPort));
-}
-const natMap = (address: string): { host: string; port: number } | null => {
-  const portStr = address.split(":").pop();
-  if (!portStr) return null;
-  const mappedPort = portMap.get(Number(portStr));
-  if (mappedPort === undefined) return null;
-  return { host, port: mappedPort };
+const startupNodes = rc.rootNodes.map((node) => {
+  const url = new URL(node.url);
+  return { host: url.hostname, port: Number(url.port) };
+});
+const natMap = (address: string) => {
+  const result = rc.nodeAddressMap(address);
+  return result ?? null;
 };
-const startupNodes = NODE_PORTS.map((internalPort) => ({
-  host,
-  port: clusterContainer.getMappedPort(internalPort),
-}));
 
 // 2. Create Redis Cluster connections
 const cluster = new Cluster(startupNodes, { natMap });
@@ -77,7 +53,7 @@ const jobTypeRegistry = defineJobTypeRegistry<{
 
 // 5. Create adapters
 const stateAdapter = createInProcessStateAdapter();
-const notifyAdapter = await createRedisNotifyAdapter({ provider: notifyProvider });
+const notifyAdapter = await createRedisNotifyAdapter({ notifyProvider });
 
 // 6. Create client and worker
 const qrtClient = await createClient({
@@ -139,5 +115,4 @@ console.log(`Report ready! ID: ${result.output.reportId}, Rows: ${result.output.
 await stopWorker();
 await cluster.quit();
 await subscribeCluster.quit();
-await clusterContainer.stop();
 console.log("Done!");

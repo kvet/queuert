@@ -1,5 +1,5 @@
 import { createPgStateAdapter } from "@queuert/postgres";
-import { PostgreSqlContainer } from "@testcontainers/postgresql";
+import { acquirePostgres } from "@queuert/testcontainers";
 import { CompiledQuery, type Generated, Kysely, PostgresDialect } from "kysely";
 import { Pool } from "pg";
 import {
@@ -14,7 +14,7 @@ import { createInProcessNotifyAdapter } from "queuert/internal";
 import { createKyselyPgStateProvider } from "./provider.js";
 
 // 1. Start PostgreSQL using testcontainers
-const pgContainer = await new PostgreSqlContainer("postgres:18").withExposedPorts(5432).start();
+await using pg = await acquirePostgres("postgres:18", import.meta.url);
 
 // 2. Define Kysely database schema
 type Database = {
@@ -25,7 +25,7 @@ type Database = {
 const db = new Kysely<Database>({
   dialect: new PostgresDialect({
     pool: new Pool({
-      connectionString: pgContainer.getConnectionUri(),
+      connectionString: pg.connectionString,
       max: 10,
     }),
   }),
@@ -116,4 +116,3 @@ console.log(`Welcome email sent at: ${result.output.sentAt}`);
 // 10. Cleanup
 await stopWorker();
 await db.destroy();
-await pgContainer.stop();

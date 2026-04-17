@@ -13,7 +13,7 @@
 import assert from "node:assert/strict";
 
 import { createPgNotifyAdapter, createPgStateAdapter } from "@queuert/postgres";
-import { PostgreSqlContainer } from "@testcontainers/postgresql";
+import { acquirePostgres } from "@queuert/testcontainers";
 import { createPostgresJsNotifyProvider } from "example-notify-postgres-postgres-js/provider";
 import { createPostgresJsStateProvider } from "example-state-postgres-postgres-js/provider";
 import postgres from "postgres";
@@ -48,14 +48,14 @@ const jobTypeRegistry = defineJobTypeRegistry<{
   };
 }>();
 
-const pgContainer = await new PostgreSqlContainer("postgres:18").withExposedPorts(5432).start();
-const sql = postgres(pgContainer.getConnectionUri(), { max: 10 });
+await using pg = await acquirePostgres("postgres:18", import.meta.url);
+const sql = postgres(pg.connectionString, { max: 10 });
 
 const stateProvider = createPostgresJsStateProvider({ sql });
 const stateAdapter = await createPgStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 const notifyProvider = createPostgresJsNotifyProvider({ sql });
-const notifyAdapter = await createPgNotifyAdapter({ provider: notifyProvider });
+const notifyAdapter = await createPgNotifyAdapter({ notifyProvider });
 
 const client = await createClient({
   stateAdapter,
@@ -222,4 +222,3 @@ try {
 
 await stopWorker();
 await sql.end();
-await pgContainer.stop();

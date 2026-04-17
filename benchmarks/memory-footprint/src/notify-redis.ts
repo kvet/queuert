@@ -64,7 +64,7 @@ const notifyProvider: RedisNotifyProvider = {
 
 const stateAdapter = createInProcessStateAdapter();
 const [beforeAdapter, afterAdapter, notifyAdapter] = await measureMemory(async () =>
-  createRedisNotifyAdapter({ provider: notifyProvider }),
+  createRedisNotifyAdapter({ notifyProvider }),
 );
 console.log("\nAfter creating RedisNotifyAdapter:");
 diffMemory(beforeAdapter, afterAdapter);

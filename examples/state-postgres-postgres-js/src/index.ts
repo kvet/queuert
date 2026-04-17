@@ -1,5 +1,5 @@
 import { createPgStateAdapter } from "@queuert/postgres";
-import { PostgreSqlContainer } from "@testcontainers/postgresql";
+import { acquirePostgres } from "@queuert/testcontainers";
 import postgres from "postgres";
 import {
   createClient,
@@ -13,10 +13,10 @@ import { createInProcessNotifyAdapter } from "queuert/internal";
 import { createPostgresJsStateProvider } from "./provider.js";
 
 // 1. Start PostgreSQL using testcontainers
-const pgContainer = await new PostgreSqlContainer("postgres:18").withExposedPorts(5432).start();
+await using pg = await acquirePostgres("postgres:18", import.meta.url);
 
 // 2. Create database connection and schema
-const sql = postgres(pgContainer.getConnectionUri(), { max: 10 });
+const sql = postgres(pg.connectionString, { max: 10 });
 
 await sql`
   CREATE TABLE IF NOT EXISTS users (
@@ -93,4 +93,3 @@ console.log(`Welcome email sent at: ${result.output.sentAt}`);
 // 7. Cleanup
 await stopWorker();
 await sql.end();
-await pgContainer.stop();

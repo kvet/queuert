@@ -1,5 +1,5 @@
 import { createPgStateAdapter } from "@queuert/postgres";
-import { PostgreSqlContainer } from "@testcontainers/postgresql";
+import { acquirePostgres } from "@queuert/testcontainers";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { pgTable, serial, text } from "drizzle-orm/pg-core";
@@ -16,7 +16,7 @@ import { createInProcessNotifyAdapter } from "queuert/internal";
 import { createDrizzlePgStateProvider } from "./provider.js";
 
 // 1. Start PostgreSQL using testcontainers
-const pgContainer = await new PostgreSqlContainer("postgres:18").withExposedPorts(5432).start();
+await using pg = await acquirePostgres("postgres:18", import.meta.url);
 
 // 2. Define Drizzle schema
 const users = pgTable("users", {
@@ -29,7 +29,7 @@ const schema = { users };
 
 // 3. Create database connection and schema
 const pool = new Pool({
-  connectionString: pgContainer.getConnectionUri(),
+  connectionString: pg.connectionString,
   max: 10,
 });
 
@@ -116,4 +116,3 @@ console.log(`Welcome email sent at: ${result.output.sentAt}`);
 // 10. Cleanup
 await stopWorker();
 await db.$client.end();
-await pgContainer.stop();

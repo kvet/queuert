@@ -1,5 +1,5 @@
 import { createPgNotifyAdapter } from "@queuert/postgres";
-import { PostgreSqlContainer } from "@testcontainers/postgresql";
+import { acquirePostgres } from "@queuert/testcontainers";
 import postgres from "postgres";
 import { runNotifyAdapterConformance } from "queuert/conformance";
 import { test } from "vitest";
@@ -7,12 +7,13 @@ import { test } from "vitest";
 import { createPostgresJsNotifyProvider } from "./provider.js";
 
 test("notify-postgres-postgres-js provider passes notify adapter conformance", async () => {
+  await using pg = await acquirePostgres("postgres:18", import.meta.url);
+
   await runNotifyAdapterConformance(async () => {
-    const container = await new PostgreSqlContainer("postgres:18").withExposedPorts(5432).start();
-    const sql = postgres(container.getConnectionUri(), { max: 10 });
-    const provider = createPostgresJsNotifyProvider({ sql });
+    const sql = postgres(pg.connectionString, { max: 10 });
+    const notifyProvider = createPostgresJsNotifyProvider({ sql });
     const notifyAdapter = await createPgNotifyAdapter({
-      provider,
+      notifyProvider,
       channelPrefix: `qrt_spec_${Date.now()}_${Math.random().toString(36).slice(2)}`,
     });
 
@@ -20,7 +21,6 @@ test("notify-postgres-postgres-js provider passes notify adapter conformance", a
       notifyAdapter,
       dispose: async () => {
         await sql.end();
-        await container.stop();
       },
     };
   });

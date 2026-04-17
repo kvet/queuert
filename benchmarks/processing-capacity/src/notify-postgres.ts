@@ -20,7 +20,7 @@ const stateAdapter = await createPgStateAdapter({ stateProvider, schema: "public
 await stateAdapter.migrateToLatest();
 
 const notifyProvider = createPgPoolNotifyProvider({ pool });
-const notifyAdapter = await createPgNotifyAdapter({ provider: notifyProvider });
+const notifyAdapter = await createPgNotifyAdapter({ notifyProvider });
 console.log("PostgreSQL (state + notify) ready.");
 
 await runBenchmark({

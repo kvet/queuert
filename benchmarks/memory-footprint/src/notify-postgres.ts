@@ -44,7 +44,7 @@ const notifyProvider = createPostgresJsNotifyProvider({ sql });
 
 const stateAdapter = createInProcessStateAdapter();
 const [beforeAdapter, afterAdapter, notifyAdapter] = await measureMemory(async () =>
-  createPgNotifyAdapter({ provider: notifyProvider }),
+  createPgNotifyAdapter({ notifyProvider }),
 );
 console.log("\nAfter creating PgNotifyAdapter:");
 diffMemory(beforeAdapter, afterAdapter);

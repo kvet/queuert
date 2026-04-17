@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { createPgNotifyAdapter, createPgStateAdapter } from "@queuert/postgres";
-import { PostgreSqlContainer } from "@testcontainers/postgresql";
+import { acquirePostgres } from "@queuert/testcontainers";
 import { createPgPoolNotifyProvider } from "example-notify-postgres-pg/provider";
 import { createPgPoolStateProvider } from "example-state-postgres-pg/provider";
 import { Pool } from "pg";
@@ -52,17 +52,16 @@ const jobTypeRegistry = defineJobTypeRegistry<{
 }>();
 
 console.log("Starting PostgreSQL container...");
-const pgContainer = await new PostgreSqlContainer("postgres:18").withExposedPorts(5432).start();
-const connectionString = pgContainer.getConnectionUri();
+await using pg = await acquirePostgres("postgres:18", import.meta.url);
 
-const pool = new Pool({ connectionString, max: 10 });
+const pool = new Pool({ connectionString: pg.connectionString, max: 10 });
 
 const stateProvider = createPgPoolStateProvider({ pool });
 const stateAdapter = await createPgStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 
 const notifyProvider = createPgPoolNotifyProvider({ pool });
-const notifyAdapter = await createPgNotifyAdapter({ provider: notifyProvider });
+const notifyAdapter = await createPgNotifyAdapter({ notifyProvider });
 
 const qrtClient = await createClient({
   stateAdapter,
@@ -83,7 +82,7 @@ for (let i = 0; i < WORKER_COUNT; i++) {
   const workerId = workerNames[i];
   const child = fork(workerPath, [], {
     execArgv: ["--import=tsx"],
-    env: { ...process.env, CONNECTION_STRING: connectionString, WORKER_ID: workerId },
+    env: { ...process.env, CONNECTION_STRING: pg.connectionString, WORKER_ID: workerId },
     stdio: ["inherit", "inherit", "inherit", "ipc"],
   });
 
@@ -178,5 +177,4 @@ const stopPromises = processes.map(
 await Promise.all(stopPromises);
 await notifyProvider.close();
 await pool.end();
-await pgContainer.stop();
 console.log("Done!");

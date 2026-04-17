@@ -16,11 +16,10 @@
   },
   "devDependencies": {
     "@queuert/nats": "workspace:*",
+    "@queuert/testcontainers": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
-    "@testcontainers/nats": "11.14.0",
     "nats": "2.29.3",
     "queuert": "workspace:*",
-    "testcontainers": "11.14.0",
     "tsx": "4.21.0"
   }
 }

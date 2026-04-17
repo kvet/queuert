@@ -1,5 +1,5 @@
 import { createRedisNotifyAdapter } from "@queuert/redis";
-import { RedisContainer } from "@testcontainers/redis";
+import { acquireRedis } from "@queuert/testcontainers";
 import { Redis } from "ioredis";
 import {
   createClient,
@@ -14,8 +14,8 @@ import { createIoredisNotifyProvider } from "./provider.js";
 
 // 1. Start Redis using testcontainers
 console.log("Starting Redis...");
-const redisContainer = await new RedisContainer("redis:8").withExposedPorts(6379).start();
-const redisUrl = redisContainer.getConnectionUrl();
+await using redisContainer = await acquireRedis("redis:8");
+const redisUrl = redisContainer.connectionUrl;
 
 // 2. Create Redis connections
 const redis = new Redis(redisUrl);
@@ -45,7 +45,7 @@ const jobTypeRegistry = defineJobTypeRegistry<{
 
 // 5. Create adapters
 const stateAdapter = createInProcessStateAdapter();
-const notifyAdapter = await createRedisNotifyAdapter({ provider: notifyProvider });
+const notifyAdapter = await createRedisNotifyAdapter({ notifyProvider });
 
 // 6. Create client and worker
 const qrtClient = await createClient({
@@ -108,5 +108,4 @@ console.log(`Report ready! ID: ${result.output.reportId}, Rows: ${result.output.
 await stopWorker();
 await redis.quit();
 await redisSubscription.quit();
-await redisContainer.stop();
 console.log("Done!");

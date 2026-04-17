@@ -24,9 +24,9 @@ export const extendWithNotifyRedis = <
         await client.connect();
         await subscribeClient.connect();
 
-        const provider = createNodeRedisNotifyProvider({ client, subscribeClient });
+        const notifyProvider = createNodeRedisNotifyProvider({ client, subscribeClient });
         const notifyAdapter = await createRedisNotifyAdapter({
-          provider,
+          notifyProvider,
           channelPrefix: `queuert:${Date.now()}:${Math.random().toString(36).slice(2)}`,
         });
 

@@ -2,7 +2,7 @@ import { execSync } from "node:child_process";
 
 import { PrismaPg } from "@prisma/adapter-pg";
 import { createPgStateAdapter } from "@queuert/postgres";
-import { PostgreSqlContainer } from "@testcontainers/postgresql";
+import { acquirePostgres } from "@queuert/testcontainers";
 import {
   createClient,
   createInProcessWorker,
@@ -15,19 +15,18 @@ import { createInProcessNotifyAdapter } from "queuert/internal";
 import { createPrismaPgStateProvider } from "./provider.js";
 
 // 1. Start PostgreSQL using testcontainers
-const pgContainer = await new PostgreSqlContainer("postgres:18").withExposedPorts(5432).start();
-const connectionString = pgContainer.getConnectionUri();
+await using pg = await acquirePostgres("postgres:18", import.meta.url);
 
 // 2. Push Prisma schema to database and generate client
 execSync("npx prisma db push", {
-  env: { ...process.env, DATABASE_URL: connectionString },
+  env: { ...process.env, DATABASE_URL: pg.connectionString },
   stdio: "inherit",
 });
 
 // Dynamic import after generate to get the freshly generated client
 const { PrismaClient } = await import("../prisma/generated/prisma/client.js");
 
-const adapter = new PrismaPg({ connectionString });
+const adapter = new PrismaPg({ connectionString: pg.connectionString });
 const prisma = new PrismaClient({ adapter });
 
 // 3. Define job types
@@ -109,4 +108,3 @@ console.log(`Welcome email sent at: ${result.output.sentAt}`);
 // 9. Cleanup
 await stopWorker();
 await prisma.$disconnect();
-await pgContainer.stop();

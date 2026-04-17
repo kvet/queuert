@@ -7,26 +7,43 @@ import { type TestAPI } from "vitest";
 
 import { withContainerLock } from "./with-container-lock.js";
 
-const CONTAINER_NAME = "queuert-nats-test";
-
 export type { NatsConnectionOptions };
 
-let containerPromise: Promise<StartedNatsContainer> | null = null;
+export type AcquiredNats = {
+  connectionOptions: NatsConnectionOptions;
+} & AsyncDisposable;
 
-const getContainer = async (): Promise<StartedNatsContainer> => {
-  containerPromise ??= withContainerLock({
-    containerName: CONTAINER_NAME,
-    start: async () =>
-      new NatsContainer("nats:2.10")
-        .withName(CONTAINER_NAME)
-        .withLabels({
-          label: CONTAINER_NAME,
-        })
-        .withArg("-js")
-        .withReuse()
-        .start(),
-  });
-  return containerPromise;
+const containerNameFromImage = (image: string): string =>
+  `queuert-nats-${image.replace(/[^a-z0-9]/gi, "-")}-test`;
+
+const containerPromises = new Map<string, Promise<StartedNatsContainer>>();
+
+const startContainer = async (image: string): Promise<StartedNatsContainer> => {
+  let promise = containerPromises.get(image);
+  if (!promise) {
+    const containerName = containerNameFromImage(image);
+    promise = withContainerLock({
+      containerName,
+      start: async () =>
+        new NatsContainer(image)
+          .withName(containerName)
+          .withLabels({ label: containerName })
+          .withArg("-js")
+          .withReuse()
+          .start(),
+    });
+    containerPromises.set(image, promise);
+  }
+  return promise;
+};
+
+export const acquireNats = async (image: string): Promise<AcquiredNats> => {
+  const container = await startContainer(image);
+
+  return {
+    connectionOptions: container.getConnectionOptions(),
+    [Symbol.asyncDispose]: async () => {},
+  };
 };
 
 export const extendWithNats = <T>(
@@ -43,7 +60,7 @@ export const extendWithNats = <T>(
     natsConnectionOptions: [
       // eslint-disable-next-line no-empty-pattern
       async ({}, use) => {
-        const container = await getContainer();
+        const container = await startContainer("nats:2.10");
         await use(container.getConnectionOptions());
       },
       { scope: "worker" },

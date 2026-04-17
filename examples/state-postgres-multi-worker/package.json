@@ -16,14 +16,13 @@
   },
   "devDependencies": {
     "@queuert/postgres": "workspace:*",
+    "@queuert/testcontainers": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
-    "@testcontainers/postgresql": "11.14.0",
     "@types/pg": "8.20.0",
     "example-notify-postgres-pg": "workspace:*",
     "example-state-postgres-pg": "workspace:*",
     "pg": "8.20.0",
     "queuert": "workspace:*",
-    "testcontainers": "11.14.0",
     "tsx": "4.21.0"
   }
 }

@@ -1,5 +1,5 @@
 import { createPgNotifyAdapter } from "@queuert/postgres";
-import { PostgreSqlContainer } from "@testcontainers/postgresql";
+import { acquirePostgres } from "@queuert/testcontainers";
 import { Pool } from "pg";
 import {
   createClient,
@@ -14,11 +14,10 @@ import { createPgPoolNotifyProvider } from "./provider.js";
 
 // 1. Start PostgreSQL using testcontainers
 console.log("Starting PostgreSQL...");
-const pgContainer = await new PostgreSqlContainer("postgres:18").withExposedPorts(5432).start();
-const connectionString = pgContainer.getConnectionUri();
+await using pg = await acquirePostgres("postgres:18", import.meta.url);
 
 // 2. Create PostgreSQL connection pool
-const pool = new Pool({ connectionString, max: 10 });
+const pool = new Pool({ connectionString: pg.connectionString, max: 10 });
 
 // 3. Create the notify provider using pg
 const notifyProvider = createPgPoolNotifyProvider({ pool });
@@ -34,7 +33,7 @@ const jobTypeRegistry = defineJobTypeRegistry<{
 
 // 5. Create adapters
 const stateAdapter = createInProcessStateAdapter();
-const notifyAdapter = await createPgNotifyAdapter({ provider: notifyProvider });
+const notifyAdapter = await createPgNotifyAdapter({ notifyProvider });
 
 // 6. Create client and worker
 const qrtClient = await createClient({
@@ -97,5 +96,4 @@ console.log(`Report ready! ID: ${result.output.reportId}, Rows: ${result.output.
 await stopWorker();
 await notifyProvider.close();
 await pool.end();
-await pgContainer.stop();
 console.log("Done!");

@@ -1,5 +1,5 @@
 import { createNatsNotifyAdapter } from "@queuert/nats";
-import { NatsContainer } from "@testcontainers/nats";
+import { acquireNats } from "@queuert/testcontainers";
 import { connect } from "nats";
 import {
   createClient,
@@ -12,8 +12,8 @@ import { createInProcessStateAdapter } from "queuert/internal";
 
 // 1. Start NATS using testcontainers (with JetStream enabled)
 console.log("Starting NATS...");
-const natsContainer = await new NatsContainer("nats:2.10").withArg("-js").start();
-const connectionOptions = natsContainer.getConnectionOptions();
+await using natsContainer = await acquireNats("nats:2.10");
+const connectionOptions = natsContainer.connectionOptions;
 
 // 2. Create NATS connection
 const nc = await connect(connectionOptions);
@@ -99,5 +99,4 @@ console.log(`Report ready! ID: ${result.output.reportId}, Rows: ${result.output.
 // 10. Cleanup
 await stopWorker();
 await nc.close();
-await natsContainer.stop();
 console.log("Done!");
