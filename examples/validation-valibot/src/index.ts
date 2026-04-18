@@ -13,8 +13,9 @@ import {
   createInProcessWorker,
   createJobTypeProcessorRegistry,
   withTransactionHooks,
+  createInProcessNotifyAdapter,
+  createInProcessStateAdapter,
 } from "queuert";
-import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
 import * as v from "valibot";
 
 import { createValibotJobTypeRegistry } from "./valibot-adapter.js";

@@ -15,30 +15,29 @@ export const createDrizzleSqliteStateProvider = ({
       await lock.acquire();
       try {
         db.exec("BEGIN IMMEDIATE");
-        try {
-          const result = await fn({ db });
-          db.exec("COMMIT");
-          return result;
-        } catch (error) {
-          if (db.inTransaction) {
-            try {
-              db.exec("ROLLBACK");
-            } catch {
-              // ignore rollback errors
-            }
+        const result = await fn({ db });
+        db.exec("COMMIT");
+        return result;
+      } catch (error) {
+        if (db.inTransaction) {
+          try {
+            db.exec("ROLLBACK");
+          } catch {
+            // ignore rollback errors
           }
-          throw error;
         }
+        throw error;
       } finally {
         lock.release();
       }
     },
     executeSql: async ({ txCtx, sql, params, columnTypes }) => {
-      const database = txCtx?.db ?? db;
-      if (Object.keys(columnTypes).length > 0) {
-        const stmt = database.prepare(sql);
-        return stmt.all(...(params ?? []));
-      } else {
+      const run = (): unknown[] => {
+        const database = txCtx?.db ?? db;
+        if (Object.keys(columnTypes).length > 0) {
+          const stmt = database.prepare(sql);
+          return stmt.all(...(params ?? []));
+        }
         if (params && params.length > 0) {
           const stmt = database.prepare(sql);
           stmt.run(...params);
@@ -46,6 +45,13 @@ export const createDrizzleSqliteStateProvider = ({
           database.exec(sql);
         }
         return [];
+      };
+      if (txCtx) return run();
+      await lock.acquire();
+      try {
+        return run();
+      } finally {
+        lock.release();
       }
     },
   };

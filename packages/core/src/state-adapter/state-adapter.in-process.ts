@@ -5,118 +5,101 @@ import { type OrderDirection, type Page, type PageParams } from "../pagination.j
 import { decodeChainIndexCursor, decodeCreatedAtCursor, encodeCursor } from "./cursor.js";
 import { type StateAdapter, type StateJob, type StateJobStatus } from "./state-adapter.js";
 
-export type InProcessContext = { inTransaction?: boolean };
-
 type BlockerEntry = { index: number; traceContext: string | null };
 
-type InProcessStore = {
-  jobs: Map<string, StateJob>;
-  jobBlockers: Map<string, Map<string, BlockerEntry>>;
-};
+type JournalEntry =
+  | { kind: "job"; prev: StateJob | undefined; next: StateJob | undefined }
+  | {
+      kind: "blocker";
+      jobId: string;
+      blockerChainId: string;
+      prev: BlockerEntry | undefined;
+      next: BlockerEntry | undefined;
+    };
 
-const deepCloneStore = (store: InProcessStore): InProcessStore => ({
-  jobs: new Map(Array.from(store.jobs).map(([k, v]) => [k, { ...v }])),
-  jobBlockers: new Map(
-    Array.from(store.jobBlockers).map(([k, v]) => [
-      k,
-      new Map(Array.from(v).map(([bk, bv]) => [bk, { ...bv }])),
-    ]),
-  ),
-});
+export type InProcessContext = { inTransaction?: boolean; journal?: JournalEntry[] };
 
-const paginateByCreatedAt = <T extends StateJob | [StateJob, StateJob | undefined]>(
-  items: T[],
-  page: PageParams,
-  orderDirection: OrderDirection,
-): Page<T> => {
-  const getId = (item: T): string => (Array.isArray(item) ? item[0].id : item.id);
-  const getCreatedAt = (item: T): Date =>
-    Array.isArray(item) ? item[0].createdAt : item.createdAt;
+type Comparator<T> = (a: T, b: T) => number;
 
-  const dir = orderDirection === "desc" ? -1 : 1;
-  const sorted = items.toSorted((a, b) => {
-    const d = getCreatedAt(a).getTime() - getCreatedAt(b).getTime();
-    if (d !== 0) return d * dir;
-    const idA = getId(a);
-    const idB = getId(b);
-    return idA < idB ? -dir : idA > idB ? dir : 0;
-  });
+class SortedSet<T> {
+  private readonly items: T[] = [];
+  constructor(private readonly cmp: Comparator<T>) {}
 
-  let startIndex = 0;
-  if (page.cursor) {
-    const cursor = decodeCreatedAtCursor(page.cursor);
-    startIndex = sorted.findIndex((item) => {
-      const sv = getCreatedAt(item).toISOString();
-      const id = getId(item);
-      if (orderDirection === "desc") {
-        return sv < cursor.createdAt || (sv === cursor.createdAt && id < cursor.id);
-      }
-      return sv > cursor.createdAt || (sv === cursor.createdAt && id > cursor.id);
-    });
-    if (startIndex === -1) startIndex = sorted.length;
+  get size(): number {
+    return this.items.length;
   }
 
-  const pageItems = sorted.slice(startIndex, startIndex + page.limit);
-  const hasMore = startIndex + page.limit < sorted.length;
-  const lastItem = pageItems[pageItems.length - 1];
-
-  return {
-    items: pageItems,
-    nextCursor:
-      hasMore && lastItem
-        ? encodeCursor({
-            type: "createdAt",
-            id: getId(lastItem),
-            createdAt: getCreatedAt(lastItem).toISOString(),
-          })
-        : null,
-  };
-};
-
-const paginateByChainIndex = (
-  items: StateJob[],
-  page: PageParams,
-  orderDirection: OrderDirection,
-): Page<StateJob> => {
-  const dir = orderDirection === "asc" ? 1 : -1;
-  const sorted = items.toSorted((a, b) => {
-    const d = a.chainIndex - b.chainIndex;
-    if (d !== 0) return d * dir;
-    return a.id < b.id ? -dir : a.id > b.id ? dir : 0;
-  });
-
-  let startIndex = 0;
-  if (page.cursor) {
-    const cursor = decodeChainIndexCursor(page.cursor);
-    startIndex = sorted.findIndex((item) => {
-      if (orderDirection === "asc") {
-        return (
-          item.chainIndex > cursor.chainIndex ||
-          (item.chainIndex === cursor.chainIndex && item.id > cursor.id)
-        );
-      }
-      return (
-        item.chainIndex < cursor.chainIndex ||
-        (item.chainIndex === cursor.chainIndex && item.id < cursor.id)
-      );
-    });
-    if (startIndex === -1) startIndex = sorted.length;
+  first(): T | undefined {
+    return this.items[0];
   }
 
-  const pageItems = sorted.slice(startIndex, startIndex + page.limit);
-  const hasMore = startIndex + page.limit < sorted.length;
-  const lastItem = pageItems[pageItems.length - 1];
+  at(i: number): T | undefined {
+    return this.items[i];
+  }
 
+  insert(item: T): void {
+    const i = this.lowerBound(item);
+    this.items.splice(i, 0, item);
+  }
+
+  delete(item: T): void {
+    const i = this.lowerBound(item);
+    if (i < this.items.length && this.cmp(this.items[i], item) === 0) {
+      this.items.splice(i, 1);
+    }
+  }
+
+  *iterate(direction: "asc" | "desc"): IterableIterator<T> {
+    if (direction === "asc") {
+      for (let i = 0; i < this.items.length; i++) yield this.items[i];
+    } else {
+      for (let i = this.items.length - 1; i >= 0; i--) yield this.items[i];
+    }
+  }
+
+  private lowerBound(item: T): number {
+    let lo = 0;
+    let hi = this.items.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      if (this.cmp(this.items[mid], item) < 0) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  }
+}
+
+const compareStrings = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
+const makeComparators = (
+  seqByJobId: Map<string, number>,
+): {
+  scheduledAt: Comparator<StateJob>;
+  leasedUntil: Comparator<StateJob>;
+  createdAt: Comparator<StateJob>;
+} => {
+  const seq = (job: StateJob): number => seqByJobId.get(job.id) ?? 0;
   return {
-    items: pageItems,
-    nextCursor:
-      hasMore && lastItem
-        ? encodeCursor({
-            type: "chainIndex",
-            id: lastItem.id,
-            chainIndex: lastItem.chainIndex,
-          })
-        : null,
+    scheduledAt: (a, b) => {
+      const d = a.scheduledAt.getTime() - b.scheduledAt.getTime();
+      if (d !== 0) return d;
+      const s = seq(a) - seq(b);
+      return s !== 0 ? s : compareStrings(a.id, b.id);
+    },
+    leasedUntil: (a, b) => {
+      const ax = a.leasedUntil ? a.leasedUntil.getTime() : Infinity;
+      const bx = b.leasedUntil ? b.leasedUntil.getTime() : Infinity;
+      const d = ax - bx;
+      if (d !== 0) return d;
+      const s = seq(a) - seq(b);
+      return s !== 0 ? s : compareStrings(a.id, b.id);
+    },
+    createdAt: (a, b) => {
+      const d = a.createdAt.getTime() - b.createdAt.getTime();
+      if (d !== 0) return d;
+      const s = seq(a) - seq(b);
+      return s !== 0 ? s : compareStrings(a.id, b.id);
+    },
   };
 };
 
@@ -129,12 +112,236 @@ const matchesDateRange = (createdAt: Date, from?: Date, to?: Date): boolean => {
 export type InProcessStateAdapter = StateAdapter<InProcessContext, string>;
 
 export const createInProcessStateAdapter = (): InProcessStateAdapter => {
-  const store: InProcessStore = {
-    jobs: new Map(),
-    jobBlockers: new Map(),
-  };
+  const jobs = new Map<string, StateJob>();
+  const pendingByType = new Map<string, SortedSet<StateJob>>();
+  const runningByType = new Map<string, SortedSet<StateJob>>();
+  const jobsByChain = new Map<string, Map<number, StateJob>>();
+  const lastByChain = new Map<string, StateJob>();
+  const dedupByKey = new Map<string, Set<StateJob>>();
+  const jobBlockers = new Map<string, Map<string, BlockerEntry>>();
+  const blockedByChain = new Map<string, Set<string>>();
+
+  const seqByJobId = new Map<string, number>();
+  let nextSeq = 0;
+  const cmp = makeComparators(seqByJobId);
+  const rootJobsByCreatedAt = new SortedSet<StateJob>(cmp.createdAt);
 
   const lock = createAsyncLock();
+
+  const dedupKey = (job: StateJob): string | undefined =>
+    job.deduplicationKey != null ? `${job.chainTypeName}\u0000${job.deduplicationKey}` : undefined;
+
+  const indexInsertJob = (job: StateJob): void => {
+    if (!seqByJobId.has(job.id)) seqByJobId.set(job.id, nextSeq++);
+
+    if (job.status === "pending") {
+      let set = pendingByType.get(job.typeName);
+      if (!set) {
+        set = new SortedSet(cmp.scheduledAt);
+        pendingByType.set(job.typeName, set);
+      }
+      set.insert(job);
+    } else if (job.status === "running") {
+      let set = runningByType.get(job.typeName);
+      if (!set) {
+        set = new SortedSet(cmp.leasedUntil);
+        runningByType.set(job.typeName, set);
+      }
+      set.insert(job);
+    }
+
+    let chainMap = jobsByChain.get(job.chainId);
+    if (!chainMap) {
+      chainMap = new Map();
+      jobsByChain.set(job.chainId, chainMap);
+    }
+    chainMap.set(job.chainIndex, job);
+
+    const last = lastByChain.get(job.chainId);
+    if (!last || job.chainIndex > last.chainIndex) {
+      lastByChain.set(job.chainId, job);
+    }
+
+    if (job.id === job.chainId) {
+      rootJobsByCreatedAt.insert(job);
+      const k = dedupKey(job);
+      if (k) {
+        let set = dedupByKey.get(k);
+        if (!set) {
+          set = new Set();
+          dedupByKey.set(k, set);
+        }
+        set.add(job);
+      }
+    }
+  };
+
+  const indexRemoveJob = (job: StateJob): void => {
+    if (job.status === "pending") {
+      pendingByType.get(job.typeName)?.delete(job);
+    } else if (job.status === "running") {
+      runningByType.get(job.typeName)?.delete(job);
+    }
+
+    const chainMap = jobsByChain.get(job.chainId);
+    if (chainMap) {
+      const stored = chainMap.get(job.chainIndex);
+      if (stored && stored.id === job.id) {
+        chainMap.delete(job.chainIndex);
+        if (chainMap.size === 0) jobsByChain.delete(job.chainId);
+      }
+    }
+
+    const last = lastByChain.get(job.chainId);
+    if (last && last.id === job.id) {
+      let newLast: StateJob | undefined;
+      const remaining = jobsByChain.get(job.chainId);
+      if (remaining) {
+        for (const j of remaining.values()) {
+          if (!newLast || j.chainIndex > newLast.chainIndex) newLast = j;
+        }
+      }
+      if (newLast) lastByChain.set(job.chainId, newLast);
+      else lastByChain.delete(job.chainId);
+    }
+
+    if (job.id === job.chainId) {
+      rootJobsByCreatedAt.delete(job);
+      const k = dedupKey(job);
+      if (k) {
+        const set = dedupByKey.get(k);
+        if (set) {
+          set.delete(job);
+          if (set.size === 0) dedupByKey.delete(k);
+        }
+      }
+    }
+  };
+
+  const writeJob = (
+    journal: JournalEntry[] | undefined,
+    prev: StateJob | undefined,
+    next: StateJob | undefined,
+  ): void => {
+    if (prev) indexRemoveJob(prev);
+    if (next) {
+      jobs.set(next.id, next);
+      indexInsertJob(next);
+    } else if (prev) {
+      jobs.delete(prev.id);
+      seqByJobId.delete(prev.id);
+    }
+    if (journal) journal.push({ kind: "job", prev, next });
+  };
+
+  const writeBlocker = (
+    journal: JournalEntry[] | undefined,
+    jobId: string,
+    blockerChainId: string,
+    prev: BlockerEntry | undefined,
+    next: BlockerEntry | undefined,
+  ): void => {
+    const map = jobBlockers.get(jobId);
+    if (next) {
+      if (map) {
+        map.set(blockerChainId, next);
+      } else {
+        jobBlockers.set(jobId, new Map([[blockerChainId, next]]));
+      }
+      let inv = blockedByChain.get(blockerChainId);
+      if (!inv) {
+        inv = new Set();
+        blockedByChain.set(blockerChainId, inv);
+      }
+      inv.add(jobId);
+    } else if (map) {
+      map.delete(blockerChainId);
+      if (map.size === 0) jobBlockers.delete(jobId);
+      const inv = blockedByChain.get(blockerChainId);
+      if (inv) {
+        inv.delete(jobId);
+        if (inv.size === 0) blockedByChain.delete(blockerChainId);
+      }
+    }
+    if (journal) journal.push({ kind: "blocker", jobId, blockerChainId, prev, next });
+  };
+
+  const rollbackTo = (journal: JournalEntry[], target: number): void => {
+    while (journal.length > target) {
+      const entry = journal.pop()!;
+      if (entry.kind === "job") {
+        if (entry.next) indexRemoveJob(entry.next);
+        if (entry.prev) {
+          jobs.set(entry.prev.id, entry.prev);
+          indexInsertJob(entry.prev);
+        } else if (entry.next) {
+          jobs.delete(entry.next.id);
+          seqByJobId.delete(entry.next.id);
+        }
+      } else {
+        const map = jobBlockers.get(entry.jobId);
+        if (entry.prev) {
+          if (map) {
+            map.set(entry.blockerChainId, entry.prev);
+          } else {
+            jobBlockers.set(entry.jobId, new Map([[entry.blockerChainId, entry.prev]]));
+          }
+          let inv = blockedByChain.get(entry.blockerChainId);
+          if (!inv) {
+            inv = new Set();
+            blockedByChain.set(entry.blockerChainId, inv);
+          }
+          inv.add(entry.jobId);
+        } else if (map) {
+          map.delete(entry.blockerChainId);
+          if (map.size === 0) jobBlockers.delete(entry.jobId);
+          const inv = blockedByChain.get(entry.blockerChainId);
+          if (inv) {
+            inv.delete(entry.jobId);
+            if (inv.size === 0) blockedByChain.delete(entry.blockerChainId);
+          }
+        }
+      }
+    }
+  };
+
+  const getLastJobInChain = (chainId: string): StateJob | undefined => lastByChain.get(chainId);
+
+  const findExistingContinuation = (chainId: string, chainIndex: number): StateJob | undefined => {
+    const chainMap = jobsByChain.get(chainId);
+    if (!chainMap) return undefined;
+    const candidate = chainMap.get(chainIndex);
+    if (!candidate) return undefined;
+    if (candidate.id === candidate.chainId) return undefined;
+    return candidate;
+  };
+
+  const findDeduplicatedJob = (
+    chainTypeName: string,
+    deduplication: DeduplicationOptions<string>,
+  ): StateJob | undefined => {
+    if (!deduplication.key) return undefined;
+
+    const set = dedupByKey.get(`${chainTypeName}\u0000${deduplication.key}`);
+    if (!set || set.size === 0) return undefined;
+
+    const now = Date.now();
+    const scope = deduplication.scope ?? "incomplete";
+    const exclude = deduplication.excludeJobChainIds
+      ? new Set(deduplication.excludeJobChainIds)
+      : undefined;
+    const windowStart =
+      deduplication.windowMs !== undefined ? now - deduplication.windowMs : undefined;
+
+    let bestMatch: StateJob | undefined;
+    for (const job of set) {
+      if (exclude?.has(job.chainId)) continue;
+      if (scope === "incomplete" && job.status === "completed") continue;
+      if (windowStart !== undefined && job.createdAt.getTime() < windowStart) continue;
+      if (!bestMatch || job.createdAt > bestMatch.createdAt) bestMatch = job;
+    }
+    return bestMatch;
+  };
 
   const matchesStatusFilter = (job: StateJob, statuses?: StateJobStatus[]): boolean =>
     !statuses || statuses.length === 0 || statuses.includes(job.status);
@@ -145,71 +352,121 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
   const matchesChainTypeNameFilter = (job: StateJob, chainTypeNames?: string[]): boolean =>
     !chainTypeNames || chainTypeNames.length === 0 || chainTypeNames.includes(job.chainTypeName);
 
-  const getLastJobInChain = (chainId: string): StateJob | undefined => {
-    let lastJob: StateJob | undefined;
-    for (const job of store.jobs.values()) {
-      if (job.chainId === chainId) {
-        if (!lastJob || job.chainIndex > lastJob.chainIndex) {
-          lastJob = job;
+  const paginateByCreatedAt = <T extends StateJob | [StateJob, StateJob | undefined]>(
+    items: T[],
+    page: PageParams,
+    orderDirection: OrderDirection,
+  ): Page<T> => {
+    const getId = (item: T): string => (Array.isArray(item) ? item[0].id : item.id);
+    const getCreatedAt = (item: T): Date =>
+      Array.isArray(item) ? item[0].createdAt : item.createdAt;
+
+    const dir = orderDirection === "desc" ? -1 : 1;
+    const sorted = items.toSorted((a, b) => {
+      const d = getCreatedAt(a).getTime() - getCreatedAt(b).getTime();
+      if (d !== 0) return d * dir;
+      const idA = getId(a);
+      const idB = getId(b);
+      return idA < idB ? -dir : idA > idB ? dir : 0;
+    });
+
+    let startIndex = 0;
+    if (page.cursor) {
+      const cursor = decodeCreatedAtCursor(page.cursor);
+      startIndex = sorted.findIndex((item) => {
+        const sv = getCreatedAt(item).toISOString();
+        const id = getId(item);
+        if (orderDirection === "desc") {
+          return sv < cursor.createdAt || (sv === cursor.createdAt && id < cursor.id);
         }
-      }
+        return sv > cursor.createdAt || (sv === cursor.createdAt && id > cursor.id);
+      });
+      if (startIndex === -1) startIndex = sorted.length;
     }
-    return lastJob;
+
+    const pageItems = sorted.slice(startIndex, startIndex + page.limit);
+    const hasMore = startIndex + page.limit < sorted.length;
+    const lastItem = pageItems[pageItems.length - 1];
+
+    return {
+      items: pageItems,
+      nextCursor:
+        hasMore && lastItem
+          ? encodeCursor({
+              type: "createdAt",
+              id: getId(lastItem),
+              createdAt: getCreatedAt(lastItem).toISOString(),
+            })
+          : null,
+    };
   };
 
-  const findExistingContinuation = (chainId: string, chainIndex: number): StateJob | undefined => {
-    for (const job of store.jobs.values()) {
-      if (job.chainId === chainId && job.chainIndex === chainIndex && job.id !== job.chainId) {
-        return job;
-      }
+  const paginateByChainIndex = (
+    items: StateJob[],
+    page: PageParams,
+    orderDirection: OrderDirection,
+  ): Page<StateJob> => {
+    const dir = orderDirection === "asc" ? 1 : -1;
+    const sorted = items.toSorted((a, b) => {
+      const d = a.chainIndex - b.chainIndex;
+      if (d !== 0) return d * dir;
+      return a.id < b.id ? -dir : a.id > b.id ? dir : 0;
+    });
+
+    let startIndex = 0;
+    if (page.cursor) {
+      const cursor = decodeChainIndexCursor(page.cursor);
+      startIndex = sorted.findIndex((item) => {
+        if (orderDirection === "asc") {
+          return (
+            item.chainIndex > cursor.chainIndex ||
+            (item.chainIndex === cursor.chainIndex && item.id > cursor.id)
+          );
+        }
+        return (
+          item.chainIndex < cursor.chainIndex ||
+          (item.chainIndex === cursor.chainIndex && item.id < cursor.id)
+        );
+      });
+      if (startIndex === -1) startIndex = sorted.length;
     }
-    return undefined;
+
+    const pageItems = sorted.slice(startIndex, startIndex + page.limit);
+    const hasMore = startIndex + page.limit < sorted.length;
+    const lastItem = pageItems[pageItems.length - 1];
+
+    return {
+      items: pageItems,
+      nextCursor:
+        hasMore && lastItem
+          ? encodeCursor({
+              type: "chainIndex",
+              id: lastItem.id,
+              chainIndex: lastItem.chainIndex,
+            })
+          : null,
+    };
   };
 
-  const findDeduplicatedJob = (
-    chainTypeName: string,
-    deduplication: DeduplicationOptions<string>,
-  ): StateJob | undefined => {
-    if (!deduplication.key) return undefined;
-
-    let bestMatch: StateJob | undefined;
-    const now = Date.now();
-    const scope = deduplication.scope ?? "incomplete";
-
-    for (const job of store.jobs.values()) {
-      if (job.deduplicationKey !== deduplication.key) continue;
-      if (job.id !== job.chainId) continue; // Only first jobs in chain
-      if (job.chainTypeName !== chainTypeName) continue;
-
-      if (deduplication.excludeJobChainIds?.includes(job.chainId)) continue;
-
-      if (scope === "incomplete" && job.status === "completed") continue;
-
-      if (deduplication.windowMs !== undefined) {
-        const windowStart = now - deduplication.windowMs;
-        if (job.createdAt.getTime() < windowStart) continue;
-      }
-
-      if (!bestMatch || job.createdAt > bestMatch.createdAt) {
-        bestMatch = job;
-      }
+  const withWriteLock = async <T>(txCtx: InProcessContext | undefined, fn: () => T): Promise<T> => {
+    if (txCtx?.inTransaction) return fn();
+    await lock.acquire();
+    try {
+      return fn();
+    } finally {
+      lock.release();
     }
-
-    return bestMatch;
   };
 
   const adapter: InProcessStateAdapter = {
     withTransaction: async (fn) => {
       await lock.acquire();
-
-      const snapshot = deepCloneStore(store);
-      const txCtx: InProcessContext = { inTransaction: true };
-
+      const journal: JournalEntry[] = [];
+      const txCtx: InProcessContext = { inTransaction: true, journal };
       try {
         return await fn(txCtx);
       } catch (error) {
-        store.jobs = snapshot.jobs;
-        store.jobBlockers = snapshot.jobBlockers;
+        rollbackTo(journal, 0);
         throw error;
       } finally {
         lock.release();
@@ -217,184 +474,201 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
     },
 
     withSavepoint: async (txCtx, fn) => {
-      const snapshot = deepCloneStore(store);
+      if (!txCtx.journal) {
+        throw new Error("withSavepoint called outside a transaction");
+      }
+      const journal = txCtx.journal;
+      const start = journal.length;
       try {
         return await fn(txCtx);
       } catch (error) {
-        store.jobs = snapshot.jobs;
-        store.jobBlockers = snapshot.jobBlockers;
+        rollbackTo(journal, start);
         throw error;
       }
     },
 
     getJobChainById: async ({ chainId }) => {
-      const rootJob = store.jobs.get(chainId);
+      const rootJob = jobs.get(chainId);
       if (!rootJob) return undefined;
-
       const lastJob = getLastJobInChain(chainId);
-      return [rootJob, lastJob?.id !== rootJob.id ? lastJob : undefined];
+      return [rootJob, lastJob && lastJob.id !== rootJob.id ? lastJob : undefined];
     },
 
-    getJobById: async ({ jobId }) => {
-      return store.jobs.get(jobId);
-    },
+    getJobById: async ({ jobId }) => jobs.get(jobId),
 
-    createJobs: async ({ jobs }) => {
-      const results: { job: StateJob; deduplicated: boolean }[] = [];
-      for (const {
-        typeName,
-        chainTypeName,
-        chainIndex,
-        input,
-        chainId,
-        deduplication,
-        schedule,
-        chainTraceContext,
-        traceContext,
-      } of jobs) {
-        if (chainId) {
-          const existingContinuation = findExistingContinuation(chainId, chainIndex);
-          if (existingContinuation) {
-            results.push({ job: existingContinuation, deduplicated: true });
-            continue;
-          }
-        } else if (deduplication) {
-          const existingDeduplicated = findDeduplicatedJob(chainTypeName, deduplication);
-          if (existingDeduplicated) {
-            results.push({ job: existingDeduplicated, deduplicated: true });
-            continue;
-          }
-        }
-
-        const id = crypto.randomUUID();
-        const now = new Date();
-        const resolvedScheduledAt =
-          schedule?.at ?? (schedule?.afterMs ? new Date(now.getTime() + schedule.afterMs) : now);
-
-        const job: StateJob = {
-          id,
+    createJobs: async ({ txCtx, jobs: jobInputs }) =>
+      withWriteLock(txCtx, () => {
+        const journal = txCtx?.journal;
+        const results: { job: StateJob; deduplicated: boolean }[] = [];
+        for (const {
           typeName,
           chainTypeName,
           chainIndex,
           input,
-          output: null,
-          chainId: chainId ?? id,
-          status: "pending",
-          createdAt: now,
-          scheduledAt: resolvedScheduledAt,
-          completedAt: null,
-          completedBy: null,
-          attempt: 0,
-          lastAttemptError: null,
-          lastAttemptAt: null,
-          leasedBy: null,
-          leasedUntil: null,
-          deduplicationKey: deduplication?.key ?? null,
-          chainTraceContext: chainTraceContext ?? null,
-          traceContext: traceContext ?? null,
-        };
-
-        store.jobs.set(id, job);
-        results.push({ job, deduplicated: false });
-      }
-      return results;
-    },
-
-    addJobsBlockers: async ({ jobBlockers }) => {
-      const results: {
-        job: StateJob;
-        incompleteBlockerChainIds: string[];
-        blockerChainTraceContexts: (string | null)[];
-      }[] = [];
-
-      for (const { jobId, blockedByChainIds, blockerTraceContexts } of jobBlockers) {
-        const job = store.jobs.get(jobId);
-        if (!job) throw new Error("Job not found");
-
-        const blockerMap = store.jobBlockers.get(jobId) ?? new Map<string, BlockerEntry>();
-        blockedByChainIds.forEach((blockerChainId, index) => {
-          blockerMap.set(blockerChainId, {
-            index,
-            traceContext: blockerTraceContexts?.[index] ?? null,
-          });
-        });
-        store.jobBlockers.set(jobId, blockerMap);
-
-        const incompleteBlockerChainIds: string[] = [];
-        const blockerChainTraceContexts: (string | null)[] = [];
-        for (const blockerChainId of blockedByChainIds) {
-          const lastJob = getLastJobInChain(blockerChainId);
-          if (!lastJob || lastJob.status !== "completed") {
-            incompleteBlockerChainIds.push(blockerChainId);
+          chainId,
+          deduplication,
+          schedule,
+          chainTraceContext,
+          traceContext,
+        } of jobInputs) {
+          if (chainId) {
+            const existingContinuation = findExistingContinuation(chainId, chainIndex);
+            if (existingContinuation) {
+              results.push({ job: existingContinuation, deduplicated: true });
+              continue;
+            }
+          } else if (deduplication) {
+            const existingDeduplicated = findDeduplicatedJob(chainTypeName, deduplication);
+            if (existingDeduplicated) {
+              results.push({ job: existingDeduplicated, deduplicated: true });
+              continue;
+            }
           }
-          const rootJob = store.jobs.get(blockerChainId);
-          blockerChainTraceContexts.push(rootJob?.chainTraceContext ?? null);
-        }
 
-        if (incompleteBlockerChainIds.length > 0 && job.status === "pending") {
-          const updatedJob: StateJob = { ...job, status: "blocked" };
-          store.jobs.set(jobId, updatedJob);
-          results.push({ job: updatedJob, incompleteBlockerChainIds, blockerChainTraceContexts });
-        } else {
-          results.push({ job, incompleteBlockerChainIds: [], blockerChainTraceContexts });
-        }
-      }
+          const id = crypto.randomUUID();
+          const now = new Date();
+          const resolvedScheduledAt =
+            schedule?.at ?? (schedule?.afterMs ? new Date(now.getTime() + schedule.afterMs) : now);
 
-      return results;
-    },
-
-    unblockJobs: async ({ blockedByChainId }) => {
-      const unblockedJobs: StateJob[] = [];
-      const blockerTraceContexts: (string | null)[] = [];
-      const now = new Date();
-
-      for (const [jobId, blockerMap] of store.jobBlockers) {
-        const entry = blockerMap.get(blockedByChainId);
-        if (!entry) continue;
-
-        if (entry.traceContext != null) {
-          blockerTraceContexts.push(entry.traceContext);
-        }
-
-        const job = store.jobs.get(jobId);
-        if (!job || job.status !== "blocked") continue;
-
-        let allComplete = true;
-        for (const blockerChainId of blockerMap.keys()) {
-          const lastJob = getLastJobInChain(blockerChainId);
-          if (!lastJob || lastJob.status !== "completed") {
-            allComplete = false;
-            break;
-          }
-        }
-
-        if (allComplete) {
-          const updatedJob: StateJob = {
-            ...job,
+          const job: StateJob = {
+            id,
+            typeName,
+            chainTypeName,
+            chainIndex,
+            input,
+            output: null,
+            chainId: chainId ?? id,
             status: "pending",
-            scheduledAt: now,
+            createdAt: now,
+            scheduledAt: resolvedScheduledAt,
+            completedAt: null,
+            completedBy: null,
+            attempt: 0,
+            lastAttemptError: null,
+            lastAttemptAt: null,
+            leasedBy: null,
+            leasedUntil: null,
+            deduplicationKey: deduplication?.key ?? null,
+            chainTraceContext: chainTraceContext ?? null,
+            traceContext: traceContext ?? null,
           };
-          store.jobs.set(jobId, updatedJob);
-          unblockedJobs.push(updatedJob);
-        }
-      }
 
-      return { unblockedJobs, blockerTraceContexts };
-    },
+          writeJob(journal, undefined, job);
+          results.push({ job, deduplicated: false });
+        }
+        return results;
+      }),
+
+    addJobsBlockers: async ({ txCtx, jobBlockers: jobBlockerInputs }) =>
+      withWriteLock(txCtx, () => {
+        const journal = txCtx?.journal;
+        const results: {
+          job: StateJob;
+          incompleteBlockerChainIds: string[];
+          blockerChainTraceContexts: (string | null)[];
+        }[] = [];
+
+        for (const { jobId, blockedByChainIds, blockerTraceContexts } of jobBlockerInputs) {
+          const job = jobs.get(jobId);
+          if (!job) throw new Error("Job not found");
+
+          blockedByChainIds.forEach((blockerChainId, index) => {
+            const prev = jobBlockers.get(jobId)?.get(blockerChainId);
+            writeBlocker(journal, jobId, blockerChainId, prev, {
+              index,
+              traceContext: blockerTraceContexts?.[index] ?? null,
+            });
+          });
+
+          const incompleteBlockerChainIds: string[] = [];
+          const blockerChainTraceContexts: (string | null)[] = [];
+          for (const blockerChainId of blockedByChainIds) {
+            const lastJob = getLastJobInChain(blockerChainId);
+            if (!lastJob || lastJob.status !== "completed") {
+              incompleteBlockerChainIds.push(blockerChainId);
+            }
+            const rootJob = jobs.get(blockerChainId);
+            blockerChainTraceContexts.push(rootJob?.chainTraceContext ?? null);
+          }
+
+          if (incompleteBlockerChainIds.length > 0 && job.status === "pending") {
+            const updatedJob: StateJob = { ...job, status: "blocked" };
+            writeJob(journal, job, updatedJob);
+            results.push({
+              job: updatedJob,
+              incompleteBlockerChainIds,
+              blockerChainTraceContexts,
+            });
+          } else {
+            results.push({ job, incompleteBlockerChainIds: [], blockerChainTraceContexts });
+          }
+        }
+
+        return results;
+      }),
+
+    unblockJobs: async ({ txCtx, blockedByChainId }) =>
+      withWriteLock(txCtx, () => {
+        const journal = txCtx?.journal;
+        const unblockedJobs: StateJob[] = [];
+        const blockerTraceContexts: (string | null)[] = [];
+        const now = new Date();
+
+        const blockedJobIds = blockedByChain.get(blockedByChainId);
+        if (!blockedJobIds || blockedJobIds.size === 0) {
+          return { unblockedJobs, blockerTraceContexts };
+        }
+
+        const candidateJobIds = Array.from(blockedJobIds);
+        for (const jobId of candidateJobIds) {
+          const blockerMap = jobBlockers.get(jobId);
+          if (!blockerMap) continue;
+          const entry = blockerMap.get(blockedByChainId);
+          if (!entry) continue;
+
+          if (entry.traceContext != null) {
+            blockerTraceContexts.push(entry.traceContext);
+          }
+
+          const job = jobs.get(jobId);
+          if (!job || job.status !== "blocked") continue;
+
+          let allComplete = true;
+          for (const blockerChainId of blockerMap.keys()) {
+            const lastJob = getLastJobInChain(blockerChainId);
+            if (!lastJob || lastJob.status !== "completed") {
+              allComplete = false;
+              break;
+            }
+          }
+
+          if (allComplete) {
+            const updatedJob: StateJob = {
+              ...job,
+              status: "pending",
+              scheduledAt: now,
+            };
+            writeJob(journal, job, updatedJob);
+            unblockedJobs.push(updatedJob);
+          }
+        }
+
+        return { unblockedJobs, blockerTraceContexts };
+      }),
 
     getJobBlockers: async ({ jobId }) => {
-      const blockerMap = store.jobBlockers.get(jobId);
+      const blockerMap = jobBlockers.get(jobId);
       if (!blockerMap) return [];
 
       const entries = Array.from(blockerMap.entries()).sort((a, b) => a[1].index - b[1].index);
 
       const result: [StateJob, StateJob | undefined][] = [];
       for (const [blockerChainId] of entries) {
-        const rootJob = store.jobs.get(blockerChainId);
+        const rootJob = jobs.get(blockerChainId);
         if (!rootJob) continue;
 
         const lastJob = getLastJobInChain(blockerChainId);
-        result.push([rootJob, lastJob?.id !== rootJob.id ? lastJob : undefined]);
+        result.push([rootJob, lastJob && lastJob.id !== rootJob.id ? lastJob : undefined]);
       }
 
       return result;
@@ -404,208 +678,239 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       const now = Date.now();
       let nextScheduledAt: number | null = null;
 
-      for (const job of store.jobs.values()) {
-        if (!typeNames.includes(job.typeName)) continue;
-        if (job.status !== "pending") continue;
-
-        const scheduledAt = job.scheduledAt.getTime();
-        if (nextScheduledAt === null || scheduledAt < nextScheduledAt) {
-          nextScheduledAt = scheduledAt;
-        }
+      for (const typeName of typeNames) {
+        const set = pendingByType.get(typeName);
+        const candidate = set?.first();
+        if (!candidate) continue;
+        const t = candidate.scheduledAt.getTime();
+        if (nextScheduledAt === null || t < nextScheduledAt) nextScheduledAt = t;
       }
 
-      if (nextScheduledAt === null) {
-        return null;
-      }
+      if (nextScheduledAt === null) return null;
       return Math.max(0, nextScheduledAt - now);
     },
 
-    acquireJob: async ({ typeNames }) => {
-      const now = new Date();
-      const eligibleJobs = Array.from(store.jobs.values())
-        .filter(
-          (job) =>
-            typeNames.includes(job.typeName) && job.status === "pending" && job.scheduledAt <= now,
-        )
-        .sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime());
+    acquireJob: async ({ txCtx, typeNames }) =>
+      withWriteLock(txCtx, () => {
+        const journal = txCtx?.journal;
+        const now = new Date();
+        const nowMs = now.getTime();
 
-      const candidateJob = eligibleJobs[0];
-      if (!candidateJob) {
-        return { job: undefined, hasMore: false };
-      }
-
-      const updatedJob: StateJob = {
-        ...candidateJob,
-        status: "running",
-        attempt: candidateJob.attempt + 1,
-      };
-      store.jobs.set(candidateJob.id, updatedJob);
-
-      return { job: updatedJob, hasMore: eligibleJobs.length > 1 };
-    },
-
-    renewJobLease: async ({ jobId, workerId, leaseDurationMs }) => {
-      const job = store.jobs.get(jobId);
-      if (!job) throw new Error("Job not found");
-
-      const now = new Date();
-      const updatedJob: StateJob = {
-        ...job,
-        leasedBy: workerId,
-        leasedUntil: new Date(now.getTime() + leaseDurationMs),
-        status: "running",
-      };
-
-      store.jobs.set(jobId, updatedJob);
-      return updatedJob;
-    },
-
-    rescheduleJob: async ({ jobId, schedule, error }) => {
-      const job = store.jobs.get(jobId);
-      if (!job) throw new Error("Job not found");
-
-      const now = new Date();
-      const resolvedScheduledAt =
-        schedule.at ?? (schedule.afterMs ? new Date(now.getTime() + schedule.afterMs) : now);
-      const updatedJob: StateJob = {
-        ...job,
-        scheduledAt: resolvedScheduledAt,
-        lastAttemptAt: now,
-        lastAttemptError: error,
-        leasedBy: null,
-        leasedUntil: null,
-        status: "pending",
-      };
-
-      store.jobs.set(jobId, updatedJob);
-      return updatedJob;
-    },
-
-    completeJob: async ({ jobId, output, workerId }) => {
-      const job = store.jobs.get(jobId);
-      if (!job) throw new Error("Job not found");
-
-      const now = new Date();
-      const updatedJob: StateJob = {
-        ...job,
-        status: "completed",
-        completedAt: now,
-        completedBy: workerId,
-        output,
-        leasedBy: null,
-        leasedUntil: null,
-      };
-
-      store.jobs.set(jobId, updatedJob);
-      return updatedJob;
-    },
-
-    reapExpiredJobLease: async ({ typeNames, ignoredJobIds }) => {
-      const now = new Date();
-      let candidateJob: StateJob | undefined;
-      const ignoredSet = ignoredJobIds ? new Set(ignoredJobIds) : undefined;
-
-      for (const job of store.jobs.values()) {
-        if (!typeNames.includes(job.typeName)) continue;
-        if (job.status !== "running") continue;
-        if (!job.leasedUntil || job.leasedUntil > now) continue;
-        if (ignoredSet?.has(job.id)) continue;
-
-        if (!candidateJob || job.leasedUntil < candidateJob.leasedUntil!) {
-          candidateJob = job;
+        let bestJob: StateJob | undefined;
+        let bestSet: SortedSet<StateJob> | undefined;
+        for (const typeName of typeNames) {
+          const set = pendingByType.get(typeName);
+          const candidate = set?.first();
+          if (!candidate) continue;
+          if (candidate.scheduledAt.getTime() > nowMs) continue;
+          if (!bestJob || cmp.scheduledAt(candidate, bestJob) < 0) {
+            bestJob = candidate;
+            bestSet = set;
+          }
         }
-      }
 
-      if (!candidateJob) {
-        return undefined;
-      }
+        if (!bestJob || !bestSet) {
+          return { job: undefined, hasMore: false };
+        }
 
-      const updatedJob: StateJob = {
-        ...candidateJob,
-        leasedBy: null,
-        leasedUntil: null,
-        status: "pending",
-      };
-      store.jobs.set(candidateJob.id, updatedJob);
-
-      return updatedJob;
-    },
-
-    deleteJobChains: async ({ chainIds, cascade }) => {
-      let effectiveChainIds = chainIds;
-
-      if (cascade) {
-        const visited = new Set(chainIds);
-        const queue = [...chainIds];
-        while (queue.length > 0) {
-          const current = queue.shift()!;
-          // jobBlockers is keyed by jobId; chainId = root job id by construction
-          const blockerMap = store.jobBlockers.get(current);
-          if (blockerMap) {
-            for (const blockerChainId of blockerMap.keys()) {
-              if (!visited.has(blockerChainId)) {
-                visited.add(blockerChainId);
-                queue.push(blockerChainId);
-              }
+        let hasMore = false;
+        const second = bestSet.at(1);
+        if (second && second.scheduledAt.getTime() <= nowMs) hasMore = true;
+        if (!hasMore) {
+          for (const typeName of typeNames) {
+            const set = pendingByType.get(typeName);
+            if (!set || set === bestSet) continue;
+            const candidate = set.first();
+            if (candidate && candidate.scheduledAt.getTime() <= nowMs) {
+              hasMore = true;
+              break;
             }
           }
         }
-        effectiveChainIds = [...visited];
-      }
 
-      const chainIdSet = new Set(effectiveChainIds);
+        const updatedJob: StateJob = {
+          ...bestJob,
+          status: "running",
+          attempt: bestJob.attempt + 1,
+        };
+        writeJob(journal, bestJob, updatedJob);
 
-      const refs: BlockerReference[] = [];
-      for (const [jobId, blockerMap] of store.jobBlockers) {
-        const job = store.jobs.get(jobId);
-        if (!job) continue;
-        if (chainIdSet.has(job.chainId)) continue;
+        return { job: updatedJob, hasMore };
+      }),
 
-        for (const blockerChainId of blockerMap.keys()) {
-          if (chainIdSet.has(blockerChainId)) {
-            refs.push({ chainId: blockerChainId, referencedByJobId: jobId });
+    renewJobLease: async ({ txCtx, jobId, workerId, leaseDurationMs }) =>
+      withWriteLock(txCtx, () => {
+        const journal = txCtx?.journal;
+        const job = jobs.get(jobId);
+        if (!job) throw new Error("Job not found");
+
+        const now = new Date();
+        const updatedJob: StateJob = {
+          ...job,
+          leasedBy: workerId,
+          leasedUntil: new Date(now.getTime() + leaseDurationMs),
+          status: "running",
+        };
+
+        writeJob(journal, job, updatedJob);
+        return updatedJob;
+      }),
+
+    rescheduleJob: async ({ txCtx, jobId, schedule, error }) =>
+      withWriteLock(txCtx, () => {
+        const journal = txCtx?.journal;
+        const job = jobs.get(jobId);
+        if (!job) throw new Error("Job not found");
+
+        const now = new Date();
+        const resolvedScheduledAt =
+          schedule.at ?? (schedule.afterMs ? new Date(now.getTime() + schedule.afterMs) : now);
+        const updatedJob: StateJob = {
+          ...job,
+          scheduledAt: resolvedScheduledAt,
+          lastAttemptAt: now,
+          lastAttemptError: error,
+          leasedBy: null,
+          leasedUntil: null,
+          status: "pending",
+        };
+
+        writeJob(journal, job, updatedJob);
+        return updatedJob;
+      }),
+
+    completeJob: async ({ txCtx, jobId, output, workerId }) =>
+      withWriteLock(txCtx, () => {
+        const journal = txCtx?.journal;
+        const job = jobs.get(jobId);
+        if (!job) throw new Error("Job not found");
+
+        const now = new Date();
+        const updatedJob: StateJob = {
+          ...job,
+          status: "completed",
+          completedAt: now,
+          completedBy: workerId,
+          output,
+          leasedBy: null,
+          leasedUntil: null,
+        };
+
+        writeJob(journal, job, updatedJob);
+        return updatedJob;
+      }),
+
+    reapExpiredJobLease: async ({ txCtx, typeNames, ignoredJobIds }) =>
+      withWriteLock(txCtx, () => {
+        const journal = txCtx?.journal;
+        const now = new Date();
+        const nowMs = now.getTime();
+        const ignoredSet = ignoredJobIds ? new Set(ignoredJobIds) : undefined;
+
+        let candidateJob: StateJob | undefined;
+        for (const typeName of typeNames) {
+          const set = runningByType.get(typeName);
+          if (!set) continue;
+          for (let i = 0; i < set.size; i++) {
+            const job = set.at(i)!;
+            // Running set sorts unleased jobs (leasedUntil=null → Infinity) after all leased
+            // ones, so encountering either a future lease or an unleased job means no more
+            // expired candidates in this set.
+            if (!job.leasedUntil) break;
+            const lu = job.leasedUntil.getTime();
+            if (lu > nowMs) break;
+            if (ignoredSet?.has(job.id)) continue;
+            if (!candidateJob || lu < candidateJob.leasedUntil!.getTime()) candidateJob = job;
+            break;
           }
         }
-      }
-      if (refs.length > 0) {
-        throw new BlockerReferenceError(
-          `Cannot delete chains: ${refs.map((r) => r.chainId).join(", ")} referenced as blockers`,
-          { references: refs },
-        );
-      }
 
-      const pairs: [StateJob, StateJob | undefined][] = effectiveChainIds.flatMap((chainId) => {
-        const rootJob = store.jobs.get(chainId);
-        if (!rootJob) return [];
-        const lastJob = getLastJobInChain(chainId);
-        return [[rootJob, lastJob?.id !== rootJob.id ? lastJob : undefined]];
-      });
+        if (!candidateJob) return undefined;
 
-      for (const [jobId, job] of store.jobs) {
-        if (chainIdSet.has(job.chainId)) {
-          store.jobs.delete(jobId);
-          store.jobBlockers.delete(jobId);
+        const updatedJob: StateJob = {
+          ...candidateJob,
+          leasedBy: null,
+          leasedUntil: null,
+          status: "pending",
+        };
+        writeJob(journal, candidateJob, updatedJob);
+
+        return updatedJob;
+      }),
+
+    deleteJobChains: async ({ txCtx, chainIds, cascade }) =>
+      withWriteLock(txCtx, () => {
+        const journal = txCtx?.journal;
+        let effectiveChainIds = chainIds;
+
+        if (cascade) {
+          const visited = new Set(chainIds);
+          const queue = [...chainIds];
+          while (queue.length > 0) {
+            const current = queue.shift()!;
+            const blockerMap = jobBlockers.get(current);
+            if (blockerMap) {
+              for (const blockerChainId of blockerMap.keys()) {
+                if (!visited.has(blockerChainId)) {
+                  visited.add(blockerChainId);
+                  queue.push(blockerChainId);
+                }
+              }
+            }
+          }
+          effectiveChainIds = [...visited];
         }
-      }
 
-      for (const blockerMap of store.jobBlockers.values()) {
-        for (const blockerChainId of blockerMap.keys()) {
-          if (chainIdSet.has(blockerChainId)) {
-            blockerMap.delete(blockerChainId);
+        const chainIdSet = new Set(effectiveChainIds);
+
+        const refs: BlockerReference[] = [];
+        for (const chainId of effectiveChainIds) {
+          const referencingJobIds = blockedByChain.get(chainId);
+          if (!referencingJobIds) continue;
+          for (const refJobId of referencingJobIds) {
+            const refJob = jobs.get(refJobId);
+            if (!refJob) continue;
+            if (chainIdSet.has(refJob.chainId)) continue;
+            refs.push({ chainId, referencedByJobId: refJobId });
           }
         }
-      }
+        if (refs.length > 0) {
+          throw new BlockerReferenceError(
+            `Cannot delete chains: ${refs.map((r) => r.chainId).join(", ")} referenced as blockers`,
+            { references: refs },
+          );
+        }
 
-      return pairs;
-    },
+        const pairs: [StateJob, StateJob | undefined][] = effectiveChainIds.flatMap((chainId) => {
+          const rootJob = jobs.get(chainId);
+          if (!rootJob) return [];
+          const lastJob = getLastJobInChain(chainId);
+          return [[rootJob, lastJob && lastJob.id !== rootJob.id ? lastJob : undefined]];
+        });
 
-    getJobForUpdate: async ({ jobId }) => {
-      return store.jobs.get(jobId);
-    },
+        const jobsToRemove: StateJob[] = [];
+        for (const chainId of effectiveChainIds) {
+          const chainMap = jobsByChain.get(chainId);
+          if (!chainMap) continue;
+          for (const j of chainMap.values()) jobsToRemove.push(j);
+        }
 
-    getLatestChainJobForUpdate: async ({ chainId }) => {
-      return getLastJobInChain(chainId);
-    },
+        for (const job of jobsToRemove) {
+          const map = jobBlockers.get(job.id);
+          if (map) {
+            for (const blockerChainId of Array.from(map.keys())) {
+              writeBlocker(journal, job.id, blockerChainId, map.get(blockerChainId), undefined);
+            }
+          }
+          writeJob(journal, job, undefined);
+        }
+
+        return pairs;
+      }),
+
+    getJobForUpdate: async ({ jobId }) => jobs.get(jobId),
+
+    getLatestChainJobForUpdate: async ({ chainId }) => getLastJobInChain(chainId),
 
     listJobChains: async ({ filter, orderDirection, page }) => {
       const idMatchChainIds = filter?.chainId ? new Set<string>(filter.chainId) : undefined;
@@ -613,27 +918,18 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       let jobIdMatchChainIds: Set<string> | undefined;
       if (filter?.jobId) {
         jobIdMatchChainIds = new Set<string>();
-        for (const j of store.jobs.values()) {
-          if (filter.jobId.includes(j.id)) {
-            jobIdMatchChainIds.add(j.chainId);
-          }
+        for (const j of jobs.values()) {
+          if (filter.jobId.includes(j.id)) jobIdMatchChainIds.add(j.chainId);
         }
       }
 
       let blockerChainIds: Set<string> | undefined;
       if (filter?.rootOnly) {
-        blockerChainIds = new Set<string>();
-        for (const blockerMap of store.jobBlockers.values()) {
-          for (const chainId of blockerMap.keys()) {
-            blockerChainIds.add(chainId);
-          }
-        }
+        blockerChainIds = new Set<string>(blockedByChain.keys());
       }
 
       const chains: [StateJob, StateJob | undefined][] = [];
-      for (const job of store.jobs.values()) {
-        if (job.id !== job.chainId) continue;
-
+      for (const job of rootJobsByCreatedAt.iterate("asc")) {
         const lastJob = getLastJobInChain(job.id);
 
         if (idMatchChainIds && !idMatchChainIds.has(job.chainId)) continue;
@@ -643,57 +939,59 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
         if (!matchesStatusFilter(lastJob ?? job, filter?.status)) continue;
         if (!matchesDateRange(job.createdAt, filter?.from, filter?.to)) continue;
 
-        chains.push([job, lastJob?.id !== job.id ? lastJob : undefined]);
+        chains.push([job, lastJob && lastJob.id !== job.id ? lastJob : undefined]);
       }
 
       return paginateByCreatedAt(chains, page, orderDirection);
     },
 
     listJobs: async ({ filter, orderDirection, page }) => {
-      const jobs: StateJob[] = [];
-      for (const job of store.jobs.values()) {
+      const matched: StateJob[] = [];
+      for (const job of jobs.values()) {
         if (filter?.jobId && !filter.jobId.includes(job.id)) continue;
         if (!matchesStatusFilter(job, filter?.status)) continue;
         if (!matchesTypeNameFilter(job, filter?.typeName)) continue;
         if (!matchesChainTypeNameFilter(job, filter?.chainTypeName)) continue;
         if (filter?.chainId && !filter.chainId.includes(job.chainId)) continue;
         if (!matchesDateRange(job.createdAt, filter?.from, filter?.to)) continue;
-        jobs.push(job);
+        matched.push(job);
       }
 
-      return paginateByCreatedAt(jobs, page, orderDirection);
+      return paginateByCreatedAt(matched, page, orderDirection);
     },
 
     listJobChainJobs: async ({ chainId, orderDirection, page }) => {
-      const jobs: StateJob[] = [];
-      for (const job of store.jobs.values()) {
-        if (job.chainId === chainId) jobs.push(job);
-      }
-      return paginateByChainIndex(jobs, page, orderDirection);
+      const chainMap = jobsByChain.get(chainId);
+      const matched: StateJob[] = chainMap ? Array.from(chainMap.values()) : [];
+      return paginateByChainIndex(matched, page, orderDirection);
     },
 
-    triggerJob: async ({ jobId }) => {
-      const job = store.jobs.get(jobId);
-      if (!job) throw new Error("Job not found");
-      if (job.status !== "pending") throw new Error("Job not found");
+    triggerJob: async ({ txCtx, jobId }) =>
+      withWriteLock(txCtx, () => {
+        const journal = txCtx?.journal;
+        const job = jobs.get(jobId);
+        if (!job) throw new Error("Job not found");
+        if (job.status !== "pending") throw new Error("Job not found");
 
-      const updatedJob: StateJob = {
-        ...job,
-        scheduledAt: new Date(),
-      };
+        const updatedJob: StateJob = {
+          ...job,
+          scheduledAt: new Date(),
+        };
 
-      store.jobs.set(jobId, updatedJob);
-      return updatedJob;
-    },
+        writeJob(journal, job, updatedJob);
+        return updatedJob;
+      }),
 
     listBlockedJobs: async ({ chainId, orderDirection, page }) => {
-      const jobs: StateJob[] = [];
-      for (const [jobId, blockerMap] of store.jobBlockers) {
-        if (!blockerMap.has(chainId)) continue;
-        const job = store.jobs.get(jobId);
-        if (job) jobs.push(job);
+      const blockedJobIds = blockedByChain.get(chainId);
+      const matched: StateJob[] = [];
+      if (blockedJobIds) {
+        for (const jobId of blockedJobIds) {
+          const job = jobs.get(jobId);
+          if (job) matched.push(job);
+        }
       }
-      return paginateByCreatedAt(jobs, page, orderDirection);
+      return paginateByCreatedAt(matched, page, orderDirection);
     },
   };
 

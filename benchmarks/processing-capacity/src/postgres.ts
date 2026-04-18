@@ -2,7 +2,7 @@ import { createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import { createPostgresJsStateProvider } from "example-state-postgres-postgres-js/provider";
 import postgres from "postgres";
-import { createInProcessNotifyAdapter } from "queuert/internal";
+import { createInProcessNotifyAdapter } from "queuert";
 
 import { parseConcurrency, printHeader, runBenchmark } from "./utils.js";
 

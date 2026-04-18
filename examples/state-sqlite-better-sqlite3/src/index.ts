@@ -6,8 +6,8 @@ import {
   createJobTypeProcessorRegistry,
   defineJobTypeRegistry,
   withTransactionHooks,
+  createInProcessNotifyAdapter,
 } from "queuert";
-import { createInProcessNotifyAdapter } from "queuert/internal";
 
 import { createBetterSqlite3StateProvider } from "./provider.js";
 

@@ -1,6 +1,7 @@
 import { createSqliteStateAdapter } from "@queuert/sqlite";
 import Database from "better-sqlite3";
-import { createAsyncLock, createInProcessNotifyAdapter } from "queuert/internal";
+import { createInProcessNotifyAdapter } from "queuert";
+import { createAsyncLock } from "queuert/internal";
 
 import { createSqliteStateProvider } from "./sqlite-state-provider.js";
 import { parseConcurrency, printHeader, runBenchmark } from "./utils.js";

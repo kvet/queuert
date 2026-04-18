@@ -12,8 +12,8 @@ import {
   createJobTypeProcessorRegistry,
   defineJobTypeRegistry,
   withTransactionHooks,
+  createInProcessNotifyAdapter,
 } from "queuert";
-import { createInProcessNotifyAdapter } from "queuert/internal";
 
 import { createPrismaSqliteStateProvider } from "./provider.js";
 

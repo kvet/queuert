@@ -16,10 +16,3 @@ export {
   type StateJob,
   type StateJobStatus,
 } from "./state-adapter/state-adapter.js";
-
-export { createInProcessNotifyAdapter } from "./notify-adapter/notify-adapter.in-process.js";
-export {
-  createInProcessStateAdapter,
-  type InProcessContext,
-  type InProcessStateAdapter,
-} from "./state-adapter/state-adapter.in-process.js";

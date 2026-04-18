@@ -8,8 +8,9 @@ import {
   createJobTypeProcessorRegistry,
   defineJobTypeRegistry,
   withTransactionHooks,
+  createInProcessNotifyAdapter,
 } from "queuert";
-import { createAsyncLock, createInProcessNotifyAdapter } from "queuert/internal";
+import { createAsyncLock } from "queuert/internal";
 import { stateAdapterConformanceTestSuite, withWorkers } from "queuert/testing";
 import { describe, expectTypeOf, it, vi } from "vitest";
 

@@ -5,8 +5,9 @@ import {
   createJobTypeProcessorRegistry,
   defineJobTypeRegistry,
   withTransactionHooks,
+  createInProcessNotifyAdapter,
+  createInProcessStateAdapter,
 } from "queuert";
-import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
 
 // 1. Define job types
 const jobTypeRegistry = defineJobTypeRegistry<{

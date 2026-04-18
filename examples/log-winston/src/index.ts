@@ -7,8 +7,9 @@ import {
   createJobTypeProcessorRegistry,
   defineJobTypeRegistry,
   withTransactionHooks,
+  createInProcessNotifyAdapter,
+  createInProcessStateAdapter,
 } from "queuert";
-import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
 import winston from "winston";
 
 import { createWinstonLog } from "./log.js";

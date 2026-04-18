@@ -170,8 +170,8 @@ Examples are organized by prefix to indicate their primary focus:
 
 Each example demonstrates **one integration concern**:
 
-- **State examples** use `createInProcessNotifyAdapter` from `queuert/internal`
-- **Notify examples** use `createInProcessStateAdapter` from `queuert/internal`
+- **State examples** use `createInProcessNotifyAdapter` from `queuert`
+- **Notify examples** use `createInProcessStateAdapter` from `queuert`
 
 This ensures users can copy-paste relevant code without untangling unrelated integrations.
 
@@ -234,13 +234,14 @@ These differences are intentional — each adapter uses the most natural approac
 
 ### In-Process Adapters
 
-The in-process adapters (`createInProcessStateAdapter`, `createInProcessNotifyAdapter`) are exported from `queuert/internal`, not the main entry point. They're intended for:
+The in-process adapters (`createInProcessStateAdapter`, `createInProcessNotifyAdapter`) are exported from `queuert`. They're suitable for:
 
+- Single-process production apps where persistence isn't required
 - Testing (used in test suites and examples)
 - Single-purpose examples (state examples use in-process notify, notify examples use in-process state)
 - Development/prototyping
 
-Production deployments should use the database-backed adapters from their respective packages.
+Multi-process deployments (or any app that needs state to survive a restart) should use the database-backed adapters from `@queuert/postgres`, `@queuert/sqlite`, etc.
 
 ### Code Style for Examples
 

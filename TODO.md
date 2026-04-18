@@ -1,6 +1,5 @@
 # Short term
 
-- [TASK] Publish an in-process notify adapter (mirror of `createInProcessStateAdapter`) so single-process apps don't need pg/redis for notification; not internals use in examples
 - [TASK] Change attemptMiddleware to wrapAttemptHandler, wrapPrepare, wrapCompleteHandler, etc. to allow more flexible middleware that can add additional parameters (e.g. context) and is not limited to the acquire+execute+complete flow — see `design/handler-wrapping.md`
 - [TASK] Support `triggerJobs` (plural) and `deleteJobChain` (singular) — see `design/trigger-jobs-delete-job-chain.md`
 - [EPIC] test against bun and its built-in sqlite, postgres, redis clients

@@ -6,8 +6,8 @@ import {
   createJobTypeProcessorRegistry,
   defineJobTypeRegistry,
   withTransactionHooks,
+  createInProcessStateAdapter,
 } from "queuert";
-import { createInProcessStateAdapter } from "queuert/internal";
 import { createCluster, type RedisClusterType } from "redis";
 
 import { createNodeRedisClusterNotifyProvider } from "./provider.js";

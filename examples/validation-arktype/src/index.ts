@@ -14,8 +14,9 @@ import {
   createInProcessWorker,
   createJobTypeProcessorRegistry,
   withTransactionHooks,
+  createInProcessNotifyAdapter,
+  createInProcessStateAdapter,
 } from "queuert";
-import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
 
 import { createArkTypeJobTypeRegistry } from "./arktype-adapter.js";
 

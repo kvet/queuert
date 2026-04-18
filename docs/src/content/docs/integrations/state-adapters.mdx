@@ -7,7 +7,7 @@ sidebar:
 
 import { Tabs, TabItem, Badge } from "@astrojs/starlight/components";
 
-State adapters abstract database operations for job persistence. They handle job creation, status transitions, leasing, and queries. Queuert provides two state adapters: PostgreSQL for production workloads and SQLite for lightweight or embedded use cases.
+State adapters abstract database operations for job persistence. They handle job creation, status transitions, leasing, and queries. Queuert ships three options: PostgreSQL for production workloads, SQLite for lightweight or embedded use cases, and an in-process adapter for single-process apps that don't need persistence.
 
 <Tabs>
   <TabItem label="PostgreSQL">
@@ -52,6 +52,21 @@ State adapters abstract database operations for job persistence. They handle job
     | Prisma         | [state-sqlite-prisma](https://github.com/kvet/queuert/tree/main/examples/state-sqlite-prisma)                 |
     | Drizzle        | [state-sqlite-drizzle](https://github.com/kvet/queuert/tree/main/examples/state-sqlite-drizzle)               |
     | Kysely         | [state-sqlite-kysely](https://github.com/kvet/queuert/tree/main/examples/state-sqlite-kysely)                 |
+
+  </TabItem>
+  <TabItem label="In-process">
+    **Built-in** — no extra package. Imported from `queuert`.
+
+    All state is held in memory and lost on process exit. Serializable transactions via an internal
+    lock (same isolation model as SQLite), with per-type ordered sets and per-chain maps so
+    acquisition and chain lookups work against type/chain-scoped collections rather than scanning
+    all jobs. Single-process only — not for multi-worker deployments.
+
+    ```ts
+    import { createInProcessStateAdapter } from "queuert";
+
+    const stateAdapter = createInProcessStateAdapter();
+    ```
 
   </TabItem>
 </Tabs>

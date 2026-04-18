@@ -6,8 +6,8 @@ import {
   createJobTypeProcessorRegistry,
   defineJobTypeRegistry,
   withTransactionHooks,
+  createInProcessStateAdapter,
 } from "queuert";
-import { createInProcessStateAdapter } from "queuert/internal";
 import { withWorkers } from "queuert/testing";
 import { it as baseIt, vi } from "vitest";
 

@@ -131,6 +131,34 @@ const worker = await createInProcessWorker({
 });
 ```
 
+## createInProcessStateAdapter
+
+```typescript
+import { createInProcessStateAdapter } from "queuert";
+
+const stateAdapter = createInProcessStateAdapter();
+```
+
+Creates a state adapter that holds all jobs and chains in memory. Suitable for:
+
+- Single-process production apps that don't need state persistence across restarts
+- Testing and examples
+- Development and prototyping
+
+Transactions are serializable (one-at-a-time) via an internal async lock — the same isolation model as SQLite's single-writer mode. Operations use per-`typeName` ordered sets and per-`chainId` maps, so acquisition, scheduling, and chain lookups work against small type/chain-scoped collections rather than scanning all jobs.
+
+For multi-process deployments or state that must survive restarts, use a database-backed adapter (`@queuert/postgres`, `@queuert/sqlite`).
+
+## createInProcessNotifyAdapter
+
+```typescript
+import { createInProcessNotifyAdapter } from "queuert";
+
+const notifyAdapter = createInProcessNotifyAdapter();
+```
+
+Creates a notify adapter that delivers job-arrival signals via in-process subscriptions. Useful whenever publisher and subscriber run in the same process — single-process apps, tests, and examples. For multi-process deployments, use `@queuert/postgres` (LISTEN/NOTIFY), `@queuert/redis` (pub/sub), or `@queuert/nats`.
+
 ## rescheduleJob
 
 Helper that throws `RescheduleJobError` from within an attempt handler to reschedule the job.

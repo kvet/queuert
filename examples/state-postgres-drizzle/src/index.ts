@@ -10,8 +10,8 @@ import {
   createJobTypeProcessorRegistry,
   defineJobTypeRegistry,
   withTransactionHooks,
+  createInProcessNotifyAdapter,
 } from "queuert";
-import { createInProcessNotifyAdapter } from "queuert/internal";
 
 import { createDrizzlePgStateProvider } from "./provider.js";
 

@@ -1,6 +1,5 @@
 import { createSqliteStateAdapter } from "@queuert/sqlite";
-import { createClient, defineJobTypeRegistry } from "queuert";
-import { createInProcessNotifyAdapter } from "queuert/internal";
+import { createClient, defineJobTypeRegistry, createInProcessNotifyAdapter } from "queuert";
 
 import { createDatabase, createStateProvider } from "./db.js";
 

@@ -7,8 +7,8 @@ import {
   createJobTypeProcessorRegistry,
   mergeJobTypeProcessorRegistries,
   mergeJobTypeRegistries,
+  createInProcessStateAdapter,
 } from "queuert";
-import { createInProcessStateAdapter } from "queuert/internal";
 import { describe, expect, expectTypeOf, it } from "vitest";
 
 import { createTypeBoxJobTypeRegistry } from "./typebox-adapter.js";

@@ -7,11 +7,12 @@ import { MeterProvider, PeriodicExportingMetricReader } from "@opentelemetry/sdk
 import { createOtelObservabilityAdapter } from "@queuert/otel";
 import {
   createClient,
+  createInProcessNotifyAdapter,
+  createInProcessStateAdapter,
   createInProcessWorker,
   createJobTypeProcessorRegistry,
   withTransactionHooks,
 } from "queuert";
-import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
 
 import {
   diffMemory,

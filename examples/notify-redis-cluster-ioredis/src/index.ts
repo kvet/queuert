@@ -7,8 +7,8 @@ import {
   createJobTypeProcessorRegistry,
   defineJobTypeRegistry,
   withTransactionHooks,
+  createInProcessStateAdapter,
 } from "queuert";
-import { createInProcessStateAdapter } from "queuert/internal";
 
 import { createIoredisClusterNotifyProvider } from "./provider.js";
 

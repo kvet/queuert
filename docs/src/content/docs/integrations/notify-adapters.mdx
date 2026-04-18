@@ -66,6 +66,20 @@ Notify adapters handle pub/sub notifications for efficient job scheduling. When 
     | postgres.js | [notify-postgres-postgres-js](https://github.com/kvet/queuert/tree/main/examples/notify-postgres-postgres-js) |
 
   </TabItem>
+  <TabItem label="In-process">
+    **Built-in** — no extra package. Imported from `queuert`.
+
+    Delivers job-arrival signals via in-memory subscriptions. Useful whenever publisher and
+    subscriber run in the same process. Single-process only — workers in other processes won't
+    receive notifications.
+
+    ```ts
+    import { createInProcessNotifyAdapter } from "queuert";
+
+    const notifyAdapter = createInProcessNotifyAdapter();
+    ```
+
+  </TabItem>
   <TabItem label="None (polling)">
     The default when no notify adapter is configured. Workers poll the database on a configurable
     interval to check for new jobs. No additional packages or infrastructure required.

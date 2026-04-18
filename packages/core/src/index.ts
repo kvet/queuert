@@ -63,11 +63,17 @@ export {
   type InProcessWorker,
   type JobTypeProcessorDefaults,
 } from "./in-process-worker.js";
+export { createInProcessNotifyAdapter } from "./notify-adapter/notify-adapter.in-process.js";
 export { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 export { createConsoleLog } from "./observability-adapter/log.console.js";
 export { type Log } from "./observability-adapter/log.js";
 export { type ObservabilityAdapter } from "./observability-adapter/observability-adapter.js";
 export { type OrderDirection, type Page } from "./pagination.js";
+export {
+  createInProcessStateAdapter,
+  type InProcessContext,
+  type InProcessStateAdapter,
+} from "./state-adapter/state-adapter.in-process.js";
 export { type BaseTxContext, type StateAdapter } from "./state-adapter/state-adapter.js";
 export {
   createTransactionHooks,

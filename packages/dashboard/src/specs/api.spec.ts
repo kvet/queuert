@@ -1,5 +1,4 @@
-import { createClient, defineJobTypeRegistry } from "queuert";
-import { createInProcessStateAdapter } from "queuert/internal";
+import { createClient, defineJobTypeRegistry, createInProcessStateAdapter } from "queuert";
 // @ts-expect-error tsgo doesn't resolve export * re-exports from seroval
 import { deserialize } from "seroval";
 import { describe, expect, it } from "vitest";

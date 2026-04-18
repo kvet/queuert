@@ -187,8 +187,7 @@ const wrapInScenario = (defs: JobTypeDef[]): string => {
   const clientCalls = generateClientCalls(defs);
   const middleware = generateMiddleware();
 
-  return `import { defineJobTypeRegistry, createJobTypeProcessorRegistry, createInProcessWorker, createClient, createTransactionHooks, type JobAttemptMiddleware } from "queuert";
-import { createInProcessStateAdapter, createInProcessNotifyAdapter } from "queuert/internal";
+  return `import { defineJobTypeRegistry, createJobTypeProcessorRegistry, createInProcessWorker, createClient, createTransactionHooks, type JobAttemptMiddleware, createInProcessStateAdapter, createInProcessNotifyAdapter } from "queuert";
 
 type Defs = {
 ${typeStrings.join("\n")}
@@ -241,7 +240,6 @@ const ${slice.name}Registry = defineJobTypeRegistry<${slice.name}Defs>();`;
   const middleware = generateMiddleware();
 
   return `import { defineJobTypeRegistry, createJobTypeProcessorRegistry, createInProcessWorker, createClient, createTransactionHooks, mergeJobTypeRegistries, type JobAttemptMiddleware, mergeJobTypeProcessorRegistries } from "queuert";
-import { createInProcessStateAdapter, createInProcessNotifyAdapter } from "queuert/internal";
 ${sliceTypeDecls.join("\n")}
 
 const mergedJobTypeRegistry = mergeJobTypeRegistries({ slices: [${registryNames.join(", ")}] });

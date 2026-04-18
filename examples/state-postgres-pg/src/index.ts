@@ -7,8 +7,8 @@ import {
   createJobTypeProcessorRegistry,
   defineJobTypeRegistry,
   withTransactionHooks,
+  createInProcessNotifyAdapter,
 } from "queuert";
-import { createInProcessNotifyAdapter } from "queuert/internal";
 
 import { createPgPoolStateProvider } from "./provider.js";
 

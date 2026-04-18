@@ -7,11 +7,11 @@ import { NatsContainer } from "@testcontainers/nats";
 import { connect } from "nats";
 import {
   createClient,
+  createInProcessStateAdapter,
   createInProcessWorker,
   createJobTypeProcessorRegistry,
   withTransactionHooks,
 } from "queuert";
-import { createInProcessStateAdapter } from "queuert/internal";
 
 import {
   diffMemory,

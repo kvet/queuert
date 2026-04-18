@@ -13,8 +13,9 @@ import {
   createInProcessWorker,
   createJobTypeProcessorRegistry,
   withTransactionHooks,
+  createInProcessNotifyAdapter,
+  createInProcessStateAdapter,
 } from "queuert";
-import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
 import { z } from "zod";
 
 import { createZodJobTypeRegistry } from "./zod-adapter.js";

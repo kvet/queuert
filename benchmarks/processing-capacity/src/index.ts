@@ -9,6 +9,7 @@ const args = process.argv.slice(2);
 const benchmarkModules: Record<string, string> = {
   postgres: "postgres.ts",
   sqlite: "sqlite.ts",
+  "in-process": "in-process.ts",
   "notify-redis": "notify-redis.ts",
   "notify-postgres": "notify-postgres.ts",
   "notify-nats": "notify-nats.ts",

@@ -7,8 +7,8 @@ import {
   createJobTypeProcessorRegistry,
   defineJobTypeRegistry,
   withTransactionHooks,
+  createInProcessStateAdapter,
 } from "queuert";
-import { createInProcessStateAdapter } from "queuert/internal";
 
 // 1. Start NATS using testcontainers (with JetStream enabled)
 console.log("Starting NATS...");

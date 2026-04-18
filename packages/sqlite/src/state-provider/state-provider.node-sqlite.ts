@@ -37,18 +37,27 @@ export const createNodeSqliteProvider = ({
       }
     },
     executeSql: async ({ txCtx, sql, params, columnTypes }) => {
-      const database = txCtx?.db ?? db;
-      if (Object.keys(columnTypes).length > 0) {
-        const stmt = database.prepare(sql);
-        return stmt.all(...((params ?? []) as SQLInputValue[]));
+      const run = (): unknown[] => {
+        const database = txCtx?.db ?? db;
+        if (Object.keys(columnTypes).length > 0) {
+          const stmt = database.prepare(sql);
+          return stmt.all(...((params ?? []) as SQLInputValue[]));
+        }
+        if (params && params.length > 0) {
+          const stmt = database.prepare(sql);
+          stmt.run(...(params as SQLInputValue[]));
+        } else {
+          database.exec(sql);
+        }
+        return [] as unknown[];
+      };
+      if (txCtx) return run();
+      await lock.acquire();
+      try {
+        return run();
+      } finally {
+        lock.release();
       }
-      if (params && params.length > 0) {
-        const stmt = database.prepare(sql);
-        stmt.run(...(params as SQLInputValue[]));
-      } else {
-        database.exec(sql);
-      }
-      return [] as unknown[];
     },
   };
 };

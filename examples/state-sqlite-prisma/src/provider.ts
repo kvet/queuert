@@ -24,13 +24,24 @@ export const createPrismaSqliteStateProvider = <TPrisma extends PrismaLikeClient
       }
     },
     executeSql: async ({ txCtx, sql, params, columnTypes }) => {
-      const prismaClient = (txCtx?.prisma ?? prisma) as PrismaLikeClient;
+      const runQuery = async (): Promise<unknown[]> => {
+        const prismaClient = (txCtx?.prisma ?? prisma) as PrismaLikeClient;
+        if (params && params.length > 0) {
+          return prismaClient.$queryRawUnsafe(sql, ...params);
+        }
+        return prismaClient.$queryRawUnsafe(sql);
+      };
 
       let result: unknown[];
-      if (params && params.length > 0) {
-        result = await prismaClient.$queryRawUnsafe(sql, ...params);
+      if (txCtx) {
+        result = await runQuery();
       } else {
-        result = await prismaClient.$queryRawUnsafe(sql);
+        await lock.acquire();
+        try {
+          result = await runQuery();
+        } finally {
+          lock.release();
+        }
       }
 
       // Prisma returns BigInt for SQLite INTEGER columns; narrow back to number

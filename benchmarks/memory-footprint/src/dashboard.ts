@@ -5,11 +5,12 @@
 import { createDashboard } from "@queuert/dashboard";
 import {
   createClient,
+  createInProcessNotifyAdapter,
+  createInProcessStateAdapter,
   createInProcessWorker,
   createJobTypeProcessorRegistry,
   withTransactionHooks,
 } from "queuert";
-import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
 
 import {
   diffMemory,

@@ -8,11 +8,11 @@ import { createPostgresJsStateProvider } from "example-state-postgres-postgres-j
 import postgres from "postgres";
 import {
   createClient,
+  createInProcessNotifyAdapter,
   createInProcessWorker,
   createJobTypeProcessorRegistry,
   withTransactionHooks,
 } from "queuert";
-import { createInProcessNotifyAdapter } from "queuert/internal";
 
 import {
   diffMemory,

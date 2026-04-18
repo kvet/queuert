@@ -6,8 +6,8 @@ import {
   createJobTypeProcessorRegistry,
   mergeJobTypeProcessorRegistries,
   mergeJobTypeRegistries,
+  createInProcessStateAdapter,
 } from "queuert";
-import { createInProcessStateAdapter } from "queuert/internal";
 import * as v from "valibot";
 import { describe, expect, expectTypeOf, it } from "vitest";
 

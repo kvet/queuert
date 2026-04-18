@@ -6,11 +6,11 @@ import { type RedisNotifyProvider, createRedisNotifyAdapter } from "@queuert/red
 import { RedisContainer } from "@testcontainers/redis";
 import {
   createClient,
+  createInProcessStateAdapter,
   createInProcessWorker,
   createJobTypeProcessorRegistry,
   withTransactionHooks,
 } from "queuert";
-import { createInProcessStateAdapter } from "queuert/internal";
 import { createClient as createRedisClient } from "redis";
 
 import {

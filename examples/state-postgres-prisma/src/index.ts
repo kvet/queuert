@@ -9,8 +9,8 @@ import {
   createJobTypeProcessorRegistry,
   defineJobTypeRegistry,
   withTransactionHooks,
+  createInProcessNotifyAdapter,
 } from "queuert";
-import { createInProcessNotifyAdapter } from "queuert/internal";
 
 import { createPrismaPgStateProvider } from "./provider.js";
 

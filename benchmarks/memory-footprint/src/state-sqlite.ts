@@ -7,11 +7,12 @@ import Database from "better-sqlite3";
 import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
 import {
   createClient,
+  createInProcessNotifyAdapter,
   createInProcessWorker,
   createJobTypeProcessorRegistry,
   withTransactionHooks,
 } from "queuert";
-import { createAsyncLock, createInProcessNotifyAdapter } from "queuert/internal";
+import { createAsyncLock } from "queuert/internal";
 
 import {
   diffMemory,
