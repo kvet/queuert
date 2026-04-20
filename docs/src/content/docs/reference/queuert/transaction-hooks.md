@@ -37,8 +37,8 @@ Manual lifecycle for advanced use cases. Call `flush()` after the transaction co
 
 ```typescript
 type TransactionHooks = {
-  set<T>(key: symbol, hook: HookDef<T>): void;
-  getOrInsert<T>(key: symbol, factory: () => HookDef<T>): T;
+  set<T>(key: symbol, hook: HookDefinition<T>): void;
+  getOrInsert<T>(key: symbol, factory: () => HookDefinition<T>): T;
   get<T>(key: symbol): T;
   has(key: symbol): boolean;
   delete(key: symbol): void;
@@ -64,10 +64,10 @@ type TransactionHooksSavepoint = {
 
 A savepoint handle returned by `createSavepoint()`. Call `rollback()` to restore hook state to the point when the savepoint was created, or `release()` to keep the current state.
 
-## HookDef
+## HookDefinition
 
 ```typescript
-type HookDef<T> = {
+type HookDefinition<T> = {
   state: T;
   flush: (state: T) => void | Promise<void>;
   discard?: (state: T) => void | Promise<void>;

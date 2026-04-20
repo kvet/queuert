@@ -302,17 +302,6 @@ export type PgSqlDefinitions = {
       readonly blocker_chain_trace_contexts: DataType<"json", (string | null)[]>;
     }
   >;
-  readonly addJobBlockersSql: TypedSql<
-    readonly [
-      DataType<"array", string[]>,
-      DataType<"array", string[]>,
-      DataType<"array", string[]>,
-    ],
-    PgDbJobCols & {
-      readonly incomplete_blocker_chain_ids: DataType<"array", string[]>;
-      readonly blocker_chain_trace_contexts: DataType<"json", (string | null)[]>;
-    }
-  >;
   readonly completeJobSql: TypedSql<
     readonly [Id, DataType<"json">, DataType<"string?", string | null>],
     PgDbJobCols
@@ -642,77 +631,6 @@ ORDER BY fj.id
       columns: {
         ...dbJobColumns,
         source_job_id: id,
-        incomplete_blocker_chain_ids: t.array(),
-        blocker_chain_trace_contexts: t.json<(string | null)[]>(),
-      },
-    },
-  );
-
-  const addJobBlockersSql = sql(
-    /* sql */ `
-WITH input_data AS (
-  SELECT job_id, blocked_by_chain_id, trace_context, ord - 1 AS "index", ord
-  FROM unnest($1::{{id_type}}[], $2::{{id_type}}[], $3::text[]) WITH ORDINALITY AS t(job_id, blocked_by_chain_id, trace_context, ord)
-),
-inserted_blockers AS (
-  INSERT INTO {{schema}}.{{table_prefix}}job_blocker (job_id, blocked_by_chain_id, "index", trace_context)
-  SELECT job_id, blocked_by_chain_id, "index", trace_context
-  FROM input_data
-  RETURNING job_id, blocked_by_chain_id
-),
-blockers_status AS (
-  SELECT
-    ib.job_id,
-    ib.blocked_by_chain_id,
-    (
-      SELECT j2.status
-      FROM {{schema}}.{{table_prefix}}job j2
-      WHERE j2.chain_id = ib.blocked_by_chain_id
-      ORDER BY j2.chain_index DESC
-      LIMIT 1
-    ) AS blocker_status
-  FROM inserted_blockers ib
-),
-incomplete_blockers AS (
-  SELECT blocked_by_chain_id
-  FROM blockers_status
-  WHERE blocker_status != 'completed'
-),
-has_incomplete_blockers AS (
-  SELECT DISTINCT job_id
-  FROM blockers_status
-  WHERE blocker_status != 'completed'
-),
-updated_job AS (
-  UPDATE {{schema}}.{{table_prefix}}job j
-  SET status = 'blocked'
-  WHERE j.id IN (SELECT job_id FROM has_incomplete_blockers)
-    AND j.status = 'pending'
-  RETURNING j.*
-),
-final_job AS (
-  SELECT * FROM updated_job
-  UNION ALL
-  SELECT j.* FROM {{schema}}.{{table_prefix}}job j
-  WHERE j.id = (SELECT DISTINCT job_id FROM inserted_blockers LIMIT 1)
-    AND NOT EXISTS (SELECT 1 FROM updated_job)
-  LIMIT 1
-),
-blocker_chain_contexts AS (
-  SELECT id2.blocked_by_chain_id, j.chain_trace_context, id2.ord
-  FROM input_data id2
-  JOIN {{schema}}.{{table_prefix}}job j ON j.id = id2.blocked_by_chain_id
-)
-SELECT fj.*,
-  COALESCE((SELECT array_agg(blocked_by_chain_id) FROM incomplete_blockers), ARRAY[]::{{id_type}}[]) AS incomplete_blocker_chain_ids,
-  COALESCE((SELECT json_agg(bcc.chain_trace_context ORDER BY bcc.ord) FROM blocker_chain_contexts bcc), '[]'::json) AS blocker_chain_trace_contexts
-FROM final_job fj;
-`,
-    true,
-    {
-      params: [t.array(), t.array(), t.array()],
-      columns: {
-        ...dbJobColumns,
         incomplete_blocker_chain_ids: t.array(),
         blocker_chain_trace_contexts: t.json<(string | null)[]>(),
       },
@@ -1127,7 +1045,6 @@ FOR UPDATE
     recordMigrationSql: recordMigrationSql,
     createJobsSql: createJobsSql,
     addJobsBlockersSql: addJobsBlockersSql,
-    addJobBlockersSql: addJobBlockersSql,
     completeJobSql: completeJobSql,
     unblockJobsSql: unblockJobsSql,
     getJobChainByIdSql: getJobChainByIdSql,

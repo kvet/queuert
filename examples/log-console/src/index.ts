@@ -24,8 +24,8 @@ const jobTypeRegistry = defineJobTypeRegistry<{
 }>();
 
 // 2. Create adapters with console logging
-const stateAdapter = createInProcessStateAdapter();
-const notifyAdapter = createInProcessNotifyAdapter();
+const stateAdapter = await createInProcessStateAdapter();
+const notifyAdapter = await createInProcessNotifyAdapter();
 const log = createConsoleLog();
 
 const qrtClient = await createClient({

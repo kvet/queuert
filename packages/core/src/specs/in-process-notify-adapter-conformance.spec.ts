@@ -13,7 +13,7 @@ describe("In-Process Notify Adapter Conformance", () => {
     notifyAdapter: [
       // oxlint-disable-next-line no-empty-pattern
       async ({}, use) => {
-        await use(createInProcessNotifyAdapter());
+        await use(await createInProcessNotifyAdapter());
       },
       { scope: "test" },
     ],

@@ -63,7 +63,7 @@ import { Tabs, TabItem, Aside } from "@astrojs/starlight/components";
 
 `TransactionHooks` is a generic container for named hooks with mutable state. It knows nothing about Queuert itself -- consumers (client, worker) register their own hooks using symbol keys.
 
-A hook definition (`HookDef`) contains mutable state, a flush function, an optional discard function, and an optional checkpoint function. Multiple hooks can be registered on the same `TransactionHooks` instance. During the transaction, code mutates hook state freely. After the outer callback completes successfully, each hook's flush function is called with its accumulated state. If the callback throws, each hook's discard function is called instead -- no flush occurs.
+A hook definition (`HookDefinition`) contains mutable state, a flush function, an optional discard function, and an optional checkpoint function. Multiple hooks can be registered on the same `TransactionHooks` instance. During the transaction, code mutates hook state freely. After the outer callback completes successfully, each hook's flush function is called with its accumulated state. If the callback throws, each hook's discard function is called instead -- no flush occurs.
 
 ## Savepoints
 
@@ -97,7 +97,7 @@ A hook definition (`HookDef`) contains mutable state, a flush function, an optio
   </TabItem>
 </Tabs>
 
-Savepoints rely on the `checkpoint` callback in `HookDef`. When a savepoint is created, each registered hook's `checkpoint` is called to capture its current state. On rollback, the returned function restores the hook state to that point.
+Savepoints rely on the `checkpoint` callback in `HookDefinition`. When a savepoint is created, each registered hook's `checkpoint` is called to capture its current state. On rollback, the returned function restores the hook state to that point.
 
 Hooks are registered lazily via `getOrInsert`. This avoids a separate registration step -- the hook is created on first access and reused on subsequent accesses within the same transaction.
 

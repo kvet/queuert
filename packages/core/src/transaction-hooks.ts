@@ -1,6 +1,6 @@
 import { HookNotRegisteredError } from "./errors.js";
 
-export type HookDef<T> = {
+export type HookDefinition<T> = {
   state: T;
   flush: (state: T) => void | Promise<void>;
   discard?: (state: T) => void | Promise<void>;
@@ -15,9 +15,9 @@ export type HookDef<T> = {
  */
 export type TransactionHooks = {
   /** Register a hook with the given key. */
-  set<T>(key: symbol, hook: HookDef<T>): void;
+  set<T>(key: symbol, hook: HookDefinition<T>): void;
   /** Get the hook state for the given key, creating it with `factory` if absent. */
-  getOrInsert<T>(key: symbol, factory: () => HookDef<T>): T;
+  getOrInsert<T>(key: symbol, factory: () => HookDefinition<T>): T;
   /** Get the hook state for the given key. Throws {@link HookNotRegisteredError} if not found. */
   // oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- intentional: caller specifies T for type-safe cast
   get<T>(key: symbol): T;
@@ -57,14 +57,17 @@ export type TransactionHooksHandle = {
  * and `discard` (call on rollback).
  */
 export const createTransactionHooks = (): TransactionHooksHandle => {
-  const hooks = new Map<symbol, HookDef<any>>();
+  const hooks = new Map<symbol, HookDefinition<any>>();
 
   const captureSnapshot = () => {
-    const entries = new Map<symbol, { hookDef: HookDef<any>; rollback?: () => void }>();
-    for (const [key, hookDef] of hooks) {
+    const entries = new Map<
+      symbol,
+      { hookDefinition: HookDefinition<any>; rollback?: () => void }
+    >();
+    for (const [key, hookDefinition] of hooks) {
       entries.set(key, {
-        hookDef,
-        rollback: hookDef.checkpoint?.(hookDef.state),
+        hookDefinition,
+        rollback: hookDefinition.checkpoint?.(hookDefinition.state),
       });
     }
     return { entries };
@@ -74,10 +77,10 @@ export const createTransactionHooks = (): TransactionHooksHandle => {
 
   const restoreSnapshot = (snapshot: Snapshot) => {
     const removedKeys: symbol[] = [];
-    for (const [key, hookDef] of hooks) {
+    for (const [key, hookDefinition] of hooks) {
       if (!snapshot.entries.has(key)) {
         try {
-          const result = hookDef.discard?.(hookDef.state);
+          const result = hookDefinition.discard?.(hookDefinition.state);
           if (result && typeof result.catch === "function") {
             result.catch(() => {});
           }
@@ -90,17 +93,17 @@ export const createTransactionHooks = (): TransactionHooksHandle => {
     }
     for (const [key, entry] of snapshot.entries) {
       if (!hooks.has(key)) {
-        hooks.set(key, entry.hookDef);
+        hooks.set(key, entry.hookDefinition);
       }
       entry.rollback?.();
     }
   };
 
   const transactionHooks: TransactionHooks = {
-    set: <T>(key: symbol, hook: HookDef<T>): void => {
+    set: <T>(key: symbol, hook: HookDefinition<T>): void => {
       hooks.set(key, hook);
     },
-    getOrInsert: <T>(key: symbol, factory: () => HookDef<T>): T => {
+    getOrInsert: <T>(key: symbol, factory: () => HookDefinition<T>): T => {
       if (!hooks.has(key)) {
         hooks.set(key, factory());
       }

@@ -71,7 +71,7 @@ it("infers custom ID types through the full stack", async () => {
 
     await stateAdapter.migrateToLatest();
 
-    const notifyAdapter = createInProcessNotifyAdapter();
+    const notifyAdapter = await createInProcessNotifyAdapter();
     const log = vi.fn();
     const jobTypeRegistry = defineJobTypeRegistry<{
       test: {

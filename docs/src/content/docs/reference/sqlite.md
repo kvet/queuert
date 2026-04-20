@@ -60,9 +60,12 @@ import { createAsyncLock } from "@queuert/sqlite";
 const lock = createAsyncLock();
 
 // Use the same lock in your state provider and application code
-await lock(async () => {
+await lock.acquire();
+try {
   // Serialized database access
-});
+} finally {
+  lock.release();
+}
 ```
 
 ## MigrationResult

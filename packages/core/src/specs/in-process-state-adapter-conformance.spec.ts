@@ -16,7 +16,7 @@ describe("In-Process State Adapter Conformance", () => {
       // oxlint-disable-next-line no-empty-pattern
       async ({}, use) => {
         await use(
-          createInProcessStateAdapter() as unknown as StateAdapter<{ $test: true }, string>,
+          (await createInProcessStateAdapter()) as unknown as StateAdapter<{ $test: true }, string>,
         );
       },
       { scope: "test" },

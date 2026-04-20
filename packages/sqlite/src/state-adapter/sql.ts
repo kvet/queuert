@@ -810,9 +810,17 @@ RETURNING *
 
   const triggerJobsSql = sql(
     /* sql */ `
+WITH _classified AS (
+  SELECT i.value AS input_id, j.id AS found_id, j.status AS current_status
+  FROM json_each(?) i
+  LEFT JOIN {{table_prefix}}job j ON j.id = i.value
+)
 UPDATE {{table_prefix}}job
 SET scheduled_at = datetime('now', 'subsec')
-WHERE id IN (SELECT value FROM json_each(?)) AND status = 'pending'
+WHERE id IN (SELECT input_id FROM _classified WHERE current_status = 'pending')
+  AND NOT EXISTS (
+    SELECT 1 FROM _classified WHERE found_id IS NULL OR current_status != 'pending'
+  )
 RETURNING *
 `,
     true,

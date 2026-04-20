@@ -76,8 +76,8 @@ const jobTypeRegistry = createZodJobTypeRegistry({
 });
 
 // 2. Create queuert client and worker with the jobTypeRegistry
-const stateAdapter = createInProcessStateAdapter();
-const notifyAdapter = createInProcessNotifyAdapter();
+const stateAdapter = await createInProcessStateAdapter();
+const notifyAdapter = await createInProcessNotifyAdapter();
 
 const qrtClient = await createClient({
   stateAdapter,

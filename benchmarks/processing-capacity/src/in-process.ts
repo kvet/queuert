@@ -6,11 +6,11 @@ printHeader("PROCESSING CAPACITY — IN-PROCESS");
 
 const concurrency = parseConcurrency();
 
-const stateAdapter = createInProcessStateAdapter();
+const stateAdapter = await createInProcessStateAdapter();
 
 await runBenchmark({
   stateAdapter,
-  notifyAdapter: createInProcessNotifyAdapter(),
+  notifyAdapter: await createInProcessNotifyAdapter(),
   withTransaction: stateAdapter.withTransaction,
   concurrency,
 });

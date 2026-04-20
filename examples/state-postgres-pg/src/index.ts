@@ -47,7 +47,7 @@ const stateAdapter = await createPgStateAdapter({
 });
 await stateAdapter.migrateToLatest();
 
-const notifyAdapter = createInProcessNotifyAdapter();
+const notifyAdapter = await createInProcessNotifyAdapter();
 
 const qrtClient = await createClient({
   stateAdapter,

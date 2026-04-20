@@ -140,7 +140,7 @@ Configuration for the prepare phase. `"atomic"` runs prepare and complete in the
 ### Job
 
 ```typescript
-type Job<TJobId, TJobTypeName, TChainTypeName, TInput> = {
+type Job<TJobId, TJobTypeName, TChainTypeName, TInput, TOutput> = {
   id: TJobId;
   chainId: TJobId;
   typeName: TJobTypeName;
@@ -156,11 +156,11 @@ type Job<TJobId, TJobTypeName, TChainTypeName, TInput> = {
   | { status: "blocked" }
   | { status: "pending" }
   | { status: "running"; leasedBy?: string; leasedUntil?: Date }
-  | { status: "completed"; completedAt: Date; completedBy: string | null }
+  | { status: "completed"; completedAt: Date; completedBy: string | null; output: TOutput }
 );
 ```
 
-A discriminated union on **status**. All jobs carry their chain identity via **chainId** and **chainTypeName**, and their position via **chainIndex**. The **running** variant includes lease metadata. The **completed** variant includes completion timestamps and the worker identity.
+A discriminated union on **status**. All jobs carry their chain identity via **chainId** and **chainTypeName**, and their position via **chainIndex**. The **running** variant includes lease metadata. The **completed** variant includes completion timestamps, the worker identity, and the job's **output**.
 
 ### ResolvedJobWithBlockers
 
@@ -334,7 +334,7 @@ The possible abort reasons passed through `TypedAbortSignal` in worker job handl
 type Log = (entry: TypedLogEntry) => void;
 ```
 
-Logger function type accepted by `createClient` and `createWorker`. Receives structured log entries with level, message, and contextual metadata.
+Logger function type accepted by `createClient` and `createInProcessWorker`. Receives structured log entries with level, message, and contextual metadata.
 
 ### createConsoleLog
 
@@ -346,10 +346,10 @@ Creates a simple console logger suitable for development. For production, implem
 
 ## Transaction Hook Types
 
-### HookDef
+### HookDefinition
 
 ```typescript
-type HookDef<T> = {
+type HookDefinition<T> = {
   state: T;
   flush: (state: T) => void | Promise<void>;
   discard?: (state: T) => void | Promise<void>;

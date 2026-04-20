@@ -126,8 +126,8 @@ const jobTypeRegistry = defineJobTypeRegistry<{
 }>();
 
 // Create adapters
-const stateAdapter = createInProcessStateAdapter();
-const notifyAdapter = createInProcessNotifyAdapter();
+const stateAdapter = await createInProcessStateAdapter();
+const notifyAdapter = await createInProcessNotifyAdapter();
 
 const client = await createClient({
   stateAdapter,

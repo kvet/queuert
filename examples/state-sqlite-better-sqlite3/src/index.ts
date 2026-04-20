@@ -40,7 +40,7 @@ const stateProvider = createBetterSqlite3StateProvider({ db, lock });
 const stateAdapter = await createSqliteStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 
-const notifyAdapter = createInProcessNotifyAdapter();
+const notifyAdapter = await createInProcessNotifyAdapter();
 
 const qrtClient = await createClient({
   stateAdapter,

@@ -27,7 +27,7 @@ it("should work end-to-end with NATS notify adapter", async ({ natsConnectionOpt
     subjectPrefix: "queuert.e2e",
   });
 
-  const stateAdapter = createInProcessStateAdapter();
+  const stateAdapter = await createInProcessStateAdapter();
 
   const log = vi.fn();
   const jobTypeRegistry = defineJobTypeRegistry<{
@@ -85,7 +85,7 @@ it("should work end-to-end without JetStream KV", async ({ natsConnectionOptions
     subjectPrefix: "queuert.e2e.nokv",
   });
 
-  const stateAdapter = createInProcessStateAdapter();
+  const stateAdapter = await createInProcessStateAdapter();
 
   const log = vi.fn();
   const jobTypeRegistry = defineJobTypeRegistry<{

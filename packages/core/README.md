@@ -33,7 +33,7 @@ Optional adapters:
 
 ## Testing custom adapters
 
-Building a custom state or notify adapter? `queuert/conformance` exports a framework-agnostic runner that validates any adapter against the expected contract (106 state cases / 18 notify cases) from inside a single `test()` block:
+Building a custom state or notify adapter? `queuert/conformance` exports a framework-agnostic runner that validates any adapter against the expected contract from inside a single `test()` block:
 
 ```ts
 import { runStateAdapterConformance } from "queuert/conformance";

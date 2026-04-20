@@ -40,7 +40,7 @@ const stateProvider = createPostgresJsStateProvider({ sql });
 const stateAdapter = await createPgStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 
-const notifyAdapter = createInProcessNotifyAdapter();
+const notifyAdapter = await createInProcessNotifyAdapter();
 
 const qrtClient = await createClient({
   stateAdapter,

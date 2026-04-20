@@ -56,8 +56,8 @@ const [beforeAdapter, afterAdapter, observabilityAdapter] = await measureMemory(
 console.log("\nAfter creating OtelObservabilityAdapter:");
 diffMemory(beforeAdapter, afterAdapter);
 
-const stateAdapter = createInProcessStateAdapter();
-const notifyAdapter = createInProcessNotifyAdapter();
+const stateAdapter = await createInProcessStateAdapter();
+const notifyAdapter = await createInProcessNotifyAdapter();
 
 const [beforeSetup, afterSetup, { qrtClient, stopWorker }] = await measureMemory(async () => {
   const qrtClient = await createClient({

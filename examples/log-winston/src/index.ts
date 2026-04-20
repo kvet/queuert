@@ -78,8 +78,8 @@ const jobTypeRegistry = defineJobTypeRegistry<{
 }>();
 
 // 5. Create adapters and queuert client/worker with Winston logging
-const stateAdapter = createInProcessStateAdapter();
-const notifyAdapter = createInProcessNotifyAdapter();
+const stateAdapter = await createInProcessStateAdapter();
+const notifyAdapter = await createInProcessNotifyAdapter();
 const log = createWinstonLog(logger);
 
 const qrtClient = await createClient({

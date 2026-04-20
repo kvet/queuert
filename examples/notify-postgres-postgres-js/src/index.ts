@@ -32,7 +32,7 @@ const jobTypeRegistry = defineJobTypeRegistry<{
 }>();
 
 // 5. Create adapters
-const stateAdapter = createInProcessStateAdapter();
+const stateAdapter = await createInProcessStateAdapter();
 const notifyAdapter = await createPgNotifyAdapter({ notifyProvider });
 
 // 6. Create client and worker

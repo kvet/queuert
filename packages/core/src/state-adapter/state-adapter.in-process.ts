@@ -111,7 +111,7 @@ const matchesDateRange = (createdAt: Date, from?: Date, to?: Date): boolean => {
 
 export type InProcessStateAdapter = StateAdapter<InProcessContext, string>;
 
-export const createInProcessStateAdapter = (): InProcessStateAdapter => {
+export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapter> => {
   const jobs = new Map<string, StateJob>();
   const pendingByType = new Map<string, SortedSet<StateJob>>();
   const runningByType = new Map<string, SortedSet<StateJob>>();

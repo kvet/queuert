@@ -38,7 +38,7 @@ diffMemory(beforeDb, afterDb);
 
 const stateProvider = createBetterSqlite3StateProvider({ db, lock: createAsyncLock() });
 
-const notifyAdapter = createInProcessNotifyAdapter();
+const notifyAdapter = await createInProcessNotifyAdapter();
 const [beforeAdapter, afterAdapter, stateAdapter] = await measureMemory(async () => {
   const stateAdapter = await createSqliteStateAdapter({ stateProvider });
   await stateAdapter.migrateToLatest();

@@ -39,7 +39,7 @@ const [beforeConnection, afterConnection, nc] = await measureMemory(async () =>
 console.log("\nAfter creating NATS connection:");
 diffMemory(beforeConnection, afterConnection);
 
-const stateAdapter = createInProcessStateAdapter();
+const stateAdapter = await createInProcessStateAdapter();
 const [beforeAdapter, afterAdapter, notifyAdapter] = await measureMemory(async () =>
   createNatsNotifyAdapter({ nc, subjectPrefix: "queuert_perf" }),
 );

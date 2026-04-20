@@ -58,7 +58,7 @@ The dashboard provides:
 - **Job list** -- Cross-chain job view with status/type filtering
 - **Job detail** -- Input/output data, error messages, lease info, continuation links
 
-Read-only -- no mutations. Add authentication middleware before the dashboard handler to restrict access.
+Supports a small set of mutations (triggering a blocked job, deleting a chain) in addition to read queries. Add authentication middleware before the dashboard handler to restrict access.
 
 <Aside type="caution" title="Performance on large tables">
   Chain listing joins each root row with the last job in the chain. Filtering by status alone is not optimized. Always use the type name filter when browsing large tables — see [Performance considerations](/queuert/guides/queries/#performance-considerations).

@@ -22,7 +22,7 @@ const jobTypeRegistry = defineJobTypeRegistry<{
 }>();
 ```
 
-Creates a compile-time-only type registry. No runtime validation is performed. The returned object carries type information used by `createClient` and `createWorker` to infer input, output, and chain-flow types.
+Creates a compile-time-only type registry. No runtime validation is performed. The returned object carries type information used by `createClient` and `createInProcessWorker` to infer input, output, and chain-flow types.
 
 An optional second type parameter `TExternal` allows `blockers` to reference job types from other slices without owning them:
 
@@ -136,7 +136,7 @@ const worker = await createInProcessWorker({
 ```typescript
 import { createInProcessStateAdapter } from "queuert";
 
-const stateAdapter = createInProcessStateAdapter();
+const stateAdapter = await createInProcessStateAdapter();
 ```
 
 Creates a state adapter that holds all jobs and chains in memory. Suitable for:
@@ -154,7 +154,7 @@ For multi-process deployments or state that must survive restarts, use a databas
 ```typescript
 import { createInProcessNotifyAdapter } from "queuert";
 
-const notifyAdapter = createInProcessNotifyAdapter();
+const notifyAdapter = await createInProcessNotifyAdapter();
 ```
 
 Creates a notify adapter that delivers job-arrival signals via in-process subscriptions. Useful whenever publisher and subscriber run in the same process — single-process apps, tests, and examples. For multi-process deployments, use `@queuert/postgres` (LISTEN/NOTIFY), `@queuert/redis` (pub/sub), or `@queuert/nats`.

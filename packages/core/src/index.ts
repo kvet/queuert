@@ -78,7 +78,7 @@ export { type BaseTxContext, type StateAdapter } from "./state-adapter/state-ada
 export {
   createTransactionHooks,
   withTransactionHooks,
-  type HookDef,
+  type HookDefinition,
   type TransactionHooks,
   type TransactionHooksHandle,
   type TransactionHooksSavepoint,

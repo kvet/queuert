@@ -33,7 +33,7 @@ export const extendWithStateInProcess = <T>(
     stateAdapter: [
       // oxlint-disable-next-line no-empty-pattern
       async ({}, use) => {
-        await use(createInProcessStateAdapter());
+        await use(await createInProcessStateAdapter());
       },
       { scope: "test" },
     ],

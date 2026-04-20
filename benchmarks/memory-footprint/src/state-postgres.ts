@@ -42,7 +42,7 @@ diffMemory(beforeConnection, afterConnection);
 
 const stateProvider = createPostgresJsStateProvider({ sql });
 
-const notifyAdapter = createInProcessNotifyAdapter();
+const notifyAdapter = await createInProcessNotifyAdapter();
 const [beforeAdapter, afterAdapter, stateAdapter] = await measureMemory(async () => {
   const stateAdapter = await createPgStateAdapter({ stateProvider, schema: "public" });
   await stateAdapter.migrateToLatest();

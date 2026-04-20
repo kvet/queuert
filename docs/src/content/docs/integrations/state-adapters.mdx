@@ -65,7 +65,7 @@ State adapters abstract database operations for job persistence. They handle job
     ```ts
     import { createInProcessStateAdapter } from "queuert";
 
-    const stateAdapter = createInProcessStateAdapter();
+    const stateAdapter = await createInProcessStateAdapter();
     ```
 
   </TabItem>
@@ -84,7 +84,7 @@ You're not limited to the ORMs and drivers listed here — you can write a provi
 
 ## Verify your provider
 
-Queuert ships a conformance runner that exercises the 106-case state adapter suite against any provider you build. Embed it in a single `test()` block from your test framework to validate correctness:
+Queuert ships a conformance runner that exercises the full state adapter suite against any provider you build. Embed it in a single `test()` block from your test framework to validate correctness:
 
 ```ts
 import { runStateAdapterConformance } from "queuert/conformance";

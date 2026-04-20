@@ -62,8 +62,8 @@ const jobTypeRegistry = defineJobTypeRegistry<{
 }>();
 
 // 4. Create adapters and queuert client/worker with Pino logging
-const stateAdapter = createInProcessStateAdapter();
-const notifyAdapter = createInProcessNotifyAdapter();
+const stateAdapter = await createInProcessStateAdapter();
+const notifyAdapter = await createInProcessNotifyAdapter();
 const log = createPinoLog(logger);
 
 const qrtClient = await createClient({

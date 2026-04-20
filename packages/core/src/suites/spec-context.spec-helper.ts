@@ -87,7 +87,7 @@ export const extendWithNotifyInProcess = <T extends {}>(
   it.extend<Pick<TestSuiteContext, "notifyAdapter"> & { flakyNotifyAdapter: NotifyAdapter }>({
     notifyAdapter: [
       async ({}, use) => {
-        await use(createInProcessNotifyAdapter());
+        await use(await createInProcessNotifyAdapter());
       },
       { scope: "test" },
     ],

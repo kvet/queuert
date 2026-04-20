@@ -480,7 +480,7 @@ describe("createValibotJobTypeRegistry", () => {
     });
 
     it("merges processors from typed slices", async () => {
-      const stateAdapter = createInProcessStateAdapter();
+      const stateAdapter = await createInProcessStateAdapter();
       const client = await createClient({
         stateAdapter,
         jobTypeRegistry: mergeJobTypeRegistries({

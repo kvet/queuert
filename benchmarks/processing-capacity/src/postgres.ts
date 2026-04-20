@@ -22,7 +22,7 @@ console.log("PostgreSQL ready.");
 
 await runBenchmark({
   stateAdapter,
-  notifyAdapter: createInProcessNotifyAdapter(),
+  notifyAdapter: await createInProcessNotifyAdapter(),
   withTransaction: stateProvider.withTransaction,
   concurrency,
 });

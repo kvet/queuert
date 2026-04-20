@@ -2,7 +2,7 @@ import { type NotifyAdapter } from "./notify-adapter.js";
 
 type JobScheduledNotification = { typeName: string; hintId: string };
 
-export const createInProcessNotifyAdapter = (): NotifyAdapter => {
+export const createInProcessNotifyAdapter = async (): Promise<NotifyAdapter> => {
   const hintCounts = new Map<string, number>();
 
   const jobScheduledListeners: ((notification: JobScheduledNotification) => void)[] = [];

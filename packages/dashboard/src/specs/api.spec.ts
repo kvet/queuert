@@ -8,7 +8,7 @@ import { createDashboard } from "../api/dashboard.js";
 const parseBody = async (res: Response) => deserialize(await res.text());
 
 const createTestDashboard = async (basePath?: string) => {
-  const stateAdapter = createInProcessStateAdapter();
+  const stateAdapter = await createInProcessStateAdapter();
   const client = await createClient({ stateAdapter, jobTypeRegistry: defineJobTypeRegistry() });
   const dashboard = await createDashboard({ client, basePath });
   const prefix = basePath ?? "";
@@ -18,7 +18,7 @@ const createTestDashboard = async (basePath?: string) => {
 };
 
 const createJob = async (
-  stateAdapter: ReturnType<typeof createInProcessStateAdapter>,
+  stateAdapter: Awaited<ReturnType<typeof createInProcessStateAdapter>>,
   typeName: string,
   input: unknown,
 ) => {
@@ -32,7 +32,7 @@ const createJob = async (
 };
 
 const createContinuation = async (
-  stateAdapter: ReturnType<typeof createInProcessStateAdapter>,
+  stateAdapter: Awaited<ReturnType<typeof createInProcessStateAdapter>>,
   typeName: string,
   chainId: string,
   chainTypeName: string,
@@ -445,7 +445,7 @@ describe("Dashboard API", () => {
     it("returns 404 for requests outside basePath", async () => {
       const dashboard = await createDashboard({
         client: await createClient({
-          stateAdapter: createInProcessStateAdapter(),
+          stateAdapter: await createInProcessStateAdapter(),
           jobTypeRegistry: defineJobTypeRegistry(),
         }),
         basePath: "/internal/queuert",
@@ -457,7 +457,7 @@ describe("Dashboard API", () => {
     it("returns 404 for paths that share a prefix with basePath", async () => {
       const dashboard = await createDashboard({
         client: await createClient({
-          stateAdapter: createInProcessStateAdapter(),
+          stateAdapter: await createInProcessStateAdapter(),
           jobTypeRegistry: defineJobTypeRegistry(),
         }),
         basePath: "/app",

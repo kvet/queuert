@@ -65,7 +65,7 @@ typeInferenceIt("infers custom ID types through the full stack", async ({ db }) 
 
   await stateAdapter.migrateToLatest();
 
-  const notifyAdapter = createInProcessNotifyAdapter();
+  const notifyAdapter = await createInProcessNotifyAdapter();
   const log = vi.fn();
   const jobTypeRegistry = defineJobTypeRegistry<{
     test: {

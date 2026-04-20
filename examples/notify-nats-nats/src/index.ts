@@ -32,7 +32,7 @@ const jobTypeRegistry = defineJobTypeRegistry<{
 }>();
 
 // 5. Create adapters
-const stateAdapter = createInProcessStateAdapter();
+const stateAdapter = await createInProcessStateAdapter();
 const notifyAdapter = await createNatsNotifyAdapter({
   nc,
   kv,

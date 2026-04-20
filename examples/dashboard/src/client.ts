@@ -76,6 +76,6 @@ const stateProvider = createStateProvider(db);
 export const stateAdapter = await createSqliteStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 
-export const notifyAdapter = createInProcessNotifyAdapter();
+export const notifyAdapter = await createInProcessNotifyAdapter();
 
 export const client = await createClient({ stateAdapter, notifyAdapter, jobTypeRegistry });

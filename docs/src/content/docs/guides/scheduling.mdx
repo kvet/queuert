@@ -51,7 +51,7 @@ return complete(async ({ continueWith }) =>
 ```
 
 <Aside type="tip">
-  Combine `schedule` with a `deduplicationKey` to prevent duplicate future jobs — for example,
+  Combine `schedule` with `deduplication: { key }` to prevent duplicate future jobs — for example,
   ensuring only one reminder is queued per user even if the trigger fires multiple times. See
   [Deduplication](../deduplication/).
 </Aside>

@@ -832,6 +832,22 @@ export const createSqliteStateAdapter = async <
       if (jobIds.length === 0) return { triggered: [], notFound: [], notTriggerable: [] };
       const idsJson = JSON.stringify(jobIds);
 
+      const rows = await executeTypedSql({
+        txCtx,
+        sql: defs.triggerJobsSql,
+        params: [idsJson],
+      });
+
+      if (rows.length > 0) {
+        const orderById = new Map(jobIds.map((id, i) => [id as string, i]));
+        rows.sort((a, b) => orderById.get(a.id)! - orderById.get(b.id)!);
+        return {
+          triggered: rows.map((row) => mapDbJobToStateJob(row)),
+          notFound: [],
+          notTriggerable: [],
+        };
+      }
+
       const statusRows = await executeTypedSql({
         txCtx,
         sql: defs.getJobStatusesByIdsSql,
@@ -854,22 +870,7 @@ export const createSqliteStateAdapter = async <
         }
       }
 
-      if (notFound.length > 0 || notTriggerable.length > 0) {
-        return { triggered: [], notFound, notTriggerable };
-      }
-
-      const rows = await executeTypedSql({
-        txCtx,
-        sql: defs.triggerJobsSql,
-        params: [idsJson],
-      });
-      const orderById = new Map(jobIds.map((id, i) => [id as string, i]));
-      rows.sort((a, b) => orderById.get(a.id)! - orderById.get(b.id)!);
-      return {
-        triggered: rows.map((row) => mapDbJobToStateJob(row)),
-        notFound: [],
-        notTriggerable: [],
-      };
+      return { triggered: [], notFound, notTriggerable };
     },
 
     listBlockedJobs: async ({ txCtx, chainId, orderDirection, page }) => {

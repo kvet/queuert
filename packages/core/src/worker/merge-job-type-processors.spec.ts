@@ -34,7 +34,7 @@ const orderJobTypeRegistry = defineJobTypeRegistry<OrderDefs>();
 const notificationJobTypeRegistry = defineJobTypeRegistry<NotificationDefs>();
 const billingJobTypeRegistry = defineJobTypeRegistry<BillingDefs>();
 
-const stateAdapter = createInProcessStateAdapter();
+const stateAdapter = await createInProcessStateAdapter();
 const client = await createClient({
   stateAdapter,
   jobTypeRegistry: mergeJobTypeRegistries({
@@ -372,7 +372,7 @@ describe("cross-slice blocker type resolution", () => {
     const mergedJobTypeRegistry = mergeJobTypeRegistries({
       slices: [notifJobTypeRegistry, orderJobTypeRegistry],
     });
-    const sa = createInProcessStateAdapter();
+    const sa = await createInProcessStateAdapter();
     const c = await createClient({ stateAdapter: sa, jobTypeRegistry: mergedJobTypeRegistry });
 
     const notifJobTypeProcessorRegistry = createJobTypeProcessorRegistry({
@@ -444,7 +444,7 @@ describe("cross-slice blocker type resolution", () => {
     const mergedJobTypeRegistry = mergeJobTypeRegistries({
       slices: [notifJobTypeRegistry, orderJobTypeRegistry],
     });
-    const sa = createInProcessStateAdapter();
+    const sa = await createInProcessStateAdapter();
     const c = await createClient({ stateAdapter: sa, jobTypeRegistry: mergedJobTypeRegistry });
 
     createJobTypeProcessorRegistry({
@@ -542,7 +542,7 @@ describe("createInProcessWorker with partial processor registries", () => {
       "unrelated.task": { entry: true; input: { x: number }; output: { y: number } };
     }>();
     const unrelatedClient = await createClient({
-      stateAdapter: createInProcessStateAdapter(),
+      stateAdapter: await createInProcessStateAdapter(),
       jobTypeRegistry: unrelatedJobTypeRegistry,
     });
     const unrelatedJobTypeProcessorRegistry = createJobTypeProcessorRegistry({

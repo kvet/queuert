@@ -68,7 +68,7 @@ The context is named `TTxContext` (transaction context) because it's exclusively
 
 ### StateProvider Interface
 
-Users create a `StateProvider` implementation to integrate with their database client:
+Users create a `StateProvider` implementation to integrate with their database client. The concrete interfaces live in `@queuert/postgres` and `@queuert/sqlite`; the shape below is an illustrative reduction — see the TSDoc on `PgStateProvider` and `SqliteStateProvider` for the authoritative signatures (including `paramTypes`/`columnTypes` annotations required by the typed-SQL layer).
 
 ```typescript
 interface PgStateProvider<TTxContext> {
@@ -80,6 +80,8 @@ interface PgStateProvider<TTxContext> {
     txCtx?: TTxContext;
     sql: string;
     params?: unknown[];
+    paramTypes: Record<number, RuntimeType>;
+    columnTypes: Record<string, RuntimeType>;
   }) => Promise<unknown[]>;
 }
 ```
