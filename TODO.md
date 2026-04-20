@@ -1,17 +1,16 @@
 # Short term
 
 - [TASK] Change attemptMiddleware to wrapAttemptHandler, wrapPrepare, wrapCompleteHandler, etc. to allow more flexible middleware that can add additional parameters (e.g. context) and is not limited to the acquire+execute+complete flow — see `design/handler-wrapping.md`
-- [EPIC] test against bun and its built-in sqlite, postgres, redis clients
 - [TASK] Name internal types properly. No underscore. Add to code-style guide.
-- [?,REF] Investigate `job_deduplication_idx` missing `chain_type_name` — dedup query scans all dedup matches across chain types before post-filtering. Likely fine under typical load, but worth measuring on a cross-type heavy workload. See publish readiness report Schema W1.
-- [TASK] Enforce json-serializable inputs and outputs (like no Date in job definitions) — see `design/json-serializable-types.md`
-- [?,REF] Investigate uuid7 (to support PG partitioning) in a separate partitioned adapter
-- [?,REF] Investigate adding `close()` to all provider interfaces (Pg/Sqlite state, Pg/Redis notify) and propagating it to the adapter. Today only `PgPoolNotifyProvider` exposes `close()` as an intersection type; callers have to know which provider variant they hold to release internally-held resources (dedicated LISTEN clients, prepared-statement caches, background pollers). Lifting it to the base interface would make teardown uniform — but only if there's a real resource to release (postgres.js doesn't need it since `sql` is caller-owned). Decide: keep opt-in intersection vs. base contract that's a no-op for pass-through providers
+- [?,REF] Lift `close()` onto base provider interfaces + adapters for uniform teardown (today only `PgPoolNotifyProvider` has it, via intersection) — see `design/provider-close.md`
 - [?,REF] Rethink long names — rename to `JobTypes` + `Processors`, see `design/registry-rename.md`
 - [TASK] Add tests that check sql param and column types are correct in provider interfaces
 
 # Medium term
 
+- [EPIC] test against bun and its built-in sqlite, postgres, redis clients
+- [TASK] Enforce json-serializable inputs and outputs (like no Date in job definitions) — see `design/json-serializable-types.md`
+- [?,REF] Investigate uuid7 (to support PG partitioning) in a separate partitioned adapter
 - [?,REF] For update locking in list methods (e.g. `listJobChainsForCleanup`), add option to skip locking when the method is used in a context where concurrent modifications are not a concern (e.g. cleanup job listing its own completed chains for deletion)
   - [?,REF] Change complete job chain to something more empirical?
 - [REF] Handle routing with seroval on dashboard instead of path-based routing (e.g. `/chains/${chainId}` → `/chain?chainId=${chainId}`) — simplifies dashboard API and allows more flexible UI patterns (modals, nested views)
