@@ -25,7 +25,7 @@ class JobChainNotFoundError extends Error {
 }
 ```
 
-Thrown when a job chain cannot be found by ID. Raised by `awaitJobChain`, `completeJobChain`, and `deleteJobChain`. The plural `deleteJobChains` silently skips missing IDs and does not throw.
+Thrown when a job chain cannot be found by ID. Raised by `awaitJobChain` and `completeJobChain`. Deletion APIs do not throw this: `deleteJobChain` returns `undefined` for missing chains, and `deleteJobChains` silently skips missing IDs.
 
 ## JobAlreadyCompletedError
 

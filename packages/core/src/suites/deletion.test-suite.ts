@@ -4,7 +4,6 @@ import { sleep } from "../helpers/sleep.js";
 import {
   BlockerReferenceError,
   type JobChain,
-  JobChainNotFoundError,
   TransactionContextRequiredError,
   createClient,
   createInProcessWorker,
@@ -1103,7 +1102,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     expect(fetched).toBeUndefined();
   });
 
-  it("deleteJobChain throws JobChainNotFoundError for nonexistent chain", async ({
+  it("deleteJobChain returns undefined for nonexistent chain", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -1123,25 +1122,17 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       jobTypeRegistry,
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
+    const deleted = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.deleteJobChain({
+          ...txCtx,
+          transactionHooks,
+          id: "00000000-0000-0000-0000-000000000000",
+        }),
       ),
     );
 
-    await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.deleteJobChain({ ...txCtx, transactionHooks, id: chain.id }),
-      ),
-    );
-
-    await expect(
-      withTransactionHooks(async (transactionHooks) =>
-        withTransaction(async (txCtx) =>
-          client.deleteJobChain({ ...txCtx, transactionHooks, id: chain.id }),
-        ),
-      ),
-    ).rejects.toThrow(JobChainNotFoundError);
+    expect(deleted).toBeUndefined();
   });
 
   it("deleteJobChain cascades transitive dependencies", async ({
@@ -1200,7 +1191,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       ),
     );
 
-    expect(deleted.id).toBe(mainChain.id);
+    expect(deleted?.id).toBe(mainChain.id);
 
     const fetchedBlocker = await client.getJobChain({ id: blockerChain!.id });
     expect(fetchedBlocker).toBeUndefined();

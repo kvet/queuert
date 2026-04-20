@@ -71,9 +71,9 @@ const deleted = await client.deleteJobChain({
 });
 ```
 
-Returns `JobChain`.
+Returns `JobChain | undefined`.
 
-Deletes a single job chain by ID. When **cascade** is `true`, transitive dependencies are included (default: `false`). Throws `JobChainNotFoundError` if the chain does not exist, `BlockerReferenceError` if external jobs depend on it.
+Deletes a single job chain by ID. Returns the deleted chain, or `undefined` if no chain with that ID exists. When **cascade** is `true`, transitive dependencies are included (default: `false`). Throws `BlockerReferenceError` if external jobs depend on it.
 
 ### deleteJobChains
 

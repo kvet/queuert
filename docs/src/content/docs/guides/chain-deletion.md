@@ -16,7 +16,7 @@ await withTransactionHooks(async (transactionHooks) =>
 );
 ```
 
-Use `deleteJobChain` when targeting a single chain that is expected to exist — it throws `JobChainNotFoundError` if the chain is missing, while `deleteJobChains` silently skips missing IDs (idempotent bulk cleanup):
+Use `deleteJobChain` to target a single chain — it returns the deleted chain or `undefined` if no chain with that ID exists. `deleteJobChains` silently skips missing IDs and returns the chains that were actually deleted. Both calls are idempotent:
 
 ```ts
 await withTransactionHooks(async (transactionHooks) =>

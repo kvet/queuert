@@ -36,13 +36,15 @@ How to connect Queuert to your database using different ORMs and drivers.
 
 How to set up real-time job notifications between client and workers.
 
-| Example                                                                                                       | Transport                              |
-| ------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
-| [notify-redis-redis](https://github.com/kvet/queuert/tree/main/examples/notify-redis-redis)                   | Redis (node-redis)                     |
-| [notify-redis-ioredis](https://github.com/kvet/queuert/tree/main/examples/notify-redis-ioredis)               | Redis (ioredis)                        |
-| [notify-nats-nats](https://github.com/kvet/queuert/tree/main/examples/notify-nats-nats)                       | NATS                                   |
-| [notify-postgres-pg](https://github.com/kvet/queuert/tree/main/examples/notify-postgres-pg)                   | PostgreSQL LISTEN/NOTIFY (pg)          |
-| [notify-postgres-postgres-js](https://github.com/kvet/queuert/tree/main/examples/notify-postgres-postgres-js) | PostgreSQL LISTEN/NOTIFY (postgres.js) |
+| Example                                                                                                               | Transport                              |
+| --------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| [notify-redis-redis](https://github.com/kvet/queuert/tree/main/examples/notify-redis-redis)                           | Redis (node-redis)                     |
+| [notify-redis-ioredis](https://github.com/kvet/queuert/tree/main/examples/notify-redis-ioredis)                       | Redis (ioredis)                        |
+| [notify-redis-cluster-node-redis](https://github.com/kvet/queuert/tree/main/examples/notify-redis-cluster-node-redis) | Redis Cluster (node-redis)             |
+| [notify-redis-cluster-ioredis](https://github.com/kvet/queuert/tree/main/examples/notify-redis-cluster-ioredis)       | Redis Cluster (ioredis)                |
+| [notify-nats-nats](https://github.com/kvet/queuert/tree/main/examples/notify-nats-nats)                               | NATS                                   |
+| [notify-postgres-pg](https://github.com/kvet/queuert/tree/main/examples/notify-postgres-pg)                           | PostgreSQL LISTEN/NOTIFY (pg)          |
+| [notify-postgres-postgres-js](https://github.com/kvet/queuert/tree/main/examples/notify-postgres-postgres-js)         | PostgreSQL LISTEN/NOTIFY (postgres.js) |
 
 ## Patterns & Features
 

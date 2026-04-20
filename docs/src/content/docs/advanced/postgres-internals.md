@@ -239,7 +239,7 @@ The adapter uses CTEs (Common Table Expressions) extensively to perform multi-st
 
 - **Job creation**: Deduplication check + batch INSERT in one query
 - **Blocker management**: INSERT blockers + UPDATE job status from pending to blocked
-- **Unblocking**: DELETE resolved blockers + UPDATE jobs from blocked to pending (when all blockers resolved)
+- **Unblocking**: UPDATE jobs from blocked to pending when all their blockers have completed (blocker rows are retained to propagate trace context into the unblocked job)
 - **Chain deletion**: Recursive CTE to find connected chains + cascading DELETE
 - **Connected chain discovery**: Recursive CTE traversing blocker relationships in both directions
 

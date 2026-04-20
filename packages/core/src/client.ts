@@ -209,7 +209,7 @@ export type Client<
     } & GetStateAdapterTxContext<TStateAdapter>,
   ) => Promise<_StartJobChainsResult<TJobId, TJobTypeDefinitions, TChains>>;
 
-  /** Delete a single job chain by ID. Throws {@link JobChainNotFoundError} if the chain does not exist, {@link BlockerReferenceError} if external jobs depend on it. When `cascade` is true, includes transitive dependencies. */
+  /** Delete a single job chain by ID. Returns the deleted chain, or `undefined` if no chain with that ID exists. Throws {@link BlockerReferenceError} if external jobs depend on it. When `cascade` is true, includes transitive dependencies. */
   deleteJobChain: <
     TEntryName extends JobTypeEntryNames<TJobTypeDefinitions> =
       JobTypeEntryNames<TJobTypeDefinitions>,
@@ -219,7 +219,7 @@ export type Client<
       cascade?: boolean;
       transactionHooks: TransactionHooks;
     } & GetStateAdapterTxContext<TStateAdapter>,
-  ) => Promise<ResolvedJobChain<TJobId, TJobTypeDefinitions, TEntryName>>;
+  ) => Promise<ResolvedJobChain<TJobId, TJobTypeDefinitions, TEntryName> | undefined>;
 
   /** Delete job chains by ID. Missing IDs are silently skipped. Throws {@link BlockerReferenceError} if external jobs depend on them. When `cascade` is true, includes transitive dependencies. */
   deleteJobChains: <
@@ -495,7 +495,7 @@ export const createClient = async <
       })) as _StartJobChainsResult<TJobId, TJobTypeDefinitions, TChains>;
     },
 
-    /** Delete a single job chain by ID. Throws {@link JobChainNotFoundError} if the chain does not exist, {@link BlockerReferenceError} if external jobs depend on it. When `cascade` is true, includes transitive dependencies. */
+    /** Delete a single job chain by ID. Returns the deleted chain, or `undefined` if no chain with that ID exists. Throws {@link BlockerReferenceError} if external jobs depend on it. When `cascade` is true, includes transitive dependencies. */
     deleteJobChain: async <
       TEntryName extends JobTypeEntryNames<TJobTypeDefinitions> =
         JobTypeEntryNames<TJobTypeDefinitions>,
@@ -505,23 +505,16 @@ export const createClient = async <
         cascade?: boolean;
         transactionHooks: TransactionHooks;
       } & GetStateAdapterTxContext<TStateAdapter>,
-    ): Promise<ResolvedJobChain<TJobId, TJobTypeDefinitions, TEntryName>> => {
+    ): Promise<ResolvedJobChain<TJobId, TJobTypeDefinitions, TEntryName> | undefined> => {
       const { id, cascade, transactionHooks, ...rest } = options;
-      const deleted = await client.deleteJobChains({
+      const deleted = await client.deleteJobChains<TEntryName>({
         ids: [id],
         cascade,
         transactionHooks,
         ...(rest as GetStateAdapterTxContext<TStateAdapter>),
       });
 
-      const match = deleted.find((chain) => chain.id === id);
-      if (!match) {
-        throw new JobChainNotFoundError(`Job chain with id ${String(id)} not found`, {
-          chainId: id as string,
-        });
-      }
-
-      return match as ResolvedJobChain<TJobId, TJobTypeDefinitions, TEntryName>;
+      return deleted.find((chain) => chain.id === id);
     },
 
     /** Delete job chains by ID. Missing IDs are silently skipped. Throws {@link BlockerReferenceError} if external jobs depend on them. When `cascade` is true, includes transitive dependencies. */
@@ -579,33 +572,12 @@ export const createClient = async <
       } & GetStateAdapterTxContext<TStateAdapter>,
     ): Promise<ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>> => {
       const { id, transactionHooks, ...rest } = options;
-      const txCtx = requireTxCtx(rest);
-
-      const { triggered, notFound, notTriggerable } = await helpers.stateAdapter.triggerJobs({
-        txCtx,
-        jobIds: [id],
+      const [job] = await client.triggerJobs<TJobTypeName>({
+        ids: [id],
+        transactionHooks,
+        ...(rest as GetStateAdapterTxContext<TStateAdapter>),
       });
-
-      if (notFound.length > 0) {
-        throw new JobNotFoundError(`Job with id ${String(id)} not found`, {
-          jobId: id as string,
-        });
-      }
-      if (notTriggerable.length > 0) {
-        const { status } = notTriggerable[0];
-        throw new JobNotTriggerableError(
-          `Cannot trigger job ${String(id)}: job status is "${status}", must be "pending"`,
-          { jobId: id as string, status },
-        );
-      }
-
-      const [job] = triggered;
-      bufferNotifyJobScheduled(transactionHooks, helpers.notifyAdapter, job);
-      bufferObservabilityEvent(transactionHooks, () => {
-        helpers.observabilityHelper.jobTriggered(job);
-      });
-
-      return mapStateJobToJob(job) as ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>;
+      return job;
     },
 
     /** Trigger multiple pending jobs immediately. Validation is atomic: throws {@link JobNotFoundError} or {@link JobNotTriggerableError} for the first invalid job before any job is triggered. Returns jobs in input order. Empty `ids` returns `[]`. */
