@@ -32,7 +32,7 @@ jobs:
         run: npm install -g pnpm
 
       - name: Upgrade npm for OIDC trusted publishing
-        run: npm install -g npm@latest
+        run: corepack enable && corepack prepare npm@latest --activate
 
       - name: Publish packages
         run: pnpm -r publish --access public --no-git-checks --provenance
