@@ -19,10 +19,6 @@ yarn add @queuert/postgres
 
 **Peer dependencies:** `queuert`
 
-## Testing custom providers
-
-Validate a custom `PgStateProvider` or `PgNotifyProvider` against Queuert's conformance suites using the framework-agnostic runner from [`queuert/conformance`](https://kvet.github.io/queuert/reference/queuert/conformance/). See the [Testing Custom Adapters guide](https://kvet.github.io/queuert/advanced/custom-adapters/).
-
 ## Documentation
 
 - [State Adapters Guide](https://kvet.github.io/queuert/integrations/state-adapters/)
