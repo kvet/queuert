@@ -1,5 +1,27 @@
 # @queuert/sqlite
 
+## 0.11.0
+
+### Minor Changes
+
+- Promote in-process adapters to the public `queuert` entry (now async), add `queuert/conformance` runner for building and certifying custom adapters, and introduce singular `deleteJobChain` + plural `triggerJobs` client APIs. Add Redis Cluster support (new cluster notify examples), and optional `withSavepoint` hooks on `PgStateProvider` / `SqliteStateProvider` for drivers with native savepoint tracking. New guides and examples for prioritization and error recovery.
+
+  **Breaking:**
+  - `runInTransaction` → `withTransaction` (StateAdapter, Pg/Sqlite providers).
+  - `HookDef` → `HookDefinition`.
+  - `createPgNotifyAdapter` / `createRedisNotifyAdapter`: option `provider` → `notifyProvider`.
+  - `createInProcessStateAdapter` / `createInProcessNotifyAdapter` are now async (and moved from `queuert/internal` to `queuert`).
+  - `client.deleteJobChain` returns `undefined` for missing chains instead of throwing `JobChainNotFoundError`.
+  - `StateAdapter`: `triggerJob` replaced by `triggerJobs`; `deleteJobChains` returns `{ deleted, blockerRefs }`; adapters now enforce blocker validation.
+  - Custom `PgStateProvider` / `SqliteStateProvider`: `executeSql` takes `paramTypes` / `columnTypes` (replacing the `returns` flag).
+  - `pgLiteral` / `sqliteLiteral` removed from public package entries.
+  - `Job<…>` gained a `TOutput` generic parameter.
+
+### Patch Changes
+
+- Updated dependencies
+  - queuert@0.11.0
+
 ## 0.10.0
 
 ### Minor Changes

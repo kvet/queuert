@@ -1,6 +1,6 @@
 {
   "name": "@queuert/otel",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "OpenTelemetry observability adapter for Queuert job queue system",
   "keywords": [
     "background-jobs",
