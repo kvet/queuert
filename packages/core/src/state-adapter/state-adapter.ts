@@ -1,4 +1,5 @@
 import { type ScheduleOptions } from "../entities/schedule.js";
+import { type BlockerReference } from "../errors.js";
 import { type OrderDirection, type Page, type PageParams } from "../pagination.js";
 
 export type StateJobStatus = "blocked" | "pending" | "running" | "completed";
@@ -164,12 +165,24 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     ignoredJobIds?: TJobId[];
   }) => Promise<StateJob | undefined>;
 
-  /** Deletes all jobs in the given chains. Throws if external jobs depend on them as blockers. When `cascade` is true, expands `chainIds` to include transitive dependencies (downward only) before deleting. */
+  /**
+   * Deletes all jobs in the given chains in a single atomic operation.
+   *
+   * All-or-nothing: if any chain in the effective set is referenced as a blocker
+   * by a job outside the set, nothing is deleted and `blockerRefs` lists the
+   * offending references. When deletion proceeds, missing ids are silently
+   * skipped and `blockerRefs` is empty. When `cascade` is true, expands
+   * `chainIds` to include transitive dependencies (downward only) before
+   * checking and deleting.
+   */
   deleteJobChains: (params: {
     txCtx?: TTxContext;
     chainIds: TJobId[];
     cascade?: boolean;
-  }) => Promise<[StateJob, StateJob | undefined][]>;
+  }) => Promise<{
+    deleted: [StateJob, StateJob | undefined][];
+    blockerRefs: BlockerReference[];
+  }>;
 
   /** Gets a job by ID with a FOR UPDATE lock. */
   getJobForUpdate: (params: { txCtx?: TTxContext; jobId: TJobId }) => Promise<StateJob | undefined>;
@@ -228,8 +241,21 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     page: PageParams;
   }) => Promise<Page<StateJob>>;
 
-  /** Triggers a pending job immediately by setting its scheduledAt to now. */
-  triggerJob: (params: { txCtx?: TTxContext; jobId: TJobId }) => Promise<StateJob>;
+  /**
+   * Triggers pending jobs immediately by setting their scheduledAt to now.
+   *
+   * All-or-nothing: if any input id is missing or not in `pending` status, no
+   * rows are updated and `triggered` is empty. `notFound` lists ids with no
+   * matching job; `notTriggerable` lists existing jobs whose status is not
+   * `pending`. When every input is eligible, `triggered` contains the updated
+   * jobs in the same order as `jobIds`. Never throws on missing/ineligible
+   * ids — the caller decides how to surface failures.
+   */
+  triggerJobs: (params: { txCtx?: TTxContext; jobIds: TJobId[] }) => Promise<{
+    triggered: StateJob[];
+    notFound: TJobId[];
+    notTriggerable: { id: TJobId; status: StateJobStatus }[];
+  }>;
 };
 
 export type GetStateAdapterTxContext<TStateAdapter> =

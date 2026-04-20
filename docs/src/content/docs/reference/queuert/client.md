@@ -60,6 +60,21 @@ const chains = await client.startJobChains({
 
 Returns `Array<JobChain & { deduplicated: boolean }>`.
 
+### deleteJobChain
+
+```typescript
+const deleted = await client.deleteJobChain({
+  id: chainId,
+  cascade?: boolean,
+  transactionHooks,
+  tx,
+});
+```
+
+Returns `JobChain`.
+
+Deletes a single job chain by ID. When **cascade** is `true`, transitive dependencies are included (default: `false`). Throws `JobChainNotFoundError` if the chain does not exist, `BlockerReferenceError` if external jobs depend on it.
+
 ### deleteJobChains
 
 ```typescript
@@ -73,7 +88,7 @@ const deleted = await client.deleteJobChains({
 
 Returns `JobChain[]`.
 
-Deletes the specified job chains. When **cascade** is `true`, transitive dependencies are included (default: `false`). Throws `BlockerReferenceError` if external jobs depend on the targeted chains.
+Deletes the specified job chains. Missing IDs are silently skipped (use `deleteJobChain` for strict lookup). When **cascade** is `true`, transitive dependencies are included (default: `false`). Throws `BlockerReferenceError` if external jobs depend on the targeted chains.
 
 ### triggerJob
 
@@ -88,6 +103,20 @@ const job = await client.triggerJob({
 Returns `Job`.
 
 Triggers a pending job immediately by setting its `scheduledAt` to now. Throws `JobNotFoundError` if the job does not exist, `JobNotTriggerableError` if the job is not pending.
+
+### triggerJobs
+
+```typescript
+const jobs = await client.triggerJobs({
+  ids: [jobId1, jobId2],
+  transactionHooks,
+  tx,
+});
+```
+
+Returns `Job[]` in input order.
+
+Triggers multiple pending jobs in one call. Validation is atomic — if any job is missing or not pending, the entire call fails with `JobNotFoundError` or `JobNotTriggerableError` before any job is triggered. Empty `ids` returns `[]`.
 
 ### completeJobChain
 

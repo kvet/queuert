@@ -239,7 +239,7 @@ const ${slice.name}Registry = defineJobTypeRegistry<${slice.name}Defs>();`;
   const clientCalls = generateClientCalls(allDefs);
   const middleware = generateMiddleware();
 
-  return `import { defineJobTypeRegistry, createJobTypeProcessorRegistry, createInProcessWorker, createClient, createTransactionHooks, mergeJobTypeRegistries, type JobAttemptMiddleware, mergeJobTypeProcessorRegistries } from "queuert";
+  return `import { defineJobTypeRegistry, createJobTypeProcessorRegistry, createInProcessWorker, createClient, createTransactionHooks, mergeJobTypeRegistries, type JobAttemptMiddleware, mergeJobTypeProcessorRegistries, createInProcessStateAdapter, createInProcessNotifyAdapter } from "queuert";
 ${sliceTypeDecls.join("\n")}
 
 const mergedJobTypeRegistry = mergeJobTypeRegistries({ slices: [${registryNames.join(", ")}] });

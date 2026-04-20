@@ -25,7 +25,7 @@ class JobChainNotFoundError extends Error {
 }
 ```
 
-Thrown when a job chain cannot be found by ID.
+Thrown when a job chain cannot be found by ID. Raised by `awaitJobChain`, `completeJobChain`, and `deleteJobChain`. The plural `deleteJobChains` silently skips missing IDs and does not throw.
 
 ## JobAlreadyCompletedError
 
@@ -46,7 +46,7 @@ class JobNotTriggerableError extends Error {
 }
 ```
 
-Thrown by `triggerJob` when the job is not in a triggerable state. Only `pending` jobs can be triggered.
+Thrown by `triggerJob` and `triggerJobs` when a job is not in a triggerable state. Only `pending` jobs can be triggered. `triggerJobs` validates atomically — it throws on the first invalid job before triggering any.
 
 ## JobTakenByAnotherWorkerError
 
@@ -156,7 +156,7 @@ Thrown when a transaction hook is accessed before being registered.
 class TransactionContextRequiredError extends Error {}
 ```
 
-Thrown when a mutating client method (e.g. `startJobChain`, `triggerJob`, `deleteJobChains`) is called without a `tx` provided by `withTransaction`. Mutations must run inside a transaction so the transactional outbox pattern holds.
+Thrown when a mutating client method (e.g. `startJobChain`, `triggerJob`, `triggerJobs`, `deleteJobChain`, `deleteJobChains`) is called without a `tx` provided by `withTransaction`. Mutations must run inside a transaction so the transactional outbox pattern holds.
 
 ## See Also
 

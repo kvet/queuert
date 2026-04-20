@@ -353,7 +353,14 @@ export type SqliteSqlDefinitions<TRuntime extends RuntimeType = RuntimeType> = {
     ],
     SqliteDbJobCols<TRuntime>
   >;
-  readonly triggerJobSql: TypedSql<readonly [Id<TRuntime>], SqliteDbJobCols<TRuntime>>;
+  readonly triggerJobsSql: TypedSql<
+    readonly [DataType<"string", string>],
+    SqliteDbJobCols<TRuntime>
+  >;
+  readonly getJobStatusesByIdsSql: TypedSql<
+    readonly [DataType<"string", string>],
+    { readonly id: Id<TRuntime>; readonly status: DataType<"string", string> }
+  >;
   readonly renewJobLeaseSql: TypedSql<
     readonly [DataType<"string", string>, DataType<"number", number>, Id<TRuntime>],
     SqliteDbJobCols<TRuntime>
@@ -801,17 +808,29 @@ RETURNING *
     },
   );
 
-  const triggerJobSql = sql(
+  const triggerJobsSql = sql(
     /* sql */ `
 UPDATE {{table_prefix}}job
 SET scheduled_at = datetime('now', 'subsec')
-WHERE id = ? AND status = 'pending'
+WHERE id IN (SELECT value FROM json_each(?)) AND status = 'pending'
 RETURNING *
 `,
     true,
     {
-      params: [id],
+      params: [t.string()],
       columns: { ...dbJobColumns },
+    },
+  );
+
+  const getJobStatusesByIdsSql = sql(
+    /* sql */ `
+SELECT id, status FROM {{table_prefix}}job
+WHERE id IN (SELECT value FROM json_each(?))
+`,
+    true,
+    {
+      params: [t.string()],
+      columns: { id, status: t.string() },
     },
   );
 
@@ -1037,7 +1056,8 @@ LIMIT 1
     getJobBlockersSql: getJobBlockersSql,
     getJobByIdSql: getJobByIdSql,
     rescheduleJobSql: rescheduleJobSql,
-    triggerJobSql: triggerJobSql,
+    triggerJobsSql: triggerJobsSql,
+    getJobStatusesByIdsSql: getJobStatusesByIdsSql,
     renewJobLeaseSql: renewJobLeaseSql,
     acquireJobSql: acquireJobSql,
     getNextJobAvailableInMsSql: getNextJobAvailableInMsSql,

@@ -336,7 +336,14 @@ export type PgSqlDefinitions = {
     ],
     PgDbJobCols
   >;
-  readonly triggerJobSql: TypedSql<readonly [Id], PgDbJobCols>;
+  readonly triggerJobsSql: TypedSql<
+    readonly [DataType<"array", string[]>],
+    {
+      readonly triggered: DataType<"json", DbJob[]>;
+      readonly not_found: DataType<"json", string[]>;
+      readonly not_triggerable: DataType<"json", { id: string; status: string }[]>;
+    }
+  >;
   readonly renewJobLeaseSql: TypedSql<
     readonly [Id, DataType<"string", string>, DataType<"number", number>],
     PgDbJobCols
@@ -357,11 +364,19 @@ export type PgSqlDefinitions = {
     readonly [DataType<"array", string[]>],
     { readonly chain_id: Id }
   >;
-  readonly checkExternalBlockerRefsSql: TypedSql<
-    readonly [DataType<"array", string[]>, DataType<"array", string[]>],
-    { readonly job_id: Id; readonly blocked_by_chain_id: Id }
+  readonly deleteJobChainsSql: TypedSql<
+    readonly [DataType<"array", string[]>],
+    {
+      readonly deleted: DataType<
+        "json",
+        { readonly root_job: DbJob; readonly last_chain_job: DbJob | null }[]
+      >;
+      readonly blocker_refs: DataType<
+        "json",
+        { readonly job_id: string; readonly blocked_by_chain_id: string }[]
+      >;
+    }
   >;
-  readonly deleteJobChainsSql: TypedSql<readonly [DataType<"array", string[]>], PgRowToJsonCols>;
   readonly getJobForUpdateSql: TypedSql<readonly [Id], PgDbJobCols>;
   readonly getLatestChainJobForUpdateSql: TypedSql<readonly [Id], PgDbJobCols>;
 };
@@ -857,17 +872,52 @@ RETURNING *
     },
   );
 
-  const triggerJobSql = sql(
+  const triggerJobsSql = sql(
     /* sql */ `
-UPDATE {{schema}}.{{table_prefix}}job
-SET scheduled_at = now()
-WHERE id = $1 AND status = 'pending'
-RETURNING *
+WITH _existing AS (
+  -- Lock rows in id order so concurrent triggerJobs calls on overlapping
+  -- id sets acquire locks consistently and don't deadlock. FOR UPDATE
+  -- also makes classification observe the latest committed version, so
+  -- the UPDATE below sees the same status we classified against.
+  SELECT id, status FROM {{schema}}.{{table_prefix}}job
+  WHERE id = ANY($1::{{id_type}}[])
+  ORDER BY id
+  FOR UPDATE
+),
+_not_found AS (
+  SELECT DISTINCT i AS id
+  FROM unnest($1::{{id_type}}[]) AS i
+  WHERE NOT EXISTS (SELECT 1 FROM _existing e WHERE e.id = i)
+),
+_not_triggerable AS (
+  SELECT id, status FROM _existing WHERE status != 'pending'
+),
+_updated AS (
+  -- All-or-nothing: only update when every input id resolves to a pending
+  -- job. If anything is missing or non-pending, no rows are touched.
+  UPDATE {{schema}}.{{table_prefix}}job
+  SET scheduled_at = now()
+  WHERE id IN (SELECT id FROM _existing WHERE status = 'pending')
+    AND NOT EXISTS (SELECT 1 FROM _not_found)
+    AND NOT EXISTS (SELECT 1 FROM _not_triggerable)
+  RETURNING *
+)
+SELECT
+  COALESCE((SELECT json_agg(row_to_json(u)) FROM _updated u), '[]'::json) AS triggered,
+  COALESCE((SELECT json_agg(id) FROM _not_found), '[]'::json) AS not_found,
+  COALESCE(
+    (SELECT json_agg(json_build_object('id', id, 'status', status)) FROM _not_triggerable),
+    '[]'::json
+  ) AS not_triggerable
 `,
     true,
     {
-      params: [id],
-      columns: { ...dbJobColumns },
+      params: [t.array()],
+      columns: {
+        triggered: t.json<DbJob[]>(),
+        not_found: t.json<string[]>(),
+        not_triggerable: t.json<{ id: string; status: string }[]>(),
+      },
     },
   );
 
@@ -984,60 +1034,58 @@ SELECT chain_id FROM connected
     },
   );
 
-  const checkExternalBlockerRefsSql = sql(
+  const deleteJobChainsSql = sql(
     /* sql */ `
 WITH _locked AS (
-  -- Lock all jobs in chains being deleted to prevent concurrent mutations
-  -- between the check and the subsequent DELETE.
-  -- Rows are locked in ctid order (physical), so concurrent deletes on
-  -- overlapping chain sets acquire locks in the same order — no deadlock.
+  -- Lock all jobs in chains being deleted before checking external refs, so
+  -- the check and DELETE see the same state even under concurrency.
   SELECT id FROM {{schema}}.{{table_prefix}}job
   WHERE chain_id = ANY($1::{{id_type}}[])
   ORDER BY ctid
   FOR UPDATE
-)
-SELECT jb.job_id, jb.blocked_by_chain_id
-FROM {{schema}}.{{table_prefix}}job_blocker jb
-JOIN {{schema}}.{{table_prefix}}job j ON j.id = jb.job_id
-WHERE jb.blocked_by_chain_id = ANY($1::{{id_type}}[])
-  AND j.chain_id != ALL($2::{{id_type}}[])
-`,
-    true,
-    {
-      params: [t.array(), t.array()],
-      columns: { job_id: id, blocked_by_chain_id: id },
-    },
-  );
-
-  const deleteJobChainsSql = sql(
-    /* sql */ `
-WITH _deleted_blockers AS (
+),
+_external_refs AS (
+  SELECT jb.job_id, jb.blocked_by_chain_id
+  FROM {{schema}}.{{table_prefix}}job_blocker jb
+  JOIN {{schema}}.{{table_prefix}}job j ON j.id = jb.job_id
+  WHERE jb.blocked_by_chain_id = ANY($1::{{id_type}}[])
+    AND j.chain_id != ALL($1::{{id_type}}[])
+),
+_deleted_blockers AS (
   DELETE FROM {{schema}}.{{table_prefix}}job_blocker
-  WHERE job_id IN (
-    SELECT id FROM {{schema}}.{{table_prefix}}job WHERE chain_id = ANY($1::{{id_type}}[])
-  )
+  WHERE job_id IN (SELECT id FROM _locked)
+    AND NOT EXISTS (SELECT 1 FROM _external_refs)
 ),
 _deleted_jobs AS (
   DELETE FROM {{schema}}.{{table_prefix}}job
-  WHERE chain_id = ANY($1::{{id_type}}[])
+  WHERE id IN (SELECT id FROM _locked)
+    AND NOT EXISTS (SELECT 1 FROM _external_refs)
   RETURNING *
+),
+_deleted_pairs AS (
+  SELECT
+    row_to_json(root) AS root_job,
+    row_to_json(lc) AS last_chain_job
+  FROM (SELECT * FROM _deleted_jobs WHERE chain_index = 0) AS root
+  LEFT JOIN LATERAL (
+    SELECT *
+    FROM _deleted_jobs
+    WHERE chain_id = root.id
+    ORDER BY chain_index DESC
+    LIMIT 1
+  ) AS lc ON TRUE
 )
 SELECT
-  row_to_json(root) AS root_job,
-  row_to_json(lc) AS last_chain_job
-FROM (SELECT * FROM _deleted_jobs WHERE chain_index = 0) AS root
-LEFT JOIN LATERAL (
-  SELECT *
-  FROM _deleted_jobs
-  WHERE chain_id = root.id
-  ORDER BY chain_index DESC
-  LIMIT 1
-) AS lc ON TRUE
+  COALESCE((SELECT json_agg(row_to_json(p)) FROM _deleted_pairs p), '[]'::json) AS deleted,
+  COALESCE((SELECT json_agg(row_to_json(r)) FROM _external_refs r), '[]'::json) AS blocker_refs
 `,
     true,
     {
       params: [t.array()],
-      columns: rowToJsonJobColumns,
+      columns: {
+        deleted: t.json<{ root_job: DbJob; last_chain_job: DbJob | null }[]>(),
+        blocker_refs: t.json<{ job_id: string; blocked_by_chain_id: string }[]>(),
+      },
     },
   );
 
@@ -1086,13 +1134,12 @@ FOR UPDATE
     getJobBlockersSql: getJobBlockersSql,
     getJobByIdSql: getJobByIdSql,
     rescheduleJobSql: rescheduleJobSql,
-    triggerJobSql: triggerJobSql,
+    triggerJobsSql: triggerJobsSql,
     renewJobLeaseSql: renewJobLeaseSql,
     acquireJobSql: acquireJobSql,
     getNextJobAvailableInMsSql: getNextJobAvailableInMsSql,
     reapExpiredJobLeaseSql: reapExpiredJobLeaseSql,
     getConnectedChainIdsSql: getConnectedChainIdsSql,
-    checkExternalBlockerRefsSql: checkExternalBlockerRefsSql,
     deleteJobChainsSql: deleteJobChainsSql,
     getJobForUpdateSql: getJobForUpdateSql,
     getLatestChainJobForUpdateSql: getLatestChainJobForUpdateSql,

@@ -1,5 +1,5 @@
 import { type DeduplicationOptions } from "../entities/deduplication.js";
-import { type BlockerReference, BlockerReferenceError } from "../errors.js";
+import { type BlockerReference } from "../errors.js";
 import { createAsyncLock } from "../helpers/async-lock.js";
 import { type OrderDirection, type Page, type PageParams } from "../pagination.js";
 import { decodeChainIndexCursor, decodeCreatedAtCursor, encodeCursor } from "./cursor.js";
@@ -306,6 +306,39 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
   };
 
   const getLastJobInChain = (chainId: string): StateJob | undefined => lastByChain.get(chainId);
+
+  const expandChainIds = (chainIds: readonly string[]): string[] => {
+    const visited = new Set(chainIds);
+    const queue = [...chainIds];
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      const blockerMap = jobBlockers.get(current);
+      if (!blockerMap) continue;
+      for (const blockerChainId of blockerMap.keys()) {
+        if (!visited.has(blockerChainId)) {
+          visited.add(blockerChainId);
+          queue.push(blockerChainId);
+        }
+      }
+    }
+    return [...visited];
+  };
+
+  const findExternalBlockerRefs = (effectiveChainIds: readonly string[]): BlockerReference[] => {
+    const chainIdSet = new Set(effectiveChainIds);
+    const refs: BlockerReference[] = [];
+    for (const chainId of effectiveChainIds) {
+      const referencingJobIds = blockedByChain.get(chainId);
+      if (!referencingJobIds) continue;
+      for (const refJobId of referencingJobIds) {
+        const refJob = jobs.get(refJobId);
+        if (!refJob) continue;
+        if (chainIdSet.has(refJob.chainId)) continue;
+        refs.push({ chainId, referencedByJobId: refJobId });
+      }
+    }
+    return refs;
+  };
 
   const findExistingContinuation = (chainId: string, chainIndex: number): StateJob | undefined => {
     const chainMap = jobsByChain.get(chainId);
@@ -841,47 +874,12 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
     deleteJobChains: async ({ txCtx, chainIds, cascade }) =>
       withWriteLock(txCtx, () => {
         const journal = txCtx?.journal;
-        let effectiveChainIds = chainIds;
+        const effectiveChainIds = cascade ? expandChainIds(chainIds) : chainIds;
 
-        if (cascade) {
-          const visited = new Set(chainIds);
-          const queue = [...chainIds];
-          while (queue.length > 0) {
-            const current = queue.shift()!;
-            const blockerMap = jobBlockers.get(current);
-            if (blockerMap) {
-              for (const blockerChainId of blockerMap.keys()) {
-                if (!visited.has(blockerChainId)) {
-                  visited.add(blockerChainId);
-                  queue.push(blockerChainId);
-                }
-              }
-            }
-          }
-          effectiveChainIds = [...visited];
-        }
+        const blockerRefs = findExternalBlockerRefs(effectiveChainIds);
+        if (blockerRefs.length > 0) return { deleted: [], blockerRefs };
 
-        const chainIdSet = new Set(effectiveChainIds);
-
-        const refs: BlockerReference[] = [];
-        for (const chainId of effectiveChainIds) {
-          const referencingJobIds = blockedByChain.get(chainId);
-          if (!referencingJobIds) continue;
-          for (const refJobId of referencingJobIds) {
-            const refJob = jobs.get(refJobId);
-            if (!refJob) continue;
-            if (chainIdSet.has(refJob.chainId)) continue;
-            refs.push({ chainId, referencedByJobId: refJobId });
-          }
-        }
-        if (refs.length > 0) {
-          throw new BlockerReferenceError(
-            `Cannot delete chains: ${refs.map((r) => r.chainId).join(", ")} referenced as blockers`,
-            { references: refs },
-          );
-        }
-
-        const pairs: [StateJob, StateJob | undefined][] = effectiveChainIds.flatMap((chainId) => {
+        const deleted: [StateJob, StateJob | undefined][] = effectiveChainIds.flatMap((chainId) => {
           const rootJob = jobs.get(chainId);
           if (!rootJob) return [];
           const lastJob = getLastJobInChain(chainId);
@@ -905,7 +903,7 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
           writeJob(journal, job, undefined);
         }
 
-        return pairs;
+        return { deleted, blockerRefs: [] };
       }),
 
     getJobForUpdate: async ({ jobId }) => jobs.get(jobId),
@@ -966,20 +964,45 @@ export const createInProcessStateAdapter = (): InProcessStateAdapter => {
       return paginateByChainIndex(matched, page, orderDirection);
     },
 
-    triggerJob: async ({ txCtx, jobId }) =>
+    triggerJobs: async ({ txCtx, jobIds }) =>
       withWriteLock(txCtx, () => {
+        if (jobIds.length === 0) return { triggered: [], notFound: [], notTriggerable: [] };
+
+        const notFound: string[] = [];
+        const notTriggerable: { id: string; status: StateJob["status"] }[] = [];
+        const eligible: StateJob[] = [];
+        const seen = new Set<string>();
+        for (const jobId of jobIds) {
+          if (seen.has(jobId)) continue;
+          seen.add(jobId);
+          const job = jobs.get(jobId);
+          if (!job) notFound.push(jobId);
+          else if (job.status !== "pending") notTriggerable.push({ id: jobId, status: job.status });
+          else eligible.push(job);
+        }
+
+        if (notFound.length > 0 || notTriggerable.length > 0) {
+          return { triggered: [], notFound, notTriggerable };
+        }
+
         const journal = txCtx?.journal;
-        const job = jobs.get(jobId);
-        if (!job) throw new Error("Job not found");
-        if (job.status !== "pending") throw new Error("Job not found");
+        const now = new Date();
+        const updatedById = new Map<string, StateJob>();
+        for (const job of eligible) {
+          const updatedJob: StateJob = { ...job, scheduledAt: now };
+          writeJob(journal, job, updatedJob);
+          updatedById.set(job.id, updatedJob);
+        }
 
-        const updatedJob: StateJob = {
-          ...job,
-          scheduledAt: new Date(),
-        };
-
-        writeJob(journal, job, updatedJob);
-        return updatedJob;
+        const triggered: StateJob[] = [];
+        const emitted = new Set<string>();
+        for (const jobId of jobIds) {
+          if (emitted.has(jobId)) continue;
+          emitted.add(jobId);
+          const job = updatedById.get(jobId);
+          if (job) triggered.push(job);
+        }
+        return { triggered, notFound: [], notTriggerable: [] };
       }),
 
     listBlockedJobs: async ({ chainId, orderDirection, page }) => {

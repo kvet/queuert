@@ -11,7 +11,7 @@ import {
   extractColumnTypes,
   t,
 } from "@queuert/typed-sql";
-import { BlockerReferenceError, type StateAdapter } from "queuert";
+import { type StateAdapter } from "queuert";
 import {
   type BaseTxContext,
   type StateJob,
@@ -201,6 +201,36 @@ export const createSqliteStateAdapter = async <
       params: params!,
       columnTypes: extractColumnTypes(resolvedSql.columns),
     }) as Promise<InferColumns<TColumns>[]>;
+  };
+
+  const expandChainIds = async (
+    txCtx: TTxContext | undefined,
+    chainIds: readonly TIdType[],
+  ): Promise<TIdType[]> => {
+    if (chainIds.length === 0) return [];
+    const connected = await executeTypedSql({
+      txCtx,
+      sql: defs.getConnectedChainIdsSql,
+      params: [JSON.stringify(chainIds)],
+    });
+    return connected.map((r) => r.chain_id) as TIdType[];
+  };
+
+  const getExternalBlockerRefs = async (
+    txCtx: TTxContext | undefined,
+    effectiveChainIds: readonly TIdType[],
+  ): Promise<{ chainId: string; referencedByJobId: string }[]> => {
+    if (effectiveChainIds.length === 0) return [];
+    const idsJson = JSON.stringify(effectiveChainIds);
+    const refs = await executeTypedSql({
+      txCtx,
+      sql: defs.checkExternalBlockerRefsSql,
+      params: [idsJson, idsJson],
+    });
+    return refs.map((r) => ({
+      chainId: r.blocked_by_chain_id,
+      referencedByJobId: r.job_id,
+    }));
   };
 
   const rawAdapter: StateAdapter<TTxContext, TIdType> = {
@@ -550,32 +580,13 @@ export const createSqliteStateAdapter = async <
       return job ? mapDbJobToStateJob(job) : undefined;
     },
     deleteJobChains: async ({ txCtx, chainIds, cascade }) => {
-      let effectiveChainIds = chainIds;
-      if (cascade) {
-        const connected = await executeTypedSql({
-          txCtx,
-          sql: defs.getConnectedChainIdsSql,
-          params: [JSON.stringify(chainIds)],
-        });
-        effectiveChainIds = connected.map((r) => r.chain_id) as typeof chainIds;
-      }
+      const effectiveChainIds = cascade ? await expandChainIds(txCtx, chainIds) : chainIds;
+      if (effectiveChainIds.length === 0) return { deleted: [], blockerRefs: [] };
+
+      const blockerRefs = await getExternalBlockerRefs(txCtx, effectiveChainIds);
+      if (blockerRefs.length > 0) return { deleted: [], blockerRefs };
+
       const chainIdsJson = JSON.stringify(effectiveChainIds);
-      const refs = await executeTypedSql({
-        txCtx,
-        sql: defs.checkExternalBlockerRefsSql,
-        params: [chainIdsJson, chainIdsJson],
-      });
-      if (refs.length > 0) {
-        throw new BlockerReferenceError(
-          `Cannot delete chains: ${[...new Set(refs.map((r) => r.blocked_by_chain_id))].join(", ")} referenced as blockers`,
-          {
-            references: refs.map((r) => ({
-              chainId: r.blocked_by_chain_id,
-              referencedByJobId: r.job_id,
-            })),
-          },
-        );
-      }
       const rows = await executeTypedSql({
         txCtx,
         sql: defs.getJobChainsByChainIdsSql,
@@ -591,7 +602,7 @@ export const createSqliteStateAdapter = async <
         sql: defs.deleteJobChainsSql,
         params: [chainIdsJson],
       });
-      return rows.map((row) => {
+      const deleted = rows.map((row) => {
         const { rootJob, lastChainJob } = parseDbJobChainRow(row);
         return [
           mapDbJobToStateJob(rootJob),
@@ -600,6 +611,7 @@ export const createSqliteStateAdapter = async <
             : undefined,
         ] as [StateJob, StateJob | undefined];
       });
+      return { deleted, blockerRefs: [] };
     },
     getJobForUpdate: async ({ txCtx, jobId }) => {
       const [job] = await executeTypedSql({
@@ -816,13 +828,48 @@ export const createSqliteStateAdapter = async <
       return { items, nextCursor };
     },
 
-    triggerJob: async ({ txCtx, jobId }) => {
-      const [job] = await executeTypedSql({
+    triggerJobs: async ({ txCtx, jobIds }) => {
+      if (jobIds.length === 0) return { triggered: [], notFound: [], notTriggerable: [] };
+      const idsJson = JSON.stringify(jobIds);
+
+      const statusRows = await executeTypedSql({
         txCtx,
-        sql: defs.triggerJobSql,
-        params: [jobId],
+        sql: defs.getJobStatusesByIdsSql,
+        params: [idsJson],
       });
-      return mapDbJobToStateJob(job);
+      const statusById = new Map(statusRows.map((r) => [r.id, r.status]));
+
+      const notFound: TIdType[] = [];
+      const notTriggerable: { id: TIdType; status: StateJob["status"] }[] = [];
+      const seen = new Set<string>();
+      for (const id of jobIds) {
+        const key = id as string;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const status = statusById.get(key);
+        if (status === undefined) {
+          notFound.push(id);
+        } else if (status !== "pending") {
+          notTriggerable.push({ id, status: status as StateJob["status"] });
+        }
+      }
+
+      if (notFound.length > 0 || notTriggerable.length > 0) {
+        return { triggered: [], notFound, notTriggerable };
+      }
+
+      const rows = await executeTypedSql({
+        txCtx,
+        sql: defs.triggerJobsSql,
+        params: [idsJson],
+      });
+      const orderById = new Map(jobIds.map((id, i) => [id as string, i]));
+      rows.sort((a, b) => orderById.get(a.id)! - orderById.get(b.id)!);
+      return {
+        triggered: rows.map((row) => mapDbJobToStateJob(row)),
+        notFound: [],
+        notTriggerable: [],
+      };
     },
 
     listBlockedJobs: async ({ txCtx, chainId, orderDirection, page }) => {

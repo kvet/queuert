@@ -7,6 +7,7 @@
  * 1. Recurring Jobs: Independent chains with scheduled delays
  * 2. Deduplication: Prevent duplicate recurring job instances
  * 3. Time-Windowed: Rate-limit job creation with windowMs
+ * 4. Trigger Early: Run a future-scheduled job immediately
  */
 
 import assert from "node:assert/strict";
@@ -51,6 +52,16 @@ const jobTypeRegistry = defineJobTypeRegistry<{
     entry: true;
     input: { sourceId: string };
     output: { syncedAt: string };
+  };
+
+  /*
+   * Workflow (reminder):
+   *   reminder --> output  (typically deferred for hours/days; can be triggered early)
+   */
+  reminder: {
+    entry: true;
+    input: { userId: string; message: string };
+    output: { sentAt: string };
   };
 }>();
 
@@ -98,6 +109,15 @@ await sql.unsafe(`
     id SERIAL PRIMARY KEY,
     source_id TEXT NOT NULL,
     synced_at TIMESTAMP DEFAULT NOW()
+  )
+`);
+
+await sql.unsafe(`
+  CREATE TABLE IF NOT EXISTS reminder_logs (
+    id SERIAL PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    message TEXT NOT NULL,
+    sent_at TIMESTAMP DEFAULT NOW()
   )
 `);
 
@@ -201,6 +221,18 @@ const worker = await createInProcessWorker({
             return { syncedAt };
           });
         },
+      },
+
+      reminder: {
+        attemptHandler: async ({ job, complete }) =>
+          complete(async ({ sql: txSql }) => {
+            console.log(`\n[reminder] "${job.input.message}" for ${job.input.userId}`);
+            await txSql.unsafe("INSERT INTO reminder_logs (user_id, message) VALUES ($1, $2)", [
+              job.input.userId,
+              job.input.message,
+            ]);
+            return { sentAt: new Date().toISOString() };
+          }),
       },
     },
   }),
@@ -399,6 +431,46 @@ console.log("SCENARIO 3 COMPLETED");
 console.log("-".repeat(40));
 console.log(`Total syncs executed: ${syncCount.count} (2 out of 3 attempts)`);
 assert.equal(Number(syncCount.count), 2);
+
+// Scenario 4: Trigger a Scheduled Job Early
+console.log("\n--- Scenario 4: Trigger a Scheduled Job Early ---");
+console.log("Schedule a reminder for an hour from now, then trigger it immediately.\n");
+
+const ONE_HOUR_MS = 60 * 60 * 1000;
+
+const reminder = await withTransactionHooks(async (transactionHooks) =>
+  sql.begin(async (txSql) =>
+    client.startJobChain({
+      sql: txSql,
+      transactionHooks,
+      typeName: "reminder",
+      input: { userId: "user-123", message: "Weekly standup starts soon" },
+      schedule: { afterMs: ONE_HOUR_MS },
+    }),
+  ),
+);
+console.log(`Scheduled reminder ${reminder.id} for +1h`);
+
+const scheduled = await client.getJob({ id: reminder.id });
+console.log(`  scheduledAt: ${scheduled!.scheduledAt.toISOString()}`);
+
+// Admin action: run it now
+console.log(`\nTriggering reminder ${reminder.id}...`);
+await withTransactionHooks(async (transactionHooks) =>
+  sql.begin(async (txSql) => client.triggerJob({ sql: txSql, transactionHooks, id: reminder.id })),
+);
+
+await client.awaitJobChain(reminder, { timeoutMs: 5000 });
+
+const [reminderCount] = await sql.unsafe<{ count: string }[]>(
+  "SELECT COUNT(*) as count FROM reminder_logs WHERE user_id = 'user-123'",
+);
+
+console.log("\n" + "-".repeat(40));
+console.log("SCENARIO 4 COMPLETED");
+console.log("-".repeat(40));
+console.log(`Reminders sent: ${reminderCount.count}`);
+assert.equal(Number(reminderCount.count), 1);
 
 await stopWorker();
 await sql.end();

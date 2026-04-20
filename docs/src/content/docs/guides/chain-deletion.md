@@ -5,13 +5,24 @@ sidebar:
   order: 13
 ---
 
-Job chains can be deleted using `deleteJobChains`. All jobs in the chain (entry job and continuations) are removed together.
+Job chains can be deleted using `deleteJobChains` (plural) or `deleteJobChain` (singular). All jobs in the chain (entry job and continuations) are removed together.
 
 ```ts
 await withTransactionHooks(async (transactionHooks) =>
   client.deleteJobChains({
     transactionHooks,
     ids: [chain.id],
+  }),
+);
+```
+
+Use `deleteJobChain` when targeting a single chain that is expected to exist — it throws `JobChainNotFoundError` if the chain is missing, while `deleteJobChains` silently skips missing IDs (idempotent bulk cleanup):
+
+```ts
+await withTransactionHooks(async (transactionHooks) =>
+  client.deleteJobChain({
+    transactionHooks,
+    id: chain.id,
   }),
 );
 ```

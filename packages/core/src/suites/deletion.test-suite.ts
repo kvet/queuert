@@ -4,6 +4,7 @@ import { sleep } from "../helpers/sleep.js";
 import {
   BlockerReferenceError,
   type JobChain,
+  JobChainNotFoundError,
   TransactionContextRequiredError,
   createClient,
   createInProcessWorker,
@@ -1050,6 +1051,245 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       withTransactionHooks(async (transactionHooks) =>
         // @ts-expect-error missing txCtx
         client.deleteJobChains({ transactionHooks, ids: [jobChain.id] }),
+      ),
+    ).rejects.toThrow(TransactionContextRequiredError);
+  });
+
+  it("deleteJobChain deletes a single chain and returns it", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypeRegistry = defineJobTypeRegistry<{
+      test: { entry: true; input: { value: number }; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+    });
+
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: { value: 42 },
+        }),
+      ),
+    );
+
+    const deleted = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.deleteJobChain({ ...txCtx, transactionHooks, id: jobChain.id }),
+      ),
+    );
+
+    expect(deleted).toMatchObject({
+      id: jobChain.id,
+      typeName: "test",
+      input: { value: 42 },
+      status: "pending",
+    });
+
+    const fetched = await client.getJobChain({ id: jobChain.id });
+    expect(fetched).toBeUndefined();
+  });
+
+  it("deleteJobChain throws JobChainNotFoundError for nonexistent chain", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypeRegistry = defineJobTypeRegistry<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+    });
+
+    const chain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+      ),
+    );
+
+    await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.deleteJobChain({ ...txCtx, transactionHooks, id: chain.id }),
+      ),
+    );
+
+    await expect(
+      withTransactionHooks(async (transactionHooks) =>
+        withTransaction(async (txCtx) =>
+          client.deleteJobChain({ ...txCtx, transactionHooks, id: chain.id }),
+        ),
+      ),
+    ).rejects.toThrow(JobChainNotFoundError);
+  });
+
+  it("deleteJobChain cascades transitive dependencies", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypeRegistry = defineJobTypeRegistry<{
+      blocker: { entry: true; input: { value: number }; output: null };
+      main: {
+        entry: true;
+        input: null;
+        output: null;
+        blockers: [{ typeName: "blocker" }];
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+    });
+
+    let blockerChain: JobChain<string, "blocker", { value: number }, null>;
+    const mainChain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) => {
+        blockerChain = await client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "blocker",
+          input: { value: 1 },
+        });
+        return client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "main",
+          input: null,
+          blockers: [blockerChain],
+        });
+      }),
+    );
+
+    const deleted = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.deleteJobChain({
+          ...txCtx,
+          transactionHooks,
+          id: mainChain.id,
+          cascade: true,
+        }),
+      ),
+    );
+
+    expect(deleted.id).toBe(mainChain.id);
+
+    const fetchedBlocker = await client.getJobChain({ id: blockerChain!.id });
+    expect(fetchedBlocker).toBeUndefined();
+  });
+
+  it("deleteJobChain throws when chain is referenced as a blocker", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypeRegistry = defineJobTypeRegistry<{
+      blocker: { entry: true; input: null; output: null };
+      main: {
+        entry: true;
+        input: null;
+        output: null;
+        blockers: [{ typeName: "blocker" }];
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+    });
+
+    let blockerChain: JobChain<string, "blocker", null, null>;
+    await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) => {
+        blockerChain = await client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "blocker",
+          input: null,
+        });
+        return client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "main",
+          input: null,
+          blockers: [blockerChain],
+        });
+      }),
+    );
+
+    await expect(
+      withTransactionHooks(async (transactionHooks) =>
+        withTransaction(async (txCtx) =>
+          client.deleteJobChain({ ...txCtx, transactionHooks, id: blockerChain!.id }),
+        ),
+      ),
+    ).rejects.toThrow(BlockerReferenceError);
+  });
+
+  it("deleteJobChain throws when called without transaction context", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypeRegistry = defineJobTypeRegistry<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+    });
+
+    const chain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+      ),
+    );
+
+    await expect(
+      withTransactionHooks(async (transactionHooks) =>
+        // @ts-expect-error missing txCtx
+        client.deleteJobChain({ transactionHooks, id: chain.id }),
       ),
     ).rejects.toThrow(TransactionContextRequiredError);
   });

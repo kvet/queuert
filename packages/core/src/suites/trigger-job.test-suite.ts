@@ -330,4 +330,253 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       ),
     ).rejects.toThrow(JobNotTriggerableError);
   });
+
+  it("triggerJobs triggers multiple pending jobs in input order", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypeRegistry = defineJobTypeRegistry<{
+      task: { entry: true; input: { value: number }; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+    });
+
+    const chains = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startJobChains({
+          ...txCtx,
+          transactionHooks,
+          items: [
+            { typeName: "task", input: { value: 1 }, schedule: { afterMs: 60 * 60 * 1000 } },
+            { typeName: "task", input: { value: 2 }, schedule: { afterMs: 60 * 60 * 1000 } },
+            { typeName: "task", input: { value: 3 }, schedule: { afterMs: 60 * 60 * 1000 } },
+          ],
+        }),
+      ),
+    );
+
+    const before = Date.now();
+    const ids = chains.map((c) => c.id);
+    const triggered = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) => client.triggerJobs({ ...txCtx, transactionHooks, ids })),
+    );
+
+    expect(triggered).toHaveLength(3);
+    for (let i = 0; i < triggered.length; i++) {
+      expect(triggered[i].id).toBe(ids[i]);
+      expect(triggered[i].status).toBe("pending");
+      expect(triggered[i].scheduledAt.getTime()).toBeGreaterThanOrEqual(before - 1000);
+      expect(triggered[i].scheduledAt.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
+    }
+  });
+
+  it("triggerJobs with empty ids returns empty array", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypeRegistry = defineJobTypeRegistry<{
+      task: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+    });
+
+    const triggered = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) => client.triggerJobs({ ...txCtx, transactionHooks, ids: [] })),
+    );
+
+    expect(triggered).toEqual([]);
+  });
+
+  it("triggerJobs fails atomically when any job is missing", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypeRegistry = defineJobTypeRegistry<{
+      task: { entry: true; input: { value: number }; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+    });
+
+    const [chainA, chainB] = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startJobChains({
+          ...txCtx,
+          transactionHooks,
+          items: [
+            { typeName: "task", input: { value: 1 }, schedule: { afterMs: 60 * 60 * 1000 } },
+            { typeName: "task", input: { value: 2 }, schedule: { afterMs: 60 * 60 * 1000 } },
+          ],
+        }),
+      ),
+    );
+
+    await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.deleteJobChains({ ...txCtx, transactionHooks, ids: [chainB.id] }),
+      ),
+    );
+
+    await expect(
+      withTransactionHooks(async (transactionHooks) =>
+        withTransaction(async (txCtx) =>
+          client.triggerJobs({
+            ...txCtx,
+            transactionHooks,
+            ids: [chainA.id, chainB.id],
+          }),
+        ),
+      ),
+    ).rejects.toThrow(JobNotFoundError);
+
+    const chainAJob = await client.getJob({ id: chainA.id });
+    expect(chainAJob!.scheduledAt.getTime()).toBeGreaterThan(Date.now() + 30_000);
+  });
+
+  it("triggerJobs fails atomically when any job is not pending", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypeRegistry = defineJobTypeRegistry<{
+      task: { entry: true; input: { value: number }; output: { done: true } };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+    });
+
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        client,
+        jobTypeRegistry,
+        processors: {
+          task: {
+            attemptHandler: async ({ complete }) => complete(async () => ({ done: true as const })),
+          },
+        },
+      }),
+    });
+
+    const completedChain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "task",
+          input: { value: 1 },
+        }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitJobChain(completedChain, { timeoutMs: 5000, pollIntervalMs: 100 });
+    });
+
+    const pendingChain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "task",
+          input: { value: 2 },
+          schedule: { afterMs: 60 * 60 * 1000 },
+        }),
+      ),
+    );
+
+    await expect(
+      withTransactionHooks(async (transactionHooks) =>
+        withTransaction(async (txCtx) =>
+          client.triggerJobs({
+            ...txCtx,
+            transactionHooks,
+            ids: [pendingChain.id, completedChain.id],
+          }),
+        ),
+      ),
+    ).rejects.toThrow(JobNotTriggerableError);
+
+    const pendingJob = await client.getJob({ id: pendingChain.id });
+    expect(pendingJob!.scheduledAt.getTime()).toBeGreaterThan(Date.now() + 30_000);
+  });
+
+  it("triggerJobs throws when called without transaction context", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypeRegistry = defineJobTypeRegistry<{
+      task: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypeRegistry,
+    });
+
+    const chain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "task",
+          input: null,
+          schedule: { afterMs: 60_000 },
+        }),
+      ),
+    );
+
+    await expect(
+      withTransactionHooks(async (transactionHooks) =>
+        // @ts-expect-error missing txCtx
+        client.triggerJobs({ transactionHooks, ids: [chain.id] }),
+      ),
+    ).rejects.toThrow(TransactionContextRequiredError);
+  });
 };

@@ -56,6 +56,23 @@ return complete(async ({ continueWith }) =>
   [Deduplication](../deduplication/).
 </Aside>
 
+## Triggering Scheduled Jobs Early
+
+A scheduled job is just a pending job with a future `scheduledAt`. Use `triggerJob` (or `triggerJobs` for a batch) to override the schedule and run it immediately — useful for admin "run now" actions or manually advancing a queued reminder.
+
+```ts
+await withTransactionHooks(async (transactionHooks) =>
+  client.triggerJob({
+    transactionHooks,
+    id: jobId,
+  }),
+);
+```
+
+`triggerJob` throws `JobNotFoundError` if the job does not exist and `JobNotTriggerableError` if it is not `pending` (e.g. already running, completed, or blocked).
+
+`triggerJobs` validates atomically — if any id in the batch is missing or not pending, the entire call fails and no job is triggered. Both methods are mutating and require `transactionHooks` + a transaction context.
+
 ## Recurring Jobs
 
 For periodic tasks like daily digests, health checks, or billing cycles, start a new independent job chain from within the handler instead of using `continueWith`. This keeps each execution as its own short-lived chain rather than building an ever-growing chain history.
