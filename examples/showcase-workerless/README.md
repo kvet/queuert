@@ -1,15 +1,12 @@
 # Workerless Completion Showcase
 
-Demonstrates completing jobs externally without a worker using `completeJobChain`.
+Completing jobs externally without a worker, via `completeJobChain`.
 
-## Scenarios
-
-1. **Approval Workflow**: Job waits for external approval, completed via API
-2. **Deferred Start with Early Completion**: Scheduled timeout with early action option
+Scenarios: approval workflow (external API completes the job), deferred start with early completion (scheduled timeout that an early action can preempt).
 
 ## Running
 
 ```bash
-pnpm install
-pnpm start
+bun install
+bun run --filter example-showcase-workerless start
 ```

@@ -2,7 +2,7 @@
  * Shared utilities for memory footprint measurements
  */
 
-import { defineJobTypeRegistry } from "queuert";
+import { defineJobTypes } from "queuert";
 
 // ============================================================================
 // Memory measurement utilities
@@ -99,7 +99,7 @@ export async function measureBaseline(): Promise<MemorySnapshot> {
 // Shared job configuration
 // ============================================================================
 
-export const jobTypeRegistry = defineJobTypeRegistry<{
+export const jobTypes = defineJobTypes<{
   "test-job": {
     entry: true;
     input: { message: string };

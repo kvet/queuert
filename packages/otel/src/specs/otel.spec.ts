@@ -2,8 +2,8 @@ import {
   type NotifyAdapter,
   createClient,
   createInProcessWorker,
-  createJobTypeProcessorRegistry,
-  defineJobTypeRegistry,
+  createProcessors,
+  defineJobTypes,
   withTransactionHooks,
 } from "queuert";
 import { sleep } from "queuert/internal";
@@ -36,7 +36,7 @@ describe("Metrics", () => {
     expectMetrics,
     expectHistograms,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: {
         entry: true;
         input: { test: boolean };
@@ -49,15 +49,15 @@ describe("Metrics", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client,
       workerId: "worker",
       concurrency: 1,
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
         processors: {
           test: {
             attemptHandler: async ({ prepare, complete }) => {
@@ -112,7 +112,7 @@ describe("Metrics", () => {
     log,
     expectMetrics,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: {
         entry: true;
         input: null;
@@ -125,21 +125,19 @@ describe("Metrics", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      jobTypeProcessorDefaults: {
+      processors: createProcessors({
+        client,
+        jobTypes,
         backoffConfig: {
           initialDelayMs: 10,
           multiplier: 2.0,
           maxDelayMs: 100,
         },
-      },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
-        client,
-        jobTypeRegistry,
         processors: {
           test: {
             attemptHandler: async ({ job, complete }) => {
@@ -197,7 +195,7 @@ describe("Metrics", () => {
     expectMetrics,
     expectHistograms,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       linear: {
         entry: true;
         input: { value: number };
@@ -218,14 +216,14 @@ describe("Metrics", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
         processors: {
           linear: {
             attemptHandler: async ({ job, complete }) =>
@@ -310,7 +308,7 @@ describe("Metrics", () => {
     log,
     expectMetrics,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       blocker: {
         entry: true;
         input: { value: number };
@@ -330,14 +328,14 @@ describe("Metrics", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
         processors: {
           blocker: {
             attemptHandler: async ({ job, complete }) =>
@@ -422,7 +420,7 @@ describe("Metrics", () => {
     log,
     expectMetrics,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: {
         entry: true;
         input: { value: number };
@@ -435,7 +433,7 @@ describe("Metrics", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -481,7 +479,7 @@ describe("Metrics", () => {
     getMetricNames,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
     }>();
 
@@ -490,17 +488,15 @@ describe("Metrics", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      jobTypeProcessorDefaults: {
-        leaseConfig: { leaseMs: 500, renewIntervalMs: 50 },
-      },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
+        leaseConfig: { leaseMs: 500, renewIntervalMs: 50 },
         processors: {
           test: {
             attemptHandler: async ({ complete }) => {
@@ -536,7 +532,7 @@ describe("Metrics", () => {
     getMetricNames,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
     }>();
 
@@ -545,17 +541,15 @@ describe("Metrics", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      jobTypeProcessorDefaults: {
-        leaseConfig: { leaseMs: 10, renewIntervalMs: 100 },
-      },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
+        leaseConfig: { leaseMs: 10, renewIntervalMs: 100 },
         processors: {
           test: {
             attemptHandler: async ({ complete }) => {
@@ -591,7 +585,7 @@ describe("Metrics", () => {
     getMetricNames,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
     }>();
 
@@ -600,7 +594,7 @@ describe("Metrics", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     let failed = false;
@@ -612,10 +606,11 @@ describe("Metrics", () => {
       client,
       workerId: "w1",
       concurrency: 1,
-      jobTypeProcessorDefaults: { leaseConfig, pollIntervalMs: leaseConfig.leaseMs },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      pollIntervalMs: leaseConfig.leaseMs,
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
+        leaseConfig,
         processors: {
           test: {
             attemptHandler: async ({ signal, complete }) => {
@@ -638,10 +633,11 @@ describe("Metrics", () => {
       client,
       workerId: "w2",
       concurrency: 1,
-      jobTypeProcessorDefaults: { leaseConfig, pollIntervalMs: leaseConfig.leaseMs },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      pollIntervalMs: leaseConfig.leaseMs,
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
+        leaseConfig,
         processors: {
           test: {
             attemptHandler: async ({ signal, complete }) => {
@@ -702,12 +698,12 @@ describe("Metrics", () => {
     getMetricNames,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
     }>();
 
     // Wrap getNextJobAvailableInMs to throw once — this is a wrapped operation
-    // so the logging wrapper will emit stateAdapterError, and the error propagates
+    // so the logging middleware will emit stateAdapterError, and the error propagates
     // to the worker loop's outer catch which emits workerError
     let errorThrown = false;
     const erroringStateAdapter: typeof stateAdapter = {
@@ -726,22 +722,22 @@ describe("Metrics", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const workerClient = await createClient({
       stateAdapter: erroringStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
+        backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
         processors: {
           test: {
             attemptHandler: async ({ complete }) => {
@@ -777,7 +773,7 @@ describe("Metrics", () => {
     getMetricNames,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
     }>();
 
@@ -793,17 +789,15 @@ describe("Metrics", () => {
       notifyAdapter: failingNotifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      jobTypeProcessorDefaults: {
-        pollIntervalMs: 100,
-      },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      pollIntervalMs: 100,
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
         processors: {
           test: {
             attemptHandler: async ({ complete }) => {
@@ -839,7 +833,7 @@ describe("Metrics", () => {
     log,
     expectMetrics,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
     }>();
 
@@ -848,7 +842,7 @@ describe("Metrics", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -878,7 +872,7 @@ describe("Metrics", () => {
     log,
     expectMetrics,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
     }>();
 
@@ -887,7 +881,7 @@ describe("Metrics", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -926,7 +920,7 @@ describe("Spans", () => {
     log,
     expectSpans,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: {
         entry: true;
         input: { test: boolean };
@@ -939,14 +933,14 @@ describe("Spans", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
         processors: {
           test: {
             attemptHandler: async ({ prepare, complete }) => {
@@ -997,7 +991,7 @@ describe("Spans", () => {
     log,
     expectSpans,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: {
         entry: true;
         input: null;
@@ -1010,21 +1004,19 @@ describe("Spans", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      jobTypeProcessorDefaults: {
+      processors: createProcessors({
+        client,
+        jobTypes,
         backoffConfig: {
           initialDelayMs: 10,
           multiplier: 2.0,
           maxDelayMs: 100,
         },
-      },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
-        client,
-        jobTypeRegistry,
         processors: {
           test: {
             attemptHandler: async ({ job, complete }) => {
@@ -1104,7 +1096,7 @@ describe("Spans", () => {
     log,
     expectSpans,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       linear: {
         entry: true;
         input: { value: number };
@@ -1125,14 +1117,14 @@ describe("Spans", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
         processors: {
           linear: {
             attemptHandler: async ({ job, complete }) =>
@@ -1227,7 +1219,7 @@ describe("Spans", () => {
     log,
     expectSpans,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       blocker: {
         entry: true;
         input: { value: number };
@@ -1247,14 +1239,14 @@ describe("Spans", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
         processors: {
           blocker: {
             attemptHandler: async ({ job, complete }) =>
@@ -1354,7 +1346,7 @@ describe("Spans", () => {
     log,
     expectSpans,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       blocker: {
         entry: true;
         input: { value: number };
@@ -1373,14 +1365,14 @@ describe("Spans", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
         processors: {
           blocker: {
             attemptHandler: async ({ complete }) => complete(async () => ({ done: true })),
@@ -1471,7 +1463,7 @@ describe("Spans", () => {
     log,
     expectSpans,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: {
         entry: true;
         input: { value: number };
@@ -1484,7 +1476,7 @@ describe("Spans", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     await withTransactionHooks(async (transactionHooks) =>
@@ -1542,7 +1534,7 @@ describe("Spans", () => {
     log,
     expectSpans,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: {
         entry: true;
         input: { value: number };
@@ -1555,7 +1547,7 @@ describe("Spans", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -1600,7 +1592,7 @@ describe("Spans", () => {
     expectSpans,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       "awaiting-approval": {
         entry: true;
         input: { requestId: string };
@@ -1617,7 +1609,7 @@ describe("Spans", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -1698,7 +1690,7 @@ describe("Gauges", () => {
     log,
     expectGauges,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: {
         entry: true;
         input: { test: boolean };
@@ -1711,14 +1703,14 @@ describe("Gauges", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
         processors: {
           test: {
             attemptHandler: async ({ job, complete }) => {
@@ -1779,7 +1771,7 @@ describe("Gauges", () => {
   }) => {
     const processedTypes: string[] = [];
 
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       email: { entry: true; input: { to: string }; output: { sent: boolean } };
       sms: { entry: true; input: { phone: string }; output: { sent: boolean } };
     }>();
@@ -1789,14 +1781,14 @@ describe("Gauges", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
         processors: {
           email: {
             attemptHandler: async ({ complete }) => {
@@ -1889,7 +1881,7 @@ describe("Rollback", () => {
     expectSpans,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
     }>();
 
@@ -1898,7 +1890,7 @@ describe("Rollback", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     await withTransactionHooks(async (transactionHooks) =>
@@ -1931,7 +1923,7 @@ describe("Rollback", () => {
     expectSpans,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       blocker: { entry: true; input: null; output: null };
       main: {
         entry: true;
@@ -1946,7 +1938,7 @@ describe("Rollback", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     await withTransactionHooks(async (transactionHooks) =>
@@ -1997,7 +1989,7 @@ describe("Rollback", () => {
     expectMetrics,
     expectSpans,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: { result: number } };
     }>();
 
@@ -2006,7 +1998,7 @@ describe("Rollback", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -2045,7 +2037,7 @@ describe("Rollback", () => {
     log,
     expectMetrics,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
     }>();
 
@@ -2066,25 +2058,23 @@ describe("Rollback", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const workerClient = await createClient({
       stateAdapter: erroringStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      jobTypeProcessorDefaults: {
-        pollIntervalMs: 100,
-        backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-      },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      pollIntervalMs: 100,
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
+        backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
         processors: {
           test: {
             attemptHandler: async ({ complete }) => complete(async () => null),
@@ -2128,7 +2118,7 @@ describe("Rollback", () => {
     log,
     expectMetrics,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
     }>();
 
@@ -2150,25 +2140,23 @@ describe("Rollback", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const workerClient = await createClient({
       stateAdapter: erroringStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      jobTypeProcessorDefaults: {
-        leaseConfig: { leaseMs: 50, renewIntervalMs: 500 },
-        pollIntervalMs: 50,
-      },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      pollIntervalMs: 50,
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
+        leaseConfig: { leaseMs: 50, renewIntervalMs: 500 },
         processors: {
           test: {
             attemptHandler: async ({ complete }) => {
@@ -2218,7 +2206,7 @@ describe("Rollback", () => {
     log,
     expectMetrics,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       linear: {
         entry: true;
         input: null;
@@ -2235,20 +2223,18 @@ describe("Rollback", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     let throwOnce = true;
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      jobTypeProcessorDefaults: {
-        pollIntervalMs: 100,
-        backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-      },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      pollIntervalMs: 100,
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
+        backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
         processors: {
           linear: {
             attemptHandler: async ({ complete }) =>
@@ -2306,7 +2292,7 @@ describe("Rollback", () => {
     log,
     expectMetrics,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
     }>();
 
@@ -2327,25 +2313,23 @@ describe("Rollback", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const workerClient = await createClient({
       stateAdapter: erroringStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      jobTypeProcessorDefaults: {
-        pollIntervalMs: 100,
-        backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-      },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      pollIntervalMs: 100,
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
+        backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
         processors: {
           test: {
             attemptHandler: async ({ complete }) => complete(async () => null),
@@ -2388,7 +2372,7 @@ describe("Rollback", () => {
     log,
     expectMetrics,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: { result: number } };
     }>();
 
@@ -2409,14 +2393,14 @@ describe("Rollback", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const erroringClient = await createClient({
       stateAdapter: erroringStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -2469,7 +2453,7 @@ describe("Rollback", () => {
     log,
     expectMetrics,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       linear: {
         entry: true;
         input: null;
@@ -2498,25 +2482,23 @@ describe("Rollback", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const workerClient = await createClient({
       stateAdapter: erroringStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      jobTypeProcessorDefaults: {
-        pollIntervalMs: 100,
-        backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-      },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      pollIntervalMs: 100,
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
+        backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
         processors: {
           linear: {
             attemptHandler: async ({ complete }) =>
@@ -2569,7 +2551,7 @@ describe("Rollback", () => {
     log,
     expectSpans,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
     }>();
 
@@ -2578,7 +2560,7 @@ describe("Rollback", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     await withTransactionHooks(async (transactionHooks) =>
@@ -2612,7 +2594,7 @@ describe("Rollback", () => {
     log,
     expectSpans,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       linear: {
         entry: true;
         input: null;
@@ -2629,20 +2611,18 @@ describe("Rollback", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     let throwOnce = true;
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      jobTypeProcessorDefaults: {
-        pollIntervalMs: 100,
-        backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-      },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      pollIntervalMs: 100,
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
+        backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
         processors: {
           linear: {
             attemptHandler: async ({ complete }) =>
@@ -2732,7 +2712,7 @@ describe("Rollback", () => {
     log,
     expectSpans,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
       other: { entry: true; input: null; output: null };
     }>();
@@ -2742,20 +2722,18 @@ describe("Rollback", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     let throwOnce = true;
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      jobTypeProcessorDefaults: {
-        pollIntervalMs: 100,
-        backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-      },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      pollIntervalMs: 100,
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
+        backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
         processors: {
           test: {
             attemptHandler: async ({ complete }) => {

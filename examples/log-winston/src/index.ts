@@ -1,11 +1,9 @@
-import { AsyncLocalStorage } from "node:async_hooks";
-
 import {
-  type JobAttemptMiddleware,
+  type AttemptMiddleware,
   createClient,
   createInProcessWorker,
-  createJobTypeProcessorRegistry,
-  defineJobTypeRegistry,
+  createProcessors,
+  defineJobTypes,
   withTransactionHooks,
   createInProcessNotifyAdapter,
   createInProcessStateAdapter,
@@ -15,11 +13,10 @@ import winston from "winston";
 import { createWinstonLog } from "./log.js";
 
 // ============================================================
-// Contextual Logging Setup with attemptMiddlewares
+// Contextual Logging via logger injection (attemptMiddleware)
 // ============================================================
 
-// 1. Create AsyncLocalStorage to hold job context during processing
-type JobContext = {
+type JobAttemptMeta = {
   jobId: string;
   typeName: string;
   chainTypeName: string;
@@ -27,32 +24,15 @@ type JobContext = {
   workerId: string;
 };
 
-const jobContextStore = new AsyncLocalStorage<JobContext>();
-
-// Helper to get current job context (for use anywhere in job processing)
-export const getJobContext = () => jobContextStore.getStore();
-
-// 2. Create custom format that automatically includes job context
-const jobContextFormat = winston.format((info) => {
-  const ctx = getJobContext();
-  if (ctx) {
-    // Add job context to log metadata
-    info.jobAttempt = ctx;
-  }
-  return info;
-});
-
-// 3. Create Winston logger with job context format
+// 1. Create Winston logger (no AsyncLocalStorage, no global format hook)
 const logger = winston.createLogger({
   level: "info",
   format: winston.format.combine(
-    jobContextFormat(), // Add job context to every log entry
     winston.format.timestamp(),
     winston.format.errors({ stack: true }),
-    winston.format.printf(({ timestamp, level, message, type, error, job, ...meta }) => {
-      // Format job context if present
-      const jobStr = job
-        ? ` [job:${(job as JobContext).typeName}#${(job as JobContext).attempt}]`
+    winston.format.printf(({ timestamp, level, message, type, error, jobAttempt, ...meta }) => {
+      const jobStr = jobAttempt
+        ? ` [job:${(jobAttempt as JobAttemptMeta).typeName}#${(jobAttempt as JobAttemptMeta).attempt}]`
         : "";
       const metaStr = Object.keys(meta).length ? ` ${JSON.stringify(meta)}` : "";
       const errorStr = error instanceof Error ? `\n${error.stack}` : "";
@@ -63,8 +43,8 @@ const logger = winston.createLogger({
   transports: [new winston.transports.Console()],
 });
 
-// 4. Define job types
-const jobTypeRegistry = defineJobTypeRegistry<{
+// 2. Define job types
+const jobTypes = defineJobTypes<{
   greet: {
     entry: true;
     input: { name: string };
@@ -77,69 +57,66 @@ const jobTypeRegistry = defineJobTypeRegistry<{
   };
 }>();
 
-// 5. Create adapters and queuert client/worker with Winston logging
+// 3. Create adapters and queuert client
 const stateAdapter = await createInProcessStateAdapter();
 const notifyAdapter = await createInProcessNotifyAdapter();
 const log = createWinstonLog(logger);
 
-const qrtClient = await createClient({
+const client = await createClient({
   stateAdapter,
   notifyAdapter,
   log,
-  jobTypeRegistry,
+  jobTypes,
 });
-// 6. Create middleware that sets job context for the duration of job processing
-const contextualLoggingMiddleware: JobAttemptMiddleware<typeof stateAdapter> = async (
-  { job, workerId },
-  next,
-) => {
-  // Run the job processing within the AsyncLocalStorage context
-  return jobContextStore.run(
-    {
-      jobId: job.id,
-      typeName: job.typeName,
-      chainTypeName: job.chainTypeName,
-      attempt: job.attempt,
-      workerId,
-    },
-    next,
-  );
+
+// 4. Middleware that injects a child logger pre-bound to job context.
+//    The handler receives `log` in its typed ctx — no AsyncLocalStorage, no mixin.
+const loggerInjectionMiddleware: AttemptMiddleware<any, { log: winston.Logger }> = {
+  wrapHandler: async ({ job, workerId, next }) =>
+    next({
+      log: logger.child({
+        jobAttempt: {
+          jobId: job.id,
+          typeName: job.typeName,
+          chainTypeName: job.chainTypeName,
+          attempt: job.attempt,
+          workerId,
+        } satisfies JobAttemptMeta,
+      }),
+    }),
 };
 
-// 7. Create and start qrtWorker with the middleware
-const qrtWorker = await createInProcessWorker({
-  client: qrtClient,
+// 5. Create and start the worker with the middleware
+const worker = await createInProcessWorker({
+  client,
   workerId: "worker-1",
-  jobTypeProcessorDefaults: {
-    attemptMiddlewares: [contextualLoggingMiddleware],
-  },
-  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
-    client: qrtClient,
-    jobTypeRegistry,
+  processors: createProcessors({
+    client,
+    jobTypes,
+    attemptMiddleware: [loggerInjectionMiddleware],
     processors: {
       greet: {
-        attemptHandler: async ({ job, complete }) => {
-          // This log automatically includes job context thanks to the custom format!
-          logger.info("Starting to process greeting");
+        attemptHandler: async ({ job, log, complete }) => {
+          // `log` is already bound to this job's context
+          log.info("Starting to process greeting");
 
           return complete(async () => {
-            logger.info("Generating greeting", { name: job.input.name });
+            log.info("Generating greeting", { name: job.input.name });
             return { greeting: `Hello, ${job.input.name}!` };
           });
         },
       },
       "might-fail": {
-        attemptHandler: async ({ job, complete }) => {
-          // Job context is automatically included in all logs
-          logger.info("Processing might-fail job");
+        attemptHandler: async ({ job, log, complete }) => {
+          log.info("Processing might-fail job");
 
           if (job.input.shouldFail && job.attempt < 2) {
-            logger.warn("About to throw simulated error");
+            log.warn("About to throw simulated error");
             throw new Error("Simulated failure for demonstration");
           }
 
           return complete(async () => {
-            logger.info("Job succeeded");
+            log.info("Job succeeded");
             return { success: true as const };
           });
         },
@@ -149,14 +126,14 @@ const qrtWorker = await createInProcessWorker({
   }),
 });
 
-// Start qrtWorker
-const stopWorker = await qrtWorker.start();
+// Start worker
+const stopWorker = await worker.start();
 
-// 8. Run successful job
+// 6. Run successful job
 logger.info("--- Running successful job ---");
 const successJob = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
-    qrtClient.startJobChain({
+    client.startJobChain({
       ...ctx,
       transactionHooks,
       typeName: "greet",
@@ -165,16 +142,16 @@ const successJob = await withTransactionHooks(async (transactionHooks) =>
   ),
 );
 
-const successCompleted = await qrtClient.awaitJobChain(successJob, {
+const successCompleted = await client.awaitJobChain(successJob, {
   timeoutMs: 5000,
 });
 logger.info("Successful job completed", { output: successCompleted.output });
 
-// 9. Run job that fails then succeeds (demonstrates error logging with stack trace)
+// 7. Run job that fails then succeeds (demonstrates error logging with stack trace)
 logger.info("--- Running job that fails first attempt ---");
 const failThenSucceedJob = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
-    qrtClient.startJobChain({
+    client.startJobChain({
       ...ctx,
       transactionHooks,
       typeName: "might-fail",
@@ -183,10 +160,10 @@ const failThenSucceedJob = await withTransactionHooks(async (transactionHooks) =
   ),
 );
 
-const retryCompleted = await qrtClient.awaitJobChain(failThenSucceedJob, {
+const retryCompleted = await client.awaitJobChain(failThenSucceedJob, {
   timeoutMs: 5000,
 });
 logger.info("Retry job completed after failure", { output: retryCompleted.output });
 
-// 10. Cleanup
+// 8. Cleanup
 await stopWorker();

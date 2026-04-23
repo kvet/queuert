@@ -26,12 +26,12 @@ import postgres from "postgres";
 import {
   createClient,
   createInProcessWorker,
-  createJobTypeProcessorRegistry,
-  defineJobTypeRegistry,
+  createProcessors,
+  defineJobTypes,
   withTransactionHooks,
 } from "queuert";
 
-const jobTypeRegistry = defineJobTypeRegistry<{
+const jobTypes = defineJobTypes<{
   /*
    * Workload layout (each worker's registry is a subset of the client's):
    *
@@ -76,7 +76,7 @@ const notifyAdapter = await createPgNotifyAdapter({ notifyProvider });
 const client = await createClient({
   stateAdapter,
   notifyAdapter,
-  jobTypeRegistry,
+  jobTypes,
 });
 
 const startedAt = Date.now();
@@ -90,9 +90,9 @@ const urgentWorker = await createInProcessWorker({
   client,
   workerId: "urgent-worker",
   concurrency: 3,
-  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+  processors: createProcessors({
     client,
-    jobTypeRegistry,
+    jobTypes,
     processors: {
       "email.transactional": {
         attemptHandler: async ({ job, complete }) => {
@@ -137,9 +137,9 @@ const bulkWorker = await createInProcessWorker({
   client,
   workerId: "bulk-worker",
   concurrency: 1,
-  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+  processors: createProcessors({
     client,
-    jobTypeRegistry,
+    jobTypes,
     processors: {
       "email.marketing": {
         attemptHandler: async ({ job, complete }) => {

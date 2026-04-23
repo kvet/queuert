@@ -1,28 +1,12 @@
 # PostgreSQL State Adapter (Drizzle ORM)
 
-This example demonstrates the PostgreSQL state adapter with Drizzle ORM.
+PostgreSQL state storage via `@queuert/postgres` with Drizzle ORM — atomic job creation inside application transactions.
 
-## What it demonstrates
-
-- PostgreSQL state storage via `@queuert/postgres`
-- Integration with Drizzle ORM for database operations
-- Atomic job creation within Drizzle transactions
-
-## What it does
-
-1. Connects to PostgreSQL
-2. Creates a Drizzle database connection and runs schema migrations
-3. Sets up Queuert with PostgreSQL state adapter
-4. Starts a worker that processes `send_welcome_email` jobs
-5. Registers a new user and queues a welcome email job (atomically in one transaction)
-6. Waits for the job to complete
-
-## Running the example
+## Running
 
 ```bash
-# From the monorepo root
-pnpm install
-
-# Run the example
-pnpm --filter example-state-postgres-drizzle start
+bun install
+bun run --filter example-state-postgres-drizzle start
 ```
+
+Requires Docker (uses testcontainers to start PostgreSQL).

@@ -6,8 +6,8 @@ import {
   type NotifyAdapter,
   createClient,
   createInProcessWorker,
-  createJobTypeProcessorRegistry,
-  defineJobTypeRegistry,
+  createProcessors,
+  defineJobTypes,
   withTransactionHooks,
 } from "../index.js";
 import { extendWithStateInProcess } from "../state-adapter/state-adapter.in-process.spec-helper.js";
@@ -60,7 +60,7 @@ describe("Logging", () => {
     log,
     expectLogs,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: {
         entry: true;
         input: { test: boolean };
@@ -73,15 +73,15 @@ describe("Logging", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client,
       workerId: "worker",
       concurrency: 1,
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
         processors: {
           test: {
             attemptHandler: async ({ prepare, complete }) => {
@@ -165,7 +165,7 @@ describe("Logging", () => {
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: {
         entry: true;
         input: null;
@@ -178,21 +178,19 @@ describe("Logging", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      jobTypeProcessorDefaults: {
+      processors: createProcessors({
+        client,
+        jobTypes,
         backoffConfig: {
           initialDelayMs: 10,
           multiplier: 2.0,
           maxDelayMs: 100,
         },
-      },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
-        client,
-        jobTypeRegistry,
         processors: {
           test: {
             attemptHandler: async ({ job, complete }) => {
@@ -253,7 +251,7 @@ describe("Logging", () => {
     log,
     expectLogs,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       linear: {
         entry: true;
         input: { value: number };
@@ -274,14 +272,14 @@ describe("Logging", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
         processors: {
           linear: {
             attemptHandler: async ({ job, complete }) => {
@@ -372,7 +370,7 @@ describe("Logging", () => {
     log,
     expectLogs,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       blocker: {
         entry: true;
         input: { value: number };
@@ -392,16 +390,16 @@ describe("Logging", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     let blockerChainId: string;
 
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
         processors: {
           blocker: {
             attemptHandler: async ({ job, complete }) =>
@@ -525,7 +523,7 @@ describe("Logging", () => {
     log,
     expectLogs,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: {
         entry: true;
         input: { value: number };
@@ -538,7 +536,7 @@ describe("Logging", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -583,7 +581,7 @@ describe("Logging", () => {
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
     }>();
 
@@ -592,17 +590,15 @@ describe("Logging", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      jobTypeProcessorDefaults: {
-        leaseConfig: { leaseMs: 500, renewIntervalMs: 50 },
-      },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
+        leaseConfig: { leaseMs: 500, renewIntervalMs: 50 },
         processors: {
           test: {
             attemptHandler: async ({ complete }) => {
@@ -646,7 +642,7 @@ describe("Logging", () => {
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
     }>();
 
@@ -655,17 +651,15 @@ describe("Logging", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      jobTypeProcessorDefaults: {
-        leaseConfig: { leaseMs: 10, renewIntervalMs: 100 },
-      },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
+        leaseConfig: { leaseMs: 10, renewIntervalMs: 100 },
         processors: {
           test: {
             attemptHandler: async ({ complete }) => {
@@ -710,7 +704,7 @@ describe("Logging", () => {
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
     }>();
 
@@ -719,7 +713,7 @@ describe("Logging", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     let failed = false;
@@ -731,10 +725,11 @@ describe("Logging", () => {
       client,
       workerId: "w1",
       concurrency: 1,
-      jobTypeProcessorDefaults: { leaseConfig, pollIntervalMs: leaseConfig.leaseMs },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      pollIntervalMs: leaseConfig.leaseMs,
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
+        leaseConfig,
         processors: {
           test: {
             attemptHandler: async ({ signal, complete }) => {
@@ -757,10 +752,11 @@ describe("Logging", () => {
       client,
       workerId: "w2",
       concurrency: 1,
-      jobTypeProcessorDefaults: { leaseConfig, pollIntervalMs: leaseConfig.leaseMs },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      pollIntervalMs: leaseConfig.leaseMs,
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
+        leaseConfig,
         processors: {
           test: {
             attemptHandler: async ({ signal, complete }) => {
@@ -820,12 +816,12 @@ describe("Logging", () => {
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
     }>();
 
     // Wrap getNextJobAvailableInMs to throw once — triggers both
-    // state_adapter_error (from logging wrapper) and worker_error (from worker loop catch)
+    // state_adapter_error (from logging middleware) and worker_error (from worker loop catch)
     let errorThrown = false;
     const erroringStateAdapter: typeof stateAdapter = {
       ...stateAdapter,
@@ -843,22 +839,22 @@ describe("Logging", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const workerClient = await createClient({
       stateAdapter: erroringStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
+        backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
         processors: {
           test: {
             attemptHandler: async ({ complete }) => {
@@ -893,7 +889,7 @@ describe("Logging", () => {
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
     }>();
 
@@ -909,15 +905,15 @@ describe("Logging", () => {
       notifyAdapter: failingNotifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      jobTypeProcessorDefaults: { pollIntervalMs: 100 },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      pollIntervalMs: 100,
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
         processors: {
           test: {
             attemptHandler: async ({ complete }) => {
@@ -966,7 +962,7 @@ describe("Logging rollback", () => {
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
     }>();
 
@@ -975,7 +971,7 @@ describe("Logging rollback", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     await withTransactionHooks(async (transactionHooks) =>
@@ -998,7 +994,7 @@ describe("Logging rollback", () => {
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       blocker: { entry: true; input: null; output: null };
       main: {
         entry: true;
@@ -1013,7 +1009,7 @@ describe("Logging rollback", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     await withTransactionHooks(async (transactionHooks) =>
@@ -1049,7 +1045,7 @@ describe("Logging rollback", () => {
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: { result: number } };
     }>();
 
@@ -1058,7 +1054,7 @@ describe("Logging rollback", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -1096,7 +1092,7 @@ describe("Logging rollback", () => {
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
     }>();
 
@@ -1117,25 +1113,23 @@ describe("Logging rollback", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const workerClient = await createClient({
       stateAdapter: erroringStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      jobTypeProcessorDefaults: {
-        pollIntervalMs: 100,
-        backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-      },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      pollIntervalMs: 100,
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
+        backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
         processors: {
           test: {
             attemptHandler: async ({ complete }) => complete(async () => null),
@@ -1175,7 +1169,7 @@ describe("Logging rollback", () => {
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
     }>();
 
@@ -1197,25 +1191,23 @@ describe("Logging rollback", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const workerClient = await createClient({
       stateAdapter: erroringStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      jobTypeProcessorDefaults: {
-        leaseConfig: { leaseMs: 50, renewIntervalMs: 500 },
-        pollIntervalMs: 50,
-      },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      pollIntervalMs: 50,
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
+        leaseConfig: { leaseMs: 50, renewIntervalMs: 500 },
         processors: {
           test: {
             attemptHandler: async ({ complete }) => {
@@ -1254,7 +1246,7 @@ describe("Logging rollback", () => {
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       linear: {
         entry: true;
         input: null;
@@ -1271,20 +1263,18 @@ describe("Logging rollback", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     let throwOnce = true;
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      jobTypeProcessorDefaults: {
-        pollIntervalMs: 100,
-        backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-      },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      pollIntervalMs: 100,
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
+        backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
         processors: {
           linear: {
             attemptHandler: async ({ complete }) =>
@@ -1337,7 +1327,7 @@ describe("Logging rollback", () => {
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
     }>();
 
@@ -1358,25 +1348,23 @@ describe("Logging rollback", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const workerClient = await createClient({
       stateAdapter: erroringStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      jobTypeProcessorDefaults: {
-        pollIntervalMs: 100,
-        backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-      },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      pollIntervalMs: 100,
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
+        backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
         processors: {
           test: {
             attemptHandler: async ({ complete }) => complete(async () => null),
@@ -1419,7 +1407,7 @@ describe("Logging rollback", () => {
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: { result: number } };
     }>();
 
@@ -1440,14 +1428,14 @@ describe("Logging rollback", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const erroringClient = await createClient({
       stateAdapter: erroringStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -1506,7 +1494,7 @@ describe("Logging rollback", () => {
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       linear: {
         entry: true;
         input: null;
@@ -1535,25 +1523,23 @@ describe("Logging rollback", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const workerClient = await createClient({
       stateAdapter: erroringStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
-      jobTypeProcessorDefaults: {
-        pollIntervalMs: 100,
-        backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-      },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      pollIntervalMs: 100,
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
+        backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
         processors: {
           linear: {
             attemptHandler: async ({ complete }) =>
@@ -1596,7 +1582,7 @@ describe("Logging rollback", () => {
     log,
     expectLogs,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
     }>();
 
@@ -1605,7 +1591,7 @@ describe("Logging rollback", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -1635,7 +1621,7 @@ describe("Logging rollback", () => {
     log,
     expectLogs,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
     }>();
 
@@ -1644,7 +1630,7 @@ describe("Logging rollback", () => {
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     const jobChain = await withTransactionHooks(async (transactionHooks) =>

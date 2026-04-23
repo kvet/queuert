@@ -5,8 +5,6 @@ sidebar:
   order: 3
 ---
 
-import { Aside } from "@astrojs/starlight/components";
-
 ### Job
 
 An individual unit of work. Jobs have a lifecycle: `blocked` → `pending` → `running` → `completed`. Each job belongs to a Job Type and contains typed input/output. Jobs start as `blocked` when they depend on other chains (see [Job Blockers](/queuert/guides/job-blockers/)); otherwise they start as `pending`.
@@ -17,7 +15,7 @@ A chain of linked jobs where each job can `continueWith` to the next - just like
 
 ### Job Type
 
-Defines a named job type with its input/output types and attempt handler function. Job types are registered with workers via the `jobTypeProcessorRegistry` configuration. The attempt handler receives the job and context for completing or continuing the chain.
+Defines a named job type with its input/output types and attempt handler function. Job types are registered with workers. The attempt handler receives the job and context for completing or continuing the chain.
 
 ### State Adapter
 
@@ -28,10 +26,10 @@ Abstracts database operations for job persistence. Queuert provides adapters for
 - `@queuert/postgres` - PostgreSQL state adapter (recommended for production)
 - `@queuert/sqlite` - SQLite state adapter _(experimental)_
 
-<Aside type="tip">
-  See [State Adapters](/queuert/integrations/state-adapters/) for supported ORMs, drivers, and
-  configuration details.
-</Aside>
+:::tip
+See [State Adapters](/queuert/integrations/state-adapters/) for supported ORMs, drivers, and
+configuration details.
+:::
 
 ### State Provider
 
@@ -48,10 +46,10 @@ Handles pub/sub notifications for efficient job scheduling. When a job is create
 - `@queuert/postgres` - PostgreSQL notify adapter (uses LISTEN/NOTIFY, no additional infrastructure)
 - None (default) - polling only, no real-time notifications
 
-<Aside type="tip">
-  See [Notify Adapters](/queuert/integrations/notify-adapters/) for supported clients and
-  configuration details.
-</Aside>
+:::tip
+See [Notify Adapters](/queuert/integrations/notify-adapters/) for supported clients and
+configuration details.
+:::
 
 ### Notify Provider
 

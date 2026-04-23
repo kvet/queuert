@@ -88,7 +88,7 @@ type JobTypeValidationErrorCode =
   | "invalid_output";
 ```
 
-Thrown by `createJobTypeRegistry` when runtime validation fails.
+Thrown by `createJobTypes` when runtime validation fails.
 
 - **code** — identifies the specific validation failure
 - **typeName** — the job type that failed validation
@@ -138,7 +138,21 @@ class DuplicateJobTypeError extends Error {
 }
 ```
 
-Thrown by `mergeJobTypeRegistries` when validated registries (from `createJobTypeRegistry`) have overlapping type names. **duplicateTypeNames** lists the conflicting keys.
+Thrown by `createClient` (when merging an array of `JobTypes` slices) and `createInProcessWorker` (when merging an array of `Processors` slices) if slices have overlapping type names. **duplicateTypeNames** lists the conflicting keys.
+
+## UnknownJobTypeError
+
+```typescript
+class UnknownJobTypeError extends Error {
+  readonly typeName: string;
+  readonly registeredTypeNames: readonly string[];
+}
+```
+
+Thrown by a merged `JobTypes` (built from an array of slices passed to `createClient`) when an operation references a type name that no slice owns. Only raised when every slice in the merge was built with `createJobTypes` — mixed merges that include a `defineJobTypes` slice keep no-op pass-through semantics for unknown types.
+
+- **typeName** — the type that no slice claimed
+- **registeredTypeNames** — the type names registered across the merged slices, useful for diagnosing typos
 
 ## HookNotRegisteredError
 
@@ -162,6 +176,6 @@ Thrown when a mutating client method (e.g. `startJobChain`, `triggerJob`, `trigg
 
 - [Client](/queuert/reference/queuert/client/) — Client API reference
 - [Worker](/queuert/reference/queuert/worker/) — Worker and job processing reference
-- [Types](/queuert/reference/queuert/types/) — Job, JobChain, and configuration types
+- [Entities](/queuert/reference/queuert/entities/) — `Job`, `JobChain`, and resolved variants
 - [Utilities](/queuert/reference/queuert/utilities/) — Composition helpers and utility functions
 - [Error Handling](/queuert/guides/error-handling/) — Error handling patterns guide

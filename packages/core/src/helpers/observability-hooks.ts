@@ -2,14 +2,14 @@ import { type TransactionHooks } from "../transaction-hooks.js";
 
 type Callback = () => void | Promise<void>;
 
-const queuertObservabilityCommit = Symbol("queuert.observability.commit");
+const observabilityCommitKey = Symbol("queuert.observability.commit");
 
 export const bufferObservabilityEvent = (
   transactionHooks: TransactionHooks,
   callback: Callback,
 ): void => {
   transactionHooks
-    .getOrInsert<Callback[]>(queuertObservabilityCommit, () => ({
+    .getOrInsert<Callback[]>(observabilityCommitKey, () => ({
       state: [],
       flush: async (cbs) => {
         let firstError: unknown;
@@ -33,14 +33,14 @@ export const bufferObservabilityEvent = (
     .push(callback);
 };
 
-const queuertObservabilityRollback = Symbol("queuert.observability.rollback");
+const observabilityRollbackKey = Symbol("queuert.observability.rollback");
 
 export const bufferObservabilityRollback = (
   transactionHooks: TransactionHooks,
   callback: Callback,
 ): void => {
   transactionHooks
-    .getOrInsert<Callback[]>(queuertObservabilityRollback, () => ({
+    .getOrInsert<Callback[]>(observabilityRollbackKey, () => ({
       state: [],
       flush: () => {},
       discard: async (cbs) => {

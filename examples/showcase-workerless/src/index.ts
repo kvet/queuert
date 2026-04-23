@@ -18,12 +18,12 @@ import postgres from "postgres";
 import {
   createClient,
   createInProcessWorker,
-  createJobTypeProcessorRegistry,
-  defineJobTypeRegistry,
+  createProcessors,
+  defineJobTypes,
   withTransactionHooks,
 } from "queuert";
 
-const jobTypeRegistry = defineJobTypeRegistry<{
+const jobTypes = defineJobTypes<{
   /*
    * Workflow (approval):
    *   await-approval (scheduled timeout)
@@ -74,14 +74,14 @@ const notifyAdapter = await createPgNotifyAdapter({ notifyProvider });
 const client = await createClient({
   stateAdapter,
   notifyAdapter,
-  jobTypeRegistry,
+  jobTypes,
 });
 
 const worker = await createInProcessWorker({
   client,
-  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+  processors: createProcessors({
     client,
-    jobTypeRegistry,
+    jobTypes,
     processors: {
       "await-approval": {
         attemptHandler: async ({ job, complete }) => {

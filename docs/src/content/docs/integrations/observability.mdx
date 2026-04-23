@@ -34,7 +34,7 @@ Queuert provides an OpenTelemetry adapter for metrics collection. Configure your
    ```ts
    const client = await createClient({
      stateAdapter,
-     jobTypeRegistry,
+     jobTypes,
      observabilityAdapter,
      log: createConsoleLog(),
    });

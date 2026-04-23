@@ -21,12 +21,12 @@ import {
   WaitChainTimeoutError,
   createClient,
   createInProcessWorker,
-  createJobTypeProcessorRegistry,
-  defineJobTypeRegistry,
+  createProcessors,
+  defineJobTypes,
   withTransactionHooks,
 } from "queuert";
 
-const jobTypeRegistry = defineJobTypeRegistry<{
+const jobTypes = defineJobTypes<{
   /*
    * Workflow:
    *   fetch-price --> apply-discount
@@ -60,7 +60,7 @@ const notifyAdapter = await createPgNotifyAdapter({ notifyProvider });
 const client = await createClient({
   stateAdapter,
   notifyAdapter,
-  jobTypeRegistry,
+  jobTypes,
 });
 
 const PRICES: Record<string, number> = {
@@ -71,9 +71,9 @@ const PRICES: Record<string, number> = {
 
 const worker = await createInProcessWorker({
   client,
-  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+  processors: createProcessors({
     client,
-    jobTypeRegistry,
+    jobTypes,
     processors: {
       "fetch-price": {
         attemptHandler: async ({ job, complete }) => {

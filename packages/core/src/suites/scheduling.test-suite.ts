@@ -3,8 +3,8 @@ import { type TestAPI } from "vitest";
 import {
   createClient,
   createInProcessWorker,
-  createJobTypeProcessorRegistry,
-  defineJobTypeRegistry,
+  createProcessors,
+  defineJobTypes,
   rescheduleJob,
   withTransactionHooks,
 } from "../index.js";
@@ -20,7 +20,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: {
         entry: true;
         input: { value: number };
@@ -33,16 +33,16 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client,
       workerId: "worker",
       concurrency: 1,
-      jobTypeProcessorDefaults: { pollIntervalMs: 50 },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      pollIntervalMs: 50,
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
         processors: {
           test: {
             attemptHandler: async ({ job, complete }) => {
@@ -86,7 +86,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: {
         entry: true;
         input: { value: number };
@@ -99,16 +99,16 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client,
       workerId: "worker",
       concurrency: 1,
-      jobTypeProcessorDefaults: { pollIntervalMs: 50 },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      pollIntervalMs: 50,
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
         processors: {
           test: {
             attemptHandler: async ({ job, complete }) => {
@@ -152,7 +152,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       first: {
         entry: true;
         input: { value: number };
@@ -169,7 +169,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     const firstCompleted = Promise.withResolvers<void>();
@@ -178,10 +178,10 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       client,
       workerId: "worker",
       concurrency: 1,
-      jobTypeProcessorDefaults: { pollIntervalMs: 50 },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      pollIntervalMs: 50,
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
         processors: {
           first: {
             attemptHandler: async ({ complete }) => {
@@ -241,7 +241,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       first: {
         entry: true;
         input: { value: number };
@@ -258,7 +258,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     const firstCompleted = Promise.withResolvers<void>();
@@ -267,10 +267,10 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       client,
       workerId: "worker",
       concurrency: 1,
-      jobTypeProcessorDefaults: { pollIntervalMs: 50 },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      pollIntervalMs: 50,
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
         processors: {
           first: {
             attemptHandler: async ({ complete }) => {
@@ -330,7 +330,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: {
         entry: true;
         input: { value: number };
@@ -343,7 +343,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     let attemptCount = 0;
@@ -353,10 +353,10 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       client,
       workerId: "worker",
       concurrency: 1,
-      jobTypeProcessorDefaults: { pollIntervalMs: 50 },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      pollIntervalMs: 50,
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
         processors: {
           test: {
             attemptHandler: async ({ job, complete }) => {
@@ -408,7 +408,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       recurring: {
         entry: true;
         input: null;
@@ -421,7 +421,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     let completionCount = 0;
@@ -431,10 +431,10 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       client,
       workerId: "worker",
       concurrency: 1,
-      jobTypeProcessorDefaults: { pollIntervalMs: 50 },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      pollIntervalMs: 50,
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
         processors: {
           recurring: {
             attemptHandler: async ({ job, complete }) => {
@@ -495,7 +495,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: {
         entry: true;
         input: { value: number };
@@ -508,7 +508,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     let attemptCount = 0;
@@ -518,10 +518,10 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       client,
       workerId: "worker",
       concurrency: 1,
-      jobTypeProcessorDefaults: { pollIntervalMs: 50 },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      pollIntervalMs: 50,
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
         processors: {
           test: {
             attemptHandler: async ({ job, complete }) => {

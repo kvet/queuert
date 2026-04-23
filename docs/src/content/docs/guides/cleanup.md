@@ -12,7 +12,7 @@ Without cleanup, the job table grows unboundedly as completed chains accumulate.
 ## Define a Cleanup Job Type
 
 ```ts
-const cleanupJobTypeRegistry = defineJobTypeRegistry<{
+const cleanupJobTypes = defineJobTypes<{
   "queuert.cleanup": {
     entry: true;
     input: null;
@@ -28,9 +28,9 @@ const CLEANUP_RETENTION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const CLEANUP_BATCH_SIZE = 100;
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 
-const cleanupProcessorRegistry = createJobTypeProcessorRegistry({
+const cleanupProcessorRegistry = createProcessors({
   client,
-  jobTypeRegistry: cleanupJobTypeRegistry,
+  jobTypes: cleanupJobTypes,
   processors: {
     "queuert.cleanup": {
       attemptHandler: async ({ job, complete }) => {
@@ -102,22 +102,18 @@ Key patterns used:
 
 ## Merge and Start
 
-Merge the cleanup registry with your application registries using [slices](/queuert/guides/slices/):
+Compose the cleanup slice with your application slices by passing arrays to `createClient` and `createInProcessWorker`:
 
 ```ts
 const client = await createClient({
   stateAdapter,
   notifyAdapter,
-  jobTypeRegistry: mergeJobTypeRegistries({
-    slices: [cleanupJobTypeRegistry, yourJobTypeRegistry],
-  }),
+  jobTypes: [cleanupJobTypes, yourJobTypes],
 });
 
 const worker = await createInProcessWorker({
   client,
-  jobTypeProcessorRegistry: mergeJobTypeProcessorRegistries({
-    slices: [cleanupProcessorRegistry, yourProcessorRegistry],
-  }),
+  processors: [cleanupProcessorRegistry, yourProcessorRegistry],
 });
 ```
 

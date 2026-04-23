@@ -14,21 +14,21 @@ A worker provides a fixed amount of capacity — up to `concurrency` jobs in fli
 The fix is to run multiple workers, each owning a different subset of job types. Each worker's capacity is reserved for its own workload.
 
 ```ts
-const jobTypeRegistry = defineJobTypeRegistry<{
+const jobTypes = defineJobTypes<{
   "email.transactional": { entry: true; input: { to: string }; output: { at: number } };
   "email.marketing": { entry: true; input: { to: string }; output: { at: number } };
 }>();
 
-const client = await createClient({ stateAdapter, notifyAdapter, jobTypeRegistry });
+const client = await createClient({ stateAdapter, notifyAdapter, jobTypes });
 
 // Customer-facing workload (password resets, 2FA): reserved capacity.
 const transactionalWorker = await createInProcessWorker({
   client,
   workerId: "email-transactional",
   concurrency: 3,
-  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+  processors: createProcessors({
     client,
-    jobTypeRegistry,
+    jobTypes,
     processors: {
       "email.transactional": { attemptHandler: sendTransactionalHandler },
     },
@@ -40,9 +40,9 @@ const marketingWorker = await createInProcessWorker({
   client,
   workerId: "email-marketing",
   concurrency: 1,
-  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+  processors: createProcessors({
     client,
-    jobTypeRegistry,
+    jobTypes,
     processors: {
       "email.marketing": { attemptHandler: sendMarketingHandler },
     },
@@ -67,7 +67,7 @@ Start with one worker. Split when you have evidence that a specific workload is 
 A chain's `continueWith` can target any job type, so a single chain can start on one worker and continue on another. The handoff happens through the database:
 
 ```ts
-const jobTypeRegistry = defineJobTypeRegistry<{
+const jobTypes = defineJobTypes<{
   "alert.dispatch": {
     entry: true;
     input: { alertId: string };
@@ -100,9 +100,9 @@ Decide which workload a job belongs to before enqueueing, then submit to exactly
 
 ## One Client vs. Multiple Clients
 
-One `createClient` owns one `jobTypeRegistry`. Two ways to split workloads across workers:
+One `createClient` owns one `jobTypes`. Two ways to split workloads across workers:
 
-- **One client, multiple workers** — the default. Each worker subsets the shared registry via its own `JobTypeProcessorRegistry`. Use when workloads share the same database and notify adapter.
+- **One client, multiple workers** — the default. Each worker subsets the shared registry via its own `Processors`. Use when workloads share the same database and notify adapter.
 - **Multiple clients** — one client per workload, each with its own registry, adapters, and connection pool. Reach for this when workloads need different infrastructure: separate connection pools to cap each workload's DB load, different notify channels, or notify adapters that scale independently.
 
 Start with one client. Split only when a concrete resource constraint forces it.

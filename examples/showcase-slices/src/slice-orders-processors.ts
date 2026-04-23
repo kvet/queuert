@@ -1,11 +1,11 @@
-import { createJobTypeProcessorRegistry } from "queuert";
+import { createProcessors } from "queuert";
 
 import { client } from "./client.js";
-import { orderJobTypeRegistry } from "./slice-orders-definitions.js";
+import { orderJobTypes } from "./slice-orders-definitions.js";
 
-export const orderJobTypeProcessorRegistry = createJobTypeProcessorRegistry({
+export const orderProcessors = createProcessors({
   client,
-  jobTypeRegistry: orderJobTypeRegistry,
+  jobTypes: orderJobTypes,
   processors: {
     "orders.create-order": {
       attemptHandler: async ({ job, complete }) => {

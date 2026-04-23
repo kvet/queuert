@@ -1,7 +1,7 @@
 import { type TestAPI } from "vitest";
 
 import { sleep } from "../helpers/sleep.js";
-import { createClient, defineJobTypeRegistry, withTransactionHooks } from "../index.js";
+import { createClient, defineJobTypes, withTransactionHooks } from "../index.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -13,7 +13,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: {
         entry: true;
         input: { value: number };
@@ -26,7 +26,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     const [chain1, chain2, chain3] = await withTransactionHooks(async (transactionHooks) =>
@@ -105,7 +105,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     observabilityAdapter,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: {
         entry: true;
         input: { value: number };
@@ -118,7 +118,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     // Test 'any' scope - deduplicates against completed jobs
@@ -226,7 +226,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: {
         entry: true;
         input: { value: number };
@@ -239,7 +239,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     // Test 'any' scope with windowMs
@@ -326,7 +326,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       typeA: {
         entry: true;
         input: { value: number };
@@ -344,7 +344,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     const [chainA, chainB] = await withTransactionHooks(async (transactionHooks) =>
@@ -379,7 +379,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: {
         entry: true;
         input: { value: number };
@@ -392,7 +392,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     const [chain1, chain2, chain3] = await withTransactionHooks(async (transactionHooks) =>
@@ -424,7 +424,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: {
         entry: true;
         input: { value: number };
@@ -437,7 +437,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     const existing = await withTransactionHooks(async (transactionHooks) =>
@@ -479,7 +479,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     observabilityAdapter,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: {
         entry: true;
         input: { value: number };
@@ -492,7 +492,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     // Create and complete a chain with 'any' scope key
@@ -583,7 +583,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: {
         entry: true;
         input: { value: number };
@@ -596,7 +596,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     await withTransactionHooks(async (transactionHooks) =>
@@ -649,7 +649,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: {
         entry: true;
         input: { value: number };
@@ -662,7 +662,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     const chain1 = await withTransactionHooks(async (transactionHooks) =>
@@ -720,7 +720,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       typeA: {
         entry: true;
         input: { value: number };
@@ -738,7 +738,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     const [chainA, chainB] = await withTransactionHooks(async (transactionHooks) =>

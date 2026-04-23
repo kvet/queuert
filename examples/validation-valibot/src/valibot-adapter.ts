@@ -10,9 +10,9 @@ import {
   type BaseJobTypeDefinitions,
   type JobTypeDefinitionErrors,
   type JobTypeReference,
-  type JobTypeRegistry,
+  type JobTypes,
   type ValidatedJobTypeDefinitions,
-  createJobTypeRegistry,
+  createJobTypes,
 } from "queuert";
 import * as v from "valibot";
 
@@ -97,7 +97,7 @@ type InferValibotJobTypes<T extends Record<string, ValibotJobTypeSchema>> = {
  * in JobTypeValidationError with the appropriate error code.
  *
  * @example
- * const jobTypeRegistry = createValibotJobTypeRegistry({
+ * const jobTypes = createValibotJobTypes({
  *   "process-data": {
  *     entry: true,
  *     input: v.object({ dataId: v.string() }),
@@ -110,7 +110,7 @@ type InferValibotJobTypes<T extends Record<string, ValibotJobTypeSchema>> = {
  *   },
  * });
  */
-export const createValibotJobTypeRegistry = <
+export const createValibotJobTypes = <
   const T extends Record<string, ValibotJobTypeSchema>,
   TExternal extends BaseJobTypeDefinitions = Record<never, never>,
 >(
@@ -119,7 +119,7 @@ export const createValibotJobTypeRegistry = <
   ]
     ? T
     : JobTypeDefinitionErrors<InferValibotJobTypes<T>, TExternal>,
-  _externalDefinitions?: JobTypeRegistry<TExternal>,
+  _externalDefinitions?: JobTypes<TExternal>,
 ) => {
   const _schemas = schemas as Record<string, ValibotJobTypeSchema>;
   const getSchema = (typeName: string): ValibotJobTypeSchema => {
@@ -130,7 +130,7 @@ export const createValibotJobTypeRegistry = <
     return schema;
   };
 
-  return createJobTypeRegistry<InferValibotJobTypes<T>, TExternal>({
+  return createJobTypes<InferValibotJobTypes<T>, TExternal>({
     getTypeNames: () => Object.keys(_schemas),
     validateEntry: (typeName) => {
       const schema = getSchema(typeName);

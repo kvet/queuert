@@ -3,6 +3,7 @@ import {
   type JobChain,
   mapStateJobPairToJobChain,
 } from "../entities/job-chain.js";
+import { type BaseJobTypeDefinitions } from "../entities/job-type.js";
 import {
   type BlockerChains,
   type ContinuationJobs,
@@ -10,8 +11,7 @@ import {
   type JobTypeHasBlockers,
   type JobTypeProperty,
   type ResolvedJobWithBlockers,
-} from "../entities/job-type-registry.resolvers.js";
-import { type BaseJobTypeDefinitions } from "../entities/job-type.js";
+} from "../entities/job-types.resolvers.js";
 import { type Job, mapStateJobToJob } from "../entities/job.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
 import {
@@ -40,21 +40,13 @@ import {
   type StateJob,
 } from "../state-adapter/state-adapter.js";
 import { type TransactionHooks, withTransactionHooks } from "../transaction-hooks.js";
+import {
+  type AttemptMiddleware,
+  runHandlerMiddlewareChain,
+  runCompleteMiddlewareChain,
+  runPrepareMiddlewareChain,
+} from "./attempt-middleware.js";
 import { type LeaseConfig, createLeaseManager } from "./lease.js";
-
-/** Middleware that wraps each job attempt. Receives the running job context and a `next` function to invoke the inner handler. */
-export type JobAttemptMiddleware<TStateAdapter extends StateAdapter<any, any>> = <T>(
-  context: {
-    job: ResolvedJobWithBlockers<
-      GetStateAdapterJobId<TStateAdapter>,
-      BaseJobTypeDefinitions,
-      string,
-      string
-    > & { status: "running" };
-    workerId: string;
-  },
-  next: () => Promise<T>,
-) => Promise<T>;
 
 /** Reasons a job attempt's signal can be aborted. */
 export type JobAbortReason =
@@ -69,6 +61,7 @@ export type AttemptCompleteOptions<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
   TChainTypeName extends string,
+  TCompleteCtx extends Record<string, unknown> = {},
 > = {
   continueWith: <
     // oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- TContinueJobTypeNames drives conditional type inference
@@ -97,7 +90,8 @@ export type AttemptCompleteOptions<
       TChainTypeName
     >
   >;
-} & { transactionHooks: TransactionHooks } & GetStateAdapterTxContext<TStateAdapter>;
+} & { transactionHooks: TransactionHooks } & GetStateAdapterTxContext<TStateAdapter> &
+  TCompleteCtx;
 
 /** Completion callback type. Receives {@link AttemptCompleteOptions} and returns the result. */
 export type AttemptCompleteCallback<
@@ -106,12 +100,14 @@ export type AttemptCompleteCallback<
   TJobTypeName extends string,
   TChainTypeName extends string,
   TResult,
+  TCompleteCtx extends Record<string, unknown> = {},
 > = (
   completeOptions: AttemptCompleteOptions<
     TStateAdapter,
     TJobTypeDefinitions,
     TJobTypeName,
-    TChainTypeName
+    TChainTypeName,
+    TCompleteCtx
   >,
 ) => Promise<TResult>;
 
@@ -121,6 +117,7 @@ export type AttemptComplete<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
   TChainTypeName extends string,
+  TCompleteCtx extends Record<string, unknown> = {},
 > = <
   TReturn extends
     | JobTypeProperty<TJobTypeDefinitions, TJobTypeName, "output">
@@ -136,7 +133,8 @@ export type AttemptComplete<
       TStateAdapter,
       TJobTypeDefinitions,
       TJobTypeName,
-      TChainTypeName
+      TChainTypeName,
+      TCompleteCtx
     >,
   ) => Promise<TReturn>,
 ) => Promise<
@@ -166,16 +164,23 @@ export type AttemptComplete<
 export type AttemptPrepareOptions = { mode: "atomic" | "staged" };
 
 /** Callback executed during the prepare phase within the transaction. */
-export type AttemptPrepareCallback<TStateAdapter extends StateAdapter<BaseTxContext, any>, T> = (
-  prepareCallbackOptions: GetStateAdapterTxContext<TStateAdapter>,
+export type AttemptPrepareCallback<
+  TStateAdapter extends StateAdapter<BaseTxContext, any>,
+  T,
+  TPrepareCtx extends Record<string, unknown> = {},
+> = (
+  prepareCallbackOptions: GetStateAdapterTxContext<TStateAdapter> & TPrepareCtx,
 ) => T | Promise<T>;
 
 /** Typed prepare function provided to the {@link AttemptHandler | attemptHandler}. Controls the processing mode and optionally runs a callback within the prepare transaction. */
-export type AttemptPrepare<TStateAdapter extends StateAdapter<BaseTxContext, any>> = {
+export type AttemptPrepare<
+  TStateAdapter extends StateAdapter<BaseTxContext, any>,
+  TPrepareCtx extends Record<string, unknown> = {},
+> = {
   (config: AttemptPrepareOptions): Promise<void>;
   <T>(
     config: AttemptPrepareOptions,
-    prepareCallback: AttemptPrepareCallback<TStateAdapter, T>,
+    prepareCallback: AttemptPrepareCallback<TStateAdapter, T, TPrepareCtx>,
   ): Promise<Awaited<T>>;
 };
 
@@ -193,17 +198,28 @@ export type AttemptHandler<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
   TChainTypeName extends string,
-> = (processOptions: {
-  signal: TypedAbortSignal<JobAbortReason>;
-  job: ResolvedJobWithBlockers<
-    GetStateAdapterJobId<TStateAdapter>,
-    TJobTypeDefinitions,
-    TJobTypeName,
-    TChainTypeName
-  > & { status: "running" };
-  prepare: AttemptPrepare<TStateAdapter>;
-  complete: AttemptComplete<TStateAdapter, TJobTypeDefinitions, TJobTypeName, TChainTypeName>;
-}) => Promise<
+  THandlerCtx extends Record<string, unknown>,
+  TPrepareCtx extends Record<string, unknown>,
+  TCompleteCtx extends Record<string, unknown>,
+> = (
+  processOptions: {
+    signal: TypedAbortSignal<JobAbortReason>;
+    job: ResolvedJobWithBlockers<
+      GetStateAdapterJobId<TStateAdapter>,
+      TJobTypeDefinitions,
+      TJobTypeName,
+      TChainTypeName
+    > & { status: "running" };
+    prepare: AttemptPrepare<TStateAdapter, TPrepareCtx>;
+    complete: AttemptComplete<
+      TStateAdapter,
+      TJobTypeDefinitions,
+      TJobTypeName,
+      TChainTypeName,
+      TCompleteCtx
+    >;
+  } & THandlerCtx,
+) => Promise<
   | (ResolvedJobWithBlockers<
       GetStateAdapterJobId<TStateAdapter>,
       TJobTypeDefinitions,
@@ -226,21 +242,24 @@ export const runJobProcess = async ({
   backoffConfig,
   leaseConfig,
   workerId,
-  attemptMiddlewares,
+  attemptMiddleware,
 }: {
   helpers: Helpers;
   attemptHandler: AttemptHandler<
     StateAdapter<BaseTxContext, any>,
     BaseJobTypeDefinitions,
     string,
-    string
+    string,
+    Record<string, unknown>,
+    Record<string, unknown>,
+    Record<string, unknown>
   >;
   prepareTransactionContext: TransactionContext<BaseTxContext>;
   job: StateJob;
   backoffConfig: BackoffConfig;
   leaseConfig: LeaseConfig;
   workerId: string;
-  attemptMiddlewares?: JobAttemptMiddleware<StateAdapter<BaseTxContext, any>>[];
+  attemptMiddleware?: readonly AttemptMiddleware<any, any, any, any>[];
 }): Promise<void> => {
   let completeTransactionContext: TransactionContext<BaseTxContext> | null = null;
 
@@ -356,7 +375,7 @@ export const runJobProcess = async ({
     >[],
   } as ResolvedJobWithBlockers<any, any, any, any> & { status: "running" };
 
-  const runJobAttempt = async () => {
+  const runJobAttempt = async (handlerCtx: Record<string, unknown>) => {
     const attemptStartTime = Date.now();
 
     helpers.observabilityHelper.jobAttemptStarted(job, { workerId });
@@ -387,8 +406,13 @@ export const runJobProcess = async ({
       try {
         callbackOutput = await prepareTransactionContext.run(async (txCtx) =>
           prepareCallback
-            ? helpers.stateAdapter.withSavepoint(txCtx, async (txCtx) =>
-                prepareCallback({ ...txCtx }),
+            ? helpers.stateAdapter.withSavepoint(txCtx, async (innerTxCtx) =>
+                runPrepareMiddlewareChain(
+                  attemptMiddleware,
+                  { job: runningJob, txCtx: innerTxCtx },
+                  async (prepareCtx) =>
+                    prepareCallback({ ...prepareCtx, ...innerTxCtx } as BaseTxContext),
+                ),
               )
             : undefined,
         );
@@ -465,31 +489,37 @@ export const runJobProcess = async ({
 
       const result = await completeSavepointContext.run(async (txCtx, transactionHooks) => {
         let continuedJob: Job<any, any, any, any, any> | null = null;
-        const output = await completeCallback({
-          continueWith: async ({ typeName, input, schedule, blockers }) => {
-            if (continuedJob) {
-              throw new Error("continueWith can only be called once");
-            }
-            continuedJob = await continueWith(helpers, {
-              typeName,
-              input,
-              txCtx,
+        const output = await runCompleteMiddlewareChain(
+          attemptMiddleware,
+          { job: runningJob, transactionHooks, txCtx },
+          async (completeCtx) =>
+            completeCallback({
+              ...completeCtx,
+              continueWith: async ({ typeName, input, schedule, blockers }) => {
+                if (continuedJob) {
+                  throw new Error("continueWith can only be called once");
+                }
+                continuedJob = await continueWith(helpers, {
+                  typeName,
+                  input,
+                  txCtx,
+                  transactionHooks,
+                  schedule,
+                  blockers: blockers as any,
+                  chainId: job.chainId,
+                  chainIndex: job.chainIndex + 1,
+                  chainTypeName: job.chainTypeName,
+                  originChainTraceContext:
+                    attemptSpanHandle?.getChainTraceContext() ?? job.chainTraceContext,
+                  originTraceContext: attemptSpanHandle?.getTraceContext() ?? job.traceContext,
+                  fromTypeName: job.typeName,
+                });
+                return continuedJob;
+              },
               transactionHooks,
-              schedule,
-              blockers: blockers as any,
-              chainId: job.chainId,
-              chainIndex: job.chainIndex + 1,
-              chainTypeName: job.chainTypeName,
-              originChainTraceContext:
-                attemptSpanHandle?.getChainTraceContext() ?? job.chainTraceContext,
-              originTraceContext: attemptSpanHandle?.getTraceContext() ?? job.traceContext,
-              fromTypeName: job.typeName,
-            });
-            return continuedJob;
-          },
-          transactionHooks,
-          ...txCtx,
-        });
+              ...txCtx,
+            }),
+        );
         bufferObservabilityEvent(transactionHooks, () => {
           helpers.observabilityHelper.jobAttemptCompleted(job, {
             output: continuedJob ? null : output,
@@ -536,8 +566,9 @@ export const runJobProcess = async ({
     let autoPreparePromise: Promise<void> | null = null;
     try {
       const attemptPromise = attemptHandler({
+        ...handlerCtx,
         signal: abortController.signal,
-        job: runningJob as any,
+        job: runningJob,
         get prepare() {
           if (autoSetupDone) {
             throw new Error("Prepare cannot be accessed after auto-setup");
@@ -600,10 +631,11 @@ export const runJobProcess = async ({
     }
   };
 
-  await (attemptMiddlewares ?? []).reduceRight(
-    (next, mw) => async () => mw({ job: runningJob as any, workerId }, next),
-    async () => {
-      await runJobAttempt();
+  await runHandlerMiddlewareChain(
+    attemptMiddleware,
+    { job: runningJob, workerId },
+    async (handlerCtx) => {
+      await runJobAttempt(handlerCtx);
     },
-  )();
+  );
 };

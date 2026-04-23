@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 
 import { type Client, helpersSymbol } from "./client.js";
-import { type JobTypeNames } from "./entities/job-type-registry.resolvers.js";
 import { type BaseJobTypeDefinitions } from "./entities/job-type.js";
 import { type BackoffConfig } from "./helpers/backoff.js";
 import { type ParallelExecutor, createParallelExecutor } from "./helpers/parallel-executor.js";
@@ -18,23 +17,19 @@ import {
   type StateAdapter,
   type StateJob,
 } from "./state-adapter/state-adapter.js";
-import { type JobAttemptMiddleware, runJobProcess } from "./worker/job-process.js";
+import { type AttemptMiddleware } from "./worker/attempt-middleware.js";
+import { runJobProcess } from "./worker/job-process.js";
+import { type LeaseConfig } from "./worker/lease.js";
+import { type MergedProcessorDefinitions, mergeProcessors } from "./worker/merge-processors.js";
 import {
   type InProcessWorkerProcessor,
-  type JobTypeProcessorRegistry,
-} from "./worker/job-type-processor-registry.js";
-import { type LeaseConfig } from "./worker/lease.js";
+  type Processors,
+  processorAttemptMiddlewareSymbol,
+} from "./worker/processors.js";
 
-/** Default configuration applied to all job types unless overridden per-processor. */
-export type JobTypeProcessorDefaults<TStateAdapter extends StateAdapter<any, any>> = {
-  /** How often to poll for new jobs in milliseconds */
-  pollIntervalMs?: number;
-  /** Backoff configuration for failed job attempts */
-  backoffConfig?: BackoffConfig;
-  /** Lease configuration for job ownership */
-  leaseConfig?: LeaseConfig;
-  /** Middlewares that wrap each job attempt */
-  attemptMiddlewares?: JobAttemptMiddleware<TStateAdapter>[];
+/** Per-processor runtime stamp carrying the middleware tuple of the originating slice. @internal */
+type StampedProcessor = InProcessWorkerProcessor<any, any, any, any, any, any> & {
+  readonly [processorAttemptMiddlewareSymbol]: readonly AttemptMiddleware<any, any, any, any>[];
 };
 
 const waitForNextJob = async ({
@@ -85,22 +80,27 @@ const waitForNextJob = async ({
   }
 };
 
+const DEFAULT_BACKOFF_CONFIG: BackoffConfig = {
+  initialDelayMs: 10_000,
+  multiplier: 2.0,
+  maxDelayMs: 300_000,
+};
+
+const DEFAULT_LEASE_CONFIG: LeaseConfig = {
+  leaseMs: 60_000,
+  renewIntervalMs: 30_000,
+};
+
 const performJob = async ({
   helpers,
   typeNames,
-  jobTypeProcessorRegistry,
-  defaultBackoffConfig,
-  defaultLeaseConfig,
+  processors,
   workerId,
-  attemptMiddlewares,
 }: {
   helpers: Helpers;
   typeNames: string[];
-  jobTypeProcessorRegistry: Record<string, InProcessWorkerProcessor<any, any, any>>;
-  defaultBackoffConfig: BackoffConfig;
-  defaultLeaseConfig: LeaseConfig;
+  processors: Record<string, StampedProcessor>;
   workerId: string;
-  attemptMiddlewares: JobAttemptMiddleware<any>[] | undefined;
 }): Promise<
   { job: null; hasMore: false } | { job: StateJob; hasMore: boolean; execute: () => Promise<void> }
 > => {
@@ -127,7 +127,7 @@ const performJob = async ({
     return { job: null, hasMore: false };
   }
 
-  const jobTypeProcessor = jobTypeProcessorRegistry[job.typeName];
+  const jobTypeProcessor = processors[job.typeName];
   if (!jobTypeProcessor) {
     const error = new Error(`No attempt handler registered for job type "${job.typeName}"`);
     await prepareTransactionContext.reject(error);
@@ -144,10 +144,10 @@ const performJob = async ({
           attemptHandler: jobTypeProcessor.attemptHandler as any,
           job,
           prepareTransactionContext: prepareTransactionContext as TransactionContext<BaseTxContext>,
-          backoffConfig: jobTypeProcessor.backoffConfig ?? defaultBackoffConfig,
-          leaseConfig: jobTypeProcessor.leaseConfig ?? defaultLeaseConfig,
+          backoffConfig: jobTypeProcessor.backoffConfig ?? DEFAULT_BACKOFF_CONFIG,
+          leaseConfig: jobTypeProcessor.leaseConfig ?? DEFAULT_LEASE_CONFIG,
           workerId,
-          attemptMiddlewares: attemptMiddlewares as any[],
+          attemptMiddleware: jobTypeProcessor[processorAttemptMiddlewareSymbol],
         });
       } catch (error) {
         await prepareTransactionContext.reject(error);
@@ -156,6 +156,28 @@ const performJob = async ({
     },
   };
 };
+
+/** Merged-processor view of a scalar-or-array input. @internal */
+type WorkerProcessorDefs<T> = T extends readonly Processors[]
+  ? MergedProcessorDefinitions<T>
+  : T extends Processors<infer D>
+    ? D
+    : never;
+
+/** Distributive `keyof T & string` — returns all keys across a union, not common ones. @internal */
+type DistributiveKeys<T> = T extends any ? keyof T & string : never;
+
+/**
+ * Extra job type names in the processors that the client doesn't know about.
+ * When processor defs are widened to `string` keys (no inference possible),
+ * returns `never` so the subset check passes trivially.
+ * @internal
+ */
+type ExtraProcessorTypeNames<TProcessorDefs, TClientDefs> = [string] extends [
+  DistributiveKeys<TProcessorDefs>,
+]
+  ? never
+  : Exclude<DistributiveKeys<TProcessorDefs>, DistributiveKeys<TClientDefs>>;
 
 /**
  * A worker that processes jobs in the current process. Created via {@link createInProcessWorker}.
@@ -170,58 +192,58 @@ export type InProcessWorker = {
 /**
  * Create an in-process worker for processing jobs.
  *
+ * Per-attempt configuration (`attemptMiddleware`, `backoffConfig`,
+ * `leaseConfig`) lives on the **processor registry** (see {@link createProcessors}).
+ * The worker dispatches to whichever processor matches the job's typeName and
+ * runs that slice's middleware chain.
+ *
  * @param options.client - The Queuert client to process jobs for.
  * @param options.workerId - Unique worker identifier. Defaults to a random UUID.
  * @param options.concurrency - Maximum number of jobs to process in parallel. Defaults to 1.
- * @param options.backoffConfig - Backoff configuration for the worker loop itself (not job retries).
- * @param options.jobTypeProcessorDefaults - Default configuration applied to all job types unless overridden per-processor.
- * @param options.jobTypeProcessorRegistry - A JobTypeProcessorRegistry from createJobTypeProcessorRegistry or mergeJobTypeProcessorRegistries.
+ * @param options.pollIntervalMs - How often to poll for new jobs when no notify adapter wakes the worker. Defaults to 60s.
+ * @param options.recoveryBackoffConfig - Backoff configuration for the worker loop itself (not job retries).
+ * @param options.processors - A single `Processors` from {@link createProcessors}, or an array of slices to merge.
  */
 export const createInProcessWorker = async <
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TStateAdapter extends StateAdapter<any, any>,
-  TProcessorJobTypeDefinitions extends BaseJobTypeDefinitions = TJobTypeDefinitions,
+  const TProcessorsInput extends Processors | readonly Processors[] = Processors,
 >({
   client,
   workerId = randomUUID(),
   concurrency,
-  backoffConfig,
-  jobTypeProcessorDefaults,
-  jobTypeProcessorRegistry: jobTypeProcessorRegistryOption,
+  pollIntervalMs: pollIntervalMsOption,
+  recoveryBackoffConfig: recoveryBackoffConfigOption,
+  processors: processorsOption,
 }: {
   client: Client<TJobTypeDefinitions, TStateAdapter>;
   workerId?: string;
   concurrency?: number;
-  backoffConfig?: BackoffConfig;
-  jobTypeProcessorDefaults?: JobTypeProcessorDefaults<TStateAdapter>;
-  jobTypeProcessorRegistry: [
-    Exclude<JobTypeNames<TProcessorJobTypeDefinitions>, JobTypeNames<TJobTypeDefinitions>>,
+  pollIntervalMs?: number;
+  recoveryBackoffConfig?: BackoffConfig;
+  processors: [
+    ExtraProcessorTypeNames<WorkerProcessorDefs<TProcessorsInput>, TJobTypeDefinitions>,
   ] extends [never]
-    ? JobTypeProcessorRegistry<TProcessorJobTypeDefinitions, any>
-    : `Error: processor registry contains job types unknown to the client: ${Exclude<JobTypeNames<TProcessorJobTypeDefinitions>, JobTypeNames<TJobTypeDefinitions>> & string}`;
+    ? TProcessorsInput
+    : `Error: processors contain job types unknown to the client: ${ExtraProcessorTypeNames<WorkerProcessorDefs<TProcessorsInput>, TJobTypeDefinitions> & string}`;
 }): Promise<InProcessWorker> => {
-  const jobTypeProcessorRegistry = jobTypeProcessorRegistryOption as JobTypeProcessorRegistry<
-    any,
-    any
-  >;
-  const typeNames = Object.keys(jobTypeProcessorRegistry);
+  const merged = Array.isArray(processorsOption)
+    ? processorsOption.length === 1
+      ? (processorsOption[0] as Processors)
+      : // ValidatedProcessorSlices duplicate-check is enforced at the createInProcessWorker signature;
+        // internal cast bypasses it since the input is already validated.
+        mergeProcessors(processorsOption as never)
+    : (processorsOption as unknown as Processors);
 
-  const pollIntervalMs = jobTypeProcessorDefaults?.pollIntervalMs ?? 60_000;
-  const defaultBackoffConfig = jobTypeProcessorDefaults?.backoffConfig ?? {
+  const processors = merged as unknown as Record<string, StampedProcessor>;
+  const typeNames = Object.keys(processors);
+
+  const pollIntervalMs = pollIntervalMsOption ?? 60_000;
+  const recoveryBackoffConfig = recoveryBackoffConfigOption ?? {
     initialDelayMs: 10_000,
     multiplier: 2.0,
     maxDelayMs: 300_000,
   };
-  const defaultLeaseConfig = jobTypeProcessorDefaults?.leaseConfig ?? {
-    leaseMs: 60_000,
-    renewIntervalMs: 30_000,
-  };
-  const workerBackoffConfig = backoffConfig ?? {
-    initialDelayMs: 10_000,
-    multiplier: 2.0,
-    maxDelayMs: 300_000,
-  };
-  const attemptMiddlewares = jobTypeProcessorDefaults?.attemptMiddlewares;
 
   return {
     start: async (): Promise<() => Promise<void>> => {
@@ -242,11 +264,8 @@ export const createInProcessWorker = async <
               const result = await performJob({
                 helpers,
                 typeNames,
-                jobTypeProcessorRegistry,
-                defaultBackoffConfig,
-                defaultLeaseConfig,
+                processors,
                 workerId,
-                attemptMiddlewares,
               });
 
               if (result.job) {
@@ -317,7 +336,7 @@ export const createInProcessWorker = async <
         }
       };
 
-      const runWorkerLoopPromise = withRetry(async () => runWorkerLoop(), workerBackoffConfig, {
+      const runWorkerLoopPromise = withRetry(async () => runWorkerLoop(), recoveryBackoffConfig, {
         signal: stopController.signal,
       }).catch(() => {});
 

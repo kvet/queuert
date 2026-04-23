@@ -37,7 +37,7 @@ export const createStateJobs = async (
   if (jobInputs.length === 0) return [];
 
   const parsed = jobInputs.map((jobInput) => {
-    const parsedInput = helpers.jobTypeRegistry.parseInput(jobInput.typeName, jobInput.input);
+    const parsedInput = helpers.jobTypes.parseInput(jobInput.typeName, jobInput.input);
     return { ...jobInput, parsedInput };
   });
 
@@ -169,7 +169,7 @@ export const createStateJobs = async (
       const blockerChains = jobInput.blockers ?? [];
 
       const blockerRefs = blockerChains.map((b) => ({ typeName: b.typeName, input: b.input }));
-      helpers.jobTypeRegistry.validateBlockers(jobInput.typeName, blockerRefs);
+      helpers.jobTypes.validateBlockers(jobInput.typeName, blockerRefs);
 
       bufferObservabilityEvent(transactionHooks, () =>
         spanHandles[i]?.end({ status: "created", chainId: job.chainId, jobId: job.id }),

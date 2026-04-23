@@ -3,8 +3,8 @@ import { acquireRedisCluster } from "@queuert/testcontainers";
 import {
   createClient,
   createInProcessWorker,
-  createJobTypeProcessorRegistry,
-  defineJobTypeRegistry,
+  createProcessors,
+  defineJobTypes,
   withTransactionHooks,
   createInProcessStateAdapter,
 } from "queuert";
@@ -42,7 +42,7 @@ const notifyProvider = createNodeRedisClusterNotifyProvider({
 });
 
 // 4. Define job types
-const jobTypeRegistry = defineJobTypeRegistry<{
+const jobTypes = defineJobTypes<{
   generate_report: {
     entry: true;
     input: { reportType: string; dateRange: { from: string; to: string } };
@@ -55,17 +55,17 @@ const stateAdapter = await createInProcessStateAdapter();
 const notifyAdapter = await createRedisNotifyAdapter({ notifyProvider });
 
 // 6. Create client and worker
-const qrtClient = await createClient({
+const client = await createClient({
   stateAdapter,
   notifyAdapter,
-  jobTypeRegistry,
+  jobTypes,
 });
 
-const qrtWorker = await createInProcessWorker({
-  client: qrtClient,
-  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
-    client: qrtClient,
-    jobTypeRegistry,
+const worker = await createInProcessWorker({
+  client,
+  processors: createProcessors({
+    client,
+    jobTypes,
     processors: {
       generate_report: {
         attemptHandler: async ({ job, complete }) => {
@@ -84,12 +84,12 @@ const qrtWorker = await createInProcessWorker({
 });
 
 // 7. Start worker and queue a job
-const stopWorker = await qrtWorker.start();
+const stopWorker = await worker.start();
 
 console.log("Requesting sales report...");
 const jobChain = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
-    qrtClient.startJobChain({
+    client.startJobChain({
       ...ctx,
       transactionHooks,
       typeName: "generate_report",
@@ -107,7 +107,7 @@ await new Promise((resolve) => setTimeout(resolve, 100));
 
 // 9. Now wait for the report to be ready
 console.log("Waiting for report...");
-const result = await qrtClient.awaitJobChain(jobChain, { timeoutMs: 5000 });
+const result = await client.awaitJobChain(jobChain, { timeoutMs: 5000 });
 console.log(`Report ready! ID: ${result.output.reportId}, Rows: ${result.output.rowCount}`);
 
 // 10. Cleanup

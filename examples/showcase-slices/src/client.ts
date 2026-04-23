@@ -1,15 +1,11 @@
-import { createClient, mergeJobTypeRegistries } from "queuert";
+import { createClient } from "queuert";
 
 import { notifyAdapter, stateAdapter } from "./adapters.js";
-import { notificationJobTypeRegistry } from "./slice-notifications-definitions.js";
-import { orderJobTypeRegistry } from "./slice-orders-definitions.js";
-
-export const jobTypeRegistry = mergeJobTypeRegistries({
-  slices: [orderJobTypeRegistry, notificationJobTypeRegistry],
-});
+import { notificationJobTypes } from "./slice-notifications-definitions.js";
+import { orderJobTypes } from "./slice-orders-definitions.js";
 
 export const client = await createClient({
   stateAdapter,
   notifyAdapter,
-  jobTypeRegistry,
+  jobTypes: [orderJobTypes, notificationJobTypes],
 });

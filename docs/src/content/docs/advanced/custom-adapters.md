@@ -1,11 +1,11 @@
 ---
 title: Custom Adapters
-description: Write your own state or notify adapter for any database client, ORM, or message broker and validate it with Queuert's conformance suite.
+description: Write your own state, notify, or validation adapter for any database client, message broker, or schema library and validate it with Queuert's conformance suite.
 sidebar:
   order: 16
 ---
 
-Queuert's adapter system is designed to be extended. You can implement the `StateAdapter` or `NotifyAdapter` interface from scratch for your own backend — a different database engine, message broker, or anything else. The conformance suite validates that your implementation behaves correctly. It's the same suite Queuert uses internally, exposed as a framework-agnostic runner you embed in a single `test()` block.
+Queuert's adapter system is designed to be extended. You can implement the `StateAdapter` or `NotifyAdapter` interface from scratch for your own backend — a different database engine, message broker, or anything else. You can also write a **validation adapter** wrapping any schema library (Zod, Valibot, ArkType, TypeBox, or your own). The conformance suite validates that your implementation behaves correctly. It's the same suite Queuert uses internally, exposed as a framework-agnostic runner you embed in a single `test()` block.
 
 ## Custom NotifyAdapter
 
@@ -29,6 +29,8 @@ test("custom notify adapter passes conformance", async () => {
   });
 }, 60_000);
 ```
+
+See the [Notify adapter examples](/queuert/examples/#notify-adapters) for end-to-end integrations across Redis, NATS, and PostgreSQL.
 
 ## Custom StateAdapter
 
@@ -55,6 +57,57 @@ test("custom state adapter passes conformance", async () => {
   });
 }, 300_000);
 ```
+
+See the [State adapter examples](/queuert/examples/#state-adapters) for end-to-end integrations across PostgreSQL and SQLite.
+
+## Custom validation adapter
+
+Validation adapters are thin wrappers around schema libraries that produce a `JobTypes` registry. The conformance suite checks that:
+
+- The adapter's six runtime methods (`getTypeNames`, `validateEntry`, `parseInput`, `parseOutput`, `validateContinueWith`, `validateBlockers`) behave correctly.
+- Schema validation failures are wrapped in `JobTypeValidationError` with the right `code`, `typeName`, `cause`, and `details`.
+- The schema-to-shape inference (`z.infer`, `Static<>`, `T["infer"]`, `v.InferOutput`, etc.) threads through to the phantom job type definitions correctly.
+
+The last point is enforced **at compile time**: each builder in the fixture has a precise return type, so an inference bug in your adapter trips a TypeScript error at the call site of `runValidationAdapterConformance` — before the runtime suite even executes.
+
+```ts
+import { runValidationAdapterConformance } from "queuert/conformance";
+import { test } from "vitest";
+
+import { createMyJobTypes } from "./my-validation-adapter.js";
+
+test("custom validation adapter passes conformance", async () => {
+  await runValidationAdapterConformance(async () => ({
+    basic: {
+      buildEntry: () =>
+        createMyJobTypes({
+          main: {
+            entry: true,
+            input: schema({ id: "string" }),
+            output: schema({ ok: "boolean" }),
+          },
+        }),
+      buildNonEntry: () => createMyJobTypes(/* ... */),
+      buildContinuationOnly: () => createMyJobTypes(/* ... */),
+    },
+    continuations: {
+      buildNominal: () => createMyJobTypes(/* ... */),
+      buildStructural: () => createMyJobTypes(/* ... */),
+    },
+    blockers: {
+      buildNominal: () => createMyJobTypes(/* ... */),
+      buildStructural: () => createMyJobTypes(/* ... */),
+    },
+    external: {
+      buildWithExternalSlice: () => createMyJobTypes(/* ... */),
+    },
+  }));
+});
+```
+
+The exact phantom shape each builder must produce is encoded in the [`ValidationConformanceFixture`](https://github.com/kvet/queuert/blob/main/packages/core/src/conformance/validation-adapter-cases.ts) type.
+
+See the [Validation adapter examples](/queuert/examples/#validation) for end-to-end integrations across Zod, Valibot, ArkType, and TypeBox.
 
 ## Running under other test frameworks
 

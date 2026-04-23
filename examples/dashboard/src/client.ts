@@ -1,9 +1,9 @@
 import { createSqliteStateAdapter } from "@queuert/sqlite";
-import { createClient, defineJobTypeRegistry, createInProcessNotifyAdapter } from "queuert";
+import { createClient, defineJobTypes, createInProcessNotifyAdapter } from "queuert";
 
 import { createDatabase, createStateProvider } from "./db.js";
 
-export const jobTypeRegistry = defineJobTypeRegistry<{
+export const jobTypes = defineJobTypes<{
   /*
    * Scenario 1 - Single Job:
    *   greet → "Hello, {name}!"
@@ -78,4 +78,4 @@ await stateAdapter.migrateToLatest();
 
 export const notifyAdapter = await createInProcessNotifyAdapter();
 
-export const client = await createClient({ stateAdapter, notifyAdapter, jobTypeRegistry });
+export const client = await createClient({ stateAdapter, notifyAdapter, jobTypes });

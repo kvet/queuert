@@ -44,7 +44,7 @@ continueWith: { typeName: 'step2' | 'step2_alt' } | { input: { c: boolean } }
 Structural references enable loose coupling — a router doesn't need to know every handler by name:
 
 ```ts
-const jobTypeRegistry = defineJobTypeRegistry<{
+const jobTypes = defineJobTypes<{
   router: {
     entry: true;
     input: { path: string };
@@ -85,7 +85,7 @@ blockers: [
 Structural references allow any entry job type with a matching input shape to satisfy a blocker slot:
 
 ```ts
-const jobTypeRegistry = defineJobTypeRegistry<{
+const jobTypes = defineJobTypes<{
   "fetch-a": {
     entry: true;
     input: { url: string };
@@ -116,7 +116,7 @@ When accessing `job.blockers`, outputs are typed based on the reference:
 - **Structural reference**: Union of output types from all matching job types
 
 ```ts
-const jobTypeRegistry = defineJobTypeRegistry<{
+const jobTypes = defineJobTypes<{
   auth: {
     entry: true;
     input: { token: string };
@@ -135,9 +135,9 @@ const jobTypeRegistry = defineJobTypeRegistry<{
   };
 }>();
 
-const jobTypeProcessorRegistry = createJobTypeProcessorRegistry({
+const processors = createProcessors({
   client,
-  jobTypeRegistry,
+  jobTypes,
   processors: {
     process: {
       attemptHandler: async ({ job, complete }) => {
@@ -157,11 +157,11 @@ When using `{ input: Type }`, the system finds all job types whose input matches
 
 ## Validation
 
-### Compile-Time (`defineJobTypeRegistry`)
+### Compile-Time (`defineJobTypes`)
 
 Type-level validation only. References are checked at compile time via TypeScript's type system.
 
-### Runtime (`createJobTypeRegistry`)
+### Runtime (`createJobTypes`)
 
 When using validation libraries (Zod, Valibot, etc.), references are validated at both compile time and runtime. Invalid references throw `JobTypeValidationError`.
 

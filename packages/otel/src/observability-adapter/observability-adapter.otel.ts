@@ -16,8 +16,8 @@ const serializeSpanContext = (ctx: SpanContext): string =>
 const deserializeSpanContext = (traceparent: string): SpanContext => {
   const [, traceId, spanId, flags] = traceparent.split("-");
   return {
-    traceId: traceId,
-    spanId: spanId,
+    traceId,
+    spanId,
     traceFlags: parseInt(flags, 16),
     isRemote: true,
   };

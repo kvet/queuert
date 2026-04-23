@@ -12,6 +12,12 @@ export {
   type StateConformanceOptions,
 } from "./conformance/state-adapter.js";
 export {
+  runValidationAdapterConformance,
+  type ValidationAdapterConformanceContext,
+  type ValidationConformanceFixture,
+  type ValidationConformanceOptions,
+} from "./conformance/validation-adapter.js";
+export {
   ConformanceError,
   type ConformanceReport,
   type ConformanceResult,

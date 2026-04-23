@@ -78,7 +78,7 @@ await withTransactionHooks(async (transactionHooks) =>
 For periodic tasks like daily digests, health checks, or billing cycles, start a new independent job chain from within the handler instead of using `continueWith`. This keeps each execution as its own short-lived chain rather than building an ever-growing chain history.
 
 ```ts
-const jobTypeRegistry = defineJobTypeRegistry<{
+const jobTypes = defineJobTypes<{
   'daily-digest': {
     entry: true;
     input: { userId: string };

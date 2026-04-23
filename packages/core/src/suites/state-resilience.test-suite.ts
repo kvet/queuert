@@ -4,8 +4,8 @@ import {
   type StateAdapter,
   createClient,
   createInProcessWorker,
-  createJobTypeProcessorRegistry,
-  defineJobTypeRegistry,
+  createProcessors,
+  defineJobTypes,
   withTransactionHooks,
 } from "../index.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
@@ -30,7 +30,7 @@ export const stateResilienceTestSuite = ({
     observabilityAdapter,
     log,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: {
         entry: true;
         input: { value: number; atomic: boolean };
@@ -43,39 +43,37 @@ export const stateResilienceTestSuite = ({
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const flakyWorkerClient = await createClient({
       stateAdapter: flakyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const flakyWorker = await createInProcessWorker({
       client: flakyWorkerClient,
       concurrency: 1,
-      backoffConfig: {
+      // should be processed in a single worker loop
+      pollIntervalMs: 10_000,
+      recoveryBackoffConfig: {
         initialDelayMs: 1,
         multiplier: 1,
         maxDelayMs: 1,
       },
-      jobTypeProcessorDefaults: {
-        // should be processed in a single worker loop
-        pollIntervalMs: 10_000,
-        leaseConfig: {
-          leaseMs: 10,
-          renewIntervalMs: 5,
-        },
+      processors: createProcessors({
+        client,
+        jobTypes,
         backoffConfig: {
           initialDelayMs: 1,
           multiplier: 1,
           maxDelayMs: 1,
         },
-      },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
-        client,
-        jobTypeRegistry,
+        leaseConfig: {
+          leaseMs: 10,
+          renewIntervalMs: 5,
+        },
         processors: {
           test: {
             attemptHandler: async ({ job, prepare, complete }) => {
@@ -118,7 +116,7 @@ export const stateResilienceTestSuite = ({
       observabilityAdapter,
       log,
     }) => {
-      const jobTypeRegistry = defineJobTypeRegistry<{
+      const jobTypes = defineJobTypes<{
         test: {
           entry: true;
           input: { value: number; atomic: boolean };
@@ -131,43 +129,41 @@ export const stateResilienceTestSuite = ({
         notifyAdapter,
         observabilityAdapter,
         log,
-        jobTypeRegistry,
+        jobTypes,
       });
       const flakyWorkerClient = await createClient({
         stateAdapter: flakyStateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
-        jobTypeRegistry,
+        jobTypes,
       });
       const flakyWorker = await createInProcessWorker({
         client: flakyWorkerClient,
         concurrency: 5,
-        backoffConfig: {
+        // Short poll interval so the worker retries promptly after a transient error.
+        // When the complete phase hits a flaky-adapter error and the error handler's
+        // withTransaction also fails, the job stays "acquired" with a short lease.
+        // The worker must re-poll before the reaper reclaims it, so pollIntervalMs
+        // needs to be low enough to beat the lease expiry window.
+        pollIntervalMs: 250,
+        recoveryBackoffConfig: {
           initialDelayMs: 1,
           multiplier: 1,
           maxDelayMs: 1,
         },
-        jobTypeProcessorDefaults: {
-          // Short poll interval so the worker retries promptly after a transient error.
-          // When the complete phase hits a flaky-adapter error and the error handler's
-          // withTransaction also fails, the job stays "acquired" with a short lease.
-          // The worker must re-poll before the reaper reclaims it, so pollIntervalMs
-          // needs to be low enough to beat the lease expiry window.
-          pollIntervalMs: 250,
-          leaseConfig: {
-            leaseMs: 10,
-            renewIntervalMs: 5,
-          },
+        processors: createProcessors({
+          client,
+          jobTypes,
           backoffConfig: {
             initialDelayMs: 1,
             multiplier: 1,
             maxDelayMs: 1,
           },
-        },
-        jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
-          client,
-          jobTypeRegistry,
+          leaseConfig: {
+            leaseMs: 10,
+            renewIntervalMs: 5,
+          },
           processors: {
             test: {
               attemptHandler: async ({ job, prepare, complete }) => {
@@ -211,7 +207,7 @@ export const stateResilienceTestSuite = ({
       observabilityAdapter,
       log,
     }) => {
-      const jobTypeRegistry = defineJobTypeRegistry<{
+      const jobTypes = defineJobTypes<{
         test: {
           entry: true;
           input: { value: number; atomic: boolean };
@@ -224,46 +220,47 @@ export const stateResilienceTestSuite = ({
         notifyAdapter,
         observabilityAdapter,
         log,
-        jobTypeRegistry,
+        jobTypes,
       });
       const flakyWorkerClient = await createClient({
         stateAdapter: flakyStateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
-        jobTypeRegistry,
+        jobTypes,
       });
       const workerConfig = {
         client: flakyWorkerClient,
         concurrency: 5,
+        recoveryBackoffConfig: {
+          initialDelayMs: 1,
+          multiplier: 1,
+          maxDelayMs: 1,
+        },
+        // Short poll interval so the worker retries promptly after a transient error.
+        // When the complete phase hits a flaky-adapter error and the error handler's
+        // withTransaction also fails, the job stays "acquired" with a short lease.
+        // The worker must re-poll before the reaper reclaims it, so pollIntervalMs
+        // needs to be low enough to beat the lease expiry window.
+        pollIntervalMs: 100,
+      };
+      const registryConfig = {
+        leaseConfig: {
+          leaseMs: 10,
+          renewIntervalMs: 5,
+        },
         backoffConfig: {
           initialDelayMs: 1,
           multiplier: 1,
           maxDelayMs: 1,
         },
-        jobTypeProcessorDefaults: {
-          // Short poll interval so the worker retries promptly after a transient error.
-          // When the complete phase hits a flaky-adapter error and the error handler's
-          // withTransaction also fails, the job stays "acquired" with a short lease.
-          // The worker must re-poll before the reaper reclaims it, so pollIntervalMs
-          // needs to be low enough to beat the lease expiry window.
-          pollIntervalMs: 100,
-          leaseConfig: {
-            leaseMs: 10,
-            renewIntervalMs: 5,
-          },
-          backoffConfig: {
-            initialDelayMs: 1,
-            multiplier: 1,
-            maxDelayMs: 1,
-          },
-        },
       };
       const flakyWorker1 = await createInProcessWorker({
         ...workerConfig,
-        jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        processors: createProcessors({
           client,
-          jobTypeRegistry,
+          jobTypes,
+          ...registryConfig,
           processors: {
             test: {
               attemptHandler: async ({ job, prepare, complete }) => {
@@ -276,9 +273,10 @@ export const stateResilienceTestSuite = ({
       });
       const flakyWorker2 = await createInProcessWorker({
         ...workerConfig,
-        jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        processors: createProcessors({
           client,
-          jobTypeRegistry,
+          jobTypes,
+          ...registryConfig,
           processors: {
             test: {
               attemptHandler: async ({ job, prepare, complete }) => {
@@ -323,7 +321,7 @@ export const stateResilienceTestSuite = ({
   }) => {
     if (!flakyDbStateAdapter) return skip();
 
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: {
         entry: true;
         input: { value: number; atomic: boolean };
@@ -336,38 +334,36 @@ export const stateResilienceTestSuite = ({
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const flakyWorkerClient = await createClient({
       stateAdapter: flakyDbStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const flakyWorker = await createInProcessWorker({
       client: flakyWorkerClient,
       concurrency: 1,
-      backoffConfig: {
+      pollIntervalMs: 10_000,
+      recoveryBackoffConfig: {
         initialDelayMs: 1,
         multiplier: 1,
         maxDelayMs: 1,
       },
-      jobTypeProcessorDefaults: {
-        pollIntervalMs: 10_000,
-        leaseConfig: {
-          leaseMs: 10,
-          renewIntervalMs: 5,
-        },
+      processors: createProcessors({
+        client,
+        jobTypes,
         backoffConfig: {
           initialDelayMs: 1,
           multiplier: 1,
           maxDelayMs: 1,
         },
-      },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
-        client,
-        jobTypeRegistry,
+        leaseConfig: {
+          leaseMs: 10,
+          renewIntervalMs: 5,
+        },
         processors: {
           test: {
             attemptHandler: async ({ job, prepare, complete }) => {
@@ -413,7 +409,7 @@ export const stateResilienceTestSuite = ({
     }) => {
       if (!flakyDbStateAdapter) return skip();
 
-      const jobTypeRegistry = defineJobTypeRegistry<{
+      const jobTypes = defineJobTypes<{
         test: {
           entry: true;
           input: { value: number; atomic: boolean };
@@ -426,38 +422,36 @@ export const stateResilienceTestSuite = ({
         notifyAdapter,
         observabilityAdapter,
         log,
-        jobTypeRegistry,
+        jobTypes,
       });
       const flakyWorkerClient = await createClient({
         stateAdapter: flakyDbStateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
-        jobTypeRegistry,
+        jobTypes,
       });
       const flakyWorker = await createInProcessWorker({
         client: flakyWorkerClient,
         concurrency: 5,
-        backoffConfig: {
+        pollIntervalMs: 250,
+        recoveryBackoffConfig: {
           initialDelayMs: 1,
           multiplier: 1,
           maxDelayMs: 1,
         },
-        jobTypeProcessorDefaults: {
-          pollIntervalMs: 250,
-          leaseConfig: {
-            leaseMs: 10,
-            renewIntervalMs: 5,
-          },
+        processors: createProcessors({
+          client,
+          jobTypes,
           backoffConfig: {
             initialDelayMs: 1,
             multiplier: 1,
             maxDelayMs: 1,
           },
-        },
-        jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
-          client,
-          jobTypeRegistry,
+          leaseConfig: {
+            leaseMs: 10,
+            renewIntervalMs: 5,
+          },
           processors: {
             test: {
               attemptHandler: async ({ job, prepare, complete }) => {
@@ -504,7 +498,7 @@ export const stateResilienceTestSuite = ({
     }) => {
       if (!flakyDbStateAdapter) return skip();
 
-      const jobTypeRegistry = defineJobTypeRegistry<{
+      const jobTypes = defineJobTypes<{
         test: {
           entry: true;
           input: { value: number; atomic: boolean };
@@ -517,41 +511,42 @@ export const stateResilienceTestSuite = ({
         notifyAdapter,
         observabilityAdapter,
         log,
-        jobTypeRegistry,
+        jobTypes,
       });
       const flakyWorkerClient = await createClient({
         stateAdapter: flakyDbStateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
-        jobTypeRegistry,
+        jobTypes,
       });
       const workerConfig = {
         client: flakyWorkerClient,
         concurrency: 5,
+        pollIntervalMs: 100,
+        recoveryBackoffConfig: {
+          initialDelayMs: 1,
+          multiplier: 1,
+          maxDelayMs: 1,
+        },
+      };
+      const registryConfig = {
+        leaseConfig: {
+          leaseMs: 10,
+          renewIntervalMs: 5,
+        },
         backoffConfig: {
           initialDelayMs: 1,
           multiplier: 1,
           maxDelayMs: 1,
         },
-        jobTypeProcessorDefaults: {
-          pollIntervalMs: 100,
-          leaseConfig: {
-            leaseMs: 10,
-            renewIntervalMs: 5,
-          },
-          backoffConfig: {
-            initialDelayMs: 1,
-            multiplier: 1,
-            maxDelayMs: 1,
-          },
-        },
       };
       const flakyWorker1 = await createInProcessWorker({
         ...workerConfig,
-        jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        processors: createProcessors({
           client,
-          jobTypeRegistry,
+          jobTypes,
+          ...registryConfig,
           processors: {
             test: {
               attemptHandler: async ({ job, prepare, complete }) => {
@@ -564,9 +559,10 @@ export const stateResilienceTestSuite = ({
       });
       const flakyWorker2 = await createInProcessWorker({
         ...workerConfig,
-        jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        processors: createProcessors({
           client,
-          jobTypeRegistry,
+          jobTypes,
+          ...registryConfig,
           processors: {
             test: {
               attemptHandler: async ({ job, prepare, complete }) => {

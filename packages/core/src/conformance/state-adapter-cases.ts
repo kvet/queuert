@@ -5542,6 +5542,84 @@ export const stateAdapterConformanceGroups: ConformanceGroup<StateAdapterConform
           expect(acquiredIds.size).toBe(count);
         },
       },
+      {
+        name: "starting a chain blocked by a concurrently-completing chain does not strand it as blocked",
+        run: async ({ stateAdapter }, expect) => {
+          const count = 20;
+
+          const blockerJobs = await Promise.all(
+            Array.from({ length: count }, async (_, index) => {
+              const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
+                stateAdapter.createJobs({
+                  txCtx,
+                  jobs: [
+                    {
+                      typeName: "race-blocker",
+                      chainId: undefined,
+                      chainIndex: 0,
+                      chainTypeName: "race-blocker",
+                      input: { index },
+                    },
+                  ],
+                }),
+              );
+              return job;
+            }),
+          );
+
+          const startChainBlockedBy = async (
+            blockerChainId: string,
+            index: number,
+          ): Promise<string> =>
+            stateAdapter.withTransaction(async (txCtx) => {
+              const [{ job: mainJob }] = await stateAdapter.createJobs({
+                txCtx,
+                jobs: [
+                  {
+                    typeName: "race-main",
+                    chainId: undefined,
+                    chainIndex: 0,
+                    chainTypeName: "race-main",
+                    input: { index },
+                  },
+                ],
+              });
+              const [{ job }] = await stateAdapter.addJobsBlockers({
+                txCtx,
+                jobBlockers: [{ jobId: mainJob.id, blockedByChainIds: [blockerChainId] }],
+              });
+              return job.id;
+            });
+
+          const completeBlockerChain = async (
+            blockerJobId: string,
+            chainId: string,
+          ): Promise<void> =>
+            stateAdapter.withTransaction(async (txCtx) => {
+              await stateAdapter.completeJob({
+                txCtx,
+                jobId: blockerJobId,
+                output: null,
+                workerId: "race-test",
+              });
+              await stateAdapter.unblockJobs({ txCtx, blockedByChainId: chainId });
+            });
+
+          const mainJobIds = await Promise.all(
+            blockerJobs.flatMap((blockerJob, i) => [
+              startChainBlockedBy(blockerJob.chainId, i),
+              completeBlockerChain(blockerJob.id, blockerJob.chainId).then(() => undefined),
+            ]),
+          ).then((results) => results.filter((id): id is string => id !== undefined));
+
+          const finalStates = await Promise.all(
+            mainJobIds.map(async (jobId) => stateAdapter.getJobById({ jobId })),
+          );
+
+          const stranded = finalStates.filter((job) => job?.status === "blocked");
+          expect(stranded).toHaveLength(0);
+        },
+      },
     ],
   },
 ];

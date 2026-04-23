@@ -7,7 +7,7 @@ import { acquirePostgres } from "@queuert/testcontainers";
 import { createPgPoolNotifyProvider } from "example-notify-postgres-pg/provider";
 import { createPgPoolStateProvider } from "example-state-postgres-pg/provider";
 import { Pool } from "pg";
-import { createClient, defineJobTypeRegistry, withTransactionHooks } from "queuert";
+import { createClient, defineJobTypes, withTransactionHooks } from "queuert";
 
 // ============================================================================
 // Multi-Worker Order Processing Example (with Child Processes)
@@ -43,7 +43,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const WORKER_COUNT = 3;
 const JOBS_TO_PROCESS = 12;
 
-const jobTypeRegistry = defineJobTypeRegistry<{
+const jobTypes = defineJobTypes<{
   process_order: {
     entry: true;
     input: { orderId: string; items: string[]; total: number };
@@ -63,10 +63,10 @@ await stateAdapter.migrateToLatest();
 const notifyProvider = createPgPoolNotifyProvider({ pool });
 const notifyAdapter = await createPgNotifyAdapter({ notifyProvider });
 
-const qrtClient = await createClient({
+const client = await createClient({
   stateAdapter,
   notifyAdapter,
-  jobTypeRegistry,
+  jobTypes,
 });
 
 const workerNames = ["alpha", "beta", "gamma"];
@@ -114,7 +114,7 @@ console.log(`\nQueueing ${JOBS_TO_PROCESS} orders...\n`);
 const products = ["Widget", "Gadget", "Gizmo", "Doohickey", "Thingamajig", "Contraption"];
 const jobChains = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
-    qrtClient.startJobChains({
+    client.startJobChains({
       ...ctx,
       transactionHooks,
       items: Array.from({ length: JOBS_TO_PROCESS }, (_, i) => {
@@ -134,7 +134,7 @@ const jobChains = await withTransactionHooks(async (transactionHooks) =>
 );
 
 await Promise.all(
-  jobChains.map(async (chain) => qrtClient.awaitJobChain(chain, { timeoutMs: 30000 })),
+  jobChains.map(async (chain) => client.awaitJobChain(chain, { timeoutMs: 30000 })),
 );
 
 console.log("\n" + "=".repeat(60));

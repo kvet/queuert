@@ -1,6 +1,6 @@
 import { type JobChain } from "../entities/job-chain.js";
-import { type ResolvedJob } from "../entities/job-type-registry.resolvers.js";
 import { type BaseJobTypeDefinitions } from "../entities/job-type.js";
+import { type ResolvedJob } from "../entities/job-types.resolvers.js";
 import { mapStateJobToJob } from "../entities/job.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
 import { type Helpers } from "../setup-helpers.js";
@@ -38,7 +38,7 @@ export const continueWith = async <TJobTypeName extends string, TInput>(
     fromTypeName: string;
   },
 ): Promise<ResolvedJob<string, BaseJobTypeDefinitions, TJobTypeName, string>> => {
-  helpers.jobTypeRegistry.validateContinueWith(fromTypeName, { typeName, input });
+  helpers.jobTypes.validateContinueWith(fromTypeName, { typeName, input });
 
   const [{ job }] = await createStateJobs(helpers, {
     jobs: [

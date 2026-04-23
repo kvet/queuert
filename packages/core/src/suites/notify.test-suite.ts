@@ -4,8 +4,8 @@ import { sleep } from "../helpers/sleep.js";
 import {
   createClient,
   createInProcessWorker,
-  createJobTypeProcessorRegistry,
-  defineJobTypeRegistry,
+  createProcessors,
+  defineJobTypes,
   withTransactionHooks,
 } from "../index.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
@@ -20,7 +20,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     withTransaction,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: {
         entry: true;
         input: { value: number };
@@ -33,14 +33,14 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
         processors: {
           test: {
             attemptHandler: async ({ job, complete }) => {
@@ -81,7 +81,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     withTransaction,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: {
         entry: true;
         input: { value: number };
@@ -94,16 +94,16 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     const createWorker = async () =>
       createInProcessWorker({
         client,
         concurrency: 1,
-        jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        processors: createProcessors({
           client,
-          jobTypeRegistry,
+          jobTypes,
           processors: {
             test: {
               attemptHandler: async ({ job, complete }) => {
@@ -151,7 +151,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     withTransaction,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       blocker: {
         entry: true;
         input: null;
@@ -170,14 +170,14 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker1 = await createInProcessWorker({
       client,
       concurrency: 1,
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
         processors: {
           blocker: {
             attemptHandler: async ({ complete }) => {
@@ -191,9 +191,9 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const worker2 = await createInProcessWorker({
       client,
       concurrency: 1,
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
         processors: {
           main: {
             attemptHandler: async ({ complete }) => {
@@ -244,7 +244,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     withTransaction,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       step1: {
         entry: true;
         input: null;
@@ -261,14 +261,14 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker1 = await createInProcessWorker({
       client,
       concurrency: 1,
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
         processors: {
           step1: {
             attemptHandler: async ({ complete }) => {
@@ -287,9 +287,9 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const worker2 = await createInProcessWorker({
       client,
       concurrency: 1,
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
         processors: {
           step2: {
             attemptHandler: async ({ complete }) => {
@@ -333,7 +333,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     withTransaction,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: {
         entry: true;
         input: null;
@@ -346,7 +346,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     const jobStarted = Promise.withResolvers<void>();
@@ -356,9 +356,9 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       client,
       workerId: "worker",
       concurrency: 1,
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
         processors: {
           test: {
             attemptHandler: async ({ signal, prepare }) => {
@@ -418,7 +418,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     withTransaction,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: {
         entry: true;
         input: null;
@@ -431,7 +431,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     const jobStarted = Promise.withResolvers<void>();
@@ -441,9 +441,9 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       createInProcessWorker({
         client,
         concurrency: 1,
-        jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        processors: createProcessors({
           client,
-          jobTypeRegistry,
+          jobTypes,
           processors: {
             test: {
               attemptHandler: async ({ signal, job, prepare, complete }) => {

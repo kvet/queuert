@@ -1,14 +1,14 @@
-import { type JobTypeRegistry, createNoopJobTypeRegistry } from "./job-type-registry.js";
 import { type BaseJobTypeDefinitions } from "./job-type.js";
 import { type ValidatedJobTypeDefinitions } from "./job-type.validation.js";
+import { type JobTypes, createNoopJobTypes } from "./job-types.js";
 
 /**
  * Define job types with compile-time type checking only (no runtime validation).
- * Returns a JobTypeRegistry that passes all values through without validation.
+ * Returns a JobTypes that passes all values through without validation.
  *
  * @example
  * // Inline definition
- * const jobTypeRegistry = defineJobTypeRegistry<{
+ * const jobTypes = defineJobTypes<{
  *   'fetch': {
  *     entry: true;
  *     input: { url: string };
@@ -27,8 +27,8 @@ import { type ValidatedJobTypeDefinitions } from "./job-type.validation.js";
  * }>();
  *
  * @example
- * // With DefineJobTypes for better IntelliSense
- * type MyJobDefinitions = DefineJobTypes<{
+ * // With JobTypeDefs for better IntelliSense
+ * type MyJobDefinitions = JobTypeDefs<{
  *   'process': {
  *     entry: true;
  *     input: { id: string };
@@ -36,12 +36,12 @@ import { type ValidatedJobTypeDefinitions } from "./job-type.validation.js";
  *   };
  * }>;
  *
- * const jobTypeRegistry = defineJobTypeRegistry<MyJobDefinitions>();
+ * const jobTypes = defineJobTypes<MyJobDefinitions>();
  */
-export const defineJobTypeRegistry = <
+export const defineJobTypes = <
   TJobTypeDefinitions extends BaseJobTypeDefinitions &
     ValidatedJobTypeDefinitions<TJobTypeDefinitions, TExternalJobTypeDefinitions>,
   TExternalJobTypeDefinitions extends BaseJobTypeDefinitions = Record<never, never>,
->(): JobTypeRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions, false> => {
-  return createNoopJobTypeRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions>();
+>(): JobTypes<TJobTypeDefinitions, TExternalJobTypeDefinitions> => {
+  return createNoopJobTypes<TJobTypeDefinitions, TExternalJobTypeDefinitions>();
 };

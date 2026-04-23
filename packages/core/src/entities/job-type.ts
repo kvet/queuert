@@ -25,8 +25,8 @@ export type BaseJobTypeDefinition = {
 /** Record mapping job type names to their definitions. */
 export type BaseJobTypeDefinitions = Record<string, BaseJobTypeDefinition>;
 
-/** Identity type helper for better IntelliSense when defining job types separately from {@link defineJobTypeRegistry}. */
-export type DefineJobTypes<T extends BaseJobTypeDefinitions> = T;
+/** Identity type helper for better IntelliSense when defining job types separately from {@link defineJobTypes}. */
+export type JobTypeDefs<T extends BaseJobTypeDefinitions> = T;
 
 /**
  * Reference object for continuation and blocker validation.

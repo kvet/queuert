@@ -1,8 +1,7 @@
 import { describe, expectTypeOf, it } from "vitest";
 
 import { type Client, createClient } from "./client.js";
-import { defineJobTypeRegistry } from "./entities/define-job-type-registry.js";
-import { mergeJobTypeRegistries } from "./entities/merge-job-type-registries.js";
+import { defineJobTypes } from "./entities/define-job-types.js";
 import { createInProcessStateAdapter } from "./state-adapter/state-adapter.in-process.js";
 import { type BaseTxContext, type StateAdapter } from "./state-adapter/state-adapter.js";
 
@@ -22,15 +21,13 @@ type Defs2 = {
   };
 };
 
-const registry1 = defineJobTypeRegistry<Defs1>();
-const registry2 = defineJobTypeRegistry<Defs2>();
+const registry1 = defineJobTypes<Defs1>();
+const registry2 = defineJobTypes<Defs2>();
 
 const stateAdapter = await createInProcessStateAdapter();
 const mergedClient = await createClient({
   stateAdapter,
-  jobTypeRegistry: mergeJobTypeRegistries({
-    slices: [registry1, registry2],
-  }),
+  jobTypes: [registry1, registry2],
 });
 
 describe("Client covariance", () => {

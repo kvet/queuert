@@ -14,8 +14,8 @@
 import {
   createClient,
   createInProcessWorker,
-  createJobTypeProcessorRegistry,
-  defineJobTypeRegistry,
+  createProcessors,
+  defineJobTypes,
   withTransactionHooks,
   createInProcessNotifyAdapter,
   createInProcessStateAdapter,
@@ -23,7 +23,7 @@ import {
 
 import { flush, observabilityAdapter, shutdown } from "./observability.js";
 
-const jobTypeRegistry = defineJobTypeRegistry<{
+const jobTypes = defineJobTypes<{
   /*
    * Scenario 1 - Single Job:
    *   greet → "Hello, {name}!"
@@ -133,16 +133,16 @@ const client = await createClient({
   stateAdapter,
   notifyAdapter,
   observabilityAdapter,
-  jobTypeRegistry,
+  jobTypes,
 });
 
 // Create worker with processors
 const worker = await createInProcessWorker({
   client,
   workerId: "worker-1",
-  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+  processors: createProcessors({
     client,
-    jobTypeRegistry,
+    jobTypes,
     processors: {
       // Scenario 1: Simple job
       greet: {
@@ -235,7 +235,7 @@ const stopWorker = await worker.start();
 
 // Run all scenarios
 console.log("\n=== OpenTelemetry Observability Showcase ===\n");
-console.log("Optional: Run `pnpm tui` in another terminal to view traces\n");
+console.log("Optional: Run `bun run tui` in another terminal to view traces\n");
 
 // Scenario 1: Single Job
 console.log("--- Scenario 1: Single Job ---");

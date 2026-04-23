@@ -4,7 +4,7 @@
  * Starts the @queuert/dashboard web UI on http://localhost:3333.
  * Reads job state from the shared SQLite database.
  *
- * Usage: pnpm dashboard
+ * Usage: bun run dashboard
  * Then open http://localhost:3333 in your browser.
  */
 
@@ -29,7 +29,7 @@ const server = createServer((req, res) => {
 
 server.listen(PORT, () => {
   console.log(`Dashboard running at http://localhost:${PORT}`);
-  console.log("Run `pnpm start` in another terminal to populate jobs.\n");
+  console.log("Run `bun run start` in another terminal to populate jobs.\n");
 });
 
 process.on("SIGINT", () => {

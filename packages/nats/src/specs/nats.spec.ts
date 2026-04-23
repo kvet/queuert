@@ -3,8 +3,8 @@ import { connect } from "nats";
 import {
   createClient,
   createInProcessWorker,
-  createJobTypeProcessorRegistry,
-  defineJobTypeRegistry,
+  createProcessors,
+  defineJobTypes,
   withTransactionHooks,
   createInProcessStateAdapter,
 } from "queuert";
@@ -30,7 +30,7 @@ it("should work end-to-end with NATS notify adapter", async ({ natsConnectionOpt
   const stateAdapter = await createInProcessStateAdapter();
 
   const log = vi.fn();
-  const jobTypeRegistry = defineJobTypeRegistry<{
+  const jobTypes = defineJobTypes<{
     test: {
       entry: true;
       input: { message: string };
@@ -42,13 +42,13 @@ it("should work end-to-end with NATS notify adapter", async ({ natsConnectionOpt
     stateAdapter,
     notifyAdapter,
     log,
-    jobTypeRegistry,
+    jobTypes,
   });
   const worker = await createInProcessWorker({
     client,
-    jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+    processors: createProcessors({
       client,
-      jobTypeRegistry,
+      jobTypes,
       processors: {
         test: {
           attemptHandler: async ({ complete }) => {
@@ -88,7 +88,7 @@ it("should work end-to-end without JetStream KV", async ({ natsConnectionOptions
   const stateAdapter = await createInProcessStateAdapter();
 
   const log = vi.fn();
-  const jobTypeRegistry = defineJobTypeRegistry<{
+  const jobTypes = defineJobTypes<{
     test: {
       entry: true;
       input: { value: number };
@@ -100,13 +100,13 @@ it("should work end-to-end without JetStream KV", async ({ natsConnectionOptions
     stateAdapter,
     notifyAdapter,
     log,
-    jobTypeRegistry,
+    jobTypes,
   });
   const worker = await createInProcessWorker({
     client,
-    jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+    processors: createProcessors({
       client,
-      jobTypeRegistry,
+      jobTypes,
       processors: {
         test: {
           attemptHandler: async ({ job, complete }) => {

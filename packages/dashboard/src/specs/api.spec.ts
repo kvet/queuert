@@ -1,4 +1,4 @@
-import { createClient, defineJobTypeRegistry, createInProcessStateAdapter } from "queuert";
+import { createClient, defineJobTypes, createInProcessStateAdapter } from "queuert";
 // @ts-expect-error tsgo doesn't resolve export * re-exports from seroval
 import { deserialize } from "seroval";
 import { describe, expect, it } from "vitest";
@@ -9,7 +9,7 @@ const parseBody = async (res: Response) => deserialize(await res.text());
 
 const createTestDashboard = async (basePath?: string) => {
   const stateAdapter = await createInProcessStateAdapter();
-  const client = await createClient({ stateAdapter, jobTypeRegistry: defineJobTypeRegistry() });
+  const client = await createClient({ stateAdapter, jobTypes: defineJobTypes() });
   const dashboard = await createDashboard({ client, basePath });
   const prefix = basePath ?? "";
   const request = async (path: string, init?: RequestInit) =>
@@ -446,7 +446,7 @@ describe("Dashboard API", () => {
       const dashboard = await createDashboard({
         client: await createClient({
           stateAdapter: await createInProcessStateAdapter(),
-          jobTypeRegistry: defineJobTypeRegistry(),
+          jobTypes: defineJobTypes(),
         }),
         basePath: "/internal/queuert",
       });
@@ -458,7 +458,7 @@ describe("Dashboard API", () => {
       const dashboard = await createDashboard({
         client: await createClient({
           stateAdapter: await createInProcessStateAdapter(),
-          jobTypeRegistry: defineJobTypeRegistry(),
+          jobTypes: defineJobTypes(),
         }),
         basePath: "/app",
       });

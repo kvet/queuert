@@ -51,6 +51,7 @@
     "no-useless-catch": "warn",
     "no-useless-escape": "warn",
     "no-useless-rename": "warn",
+    "object-shorthand": "warn",
     "no-with": "warn",
     "require-yield": "warn",
     "use-isnan": "warn",

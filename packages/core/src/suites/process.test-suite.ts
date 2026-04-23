@@ -4,8 +4,8 @@ import { sleep } from "../helpers/sleep.js";
 import {
   createClient,
   createInProcessWorker,
-  createJobTypeProcessorRegistry,
-  defineJobTypeRegistry,
+  createProcessors,
+  defineJobTypes,
   withTransactionHooks,
 } from "../index.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
@@ -25,7 +25,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       "test-prepare-twice": {
         entry: true;
         input: null;
@@ -57,14 +57,14 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
         processors: {
           "test-prepare-twice": {
             attemptHandler: async ({ prepare, complete }) => {
@@ -158,7 +158,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: {
         entry: true;
         input: null;
@@ -173,21 +173,19 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      jobTypeProcessorDefaults: {
+      processors: createProcessors({
+        client,
+        jobTypes,
         backoffConfig: {
           initialDelayMs: 1,
           multiplier: 1,
           maxDelayMs: 1,
         },
-      },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
-        client,
-        jobTypeRegistry,
         processors: {
           test: {
             attemptHandler: async ({ job, prepare, complete }) => {
@@ -245,7 +243,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: {
         entry: true;
         input: null;
@@ -260,21 +258,19 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      jobTypeProcessorDefaults: {
+      processors: createProcessors({
+        client,
+        jobTypes,
         backoffConfig: {
           initialDelayMs: 10,
           multiplier: 2.0,
           maxDelayMs: 100,
         },
-      },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
-        client,
-        jobTypeRegistry,
         processors: {
           test: {
             attemptHandler: async ({ job, complete }) => {
@@ -323,7 +319,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: {
         entry: true;
         input: { test: boolean };
@@ -336,15 +332,15 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client,
       workerId: "worker",
       concurrency: 1,
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
         processors: {
           test: {
             attemptHandler: async ({ job, prepare, complete }) => {

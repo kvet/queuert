@@ -24,7 +24,7 @@ Start a job inside a database transaction. The `input` type is inferred from you
 definition — no casting, no `any`. If the transaction rolls back, the job is never created.
 
 ```ts
-const jobTypeRegistry = defineJobTypeRegistry<{
+const jobTypes = defineJobTypes<{
   "send-welcome-email": {
     entry: true;
     input: { userId: number; email: string; name: string };
@@ -32,7 +32,7 @@ const jobTypeRegistry = defineJobTypeRegistry<{
   };
 }>();
 
-const client = await createClient({ stateAdapter, jobTypeRegistry });
+const client = await createClient({ stateAdapter, jobTypes });
 
 await withTransactionHooks(async (transactionHooks) =>
   db.transaction(async (tx) => {
@@ -56,9 +56,9 @@ A background worker picks it up and runs it to completion.
 ```ts
 const worker = await createInProcessWorker({
   client,
-  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+  processors: createProcessors({
     client,
-    jobTypeRegistry,
+    jobTypes,
     processors: {
       "send-welcome-email": {
         attemptHandler: async ({ job, complete }) => {

@@ -4,8 +4,8 @@ import {
   TransactionContextRequiredError,
   createClient,
   createInProcessWorker,
-  createJobTypeProcessorRegistry,
-  defineJobTypeRegistry,
+  createProcessors,
+  defineJobTypes,
   withTransactionHooks,
 } from "../index.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
@@ -25,7 +25,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       log,
       expect,
     }) => {
-      const jobTypeRegistry = defineJobTypeRegistry<{
+      const jobTypes = defineJobTypes<{
         test: { entry: true; input: { value: number }; output: null };
       }>();
 
@@ -34,7 +34,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         notifyAdapter,
         observabilityAdapter,
         log,
-        jobTypeRegistry,
+        jobTypes,
       });
 
       const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -62,7 +62,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       log,
       expect,
     }) => {
-      const jobTypeRegistry = defineJobTypeRegistry<{
+      const jobTypes = defineJobTypes<{
         test: { entry: true; input: { value: number }; output: null };
       }>();
 
@@ -71,7 +71,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         notifyAdapter,
         observabilityAdapter,
         log,
-        jobTypeRegistry,
+        jobTypes,
       });
 
       const first = await withTransactionHooks(async (transactionHooks) =>
@@ -111,7 +111,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       log,
       expect,
     }) => {
-      const jobTypeRegistry = defineJobTypeRegistry<{
+      const jobTypes = defineJobTypes<{
         dependency: { entry: true; input: null; output: null };
         main: {
           entry: true;
@@ -126,7 +126,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         notifyAdapter,
         observabilityAdapter,
         log,
-        jobTypeRegistry,
+        jobTypes,
       });
 
       const dep = await withTransactionHooks(async (transactionHooks) =>
@@ -163,7 +163,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       log,
       expect,
     }) => {
-      const jobTypeRegistry = defineJobTypeRegistry<{
+      const jobTypes = defineJobTypes<{
         test: { entry: true; input: null; output: null };
       }>();
 
@@ -172,7 +172,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         notifyAdapter,
         observabilityAdapter,
         log,
-        jobTypeRegistry,
+        jobTypes,
       });
 
       const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -197,7 +197,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       log,
       expect,
     }) => {
-      const jobTypeRegistry = defineJobTypeRegistry<{
+      const jobTypes = defineJobTypes<{
         test: { entry: true; input: { value: number }; output: null };
       }>();
 
@@ -206,7 +206,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         notifyAdapter,
         observabilityAdapter,
         log,
-        jobTypeRegistry,
+        jobTypes,
       });
 
       await expect(
@@ -224,7 +224,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       log,
       withTransaction,
     }) => {
-      const jobTypeRegistry = defineJobTypeRegistry<{
+      const jobTypes = defineJobTypes<{
         test: { entry: true; input: { value: number }; output: null };
       }>();
 
@@ -233,7 +233,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         notifyAdapter,
         observabilityAdapter,
         log,
-        jobTypeRegistry,
+        jobTypes,
       });
 
       void withTransactionHooks(async (transactionHooks) =>
@@ -256,7 +256,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       log,
       withTransaction,
     }) => {
-      const jobTypeRegistry = defineJobTypeRegistry<{
+      const jobTypes = defineJobTypes<{
         test: { entry: true; input: { value: number }; output: null };
       }>();
 
@@ -265,7 +265,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         notifyAdapter,
         observabilityAdapter,
         log,
-        jobTypeRegistry,
+        jobTypes,
       });
 
       void withTransactionHooks(async (transactionHooks) =>
@@ -288,7 +288,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       log,
       withTransaction,
     }) => {
-      const jobTypeRegistry = defineJobTypeRegistry<{
+      const jobTypes = defineJobTypes<{
         dep: { entry: true; input: null; output: null };
         withBlocker: {
           entry: true;
@@ -303,7 +303,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         notifyAdapter,
         observabilityAdapter,
         log,
-        jobTypeRegistry,
+        jobTypes,
       });
 
       void withTransactionHooks(async (transactionHooks) =>
@@ -329,7 +329,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       log,
       expect,
     }) => {
-      const jobTypeRegistry = defineJobTypeRegistry<{
+      const jobTypes = defineJobTypes<{
         test: { entry: true; input: { value: number }; output: { result: number } };
       }>();
 
@@ -338,7 +338,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         notifyAdapter,
         observabilityAdapter,
         log,
-        jobTypeRegistry,
+        jobTypes,
       });
 
       const jobChains = await withTransactionHooks(async (transactionHooks) =>
@@ -375,7 +375,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       log,
       expect,
     }) => {
-      const jobTypeRegistry = defineJobTypeRegistry<{
+      const jobTypes = defineJobTypes<{
         test: { entry: true; input: { value: number }; output: null };
       }>();
 
@@ -384,7 +384,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         notifyAdapter,
         observabilityAdapter,
         log,
-        jobTypeRegistry,
+        jobTypes,
       });
 
       const jobChains = await withTransactionHooks(async (transactionHooks) =>
@@ -408,7 +408,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       log,
       expect,
     }) => {
-      const jobTypeRegistry = defineJobTypeRegistry<{
+      const jobTypes = defineJobTypes<{
         test: { entry: true; input: { value: number }; output: null };
       }>();
 
@@ -417,7 +417,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         notifyAdapter,
         observabilityAdapter,
         log,
-        jobTypeRegistry,
+        jobTypes,
       });
 
       const existingJobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -468,7 +468,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       log,
       expect,
     }) => {
-      const jobTypeRegistry = defineJobTypeRegistry<{
+      const jobTypes = defineJobTypes<{
         dependency: { entry: true; input: null; output: null };
         main: {
           entry: true;
@@ -483,7 +483,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         notifyAdapter,
         observabilityAdapter,
         log,
-        jobTypeRegistry,
+        jobTypes,
       });
 
       const depJobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -531,7 +531,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       log,
       expect,
     }) => {
-      const jobTypeRegistry = defineJobTypeRegistry<{
+      const jobTypes = defineJobTypes<{
         test: { entry: true; input: { value: number }; output: null };
       }>();
 
@@ -540,7 +540,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         notifyAdapter,
         observabilityAdapter,
         log,
-        jobTypeRegistry,
+        jobTypes,
       });
 
       const futureDate = new Date(Date.now() + 60_000);
@@ -572,7 +572,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       log,
       expect,
     }) => {
-      const jobTypeRegistry = defineJobTypeRegistry<{
+      const jobTypes = defineJobTypes<{
         typeA: { entry: true; input: { a: number }; output: null };
         typeB: { entry: true; input: { b: string }; output: null };
       }>();
@@ -582,7 +582,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         notifyAdapter,
         observabilityAdapter,
         log,
-        jobTypeRegistry,
+        jobTypes,
       });
 
       const [chainA, chainB] = await withTransactionHooks(async (transactionHooks) =>
@@ -613,7 +613,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       log,
       expect,
     }) => {
-      const jobTypeRegistry = defineJobTypeRegistry<{
+      const jobTypes = defineJobTypes<{
         dependency: { entry: true; input: null; output: null };
         blocked: {
           entry: true;
@@ -629,7 +629,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         notifyAdapter,
         observabilityAdapter,
         log,
-        jobTypeRegistry,
+        jobTypes,
       });
 
       const dep = await withTransactionHooks(async (transactionHooks) =>
@@ -669,7 +669,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       log,
       expect,
     }) => {
-      const jobTypeRegistry = defineJobTypeRegistry<{
+      const jobTypes = defineJobTypes<{
         blocker: {
           entry: true;
           input: { value: number };
@@ -688,7 +688,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         notifyAdapter,
         observabilityAdapter,
         log,
-        jobTypeRegistry,
+        jobTypes,
       });
 
       const blocker = await withTransactionHooks(async (transactionHooks) =>
@@ -723,9 +723,9 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       const worker = await createInProcessWorker({
         client,
         concurrency: 3,
-        jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        processors: createProcessors({
           client,
-          jobTypeRegistry,
+          jobTypes,
           processors: {
             blocker: {
               attemptHandler: async ({ job, complete }) => {
@@ -763,7 +763,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       log,
       expect,
     }) => {
-      const jobTypeRegistry = defineJobTypeRegistry<{
+      const jobTypes = defineJobTypes<{
         test: { entry: true; input: { value: number }; output: { result: number } };
       }>();
 
@@ -772,7 +772,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         notifyAdapter,
         observabilityAdapter,
         log,
-        jobTypeRegistry,
+        jobTypes,
       });
 
       const jobChains = await withTransactionHooks(async (transactionHooks) =>
@@ -792,9 +792,9 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       const worker = await createInProcessWorker({
         client,
         concurrency: 3,
-        jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+        processors: createProcessors({
           client,
-          jobTypeRegistry,
+          jobTypes,
           processors: {
             test: {
               attemptHandler: async ({ job, complete }) => {
@@ -823,7 +823,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       log,
       expect,
     }) => {
-      const jobTypeRegistry = defineJobTypeRegistry<{
+      const jobTypes = defineJobTypes<{
         test: { entry: true; input: { value: number }; output: null };
       }>();
 
@@ -832,7 +832,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         notifyAdapter,
         observabilityAdapter,
         log,
-        jobTypeRegistry,
+        jobTypes,
       });
 
       await expect(
@@ -853,7 +853,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       log,
       withTransaction,
     }) => {
-      const jobTypeRegistry = defineJobTypeRegistry<{
+      const jobTypes = defineJobTypes<{
         test: { entry: true; input: { value: number }; output: null };
       }>();
 
@@ -862,7 +862,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         notifyAdapter,
         observabilityAdapter,
         log,
-        jobTypeRegistry,
+        jobTypes,
       });
 
       void withTransactionHooks(async (transactionHooks) =>
@@ -886,7 +886,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       log,
       withTransaction,
     }) => {
-      const jobTypeRegistry = defineJobTypeRegistry<{
+      const jobTypes = defineJobTypes<{
         test: { entry: true; input: { value: number }; output: null };
       }>();
 
@@ -895,7 +895,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         notifyAdapter,
         observabilityAdapter,
         log,
-        jobTypeRegistry,
+        jobTypes,
       });
 
       void withTransactionHooks(async (transactionHooks) =>
@@ -919,7 +919,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       log,
       withTransaction,
     }) => {
-      const jobTypeRegistry = defineJobTypeRegistry<{
+      const jobTypes = defineJobTypes<{
         dep: { entry: true; input: null; output: null };
         withBlocker: {
           entry: true;
@@ -934,7 +934,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         notifyAdapter,
         observabilityAdapter,
         log,
-        jobTypeRegistry,
+        jobTypes,
       });
 
       void withTransactionHooks(async (transactionHooks) =>

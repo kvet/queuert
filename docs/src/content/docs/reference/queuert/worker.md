@@ -1,6 +1,6 @@
 ---
 title: Worker
-description: Worker configuration and job processing for the queuert core package.
+description: Worker configuration, job processing, and worker-related types for the queuert core package.
 sidebar:
   order: 3
 ---
@@ -12,9 +12,9 @@ const worker = await createInProcessWorker({
   client: Client,
   workerId?: string,
   concurrency?: number,
-  backoffConfig?: BackoffConfig,
-  jobTypeProcessorDefaults?: JobTypeProcessorDefaults,
-  jobTypeProcessorRegistry: JobTypeProcessorRegistry,
+  pollIntervalMs?: number,
+  recoveryBackoffConfig?: BackoffConfig,
+  processors: Processors,
 });
 ```
 
@@ -23,11 +23,24 @@ Returns `Promise<InProcessWorker>`.
 - **client** — the Queuert client to process jobs for
 - **workerId** — unique identifier for this worker (default: random UUID)
 - **concurrency** — maximum number of jobs to process in parallel (default: 1)
-- **backoffConfig** — recovery backoff for the worker loop itself, not individual job retries
-- **jobTypeProcessorDefaults** — default configuration applied to all job types
-- **jobTypeProcessorRegistry** — a `JobTypeProcessorRegistry` from `createJobTypeProcessorRegistry` or `mergeJobTypeProcessorRegistries`. The registry's definitions must be a subset of the client's registry definitions.
+- **pollIntervalMs** — how often the worker polls for new jobs when no notify adapter wakes it (default: 60s)
+- **recoveryBackoffConfig** — recovery backoff for the worker loop itself (not job retries)
+- **processors** — a single `Processors` from `createProcessors`, or an array of slices to merge. See [Slices guide](/queuert/guides/slices/). Middleware is declared on the registry; see [Middleware guide](/queuert/guides/middleware/)
 
-## InProcessWorker
+## InProcessWorker — Methods
+
+### start
+
+```typescript
+const stop = await worker.start();
+await stop();
+```
+
+Begins polling for and processing jobs. Returns a `stop` function for graceful shutdown — `stop()` signals the worker to stop spawning new jobs, waits for in-flight jobs to finish, then resolves.
+
+## Types
+
+### InProcessWorker
 
 ```typescript
 type InProcessWorker = {
@@ -35,29 +48,9 @@ type InProcessWorker = {
 };
 ```
 
-Call `start()` to begin processing. It returns a `stop` function for graceful shutdown — signals the worker to stop spawning new jobs, waits for in-flight jobs to finish, then resolves.
+The handle returned by `createInProcessWorker`.
 
-## JobTypeProcessorDefaults
-
-Default configuration applied to all job types unless overridden per-processor.
-
-```typescript
-type JobTypeProcessorDefaults = {
-  pollIntervalMs?: number;
-  backoffConfig?: BackoffConfig;
-  leaseConfig?: LeaseConfig;
-  attemptMiddlewares?: JobAttemptMiddleware[];
-};
-```
-
-- **pollIntervalMs** — how often to poll for new jobs when no notify adapter is active (default: 60s)
-- **backoffConfig** — backoff for failed job attempts (default: 10s initial, 2x multiplier, 5min max)
-- **leaseConfig** — lease duration and renewal interval for job ownership (default: 60s lease, 30s renewal)
-- **attemptMiddlewares** — middlewares wrapping each job attempt
-
-## InProcessWorkerProcessor
-
-Configuration for processing a single job type. Overrides `jobTypeProcessorDefaults` for `backoffConfig` and `leaseConfig`.
+### InProcessWorkerProcessor
 
 ```typescript
 type InProcessWorkerProcessor = {
@@ -67,9 +60,9 @@ type InProcessWorkerProcessor = {
 };
 ```
 
-## AttemptHandler
+Configuration for processing a single job type. `backoffConfig` and `leaseConfig` override the registry-level defaults — resolution order is: processor → registry → library default.
 
-The core function called for each job attempt.
+### AttemptHandler
 
 ```typescript
 type AttemptHandler = (options: {
@@ -80,104 +73,104 @@ type AttemptHandler = (options: {
 }) => Promise<(ResolvedJobWithBlockers & { status: "completed" }) | ContinuationJobs>;
 ```
 
-**signal** — a typed `AbortSignal` whose `reason` is a `JobAbortReason`: `"taken_by_another_worker"`, `"error"`, `"not_found"`, or `"already_completed"`. Check `signal.aborted` for early termination.
+The core function called for each job attempt.
 
-**job** — the running job with its typed input and resolved blockers (as `CompletedJobChain[]`).
+- **signal** — typed `AbortSignal` whose `reason` is a `JobAbortReason`
+- **job** — the running job with its typed input and resolved blockers
+- **prepare** — controls the processing mode (atomic or staged). See the [Processing Modes guide](/queuert/guides/processing-modes/)
+- **complete** — finalizes the job. Return the output to complete the chain, or call `continueWith` to extend it
 
-**prepare** — controls the processing mode. If never accessed, the worker infers the mode from how `complete` is called: synchronous `return complete(...)` → atomic; any `await` before `return complete(...)` → staged. See [Job Processing Modes](/queuert/guides/processing-modes/).
+### AttemptComplete
+
+The typed `complete` function provided to the attempt handler. Call it to finalize the job — either return the output to complete the chain, or call `continueWith` to extend it.
+
+### AttemptCompleteCallback
+
+The callback passed to `complete()`. Receives `AttemptCompleteOptions` and returns the result.
+
+### AttemptCompleteOptions
+
+Options received by the complete callback: `continueWith` (to extend the chain), `transactionHooks`, and the transaction context.
+
+### AttemptPrepare
+
+The typed `prepare` function provided to the attempt handler. Controls the processing mode and optionally runs a callback within the prepare transaction.
+
+### AttemptPrepareCallback
+
+The callback passed to `prepare(options, callback)`. Receives the transaction context.
+
+### AttemptPrepareOptions
 
 ```typescript
-// Atomic mode — prepare and complete share the same transaction
-await prepare({ mode: "atomic" });
-
-// Staged mode — prepare commits first, complete runs in a new transaction
-await prepare({ mode: "staged" });
-
-// With a callback — runs within the prepare transaction
-const data = await prepare({ mode: "staged" }, async (tx) => {
-  return await db.query("SELECT ...", { tx });
-});
+type AttemptPrepareOptions = { mode: "atomic" | "staged" };
 ```
 
-**complete** — finalizes the job. Either return the output to complete the chain, or call `continueWith` to extend it.
+`"atomic"` runs prepare and complete in the same transaction. `"staged"` commits prepare first, then runs complete in a new transaction with lease renewal.
+
+### AttemptMiddleware
 
 ```typescript
-// Complete the chain with output
-return complete(async () => {
-  return { result: "done" }; // Must match the job type's output type
-});
-
-// Continue with the next job
-return complete(async ({ continueWith }) => {
-  return continueWith({
-    typeName: "process",
-    input: { data: job.input.rawData },
-    schedule?: ScheduleOptions,
-    blockers?: JobChain[],
-  });
-});
-```
-
-The `complete` callback also receives `transactionHooks` and the transaction context (`tx`), allowing database operations within the completion transaction.
-
-## JobAttemptMiddleware
-
-Wraps each job attempt. Receives the running job and worker ID, plus a `next` function.
-
-```typescript
-type JobAttemptMiddleware = <T>(
-  context: { job: ResolvedJobWithBlockers & { status: "running" }; workerId: string },
-  next: () => Promise<T>,
-) => Promise<T>;
-```
-
-Example:
-
-```typescript
-const loggingMiddleware: JobAttemptMiddleware = async ({ job, workerId }, next) => {
-  console.log(`[${workerId}] Processing ${job.typeName} ${job.id}`);
-  return next();
+type AttemptMiddleware<
+  TStateAdapter,
+  THandlerCtx extends Record<string, unknown> = {},
+  TPrepareCtx extends Record<string, unknown> = {},
+  TCompleteCtx extends Record<string, unknown> = {},
+> = {
+  wrapHandler?: <T>(opts: {
+    job: ResolvedJobWithBlockers & { status: "running" };
+    workerId: string;
+    next: (ctx: THandlerCtx) => Promise<T>;
+  }) => Promise<T>;
+  wrapPrepare?: <T>(opts: {
+    job: ResolvedJobWithBlockers & { status: "running" };
+    next: (ctx: TPrepareCtx) => Promise<T>;
+    // plus state-adapter-specific transaction context fields
+  }) => Promise<T>;
+  wrapComplete?: <T>(opts: {
+    job: ResolvedJobWithBlockers & { status: "running" };
+    transactionHooks: TransactionHooks;
+    next: (ctx: TCompleteCtx) => Promise<T>;
+    // plus state-adapter-specific transaction context fields
+  }) => Promise<T>;
 };
 ```
 
-## rescheduleJob
+Wraps job processing with cross-cutting logic. Each hook is optional — implement only the phases you need. The `next(ctx)` callback injects typed context that becomes available to the inner handler.
 
-Helper that throws `RescheduleJobError` from within an attempt handler to reschedule the job. See [Utilities](/queuert/reference/queuert/utilities/#reschedulejob) for details.
+- **wrapHandler** — wraps the entire attempt handler. Injected ctx merges into `attemptHandler`'s options
+- **wrapPrepare** — wraps the user-supplied `prepare` callback. Injected ctx merges into the callback's options alongside the transaction context
+- **wrapComplete** — wraps the user-supplied `complete` callback. Injected ctx merges into the callback's options alongside `continueWith`, `transactionHooks`, and the transaction context
 
-## mergeJobTypeProcessorRegistries
+Multiple middleware compose as an onion — the first middleware's "before" runs outermost. See the [Middleware guide](/queuert/guides/middleware/) for usage patterns.
 
-Merges processor registries from multiple slices into a single registry. See [Utilities](/queuert/reference/queuert/utilities/#mergejobtypeprocessorregistries) for details.
-
-## createJobTypeProcessorRegistry
-
-Defines a processor registry for a job type slice with full type inference. See [Utilities](/queuert/reference/queuert/utilities/#createjobtypeprocessorregistry) for details.
-
-## Handler Types
-
-The following types are exported for use in type annotations:
-
-- **AttemptComplete** — the typed `complete` function in `attemptHandler`
-- **AttemptCompleteCallback** — the callback passed to `complete()`
-- **AttemptCompleteOptions** — options received by the complete callback (`continueWith`, `transactionHooks`, tx context)
-- **AttemptPrepare** — the typed `prepare` function in `attemptHandler`
-- **AttemptPrepareCallback** — the callback passed to `prepare(options, callback)`
-- **AttemptPrepareOptions** — `{ mode: "atomic" | "staged" }`
-
-These are generic types parameterized over the state adapter and job type definitions.
-
-## Configuration Types
-
-**BackoffConfig**
+### BackoffConfig
 
 ```typescript
 type BackoffConfig = {
   initialDelayMs: number;
   maxDelayMs: number;
-  multiplier?: number; // Default: 2.0
+  multiplier?: number; // Default: 2
 };
 ```
 
-**LeaseConfig**
+Exponential backoff parameters.
+
+- **initialDelayMs** — delay after the first failure
+- **maxDelayMs** — caps the delay
+- **multiplier** — controls exponential growth
+
+### RetryConfig
+
+```typescript
+type RetryConfig = BackoffConfig & {
+  maxAttempts?: number;
+};
+```
+
+Extends `BackoffConfig` with **maxAttempts**, the maximum number of retry attempts before the operation is abandoned.
+
+### LeaseConfig
 
 ```typescript
 type LeaseConfig = {
@@ -186,12 +179,41 @@ type LeaseConfig = {
 };
 ```
 
+Controls job lease duration and renewal.
+
+- **leaseMs** — total lease time granted to a worker
+- **renewIntervalMs** — how often the worker renews the lease before it expires
+
+### TypedAbortSignal
+
+```typescript
+type TypedAbortSignal<T> = Omit<AbortSignal, "reason"> & {
+  readonly reason: T | undefined;
+};
+```
+
+An `AbortSignal` with a typed **reason**. Used in worker handlers to communicate why a job was aborted.
+
+### JobAbortReason
+
+```typescript
+type JobAbortReason = "taken_by_another_worker" | "error" | "not_found" | "already_completed";
+```
+
+The possible abort reasons passed through `TypedAbortSignal` in worker job handlers.
+
+- **taken_by_another_worker** — the lease was lost to another worker
+- **error** — an internal failure occurred
+- **not_found** — the job no longer exists
+- **already_completed** — the job was already completed
+
 ## See Also
 
 - [Client](/queuert/reference/queuert/client/) — Client API reference
-- [Types](/queuert/reference/queuert/types/) — Job, JobChain, and configuration types
-- [Utilities](/queuert/reference/queuert/utilities/) — Composition helpers and utility functions
-- [Errors](/queuert/reference/queuert/errors/) — Error classes reference
+- [Utilities](/queuert/reference/queuert/utilities/) — `createProcessors`, `defineJobTypes`, `createJobTypes`
+- [Entities](/queuert/reference/queuert/entities/) — `Job`, `JobChain`, and resolved variants
+- [Errors](/queuert/reference/queuert/errors/) — error reference
 - [In-Process Worker](/queuert/advanced/in-process-worker/) — Worker lifecycle and concurrency model
 - [Job Processing](/queuert/advanced/job-processing/) — Transactional design and prepare/complete pattern
 - [Processing Modes](/queuert/guides/processing-modes/) — Atomic vs staged processing guide
+- [Middleware](/queuert/guides/middleware/) — Writing and composing attempt middleware

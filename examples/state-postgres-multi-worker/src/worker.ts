@@ -2,14 +2,9 @@ import { createPgNotifyAdapter, createPgStateAdapter } from "@queuert/postgres";
 import { createPgPoolNotifyProvider } from "example-notify-postgres-pg/provider";
 import { createPgPoolStateProvider } from "example-state-postgres-pg/provider";
 import { Pool } from "pg";
-import {
-  createClient,
-  createInProcessWorker,
-  createJobTypeProcessorRegistry,
-  defineJobTypeRegistry,
-} from "queuert";
+import { createClient, createInProcessWorker, createProcessors, defineJobTypes } from "queuert";
 
-const jobTypeRegistry = defineJobTypeRegistry<{
+const jobTypes = defineJobTypes<{
   process_order: {
     entry: true;
     input: { orderId: string; items: string[]; total: number };
@@ -28,15 +23,15 @@ const stateAdapter = await createPgStateAdapter({ stateProvider });
 const notifyProvider = createPgPoolNotifyProvider({ pool });
 const notifyAdapter = await createPgNotifyAdapter({ notifyProvider });
 
-const client = await createClient({ stateAdapter, notifyAdapter, jobTypeRegistry });
+const client = await createClient({ stateAdapter, notifyAdapter, jobTypes });
 
 const worker = await createInProcessWorker({
   client,
   workerId,
   concurrency: 2,
-  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+  processors: createProcessors({
     client,
-    jobTypeRegistry,
+    jobTypes,
     processors: {
       process_order: {
         attemptHandler: async ({ job, complete }) => {

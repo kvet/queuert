@@ -6,8 +6,8 @@ import { acquirePostgres } from "@queuert/testcontainers";
 import {
   createClient,
   createInProcessWorker,
-  createJobTypeProcessorRegistry,
-  defineJobTypeRegistry,
+  createProcessors,
+  defineJobTypes,
   withTransactionHooks,
   createInProcessNotifyAdapter,
 } from "queuert";
@@ -30,7 +30,7 @@ const adapter = new PrismaPg({ connectionString: pg.connectionString });
 const prisma = new PrismaClient({ adapter });
 
 // 3. Define job types
-const jobTypeRegistry = defineJobTypeRegistry<{
+const jobTypes = defineJobTypes<{
   send_welcome_email: {
     entry: true;
     input: { userId: number; email: string; name: string };
@@ -55,18 +55,18 @@ await stateAdapter.migrateToLatest();
 
 const notifyAdapter = await createInProcessNotifyAdapter();
 
-const qrtClient = await createClient({
+const client = await createClient({
   stateAdapter,
   notifyAdapter,
-  jobTypeRegistry,
+  jobTypes,
 });
 
-// 6. Create and start qrtWorker
-const qrtWorker = await createInProcessWorker({
-  client: qrtClient,
-  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
-    client: qrtClient,
-    jobTypeRegistry,
+// 6. Create and start worker
+const worker = await createInProcessWorker({
+  client,
+  processors: createProcessors({
+    client,
+    jobTypes,
     processors: {
       send_welcome_email: {
         attemptHandler: async ({ job, complete }) => {
@@ -82,7 +82,7 @@ const qrtWorker = await createInProcessWorker({
   }),
 });
 
-const stopWorker = await qrtWorker.start();
+const stopWorker = await worker.start();
 
 // 7. Register a new user and queue welcome email atomically
 const jobChain = await withTransactionHooks(async (transactionHooks) =>
@@ -92,7 +92,7 @@ const jobChain = await withTransactionHooks(async (transactionHooks) =>
     });
 
     // Queue welcome email - if user creation fails, no email job is created
-    return qrtClient.startJobChain({
+    return client.startJobChain({
       prisma,
       transactionHooks,
       typeName: "send_welcome_email",
@@ -102,7 +102,7 @@ const jobChain = await withTransactionHooks(async (transactionHooks) =>
 );
 
 // 8. Wait for the job chain to complete
-const result = await qrtClient.awaitJobChain(jobChain, { timeoutMs: 5000 });
+const result = await client.awaitJobChain(jobChain, { timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);
 
 // 9. Cleanup

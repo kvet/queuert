@@ -14,7 +14,7 @@ Run your application logic as a series of background jobs that are started along
 Imagine a user signs up and you want to send them a welcome email. You don't want to block the registration request, so you queue it as a background job.
 
 ```ts
-const jobTypeRegistry = defineJobTypeRegistry<{
+const jobTypes = defineJobTypes<{
   "send-welcome-email": {
     entry: true;
     input: { userId: number; email: string; name: string };
@@ -24,7 +24,7 @@ const jobTypeRegistry = defineJobTypeRegistry<{
 
 const client = await createClient({
   stateAdapter,
-  jobTypeRegistry,
+  jobTypes,
 });
 
 await withTransactionHooks(async (transactionHooks) =>
@@ -51,9 +51,9 @@ Later, a background worker picks up the job and sends the email:
 ```ts
 const worker = await createInProcessWorker({
   client,
-  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+  processors: createProcessors({
     client,
-    jobTypeRegistry,
+    jobTypes,
     processors: {
       "send-welcome-email": {
         attemptHandler: async ({ job, complete }) => {

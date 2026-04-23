@@ -4,8 +4,8 @@ import {
   type NotifyAdapter,
   createClient,
   createInProcessWorker,
-  createJobTypeProcessorRegistry,
-  defineJobTypeRegistry,
+  createProcessors,
+  defineJobTypes,
   withTransactionHooks,
 } from "../index.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
@@ -23,7 +23,7 @@ export const notifyResilienceTestSuite = ({
     observabilityAdapter,
     log,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: {
         entry: true;
         input: { value: number; atomic: boolean };
@@ -36,31 +36,29 @@ export const notifyResilienceTestSuite = ({
       notifyAdapter: flakyNotifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      backoffConfig: {
+      recoveryBackoffConfig: {
         initialDelayMs: 1,
         multiplier: 1,
         maxDelayMs: 1,
       },
-      jobTypeProcessorDefaults: {
-        pollIntervalMs: 1_000_000, // should be processed in a single loop invocations
-        leaseConfig: {
-          leaseMs: 10,
-          renewIntervalMs: 5,
-        },
+      pollIntervalMs: 1_000_000, // should be processed in a single loop invocation
+      processors: createProcessors({
+        client,
+        jobTypes,
         backoffConfig: {
           initialDelayMs: 1,
           multiplier: 1,
           maxDelayMs: 1,
         },
-      },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
-        client,
-        jobTypeRegistry,
+        leaseConfig: {
+          leaseMs: 10,
+          renewIntervalMs: 5,
+        },
         processors: {
           test: {
             attemptHandler: async ({ job, prepare, complete }) => {

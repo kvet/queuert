@@ -20,12 +20,12 @@ import postgres from "postgres";
 import {
   createClient,
   createInProcessWorker,
-  createJobTypeProcessorRegistry,
-  defineJobTypeRegistry,
+  createProcessors,
+  defineJobTypes,
   withTransactionHooks,
 } from "queuert";
 
-const jobTypeRegistry = defineJobTypeRegistry<{
+const jobTypes = defineJobTypes<{
   /*
    * Scenario 1: Constraint violation in complete
    *   transfer-funds --> output { transferred }
@@ -97,14 +97,14 @@ await sql`INSERT INTO accounts (name, balance) VALUES ('Bob', 50)`;
 const client = await createClient({
   stateAdapter,
   notifyAdapter,
-  jobTypeRegistry,
+  jobTypes,
 });
 
 const worker = await createInProcessWorker({
   client,
-  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+  processors: createProcessors({
     client,
-    jobTypeRegistry,
+    jobTypes,
     processors: {
       "transfer-funds": {
         backoffConfig: { initialDelayMs: 500, multiplier: 1, maxDelayMs: 500 },

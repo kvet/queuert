@@ -6,8 +6,8 @@ import {
   type LeaseConfig,
   createClient,
   createInProcessWorker,
-  createJobTypeProcessorRegistry,
-  defineJobTypeRegistry,
+  createProcessors,
+  defineJobTypes,
   withTransactionHooks,
 } from "../index.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
@@ -27,7 +27,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: {
         entry: true;
         input: null;
@@ -40,17 +40,15 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      jobTypeProcessorDefaults: {
-        leaseConfig: { leaseMs: 10, renewIntervalMs: 100 },
-      },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
+        leaseConfig: { leaseMs: 10, renewIntervalMs: 100 },
         processors: {
           test: {
             attemptHandler: async ({ complete }) => {
@@ -95,7 +93,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: {
         entry: true;
         input: null;
@@ -108,7 +106,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     let failed = false;
@@ -120,13 +118,11 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       client,
       workerId: "w1",
       concurrency: 1,
-      jobTypeProcessorDefaults: {
-        leaseConfig: leaseConfig,
-        pollIntervalMs: leaseConfig.leaseMs,
-      },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      pollIntervalMs: leaseConfig.leaseMs,
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
+        leaseConfig,
         processors: {
           test: {
             attemptHandler: async ({ signal, complete }) => {
@@ -154,13 +150,11 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       client,
       workerId: "w2",
       concurrency: 1,
-      jobTypeProcessorDefaults: {
-        leaseConfig: leaseConfig,
-        pollIntervalMs: leaseConfig.leaseMs,
-      },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      pollIntervalMs: leaseConfig.leaseMs,
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
+        leaseConfig,
         processors: {
           test: {
             attemptHandler: async ({ signal, complete }) => {
@@ -234,7 +228,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: {
         entry: true;
         input: null;
@@ -247,7 +241,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     let failed = false;
@@ -259,13 +253,11 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       client,
       workerId: "w1",
       concurrency: 1,
-      jobTypeProcessorDefaults: {
-        leaseConfig: leaseConfig,
-        pollIntervalMs: leaseConfig.leaseMs,
-      },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      pollIntervalMs: leaseConfig.leaseMs,
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
+        leaseConfig,
         processors: {
           test: {
             attemptHandler: async ({ prepare, complete }) => {
@@ -296,13 +288,11 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       client,
       workerId: "w2",
       concurrency: 1,
-      jobTypeProcessorDefaults: {
-        leaseConfig: leaseConfig,
-        pollIntervalMs: leaseConfig.leaseMs,
-      },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      pollIntervalMs: leaseConfig.leaseMs,
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
+        leaseConfig,
         processors: {
           test: {
             attemptHandler: async ({ prepare, complete }) => {
@@ -379,7 +369,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     log,
     expect,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: {
         entry: true;
         input: { id: number };
@@ -392,7 +382,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
 
     const jobsStarted = Promise.withResolvers<void>();
@@ -404,13 +394,11 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       client,
       workerId: "concurrent-worker",
       concurrency: 2,
-      jobTypeProcessorDefaults: {
-        leaseConfig: leaseConfig,
-        pollIntervalMs: 10,
-      },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      pollIntervalMs: 10,
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
+        leaseConfig,
         processors: {
           test: {
             attemptHandler: async ({ job, complete }) => {

@@ -111,7 +111,7 @@ See [Job Processing](../job-processing/) for details on error handling and abort
 
 ## Client-Based Construction
 
-`createInProcessWorker` accepts a `client` instance and extracts infrastructure (`stateAdapter`, `notifyAdapter`, `observabilityAdapter`, `jobTypeRegistry`, `log`) from it internally. Worker-specific options (`jobTypeProcessorRegistry`, `concurrency`, `backoffConfig`, etc.) remain separate parameters. The top-level `backoffConfig` controls the worker's own main loop retry behavior (e.g., recovery from database connection errors), separate from the per-job `jobTypeProcessorDefaults.backoffConfig` that controls job attempt backoff.
+`createInProcessWorker` accepts a `client` instance and extracts infrastructure (`stateAdapter`, `notifyAdapter`, `observabilityAdapter`, `jobTypes`, `log`) from it internally. Worker-specific options (`processors`, `concurrency`, `pollIntervalMs`, `recoveryBackoffConfig`) remain separate parameters. The top-level `recoveryBackoffConfig` controls the worker's own main loop retry behavior (e.g., recovery from database connection errors). Per-attempt configuration — `backoffConfig`, `leaseConfig`, `attemptMiddleware` — lives on the processor registry.
 
 This is purely a construction convenience — no lifecycle coupling is introduced. The client and worker remain independent after construction.
 
@@ -123,7 +123,11 @@ A single worker can handle multiple job types. Slots poll all registered types a
 
 ### Attempt Middlewares
 
-Workers support middlewares that wrap each job attempt, enabling cross-cutting concerns like contextual logging. Middlewares compose in order: first middleware's "before" runs first, last middleware's "after" runs first. User-land middleware may use `AsyncLocalStorage` for implicit context propagation.
+Handler middleware hook into one or more job processing phases via `wrapHandler`, `wrapPrepare`, and `wrapComplete`. Each hook can inject typed context into the inner handler/callback through `next(ctx)`. Middleware compose as an onion: the first middleware's "before" runs outermost. Middleware enable cross-cutting concerns like contextual logging, audit trails, tracing spans, and resource injection.
+
+Middleware are declared on the processor registry via `createProcessors({ attemptMiddleware: [...] })`. Handler signatures inside that registry auto-infer their typed context from the middleware tuple. When multiple slices are passed as an array to `createInProcessWorker`, each processor keeps its slice's middleware chain.
+
+To share middleware across multiple registries, list them inline at each `createProcessors` call — the tuple inference narrows without requiring `as const`. Each slice's middleware chain is the runtime source of truth; the worker simply dispatches to whichever processor matches the job's typeName.
 
 ## Summary
 
@@ -133,7 +137,7 @@ The worker design emphasizes:
 2. **Efficiency**: Slots are self-contained, main loop just manages concurrency
 3. **Reliability**: Integrated reaper ensures recovery from failures
 4. **Flexibility**: Per-type configuration, multi-type workers
-5. **Extensibility**: Middlewares enable cross-cutting concerns
+5. **Extensibility**: Handler middleware enable cross-cutting concerns
 
 ## See Also
 

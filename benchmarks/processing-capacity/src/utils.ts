@@ -4,14 +4,14 @@ import {
   type StateAdapter,
   createClient,
   createInProcessWorker,
-  createJobTypeProcessorRegistry,
-  defineJobTypeRegistry,
+  createProcessors,
+  defineJobTypes,
   withTransactionHooks,
 } from "queuert";
 
 export const JOB_COUNT = 10_000;
 
-export const jobTypeRegistry = defineJobTypeRegistry<{
+export const jobTypes = defineJobTypes<{
   "test-job": {
     entry: true;
     input: { index: number };
@@ -53,15 +53,15 @@ export const runBenchmark = async ({
   const client: Client<any, any> = await createClient({
     stateAdapter,
     notifyAdapter,
-    jobTypeRegistry,
+    jobTypes,
   });
 
   const worker = await createInProcessWorker({
     client,
     concurrency,
-    jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+    processors: createProcessors({
       client,
-      jobTypeRegistry,
+      jobTypes,
       processors: {
         "test-job": {
           attemptHandler: async ({ complete }) => complete(async () => ({ done: true as const })),

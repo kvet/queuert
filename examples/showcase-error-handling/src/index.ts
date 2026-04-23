@@ -19,13 +19,13 @@ import postgres from "postgres";
 import {
   createClient,
   createInProcessWorker,
-  createJobTypeProcessorRegistry,
-  defineJobTypeRegistry,
+  createProcessors,
+  defineJobTypes,
   rescheduleJob,
   withTransactionHooks,
 } from "queuert";
 
-const jobTypeRegistry = defineJobTypeRegistry<{
+const jobTypes = defineJobTypes<{
   /*
    * Workflow (discriminated union):
    *   process-payment --> output { success } | { error }
@@ -93,14 +93,14 @@ const notifyAdapter = await createPgNotifyAdapter({ notifyProvider });
 const client = await createClient({
   stateAdapter,
   notifyAdapter,
-  jobTypeRegistry,
+  jobTypes,
 });
 
 const worker = await createInProcessWorker({
   client,
-  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+  processors: createProcessors({
     client,
-    jobTypeRegistry,
+    jobTypes,
     processors: {
       "process-payment": {
         attemptHandler: async ({ job, complete }) => {

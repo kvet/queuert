@@ -1,15 +1,12 @@
 # Blockers Showcase
 
-Demonstrates how jobs can depend on other job chains to complete before starting.
+Jobs that depend on other job chains completing before they start.
 
-## Scenarios
-
-1. **Fan-out/Fan-in**: Multiple fetch jobs run in parallel, aggregate waits for all
-2. **Fixed Slots**: Job requires exactly two specific prerequisite jobs
+Scenarios: fan-out/fan-in, fixed slots.
 
 ## Running
 
 ```bash
-pnpm install
-pnpm start
+bun install
+bun run --filter example-showcase-blockers start
 ```

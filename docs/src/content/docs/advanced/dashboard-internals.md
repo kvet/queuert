@@ -31,15 +31,15 @@ All API endpoints are read-only except `POST /api/jobs/{jobId}/trigger` and `DEL
 
 **`GET /api/chains`** — List job chains with filtering and pagination.
 
-| Parameter  | Type  | Description                   |
-| ---------- | ----- | ----------------------------- |
-| `typeName` | query | Filter by chain type name     |
-| `status`   | query | Filter by status              |
-| `rootOnly` | query | Return only root jobs         |
-| `id`       | query | Filter by chain ID            |
-| `jobId`    | query | Filter by job ID within chain |
-| `cursor`   | query | Pagination cursor             |
-| `limit`    | query | Page size                     |
+| Parameter  | Type  | Description                                                       |
+| ---------- | ----- | ----------------------------------------------------------------- |
+| `typeName` | query | Filter by chain type name                                         |
+| `status`   | query | Filter by status                                                  |
+| `root`     | query | Return only root chains (default `true`; pass `false` to disable) |
+| `id`       | query | Filter by chain ID                                                |
+| `jobId`    | query | Filter by job ID within chain                                     |
+| `cursor`   | query | Pagination cursor                                                 |
+| `limit`    | query | Page size                                                         |
 
 Returns an array of `[rootJob, lastJob]` pairs and a `nextCursor` for pagination.
 

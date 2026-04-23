@@ -1,5 +1,5 @@
-import { type JobTypeRegistry } from "./entities/job-type-registry.js";
-import { wrapJobTypeRegistryWithLogging } from "./entities/job-type-registry.wrapper.logging.js";
+import { type JobTypes } from "./entities/job-types.js";
+import { wrapJobTypesWithLogging } from "./entities/job-types.wrapper.logging.js";
 import { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 import { createNoopNotifyAdapter } from "./notify-adapter/notify-adapter.noop.js";
 import { wrapNotifyAdapterWithLogging } from "./notify-adapter/notify-adapter.wrapper.logging.js";
@@ -17,19 +17,19 @@ export const createHelpers = ({
   stateAdapter: stateAdapterOption,
   notifyAdapter: notifyAdapterOption,
   observabilityAdapter: observabilityAdapterOption,
-  jobTypeRegistry: jobTypeRegistryOption,
+  jobTypes: jobTypesOption,
   log,
 }: {
   stateAdapter: StateAdapter<any, any>;
   notifyAdapter?: NotifyAdapter;
   observabilityAdapter?: ObservabilityAdapter;
-  jobTypeRegistry: JobTypeRegistry;
+  jobTypes: JobTypes;
   log?: Log;
 }): {
   stateAdapter: StateAdapter<any, any>;
   notifyAdapter: NotifyAdapter;
   observabilityHelper: ObservabilityHelper;
-  jobTypeRegistry: JobTypeRegistry;
+  jobTypes: JobTypes;
 } => {
   const observabilityAdapter = observabilityAdapterOption ?? createNoopObservabilityAdapter();
   const observabilityHelper = createObservabilityHelper({ log, adapter: observabilityAdapter });
@@ -43,8 +43,8 @@ export const createHelpers = ({
         observabilityHelper,
       })
     : createNoopNotifyAdapter();
-  const jobTypeRegistry = wrapJobTypeRegistryWithLogging({
-    jobTypeRegistry: jobTypeRegistryOption,
+  const jobTypes = wrapJobTypesWithLogging({
+    jobTypes: jobTypesOption,
     observabilityHelper,
   });
 
@@ -52,7 +52,7 @@ export const createHelpers = ({
     stateAdapter,
     notifyAdapter,
     observabilityHelper,
-    jobTypeRegistry,
+    jobTypes,
   };
 };
 

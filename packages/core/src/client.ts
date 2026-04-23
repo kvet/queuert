@@ -1,9 +1,7 @@
 import { type DeduplicationOptions } from "./entities/deduplication.js";
 import { type JobChain, mapStateJobPairToJobChain } from "./entities/job-chain.js";
-import {
-  type JobTypeRegistry,
-  type JobTypeRegistryDefinitions,
-} from "./entities/job-type-registry.js";
+import { type BaseJobTypeDefinitions } from "./entities/job-type.js";
+import { type JobTypes, type JobTypeDefinitions } from "./entities/job-types.js";
 import {
   type BlockerChains,
   type ContinuationJobs,
@@ -16,9 +14,13 @@ import {
   type ResolvedChainJobs,
   type ResolvedJob,
   type ResolvedJobChain,
-} from "./entities/job-type-registry.resolvers.js";
-import { type BaseJobTypeDefinitions } from "./entities/job-type.js";
+} from "./entities/job-types.resolvers.js";
 import { type Job, type JobStatus, mapStateJobToJob } from "./entities/job.js";
+import {
+  type MergeDefinitions,
+  type ValidatedSlices,
+  mergeJobTypes,
+} from "./entities/merge-job-types.js";
 import { type ScheduleOptions } from "./entities/schedule.js";
 import {
   BlockerReferenceError,
@@ -407,39 +409,56 @@ export type Client<
   ) => Promise<Page<_TBlockedJob>>;
 };
 
+/** Derive TJobTypeDefinitions from a single slice or an array of slices. @internal */
+type ClientDefinitions<T> = T extends readonly JobTypes<any>[]
+  ? MergeDefinitions<T>
+  : T extends JobTypes<any>
+    ? JobTypeDefinitions<T>
+    : never;
+
 /**
  * Create a new Queuert client.
  *
  * @param options.stateAdapter - Database adapter for job persistence.
  * @param options.notifyAdapter - Optional pub/sub adapter for real-time notifications.
  * @param options.observabilityAdapter - Optional adapter for metrics and tracing.
- * @param options.jobTypeRegistry - Job type registry (from {@link defineJobTypeRegistry} or {@link createJobTypeRegistry}).
+ * @param options.jobTypes - A single JobTypes slice, or an array of slices to merge. Slices are built with {@link defineJobTypes} or {@link createJobTypes}.
  * @param options.log - Optional structured log function.
  */
 export const createClient = async <
-  TJobTypeRegistry extends JobTypeRegistry<any>,
+  const TJobTypesInput extends JobTypes<any> | readonly [JobTypes<any>, ...JobTypes<any>[]],
   TStateAdapter extends StateAdapter<any, any>,
 >({
   stateAdapter: stateAdapterOption,
   notifyAdapter: notifyAdapterOption,
   observabilityAdapter: observabilityAdapterOption,
-  jobTypeRegistry: jobTypeRegistryOption,
+  jobTypes: jobTypesOption,
   log,
 }: {
   stateAdapter: TStateAdapter;
   notifyAdapter?: NotifyAdapter;
   observabilityAdapter?: ObservabilityAdapter;
-  jobTypeRegistry: TJobTypeRegistry;
+  jobTypes: TJobTypesInput extends readonly JobTypes<any>[]
+    ? ValidatedSlices<TJobTypesInput> & TJobTypesInput
+    : TJobTypesInput;
   log?: Log;
-}): Promise<Client<JobTypeRegistryDefinitions<TJobTypeRegistry>, TStateAdapter>> => {
-  type TJobTypeDefinitions = JobTypeRegistryDefinitions<TJobTypeRegistry>;
+}): Promise<Client<ClientDefinitions<TJobTypesInput>, TStateAdapter>> => {
+  type TJobTypeDefinitions = ClientDefinitions<TJobTypesInput>;
   type TJobId = GetStateAdapterJobId<TStateAdapter>;
+
+  const jobTypes = Array.isArray(jobTypesOption)
+    ? jobTypesOption.length === 1
+      ? (jobTypesOption[0] as JobTypes<any>)
+      : // ValidatedSlices duplicate-check is enforced at the createClient signature;
+        // internal cast bypasses it since the input is already validated.
+        mergeJobTypes(jobTypesOption as never)
+    : (jobTypesOption as JobTypes<any>);
 
   const helpers = createHelpers({
     stateAdapter: stateAdapterOption,
     notifyAdapter: notifyAdapterOption,
     observabilityAdapter: observabilityAdapterOption,
-    jobTypeRegistry: jobTypeRegistryOption,
+    jobTypes,
     log,
   });
   const client: Client<TJobTypeDefinitions, TStateAdapter> = {

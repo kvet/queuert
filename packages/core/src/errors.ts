@@ -185,6 +185,29 @@ export class DuplicateJobTypeError extends Error {
   }
 }
 
+/**
+ * Thrown by a merged {@link JobTypes} when an operation references a type name
+ * that no slice owns. Only raised when every slice in the merge was built with
+ * {@link createJobTypes}; mixed merges that include a {@link defineJobTypes}
+ * slice fall back to no-op validation for unknown types.
+ */
+export class UnknownJobTypeError extends Error {
+  /** The type name that no slice claimed. */
+  readonly typeName: string;
+  /** Type names registered across the merged slices, for diagnosis. */
+  readonly registeredTypeNames: readonly string[];
+
+  constructor(
+    message: string,
+    options: { typeName: string; registeredTypeNames: readonly string[]; cause?: unknown },
+  ) {
+    super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
+    this.name = "UnknownJobTypeError";
+    this.typeName = options.typeName;
+    this.registeredTypeNames = options.registeredTypeNames;
+  }
+}
+
 /** Error codes for job type validation failures. */
 export type JobTypeValidationErrorCode =
   | "not_entry_point"
@@ -201,7 +224,7 @@ export class TransactionContextRequiredError extends Error {
   }
 }
 
-/** Thrown when runtime job type validation fails (via {@link createJobTypeRegistry}). */
+/** Thrown when runtime job type validation fails (via {@link createJobTypes}). */
 export class JobTypeValidationError extends Error {
   /** The specific validation failure code. */
   readonly code: JobTypeValidationErrorCode;

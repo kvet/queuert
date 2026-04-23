@@ -17,7 +17,7 @@ const workerA = await createInProcessWorker({
   client,
   workerId: "worker-a",
   concurrency: 10,
-  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({ client, jobTypeRegistry, processors: { ... } }),
+  processors: createProcessors({ client, jobTypes, processors: { ... } }),
 });
 
 // Process B (e.g., machine-2)
@@ -25,7 +25,7 @@ const workerB = await createInProcessWorker({
   client,
   workerId: "worker-b",
   concurrency: 10,
-  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({ client, jobTypeRegistry, processors: { ... } }),
+  processors: createProcessors({ client, jobTypes, processors: { ... } }),
 });
 ```
 
@@ -43,16 +43,16 @@ const stateAdapter = await createPgStateAdapter({ stateProvider });
 const client = await createClient({
   stateAdapter,
   notifyAdapter,
-  jobTypeRegistry: imageJobTypeRegistry,
+  jobTypes: imageJobTypes,
 });
 
 const worker = await createInProcessWorker({
   client,
   workerId: `image-worker-${threadId}`,
   concurrency: 1,
-  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+  processors: createProcessors({
     client,
-    jobTypeRegistry: imageJobTypeRegistry,
+    jobTypes,
     processors: {
       "images.resize": { attemptHandler: resizeHandler },
       "images.transcode": { attemptHandler: transcodeHandler },
@@ -74,9 +74,9 @@ const notificationWorker = await createInProcessWorker({
   client,
   workerId: "notification-worker",
   concurrency: 100,
-  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+  processors: createProcessors({
     client,
-    jobTypeRegistry: notificationJobTypeRegistry,
+    jobTypes,
     processors: {
       "notifications.send-email": { attemptHandler: emailHandler },
       "notifications.send-sms": { attemptHandler: smsHandler },
@@ -92,9 +92,7 @@ You can also combine slices when a single worker should handle multiple domains:
 ```ts
 const worker = await createInProcessWorker({
   client,
-  jobTypeProcessorRegistry: mergeJobTypeProcessorRegistries({
-    slices: [orderProcessors, notificationProcessors],
-  }),
+  processors: [orderProcessors, notificationProcessors],
 });
 ```
 

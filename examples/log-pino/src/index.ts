@@ -1,12 +1,10 @@
-import { AsyncLocalStorage } from "node:async_hooks";
-
-import pino from "pino";
+import pino, { type Logger } from "pino";
 import {
-  type JobAttemptMiddleware,
+  type AttemptMiddleware,
   createClient,
   createInProcessWorker,
-  createJobTypeProcessorRegistry,
-  defineJobTypeRegistry,
+  createProcessors,
+  defineJobTypes,
   withTransactionHooks,
   createInProcessNotifyAdapter,
   createInProcessStateAdapter,
@@ -15,24 +13,10 @@ import {
 import { createPinoLog } from "./log.js";
 
 // ============================================================
-// Contextual Logging Setup with attemptMiddlewares
+// Contextual Logging via logger injection (attemptMiddleware)
 // ============================================================
 
-// 1. Create AsyncLocalStorage to hold job context during processing
-type JobContext = {
-  jobId: string;
-  typeName: string;
-  chainTypeName: string;
-  attempt: number;
-  workerId: string;
-};
-
-const jobContextStore = new AsyncLocalStorage<JobContext>();
-
-// Helper to get current job context (for use anywhere in job processing)
-export const getJobContext = () => jobContextStore.getStore();
-
-// 2. Create Pino logger with mixin that automatically includes job context
+// 1. Create root Pino logger
 const logger = pino({
   transport: {
     target: "pino-pretty",
@@ -40,15 +24,10 @@ const logger = pino({
       colorize: true,
     },
   },
-  // Pino mixin automatically adds job context to every log entry
-  mixin: () => {
-    const ctx = getJobContext();
-    return ctx ? { jobAttempt: ctx } : {};
-  },
 });
 
-// 3. Define job types
-const jobTypeRegistry = defineJobTypeRegistry<{
+// 2. Define job types
+const jobTypes = defineJobTypes<{
   greet: {
     entry: true;
     input: { name: string };
@@ -61,69 +40,66 @@ const jobTypeRegistry = defineJobTypeRegistry<{
   };
 }>();
 
-// 4. Create adapters and queuert client/worker with Pino logging
+// 3. Create adapters and queuert client
 const stateAdapter = await createInProcessStateAdapter();
 const notifyAdapter = await createInProcessNotifyAdapter();
 const log = createPinoLog(logger);
 
-const qrtClient = await createClient({
+const client = await createClient({
   stateAdapter,
   notifyAdapter,
   log,
-  jobTypeRegistry,
+  jobTypes,
 });
-// 5. Create middleware that sets job context for the duration of job processing
-const contextualLoggingMiddleware: JobAttemptMiddleware<typeof stateAdapter> = async (
-  { job, workerId },
-  next,
-) => {
-  // Run the job processing within the AsyncLocalStorage context
-  return jobContextStore.run(
-    {
-      jobId: job.id,
-      typeName: job.typeName,
-      chainTypeName: job.chainTypeName,
-      attempt: job.attempt,
-      workerId,
-    },
-    next,
-  );
+
+// 4. Middleware that injects a child logger pre-bound to job context.
+//    The handler receives `log` in its typed ctx — no AsyncLocalStorage, no mixin.
+const loggerInjectionMiddleware: AttemptMiddleware<any, { log: Logger }> = {
+  wrapHandler: async ({ job, workerId, next }) =>
+    next({
+      log: logger.child({
+        jobAttempt: {
+          jobId: job.id,
+          typeName: job.typeName,
+          chainTypeName: job.chainTypeName,
+          attempt: job.attempt,
+          workerId,
+        },
+      }),
+    }),
 };
 
-// 6. Create and start qrtWorker with the middleware
-const qrtWorker = await createInProcessWorker({
-  client: qrtClient,
+// 5. Create and start the worker with the middleware
+const worker = await createInProcessWorker({
+  client,
   workerId: "worker-1",
-  jobTypeProcessorDefaults: {
-    attemptMiddlewares: [contextualLoggingMiddleware],
-  },
-  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
-    client: qrtClient,
-    jobTypeRegistry,
+  processors: createProcessors({
+    client,
+    jobTypes,
+    attemptMiddleware: [loggerInjectionMiddleware],
     processors: {
       greet: {
-        attemptHandler: async ({ job, complete }) => {
-          // This log automatically includes job context thanks to pino mixin!
-          logger.info("Starting to process greeting");
+        attemptHandler: async ({ job, log, complete }) => {
+          // `log` is already bound to this job's context
+          log.info("Starting to process greeting");
 
           return complete(async () => {
-            logger.info({ name: job.input.name }, "Generating greeting");
+            log.info({ name: job.input.name }, "Generating greeting");
             return { greeting: `Hello, ${job.input.name}!` };
           });
         },
       },
       "might-fail": {
-        attemptHandler: async ({ job, complete }) => {
-          // Job context is automatically included in all logs
-          logger.info("Processing might-fail job");
+        attemptHandler: async ({ job, log, complete }) => {
+          log.info("Processing might-fail job");
 
           if (job.input.shouldFail && job.attempt < 2) {
-            logger.warn("About to throw simulated error");
+            log.warn("About to throw simulated error");
             throw new Error("Simulated failure for demonstration");
           }
 
           return complete(async () => {
-            logger.info("Job succeeded");
+            log.info("Job succeeded");
             return { success: true as const };
           });
         },
@@ -133,14 +109,14 @@ const qrtWorker = await createInProcessWorker({
   }),
 });
 
-// Start qrtWorker
-const stopWorker = await qrtWorker.start();
+// Start worker
+const stopWorker = await worker.start();
 
-// 7. Run successful job
+// 6. Run successful job
 logger.info("--- Running successful job ---");
 const successJob = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
-    qrtClient.startJobChain({
+    client.startJobChain({
       ...ctx,
       transactionHooks,
       typeName: "greet",
@@ -149,16 +125,16 @@ const successJob = await withTransactionHooks(async (transactionHooks) =>
   ),
 );
 
-const successCompleted = await qrtClient.awaitJobChain(successJob, {
+const successCompleted = await client.awaitJobChain(successJob, {
   timeoutMs: 5000,
 });
 logger.info({ output: successCompleted.output }, "Successful job completed");
 
-// 8. Run job that fails then succeeds (demonstrates error logging with stack trace)
+// 7. Run job that fails then succeeds (demonstrates error logging with stack trace)
 logger.info("--- Running job that fails first attempt ---");
 const failThenSucceedJob = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
-    qrtClient.startJobChain({
+    client.startJobChain({
       ...ctx,
       transactionHooks,
       typeName: "might-fail",
@@ -167,10 +143,10 @@ const failThenSucceedJob = await withTransactionHooks(async (transactionHooks) =
   ),
 );
 
-const retryCompleted = await qrtClient.awaitJobChain(failThenSucceedJob, {
+const retryCompleted = await client.awaitJobChain(failThenSucceedJob, {
   timeoutMs: 5000,
 });
 logger.info({ output: retryCompleted.output }, "Retry job eventually succeeded");
 
-// 9. Cleanup
+// 8. Cleanup
 await stopWorker();

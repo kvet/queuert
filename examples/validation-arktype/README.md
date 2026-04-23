@@ -1,31 +1,10 @@
-# Runtime Validation with ArkType Example
+# Runtime Validation with ArkType
 
-This example demonstrates how to use ArkType for runtime validation of job types.
+Custom validation adapter backed by ArkType — covers nominal (by type name) and structural (by input shape) reference validation.
 
-## What it shows
-
-1. Creating an ArkType-based job type registry adapter
-2. Nominal reference validation (by type name)
-3. Structural reference validation (by input shape)
-4. Type inference from ArkType schemas for compile-time safety
-
-## Key concepts
-
-- **Nominal validation**: Validate continuations/blockers by type name (e.g., `"'step2'"`)
-- **Structural validation**: Validate by input shape (e.g., any job with `{ token: string }` input)
-- **Type inference**: TypeScript types are inferred from ArkType schemas automatically
-
-## Key files
-
-- `src/arktype-adapter.ts` - The ArkType adapter implementation (reusable in your projects)
-- `src/index.ts` - Demo showing nominal and structural validation
-
-## Running the example
+## Running
 
 ```bash
-# From the monorepo root
-pnpm install
-
-# Run the example
-pnpm --filter example-validation-arktype start
+bun install
+bun run --filter example-validation-arktype start
 ```

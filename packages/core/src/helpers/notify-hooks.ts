@@ -2,16 +2,16 @@ import { type NotifyAdapter } from "../notify-adapter/notify-adapter.js";
 import { type StateJob } from "../state-adapter/state-adapter.js";
 import { type TransactionHooks } from "../transaction-hooks.js";
 
-const queuertNotifyJobScheduled = Symbol("queuert.notifyJobScheduled");
-const queuertNotifyChainCompleted = Symbol("queuert.notifyChainCompleted");
-const queuertNotifyJobOwnershipLost = Symbol("queuert.notifyJobOwnershipLost");
+const notifyJobScheduledKey = Symbol("queuert.notifyJobScheduled");
+const notifyChainCompletedKey = Symbol("queuert.notifyChainCompleted");
+const notifyJobOwnershipLostKey = Symbol("queuert.notifyJobOwnershipLost");
 
 export const bufferNotifyJobScheduled = (
   transactionHooks: TransactionHooks,
   notifyAdapter: NotifyAdapter,
   job: StateJob,
 ): void => {
-  const state = transactionHooks.getOrInsert(queuertNotifyJobScheduled, () => ({
+  const state = transactionHooks.getOrInsert(notifyJobScheduledKey, () => ({
     state: new Map<string, number>(),
     flush: async (state) => {
       await Promise.all(
@@ -39,7 +39,7 @@ export const bufferNotifyChainCompletion = (
   job: StateJob,
 ): void => {
   transactionHooks
-    .getOrInsert(queuertNotifyChainCompleted, () => ({
+    .getOrInsert(notifyChainCompletedKey, () => ({
       state: new Set<string>(),
       flush: async (state) => {
         await Promise.all(
@@ -67,7 +67,7 @@ export const bufferNotifyJobOwnershipLost = (
   jobId: string,
 ): void => {
   transactionHooks
-    .getOrInsert(queuertNotifyJobOwnershipLost, () => ({
+    .getOrInsert(notifyJobOwnershipLostKey, () => ({
       state: new Set<string>(),
       flush: async (state) => {
         await Promise.all(

@@ -5,13 +5,13 @@
  * Each measurement runs in a separate child process for complete isolation.
  *
  * Usage:
- *   pnpm start                    # Run all adapter measurements
- *   pnpm start:state-postgres     # Run PostgreSQL state adapter measurement
- *   pnpm start:state-sqlite       # Run SQLite state adapter measurement
- *   pnpm start:notify-redis       # Run Redis notify adapter measurement
- *   pnpm start:notify-postgres    # Run PostgreSQL notify adapter measurement
- *   pnpm start:notify-nats        # Run NATS notify adapter measurement
- *   pnpm start:otel               # Run OpenTelemetry observability adapter measurement
+ *   bun run start                    # Run all adapter measurements
+ *   bun run start:state-postgres     # Run PostgreSQL state adapter measurement
+ *   bun run start:state-sqlite       # Run SQLite state adapter measurement
+ *   bun run start:notify-redis       # Run Redis notify adapter measurement
+ *   bun run start:notify-postgres    # Run PostgreSQL notify adapter measurement
+ *   bun run start:notify-nats        # Run NATS notify adapter measurement
+ *   bun run start:otel               # Run OpenTelemetry observability adapter measurement
  */
 
 import { spawn } from "node:child_process";
@@ -87,7 +87,7 @@ async function main(): Promise<void> {
   } else if (args.includes("--dashboard")) {
     toRun = ["dashboard"];
   } else {
-    console.log("\nUsage: pnpm start:<measurement>");
+    console.log("\nUsage: bun run start:<measurement>");
     console.log("\nAvailable measurements:");
     for (const name of Object.keys(measurementModules)) {
       console.log(`  --${name}`);

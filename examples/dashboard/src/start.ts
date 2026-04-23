@@ -4,23 +4,19 @@
  * Creates job chains matching the 4 standard demo scenarios and processes them,
  * populating the shared SQLite database for the dashboard to display.
  *
- * Usage: pnpm start
+ * Usage: bun run start
  * Then open http://localhost:3333 to view results in the dashboard.
  */
 
-import {
-  createInProcessWorker,
-  createJobTypeProcessorRegistry,
-  withTransactionHooks,
-} from "queuert";
+import { createInProcessWorker, createProcessors, withTransactionHooks } from "queuert";
 
-import { client, db, jobTypeRegistry, stateAdapter } from "./client.js";
+import { client, db, jobTypes, stateAdapter } from "./client.js";
 
 const worker = await createInProcessWorker({
   client,
-  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+  processors: createProcessors({
     client,
-    jobTypeRegistry,
+    jobTypes,
     processors: {
       greet: {
         attemptHandler: async ({ job, complete }) => {

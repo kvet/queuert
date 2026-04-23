@@ -7,26 +7,30 @@ export const definitionsSymbol: unique symbol = Symbol("queuert.definitions");
 /** Symbol used to carry phantom external job type definitions on a registry. */
 export const externalDefinitionsSymbol: unique symbol = Symbol("queuert.externalDefinitions");
 
-/** Symbol that brands a registry as merged (prevents passing to createJobTypeProcessorRegistry). */
-export const mergedRegistrySymbol: unique symbol = Symbol("queuert.mergedRegistry");
+/** Extract the job type definitions from a {@link JobTypes}. */
+export type JobTypeDefinitions<T extends JobTypes<any>> = T[typeof definitionsSymbol];
 
-/** Extract the job type definitions from a {@link JobTypeRegistry}. */
-export type JobTypeRegistryDefinitions<T extends JobTypeRegistry<any>> =
-  T[typeof definitionsSymbol];
-
-/** Extract the external job type definitions from a {@link JobTypeRegistry}. */
-export type ExternalJobTypeRegistryDefinitions<T extends JobTypeRegistry<any>> =
+/** Extract the external job type definitions from a {@link JobTypes}. */
+export type ExternalJobTypeDefinitions<T extends JobTypes<any>> =
   T[typeof externalDefinitionsSymbol];
 
-export const noopRegistries: WeakSet<JobTypeRegistry<any>> = new WeakSet<JobTypeRegistry<any>>();
+/**
+ * Set of registries produced by {@link createNoopJobTypes} (i.e. via
+ * {@link defineJobTypes}). Consulted by {@link mergeJobTypes} to decide
+ * whether to fall back to no-op validation when a type name is not
+ * owned by any validated slice — without this marker, merged registries
+ * would either swallow unknown-type validation errors or misroute them
+ * to an arbitrary validated slice.
+ */
+export const noopRegistries: WeakSet<JobTypes<any>> = new WeakSet<JobTypes<any>>();
 
 /**
- * Configuration for createJobTypeRegistry.
+ * Configuration for createJobTypes.
  * Adapters implement these functions to provide validation logic.
  * Functions should throw on validation failure (any error type).
  */
-export type JobTypeRegistryConfig = {
-  /** Returns the known job type names. Used for runtime duplicate detection in {@link mergeJobTypeRegistries}. */
+export type JobTypesOptions = {
+  /** Returns the known job type names. Used for runtime duplicate detection when {@link createClient} merges slices. */
   getTypeNames: () => readonly string[];
   /** Validate that a job type can start a chain. Throw on failure. */
   validateEntry: (typeName: string) => void;
@@ -47,10 +51,9 @@ export type JobTypeRegistryConfig = {
  * - validate* → throws JobTypeValidationError or returns void (pure validation)
  * - parse* → throws JobTypeValidationError or returns transformed value (validation + transformation)
  */
-export type JobTypeRegistry<
+export type JobTypes<
   TJobTypeDefinitions = unknown,
   TExternalJobTypeDefinitions = Record<never, never>,
-  TMerged extends boolean = boolean,
 > = {
   /** Validate that a job type can start a chain (is an entry point). Throws JobTypeValidationError on failure. */
   validateEntry: (typeName: string) => void;
@@ -75,20 +78,17 @@ export type JobTypeRegistry<
 
   /** Phantom property for external (cross-slice) type inference. */
   readonly [externalDefinitionsSymbol]: TExternalJobTypeDefinitions;
-
-  /** Phantom property that brands merged registries. */
-  readonly [mergedRegistrySymbol]: TMerged;
 };
 
 /**
  * Create a noop registry that passes all values through without validation.
- * Used by defineJobTypeRegistry for compile-time-only type checking.
+ * Used by defineJobTypes for compile-time-only type checking.
  */
-export const createNoopJobTypeRegistry = <
+export const createNoopJobTypes = <
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TExternalJobTypeDefinitions extends BaseJobTypeDefinitions = Record<never, never>,
->(): JobTypeRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions, false> => {
-  const registry: JobTypeRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions, false> = {
+>(): JobTypes<TJobTypeDefinitions, TExternalJobTypeDefinitions> => {
+  const registry: JobTypes<TJobTypeDefinitions, TExternalJobTypeDefinitions> = {
     validateEntry: () => {},
     parseInput: (_, input) => input,
     parseOutput: (_, output) => output,
@@ -97,7 +97,6 @@ export const createNoopJobTypeRegistry = <
     validateBlockers: () => {},
     [definitionsSymbol]: undefined as unknown as TJobTypeDefinitions,
     [externalDefinitionsSymbol]: undefined as unknown as TExternalJobTypeDefinitions,
-    [mergedRegistrySymbol]: false as const,
   };
   noopRegistries.add(registry);
   return registry;
@@ -108,7 +107,7 @@ export const createNoopJobTypeRegistry = <
  * Wraps adapter errors in JobTypeValidationError.
  *
  * @example
- * const registry = createJobTypeRegistry<MyJobTypes>({
+ * const registry = createJobTypes<MyJobTypes>({
  *   getTypeNames: () => Object.keys(schemas),
  *   validateEntry: (typeName) => {
  *     if (!entryTypes.has(typeName)) throw new Error('Not an entry point');
@@ -119,12 +118,12 @@ export const createNoopJobTypeRegistry = <
  *   validateBlockers: (typeName, blockers) => schemas[typeName].blockers.parse(blockers),
  * });
  */
-export const createJobTypeRegistry = <
+export const createJobTypes = <
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TExternalJobTypeDefinitions extends BaseJobTypeDefinitions = Record<never, never>,
 >(
-  config: JobTypeRegistryConfig,
-): JobTypeRegistry<TJobTypeDefinitions, TExternalJobTypeDefinitions, false> => ({
+  config: JobTypesOptions,
+): JobTypes<TJobTypeDefinitions, TExternalJobTypeDefinitions> => ({
   getTypeNames: () => config.getTypeNames(),
   validateEntry: (typeName) => {
     try {
@@ -185,5 +184,4 @@ export const createJobTypeRegistry = <
   },
   [definitionsSymbol]: undefined as unknown as TJobTypeDefinitions,
   [externalDefinitionsSymbol]: undefined as unknown as TExternalJobTypeDefinitions,
-  [mergedRegistrySymbol]: false as const,
 });

@@ -22,7 +22,7 @@ const client = await createClient({
   stateAdapter,
   notifyAdapter,
   log,
-  jobTypeRegistry,
+  jobTypes,
 });
 ```
 

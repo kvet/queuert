@@ -2,11 +2,12 @@ import { type TestAPI } from "vitest";
 
 import { sleep } from "../helpers/sleep.js";
 import {
+  type AttemptMiddleware,
   type JobChain,
   createClient,
   createInProcessWorker,
-  createJobTypeProcessorRegistry,
-  defineJobTypeRegistry,
+  createProcessors,
+  defineJobTypes,
   withTransactionHooks,
 } from "../index.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
@@ -25,7 +26,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     observabilityAdapter,
     log,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: {
         entry: true;
         input: { test: boolean };
@@ -38,14 +39,14 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
         processors: {
           test: {
             attemptHandler: async ({ job, complete }) => {
@@ -83,7 +84,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
   }) => {
     const processedTypes: string[] = [];
 
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       email: { entry: true; input: { to: string }; output: { sent: boolean } };
       sms: { entry: true; input: { phone: string }; output: { sent: boolean } };
     }>();
@@ -93,14 +94,14 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
         processors: {
           email: {
             attemptHandler: async ({ complete }) => {
@@ -159,7 +160,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     observabilityAdapter,
     log,
   }) => {
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: {
         entry: true;
         input: { test: boolean };
@@ -172,17 +173,15 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      jobTypeProcessorDefaults: {
-        pollIntervalMs: 100,
-      },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      pollIntervalMs: 100,
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
         processors: {
           test: {
             attemptHandler: async ({ job, complete }) => {
@@ -220,7 +219,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
   }) => {
     const processedJobs: number[] = [];
 
-    const jobTypeRegistry = defineJobTypeRegistry<{
+    const jobTypes = defineJobTypes<{
       test: {
         entry: true;
         input: { jobNumber: number };
@@ -233,14 +232,14 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
         processors: {
           test: {
             attemptHandler: async ({ job, complete }) => {
@@ -279,7 +278,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     expect(processedJobs).toEqual([0, 1, 2, 3, 4]);
   });
 
-  it("calls attemptMiddlewares with job context and composes them correctly", async ({
+  it("composes registry-level wrapHandler onion with typed ctx", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -289,14 +288,10 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     expect,
   }) => {
     const order: string[] = [];
-    const capturedJobs: { id: unknown; typeName: string; input: unknown }[] = [];
+    const observed: { trace?: string; audit?: string; jobTypeName?: string }[] = [];
 
-    const jobTypeRegistry = defineJobTypeRegistry<{
-      test: {
-        entry: true;
-        input: { value: number };
-        output: null;
-      };
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: { value: number }; output: null };
     }>();
 
     const client = await createClient({
@@ -304,39 +299,38 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       notifyAdapter,
       observabilityAdapter,
       log,
-      jobTypeRegistry,
+      jobTypes,
     });
+
+    const traceMiddleware: AttemptMiddleware<any, { trace: string }> = {
+      wrapHandler: async ({ job, next }) => {
+        order.push("mw1-before");
+        observed.push({ jobTypeName: job.typeName });
+        const result = await next({ trace: "trace-1" });
+        order.push("mw1-after");
+        return result;
+      },
+    };
+    const auditMiddleware: AttemptMiddleware<any, { audit: string }> = {
+      wrapHandler: async ({ next }) => {
+        order.push("mw2-before");
+        const result = await next({ audit: "audit-1" });
+        order.push("mw2-after");
+        return result;
+      },
+    };
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
-      jobTypeProcessorDefaults: {
-        attemptMiddlewares: [
-          async (ctx, next) => {
-            order.push("mw1-before");
-            capturedJobs.push({
-              id: ctx.job.id,
-              typeName: ctx.job.typeName,
-              input: ctx.job.input,
-            });
-            const result = await next();
-            order.push("mw1-after");
-            return result;
-          },
-          async (ctx, next) => {
-            order.push("mw2-before");
-            const result = await next();
-            order.push("mw2-after");
-            return result;
-          },
-        ],
-      },
-      jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+      processors: createProcessors({
         client,
-        jobTypeRegistry,
+        jobTypes,
+        attemptMiddleware: [traceMiddleware, auditMiddleware],
         processors: {
           test: {
-            attemptHandler: async ({ complete }) => {
+            attemptHandler: async ({ trace, audit, complete }) => {
               order.push("process");
+              observed.push({ trace, audit });
               return complete(async () => null);
             },
           },
@@ -360,8 +354,149 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     expect(order).toEqual(["mw1-before", "mw2-before", "process", "mw2-after", "mw1-after"]);
-    expect(capturedJobs).toHaveLength(1);
-    expect(capturedJobs[0].typeName).toBe("test");
-    expect(capturedJobs[0].input).toEqual({ value: 42 });
+    expect(observed).toEqual([{ jobTypeName: "test" }, { trace: "trace-1", audit: "audit-1" }]);
+  });
+
+  it("calls wrapPrepare around the prepare callback with typed ctx", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const order: string[] = [];
+    const observedPrepareCtx: { tag: string }[] = [];
+
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: { value: number }; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    const prepareMiddleware: AttemptMiddleware<any, {}, { tag: string }> = {
+      wrapPrepare: async ({ next }) => {
+        order.push("prepare-wrap-before");
+        const result = await next({ tag: "prep" });
+        order.push("prepare-wrap-after");
+        return result;
+      },
+    };
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        attemptMiddleware: [prepareMiddleware],
+        processors: {
+          test: {
+            attemptHandler: async ({ prepare, complete }) => {
+              await prepare({ mode: "atomic" }, async ({ tag }) => {
+                order.push("prepare-callback");
+                observedPrepareCtx.push({ tag });
+              });
+              return complete(async () => null);
+            },
+          },
+        },
+      }),
+    });
+
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: { value: 1 },
+        }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitJobChain(jobChain, completionOptions);
+    });
+
+    expect(order).toEqual(["prepare-wrap-before", "prepare-callback", "prepare-wrap-after"]);
+    expect(observedPrepareCtx).toEqual([{ tag: "prep" }]);
+  });
+
+  it("calls wrapComplete around the complete callback with typed ctx", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const order: string[] = [];
+    const observedCompleteCtx: { tag: string }[] = [];
+
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: { value: number }; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    const completeMiddleware: AttemptMiddleware<any, {}, {}, { tag: string }> = {
+      wrapComplete: async ({ next }) => {
+        order.push("complete-wrap-before");
+        const result = await next({ tag: "complete" });
+        order.push("complete-wrap-after");
+        return result;
+      },
+    };
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        attemptMiddleware: [completeMiddleware],
+        processors: {
+          test: {
+            attemptHandler: async ({ complete }) =>
+              complete(async ({ tag }) => {
+                order.push("complete-callback");
+                observedCompleteCtx.push({ tag });
+                return null;
+              }),
+          },
+        },
+      }),
+    });
+
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startJobChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: { value: 1 },
+        }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitJobChain(jobChain, completionOptions);
+    });
+
+    expect(order).toEqual(["complete-wrap-before", "complete-callback", "complete-wrap-after"]);
+    expect(observedCompleteCtx).toEqual([{ tag: "complete" }]);
   });
 };

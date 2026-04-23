@@ -3,7 +3,7 @@
  *
  * This example demonstrates how to use ArkType for runtime validation of job types.
  * It shows:
- * 1. Creating an ArkType-based job type jobTypeRegistry
+ * 1. Creating an ArkType-based job type jobTypes
  * 2. Nominal reference validation (by type name)
  * 3. Structural reference validation (by input shape)
  */
@@ -12,16 +12,16 @@ import { type } from "arktype";
 import {
   createClient,
   createInProcessWorker,
-  createJobTypeProcessorRegistry,
+  createProcessors,
   withTransactionHooks,
   createInProcessNotifyAdapter,
   createInProcessStateAdapter,
 } from "queuert";
 
-import { createArkTypeJobTypeRegistry } from "./arktype-adapter.js";
+import { createArkTypeJobTypes } from "./arktype-adapter.js";
 
 // 1. Define job types with ArkType schemas
-const jobTypeRegistry = createArkTypeJobTypeRegistry({
+const jobTypes = createArkTypeJobTypes({
   // Entry point with nominal continuation validation
   "fetch-data": {
     entry: true,
@@ -73,22 +73,22 @@ const jobTypeRegistry = createArkTypeJobTypeRegistry({
   },
 });
 
-// 2. Create queuert client and worker with the jobTypeRegistry
+// 2. Create queuert client and worker with the jobTypes
 const stateAdapter = await createInProcessStateAdapter();
 const notifyAdapter = await createInProcessNotifyAdapter();
 
-const qrtClient = await createClient({
+const client = await createClient({
   stateAdapter,
   notifyAdapter,
-  jobTypeRegistry,
+  jobTypes,
 });
 
-// 3. Create and start qrtWorker with job type processors
-const qrtWorker = await createInProcessWorker({
-  client: qrtClient,
-  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
-    client: qrtClient,
-    jobTypeRegistry,
+// 3. Create and start worker with job type processors
+const worker = await createInProcessWorker({
+  client,
+  processors: createProcessors({
+    client,
+    jobTypes,
     processors: {
       "fetch-data": {
         attemptHandler: async ({ job, complete }) => {
@@ -136,13 +136,13 @@ const qrtWorker = await createInProcessWorker({
   }),
 });
 
-const stopWorker = await qrtWorker.start();
+const stopWorker = await worker.start();
 
 // 4. Run a chain
 console.log("\n=== Running fetch-data chain ===");
 const jobChain = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
-    qrtClient.startJobChain({
+    client.startJobChain({
       ...ctx,
       transactionHooks,
       typeName: "fetch-data",
@@ -151,7 +151,7 @@ const jobChain = await withTransactionHooks(async (transactionHooks) =>
   ),
 );
 
-const result = await qrtClient.awaitJobChain(jobChain, { timeoutMs: 5000 });
+const result = await client.awaitJobChain(jobChain, { timeoutMs: 5000 });
 console.log("Chain completed:", result.output);
 
 // 5. Cleanup

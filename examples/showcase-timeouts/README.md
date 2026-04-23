@@ -1,15 +1,12 @@
 # Timeouts Showcase
 
-Demonstrates timeout patterns for job processing.
+Timeout patterns for job processing.
 
-## Scenarios
-
-1. **Cooperative Timeout**: Using `AbortSignal.timeout()` with the job signal
-2. **Hard Timeout**: Using `leaseConfig` for automatic job reclamation
+Scenarios: cooperative timeout via `AbortSignal.timeout()` composed with the job signal; hard timeout via `leaseConfig` for automatic reclamation.
 
 ## Running
 
 ```bash
-pnpm install
-pnpm start
+bun install
+bun run --filter example-showcase-timeouts start
 ```

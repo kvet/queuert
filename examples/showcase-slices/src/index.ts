@@ -12,22 +12,16 @@
 
 import assert from "node:assert/strict";
 
-import {
-  createInProcessWorker,
-  mergeJobTypeProcessorRegistries,
-  withTransactionHooks,
-} from "queuert";
+import { createInProcessWorker, withTransactionHooks } from "queuert";
 
 import { sql, stopContainer } from "./adapters.js";
 import { client } from "./client.js";
-import { notificationJobTypeProcessorRegistry } from "./slice-notifications-processors.js";
-import { orderJobTypeProcessorRegistry } from "./slice-orders-processors.js";
+import { notificationProcessors } from "./slice-notifications-processors.js";
+import { orderProcessors } from "./slice-orders-processors.js";
 
 const worker = await createInProcessWorker({
   client,
-  jobTypeProcessorRegistry: mergeJobTypeProcessorRegistries({
-    slices: [orderJobTypeProcessorRegistry, notificationJobTypeProcessorRegistry],
-  }),
+  processors: [orderProcessors, notificationProcessors],
 });
 
 const stopWorker = await worker.start();
@@ -94,7 +88,7 @@ assert.ok(orderResult2.output.orderId > 0);
 // ---------------------------------------------------------------------------
 // Pattern 3: Cross-slice blockers with external references
 // The orders slice references notifications.send-notification as a blocker
-// using defineJobTypeRegistry<T, TExternal>. No need for a separate workflow slice
+// using defineJobTypes<T, TExternal>. No need for a separate workflow slice
 // that duplicates the notification type definition.
 //
 // place-order starts a notification chain and passes it as a blocker

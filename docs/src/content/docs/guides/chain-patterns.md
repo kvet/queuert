@@ -12,7 +12,7 @@ Chains support various execution patterns via `continueWith`:
 Jobs execute one after another: `create-subscription -> activate-trial`
 
 ```ts
-const jobTypeRegistry = defineJobTypeRegistry<{
+const jobTypes = defineJobTypes<{
   'create-subscription': {
     entry: true;
     input: { userId: string; planId: string };
@@ -67,7 +67,7 @@ Jobs conditionally continue to different types: `trial-decision -> convert-to-pa
 Jobs continue to the same type: `charge-billing -> charge-billing -> ... -> done`
 
 ```ts
-const jobTypeRegistry = defineJobTypeRegistry<{
+const jobTypes = defineJobTypes<{
   'charge-billing': {
     input: { subscriptionId: number; cycle: number };
     output: { finalCycle: number; totalCharged: number };  // Terminal output
@@ -97,7 +97,7 @@ const jobTypeRegistry = defineJobTypeRegistry<{
 Jobs jump to a different type mid-chain: `charge-billing -> cancel-subscription`
 
 ```ts
-const jobTypeRegistry = defineJobTypeRegistry<{
+const jobTypes = defineJobTypes<{
   'charge-billing': {
     input: { subscriptionId: number; cycle: number };
     output: { finalCycle: number; totalCharged: number };

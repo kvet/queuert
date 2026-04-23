@@ -2,15 +2,15 @@ import {
   createClient,
   createConsoleLog,
   createInProcessWorker,
-  createJobTypeProcessorRegistry,
-  defineJobTypeRegistry,
+  createProcessors,
+  defineJobTypes,
   withTransactionHooks,
   createInProcessNotifyAdapter,
   createInProcessStateAdapter,
 } from "queuert";
 
 // 1. Define job types
-const jobTypeRegistry = defineJobTypeRegistry<{
+const jobTypes = defineJobTypes<{
   greet: {
     entry: true;
     input: { name: string };
@@ -28,20 +28,20 @@ const stateAdapter = await createInProcessStateAdapter();
 const notifyAdapter = await createInProcessNotifyAdapter();
 const log = createConsoleLog();
 
-const qrtClient = await createClient({
+const client = await createClient({
   stateAdapter,
   notifyAdapter,
   log,
-  jobTypeRegistry,
+  jobTypes,
 });
 
 // 3. Create and start worker
-const qrtWorker = await createInProcessWorker({
-  client: qrtClient,
+const worker = await createInProcessWorker({
+  client,
   workerId: "worker-1",
-  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
-    client: qrtClient,
-    jobTypeRegistry,
+  processors: createProcessors({
+    client,
+    jobTypes,
     processors: {
       greet: {
         attemptHandler: async ({ job, complete }) => {
@@ -68,13 +68,13 @@ const qrtWorker = await createInProcessWorker({
   }),
 });
 
-const stopWorker = await qrtWorker.start();
+const stopWorker = await worker.start();
 
 // 4. Run successful job
 console.log("\n--- Running successful job ---\n");
 const successJob = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
-    qrtClient.startJobChain({
+    client.startJobChain({
       ...ctx,
       transactionHooks,
       typeName: "greet",
@@ -83,7 +83,7 @@ const successJob = await withTransactionHooks(async (transactionHooks) =>
   ),
 );
 
-const successCompleted = await qrtClient.awaitJobChain(successJob, {
+const successCompleted = await client.awaitJobChain(successJob, {
   timeoutMs: 5000,
 });
 console.log(`\n[app] Successful job output: ${JSON.stringify(successCompleted.output)}`);
@@ -92,7 +92,7 @@ console.log(`\n[app] Successful job output: ${JSON.stringify(successCompleted.ou
 console.log("\n--- Running job that fails first attempt ---\n");
 const failThenSucceedJob = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
-    qrtClient.startJobChain({
+    client.startJobChain({
       ...ctx,
       transactionHooks,
       typeName: "might-fail",
@@ -101,7 +101,7 @@ const failThenSucceedJob = await withTransactionHooks(async (transactionHooks) =
   ),
 );
 
-const retryCompleted = await qrtClient.awaitJobChain(failThenSucceedJob, {
+const retryCompleted = await client.awaitJobChain(failThenSucceedJob, {
   timeoutMs: 5000,
 });
 console.log(`\n[app] Retry job output: ${JSON.stringify(retryCompleted.output)}`);

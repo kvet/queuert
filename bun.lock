@@ -370,6 +370,22 @@
         "tsx": "4.21.0",
       },
     },
+    "examples/showcase-middleware": {
+      "name": "example-showcase-middleware",
+      "version": "0.0.1",
+      "dependencies": {
+        "@queuert/postgres": "workspace:*",
+        "example-notify-postgres-postgres-js": "workspace:*",
+        "example-state-postgres-postgres-js": "workspace:*",
+        "postgres": "3.4.9",
+        "queuert": "workspace:*",
+      },
+      "devDependencies": {
+        "@queuert/testcontainers": "workspace:*",
+        "@queuert/tsconfig": "workspace:*",
+        "tsx": "4.21.0",
+      },
+    },
     "examples/showcase-multiworker-prioritization": {
       "name": "example-showcase-multiworker-prioritization",
       "version": "0.0.1",
@@ -719,14 +735,14 @@
     },
     "packages/core": {
       "name": "queuert",
-      "version": "0.10.0",
+      "version": "0.11.0",
       "devDependencies": {
         "@queuert/tsconfig": "workspace:*",
       },
     },
     "packages/dashboard": {
       "name": "@queuert/dashboard",
-      "version": "0.10.0",
+      "version": "0.11.0",
       "devDependencies": {
         "@queuert/tsconfig": "workspace:*",
         "@solidjs/router": "0.16.1",
@@ -742,7 +758,7 @@
     },
     "packages/nats": {
       "name": "@queuert/nats",
-      "version": "0.10.0",
+      "version": "0.11.0",
       "devDependencies": {
         "@queuert/testcontainers": "workspace:*",
         "@queuert/tsconfig": "workspace:*",
@@ -756,7 +772,7 @@
     },
     "packages/otel": {
       "name": "@queuert/otel",
-      "version": "0.10.0",
+      "version": "0.11.0",
       "devDependencies": {
         "@opentelemetry/api": "1.9.1",
         "@opentelemetry/sdk-metrics": "2.6.1",
@@ -771,7 +787,7 @@
     },
     "packages/postgres": {
       "name": "@queuert/postgres",
-      "version": "0.10.0",
+      "version": "0.11.0",
       "devDependencies": {
         "@queuert/testcontainers": "workspace:*",
         "@queuert/tsconfig": "workspace:*",
@@ -787,7 +803,7 @@
     },
     "packages/redis": {
       "name": "@queuert/redis",
-      "version": "0.10.0",
+      "version": "0.11.0",
       "devDependencies": {
         "@queuert/testcontainers": "workspace:*",
         "@queuert/tsconfig": "workspace:*",
@@ -801,7 +817,7 @@
     },
     "packages/sqlite": {
       "name": "@queuert/sqlite",
-      "version": "0.10.0",
+      "version": "0.11.0",
       "devDependencies": {
         "@queuert/tsconfig": "workspace:*",
         "@queuert/typed-sql": "workspace:*",
@@ -1936,6 +1952,8 @@
     "example-showcase-error-handling": ["example-showcase-error-handling@workspace:examples/showcase-error-handling"],
 
     "example-showcase-error-recovery": ["example-showcase-error-recovery@workspace:examples/showcase-error-recovery"],
+
+    "example-showcase-middleware": ["example-showcase-middleware@workspace:examples/showcase-middleware"],
 
     "example-showcase-multiworker-prioritization": ["example-showcase-multiworker-prioritization@workspace:examples/showcase-multiworker-prioritization"],
 

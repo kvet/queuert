@@ -18,12 +18,12 @@ import postgres from "postgres";
 import {
   createClient,
   createInProcessWorker,
-  createJobTypeProcessorRegistry,
-  defineJobTypeRegistry,
+  createProcessors,
+  defineJobTypes,
   withTransactionHooks,
 } from "queuert";
 
-const jobTypeRegistry = defineJobTypeRegistry<{
+const jobTypes = defineJobTypes<{
   // Job with cooperative timeout
   "fetch-with-timeout": {
     entry: true;
@@ -67,14 +67,14 @@ const notifyAdapter = await createPgNotifyAdapter({ notifyProvider });
 const client = await createClient({
   stateAdapter,
   notifyAdapter,
-  jobTypeRegistry,
+  jobTypes,
 });
 
 const worker = await createInProcessWorker({
   client,
-  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+  processors: createProcessors({
     client,
-    jobTypeRegistry,
+    jobTypes,
     processors: {
       "fetch-with-timeout": {
         attemptHandler: async ({ signal, job, complete }) => {

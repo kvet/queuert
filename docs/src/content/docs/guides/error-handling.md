@@ -13,7 +13,7 @@ Return error information in your output type. The caller inspects the output to 
 success or failure.
 
 ```ts
-const jobTypeRegistry = defineJobTypeRegistry<{
+const jobTypes = defineJobTypes<{
   "process-payment": {
     entry: true;
     input: { orderId: string };
@@ -32,7 +32,7 @@ react to the outcome, or when you want the error to be part of the chain's perma
 For workflows that need rollback, continue to a compensation job that undoes previous steps.
 
 ```ts
-const jobTypeRegistry = defineJobTypeRegistry<{
+const jobTypes = defineJobTypes<{
   "charge-card": {
     entry: true;
     input: { orderId: string };
@@ -60,9 +60,9 @@ import { rescheduleJob } from "queuert";
 
 const worker = await createInProcessWorker({
   client,
-  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+  processors: createProcessors({
     client,
-    jobTypeRegistry,
+    jobTypes,
     processors: {
       "call-external-api": {
         attemptHandler: async ({ job, prepare, complete }) => {

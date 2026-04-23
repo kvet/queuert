@@ -59,7 +59,7 @@ export const extendWithStateSqlite = <T>(
     ],
     _dbMigrateToLatest: [
       async ({ db }, use) => {
-        const stateProvider = createBetterSqlite3Provider({ db: db });
+        const stateProvider = createBetterSqlite3Provider({ db });
         const stateAdapter = await createSqliteStateAdapter({ stateProvider });
 
         await stateAdapter.migrateToLatest();

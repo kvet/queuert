@@ -8,7 +8,7 @@ sidebar:
 Jobs can be completed without a worker using `completeJobChain`. This enables approval workflows, webhook-triggered completions, and patterns where jobs wait for external events. Deferred start pairs well with this -- schedule a job to auto-reject after a timeout, but allow early completion based on user action.
 
 ```ts
-const jobTypeRegistry = defineJobTypeRegistry<{
+const jobTypes = defineJobTypes<{
   "await-approval": {
     entry: true;
     input: { requestId: string };
@@ -34,9 +34,9 @@ const chain = await withTransactionHooks(async (transactionHooks) =>
 // The worker handles the timeout case (auto-reject) and processes approved requests
 const worker = await createInProcessWorker({
   client,
-  jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+  processors: createProcessors({
     client,
-    jobTypeRegistry,
+    jobTypes,
     processors: {
       "await-approval": {
         attemptHandler: async ({ complete }) => complete(() => ({ rejected: true })),
@@ -57,23 +57,24 @@ const stop = await worker.start();
 await withTransactionHooks(async (transactionHooks) =>
   client.completeJobChain({
     transactionHooks,
-  id: chain.id,
-  typeName: "await-approval",
-  complete: async ({ job, complete }) => {
-    if (job.typeName !== "await-approval") {
-      return; // Already past approval stage
-    }
-    // If approved, continue to process-request; otherwise just reject
-    if (userApproved) {
-      await complete(job, ({ continueWith }) =>
-        continueWith({
-          typeName: "process-request",
-          input: { requestId: job.input.requestId },
-        }),
-      );
-    } else {
-      await complete(job, () => ({ rejected: true }));
-    }
+    id: chain.id,
+    typeName: "await-approval",
+    complete: async ({ job, complete }) => {
+      if (job.typeName !== "await-approval") {
+        return; // Already past approval stage
+      }
+      // If approved, continue to process-request; otherwise just reject
+      if (userApproved) {
+        await complete(job, ({ continueWith }) =>
+          continueWith({
+            typeName: "process-request",
+            input: { requestId: job.input.requestId },
+          }),
+        );
+      } else {
+        await complete(job, () => ({ rejected: true }));
+      }
+    },
   }),
 );
 ```

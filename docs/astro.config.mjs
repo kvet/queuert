@@ -63,7 +63,7 @@ export default defineConfig({
                 { label: "Client", slug: "reference/queuert/client" },
                 { label: "Worker", slug: "reference/queuert/worker" },
                 { label: "Utilities", slug: "reference/queuert/utilities" },
-                { label: "Types", slug: "reference/queuert/types" },
+                { label: "Entities", slug: "reference/queuert/entities" },
                 { label: "Transaction Hooks", slug: "reference/queuert/transaction-hooks" },
                 { label: "Errors", slug: "reference/queuert/errors" },
                 { label: "Conformance", slug: "reference/queuert/conformance" },

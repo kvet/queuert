@@ -1,17 +1,12 @@
 # Error Recovery Showcase
 
-Demonstrates Queuert's engine-level error recovery guarantees.
+Queuert's engine-level error recovery guarantees.
 
-## Scenarios
-
-1. **Constraint Violation in Complete**: CHECK constraint fires, savepoint rolls back, job retries
-2. **Error After Complete**: Handler throws after `await complete()`, completion is rolled back
-3. **Error Between Prepare and Complete (Staged)**: External call fails, prepare committed, job retries
-4. **lastAttemptError Inspection**: Previous error available on retry with serialization
+Scenarios: CHECK constraint violation inside complete, handler throws after `await complete()`, staged-mode failure between prepare and complete, `lastAttemptError` inspection on retry.
 
 ## Running
 
 ```bash
-pnpm install
-pnpm start
+bun install
+bun run --filter example-showcase-error-recovery start
 ```

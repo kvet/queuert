@@ -560,6 +560,17 @@ WITH input_data AS (
   SELECT job_id, blocked_by_chain_id, trace_context, blocker_index AS "index", ord
   FROM unnest($1::{{id_type}}[], $2::{{id_type}}[], $3::text[], $4::integer[]) WITH ORDINALITY AS t(job_id, blocked_by_chain_id, trace_context, blocker_index, ord)
 ),
+locked_blocker_chain_latest AS (
+  SELECT j.id, j.chain_id, j.status
+  FROM {{schema}}.{{table_prefix}}job j
+  WHERE j.chain_id IN (SELECT DISTINCT blocked_by_chain_id FROM input_data)
+    AND NOT EXISTS (
+      SELECT 1 FROM {{schema}}.{{table_prefix}}job j2
+      WHERE j2.chain_id = j.chain_id AND j2.chain_index > j.chain_index
+    )
+  ORDER BY j.id
+  FOR UPDATE
+),
 inserted_blockers AS (
   INSERT INTO {{schema}}.{{table_prefix}}job_blocker (job_id, blocked_by_chain_id, "index", trace_context)
   SELECT job_id, blocked_by_chain_id, "index", trace_context
@@ -570,14 +581,9 @@ blockers_status AS (
   SELECT
     ib.job_id,
     ib.blocked_by_chain_id,
-    (
-      SELECT j2.status
-      FROM {{schema}}.{{table_prefix}}job j2
-      WHERE j2.chain_id = ib.blocked_by_chain_id
-      ORDER BY j2.chain_index DESC
-      LIMIT 1
-    ) AS blocker_status
+    lbcl.status AS blocker_status
   FROM inserted_blockers ib
+  LEFT JOIN locked_blocker_chain_latest lbcl ON lbcl.chain_id = ib.blocked_by_chain_id
 ),
 has_incomplete_blockers AS (
   SELECT DISTINCT job_id
@@ -1038,27 +1044,27 @@ FOR UPDATE
   );
 
   return {
-    dbJobColumns: dbJobColumns,
-    rowToJsonJobColumns: rowToJsonJobColumns,
-    createMigrationTableSql: createMigrationTableSql,
-    getAppliedMigrationsSql: getAppliedMigrationsSql,
-    recordMigrationSql: recordMigrationSql,
-    createJobsSql: createJobsSql,
-    addJobsBlockersSql: addJobsBlockersSql,
-    completeJobSql: completeJobSql,
-    unblockJobsSql: unblockJobsSql,
-    getJobChainByIdSql: getJobChainByIdSql,
-    getJobBlockersSql: getJobBlockersSql,
-    getJobByIdSql: getJobByIdSql,
-    rescheduleJobSql: rescheduleJobSql,
-    triggerJobsSql: triggerJobsSql,
-    renewJobLeaseSql: renewJobLeaseSql,
-    acquireJobSql: acquireJobSql,
-    getNextJobAvailableInMsSql: getNextJobAvailableInMsSql,
-    reapExpiredJobLeaseSql: reapExpiredJobLeaseSql,
-    getConnectedChainIdsSql: getConnectedChainIdsSql,
-    deleteJobChainsSql: deleteJobChainsSql,
-    getJobForUpdateSql: getJobForUpdateSql,
-    getLatestChainJobForUpdateSql: getLatestChainJobForUpdateSql,
+    dbJobColumns,
+    rowToJsonJobColumns,
+    createMigrationTableSql,
+    getAppliedMigrationsSql,
+    recordMigrationSql,
+    createJobsSql,
+    addJobsBlockersSql,
+    completeJobSql,
+    unblockJobsSql,
+    getJobChainByIdSql,
+    getJobBlockersSql,
+    getJobByIdSql,
+    rescheduleJobSql,
+    triggerJobsSql,
+    renewJobLeaseSql,
+    acquireJobSql,
+    getNextJobAvailableInMsSql,
+    reapExpiredJobLeaseSql,
+    getConnectedChainIdsSql,
+    deleteJobChainsSql,
+    getJobForUpdateSql,
+    getLatestChainJobForUpdateSql,
   } as const;
 };

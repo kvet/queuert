@@ -9,13 +9,13 @@ import {
   createClient,
   createInProcessStateAdapter,
   createInProcessWorker,
-  createJobTypeProcessorRegistry,
+  createProcessors,
   withTransactionHooks,
 } from "queuert";
 
 import {
   diffMemory,
-  jobTypeRegistry,
+  jobTypes,
   measureBaseline,
   measureMemory,
   printHeader,
@@ -46,18 +46,18 @@ const [beforeAdapter, afterAdapter, notifyAdapter] = await measureMemory(async (
 console.log("\nAfter creating NatsNotifyAdapter:");
 diffMemory(beforeAdapter, afterAdapter);
 
-const [beforeSetup, afterSetup, { qrtClient, stopWorker }] = await measureMemory(async () => {
-  const qrtClient = await createClient({
+const [beforeSetup, afterSetup, { client, stopWorker }] = await measureMemory(async () => {
+  const client = await createClient({
     stateAdapter,
     notifyAdapter,
-    jobTypeRegistry,
+    jobTypes,
   });
 
-  const qrtWorker = await createInProcessWorker({
-    client: qrtClient,
-    jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
-      client: qrtClient,
-      jobTypeRegistry,
+  const worker = await createInProcessWorker({
+    client,
+    processors: createProcessors({
+      client,
+      jobTypes,
       processors: {
         "test-job": {
           attemptHandler: async ({ complete }) => complete(async () => ({ processed: true })),
@@ -66,8 +66,8 @@ const [beforeSetup, afterSetup, { qrtClient, stopWorker }] = await measureMemory
     }),
   });
 
-  const stopWorker = await qrtWorker.start();
-  return { qrtClient, stopWorker };
+  const stopWorker = await worker.start();
+  return { client, stopWorker };
 });
 console.log("\nAfter creating client + worker:");
 diffMemory(beforeSetup, afterSetup);
@@ -78,7 +78,7 @@ const [beforeProcessing, afterProcessing] = await measureMemory(async () => {
   for (let i = 0; i < 100; i++) {
     const jobChain = await withTransactionHooks(async (transactionHooks) =>
       stateAdapter.withTransaction(async (ctx) =>
-        qrtClient.startJobChain({
+        client.startJobChain({
           ...ctx,
           transactionHooks,
           typeName: "test-job",
@@ -86,7 +86,7 @@ const [beforeProcessing, afterProcessing] = await measureMemory(async () => {
         }),
       ),
     );
-    promises.push(qrtClient.awaitJobChain(jobChain, { timeoutMs: 5000 }));
+    promises.push(client.awaitJobChain(jobChain, { timeoutMs: 5000 }));
   }
   await Promise.all(promises);
 });

@@ -12,9 +12,9 @@ import {
   type BaseJobTypeDefinitions,
   type JobTypeDefinitionErrors,
   type JobTypeReference,
-  type JobTypeRegistry,
+  type JobTypes,
   type ValidatedJobTypeDefinitions,
-  createJobTypeRegistry,
+  createJobTypes,
 } from "queuert";
 
 /**
@@ -130,7 +130,7 @@ const parse = <T extends TSchema>(schema: T, data: unknown): Static<T> => {
  * in JobTypeValidationError with the appropriate error code.
  *
  * @example
- * const jobTypeRegistry = createTypeBoxJobTypeRegistry({
+ * const jobTypes = createTypeBoxJobTypes({
  *   "process-data": {
  *     entry: true,
  *     input: Type.Object({ dataId: Type.String() }),
@@ -143,7 +143,7 @@ const parse = <T extends TSchema>(schema: T, data: unknown): Static<T> => {
  *   },
  * });
  */
-export const createTypeBoxJobTypeRegistry = <
+export const createTypeBoxJobTypes = <
   const T extends Record<string, TypeBoxJobTypeSchema>,
   TExternal extends BaseJobTypeDefinitions = Record<never, never>,
 >(
@@ -152,7 +152,7 @@ export const createTypeBoxJobTypeRegistry = <
   ]
     ? T
     : JobTypeDefinitionErrors<InferTypeBoxJobTypes<T>, TExternal>,
-  _externalDefinitions?: JobTypeRegistry<TExternal>,
+  _externalDefinitions?: JobTypes<TExternal>,
 ) => {
   const _schemas = schemas as Record<string, TypeBoxJobTypeSchema>;
   const getSchema = (typeName: string): TypeBoxJobTypeSchema => {
@@ -163,7 +163,7 @@ export const createTypeBoxJobTypeRegistry = <
     return schema;
   };
 
-  return createJobTypeRegistry<InferTypeBoxJobTypes<T>, TExternal>({
+  return createJobTypes<InferTypeBoxJobTypes<T>, TExternal>({
     getTypeNames: () => Object.keys(_schemas),
     validateEntry: (typeName) => {
       const schema = getSchema(typeName);

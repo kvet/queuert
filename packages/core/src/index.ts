@@ -1,31 +1,15 @@
 export { createClient, type Client } from "./client.js";
 export { type DeduplicationOptions } from "./entities/deduplication.js";
-export { defineJobTypeRegistry } from "./entities/define-job-type-registry.js";
+export { defineJobTypes } from "./entities/define-job-types.js";
 export {
   type CompletedJobChain,
   type JobChain,
   type JobChainStatus,
 } from "./entities/job-chain.js";
 export {
-  createJobTypeRegistry,
-  type ExternalJobTypeRegistryDefinitions,
-  type JobTypeRegistry,
-  type JobTypeRegistryConfig,
-  type JobTypeRegistryDefinitions,
-} from "./entities/job-type-registry.js";
-export {
-  type BlockerChains,
-  type JobTypeEntryNames,
-  type JobTypeNames,
-  type JobTypeProperty,
-  type ResolvedChainJobs,
-  type ResolvedJob,
-  type ResolvedJobChain,
-} from "./entities/job-type-registry.resolvers.js";
-export {
   type BaseJobTypeDefinition,
   type BaseJobTypeDefinitions,
-  type DefineJobTypes,
+  type JobTypeDefs,
   type JobTypeReference,
   type NominalJobTypeReference,
   type ResolvedJobTypeReference,
@@ -35,8 +19,23 @@ export {
   type JobTypeDefinitionErrors,
   type ValidatedJobTypeDefinitions,
 } from "./entities/job-type.validation.js";
+export {
+  createJobTypes,
+  type ExternalJobTypeDefinitions,
+  type JobTypeDefinitions,
+  type JobTypes,
+  type JobTypesOptions,
+} from "./entities/job-types.js";
+export {
+  type BlockerChains,
+  type JobTypeEntryNames,
+  type JobTypeNames,
+  type JobTypeProperty,
+  type ResolvedChainJobs,
+  type ResolvedJob,
+  type ResolvedJobChain,
+} from "./entities/job-types.resolvers.js";
 export { type Job, type JobStatus } from "./entities/job.js";
-export { mergeJobTypeRegistries } from "./entities/merge-job-type-registries.js";
 export { type ScheduleOptions } from "./entities/schedule.js";
 export {
   BlockerReferenceError,
@@ -51,6 +50,7 @@ export {
   JobTypeValidationError,
   RescheduleJobError,
   TransactionContextRequiredError,
+  UnknownJobTypeError,
   WaitChainTimeoutError,
   rescheduleJob,
   type JobTypeValidationErrorCode,
@@ -58,11 +58,7 @@ export {
 export { type TypedAbortSignal } from "./helpers/abort.js";
 export { type BackoffConfig } from "./helpers/backoff.js";
 export { type RetryConfig } from "./helpers/retry.js";
-export {
-  createInProcessWorker,
-  type InProcessWorker,
-  type JobTypeProcessorDefaults,
-} from "./in-process-worker.js";
+export { createInProcessWorker, type InProcessWorker } from "./in-process-worker.js";
 export { createInProcessNotifyAdapter } from "./notify-adapter/notify-adapter.in-process.js";
 export { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 export { createConsoleLog } from "./observability-adapter/log.console.js";
@@ -83,7 +79,8 @@ export {
   type TransactionHooksHandle,
   type TransactionHooksSavepoint,
 } from "./transaction-hooks.js";
-export { createJobTypeProcessorRegistry } from "./worker/create-job-type-processor-registry.js";
+export { type AttemptMiddleware } from "./worker/attempt-middleware.js";
+export { createProcessors } from "./worker/create-processors.js";
 export {
   type AttemptComplete,
   type AttemptCompleteCallback,
@@ -93,13 +90,10 @@ export {
   type AttemptPrepareCallback,
   type AttemptPrepareOptions,
   type JobAbortReason,
-  type JobAttemptMiddleware,
 } from "./worker/job-process.js";
-export {
-  type ExternalJobTypeProcessorRegistryDefinitions,
-  type InProcessWorkerProcessor,
-  type JobTypeProcessorRegistry,
-  type JobTypeProcessorRegistryDefinitions,
-} from "./worker/job-type-processor-registry.js";
 export { type LeaseConfig } from "./worker/lease.js";
-export { mergeJobTypeProcessorRegistries } from "./worker/merge-job-type-processors.js";
+export {
+  type InProcessWorkerProcessor,
+  type ProcessorDefinitions,
+  type Processors,
+} from "./worker/processors.js";

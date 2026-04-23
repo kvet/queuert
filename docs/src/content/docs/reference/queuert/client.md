@@ -1,6 +1,6 @@
 ---
 title: Client
-description: Client API and transaction hooks for the queuert core package.
+description: Client API, mutating/read-only methods, and client-related types for the queuert core package.
 sidebar:
   order: 1
 ---
@@ -12,7 +12,7 @@ const client = await createClient({
   stateAdapter: StateAdapter,
   notifyAdapter?: NotifyAdapter,
   observabilityAdapter?: ObservabilityAdapter,
-  jobTypeRegistry: JobTypeRegistry,
+  jobTypes: JobTypes,
   log?: Log,
 });
 ```
@@ -22,7 +22,7 @@ Returns `Promise<Client>`.
 - **stateAdapter** — database adapter for job persistence
 - **notifyAdapter** — optional pub/sub adapter for real-time notifications between client and workers
 - **observabilityAdapter** — optional adapter for metrics and tracing
-- **jobTypeRegistry** — job type registry created by `defineJobTypeRegistry()` or `createJobTypeRegistry()`
+- **jobTypes** — job type registry created by `defineJobTypes()` or `createJobTypes()`
 - **log** — optional structured logger
 
 ## Client — Mutating Methods
@@ -284,10 +284,60 @@ Returns `Page<Job>`.
 
 Lists jobs that are blocked by the specified chain. Default **orderDirection** is `"desc"`. Default **limit** is `50`.
 
+## Types
+
+### DeduplicationOptions
+
+```typescript
+type DeduplicationOptions<TJobId> = {
+  key: string;
+  scope?: "incomplete" | "any"; // default: "incomplete"
+  windowMs?: number; // required when scope is "any"
+  excludeJobChainIds?: TJobId[];
+};
+```
+
+Chain deduplication configuration passed to `startJobChain`.
+
+- **key** — identifies the logical operation
+- **scope** — match incomplete chains only (`"incomplete"`, the default) or all chains within the time window (`"any"`)
+- **windowMs** — required when scope is `"any"`
+- **excludeJobChainIds** — chain IDs to exclude from deduplication matching; useful for recurring jobs that self-schedule within a completion callback where the current chain is still incomplete
+
+### ScheduleOptions
+
+```typescript
+type ScheduleOptions = { at: Date; afterMs?: never } | { at?: never; afterMs: number };
+```
+
+Deferred job scheduling. The two fields are mutually exclusive.
+
+- **at** — schedules for an absolute timestamp
+- **afterMs** — schedules relative to the current time
+
+### Page
+
+```typescript
+type Page<T> = {
+  items: T[];
+  nextCursor: string | null; // null when no more pages
+};
+```
+
+Cursor-based pagination wrapper returned by all list methods. Pass **nextCursor** back as the `cursor` parameter to fetch the next page.
+
+### OrderDirection
+
+```typescript
+type OrderDirection = "asc" | "desc";
+```
+
+Controls sort order in list queries. Most list methods default to `"desc"`.
+
 ## See Also
 
 - [Worker](/queuert/reference/queuert/worker/) — Worker configuration and job processing
-- [Types](/queuert/reference/queuert/types/) — Job, JobChain, and configuration types
+- [Entities](/queuert/reference/queuert/entities/) — `Job`, `JobChain`, and resolved variants
 - [Utilities](/queuert/reference/queuert/utilities/) — Composition helpers and utility functions
 - [Transaction Hooks](/queuert/reference/queuert/transaction-hooks/) — Transaction hooks API reference
 - [Errors](/queuert/reference/queuert/errors/) — Error classes reference

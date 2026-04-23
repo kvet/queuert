@@ -1,6 +1,6 @@
-import { defineJobTypeRegistry } from "queuert";
+import { defineJobTypes } from "queuert";
 
-export const notificationJobTypeRegistry = defineJobTypeRegistry<{
+export const notificationJobTypes = defineJobTypes<{
   /*
    * Workflow:
    *   notifications.send-notification

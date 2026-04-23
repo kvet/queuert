@@ -19,10 +19,8 @@ import postgres from "postgres";
 import {
   createClient,
   createInProcessWorker,
-  createJobTypeProcessorRegistry,
-  defineJobTypeRegistry,
-  mergeJobTypeProcessorRegistries,
-  mergeJobTypeRegistries,
+  createProcessors,
+  defineJobTypes,
   withTransactionHooks,
 } from "queuert";
 
@@ -35,7 +33,7 @@ const CLEANUP_INTERVAL_MS = 1000;
 
 // --- Define a custom cleanup job type alongside user job types ---
 
-const cleanupJobTypeRegistry = defineJobTypeRegistry<{
+const cleanupJobTypes = defineJobTypes<{
   "queuert.cleanup": {
     entry: true;
     input: null;
@@ -43,7 +41,7 @@ const cleanupJobTypeRegistry = defineJobTypeRegistry<{
   };
 }>();
 
-const userJobTypeRegistry = defineJobTypeRegistry<{
+const userJobTypes = defineJobTypes<{
   "work.process": {
     entry: true;
     input: { taskId: number };
@@ -60,21 +58,17 @@ await stateAdapter.migrateToLatest();
 const notifyProvider = createPostgresJsNotifyProvider({ sql });
 const notifyAdapter = await createPgNotifyAdapter({ notifyProvider });
 
-const mergedJobTypeRegistry = mergeJobTypeRegistries({
-  slices: [cleanupJobTypeRegistry, userJobTypeRegistry],
-});
-
 const client = await createClient({
   stateAdapter,
   notifyAdapter,
-  jobTypeRegistry: mergedJobTypeRegistry,
+  jobTypes: [cleanupJobTypes, userJobTypes],
 });
 
 // --- Define the cleanup processor ---
 
-const cleanupProcessorRegistry = createJobTypeProcessorRegistry({
+const cleanupProcessorRegistry = createProcessors({
   client,
-  jobTypeRegistry: cleanupJobTypeRegistry,
+  jobTypes: cleanupJobTypes,
   processors: {
     "queuert.cleanup": {
       attemptHandler: async ({ job, complete }) => {
@@ -138,23 +132,21 @@ const cleanupProcessorRegistry = createJobTypeProcessorRegistry({
 
 const worker = await createInProcessWorker({
   client,
-  jobTypeProcessorRegistry: mergeJobTypeProcessorRegistries({
-    slices: [
-      cleanupProcessorRegistry,
-      createJobTypeProcessorRegistry({
-        client,
-        jobTypeRegistry: userJobTypeRegistry,
-        processors: {
-          "work.process": {
-            attemptHandler: async ({ job, complete }) => {
-              console.log(`[work.process] Processing task #${job.input.taskId}`);
-              return complete(async () => ({ processedAt: new Date().toISOString() }));
-            },
+  processors: [
+    cleanupProcessorRegistry,
+    createProcessors({
+      client,
+      jobTypes: userJobTypes,
+      processors: {
+        "work.process": {
+          attemptHandler: async ({ job, complete }) => {
+            console.log(`[work.process] Processing task #${job.input.taskId}`);
+            return complete(async () => ({ processedAt: new Date().toISOString() }));
           },
         },
-      }),
-    ],
-  }),
+      },
+    }),
+  ],
 });
 
 const stopWorker = await worker.start();

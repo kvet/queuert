@@ -5,8 +5,8 @@ import {
   type StateAdapter,
   createClient,
   createInProcessWorker,
-  createJobTypeProcessorRegistry,
-  defineJobTypeRegistry,
+  createProcessors,
+  defineJobTypes,
   withTransactionHooks,
   createInProcessNotifyAdapter,
 } from "queuert";
@@ -67,7 +67,7 @@ typeInferenceIt("infers custom ID types through the full stack", async ({ db }) 
 
   const notifyAdapter = await createInProcessNotifyAdapter();
   const log = vi.fn();
-  const jobTypeRegistry = defineJobTypeRegistry<{
+  const jobTypes = defineJobTypes<{
     test: {
       entry: true;
       input: { foo: string };
@@ -79,13 +79,13 @@ typeInferenceIt("infers custom ID types through the full stack", async ({ db }) 
     stateAdapter,
     notifyAdapter,
     log,
-    jobTypeRegistry,
+    jobTypes,
   });
   const worker = await createInProcessWorker({
     client,
-    jobTypeProcessorRegistry: createJobTypeProcessorRegistry({
+    processors: createProcessors({
       client,
-      jobTypeRegistry,
+      jobTypes,
       processors: {
         test: {
           attemptHandler: async ({ job, complete }) => {

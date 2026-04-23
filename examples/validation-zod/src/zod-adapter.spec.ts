@@ -1,167 +1,43 @@
-import {
-  type ExternalJobTypeRegistryDefinitions,
-  type JobTypeRegistryDefinitions,
-  JobTypeValidationError,
-  createClient,
-  createJobTypeProcessorRegistry,
-  mergeJobTypeProcessorRegistries,
-  mergeJobTypeRegistries,
-  createInProcessStateAdapter,
-} from "queuert";
-import { describe, expect, expectTypeOf, it } from "vitest";
+import { runValidationAdapterConformance } from "queuert/conformance";
+import { test } from "vitest";
 import { z } from "zod";
 
-import { createZodJobTypeRegistry } from "./zod-adapter.js";
+import { createZodJobTypes } from "./zod-adapter.js";
 
-describe("createZodJobTypeRegistry", () => {
-  describe("getTypeNames", () => {
-    it("returns all registered type names", () => {
-      const jobTypeRegistry = createZodJobTypeRegistry({
-        "job-a": {
-          entry: true,
-          input: z.object({ id: z.string() }),
-          continueWith: z.object({ typeName: z.literal("job-b") }),
-        },
-        "job-b": {
-          input: z.object({ count: z.number() }),
-          output: z.object({ done: z.boolean() }),
-        },
-      });
-
-      expect(jobTypeRegistry.getTypeNames()).toEqual(["job-a", "job-b"]);
-    });
-  });
-
-  describe("validateEntry", () => {
-    it("passes for entry types", () => {
-      const jobTypeRegistry = createZodJobTypeRegistry({
-        main: {
-          entry: true,
-          input: z.object({ id: z.string() }),
-          output: z.object({ ok: z.boolean() }),
-        },
-      });
-
-      expect(() => {
-        jobTypeRegistry.validateEntry("main");
-      }).not.toThrow();
-    });
-
-    it("throws for non-entry types", () => {
-      const jobTypeRegistry = createZodJobTypeRegistry({
-        internal: { input: z.object({ id: z.string() }), output: z.object({ ok: z.boolean() }) },
-      });
-
-      expect(() => {
-        jobTypeRegistry.validateEntry("internal");
-      }).toThrow(JobTypeValidationError);
-    });
-
-    it("throws for unknown types", () => {
-      const jobTypeRegistry = createZodJobTypeRegistry({
-        main: {
-          entry: true,
-          input: z.object({ id: z.string() }),
-          output: z.object({ ok: z.boolean() }),
-        },
-      });
-
-      expect(() => {
-        jobTypeRegistry.validateEntry("unknown");
-      }).toThrow(JobTypeValidationError);
-    });
-  });
-
-  describe("parseInput", () => {
-    it("returns parsed input for valid data", () => {
-      const jobTypeRegistry = createZodJobTypeRegistry({
-        main: {
-          entry: true,
-          input: z.object({ id: z.string(), count: z.number() }),
-          output: z.object({ ok: z.boolean() }),
-        },
-      });
-
-      const result = jobTypeRegistry.parseInput("main", { id: "abc", count: 42 });
-      expect(result).toEqual({ id: "abc", count: 42 });
-    });
-
-    it("throws for invalid input", () => {
-      const jobTypeRegistry = createZodJobTypeRegistry({
-        main: {
-          entry: true,
-          input: z.object({ id: z.string() }),
-          output: z.object({ ok: z.boolean() }),
-        },
-      });
-
-      expect(() => {
-        jobTypeRegistry.parseInput("main", { id: 123 });
-      }).toThrow(JobTypeValidationError);
-    });
-
-    it("coerces types when schema allows", () => {
-      const jobTypeRegistry = createZodJobTypeRegistry({
-        main: {
-          entry: true,
-          input: z.object({ count: z.coerce.number() }),
-          output: z.object({ ok: z.boolean() }),
-        },
-      });
-
-      const result = jobTypeRegistry.parseInput("main", { count: "42" });
-      expect(result).toEqual({ count: 42 });
-    });
-  });
-
-  describe("parseOutput", () => {
-    it("returns parsed output for valid data", () => {
-      const jobTypeRegistry = createZodJobTypeRegistry({
-        main: {
-          entry: true,
-          input: z.object({ id: z.string() }),
-          output: z.object({ success: z.boolean() }),
-        },
-      });
-
-      const result = jobTypeRegistry.parseOutput("main", { success: true });
-      expect(result).toEqual({ success: true });
-    });
-
-    it("throws for invalid output", () => {
-      const jobTypeRegistry = createZodJobTypeRegistry({
-        main: {
-          entry: true,
-          input: z.object({ id: z.string() }),
-          output: z.object({ success: z.boolean() }),
-        },
-      });
-
-      expect(() => {
-        jobTypeRegistry.parseOutput("main", { success: "yes" });
-      }).toThrow(JobTypeValidationError);
-    });
-
-    it("throws when output schema is not defined", () => {
-      const jobTypeRegistry = createZodJobTypeRegistry({
-        main: {
-          entry: true,
-          input: z.object({ id: z.string() }),
-          continueWith: z.object({ typeName: z.literal("next") }),
-        },
-        next: { input: z.object({ id: z.string() }), output: z.object({ ok: z.boolean() }) },
-      });
-
-      expect(() => {
-        jobTypeRegistry.parseOutput("main", { success: true });
-      }).toThrow(JobTypeValidationError);
-    });
-  });
-
-  describe("validateContinueWith", () => {
-    describe("nominal validation", () => {
-      it("passes for valid type name", () => {
-        const jobTypeRegistry = createZodJobTypeRegistry({
+test("zod adapter passes validation conformance", async () => {
+  await runValidationAdapterConformance(async () => ({
+    basic: {
+      buildEntry: () =>
+        createZodJobTypes({
+          main: {
+            entry: true,
+            input: z.object({ id: z.string() }),
+            output: z.object({ ok: z.boolean() }),
+          },
+        }),
+      buildNonEntry: () =>
+        createZodJobTypes({
+          internal: {
+            input: z.object({ id: z.string() }),
+            output: z.object({ ok: z.boolean() }),
+          },
+        }),
+      buildContinuationOnly: () =>
+        createZodJobTypes({
+          main: {
+            entry: true,
+            input: z.object({ id: z.string() }),
+            continueWith: z.object({ typeName: z.literal("next") }),
+          },
+          next: {
+            input: z.object({ data: z.string() }),
+            output: z.object({ done: z.boolean() }),
+          },
+        }),
+    },
+    continuations: {
+      buildNominal: () =>
+        createZodJobTypes({
           step1: {
             entry: true,
             input: z.object({ id: z.string() }),
@@ -171,38 +47,9 @@ describe("createZodJobTypeRegistry", () => {
             input: z.object({ data: z.unknown() }),
             output: z.object({ done: z.boolean() }),
           },
-        });
-
-        expect(() => {
-          jobTypeRegistry.validateContinueWith("step1", {
-            typeName: "step2",
-            input: { data: "test" },
-          });
-        }).not.toThrow();
-      });
-
-      it("throws for invalid type name", () => {
-        const jobTypeRegistry = createZodJobTypeRegistry({
-          step1: {
-            entry: true,
-            input: z.object({ id: z.string() }),
-            continueWith: z.object({ typeName: z.literal("step2") }),
-          },
-          step2: {
-            input: z.object({ data: z.unknown() }),
-            output: z.object({ done: z.boolean() }),
-          },
-        });
-
-        expect(() => {
-          jobTypeRegistry.validateContinueWith("step1", { typeName: "step3", input: {} });
-        }).toThrow(JobTypeValidationError);
-      });
-    });
-
-    describe("structural validation", () => {
-      it("passes for matching input shape", () => {
-        const jobTypeRegistry = createZodJobTypeRegistry({
+        }),
+      buildStructural: () =>
+        createZodJobTypes({
           router: {
             entry: true,
             input: z.object({ route: z.string() }),
@@ -212,323 +59,65 @@ describe("createZodJobTypeRegistry", () => {
             input: z.object({ payload: z.string() }),
             output: z.object({ handled: z.boolean() }),
           },
-        });
-
-        expect(() => {
-          jobTypeRegistry.validateContinueWith("router", {
-            typeName: "handler",
-            input: { payload: "test-data" },
-          });
-        }).not.toThrow();
-      });
-
-      it("throws for non-matching input shape", () => {
-        const jobTypeRegistry = createZodJobTypeRegistry({
-          router: {
-            entry: true,
-            input: z.object({ route: z.string() }),
-            continueWith: z.object({ input: z.object({ payload: z.string() }) }),
-          },
-          handler: {
-            input: z.object({ payload: z.string() }),
-            output: z.object({ ok: z.boolean() }),
-          },
-        });
-
-        expect(() => {
-          jobTypeRegistry.validateContinueWith("router", {
-            typeName: "handler",
-            input: { wrongField: "test" },
-          });
-        }).toThrow(JobTypeValidationError);
-      });
-    });
-
-    it("throws when continueWith is not defined", () => {
-      const jobTypeRegistry = createZodJobTypeRegistry({
-        terminal: {
-          entry: true,
-          input: z.object({ id: z.string() }),
-          output: z.object({ done: z.boolean() }),
-        },
-      });
-
-      expect(() => {
-        jobTypeRegistry.validateContinueWith("terminal", { typeName: "next", input: {} });
-      }).toThrow(JobTypeValidationError);
-    });
-  });
-
-  describe("validateBlockers", () => {
-    describe("nominal validation", () => {
-      it("passes for valid blocker type names", () => {
-        const jobTypeRegistry = createZodJobTypeRegistry({
-          main: {
-            entry: true,
-            input: z.object({ id: z.string() }),
-            output: z.object({ done: z.boolean() }),
-            blockers: z.array(z.object({ typeName: z.literal("auth") })),
-          },
-          auth: {
-            entry: true,
-            input: z.object({ token: z.string() }),
-            output: z.object({ userId: z.string() }),
-          },
-        });
-
-        expect(() => {
-          jobTypeRegistry.validateBlockers("main", [{ typeName: "auth", input: { token: "abc" } }]);
-        }).not.toThrow();
-      });
-
-      it("throws for invalid blocker type name", () => {
-        const jobTypeRegistry = createZodJobTypeRegistry({
-          main: {
-            entry: true,
-            input: z.object({ id: z.string() }),
-            output: z.object({ done: z.boolean() }),
-            blockers: z.array(z.object({ typeName: z.literal("auth") })),
-          },
-          auth: {
-            entry: true,
-            input: z.object({ token: z.string() }),
-            output: z.object({ userId: z.string() }),
-          },
-        });
-
-        expect(() => {
-          jobTypeRegistry.validateBlockers("main", [{ typeName: "wrong", input: {} }]);
-        }).toThrow(JobTypeValidationError);
-      });
-    });
-
-    describe("structural validation", () => {
-      it("passes for matching blocker input shapes", () => {
-        const jobTypeRegistry = createZodJobTypeRegistry({
-          main: {
-            entry: true,
-            input: z.object({ id: z.string() }),
-            output: z.object({ done: z.boolean() }),
-            blockers: z.array(z.object({ input: z.object({ token: z.string() }) })),
-          },
-          auth: {
-            entry: true,
-            input: z.object({ token: z.string() }),
-            output: z.object({ userId: z.string() }),
-          },
-          authOther: {
-            entry: true,
-            input: z.object({ token: z.string(), extra: z.string() }),
-            output: z.object({ userId: z.string() }),
-          },
-        });
-
-        // Both auth types have { token: string } in input, so both are valid
-        expect(() => {
-          jobTypeRegistry.validateBlockers("main", [
-            { typeName: "auth", input: { token: "abc" } },
-            { typeName: "authOther", input: { token: "xyz", extra: "data" } },
-          ]);
-        }).not.toThrow();
-      });
-
-      it("throws for non-matching blocker input shape", () => {
-        const jobTypeRegistry = createZodJobTypeRegistry({
-          main: {
-            entry: true,
-            input: z.object({ id: z.string() }),
-            output: z.object({ done: z.boolean() }),
-            blockers: z.array(z.object({ input: z.object({ token: z.string() }) })),
-          },
-          auth: {
-            entry: true,
-            input: z.object({ token: z.string() }),
-            output: z.object({ userId: z.string() }),
-          },
-        });
-
-        expect(() => {
-          jobTypeRegistry.validateBlockers("main", [
-            { typeName: "auth", input: { wrong: "data" } },
-          ]);
-        }).toThrow(JobTypeValidationError);
-      });
-    });
-
-    it("rejects blockers referencing continuation-only job type", () => {
-      // @ts-expect-error "internal" is a continuation-only type, cannot be a blocker
-      createZodJobTypeRegistry({
-        start: {
-          entry: true,
-          input: z.object({ id: z.string() }),
-          continueWith: z.object({ typeName: z.literal("internal") }),
-        },
-        internal: {
-          input: z.object({ data: z.string() }),
-          output: z.object({ done: z.boolean() }),
-        },
-        main: {
-          entry: true,
-          input: z.object({ id: z.string() }),
-          output: z.object({ result: z.number() }),
-          blockers: z.array(z.object({ typeName: z.literal("internal") })),
-        },
-      });
-    });
-
-    it("allows valid blocker references", () => {
-      const jobTypeRegistry = createZodJobTypeRegistry({
-        blocker: {
-          entry: true,
-          input: z.object({ value: z.number() }),
-          output: z.object({ result: z.number() }),
-        },
-        main: {
-          entry: true,
-          input: z.object({ id: z.string() }),
-          output: z.object({ done: z.boolean() }),
-          blockers: z.array(z.object({ typeName: z.literal("blocker") })),
-        },
-      });
-
-      expect(jobTypeRegistry.getTypeNames()).toEqual(["blocker", "main"]);
-    });
-
-    it("throws when blockers is not defined", () => {
-      const jobTypeRegistry = createZodJobTypeRegistry({
-        main: {
-          entry: true,
-          input: z.object({ id: z.string() }),
-          output: z.object({ done: z.boolean() }),
-        },
-      });
-
-      expect(() => {
-        jobTypeRegistry.validateBlockers("main", [{ typeName: "auth", input: {} }]);
-      }).toThrow(JobTypeValidationError);
-    });
-  });
-
-  describe("external definitions (cross-slice)", () => {
-    const notificationJobTypeRegistry = createZodJobTypeRegistry({
-      "notifications.send-notification": {
-        entry: true,
-        input: z.object({ userId: z.string(), message: z.string() }),
-        output: z.object({ sentAt: z.string() }),
-      },
-    });
-
-    const orderJobTypeRegistry = createZodJobTypeRegistry(
-      {
-        "orders.place-order": {
-          entry: true,
-          input: z.object({ userId: z.string() }),
-          continueWith: z.object({ typeName: z.literal("orders.confirm-order") }),
-        },
-        "orders.confirm-order": {
-          input: z.object({ orderId: z.number() }),
-          output: z.object({ confirmedAt: z.string() }),
-          blockers: z.array(z.object({ typeName: z.literal("notifications.send-notification") })),
-        },
-      },
-      notificationJobTypeRegistry,
-    );
-
-    it("merges registries and validates across slices", () => {
-      const merged = mergeJobTypeRegistries({
-        slices: [orderJobTypeRegistry, notificationJobTypeRegistry],
-      });
-
-      expect(merged.getTypeNames()).toEqual([
-        "orders.place-order",
-        "orders.confirm-order",
-        "notifications.send-notification",
-      ]);
-
-      expect(() => {
-        merged.validateEntry("orders.place-order");
-      }).not.toThrow();
-
-      expect(() => {
-        merged.validateEntry("notifications.send-notification");
-      }).not.toThrow();
-    });
-
-    it("validates cross-slice blocker references", () => {
-      const merged = mergeJobTypeRegistries({
-        slices: [orderJobTypeRegistry, notificationJobTypeRegistry],
-      });
-
-      expect(() => {
-        merged.validateBlockers("orders.confirm-order", [
-          { typeName: "notifications.send-notification", input: { userId: "u1", message: "hi" } },
-        ]);
-      }).not.toThrow();
-
-      expect(() => {
-        merged.validateBlockers("orders.confirm-order", [{ typeName: "unknown-type", input: {} }]);
-      }).toThrow(JobTypeValidationError);
-    });
-
-    it("exposes external definitions via ExternalJobTypeRegistryDefinitions", () => {
-      type OrderDefs = JobTypeRegistryDefinitions<typeof orderJobTypeRegistry>;
-      type ExternalDefs = ExternalJobTypeRegistryDefinitions<typeof orderJobTypeRegistry>;
-
-      expectTypeOf<ExternalDefs>().toHaveProperty("notifications.send-notification");
-      expectTypeOf<OrderDefs>().toHaveProperty("orders.place-order");
-      expectTypeOf<OrderDefs>().toHaveProperty("orders.confirm-order");
-    });
-
-    it("merges processors from typed slices", async () => {
-      const stateAdapter = await createInProcessStateAdapter();
-      const client = await createClient({
-        stateAdapter,
-        jobTypeRegistry: mergeJobTypeRegistries({
-          slices: [orderJobTypeRegistry, notificationJobTypeRegistry],
         }),
-      });
-      const notificationJobTypeProcessorRegistry = createJobTypeProcessorRegistry({
-        client,
-        jobTypeRegistry: notificationJobTypeRegistry,
-        processors: {
+    },
+    blockers: {
+      buildNominal: () =>
+        createZodJobTypes({
+          main: {
+            entry: true,
+            input: z.object({ id: z.string() }),
+            output: z.object({ done: z.boolean() }),
+            blockers: z.array(z.object({ typeName: z.literal("auth") })),
+          },
+          auth: {
+            entry: true,
+            input: z.object({ token: z.string() }),
+            output: z.object({ userId: z.string() }),
+          },
+        }),
+      buildStructural: () =>
+        createZodJobTypes({
+          main: {
+            entry: true,
+            input: z.object({ id: z.string() }),
+            output: z.object({ done: z.boolean() }),
+            blockers: z.array(z.object({ input: z.object({ token: z.string() }) })),
+          },
+          auth: {
+            entry: true,
+            input: z.object({ token: z.string() }),
+            output: z.object({ userId: z.string() }),
+          },
+        }),
+    },
+    external: {
+      buildWithExternalSlice: () => {
+        const notifications = createZodJobTypes({
           "notifications.send-notification": {
-            attemptHandler: async ({ complete }) => complete(async () => ({ sentAt: "now" })),
+            entry: true,
+            input: z.object({ userId: z.string(), message: z.string() }),
+            output: z.object({ sentAt: z.string() }),
           },
-        },
-      });
-
-      const orderJobTypeProcessorRegistry = createJobTypeProcessorRegistry({
-        client,
-        jobTypeRegistry: orderJobTypeRegistry,
-        processors: {
-          "orders.place-order": {
-            attemptHandler: async ({ complete }) =>
-              complete(async ({ continueWith }) =>
-                continueWith({
-                  typeName: "orders.confirm-order",
-                  input: { orderId: 1 },
-                  blockers: [] as never,
-                }),
+        });
+        return createZodJobTypes(
+          {
+            "orders.place-order": {
+              entry: true,
+              input: z.object({ userId: z.string() }),
+              continueWith: z.object({ typeName: z.literal("orders.confirm-order") }),
+            },
+            "orders.confirm-order": {
+              input: z.object({ orderId: z.number() }),
+              output: z.object({ confirmedAt: z.string() }),
+              blockers: z.array(
+                z.object({ typeName: z.literal("notifications.send-notification") }),
               ),
-          },
-          "orders.confirm-order": {
-            attemptHandler: async ({ job, complete }) => {
-              expectTypeOf(job.blockers[0].output).toEqualTypeOf<{ sentAt: string }>();
-              return complete(async () => ({ confirmedAt: "now" }));
             },
           },
-        },
-      });
-
-      const merged = mergeJobTypeProcessorRegistries({
-        slices: [orderJobTypeProcessorRegistry, notificationJobTypeProcessorRegistry],
-      });
-
-      expect(Object.keys(merged)).toEqual([
-        "orders.place-order",
-        "orders.confirm-order",
-        "notifications.send-notification",
-      ]);
-    });
-  });
+          notifications,
+        );
+      },
+    },
+  }));
 });
