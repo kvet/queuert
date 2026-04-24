@@ -9,6 +9,7 @@ import {
   createTemplateApplier,
   executeMigrations,
   extractColumnTypes,
+  extractParamTypes,
   t,
 } from "@queuert/typed-sql";
 import { type StateAdapter } from "queuert";
@@ -198,8 +199,10 @@ export const createSqliteStateAdapter = async <
     return stateProvider.executeSql({
       txCtx,
       sql: resolvedSql.sql,
-      params: params!,
+      params: params ?? [],
+      paramTypes: extractParamTypes(resolvedSql.params),
       columnTypes: extractColumnTypes(resolvedSql.columns),
+      readOnly: resolvedSql.readOnly,
     }) as Promise<InferColumns<TColumns>[]>;
   };
 
@@ -240,18 +243,35 @@ export const createSqliteStateAdapter = async <
       stateProvider.withSavepoint ??
       (async (txCtx, fn) => {
         const sp = `queuert_sp_${randomUUID().replace(/-/g, "_")}`;
-        await stateProvider.executeSql({ txCtx, sql: `SAVEPOINT ${sp}`, columnTypes: {} });
+        await stateProvider.executeSql({
+          txCtx,
+          sql: `SAVEPOINT ${sp}`,
+          params: [],
+          paramTypes: {},
+          columnTypes: {},
+          readOnly: false,
+        });
         try {
           const result = await fn(txCtx);
           await stateProvider.executeSql({
             txCtx,
             sql: `RELEASE SAVEPOINT ${sp}`,
+            params: [],
+            paramTypes: {},
             columnTypes: {},
+            readOnly: false,
           });
           return result;
         } catch (error) {
           await stateProvider
-            .executeSql({ txCtx, sql: `ROLLBACK TO SAVEPOINT ${sp}`, columnTypes: {} })
+            .executeSql({
+              txCtx,
+              sql: `ROLLBACK TO SAVEPOINT ${sp}`,
+              params: [],
+              paramTypes: {},
+              columnTypes: {},
+              readOnly: false,
+            })
             .catch(() => {});
           throw error;
         }
@@ -684,7 +704,9 @@ export const createSqliteStateAdapter = async <
         txCtx,
         sql: sqlStr,
         params,
+        paramTypes: {},
         columnTypes: extractColumnTypes(defs.dbJobChainRowColumns),
+        readOnly: true,
       })) as DbJobChainRow[];
 
       const hasMore = rows.length > page.limit;
@@ -766,7 +788,9 @@ export const createSqliteStateAdapter = async <
         txCtx,
         sql: sqlStr,
         params,
+        paramTypes: {},
         columnTypes: extractColumnTypes(defs.dbJobColumns),
+        readOnly: true,
       })) as DbJob[];
 
       const hasMore = rows.length > page.limit;
@@ -808,7 +832,9 @@ export const createSqliteStateAdapter = async <
         txCtx,
         sql: sqlStr,
         params,
+        paramTypes: {},
         columnTypes: extractColumnTypes(defs.dbJobColumns),
+        readOnly: true,
       })) as DbJob[];
 
       const hasMore = rows.length > page.limit;
@@ -898,7 +924,9 @@ export const createSqliteStateAdapter = async <
         txCtx,
         sql: sqlStr,
         params,
+        paramTypes: {},
         columnTypes: extractColumnTypes(defs.dbJobColumns),
+        readOnly: true,
       })) as DbJob[];
 
       const hasMore = rows.length > page.limit;
@@ -927,7 +955,10 @@ export const createSqliteStateAdapter = async <
           const [fkResult] = (await stateProvider.executeSql({
             txCtx,
             sql: "PRAGMA foreign_keys",
+            params: [],
+            paramTypes: {},
             columnTypes: { foreign_keys: "number" },
+            readOnly: true,
           })) as { foreign_keys: number }[];
           if (!fkResult || fkResult.foreign_keys !== 1) {
             throw new Error(
@@ -942,7 +973,10 @@ export const createSqliteStateAdapter = async <
       if (checkAutoVacuum) {
         const [avResult] = (await stateProvider.executeSql({
           sql: "PRAGMA auto_vacuum",
+          params: [],
+          paramTypes: {},
           columnTypes: { auto_vacuum: "number" },
+          readOnly: true,
         })) as { auto_vacuum: number }[];
         if (!avResult || avResult.auto_vacuum !== 2) {
           throw new Error(
@@ -959,12 +993,18 @@ export const createSqliteStateAdapter = async <
           await stateProvider.executeSql({
             txCtx,
             sql: applyTemplate(defs.createMigrationTableSql).sql,
+            params: [],
+            paramTypes: {},
             columnTypes: {},
+            readOnly: false,
           });
           const applied = (await stateProvider.executeSql({
             txCtx,
             sql: applyTemplate(defs.getAppliedMigrationsSql).sql,
+            params: [],
+            paramTypes: {},
             columnTypes: { name: "string", applied_at: "string" },
+            readOnly: true,
           })) as { name: string }[];
           return applied.map((m) => m.name);
         },
@@ -973,7 +1013,10 @@ export const createSqliteStateAdapter = async <
             await stateProvider.executeSql({
               txCtx,
               sql: applyTemplate(stmt.sql).sql,
+              params: [],
+              paramTypes: {},
               columnTypes: {},
+              readOnly: false,
             });
           }
         },
@@ -982,7 +1025,9 @@ export const createSqliteStateAdapter = async <
             txCtx,
             sql: applyTemplate(defs.recordMigrationSql).sql,
             params: [name],
+            paramTypes: { 0: "string" },
             columnTypes: {},
+            readOnly: false,
           });
         },
       });
@@ -990,16 +1035,28 @@ export const createSqliteStateAdapter = async <
       return stateProvider.withTransaction(runMigrations);
     },
     vacuum: async () => {
-      await stateProvider.executeSql({ sql: "PRAGMA incremental_vacuum", columnTypes: {} });
+      await stateProvider.executeSql({
+        sql: "PRAGMA incremental_vacuum",
+        params: [],
+        paramTypes: {},
+        columnTypes: {},
+        readOnly: false,
+      });
     },
     truncate: async () => {
       await stateProvider.executeSql({
         sql: `DELETE FROM ${tablePrefix}job_blocker`,
+        params: [],
+        paramTypes: {},
         columnTypes: {},
+        readOnly: false,
       });
       await stateProvider.executeSql({
         sql: `DELETE FROM ${tablePrefix}job`,
+        params: [],
+        paramTypes: {},
         columnTypes: {},
+        readOnly: false,
       });
     },
   };

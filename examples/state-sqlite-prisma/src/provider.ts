@@ -1,4 +1,4 @@
-import { type AsyncLock, type SqliteStateProvider } from "@queuert/sqlite";
+import { type AsyncRwLock, type SqliteStateProvider } from "@queuert/sqlite";
 
 export type PrismaLikeClient = {
   $transaction: <T>(fn: (prisma: any) => Promise<T>) => Promise<T>;
@@ -12,18 +12,14 @@ export const createPrismaSqliteStateProvider = <TPrisma extends PrismaLikeClient
   lock,
 }: {
   prisma: TPrisma;
-  lock: AsyncLock;
+  lock: AsyncRwLock;
 }): SqliteStateProvider<PrismaSqliteContext<TPrisma>> => {
   return {
     withTransaction: async (cb) => {
-      await lock.acquire();
-      try {
-        return await prisma.$transaction(async (prisma: TPrisma) => cb({ prisma }));
-      } finally {
-        lock.release();
-      }
+      using _h = await lock.acquireWrite();
+      return await prisma.$transaction(async (prisma: TPrisma) => cb({ prisma }));
     },
-    executeSql: async ({ txCtx, sql, params, columnTypes }) => {
+    executeSql: async ({ txCtx, sql, params, columnTypes, readOnly }) => {
       const runQuery = async (): Promise<unknown[]> => {
         const prismaClient = (txCtx?.prisma ?? prisma) as PrismaLikeClient;
         if (params && params.length > 0) {
@@ -36,12 +32,8 @@ export const createPrismaSqliteStateProvider = <TPrisma extends PrismaLikeClient
       if (txCtx) {
         result = await runQuery();
       } else {
-        await lock.acquire();
-        try {
-          result = await runQuery();
-        } finally {
-          lock.release();
-        }
+        using _h = readOnly ? await lock.acquireRead() : await lock.acquireWrite();
+        result = await runQuery();
       }
 
       // Prisma returns BigInt for SQLite INTEGER columns; narrow back to number

@@ -1,6 +1,6 @@
 import { type DeduplicationOptions } from "../entities/deduplication.js";
 import { type BlockerReference } from "../errors.js";
-import { createAsyncLock } from "../helpers/async-lock.js";
+import { createAsyncRwLock } from "../helpers/async-rw-lock.js";
 import { type OrderDirection, type Page, type PageParams } from "../pagination.js";
 import { decodeChainIndexCursor, decodeCreatedAtCursor, encodeCursor } from "./cursor.js";
 import { type StateAdapter, type StateJob, type StateJobStatus } from "./state-adapter.js";
@@ -126,7 +126,7 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
   const cmp = makeComparators(seqByJobId);
   const rootJobsByCreatedAt = new SortedSet<StateJob>(cmp.createdAt);
 
-  const lock = createAsyncLock();
+  const lock = createAsyncRwLock();
 
   const dedupKey = (job: StateJob): string | undefined =>
     job.deduplicationKey != null ? `${job.chainTypeName}\u0000${job.deduplicationKey}` : undefined;
@@ -483,17 +483,19 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
 
   const withWriteLock = async <T>(txCtx: InProcessContext | undefined, fn: () => T): Promise<T> => {
     if (txCtx?.inTransaction) return fn();
-    await lock.acquire();
-    try {
-      return fn();
-    } finally {
-      lock.release();
-    }
+    using _h = await lock.acquireWrite();
+    return fn();
+  };
+
+  const withReadLock = async <T>(txCtx: InProcessContext | undefined, fn: () => T): Promise<T> => {
+    if (txCtx?.inTransaction) return fn();
+    using _h = await lock.acquireRead();
+    return fn();
   };
 
   const adapter: InProcessStateAdapter = {
     withTransaction: async (fn) => {
-      await lock.acquire();
+      using _h = await lock.acquireWrite();
       const journal: JournalEntry[] = [];
       const txCtx: InProcessContext = { inTransaction: true, journal };
       try {
@@ -501,8 +503,6 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
       } catch (error) {
         rollbackTo(journal, 0);
         throw error;
-      } finally {
-        lock.release();
       }
     },
 
@@ -520,14 +520,15 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
       }
     },
 
-    getJobChainById: async ({ chainId }) => {
-      const rootJob = jobs.get(chainId);
-      if (!rootJob) return undefined;
-      const lastJob = getLastJobInChain(chainId);
-      return [rootJob, lastJob && lastJob.id !== rootJob.id ? lastJob : undefined];
-    },
+    getJobChainById: async ({ txCtx, chainId }) =>
+      withReadLock(txCtx, () => {
+        const rootJob = jobs.get(chainId);
+        if (!rootJob) return undefined;
+        const lastJob = getLastJobInChain(chainId);
+        return [rootJob, lastJob && lastJob.id !== rootJob.id ? lastJob : undefined];
+      }),
 
-    getJobById: async ({ jobId }) => jobs.get(jobId),
+    getJobById: async ({ txCtx, jobId }) => withReadLock(txCtx, () => jobs.get(jobId)),
 
     createJobs: async ({ txCtx, jobs: jobInputs }) =>
       withWriteLock(txCtx, () => {
@@ -689,39 +690,41 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
         return { unblockedJobs, blockerTraceContexts };
       }),
 
-    getJobBlockers: async ({ jobId }) => {
-      const blockerMap = jobBlockers.get(jobId);
-      if (!blockerMap) return [];
+    getJobBlockers: async ({ txCtx, jobId }) =>
+      withReadLock(txCtx, () => {
+        const blockerMap = jobBlockers.get(jobId);
+        if (!blockerMap) return [];
 
-      const entries = Array.from(blockerMap.entries()).sort((a, b) => a[1].index - b[1].index);
+        const entries = Array.from(blockerMap.entries()).sort((a, b) => a[1].index - b[1].index);
 
-      const result: [StateJob, StateJob | undefined][] = [];
-      for (const [blockerChainId] of entries) {
-        const rootJob = jobs.get(blockerChainId);
-        if (!rootJob) continue;
+        const result: [StateJob, StateJob | undefined][] = [];
+        for (const [blockerChainId] of entries) {
+          const rootJob = jobs.get(blockerChainId);
+          if (!rootJob) continue;
 
-        const lastJob = getLastJobInChain(blockerChainId);
-        result.push([rootJob, lastJob && lastJob.id !== rootJob.id ? lastJob : undefined]);
-      }
+          const lastJob = getLastJobInChain(blockerChainId);
+          result.push([rootJob, lastJob && lastJob.id !== rootJob.id ? lastJob : undefined]);
+        }
 
-      return result;
-    },
+        return result;
+      }),
 
-    getNextJobAvailableInMs: async ({ typeNames }) => {
-      const now = Date.now();
-      let nextScheduledAt: number | null = null;
+    getNextJobAvailableInMs: async ({ txCtx, typeNames }) =>
+      withReadLock(txCtx, () => {
+        const now = Date.now();
+        let nextScheduledAt: number | null = null;
 
-      for (const typeName of typeNames) {
-        const set = pendingByType.get(typeName);
-        const candidate = set?.first();
-        if (!candidate) continue;
-        const t = candidate.scheduledAt.getTime();
-        if (nextScheduledAt === null || t < nextScheduledAt) nextScheduledAt = t;
-      }
+        for (const typeName of typeNames) {
+          const set = pendingByType.get(typeName);
+          const candidate = set?.first();
+          if (!candidate) continue;
+          const t = candidate.scheduledAt.getTime();
+          if (nextScheduledAt === null || t < nextScheduledAt) nextScheduledAt = t;
+        }
 
-      if (nextScheduledAt === null) return null;
-      return Math.max(0, nextScheduledAt - now);
-    },
+        if (nextScheduledAt === null) return null;
+        return Math.max(0, nextScheduledAt - now);
+      }),
 
     acquireJob: async ({ txCtx, typeNames }) =>
       withWriteLock(txCtx, () => {
@@ -906,63 +909,67 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
         return { deleted, blockerRefs: [] };
       }),
 
-    getJobForUpdate: async ({ jobId }) => jobs.get(jobId),
+    getJobForUpdate: async ({ txCtx, jobId }) => withReadLock(txCtx, () => jobs.get(jobId)),
 
-    getLatestChainJobForUpdate: async ({ chainId }) => getLastJobInChain(chainId),
+    getLatestChainJobForUpdate: async ({ txCtx, chainId }) =>
+      withReadLock(txCtx, () => getLastJobInChain(chainId)),
 
-    listJobChains: async ({ filter, orderDirection, page }) => {
-      const idMatchChainIds = filter?.chainId ? new Set<string>(filter.chainId) : undefined;
+    listJobChains: async ({ txCtx, filter, orderDirection, page }) =>
+      withReadLock(txCtx, () => {
+        const idMatchChainIds = filter?.chainId ? new Set<string>(filter.chainId) : undefined;
 
-      let jobIdMatchChainIds: Set<string> | undefined;
-      if (filter?.jobId) {
-        jobIdMatchChainIds = new Set<string>();
-        for (const j of jobs.values()) {
-          if (filter.jobId.includes(j.id)) jobIdMatchChainIds.add(j.chainId);
+        let jobIdMatchChainIds: Set<string> | undefined;
+        if (filter?.jobId) {
+          jobIdMatchChainIds = new Set<string>();
+          for (const j of jobs.values()) {
+            if (filter.jobId.includes(j.id)) jobIdMatchChainIds.add(j.chainId);
+          }
         }
-      }
 
-      let blockerChainIds: Set<string> | undefined;
-      if (filter?.rootOnly) {
-        blockerChainIds = new Set<string>(blockedByChain.keys());
-      }
+        let blockerChainIds: Set<string> | undefined;
+        if (filter?.rootOnly) {
+          blockerChainIds = new Set<string>(blockedByChain.keys());
+        }
 
-      const chains: [StateJob, StateJob | undefined][] = [];
-      for (const job of rootJobsByCreatedAt.iterate("asc")) {
-        const lastJob = getLastJobInChain(job.id);
+        const chains: [StateJob, StateJob | undefined][] = [];
+        for (const job of rootJobsByCreatedAt.iterate("asc")) {
+          const lastJob = getLastJobInChain(job.id);
 
-        if (idMatchChainIds && !idMatchChainIds.has(job.chainId)) continue;
-        if (jobIdMatchChainIds && !jobIdMatchChainIds.has(job.chainId)) continue;
-        if (blockerChainIds && blockerChainIds.has(job.chainId)) continue;
-        if (!matchesTypeNameFilter(job, filter?.typeName)) continue;
-        if (!matchesStatusFilter(lastJob ?? job, filter?.status)) continue;
-        if (!matchesDateRange(job.createdAt, filter?.from, filter?.to)) continue;
+          if (idMatchChainIds && !idMatchChainIds.has(job.chainId)) continue;
+          if (jobIdMatchChainIds && !jobIdMatchChainIds.has(job.chainId)) continue;
+          if (blockerChainIds && blockerChainIds.has(job.chainId)) continue;
+          if (!matchesTypeNameFilter(job, filter?.typeName)) continue;
+          if (!matchesStatusFilter(lastJob ?? job, filter?.status)) continue;
+          if (!matchesDateRange(job.createdAt, filter?.from, filter?.to)) continue;
 
-        chains.push([job, lastJob && lastJob.id !== job.id ? lastJob : undefined]);
-      }
+          chains.push([job, lastJob && lastJob.id !== job.id ? lastJob : undefined]);
+        }
 
-      return paginateByCreatedAt(chains, page, orderDirection);
-    },
+        return paginateByCreatedAt(chains, page, orderDirection);
+      }),
 
-    listJobs: async ({ filter, orderDirection, page }) => {
-      const matched: StateJob[] = [];
-      for (const job of jobs.values()) {
-        if (filter?.jobId && !filter.jobId.includes(job.id)) continue;
-        if (!matchesStatusFilter(job, filter?.status)) continue;
-        if (!matchesTypeNameFilter(job, filter?.typeName)) continue;
-        if (!matchesChainTypeNameFilter(job, filter?.chainTypeName)) continue;
-        if (filter?.chainId && !filter.chainId.includes(job.chainId)) continue;
-        if (!matchesDateRange(job.createdAt, filter?.from, filter?.to)) continue;
-        matched.push(job);
-      }
+    listJobs: async ({ txCtx, filter, orderDirection, page }) =>
+      withReadLock(txCtx, () => {
+        const matched: StateJob[] = [];
+        for (const job of jobs.values()) {
+          if (filter?.jobId && !filter.jobId.includes(job.id)) continue;
+          if (!matchesStatusFilter(job, filter?.status)) continue;
+          if (!matchesTypeNameFilter(job, filter?.typeName)) continue;
+          if (!matchesChainTypeNameFilter(job, filter?.chainTypeName)) continue;
+          if (filter?.chainId && !filter.chainId.includes(job.chainId)) continue;
+          if (!matchesDateRange(job.createdAt, filter?.from, filter?.to)) continue;
+          matched.push(job);
+        }
 
-      return paginateByCreatedAt(matched, page, orderDirection);
-    },
+        return paginateByCreatedAt(matched, page, orderDirection);
+      }),
 
-    listJobChainJobs: async ({ chainId, orderDirection, page }) => {
-      const chainMap = jobsByChain.get(chainId);
-      const matched: StateJob[] = chainMap ? Array.from(chainMap.values()) : [];
-      return paginateByChainIndex(matched, page, orderDirection);
-    },
+    listJobChainJobs: async ({ txCtx, chainId, orderDirection, page }) =>
+      withReadLock(txCtx, () => {
+        const chainMap = jobsByChain.get(chainId);
+        const matched: StateJob[] = chainMap ? Array.from(chainMap.values()) : [];
+        return paginateByChainIndex(matched, page, orderDirection);
+      }),
 
     triggerJobs: async ({ txCtx, jobIds }) =>
       withWriteLock(txCtx, () => {
@@ -1005,17 +1012,18 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
         return { triggered, notFound: [], notTriggerable: [] };
       }),
 
-    listBlockedJobs: async ({ chainId, orderDirection, page }) => {
-      const blockedJobIds = blockedByChain.get(chainId);
-      const matched: StateJob[] = [];
-      if (blockedJobIds) {
-        for (const jobId of blockedJobIds) {
-          const job = jobs.get(jobId);
-          if (job) matched.push(job);
+    listBlockedJobs: async ({ txCtx, chainId, orderDirection, page }) =>
+      withReadLock(txCtx, () => {
+        const blockedJobIds = blockedByChain.get(chainId);
+        const matched: StateJob[] = [];
+        if (blockedJobIds) {
+          for (const jobId of blockedJobIds) {
+            const job = jobs.get(jobId);
+            if (job) matched.push(job);
+          }
         }
-      }
-      return paginateByCreatedAt(matched, page, orderDirection);
-    },
+        return paginateByCreatedAt(matched, page, orderDirection);
+      }),
   };
 
   return adapter;

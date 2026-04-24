@@ -2,7 +2,7 @@
  * SQLite State Adapter Memory Measurement
  */
 
-import { createSqliteStateAdapter } from "@queuert/sqlite";
+import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import Database from "better-sqlite3";
 import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
 import {
@@ -12,7 +12,6 @@ import {
   createProcessors,
   withTransactionHooks,
 } from "queuert";
-import { createAsyncLock } from "queuert/internal";
 
 import {
   diffMemory,
@@ -36,7 +35,7 @@ const [beforeDb, afterDb, db] = await measureMemory(async () => {
 console.log("\nAfter creating better-sqlite3 database:");
 diffMemory(beforeDb, afterDb);
 
-const stateProvider = createBetterSqlite3StateProvider({ db, lock: createAsyncLock() });
+const stateProvider = createBetterSqlite3StateProvider({ db, lock: createAsyncRwLock() });
 
 const notifyAdapter = await createInProcessNotifyAdapter();
 const [beforeAdapter, afterAdapter, stateAdapter] = await measureMemory(async () => {

@@ -41,20 +41,16 @@ export const migrations: Migration[] = [
     name: "20240101000000_initial_schema",
     statements: [
       {
-        sql: sql(
-          /* sql */ `
+        sql: sql(/* sql */ `
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '{{table_prefix}}job_status' AND typnamespace = '{{schema}}'::regnamespace) THEN
     CREATE TYPE {{schema}}.{{table_prefix}}job_status AS ENUM ('blocked','pending','running','completed');
   END IF;
-END$$`,
-          false,
-        ),
+END$$`),
       },
       {
-        sql: sql(
-          /* sql */ `
+        sql: sql(/* sql */ `
 CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job (
   id                            {{id_type}} PRIMARY KEY DEFAULT {{id_default}},
   type_name                     text NOT NULL,
@@ -87,105 +83,70 @@ CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job (
   -- tracing
   chain_trace_context           text,
   trace_context                 text
-)`,
-          false,
-        ),
+)`),
       },
       {
-        sql: sql(
-          /* sql */ `
+        sql: sql(/* sql */ `
 CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job_blocker (
   job_id                        {{id_type}} NOT NULL REFERENCES {{schema}}.{{table_prefix}}job(id),
   blocked_by_chain_id           {{id_type}} NOT NULL REFERENCES {{schema}}.{{table_prefix}}job(id),
   index                         integer NOT NULL,
   trace_context                 text,
   PRIMARY KEY (job_id, blocked_by_chain_id)
-)`,
-          false,
-        ),
+)`),
       },
       {
-        sql: sql(
-          /* sql */ `
+        sql: sql(/* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_acquisition_idx
 ON {{schema}}.{{table_prefix}}job (type_name, scheduled_at)
-WHERE status = 'pending'`,
-          false,
-        ),
+WHERE status = 'pending'`),
       },
       {
-        sql: sql(
-          /* sql */ `
+        sql: sql(/* sql */ `
 CREATE UNIQUE INDEX IF NOT EXISTS {{table_prefix}}job_chain_index_idx
-ON {{schema}}.{{table_prefix}}job (chain_id, chain_index)`,
-          false,
-        ),
+ON {{schema}}.{{table_prefix}}job (chain_id, chain_index)`),
       },
       {
-        sql: sql(
-          /* sql */ `
+        sql: sql(/* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_deduplication_idx
 ON {{schema}}.{{table_prefix}}job (deduplication_key, created_at DESC)
-WHERE deduplication_key IS NOT NULL AND chain_index = 0`,
-          false,
-        ),
+WHERE deduplication_key IS NOT NULL AND chain_index = 0`),
       },
       {
-        sql: sql(
-          /* sql */ `
+        sql: sql(/* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_expired_lease_idx
 ON {{schema}}.{{table_prefix}}job (type_name, leased_until)
-WHERE status = 'running' AND leased_until IS NOT NULL`,
-          false,
-        ),
+WHERE status = 'running' AND leased_until IS NOT NULL`),
       },
       {
-        sql: sql(
-          /* sql */ `
+        sql: sql(/* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_blocker_chain_idx
-ON {{schema}}.{{table_prefix}}job_blocker (blocked_by_chain_id)`,
-          false,
-        ),
+ON {{schema}}.{{table_prefix}}job_blocker (blocked_by_chain_id)`),
       },
       {
-        sql: sql(
-          /* sql */ `
+        sql: sql(/* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_chain_listing_idx
-ON {{schema}}.{{table_prefix}}job (created_at DESC) WHERE chain_index = 0`,
-          false,
-        ),
+ON {{schema}}.{{table_prefix}}job (created_at DESC) WHERE chain_index = 0`),
       },
       {
-        sql: sql(
-          /* sql */ `
+        sql: sql(/* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_listing_idx
-ON {{schema}}.{{table_prefix}}job (created_at DESC)`,
-          false,
-        ),
+ON {{schema}}.{{table_prefix}}job (created_at DESC)`),
       },
       {
-        sql: sql(
-          /* sql */ `
+        sql: sql(/* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_listing_status_idx
-ON {{schema}}.{{table_prefix}}job (status, created_at DESC)`,
-          false,
-        ),
+ON {{schema}}.{{table_prefix}}job (status, created_at DESC)`),
       },
       {
-        sql: sql(
-          /* sql */ `
+        sql: sql(/* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_listing_type_name_idx
-ON {{schema}}.{{table_prefix}}job (type_name, created_at DESC)`,
-          false,
-        ),
+ON {{schema}}.{{table_prefix}}job (type_name, created_at DESC)`),
       },
       {
-        sql: sql(
-          /* sql */ `
+        sql: sql(/* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_chain_listing_type_name_idx
-ON {{schema}}.{{table_prefix}}job (type_name, created_at DESC) WHERE chain_index = 0`,
-          false,
-        ),
+ON {{schema}}.{{table_prefix}}job (type_name, created_at DESC) WHERE chain_index = 0`),
       },
     ],
   },
@@ -193,25 +154,19 @@ ON {{schema}}.{{table_prefix}}job (type_name, created_at DESC) WHERE chain_index
     name: "20240102000000_vacuum_tuning",
     statements: [
       {
-        sql: sql(
-          /* sql */ `
+        sql: sql(/* sql */ `
 ALTER TABLE {{schema}}.{{table_prefix}}job SET (
   fillfactor = 75,
   autovacuum_vacuum_scale_factor = 0.02,
   autovacuum_analyze_scale_factor = 0.02,
   autovacuum_vacuum_cost_delay = 0
-)`,
-          false,
-        ),
+)`),
       },
       {
-        sql: sql(
-          /* sql */ `
+        sql: sql(/* sql */ `
 ALTER TABLE {{schema}}.{{table_prefix}}job_blocker SET (
   autovacuum_vacuum_cost_delay = 0
-)`,
-          false,
-        ),
+)`),
       },
     ],
   },
@@ -405,7 +360,6 @@ CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}migration (
   name TEXT PRIMARY KEY,
   applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
 )`,
-    false,
     {
       params: [],
       columns: {},
@@ -414,16 +368,15 @@ CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}migration (
 
   const getAppliedMigrationsSql = sql(
     /* sql */ `SELECT name, applied_at FROM {{schema}}.{{table_prefix}}migration ORDER BY name`,
-    true,
     {
       params: [],
       columns: { name: t.string(), applied_at: t.string() },
+      readOnly: true,
     },
   );
 
   const recordMigrationSql = sql(
     /* sql */ `INSERT INTO {{schema}}.{{table_prefix}}migration (name) VALUES ($1) ON CONFLICT (name) DO NOTHING`,
-    false,
     {
       params: [t.string()],
       columns: {},
@@ -532,7 +485,6 @@ SELECT ti.ord, ij.id, ij.type_name, ij.chain_id, ij.chain_type_name, ij.chain_in
 FROM inserted_jobs ij JOIN to_insert ti ON COALESCE(ti.chain_id, ti.id) = ij.chain_id AND ti.chain_index = ij.chain_index
 ORDER BY ord
 `,
-    true,
     {
       params: [
         t.number(),
@@ -631,7 +583,6 @@ LEFT JOIN per_job_incomplete pi ON pi.job_id = fj.id
 LEFT JOIN per_job_trace_contexts ptc ON ptc.job_id = fj.id
 ORDER BY fj.id
 `,
-    true,
     {
       params: [t.array(), t.array(), t.array<string | null>(), t.array<number>()],
       columns: {
@@ -655,7 +606,6 @@ SET status = 'completed',
 WHERE id = $1
 RETURNING *
 `,
-    true,
     {
       params: [id, t.json(), t["string?"]()],
       columns: { ...dbJobColumns },
@@ -707,7 +657,6 @@ SELECT
   COALESCE((SELECT json_agg(row_to_json(u)) FROM updated u), '[]'::json) AS unblocked_jobs,
   COALESCE((SELECT json_agg(tc.trace_context) FROM trace_contexts tc), '[]'::json) AS blocker_trace_contexts;
 `,
-    true,
     {
       params: [id],
       columns: {
@@ -732,10 +681,10 @@ LEFT JOIN LATERAL (
 ) AS lc ON TRUE
 WHERE j.id = $1
 `,
-    true,
     {
       params: [id],
       columns: rowToJsonJobColumns,
+      readOnly: true,
     },
   );
 
@@ -757,10 +706,10 @@ LEFT JOIN LATERAL (
 WHERE b.job_id = $1
 ORDER BY b.index ASC
 `,
-    true,
     {
       params: [id],
       columns: rowToJsonJobColumns,
+      readOnly: true,
     },
   );
 
@@ -770,10 +719,10 @@ SELECT *
 FROM {{schema}}.{{table_prefix}}job
 WHERE id = $1
 `,
-    true,
     {
       params: [id],
       columns: { ...dbJobColumns },
+      readOnly: true,
     },
   );
 
@@ -789,7 +738,6 @@ SET scheduled_at = COALESCE($2::timestamptz, now() + ($3::bigint || ' millisecon
 WHERE id = $1
 RETURNING *
 `,
-    true,
     {
       params: [id, t["date?"](), t["number?"](), t.string()],
       columns: { ...dbJobColumns },
@@ -834,7 +782,6 @@ SELECT
     '[]'::json
   ) AS not_triggerable
 `,
-    true,
     {
       params: [t.array()],
       columns: {
@@ -854,7 +801,6 @@ SET leased_by = $2,
 WHERE id = $1
 RETURNING *
 `,
-    true,
     {
       params: [id, t.string(), t.number()],
       columns: { ...dbJobColumns },
@@ -886,7 +832,6 @@ RETURNING *,
     LIMIT 1
   ) AS has_more
 `,
-    true,
     {
       params: [t.array()],
       columns: { ...dbJobColumns, has_more: t.boolean() },
@@ -903,7 +848,6 @@ ORDER BY job.scheduled_at ASC
 LIMIT 1
 FOR UPDATE SKIP LOCKED
 `,
-    true,
     {
       params: [t.array()],
       columns: { available_in_ms: t.number() },
@@ -932,7 +876,6 @@ FROM job_to_unlock
 WHERE job.id = job_to_unlock.id
 RETURNING job.*
 `,
-    true,
     {
       params: [t.array(), t.array()],
       columns: { ...dbJobColumns },
@@ -951,10 +894,10 @@ WITH RECURSIVE connected(chain_id) AS (
 )
 SELECT chain_id FROM connected
 `,
-    true,
     {
       params: [t.array()],
       columns: { chain_id: id },
+      readOnly: true,
     },
   );
 
@@ -1003,7 +946,6 @@ SELECT
   COALESCE((SELECT json_agg(row_to_json(p)) FROM _deleted_pairs p), '[]'::json) AS deleted,
   COALESCE((SELECT json_agg(row_to_json(r)) FROM _external_refs r), '[]'::json) AS blocker_refs
 `,
-    true,
     {
       params: [t.array()],
       columns: {
@@ -1020,7 +962,6 @@ FROM {{schema}}.{{table_prefix}}job
 WHERE id = $1
 FOR UPDATE
 `,
-    true,
     {
       params: [id],
       columns: { ...dbJobColumns },
@@ -1036,7 +977,6 @@ ORDER BY chain_index DESC
 LIMIT 1
 FOR UPDATE
 `,
-    true,
     {
       params: [id],
       columns: { ...dbJobColumns },

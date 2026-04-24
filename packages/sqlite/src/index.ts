@@ -3,5 +3,5 @@ export {
   type SqliteStateAdapter,
 } from "./state-adapter/state-adapter.sqlite.js";
 export { type SqliteStateProvider } from "./state-provider/state-provider.sqlite.js";
-export { createAsyncLock, type AsyncLock } from "queuert/internal";
+export { createAsyncRwLock, type AsyncRwLock, type LockHandle } from "queuert/internal";
 export { type MigrationResult } from "@queuert/typed-sql";

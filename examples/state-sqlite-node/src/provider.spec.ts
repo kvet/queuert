@@ -1,6 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 
-import { createAsyncLock, createSqliteStateAdapter } from "@queuert/sqlite";
+import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import { runStateAdapterConformance } from "queuert/conformance";
 import { test } from "vitest";
 
@@ -12,7 +12,7 @@ test("state-sqlite-node provider passes state adapter conformance", async () => 
     db.exec("PRAGMA auto_vacuum = INCREMENTAL");
     db.exec("PRAGMA foreign_keys = ON");
 
-    const lock = createAsyncLock();
+    const lock = createAsyncRwLock();
     const stateProvider = createNodeSqliteStateProvider({ db, lock });
     const adapter = await createSqliteStateAdapter({ stateProvider });
     await adapter.migrateToLatest();

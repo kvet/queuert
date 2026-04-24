@@ -136,9 +136,10 @@ export const createPgStateAdapter = async <
     return stateProvider.executeSql({
       txCtx,
       sql: resolved.sql,
-      params: params!,
+      params: params ?? [],
       paramTypes: extractParamTypes(resolved.params),
       columnTypes: extractColumnTypes(resolved.columns),
+      readOnly: resolved.readOnly,
     }) as Promise<InferColumns<TColumns>[]>;
   };
 
@@ -165,16 +166,20 @@ export const createPgStateAdapter = async <
         await stateProvider.executeSql({
           txCtx,
           sql: `SAVEPOINT ${sp}`,
+          params: [],
           paramTypes: {},
           columnTypes: {},
+          readOnly: false,
         });
         try {
           const result = await fn(txCtx);
           await stateProvider.executeSql({
             txCtx,
             sql: `RELEASE SAVEPOINT ${sp}`,
+            params: [],
             paramTypes: {},
             columnTypes: {},
+            readOnly: false,
           });
           return result;
         } catch (error) {
@@ -182,8 +187,10 @@ export const createPgStateAdapter = async <
             .executeSql({
               txCtx,
               sql: `ROLLBACK TO SAVEPOINT ${sp}`,
+              params: [],
               paramTypes: {},
               columnTypes: {},
+              readOnly: false,
             })
             .catch(() => {});
           throw error;
@@ -477,6 +484,7 @@ export const createPgStateAdapter = async <
         params,
         paramTypes,
         columnTypes: extractColumnTypes(defs.rowToJsonJobColumns),
+        readOnly: true,
       })) as { root_job: DbJob; last_chain_job: DbJob | null }[];
 
       const hasMore = rows.length > page.limit;
@@ -571,6 +579,7 @@ export const createPgStateAdapter = async <
         params,
         paramTypes,
         columnTypes: extractColumnTypes(defs.dbJobColumns),
+        readOnly: true,
       })) as DbJob[];
 
       const hasMore = rows.length > page.limit;
@@ -616,6 +625,7 @@ export const createPgStateAdapter = async <
         params,
         paramTypes,
         columnTypes: extractColumnTypes(defs.dbJobColumns),
+        readOnly: true,
       })) as DbJob[];
 
       const hasMore = rows.length > page.limit;
@@ -685,6 +695,7 @@ export const createPgStateAdapter = async <
         params,
         paramTypes,
         columnTypes: extractColumnTypes(defs.dbJobColumns),
+        readOnly: true,
       })) as DbJob[];
 
       const hasMore = rows.length > page.limit;
@@ -714,14 +725,18 @@ export const createPgStateAdapter = async <
           await stateProvider.executeSql({
             txCtx,
             sql: applyTemplate(defs.createMigrationTableSql).sql,
+            params: [],
             paramTypes: {},
             columnTypes: {},
+            readOnly: false,
           });
           const applied = (await stateProvider.executeSql({
             txCtx,
             sql: applyTemplate(defs.getAppliedMigrationsSql).sql,
+            params: [],
             paramTypes: {},
             columnTypes: {},
+            readOnly: true,
           })) as { name: string }[];
           return applied.map((m) => m.name);
         },
@@ -730,8 +745,10 @@ export const createPgStateAdapter = async <
             await stateProvider.executeSql({
               txCtx,
               sql: applyTemplate(stmt.sql).sql,
+              params: [],
               paramTypes: {},
               columnTypes: {},
+              readOnly: false,
             });
           }
         },
@@ -742,6 +759,7 @@ export const createPgStateAdapter = async <
             params: [name],
             paramTypes: {},
             columnTypes: {},
+            readOnly: false,
           });
         },
       });
@@ -751,20 +769,26 @@ export const createPgStateAdapter = async <
     vacuum: async () => {
       await stateProvider.executeSql({
         sql: `VACUUM ${schema}.${tablePrefix}job`,
+        params: [],
         paramTypes: {},
         columnTypes: {},
+        readOnly: false,
       });
       await stateProvider.executeSql({
         sql: `VACUUM ${schema}.${tablePrefix}job_blocker`,
+        params: [],
         paramTypes: {},
         columnTypes: {},
+        readOnly: false,
       });
     },
     truncate: async () => {
       await stateProvider.executeSql({
         sql: `TRUNCATE ${schema}.${tablePrefix}job_blocker, ${schema}.${tablePrefix}job CASCADE`,
+        params: [],
         paramTypes: {},
         columnTypes: {},
+        readOnly: false,
       });
     },
   };

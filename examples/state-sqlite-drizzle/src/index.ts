@@ -1,4 +1,4 @@
-import { createAsyncLock, createSqliteStateAdapter } from "@queuert/sqlite";
+import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import Database from "better-sqlite3";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
@@ -49,7 +49,7 @@ const jobTypes = defineJobTypes<{
 }>();
 
 // 5. Create state provider for Drizzle with better-sqlite3
-const lock = createAsyncLock();
+const lock = createAsyncRwLock();
 const stateProvider = createDrizzleSqliteStateProvider({ db: sqlite, lock });
 
 // 6. Create adapters and queuert client/worker
@@ -89,10 +89,9 @@ const stopWorker = await worker.start();
 
 // 8. Register a new user and queue welcome email atomically
 const jobChain = await withTransactionHooks(async (transactionHooks) => {
-  await lock.acquire();
+  using _h = await lock.acquireWrite();
+  sqlite.exec("BEGIN IMMEDIATE");
   try {
-    sqlite.exec("BEGIN IMMEDIATE");
-
     // Use Drizzle to insert the user
     const [user] = db
       .insert(users)
@@ -119,8 +118,6 @@ const jobChain = await withTransactionHooks(async (transactionHooks) => {
       }
     }
     throw error;
-  } finally {
-    lock.release();
   }
 });
 

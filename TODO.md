@@ -10,8 +10,7 @@
 - [TASK] Name internal types properly. No underscore. Add to code-style guide.
 - [?,REF] Lift `close()` onto base provider interfaces + adapters for uniform teardown (today only `PgPoolNotifyProvider` has it, via intersection) — see `design/provider-close.md`
 - [REF] Standardize chain-ID parameter names across `Client`. Today the same concept is spelled three different ways depending on method: `id` on `getJobChain`/`deleteJobChain`/`triggerJob`/`completeJobChain`/`awaitJobChain`, `jobChainId` on `listJobChainJobs`/`listBlockedJobs`, and mixed `id`/`chainId` inside `listJobChains({ filter })` / `listJobs({ filter: { jobChainId } })`. Users have to memorize which key each method wants and autocomplete doesn't help disambiguate chain vs job ids. Pick one spelling (likely `chainId` at the filter level where a job id also appears, `id` where the chain is the sole subject) and migrate all methods in one breaking pass.
-- [TASK] Add tests that check sql param and column types are correct in provider interfaces
-- [TASK] Provide information about read-only or read-write executeSql
+- [TASK] Add tests that check sql read only, param types and column types are correct in provider interfaces
 
 # Medium term
 
@@ -42,10 +41,10 @@
   - [REF] Batch `addJobsBlockers` — currently 3-4 sequential queries per jobBlocker entry, O(N) round-trips
   - [REF] Better concurrency handling - WAL mode, busy timeout, retries
   - [REF] Separate read/write connection pools (single writer, multiple readers)
-  - [REF] Stop prescribing `createAsyncLock` as the sqlite transaction model. Every sqlite example currently wires a shared async lock between the provider's `withTransaction` and user-initiated transactions on the same connection — because they share one `better-sqlite3`/`node:sqlite` connection and SQLite allows only one active tx per connection. This is boilerplate users rewrite (and get wrong: better-sqlite3 example had the lock split across instances, kysely example omits the lock on the user-side `db.transaction()` entirely — latent race). The provider contract is just "`withTransaction` gives exclusive atomic access"; how the user achieves that is their concern (pool, WAL + connection-per-tx, ORM-native transactions, etc.). Concretely:
-    - Rewrite sqlite examples to show production-realistic patterns: file DB + `journal_mode=WAL` + `busy_timeout`, and either connection-per-transaction or a small pool. No `createAsyncLock` in user-facing code.
-    - Remove/soften the docs prescription at `docs/src/content/docs/advanced/sqlite-internals.md` ("Custom `SqliteStateProvider` implementations must use `createAsyncLock()`") — describe the contract, not one implementation strategy.
-    - Stop re-exporting `createAsyncLock` from `@queuert/sqlite` (or mark internal). Keeping it exported signals that it's part of the intended extension path.
+  - [REF] Stop prescribing `createAsyncRwLock` as the sqlite transaction model. Every sqlite example currently wires a shared async lock between the provider's `withTransaction` and user-initiated transactions on the same connection — because they share one `better-sqlite3`/`node:sqlite` connection and SQLite allows only one active tx per connection. This is boilerplate users rewrite (and get wrong: better-sqlite3 example had the lock split across instances, kysely example omits the lock on the user-side `db.transaction()` entirely — latent race). The provider contract is just "`withTransaction` gives exclusive atomic access"; how the user achieves that is their concern (pool, WAL + connection-per-tx, ORM-native transactions, etc.). Concretely:
+    - Rewrite sqlite examples to show production-realistic patterns: file DB + `journal_mode=WAL` + `busy_timeout`, and either connection-per-transaction or a small pool. No `createAsyncRwLock` in user-facing code.
+    - Remove/soften the docs prescription at `docs/src/content/docs/advanced/sqlite-internals.md` ("Custom `SqliteStateProvider` implementations must use `createAsyncRwLock()`") — describe the contract, not one implementation strategy.
+    - Stop re-exporting `createAsyncRwLock` from `@queuert/sqlite` (or mark internal). Keeping it exported signals that it's part of the intended extension path.
   - [TASK,EASY] Validate `PRAGMA foreign_keys = ON` at adapter init (FK on `job_blocker.blocked_by_chain_id` requires it)
   - [TASK,EASY] get rid of skipConcurrencyTests flag in resilience tests (separate test suite?)
 - [TASK] Fix flaky `handles transient database errors gracefully with multiple workers` test in state-resilience suite — fails intermittently in CI even with `--retry 2`; investigate root cause (timing-sensitive concurrent workers + injected errors)

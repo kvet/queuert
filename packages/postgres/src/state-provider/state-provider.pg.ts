@@ -36,12 +36,17 @@ export type PgStateProvider<TTxContext extends BaseTxContext> = {
    * Type hints enable drivers that don't auto-serialize/parse (e.g. postgres.js `unsafe()`)
    * to handle json/jsonb columns and array parameters correctly.
    * Drivers that handle these natively (e.g. `pg`) can ignore the hints.
+   *
+   * `readOnly` indicates whether the statement reads only (pure `SELECT` with no `FOR UPDATE`).
+   * Providers can use this to route to a read replica or a separate reader pool. The built-in
+   * pool/postgres-js providers ignore it.
    */
   executeSql: (options: {
     txCtx?: TTxContext;
     sql: string;
-    params?: unknown[];
+    params: unknown[];
     paramTypes: Record<number, RuntimeType>;
     columnTypes: Record<string, RuntimeType>;
+    readOnly: boolean;
   }) => Promise<unknown[]>;
 };

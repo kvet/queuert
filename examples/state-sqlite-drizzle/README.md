@@ -1,6 +1,6 @@
 # SQLite State Adapter (Drizzle ORM)
 
-SQLite state storage via `@queuert/sqlite` with Drizzle ORM — atomic job creation inside application transactions, with `createAsyncLock()` for write serialization.
+SQLite state storage via `@queuert/sqlite` with Drizzle ORM — atomic job creation inside application transactions, with `createAsyncRwLock()` for write serialization.
 
 ## Running
 

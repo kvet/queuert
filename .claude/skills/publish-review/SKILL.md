@@ -246,7 +246,7 @@ The following items have been reviewed and accepted as intentional design decisi
 
 - **`createOtelObservabilityAdapter` is async**: Reserves the right to add async initialization later. Accepted.
 - **`helpersSymbol` exported publicly but marked `@internal`**: Required by `@queuert/dashboard` and `createInProcessWorker`. The `@internal` annotation is a convention, not enforcement. Accepted.
-- **`createAsyncLock` re-exported from `@queuert/sqlite` via `queuert/internal`**: SQLite users need this for transaction serialization. Accepted.
+- **`createAsyncRwLock` re-exported from `@queuert/sqlite` via `queuert/internal`**: SQLite users need this for transaction serialization. Accepted.
 - **`createClient` is async but performs no I/O**: Reserves the right to add async initialization later. Accepted.
 - **`createInProcessWorker` is async but performs no I/O**: Reserves the right to add async initialization later. Accepted.
 - **`$idType` phantom property on `createPgStateAdapter` options**: Intentional pattern for generic type inference. Accepted.

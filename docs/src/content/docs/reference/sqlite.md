@@ -45,28 +45,38 @@ type SqliteStateProvider<TTxContext> = {
     txCtx?: TTxContext;
     sql: string;
     params?: unknown[];
+    paramTypes: Record<number, RuntimeType>; // Positional param runtime types
     columnTypes: Record<string, RuntimeType>; // Non-empty when the query returns rows
+    readOnly?: boolean; // true for pure SELECTs (no FOR UPDATE)
   }) => Promise<unknown[]>;
 };
 ```
 
-## createAsyncLock / AsyncLock
+The adapter pre-serializes non-primitive values, so the built-in `better-sqlite3` and `node:sqlite` providers ignore `paramTypes`. It exists for custom providers backed by drivers that need explicit type hints (e.g. remote SQLite bridges).
 
-Re-exported from `queuert/internal`. SQLite requires serialized write access. If your application performs writes outside of Queuert (e.g., in your state provider), use `createAsyncLock` to coordinate access so that your writes and Queuert's writes don't conflict:
+## createAsyncRwLock / AsyncRwLock / LockHandle
+
+Re-exported from `queuert/internal`. SQLite requires serialized write access but permits concurrent reads. If your application performs writes outside of Queuert (e.g., in your state provider), use `createAsyncRwLock` to coordinate access so that your writes and Queuert's writes don't conflict:
 
 ```typescript
-import { createAsyncLock } from "@queuert/sqlite";
+import { createAsyncRwLock } from "@queuert/sqlite";
 
-const lock = createAsyncLock();
+const lock = createAsyncRwLock();
 
-// Use the same lock in your state provider and application code
-await lock.acquire();
-try {
-  // Serialized database access
-} finally {
-  lock.release();
+// Exclusive (writer) — blocks readers and other writers
+{
+  using _h = await lock.acquireWrite();
+  // Serialized write access
+}
+
+// Shared (reader) — concurrent with other readers, blocks writers
+{
+  using _h = await lock.acquireRead();
+  // Concurrent read access
 }
 ```
+
+Handles implement `Symbol.dispose`, so `using` releases at scope exit. You can also call `handle.release()` manually. Release is idempotent.
 
 ## MigrationResult
 

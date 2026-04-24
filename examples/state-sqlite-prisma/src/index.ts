@@ -4,15 +4,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
-import { createAsyncLock, createSqliteStateAdapter } from "@queuert/sqlite";
+import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import Database from "better-sqlite3";
 import {
   createClient,
+  createInProcessNotifyAdapter,
   createInProcessWorker,
   createProcessors,
   defineJobTypes,
   withTransactionHooks,
-  createInProcessNotifyAdapter,
 } from "queuert";
 
 import { createPrismaSqliteStateProvider } from "./provider.js";
@@ -40,8 +40,8 @@ const { PrismaClient } = await import("../prisma/generated/prisma/client.js");
 const adapter = new PrismaBetterSqlite3({ url: `file:${dbPath}` });
 const prisma = new PrismaClient({ adapter });
 
-// 4. Create async lock for write serialization (SQLite requirement)
-const lock = createAsyncLock();
+// 4. Create async RW lock for write serialization (SQLite requirement)
+const lock = createAsyncRwLock();
 
 // 5. Define job types
 const jobTypes = defineJobTypes<{
@@ -94,24 +94,20 @@ const stopWorker = await worker.start();
 
 // 9. Register a new user and queue welcome email atomically
 const jobChain = await withTransactionHooks(async (transactionHooks) => {
-  await lock.acquire();
-  try {
-    return await prisma.$transaction(async (prisma) => {
-      const user = await prisma.user.create({
-        data: { name: "Alice", email: "alice@example.com" },
-      });
-
-      // Queue welcome email - if user creation fails, no email job is created
-      return client.startJobChain({
-        prisma,
-        transactionHooks,
-        typeName: "send_welcome_email",
-        input: { userId: user.id, email: user.email, name: user.name },
-      });
+  using _h = await lock.acquireWrite();
+  return await prisma.$transaction(async (prisma) => {
+    const user = await prisma.user.create({
+      data: { name: "Alice", email: "alice@example.com" },
     });
-  } finally {
-    lock.release();
-  }
+
+    // Queue welcome email - if user creation fails, no email job is created
+    return client.startJobChain({
+      prisma,
+      transactionHooks,
+      typeName: "send_welcome_email",
+      input: { userId: user.id, email: user.email, name: user.name },
+    });
+  });
 });
 
 // 10. Wait for the job chain to complete

@@ -1,4 +1,4 @@
-import { createAsyncLock, createSqliteStateAdapter } from "@queuert/sqlite";
+import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import Database from "better-sqlite3";
 import { runStateAdapterConformance } from "queuert/conformance";
 import { test } from "vitest";
@@ -11,7 +11,7 @@ test("state-sqlite-drizzle provider passes state adapter conformance", async () 
     db.pragma("auto_vacuum = INCREMENTAL");
     db.pragma("foreign_keys = ON");
 
-    const lock = createAsyncLock();
+    const lock = createAsyncRwLock();
     const stateProvider = createDrizzleSqliteStateProvider({ db, lock });
     const adapter = await createSqliteStateAdapter({ stateProvider });
     await adapter.migrateToLatest();

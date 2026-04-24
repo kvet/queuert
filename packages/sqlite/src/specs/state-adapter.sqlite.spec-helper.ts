@@ -97,7 +97,7 @@ export const extendWithStateSqlite = <T>(
         const originalExecuteSql = stateProvider.executeSql.bind(stateProvider);
         const flakyStateProvider: typeof stateProvider = {
           ...stateProvider,
-          executeSql: async ({ txCtx, sql, params, columnTypes }) => {
+          executeSql: async ({ txCtx, sql, params, paramTypes, columnTypes, readOnly }) => {
             queryCount++;
 
             if (shouldError()) {
@@ -109,7 +109,7 @@ export const extendWithStateSqlite = <T>(
               throw error;
             }
 
-            return originalExecuteSql({ txCtx, sql, params, columnTypes });
+            return originalExecuteSql({ txCtx, sql, params, paramTypes, columnTypes, readOnly });
           },
         };
 
@@ -154,7 +154,7 @@ export const extendWithStateSqlite = <T>(
         const originalExecuteSql = stateProvider.executeSql.bind(stateProvider);
         const flakyDbProvider: typeof stateProvider = {
           ...stateProvider,
-          executeSql: async ({ txCtx, sql, params, columnTypes }) => {
+          executeSql: async ({ txCtx, sql, params, paramTypes, columnTypes, readOnly }) => {
             queryCount++;
             const shouldFail = shouldError();
             if (enabled && !txCtx && shouldFail) {
@@ -162,10 +162,13 @@ export const extendWithStateSqlite = <T>(
               return originalExecuteSql({
                 txCtx,
                 sql: "SELECT 1 FROM nonexistent_table_queuert_poison_xyz",
+                params: [],
+                paramTypes: {},
                 columnTypes: { _: "number" },
+                readOnly: true,
               });
             }
-            return originalExecuteSql({ txCtx, sql, params, columnTypes });
+            return originalExecuteSql({ txCtx, sql, params, paramTypes, columnTypes, readOnly });
           },
         };
 
@@ -196,15 +199,25 @@ export const extendWithStateSqlite = <T>(
 
         const poisonableProvider: typeof stateProvider = {
           ...stateProvider,
-          executeSql: async ({ txCtx, sql, params, columnTypes }) => {
+          executeSql: async ({ txCtx, sql, params, paramTypes, columnTypes, readOnly }) => {
             if (poisoned && !txCtx) {
               return stateProvider.executeSql({
                 txCtx,
                 sql: "SELECT 1 FROM nonexistent_table_queuert_poison_xyz",
+                params: [],
+                paramTypes: {},
                 columnTypes: { _: "number" },
+                readOnly: true,
               });
             }
-            return stateProvider.executeSql({ txCtx, sql, params, columnTypes });
+            return stateProvider.executeSql({
+              txCtx,
+              sql,
+              params,
+              paramTypes,
+              columnTypes,
+              readOnly,
+            });
           },
         };
 

@@ -10,7 +10,7 @@ import {
   withTransactionHooks,
   createInProcessNotifyAdapter,
 } from "queuert";
-import { createAsyncLock } from "queuert/internal";
+import { createAsyncRwLock } from "queuert/internal";
 import { stateAdapterConformanceTestSuite, withWorkers } from "queuert/testing";
 import { describe, expectTypeOf, it, vi } from "vitest";
 
@@ -104,31 +104,27 @@ it("infers custom ID types through the full stack", async () => {
       }),
     });
 
-    const lock = createAsyncLock();
+    const lock = createAsyncRwLock();
 
     const jobChain = await withTransactionHooks(async (transactionHooks) => {
-      await lock.acquire();
+      using _h = await lock.acquireWrite();
+      db.exec("BEGIN IMMEDIATE");
       try {
-        db.exec("BEGIN IMMEDIATE");
+        const result = await client.startJobChain({
+          db,
+          transactionHooks,
+          typeName: "test",
+          input: { foo: "hello" },
+        });
+        db.exec("COMMIT");
+        return result;
+      } catch (error) {
         try {
-          const result = await client.startJobChain({
-            db,
-            transactionHooks,
-            typeName: "test",
-            input: { foo: "hello" },
-          });
-          db.exec("COMMIT");
-          return result;
-        } catch (error) {
-          try {
-            db.exec("ROLLBACK");
-          } catch {
-            // ignore
-          }
-          throw error;
+          db.exec("ROLLBACK");
+        } catch {
+          // ignore
         }
-      } finally {
-        lock.release();
+        throw error;
       }
     });
     expectTypeOf(jobChain.id).toEqualTypeOf<`job.${UUID}`>();

@@ -1,6 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 
-import { createAsyncLock, createSqliteStateAdapter } from "@queuert/sqlite";
+import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import {
   createClient,
   createInProcessWorker,
@@ -36,7 +36,7 @@ const jobTypes = defineJobTypes<{
 }>();
 
 // 4. Create state provider for node:sqlite
-const lock = createAsyncLock();
+const lock = createAsyncRwLock();
 const stateProvider = createNodeSqliteStateProvider({ db, lock });
 
 // 5. Create adapters and queuert client/worker
@@ -76,10 +76,9 @@ const stopWorker = await worker.start();
 
 // 7. Register a new user and queue welcome email atomically
 const jobChain = await withTransactionHooks(async (transactionHooks) => {
-  await lock.acquire();
+  using _h = await lock.acquireWrite();
+  db.exec("BEGIN IMMEDIATE");
   try {
-    db.exec("BEGIN IMMEDIATE");
-
     const insertStmt = db.prepare("INSERT INTO users (name, email) VALUES (?, ?) RETURNING *");
     const user = insertStmt.get("Alice", "alice@example.com") as {
       id: number;
@@ -106,8 +105,6 @@ const jobChain = await withTransactionHooks(async (transactionHooks) => {
       }
     }
     throw error;
-  } finally {
-    lock.release();
   }
 });
 

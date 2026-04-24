@@ -1,6 +1,6 @@
 import { type DatabaseSync, type SQLInputValue } from "node:sqlite";
 
-import { createAsyncLock } from "queuert/internal";
+import { createAsyncRwLock } from "queuert/internal";
 
 import { type SqliteStateProvider } from "./state-provider.sqlite.js";
 
@@ -11,32 +11,28 @@ export const createNodeSqliteProvider = ({
 }: {
   db: DatabaseSync;
 }): SqliteStateProvider<NodeSqliteContext> => {
-  const lock = createAsyncLock();
+  const lock = createAsyncRwLock();
 
   return {
     withTransaction: async (fn) => {
-      await lock.acquire();
+      using _h = await lock.acquireWrite();
+      db.exec("BEGIN IMMEDIATE");
       try {
-        db.exec("BEGIN IMMEDIATE");
-        try {
-          const result = await fn({ db });
-          db.exec("COMMIT");
-          return result;
-        } catch (error) {
-          if (db.isTransaction) {
-            try {
-              db.exec("ROLLBACK");
-            } catch {
-              // ignore rollback errors
-            }
+        const result = await fn({ db });
+        db.exec("COMMIT");
+        return result;
+      } catch (error) {
+        if (db.isTransaction) {
+          try {
+            db.exec("ROLLBACK");
+          } catch {
+            // ignore rollback errors
           }
-          throw error;
         }
-      } finally {
-        lock.release();
+        throw error;
       }
     },
-    executeSql: async ({ txCtx, sql, params, columnTypes }) => {
+    executeSql: async ({ txCtx, sql, params, columnTypes, readOnly }) => {
       const run = (): unknown[] => {
         const database = txCtx?.db ?? db;
         if (Object.keys(columnTypes).length > 0) {
@@ -52,12 +48,8 @@ export const createNodeSqliteProvider = ({
         return [] as unknown[];
       };
       if (txCtx) return run();
-      await lock.acquire();
-      try {
-        return run();
-      } finally {
-        lock.release();
-      }
+      using _h = readOnly ? await lock.acquireRead() : await lock.acquireWrite();
+      return run();
     },
   };
 };

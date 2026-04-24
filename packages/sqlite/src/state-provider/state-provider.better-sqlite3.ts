@@ -1,5 +1,5 @@
 import type Database from "better-sqlite3";
-import { createAsyncLock } from "queuert/internal";
+import { createAsyncRwLock } from "queuert/internal";
 
 import { type SqliteStateProvider } from "./state-provider.sqlite.js";
 
@@ -10,11 +10,11 @@ export const createBetterSqlite3Provider = ({
 }: {
   db: Database.Database;
 }): SqliteStateProvider<SqliteContext> => {
-  const lock = createAsyncLock();
+  const lock = createAsyncRwLock();
 
   return {
     withTransaction: async (fn) => {
-      await lock.acquire();
+      using _h = await lock.acquireWrite();
       try {
         db.exec("BEGIN IMMEDIATE");
         const result = await fn({ db });
@@ -29,11 +29,9 @@ export const createBetterSqlite3Provider = ({
           }
         }
         throw error;
-      } finally {
-        lock.release();
       }
     },
-    executeSql: async ({ txCtx, sql, params, columnTypes }) => {
+    executeSql: async ({ txCtx, sql, params, columnTypes, readOnly }) => {
       const run = (): unknown[] => {
         const database = txCtx?.db ?? db;
         if (Object.keys(columnTypes).length > 0) {
@@ -49,12 +47,8 @@ export const createBetterSqlite3Provider = ({
         return [] as unknown[];
       };
       if (txCtx) return run();
-      await lock.acquire();
-      try {
-        return run();
-      } finally {
-        lock.release();
-      }
+      using _h = readOnly ? await lock.acquireRead() : await lock.acquireWrite();
+      return run();
     },
   };
 };

@@ -1,4 +1,4 @@
-import { createAsyncLock, createSqliteStateAdapter } from "@queuert/sqlite";
+import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import Database from "better-sqlite3";
 import {
   createClient,
@@ -35,7 +35,7 @@ const jobTypes = defineJobTypes<{
 }>();
 
 // 4. Create providers and adapters
-const lock = createAsyncLock();
+const lock = createAsyncRwLock();
 const stateProvider = createBetterSqlite3StateProvider({ db, lock });
 const stateAdapter = await createSqliteStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
@@ -71,10 +71,9 @@ const stopWorker = await worker.start();
 
 // 5. Register a new user and queue welcome email atomically
 const jobChain = await withTransactionHooks(async (transactionHooks) => {
-  await lock.acquire();
+  using _h = await lock.acquireWrite();
+  db.exec("BEGIN IMMEDIATE");
   try {
-    db.exec("BEGIN IMMEDIATE");
-
     const insertStmt = db.prepare("INSERT INTO users (name, email) VALUES (?, ?) RETURNING *");
     const user = insertStmt.get("Alice", "alice@example.com") as {
       id: number;
@@ -100,8 +99,6 @@ const jobChain = await withTransactionHooks(async (transactionHooks) => {
       }
     }
     throw error;
-  } finally {
-    lock.release();
   }
 });
 

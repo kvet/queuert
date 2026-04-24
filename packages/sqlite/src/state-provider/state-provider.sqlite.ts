@@ -36,11 +36,22 @@ export type SqliteStateProvider<TTxContext extends BaseTxContext> = {
    *
    * When `columnTypes` is non-empty the query returns rows (use `.all()`);
    * when empty the query is a mutation (use `.run()` / `.exec()`).
+   *
+   * `paramTypes` annotates each positional parameter's runtime type. The built-in
+   * adapter pre-serializes non-primitive values to strings before they reach the
+   * provider, so the standard `better-sqlite3` / `node:sqlite` providers ignore
+   * this field. It exists for custom providers backed by drivers that need
+   * explicit type hints (e.g. remote SQLite bridges).
+   *
+   * `readOnly` indicates whether the statement reads only (SELECT without FOR UPDATE).
+   * Providers use this to pick between shared/exclusive locks or reader/writer connection pools.
    */
   executeSql: (options: {
     txCtx?: TTxContext;
     sql: string;
-    params?: unknown[];
+    params: unknown[];
+    paramTypes: Record<number, RuntimeType>;
     columnTypes: Record<string, RuntimeType>;
+    readOnly: boolean;
   }) => Promise<unknown[]>;
 };

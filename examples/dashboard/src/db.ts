@@ -1,6 +1,6 @@
 import { join } from "node:path";
 
-import { createAsyncLock } from "@queuert/sqlite";
+import { createAsyncRwLock } from "@queuert/sqlite";
 import Database from "better-sqlite3";
 import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
 
@@ -15,6 +15,6 @@ export const createDatabase = (): Database.Database => {
 };
 
 export const createStateProvider = (db: Database.Database) => {
-  const lock = createAsyncLock();
+  const lock = createAsyncRwLock();
   return createBetterSqlite3StateProvider({ db, lock });
 };

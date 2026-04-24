@@ -73,8 +73,7 @@ export const migrations: Migration[] = [
     name: "20240101000000_initial_schema",
     statements: [
       {
-        sql: sql(
-          /* sql */ `
+        sql: sql(/* sql */ `
 CREATE TABLE IF NOT EXISTS {{table_prefix}}job (
   id                            {{id_type}} PRIMARY KEY,
   type_name                     TEXT NOT NULL,
@@ -107,13 +106,10 @@ CREATE TABLE IF NOT EXISTS {{table_prefix}}job (
   -- tracing
   chain_trace_context           TEXT,
   trace_context                 TEXT
-)`,
-          false,
-        ),
+)`),
       },
       {
-        sql: sql(
-          /* sql */ `
+        sql: sql(/* sql */ `
 CREATE TABLE IF NOT EXISTS {{table_prefix}}job_blocker (
   job_id                        {{id_type}} NOT NULL REFERENCES {{table_prefix}}job(id),
   -- NOTE: requires PRAGMA foreign_keys = ON (SQLite default is OFF)
@@ -121,92 +117,60 @@ CREATE TABLE IF NOT EXISTS {{table_prefix}}job_blocker (
   "index"                       INTEGER NOT NULL,
   trace_context                 TEXT,
   PRIMARY KEY (job_id, blocked_by_chain_id)
-)`,
-          false,
-        ),
+)`),
       },
       {
-        sql: sql(
-          /* sql */ `
+        sql: sql(/* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_acquisition_idx
 ON {{table_prefix}}job (type_name, scheduled_at)
-WHERE status = 'pending'`,
-          false,
-        ),
+WHERE status = 'pending'`),
       },
       {
-        sql: sql(
-          /* sql */ `
+        sql: sql(/* sql */ `
 CREATE UNIQUE INDEX IF NOT EXISTS {{table_prefix}}job_chain_index_idx
-ON {{table_prefix}}job (chain_id, chain_index)`,
-          false,
-        ),
+ON {{table_prefix}}job (chain_id, chain_index)`),
       },
       {
-        sql: sql(
-          /* sql */ `
+        sql: sql(/* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_deduplication_idx
 ON {{table_prefix}}job (deduplication_key, created_at DESC)
-WHERE deduplication_key IS NOT NULL AND chain_index = 0`,
-          false,
-        ),
+WHERE deduplication_key IS NOT NULL AND chain_index = 0`),
       },
       {
-        sql: sql(
-          /* sql */ `
+        sql: sql(/* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_expired_lease_idx
 ON {{table_prefix}}job (type_name, leased_until)
-WHERE status = 'running' AND leased_until IS NOT NULL`,
-          false,
-        ),
+WHERE status = 'running' AND leased_until IS NOT NULL`),
       },
       {
-        sql: sql(
-          /* sql */ `
+        sql: sql(/* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_blocker_chain_idx
-ON {{table_prefix}}job_blocker (blocked_by_chain_id)`,
-          false,
-        ),
+ON {{table_prefix}}job_blocker (blocked_by_chain_id)`),
       },
       {
-        sql: sql(
-          /* sql */ `
+        sql: sql(/* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_chain_listing_idx
-ON {{table_prefix}}job (created_at DESC) WHERE chain_index = 0`,
-          false,
-        ),
+ON {{table_prefix}}job (created_at DESC) WHERE chain_index = 0`),
       },
       {
-        sql: sql(
-          /* sql */ `
+        sql: sql(/* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_listing_idx
-ON {{table_prefix}}job (created_at DESC)`,
-          false,
-        ),
+ON {{table_prefix}}job (created_at DESC)`),
       },
       {
-        sql: sql(
-          /* sql */ `
+        sql: sql(/* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_listing_status_idx
-ON {{table_prefix}}job (status, created_at DESC)`,
-          false,
-        ),
+ON {{table_prefix}}job (status, created_at DESC)`),
       },
       {
-        sql: sql(
-          /* sql */ `
+        sql: sql(/* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_listing_type_name_idx
-ON {{table_prefix}}job (type_name, created_at DESC)`,
-          false,
-        ),
+ON {{table_prefix}}job (type_name, created_at DESC)`),
       },
       {
-        sql: sql(
-          /* sql */ `
+        sql: sql(/* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_chain_listing_type_name_idx
-ON {{table_prefix}}job (type_name, created_at DESC) WHERE chain_index = 0`,
-          false,
-        ),
+ON {{table_prefix}}job (type_name, created_at DESC) WHERE chain_index = 0`),
       },
     ],
   },
@@ -460,7 +424,6 @@ CREATE TABLE IF NOT EXISTS {{table_prefix}}migration (
   name TEXT PRIMARY KEY,
   applied_at TEXT NOT NULL DEFAULT (datetime('now', 'subsec'))
 )`,
-    false,
     {
       params: [],
       columns: {},
@@ -469,16 +432,15 @@ CREATE TABLE IF NOT EXISTS {{table_prefix}}migration (
 
   const getAppliedMigrationsSql = sql(
     /* sql */ `SELECT name, applied_at FROM {{table_prefix}}migration ORDER BY name`,
-    true,
     {
       params: [],
       columns: { name: t.string(), applied_at: t.string() },
+      readOnly: true,
     },
   );
 
   const recordMigrationSql = sql(
     /* sql */ `INSERT INTO {{table_prefix}}migration (name) VALUES (?) ON CONFLICT (name) DO NOTHING`,
-    false,
     {
       params: [t.string()],
       columns: {},
@@ -492,10 +454,10 @@ FROM {{table_prefix}}job
 WHERE chain_id = ? AND chain_index = ? AND id != chain_id
 LIMIT 1
 `,
-    true,
     {
       params: [id, t.number()],
       columns: { ...dbJobColumns, deduplicated: t.number() },
+      readOnly: true,
     },
   );
 
@@ -523,7 +485,6 @@ WHERE ? IS NOT NULL
 ORDER BY created_at DESC
 LIMIT 1
 `,
-    true,
     {
       params: [
         t["string?"](),
@@ -538,6 +499,7 @@ LIMIT 1
         t["string?"](),
       ],
       columns: { ...dbJobColumns, deduplicated: t.number() },
+      readOnly: true,
     },
   );
 
@@ -567,7 +529,6 @@ WHERE true
 ON CONFLICT (chain_id, chain_index) DO UPDATE SET id = {{table_prefix}}job.id
 RETURNING *
 `,
-    true,
     {
       params: [t.string()],
       columns: { ...dbJobColumns },
@@ -580,7 +541,6 @@ INSERT INTO {{table_prefix}}job_blocker (job_id, blocked_by_chain_id, "index", t
 SELECT ?, je.value, je.key, json_extract(?, '$[' || je.key || ']')
 FROM json_each(?) AS je
 `,
-    false,
     {
       params: [id, t.string(), t.string()],
       columns: {},
@@ -602,10 +562,10 @@ SELECT
 FROM {{table_prefix}}job_blocker jb
 WHERE jb.job_id = ?
 `,
-    true,
     {
       params: [id],
       columns: { job_id: id, blocked_by_chain_id: id, blocker_status: t.string() },
+      readOnly: true,
     },
   );
 
@@ -616,21 +576,17 @@ SET status = 'blocked'
 WHERE id = ? AND status = 'pending'
 RETURNING *
 `,
-    true,
     {
       params: [id],
       columns: { ...dbJobColumns },
     },
   );
 
-  const getJobByIdForBlockersSql = sql(
-    /* sql */ `SELECT * FROM {{table_prefix}}job WHERE id = ?`,
-    true,
-    {
-      params: [id],
-      columns: { ...dbJobColumns },
-    },
-  );
+  const getJobByIdForBlockersSql = sql(/* sql */ `SELECT * FROM {{table_prefix}}job WHERE id = ?`, {
+    params: [id],
+    columns: { ...dbJobColumns },
+    readOnly: true,
+  });
 
   const completeJobSql = sql(
     /* sql */ `
@@ -644,7 +600,6 @@ SET status = 'completed',
 WHERE id = ?
 RETURNING *
 `,
-    true,
     {
       params: [t["string?"](), t["string?"](), id],
       columns: { ...dbJobColumns },
@@ -677,10 +632,10 @@ FROM blockers_status
 GROUP BY job_id
 HAVING MIN(CASE WHEN blocker_status = 'completed' THEN 1 ELSE 0 END) = 1
 `,
-    true,
     {
       params: [id],
       columns: { job_id: id },
+      readOnly: true,
     },
   );
 
@@ -692,7 +647,6 @@ SET scheduled_at = datetime('now', 'subsec'),
 WHERE id IN (SELECT value FROM json_each(?)) AND status = 'blocked'
 RETURNING *
 `,
-    true,
     {
       params: [t.string()],
       columns: { ...dbJobColumns },
@@ -706,10 +660,10 @@ FROM {{table_prefix}}job_blocker jb
 WHERE jb.blocked_by_chain_id = ?
   AND jb.trace_context IS NOT NULL
 `,
-    true,
     {
       params: [id],
       columns: { trace_context: t["string?"]() },
+      readOnly: true,
     },
   );
 
@@ -720,10 +674,10 @@ FROM {{table_prefix}}job j
 WHERE j.id IN (SELECT value FROM json_each(?))
 ORDER BY j.id
 `,
-    true,
     {
       params: [t.string()],
       columns: { blocked_by_chain_id: id, chain_trace_context: t["string?"]() },
+      readOnly: true,
     },
   );
 
@@ -742,10 +696,10 @@ LEFT JOIN (
 ) AS lc ON lc.chain_id = j.id
 WHERE j.id = ?
 `,
-    true,
     {
       params: [id, id],
       columns: { ...dbJobChainRowColumns },
+      readOnly: true,
     },
   );
 
@@ -767,10 +721,10 @@ LEFT JOIN {{table_prefix}}job AS lc
 WHERE b.job_id = ?
 ORDER BY b."index" ASC
 `,
-    true,
     {
       params: [id],
       columns: { ...dbJobChainRowColumns },
+      readOnly: true,
     },
   );
 
@@ -780,10 +734,10 @@ SELECT *
 FROM {{table_prefix}}job
 WHERE id = ?
 `,
-    true,
     {
       params: [id],
       columns: { ...dbJobColumns },
+      readOnly: true,
     },
   );
 
@@ -801,7 +755,6 @@ SET scheduled_at = COALESCE(?,
 WHERE id = ?
 RETURNING *
 `,
-    true,
     {
       params: [t["string?"](), t["number?"](), t["number?"](), t.string(), id],
       columns: { ...dbJobColumns },
@@ -823,7 +776,6 @@ WHERE id IN (SELECT input_id FROM _classified WHERE current_status = 'pending')
   )
 RETURNING *
 `,
-    true,
     {
       params: [t.string()],
       columns: { ...dbJobColumns },
@@ -835,10 +787,10 @@ RETURNING *
 SELECT id, status FROM {{table_prefix}}job
 WHERE id IN (SELECT value FROM json_each(?))
 `,
-    true,
     {
       params: [t.string()],
       columns: { id, status: t.string() },
+      readOnly: true,
     },
   );
 
@@ -851,7 +803,6 @@ SET leased_by = ?,
 WHERE id = ?
 RETURNING *
 `,
-    true,
     {
       params: [t.string(), t.number(), id],
       columns: { ...dbJobColumns },
@@ -882,7 +833,6 @@ RETURNING *,
     LIMIT 1
   ) AS has_more
 `,
-    true,
     {
       params: [t.string(), t.string()],
       columns: { ...dbJobColumns, has_more: t.number() },
@@ -899,10 +849,10 @@ WHERE job.type_name IN (SELECT value FROM json_each(?))
 ORDER BY job.scheduled_at ASC
 LIMIT 1
 `,
-    true,
     {
       params: [t.string()],
       columns: { available_in_ms: t.number() },
+      readOnly: true,
     },
   );
 
@@ -925,7 +875,6 @@ WHERE id = (
 )
 RETURNING *
 `,
-    true,
     {
       params: [t.string(), t.string()],
       columns: { ...dbJobColumns },
@@ -944,10 +893,10 @@ WITH RECURSIVE connected(chain_id) AS (
 )
 SELECT chain_id FROM connected
 `,
-    true,
     {
       params: [t.string()],
       columns: { chain_id: id },
+      readOnly: true,
     },
   );
 
@@ -959,10 +908,10 @@ JOIN {{table_prefix}}job j ON j.id = jb.job_id
 WHERE jb.blocked_by_chain_id IN (SELECT value FROM json_each(?))
   AND j.chain_id NOT IN (SELECT value FROM json_each(?))
 `,
-    true,
     {
       params: [t.string(), t.string()],
       columns: { job_id: id, blocked_by_chain_id: id },
+      readOnly: true,
     },
   );
 
@@ -973,7 +922,6 @@ WHERE job_id IN (
   SELECT id FROM {{table_prefix}}job WHERE chain_id IN (SELECT value FROM json_each(?))
 )
 `,
-    false,
     {
       params: [t.string()],
       columns: {},
@@ -995,10 +943,10 @@ LEFT JOIN {{table_prefix}}job AS lc
 WHERE j.id = j.chain_id
   AND j.chain_id IN (SELECT value FROM json_each(?))
 `,
-    true,
     {
       params: [t.string()],
       columns: { ...dbJobChainRowColumns },
+      readOnly: true,
     },
   );
 
@@ -1007,7 +955,6 @@ WHERE j.id = j.chain_id
 DELETE FROM {{table_prefix}}job
 WHERE chain_id IN (SELECT value FROM json_each(?))
 `,
-    false,
     {
       params: [t.string()],
       columns: {},
@@ -1020,10 +967,10 @@ SELECT *
 FROM {{table_prefix}}job
 WHERE id = ?
 `,
-    true,
     {
       params: [id],
       columns: { ...dbJobColumns },
+      readOnly: true,
     },
   );
 
@@ -1035,10 +982,10 @@ WHERE chain_id = ?
 ORDER BY chain_index DESC
 LIMIT 1
 `,
-    true,
     {
       params: [id],
       columns: { ...dbJobColumns },
+      readOnly: true,
     },
   );
 

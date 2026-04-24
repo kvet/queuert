@@ -1,6 +1,6 @@
 import { type DatabaseSync, type SQLInputValue } from "node:sqlite";
 
-import { type AsyncLock, type SqliteStateProvider } from "@queuert/sqlite";
+import { type AsyncRwLock, type SqliteStateProvider } from "@queuert/sqlite";
 
 export type NodeSqliteContext = { db: DatabaseSync };
 
@@ -9,13 +9,13 @@ export const createNodeSqliteStateProvider = ({
   lock,
 }: {
   db: DatabaseSync;
-  lock: AsyncLock;
+  lock: AsyncRwLock;
 }): SqliteStateProvider<NodeSqliteContext> => {
   return {
     withTransaction: async (fn) => {
-      await lock.acquire();
+      using _h = await lock.acquireWrite();
+      db.exec("BEGIN IMMEDIATE");
       try {
-        db.exec("BEGIN IMMEDIATE");
         const result = await fn({ db });
         db.exec("COMMIT");
         return result;
@@ -28,11 +28,9 @@ export const createNodeSqliteStateProvider = ({
           }
         }
         throw error;
-      } finally {
-        lock.release();
       }
     },
-    executeSql: async ({ txCtx, sql, params, columnTypes }) => {
+    executeSql: async ({ txCtx, sql, params, columnTypes, readOnly }) => {
       const run = (): unknown[] => {
         const database = txCtx?.db ?? db;
         if (Object.keys(columnTypes).length > 0) {
@@ -48,12 +46,8 @@ export const createNodeSqliteStateProvider = ({
         return [] as unknown[];
       };
       if (txCtx) return run();
-      await lock.acquire();
-      try {
-        return run();
-      } finally {
-        lock.release();
-      }
+      using _h = readOnly ? await lock.acquireRead() : await lock.acquireWrite();
+      return run();
     },
   };
 };

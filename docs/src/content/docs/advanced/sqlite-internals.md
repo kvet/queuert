@@ -103,29 +103,27 @@ COMMIT;
 
 `BEGIN IMMEDIATE` acquires a `RESERVED` lock at transaction start, preventing other writers from starting. This differs from the default `BEGIN DEFERRED` which only acquires a lock on the first write, avoiding `SQLITE_BUSY` errors mid-transaction.
 
-### AsyncLock
+### AsyncRwLock
 
-Since SQLite serializes writes at the database level, the adapter adds an application-level `AsyncLock` to prevent concurrent access from async code within the same process:
+Since SQLite serializes writes at the database level (but permits concurrent reads), the adapter adds an application-level `AsyncRwLock` to prevent concurrent write access from async code within the same process while allowing reads to run in parallel:
 
 ```typescript
-const lock = createAsyncLock();
+const lock = createAsyncRwLock();
 
-executeSql: async ({ txCtx, sql, params }) => {
+executeSql: async ({ txCtx, sql, params, readOnly }) => {
   if (txCtx) return executeRaw(/* ... */); // Lock already held
 
-  await lock.acquire();
-  try {
-    return executeRaw(/* ... */);
-  } finally {
-    lock.release();
-  }
+  using _h = readOnly ? await lock.acquireRead() : await lock.acquireWrite();
+  return executeRaw(/* ... */);
 };
 ```
 
-- **Outside a transaction**: Every SQL execution acquires the lock
-- **Inside a transaction**: The lock was already acquired by `withTransaction`, so individual operations skip it
+- **Outside a transaction**: Every SQL execution acquires the lock in the mode indicated by `readOnly` (pure `SELECT` → read; anything else → write)
+- **Inside a transaction**: The write lock was already acquired by `withTransaction`, so individual operations skip it
 
-Custom `SqliteStateProvider` implementations must use `createAsyncLock()` to ensure correct serialization.
+The lock is writer-preference and FIFO to prevent writer starvation: once a writer is queued, new readers wait. The handle returned from `acquireRead`/`acquireWrite` implements `Symbol.dispose`, so `using` releases at scope exit.
+
+Custom `SqliteStateProvider` implementations must use `createAsyncRwLock()` to ensure correct serialization.
 
 ### No SKIP LOCKED
 

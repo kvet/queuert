@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
-import { createAsyncLock, createSqliteStateAdapter } from "@queuert/sqlite";
+import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import Database from "better-sqlite3";
 import { runStateAdapterConformance } from "queuert/conformance";
 import { test } from "vitest";
@@ -32,7 +32,7 @@ test("state-sqlite-prisma provider passes state adapter conformance", async () =
 
     const db = new Database(dbPath);
 
-    const lock = createAsyncLock();
+    const lock = createAsyncRwLock();
     const stateProvider = createPrismaSqliteStateProvider({ prisma, lock });
     const adapter = await createSqliteStateAdapter({ stateProvider });
     await adapter.migrateToLatest();

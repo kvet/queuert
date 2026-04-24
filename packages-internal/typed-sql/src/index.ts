@@ -83,7 +83,7 @@ export type TypedSql<
   TColumns extends Record<string, DataType> = Record<string, DataType>,
 > = {
   readonly sql: string;
-  readonly returns: boolean;
+  readonly readOnly: boolean;
   readonly params: TParams;
   readonly columns: TColumns;
 };
@@ -93,12 +93,11 @@ export const sql = <
   const TColumns extends Record<string, DataType>,
 >(
   sqlString: string,
-  returns: boolean,
-  types?: { params?: TParams; columns?: TColumns },
+  types?: { params?: TParams; columns?: TColumns; readOnly?: boolean },
 ): TypedSql<TParams, TColumns> =>
   ({
     sql: sqlString,
-    returns,
+    readOnly: types?.readOnly ?? false,
     params: types?.params ?? ([] as unknown as TParams),
     columns: types?.columns ?? ({} as TColumns),
   }) as TypedSql<TParams, TColumns>;
