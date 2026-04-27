@@ -6,7 +6,7 @@ import { type RedisClientType, createClient as createRedisClient } from "redis";
 
 import { parseConcurrency, printHeader, runBenchmark } from "./utils.js";
 
-printHeader("PROCESSING CAPACITY — REDIS NOTIFY");
+printHeader("PROCESSING CAPACITY — REDIS NOTIFY (redis)");
 
 const concurrency = parseConcurrency();
 

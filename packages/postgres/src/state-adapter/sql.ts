@@ -361,6 +361,7 @@ CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}migration (
   applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
 )`,
     {
+      id: "createMigrationTable",
       params: [],
       columns: {},
     },
@@ -369,6 +370,7 @@ CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}migration (
   const getAppliedMigrationsSql = sql(
     /* sql */ `SELECT name, applied_at FROM {{schema}}.{{table_prefix}}migration ORDER BY name`,
     {
+      id: "getAppliedMigrations",
       params: [],
       columns: { name: t.string(), applied_at: t.string() },
       readOnly: true,
@@ -378,6 +380,7 @@ CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}migration (
   const recordMigrationSql = sql(
     /* sql */ `INSERT INTO {{schema}}.{{table_prefix}}migration (name) VALUES ($1) ON CONFLICT (name) DO NOTHING`,
     {
+      id: "recordMigration",
       params: [t.string()],
       columns: {},
     },
@@ -486,6 +489,7 @@ FROM inserted_jobs ij JOIN to_insert ti ON COALESCE(ti.chain_id, ti.id) = ij.cha
 ORDER BY ord
 `,
     {
+      id: "createJobs",
       params: [
         t.number(),
         t.array(),
@@ -584,6 +588,7 @@ LEFT JOIN per_job_trace_contexts ptc ON ptc.job_id = fj.id
 ORDER BY fj.id
 `,
     {
+      id: "addJobsBlockers",
       params: [t.array(), t.array(), t.array<string | null>(), t.array<number>()],
       columns: {
         ...dbJobColumns,
@@ -607,6 +612,7 @@ WHERE id = $1
 RETURNING *
 `,
     {
+      id: "completeJob",
       params: [id, t.json(), t["string?"]()],
       columns: { ...dbJobColumns },
     },
@@ -658,6 +664,7 @@ SELECT
   COALESCE((SELECT json_agg(tc.trace_context) FROM trace_contexts tc), '[]'::json) AS blocker_trace_contexts;
 `,
     {
+      id: "unblockJobs",
       params: [id],
       columns: {
         unblocked_jobs: t.json<DbJob[]>(),
@@ -682,6 +689,7 @@ LEFT JOIN LATERAL (
 WHERE j.id = $1
 `,
     {
+      id: "getJobChainById",
       params: [id],
       columns: rowToJsonJobColumns,
       readOnly: true,
@@ -707,6 +715,7 @@ WHERE b.job_id = $1
 ORDER BY b.index ASC
 `,
     {
+      id: "getJobBlockers",
       params: [id],
       columns: rowToJsonJobColumns,
       readOnly: true,
@@ -720,6 +729,7 @@ FROM {{schema}}.{{table_prefix}}job
 WHERE id = $1
 `,
     {
+      id: "getJobById",
       params: [id],
       columns: { ...dbJobColumns },
       readOnly: true,
@@ -739,6 +749,7 @@ WHERE id = $1
 RETURNING *
 `,
     {
+      id: "rescheduleJob",
       params: [id, t["date?"](), t["number?"](), t.string()],
       columns: { ...dbJobColumns },
     },
@@ -783,6 +794,7 @@ SELECT
   ) AS not_triggerable
 `,
     {
+      id: "triggerJobs",
       params: [t.array()],
       columns: {
         triggered: t.json<DbJob[]>(),
@@ -802,6 +814,7 @@ WHERE id = $1
 RETURNING *
 `,
     {
+      id: "renewJobLease",
       params: [id, t.string(), t.number()],
       columns: { ...dbJobColumns },
     },
@@ -833,6 +846,7 @@ RETURNING *,
   ) AS has_more
 `,
     {
+      id: "acquireJob",
       params: [t.array()],
       columns: { ...dbJobColumns, has_more: t.boolean() },
     },
@@ -849,6 +863,7 @@ LIMIT 1
 FOR UPDATE SKIP LOCKED
 `,
     {
+      id: "getNextJobAvailableInMs",
       params: [t.array()],
       columns: { available_in_ms: t.number() },
     },
@@ -877,6 +892,7 @@ WHERE job.id = job_to_unlock.id
 RETURNING job.*
 `,
     {
+      id: "reapExpiredJobLease",
       params: [t.array(), t.array()],
       columns: { ...dbJobColumns },
     },
@@ -895,6 +911,7 @@ WITH RECURSIVE connected(chain_id) AS (
 SELECT chain_id FROM connected
 `,
     {
+      id: "getConnectedChainIds",
       params: [t.array()],
       columns: { chain_id: id },
       readOnly: true,
@@ -947,6 +964,7 @@ SELECT
   COALESCE((SELECT json_agg(row_to_json(r)) FROM _external_refs r), '[]'::json) AS blocker_refs
 `,
     {
+      id: "deleteJobChains",
       params: [t.array()],
       columns: {
         deleted: t.json<{ root_job: DbJob; last_chain_job: DbJob | null }[]>(),
@@ -963,6 +981,7 @@ WHERE id = $1
 FOR UPDATE
 `,
     {
+      id: "getJobForUpdate",
       params: [id],
       columns: { ...dbJobColumns },
     },
@@ -978,6 +997,7 @@ LIMIT 1
 FOR UPDATE
 `,
     {
+      id: "getLatestChainJobForUpdate",
       params: [id],
       columns: { ...dbJobColumns },
     },

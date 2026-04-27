@@ -19,8 +19,17 @@ const PG_OID: Partial<Record<RuntimeType, number>> = {
 
 export const createPostgresJsStateProvider = ({
   sql,
+  prepareStatements = true,
 }: {
   sql: postgres.Sql;
+  /**
+   * When true (default), queries that arrive with an `id` are sent with
+   * `{ prepare: true }` so postgres.js caches the parsed plan per connection.
+   * Set to `false` for transaction-mode connection poolers (PgBouncer < 1.21,
+   * Supavisor without per-client tracking) where server-side prepared statements
+   * break across pooled sessions.
+   */
+  prepareStatements?: boolean;
 }): PgStateProvider<PostgresJsContext> => {
   const typed = sql.typed.bind(sql);
   const pgArray = sql.array.bind(sql);
@@ -38,13 +47,14 @@ export const createPostgresJsStateProvider = ({
     withTransaction: async (cb) => sql.begin(async (txSql) => cb({ sql: txSql }) as any),
     withSavepoint: async (txCtx, fn) =>
       txCtx.sql.savepoint(async (spSql) => fn({ sql: spSql })) as any,
-    executeSql: async ({ txCtx, sql: query, params, paramTypes }) => {
+    executeSql: async ({ txCtx, id, sql: query, params, paramTypes }) => {
       const client = txCtx?.sql ?? sql;
+      const prepare = prepareStatements && id !== undefined;
       if (!params || params.length === 0) {
-        return client.unsafe(query) as any;
+        return client.unsafe(query, [], { prepare }) as any;
       }
       const serialized = params.map((value, i) => serializeParam(value, paramTypes[i]));
-      return client.unsafe(query, serialized as any[]) as any;
+      return client.unsafe(query, serialized as any[], { prepare }) as any;
     },
   };
 };

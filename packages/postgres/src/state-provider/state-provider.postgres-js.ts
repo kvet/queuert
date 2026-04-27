@@ -41,15 +41,16 @@ export const createPostgresJsProvider = ({ sql }: { sql: postgres.Sql }): Postgr
     withSavepoint: async (txCtx, fn) => {
       return txCtx.sql.savepoint(async (savepointSql) => fn({ sql: savepointSql }) as any);
     },
-    executeSql: async ({ txCtx, sql: query, params, paramTypes }) => {
+    executeSql: async ({ txCtx, id, sql: query, params, paramTypes }) => {
       const sqlClient = txCtx?.sql ?? sql;
+      const prepare = id !== undefined;
       if (!params || params.length === 0) {
-        return sqlClient.unsafe(query) as any;
+        return sqlClient.unsafe(query, [], { prepare }) as any;
       }
       const serializedParams = params.map((value, index) =>
         serializeParam(value, paramTypes[index]),
       );
-      return sqlClient.unsafe(query, serializedParams as any[]) as any;
+      return sqlClient.unsafe(query, serializedParams as any[], { prepare }) as any;
     },
   };
 };

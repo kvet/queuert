@@ -6,7 +6,7 @@ import { createInProcessStateAdapter } from "queuert";
 
 import { parseConcurrency, printHeader, runBenchmark } from "./utils.js";
 
-printHeader("PROCESSING CAPACITY — PG NOTIFY");
+printHeader("PROCESSING CAPACITY — PG NOTIFY (pg)");
 
 const concurrency = parseConcurrency();
 

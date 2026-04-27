@@ -29,13 +29,13 @@
 - [EPIC,COMPLEX] Processing throughput (~10x) — currently 4 DB round-trips per job (acquire, getBlockers, renewLease, complete)
   - [REF] Batch job acquisition — acquire N jobs per query instead of 1, amortize loop + transaction overhead
   - [REF] Skip `getJobBlockers` when job type declares no blockers — saves 1 round-trip per job
+  - [REF] Hoist `getJobBlockers` out of the prepare-phase critical path — kick it off as a promise from the worker right after `acquireJob` returns, pass the promise into `runJobProcess`, await only when `runningJob.blockers` is consumed. Today the await is sequential right after acquire; moving it earlier costs nothing if the gap is sync, but unlocks parallelism for any future async work between acquire and blocker-use (and pairs naturally with a lazy `runningJob.blockers` getter for handlers that never read blockers — saves the RTT entirely in that case)
   - [REF] Merge acquire + initial lease into single operation — `acquireJob` already sets `status=running` but `renewJobLease` sets `leased_by`/`leased_until` separately
   - [REF] Batch completions in one transaction — amortize commit overhead for fast handlers
 - [TASK,COMPLEX] Optimized batched lease renewal
 - [EPIC] MCP server
 - [EPIC] Sqlite ready:
   - [TASK,EASY] Add `example-state-sqlite-multi-worker` — mirror of `state-postgres-multi-worker` using sqlite (probably file-backed WAL so workers share a DB)
-  - [REF] Cache prepared statements in examples — `executeSql` calls `database.prepare(sql)` on every invocation; cache by SQL string to avoid re-parsing
   - [REF] Batch `createJobs` deduplication/continuation checks — currently loops per-job with `findExistingContinuationSql`/`findDeduplicatedJobSql`, O(N) round-trips
   - [REF] Batch `addJobsBlockers` — currently 3-4 sequential queries per jobBlocker entry, O(N) round-trips
   - [REF] Better concurrency handling - WAL mode, busy timeout, retries

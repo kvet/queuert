@@ -7,12 +7,16 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 
 const benchmarkModules: Record<string, string> = {
-  "state-postgres": "state-postgres.ts",
-  "state-sqlite": "state-sqlite.ts",
+  "state-postgres-postgres-js": "state-postgres-postgres-js.ts",
+  "state-postgres-pg": "state-postgres-pg.ts",
+  "state-sqlite-better-sqlite3": "state-sqlite-better-sqlite3.ts",
+  "state-sqlite-node": "state-sqlite-node.ts",
   "state-in-process": "state-in-process.ts",
-  "notify-redis": "notify-redis.ts",
-  "notify-postgres": "notify-postgres.ts",
-  "notify-nats": "notify-nats.ts",
+  "notify-redis-redis": "notify-redis-redis.ts",
+  "notify-redis-ioredis": "notify-redis-ioredis.ts",
+  "notify-postgres-pg": "notify-postgres-pg.ts",
+  "notify-postgres-postgres-js": "notify-postgres-postgres-js.ts",
+  "notify-nats-nats": "notify-nats-nats.ts",
   "notify-in-process": "notify-in-process.ts",
 };
 

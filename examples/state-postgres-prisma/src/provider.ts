@@ -17,6 +17,7 @@ export const createPrismaPgStateProvider = <TPrisma extends PrismaLikeClient>({
     withTransaction: async (cb) => {
       return prisma.$transaction(async (prisma: TPrisma) => cb({ prisma }));
     },
+    // `id` not forwarded: Prisma's engine caches plans by SQL text per connection.
     executeSql: async ({ txCtx, sql, params }) => {
       const prismaClient = (txCtx?.prisma ?? prisma) as PrismaLikeClient;
 

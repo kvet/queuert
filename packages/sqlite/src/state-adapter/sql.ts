@@ -425,6 +425,7 @@ CREATE TABLE IF NOT EXISTS {{table_prefix}}migration (
   applied_at TEXT NOT NULL DEFAULT (datetime('now', 'subsec'))
 )`,
     {
+      id: "createMigrationTable",
       params: [],
       columns: {},
     },
@@ -433,6 +434,7 @@ CREATE TABLE IF NOT EXISTS {{table_prefix}}migration (
   const getAppliedMigrationsSql = sql(
     /* sql */ `SELECT name, applied_at FROM {{table_prefix}}migration ORDER BY name`,
     {
+      id: "getAppliedMigrations",
       params: [],
       columns: { name: t.string(), applied_at: t.string() },
       readOnly: true,
@@ -442,6 +444,7 @@ CREATE TABLE IF NOT EXISTS {{table_prefix}}migration (
   const recordMigrationSql = sql(
     /* sql */ `INSERT INTO {{table_prefix}}migration (name) VALUES (?) ON CONFLICT (name) DO NOTHING`,
     {
+      id: "recordMigration",
       params: [t.string()],
       columns: {},
     },
@@ -455,6 +458,7 @@ WHERE chain_id = ? AND chain_index = ? AND id != chain_id
 LIMIT 1
 `,
     {
+      id: "findExistingContinuation",
       params: [id, t.number()],
       columns: { ...dbJobColumns, deduplicated: t.number() },
       readOnly: true,
@@ -486,6 +490,7 @@ ORDER BY created_at DESC
 LIMIT 1
 `,
     {
+      id: "findDeduplicatedJob",
       params: [
         t["string?"](),
         t["string?"](),
@@ -530,6 +535,7 @@ ON CONFLICT (chain_id, chain_index) DO UPDATE SET id = {{table_prefix}}job.id
 RETURNING *
 `,
     {
+      id: "insertJobs",
       params: [t.string()],
       columns: { ...dbJobColumns },
     },
@@ -542,6 +548,7 @@ SELECT ?, je.value, je.key, json_extract(?, '$[' || je.key || ']')
 FROM json_each(?) AS je
 `,
     {
+      id: "insertJobBlockers",
       params: [id, t.string(), t.string()],
       columns: {},
     },
@@ -563,6 +570,7 @@ FROM {{table_prefix}}job_blocker jb
 WHERE jb.job_id = ?
 `,
     {
+      id: "checkBlockersStatus",
       params: [id],
       columns: { job_id: id, blocked_by_chain_id: id, blocker_status: t.string() },
       readOnly: true,
@@ -577,12 +585,14 @@ WHERE id = ? AND status = 'pending'
 RETURNING *
 `,
     {
+      id: "updateJobToBlocked",
       params: [id],
       columns: { ...dbJobColumns },
     },
   );
 
   const getJobByIdForBlockersSql = sql(/* sql */ `SELECT * FROM {{table_prefix}}job WHERE id = ?`, {
+    id: "getJobByIdForBlockers",
     params: [id],
     columns: { ...dbJobColumns },
     readOnly: true,
@@ -601,6 +611,7 @@ WHERE id = ?
 RETURNING *
 `,
     {
+      id: "completeJob",
       params: [t["string?"](), t["string?"](), id],
       columns: { ...dbJobColumns },
     },
@@ -633,6 +644,7 @@ GROUP BY job_id
 HAVING MIN(CASE WHEN blocker_status = 'completed' THEN 1 ELSE 0 END) = 1
 `,
     {
+      id: "findReadyJobs",
       params: [id],
       columns: { job_id: id },
       readOnly: true,
@@ -648,6 +660,7 @@ WHERE id IN (SELECT value FROM json_each(?)) AND status = 'blocked'
 RETURNING *
 `,
     {
+      id: "scheduleBlockedJobs",
       params: [t.string()],
       columns: { ...dbJobColumns },
     },
@@ -661,6 +674,7 @@ WHERE jb.blocked_by_chain_id = ?
   AND jb.trace_context IS NOT NULL
 `,
     {
+      id: "getJobBlockerTraceContexts",
       params: [id],
       columns: { trace_context: t["string?"]() },
       readOnly: true,
@@ -675,6 +689,7 @@ WHERE j.id IN (SELECT value FROM json_each(?))
 ORDER BY j.id
 `,
     {
+      id: "getBlockerChainTraceContexts",
       params: [t.string()],
       columns: { blocked_by_chain_id: id, chain_trace_context: t["string?"]() },
       readOnly: true,
@@ -697,6 +712,7 @@ LEFT JOIN (
 WHERE j.id = ?
 `,
     {
+      id: "getJobChainById",
       params: [id, id],
       columns: { ...dbJobChainRowColumns },
       readOnly: true,
@@ -722,6 +738,7 @@ WHERE b.job_id = ?
 ORDER BY b."index" ASC
 `,
     {
+      id: "getJobBlockers",
       params: [id],
       columns: { ...dbJobChainRowColumns },
       readOnly: true,
@@ -735,6 +752,7 @@ FROM {{table_prefix}}job
 WHERE id = ?
 `,
     {
+      id: "getJobById",
       params: [id],
       columns: { ...dbJobColumns },
       readOnly: true,
@@ -756,6 +774,7 @@ WHERE id = ?
 RETURNING *
 `,
     {
+      id: "rescheduleJob",
       params: [t["string?"](), t["number?"](), t["number?"](), t.string(), id],
       columns: { ...dbJobColumns },
     },
@@ -777,6 +796,7 @@ WHERE id IN (SELECT input_id FROM _classified WHERE current_status = 'pending')
 RETURNING *
 `,
     {
+      id: "triggerJobs",
       params: [t.string()],
       columns: { ...dbJobColumns },
     },
@@ -788,6 +808,7 @@ SELECT id, status FROM {{table_prefix}}job
 WHERE id IN (SELECT value FROM json_each(?))
 `,
     {
+      id: "getJobStatusesByIds",
       params: [t.string()],
       columns: { id, status: t.string() },
       readOnly: true,
@@ -804,6 +825,7 @@ WHERE id = ?
 RETURNING *
 `,
     {
+      id: "renewJobLease",
       params: [t.string(), t.number(), id],
       columns: { ...dbJobColumns },
     },
@@ -834,6 +856,7 @@ RETURNING *,
   ) AS has_more
 `,
     {
+      id: "acquireJob",
       params: [t.string(), t.string()],
       columns: { ...dbJobColumns, has_more: t.number() },
     },
@@ -850,6 +873,7 @@ ORDER BY job.scheduled_at ASC
 LIMIT 1
 `,
     {
+      id: "getNextJobAvailableInMs",
       params: [t.string()],
       columns: { available_in_ms: t.number() },
       readOnly: true,
@@ -876,6 +900,7 @@ WHERE id = (
 RETURNING *
 `,
     {
+      id: "reapExpiredJobLease",
       params: [t.string(), t.string()],
       columns: { ...dbJobColumns },
     },
@@ -894,6 +919,7 @@ WITH RECURSIVE connected(chain_id) AS (
 SELECT chain_id FROM connected
 `,
     {
+      id: "getConnectedChainIds",
       params: [t.string()],
       columns: { chain_id: id },
       readOnly: true,
@@ -909,6 +935,7 @@ WHERE jb.blocked_by_chain_id IN (SELECT value FROM json_each(?))
   AND j.chain_id NOT IN (SELECT value FROM json_each(?))
 `,
     {
+      id: "checkExternalBlockerRefs",
       params: [t.string(), t.string()],
       columns: { job_id: id, blocked_by_chain_id: id },
       readOnly: true,
@@ -923,6 +950,7 @@ WHERE job_id IN (
 )
 `,
     {
+      id: "deleteBlockersByChainIds",
       params: [t.string()],
       columns: {},
     },
@@ -944,6 +972,7 @@ WHERE j.id = j.chain_id
   AND j.chain_id IN (SELECT value FROM json_each(?))
 `,
     {
+      id: "getJobChainsByChainIds",
       params: [t.string()],
       columns: { ...dbJobChainRowColumns },
       readOnly: true,
@@ -956,6 +985,7 @@ DELETE FROM {{table_prefix}}job
 WHERE chain_id IN (SELECT value FROM json_each(?))
 `,
     {
+      id: "deleteJobChains",
       params: [t.string()],
       columns: {},
     },
@@ -968,6 +998,7 @@ FROM {{table_prefix}}job
 WHERE id = ?
 `,
     {
+      id: "getJobForUpdate",
       params: [id],
       columns: { ...dbJobColumns },
       readOnly: true,
@@ -983,6 +1014,7 @@ ORDER BY chain_index DESC
 LIMIT 1
 `,
     {
+      id: "getLatestChainJobForUpdate",
       params: [id],
       columns: { ...dbJobColumns },
       readOnly: true,

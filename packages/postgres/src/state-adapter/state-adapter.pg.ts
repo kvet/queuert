@@ -135,6 +135,7 @@ export const createPgStateAdapter = async <
     const resolved = applyTemplate(typedSql);
     return stateProvider.executeSql({
       txCtx,
+      id: resolved.id,
       sql: resolved.sql,
       params: params ?? [],
       paramTypes: extractParamTypes(resolved.params),

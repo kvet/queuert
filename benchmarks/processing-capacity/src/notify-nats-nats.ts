@@ -5,7 +5,7 @@ import { createInProcessStateAdapter } from "queuert";
 
 import { parseConcurrency, printHeader, runBenchmark } from "./utils.js";
 
-printHeader("PROCESSING CAPACITY — NATS NOTIFY");
+printHeader("PROCESSING CAPACITY — NATS NOTIFY (nats)");
 
 const concurrency = parseConcurrency();
 

@@ -15,6 +15,9 @@ export const createKyselySqliteStateProvider = <TDatabase>({
   return {
     withTransaction: async (cb) =>
       db.transaction().execute(async (txDb) => cb({ db: txDb as Kysely<TDatabase> })),
+    // `id` not forwarded: Kysely's better-sqlite3 dialect re-prepares every raw
+    // query; no hook to cache through the dialect. Bypass Kysely for statement
+    // caching (see state-sqlite-better-sqlite3).
     executeSql: async ({ txCtx, sql, params }) => {
       const database = txCtx?.db ?? db;
       const result = await database.executeQuery(CompiledQuery.raw(sql, params));

@@ -33,9 +33,13 @@ export type PgStateProvider<TTxContext extends BaseTxContext> = {
    * When txCtx is provided, uses that transaction connection.
    * When txCtx is omitted, acquires a connection from the pool, executes, and releases.
    *
-   * Type hints enable drivers that don't auto-serialize/parse (e.g. postgres.js `unsafe()`)
-   * to handle json/jsonb columns and array parameters correctly.
-   * Drivers that handle these natively (e.g. `pg`) can ignore the hints.
+   * `id` is a stable cache key for server-side prepared statements. Providers MAY use
+   * it to opt the statement into preparation (postgres.js: `prepare: true`; pg:
+   * `name = hash(id+sql)`). When omitted, the provider must execute the statement
+   * unprepared — the adapter omits `id` for one-off or dynamic SQL (e.g. savepoints).
+   *
+   * `paramTypes` / `columnTypes` are type hints for drivers that don't auto-serialize/parse
+   * (e.g. postgres.js `unsafe()`). Drivers that handle these natively (e.g. `pg`) can ignore.
    *
    * `readOnly` indicates whether the statement reads only (pure `SELECT` with no `FOR UPDATE`).
    * Providers can use this to route to a read replica or a separate reader pool. The built-in
@@ -43,6 +47,7 @@ export type PgStateProvider<TTxContext extends BaseTxContext> = {
    */
   executeSql: (options: {
     txCtx?: TTxContext;
+    id?: string;
     sql: string;
     params: unknown[];
     paramTypes: Record<number, RuntimeType>;

@@ -7,22 +7,28 @@ description: Processing capacity, memory footprint, and type complexity benchmar
 
 End-to-end job throughput measured in two phases: starting job chains (chains/s) and processing them to completion (jobs/s). Each adapter runs in a separate child process for isolation (Node.js v22, 10,000 jobs, concurrency 10, Apple M1 Pro). State and notify are measured along separate axes — when one is varied, the other is held at the in-process default. PostgreSQL, Redis, and NATS run as Dockerized containers on macOS (Docker Desktop), so per-RTT latency includes the VM bridge — numbers reflect that environment rather than a host-native or production deployment.
 
+The two phases run **sequentially** (start all chains, then process all jobs), so the end-to-end column is `(start × process) / (start + process)` — the harmonic mean of the two rates, ≈ half of either when they're similar. It's the right number for "first chain in to last chain out, no overlap." A real Queuert deployment accepts new chains and processes existing ones concurrently, so its steady-state throughput is bounded by `min(start, process)`, not the end-to-end column.
+
 ### State adapter (no notify)
 
-| State adapter | Start (chains/s) | Process (jobs/s) | End-to-end (jobs/s) |
-| ------------- | ---------------: | ---------------: | ------------------: |
-| In-process    |          ~81,312 |          ~18,581 |             ~15,125 |
-| SQLite        |          ~11,629 |           ~4,843 |              ~3,419 |
-| PostgreSQL    |             ~380 |             ~514 |                ~218 |
+| State adapter             | Start (chains/s) | Process (jobs/s) | End-to-end (jobs/s) |
+| ------------------------- | ---------------: | ---------------: | ------------------: |
+| In-process                |          ~75,838 |          ~16,596 |             ~13,616 |
+| SQLite (better-sqlite3)   |          ~20,957 |          ~10,914 |              ~7,177 |
+| SQLite (node:sqlite)      |          ~23,816 |           ~9,991 |              ~7,038 |
+| PostgreSQL (postgres-js)  |             ~568 |             ~560 |                ~282 |
+| PostgreSQL (pg)           |             ~612 |             ~560 |                ~293 |
 
 ### Notify adapter (in-process state)
 
-| Notify adapter | Start (chains/s) | Process (jobs/s) | End-to-end (jobs/s) |
-| -------------- | ---------------: | ---------------: | ------------------: |
-| In-process     |          ~55,405 |          ~11,667 |              ~9,638 |
-| Redis          |           ~2,846 |          ~11,074 |              ~2,264 |
-| PostgreSQL     |           ~2,706 |           ~6,700 |              ~1,927 |
-| NATS           |           ~1,849 |           ~4,524 |              ~1,313 |
+| Notify adapter             | Start (chains/s) | Process (jobs/s) | End-to-end (jobs/s) |
+| -------------------------- | ---------------: | ---------------: | ------------------: |
+| In-process                 |          ~67,568 |          ~16,207 |             ~13,072 |
+| Redis (redis)              |           ~2,093 |           ~8,019 |              ~1,660 |
+| Redis (ioredis)            |           ~1,551 |           ~8,657 |              ~1,316 |
+| PostgreSQL (pg)            |           ~1,916 |           ~7,745 |              ~1,536 |
+| PostgreSQL (postgres-js)   |           ~1,535 |           ~6,557 |              ~1,244 |
+| NATS                       |           ~1,773 |           ~8,207 |              ~1,458 |
 
 See [processing-capacity](https://github.com/kvet/queuert/tree/main/benchmarks/processing-capacity) for the full benchmark tool.
 

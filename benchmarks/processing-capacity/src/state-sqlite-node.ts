@@ -1,19 +1,20 @@
-import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
-import Database from "better-sqlite3";
+import { DatabaseSync } from "node:sqlite";
 
-import { createSqliteStateProvider } from "./sqlite-state-provider.js";
+import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
+import { createNodeSqliteStateProvider } from "example-state-sqlite-node/provider";
+
 import { parseConcurrency, printHeader, runBenchmark } from "./utils.js";
 
-printHeader("PROCESSING CAPACITY — SQLITE");
+printHeader("PROCESSING CAPACITY — SQLITE (node:sqlite)");
 
 const concurrency = parseConcurrency();
 
-const db = new Database(":memory:");
-db.pragma("journal_mode = WAL");
-db.pragma("auto_vacuum = INCREMENTAL");
-db.pragma("foreign_keys = ON");
+const db = new DatabaseSync(":memory:");
+db.exec("PRAGMA journal_mode = WAL");
+db.exec("PRAGMA auto_vacuum = INCREMENTAL");
+db.exec("PRAGMA foreign_keys = ON");
 
-const stateProvider = createSqliteStateProvider({ db, lock: createAsyncRwLock() });
+const stateProvider = createNodeSqliteStateProvider({ db, lock: createAsyncRwLock() });
 const stateAdapter = await createSqliteStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 console.log("SQLite ready (in-memory).");

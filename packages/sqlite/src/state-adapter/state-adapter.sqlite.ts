@@ -198,6 +198,7 @@ export const createSqliteStateAdapter = async <
     const resolvedSql = applyTemplate(typedSql);
     return stateProvider.executeSql({
       txCtx,
+      id: resolvedSql.id,
       sql: resolvedSql.sql,
       params: params ?? [],
       paramTypes: extractParamTypes(resolvedSql.params),
