@@ -11,24 +11,24 @@ The two phases run **sequentially** (start all chains, then process all jobs), s
 
 ### State adapter (no notify)
 
-| State adapter             | Start (chains/s) | Process (jobs/s) | End-to-end (jobs/s) |
-| ------------------------- | ---------------: | ---------------: | ------------------: |
-| In-process                |          ~75,838 |          ~16,596 |             ~13,616 |
-| SQLite (better-sqlite3)   |          ~20,957 |          ~10,914 |              ~7,177 |
-| SQLite (node:sqlite)      |          ~23,816 |           ~9,991 |              ~7,038 |
-| PostgreSQL (postgres-js)  |             ~568 |             ~560 |                ~282 |
-| PostgreSQL (pg)           |             ~612 |             ~560 |                ~293 |
+| State adapter            | Start (chains/s) | Process (jobs/s) | End-to-end (jobs/s) |
+| ------------------------ | ---------------: | ---------------: | ------------------: |
+| In-process               |          ~88,564 |          ~17,782 |             ~14,809 |
+| SQLite (better-sqlite3)  |          ~26,338 |          ~12,324 |              ~8,396 |
+| SQLite (node:sqlite)     |          ~25,473 |          ~10,193 |              ~7,280 |
+| PostgreSQL (postgres-js) |             ~569 |             ~579 |                ~287 |
+| PostgreSQL (pg)          |             ~584 |             ~627 |                ~302 |
 
 ### Notify adapter (in-process state)
 
-| Notify adapter             | Start (chains/s) | Process (jobs/s) | End-to-end (jobs/s) |
-| -------------------------- | ---------------: | ---------------: | ------------------: |
-| In-process                 |          ~67,568 |          ~16,207 |             ~13,072 |
-| Redis (redis)              |           ~2,093 |           ~8,019 |              ~1,660 |
-| Redis (ioredis)            |           ~1,551 |           ~8,657 |              ~1,316 |
-| PostgreSQL (pg)            |           ~1,916 |           ~7,745 |              ~1,536 |
-| PostgreSQL (postgres-js)   |           ~1,535 |           ~6,557 |              ~1,244 |
-| NATS                       |           ~1,773 |           ~8,207 |              ~1,458 |
+| Notify adapter           | Start (chains/s) | Process (jobs/s) | End-to-end (jobs/s) |
+| ------------------------ | ---------------: | ---------------: | ------------------: |
+| In-process               |          ~75,407 |          ~16,117 |             ~13,279 |
+| Redis (redis)            |           ~2,318 |           ~9,670 |              ~1,870 |
+| Redis (ioredis)          |           ~1,815 |          ~10,585 |              ~1,550 |
+| PostgreSQL (pg)          |           ~2,571 |           ~8,043 |              ~1,948 |
+| PostgreSQL (postgres-js) |           ~1,577 |           ~8,423 |              ~1,329 |
+| NATS                     |           ~1,760 |           ~9,194 |              ~1,478 |
 
 See [processing-capacity](https://github.com/kvet/queuert/tree/main/benchmarks/processing-capacity) for the full benchmark tool.
 

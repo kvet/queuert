@@ -118,7 +118,7 @@ Both `createStateJobs` and `finishJob` use savepoints to automatically roll back
 
 ### TransactionHooks
 
-The buffering mechanism is shared with notification events (`notifyJobScheduled`, `notifyJobChainCompleted`). Both observability and notification events register callbacks on `TransactionHooks`, which flushes all callbacks in registration order after commit. This ensures notifications are sent only for committed state changes and that the order of observability events matches the order of operations.
+The buffering mechanism is shared with notification events (`notifyJobScheduled`, `notifyJobChainCompleted`). Both observability and notification events register callbacks on `TransactionHooks`, which flushes all hooks after commit so callbacks run only for committed state changes. Each hook owns its own ordering: observability events register every callback under a single shared hook key and the hook flushes them sequentially, so the order of observability events matches the order of operations. Notification events use separate hook keys and flush in parallel — order across distinct hooks is not guaranteed.
 
 ## See Also
 

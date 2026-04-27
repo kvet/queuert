@@ -78,8 +78,8 @@ type HookDefinition<T> = {
 Defines a single hook's state and lifecycle callbacks.
 
 - **state** — mutable state accumulated during the transaction
-- **flush** — called with the accumulated state after the transaction commits
-- **discard** — called on rollback to clean up without executing side effects
+- **flush** — called with the accumulated state after the transaction commits. Hooks flush concurrently across keys, so order across distinct hooks is not guaranteed; serialize inside `flush` if you need ordering.
+- **discard** — called on rollback to clean up without executing side effects. Same concurrency rules as `flush`.
 - **checkpoint** — called when a savepoint is created. Returns a rollback function that restores the state to the checkpoint. Used by `withSavepoint` and `createSavepoint` to support partial rollback of hook state.
 
 ## TransactionHooksHandle

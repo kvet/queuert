@@ -146,8 +146,8 @@ describe("TransactionHooks", () => {
     expect(flush).toHaveBeenCalledWith(new Set(["a", "b"]));
   });
 
-  test("flush: supports async flush functions", async () => {
-    const order: string[] = [];
+  test("flush: awaits async flush functions", async () => {
+    const completed: string[] = [];
     const key1 = Symbol("async1");
     const key2 = Symbol("async2");
 
@@ -156,19 +156,19 @@ describe("TransactionHooks", () => {
         state: null,
         flush: async () => {
           await new Promise((r) => setTimeout(r, 10));
-          order.push("first");
+          completed.push("first");
         },
       });
       hooks.set(key2, {
         state: null,
         flush: async () => {
-          order.push("second");
+          completed.push("second");
         },
       });
     });
 
-    // Sequential flush: first completes before second starts
-    expect(order).toEqual(["first", "second"]);
+    expect(completed).toEqual(expect.arrayContaining(["first", "second"]));
+    expect(completed).toHaveLength(2);
   });
 
   test("flush: runs all hooks even if one throws, then rethrows first error", async () => {
@@ -262,8 +262,8 @@ describe("withTransactionHooks", () => {
     expect(discard).toHaveBeenCalledWith("data");
   });
 
-  test("calls async hook discard functions when callback throws", async () => {
-    const order: string[] = [];
+  test("awaits async hook discard functions when callback throws", async () => {
+    const completed: string[] = [];
     const key1 = Symbol("first");
     const key2 = Symbol("second");
 
@@ -274,21 +274,22 @@ describe("withTransactionHooks", () => {
           flush: () => {},
           discard: async (state) => {
             await new Promise((r) => setTimeout(r, 10));
-            order.push(`discard-${state}`);
+            completed.push(`discard-${state}`);
           },
         });
         hooks.set(key2, {
           state: "b",
           flush: () => {},
           discard: async (state) => {
-            order.push(`discard-${state}`);
+            completed.push(`discard-${state}`);
           },
         });
         throw new Error("transaction failed");
       }),
     ).rejects.toThrow("transaction failed");
 
-    expect(order).toEqual(["discard-a", "discard-b"]);
+    expect(completed).toEqual(expect.arrayContaining(["discard-a", "discard-b"]));
+    expect(completed).toHaveLength(2);
   });
 
   test("discard: runs all hooks even if one throws, then rethrows original error", async () => {

@@ -65,6 +65,8 @@ import { Tabs, TabItem, Aside } from "@astrojs/starlight/components";
 
 A hook definition (`HookDefinition`) contains mutable state, a flush function, an optional discard function, and an optional checkpoint function. Multiple hooks can be registered on the same `TransactionHooks` instance. During the transaction, code mutates hook state freely. After the outer callback completes successfully, each hook's flush function is called with its accumulated state. If the callback throws, each hook's discard function is called instead -- no flush occurs.
 
+Hooks flush (and discard) concurrently — cross-hook execution order is not guaranteed. If your hook records ordered events, register every event under a single hook key and serialize the work inside `flush`/`discard` (e.g. iterate the accumulated state with `for…of await`).
+
 ## Savepoints
 
 `TransactionHooks` supports savepoints for partial rollback of buffered side effects. This is useful when a sub-operation within a transaction may fail without invalidating the entire transaction.

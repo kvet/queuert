@@ -154,14 +154,10 @@ export const createTransactionHooks = (): TransactionHooksHandle => {
     const snapshot = [...hooks.values()];
     hooks.clear();
 
-    let firstError: unknown;
-    for (const hook of snapshot) {
-      try {
-        await hook.flush(hook.state);
-      } catch (error) {
-        firstError ??= error;
-      }
-    }
+    const results = await Promise.allSettled(snapshot.map(async (hook) => hook.flush(hook.state)));
+    const firstError = results.find(
+      (r): r is PromiseRejectedResult => r.status === "rejected",
+    )?.reason;
     // oxlint-disable-next-line typescript/only-throw-error -- re-throwing caught error
     if (firstError) throw firstError;
   };
@@ -170,14 +166,12 @@ export const createTransactionHooks = (): TransactionHooksHandle => {
     const snapshot = [...hooks.values()];
     hooks.clear();
 
-    let firstError: unknown;
-    for (const hook of snapshot) {
-      try {
-        await hook.discard?.(hook.state);
-      } catch (error) {
-        firstError ??= error;
-      }
-    }
+    const results = await Promise.allSettled(
+      snapshot.map(async (hook) => hook.discard?.(hook.state)),
+    );
+    const firstError = results.find(
+      (r): r is PromiseRejectedResult => r.status === "rejected",
+    )?.reason;
     // oxlint-disable-next-line typescript/only-throw-error -- re-throwing caught error
     if (firstError) throw firstError;
   };
