@@ -1,6 +1,5 @@
 import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import Database from "better-sqlite3";
-import { createInProcessNotifyAdapter } from "queuert";
 
 import { createSqliteStateProvider } from "./sqlite-state-provider.js";
 import { parseConcurrency, printHeader, runBenchmark } from "./utils.js";
@@ -21,7 +20,6 @@ console.log("SQLite ready (in-memory).");
 
 await runBenchmark({
   stateAdapter,
-  notifyAdapter: await createInProcessNotifyAdapter(),
   withTransaction: stateProvider.withTransaction,
   concurrency,
 });

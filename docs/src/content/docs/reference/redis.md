@@ -28,6 +28,7 @@ type RedisNotifyProvider = {
     onMessage: (message: string) => void,
   ) => Promise<() => Promise<void>>;
   eval: (script: string, keys: string[], args: string[]) => Promise<unknown>;
+  close: () => Promise<void>; // Pass-through providers return async () => {}
 };
 ```
 

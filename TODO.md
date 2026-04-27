@@ -4,11 +4,11 @@
 - [?,REF] Research some analytic storage for jobs (in a separate readonly storage)
 - [?,REF] Create some otel 'plugin' that reports information from state or andlytics storage
 - [?,REF] Get 'for update' semantics that belong to postgres. Switch to something like 'lock: true'
+- [?,REF] Staged and atomic modes benchmark; verify that numbers look good
 
 # Short term
 
 - [TASK] Name internal types properly. No underscore. Add to code-style guide.
-- [?,REF] Lift `close()` onto base provider interfaces + adapters for uniform teardown (today only `PgPoolNotifyProvider` has it, via intersection) — see `design/provider-close.md`
 - [REF] Standardize chain-ID parameter names across `Client`. Today the same concept is spelled three different ways depending on method: `id` on `getJobChain`/`deleteJobChain`/`triggerJob`/`completeJobChain`/`awaitJobChain`, `jobChainId` on `listJobChainJobs`/`listBlockedJobs`, and mixed `id`/`chainId` inside `listJobChains({ filter })` / `listJobs({ filter: { jobChainId } })`. Users have to memorize which key each method wants and autocomplete doesn't help disambiguate chain vs job ids. Pick one spelling (likely `chainId` at the filter level where a job id also appears, `id` where the chain is the sole subject) and migrate all methods in one breaking pass.
 
 # Medium term

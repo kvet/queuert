@@ -256,6 +256,13 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     notFound: TJobId[];
     notTriggerable: { id: TJobId; status: StateJobStatus }[];
   }>;
+
+  /**
+   * Releases internal resources (in-memory indexes, shared caches) and cascades
+   * into the underlying provider. Idempotent — the second call is a no-op.
+   * After close, other methods may reject.
+   */
+  close: () => Promise<void>;
 };
 
 export type GetStateAdapterTxContext<TStateAdapter> =

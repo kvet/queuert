@@ -53,5 +53,7 @@ export const wrapStateAdapterWithLogging = <
     listJobChainJobs: wrap("listJobChainJobs", stateAdapter.listJobChainJobs),
     listBlockedJobs: wrap("listBlockedJobs", stateAdapter.listBlockedJobs),
     triggerJobs: wrap("triggerJobs", stateAdapter.triggerJobs),
+
+    close: stateAdapter.close,
   };
 };

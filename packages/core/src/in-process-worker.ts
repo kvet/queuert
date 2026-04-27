@@ -51,8 +51,13 @@ const waitForNextJob = async ({
   let disposeNotified: () => Promise<void> = async () => {};
   try {
     if (executor.idleSlots() > 0) {
-      disposeNotified = await notifyAdapter.listenJobScheduled(typeNames, () => {
-        onNotification();
+      disposeNotified = await notifyAdapter.listenJobScheduled(typeNames, (typeName) => {
+        notifyAdapter.consumeWakeHint(typeName).then(
+          (claimed) => {
+            if (claimed) onNotification();
+          },
+          () => {},
+        );
       });
     }
   } catch {}
@@ -302,7 +307,8 @@ export const createInProcessWorker = async <
                 observabilityHelper.jobReaped(reaped, { workerId });
 
                 try {
-                  await notifyAdapter.notifyJobScheduled(reaped.typeName, 1);
+                  await notifyAdapter.provideWakeHint(reaped.typeName, 1);
+                  await notifyAdapter.notifyJobScheduled(reaped.typeName);
                 } catch {}
                 try {
                   await notifyAdapter.notifyJobOwnershipLost(reaped.id);

@@ -208,4 +208,6 @@ assert.ok(result2.output.result.includes("admin"));
 assert.ok(result2.output.result.includes("production"));
 
 await stopWorker();
+await notifyAdapter.close();
+await stateAdapter.close();
 await sql.end();

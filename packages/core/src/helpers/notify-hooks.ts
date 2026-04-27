@@ -17,7 +17,8 @@ export const bufferNotifyJobScheduled = (
       await Promise.all(
         Array.from(state.entries()).map(async ([typeName, count]) => {
           try {
-            await notifyAdapter.notifyJobScheduled(typeName, count);
+            await notifyAdapter.provideWakeHint(typeName, count);
+            await notifyAdapter.notifyJobScheduled(typeName);
           } catch {}
         }),
       );

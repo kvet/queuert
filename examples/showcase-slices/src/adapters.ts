@@ -14,6 +14,8 @@ const notifyProvider = createPostgresJsNotifyProvider({ sql });
 export const notifyAdapter = await createPgNotifyAdapter({ notifyProvider });
 
 export const stopContainer = async () => {
+  await notifyAdapter.close();
+  await stateAdapter.close();
   await sql.end();
   await pg[Symbol.asyncDispose]();
 };

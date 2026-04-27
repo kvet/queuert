@@ -1,37 +1,33 @@
 /**
- * Atomically sets a hint counter and publishes a notification.
+ * Adds `count` to the wake-hint counter for a typeName, refreshing the 60s TTL.
+ * Composes additively across concurrent publishers.
  *
- * KEYS[1] = hint key (e.g., "queuert:hint:{hintId}")
- * ARGV[1] = count (number of jobs scheduled)
- * ARGV[2] = channel (e.g., "queuert:sched")
- * ARGV[3] = message to publish (`{hintId}:{typeName}`)
- *
- * The channel is passed via ARGV rather than KEYS so the EVAL declares only
- * one key. On Redis Cluster, all KEYS[] must hash to the same slot, but
- * PUBLISH is slot-agnostic — broadcasting a channel name via ARGV avoids the
- * CROSSSLOT rejection that would otherwise occur when the hint key and the
- * channel name hash to different slots.
+ * KEYS[1] = hint key (e.g., "queuert:hint:{typeName}")
+ * ARGV[1] = count to add
  */
-export const SET_AND_PUBLISH_SCRIPT = `
-redis.call('SET', KEYS[1], ARGV[1], 'EX', 60)
-redis.call('PUBLISH', ARGV[2], ARGV[3])
+export const PROVIDE_WAKE_HINT_SCRIPT = `
+local current = tonumber(redis.call('GET', KEYS[1])) or 0
+redis.call('SET', KEYS[1], current + tonumber(ARGV[1]), 'EX', 60)
 `;
 
 /**
- * Atomically decrements a hint counter if positive.
- * Used by workers to determine if they should query the database.
+ * Atomically claims one slot of a wake-hint budget.
  *
  * KEYS[1] = hint key
  *
  * Returns:
- *   1 = success (worker should query DB)
- *   0 = hint exhausted (worker should skip)
+ *   1 = caller should wake (slot claimed, OR hint key absent — graceful degradation)
+ *   0 = budget exhausted (another consumer claimed all slots)
  */
-export const DECR_IF_POSITIVE_SCRIPT = `
-local result = redis.call('DECR', KEYS[1])
-if result >= 0 then
-    return 1
+export const CONSUME_WAKE_HINT_SCRIPT = `
+local current = redis.call('GET', KEYS[1])
+if not current then
+  return 1
 end
-redis.call('SET', KEYS[1], '0')
+local n = tonumber(current)
+if n and n > 0 then
+  redis.call('DECR', KEYS[1])
+  return 1
+end
 return 0
 `;

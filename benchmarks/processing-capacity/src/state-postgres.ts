@@ -2,7 +2,6 @@ import { createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import { createPostgresJsStateProvider } from "example-state-postgres-postgres-js/provider";
 import postgres from "postgres";
-import { createInProcessNotifyAdapter } from "queuert";
 
 import { parseConcurrency, printHeader, runBenchmark } from "./utils.js";
 
@@ -22,7 +21,6 @@ console.log("PostgreSQL ready.");
 
 await runBenchmark({
   stateAdapter,
-  notifyAdapter: await createInProcessNotifyAdapter(),
   withTransaction: stateProvider.withTransaction,
   concurrency,
 });

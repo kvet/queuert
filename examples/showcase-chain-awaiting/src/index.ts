@@ -221,4 +221,6 @@ try {
 }
 
 await stopWorker();
+await notifyAdapter.close();
+await stateAdapter.close();
 await sql.end();

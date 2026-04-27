@@ -150,3 +150,5 @@ logger.info({ output: retryCompleted.output }, "Retry job eventually succeeded")
 
 // 8. Cleanup
 await stopWorker();
+await notifyAdapter.close();
+await stateAdapter.close();

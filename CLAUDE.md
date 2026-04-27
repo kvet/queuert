@@ -8,6 +8,8 @@
 - Run `bun run fmt` before running checks to fix formatting issues
 - Run individual tests during development (e.g., `bun vitest run packages/core/src/specs/some.spec.ts`)
 - Run `bun run check` once the change is finalized to verify everything passes (`bun run lint`, `bun run typecheck`, `bun run test`, `bun run examples`)
+- **Never re-run `bun run check` (or any other multi-minute task) just to filter its output differently.** If you need to inspect the output multiple ways, redirect it to a file once (`bun run check > /tmp/check.log 2>&1`) and grep/read the file. Re-invoking the command wastes minutes per iteration.
+- **Don't grep check output for words like "error", "fail", "FAIL".** The examples emit those as legitimate content (showcase logs, simulated errors, retry demos) and produce false positives. To verify a check, rely on vitest's `Test Files`/`Tests ` summary lines, the typecheck `Exited with code N` lines, and the command's final exit code — not free-text matches.
 - See [Code Style](code-style.md) for testing patterns, documentation update guidelines, and examples naming conventions
 - When creating or modifying examples, follow the naming convention and single-purpose design described in Code Style
 - Remove todo items as soon as their work is done, whether completed directly or via sub-agents

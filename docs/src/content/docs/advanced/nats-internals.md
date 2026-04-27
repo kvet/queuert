@@ -13,11 +13,11 @@ This document describes the internal implementation of `@queuert/nats`. Like Red
 
 Three NATS subjects carry notifications (configurable prefix, default `queuert`):
 
-| Subject           | Published When      | Payload Format        | Purpose                       |
-| ----------------- | ------------------- | --------------------- | ----------------------------- |
-| `{prefix}.sched`  | Jobs become pending | `{hintId}:{typeName}` | Wake idle workers             |
-| `{prefix}.chainc` | Chain completes     | `{chainId}`           | Wake clients awaiting results |
-| `{prefix}.owls`   | Lease reaped        | `{jobId}`             | Notify ownership loss         |
+| Subject           | Published When      | Payload Format | Purpose                       |
+| ----------------- | ------------------- | -------------- | ----------------------------- |
+| `{prefix}.sched`  | Jobs become pending | `{typeName}`   | Wake idle workers             |
+| `{prefix}.chainc` | Chain completes     | `{chainId}`    | Wake clients awaiting results |
+| `{prefix}.owls`   | Lease reaped        | `{jobId}`      | Notify ownership loss         |
 
 NATS core pub/sub is fire-and-forget — messages are delivered to currently connected subscribers only.
 
@@ -36,53 +36,57 @@ const kv = await js.views.kv("queuert_hints", { ttl: 60_000 });
 ### Key Format
 
 ```
-{subjectPrefix}_hint_{hintId}
+{subjectPrefix}_hint_{typeName}
 ```
 
-Example: `queuert_hint_550e8400-e29b-41d4-a716-446655440000`
+Example: `queuert_hint_process-order`
 
 ### Hint Lifecycle
 
-1. **Create**: `notifyJobScheduled` generates a UUID hint ID, puts the job count as the value, then publishes the notification
-2. **Decrement**: Workers receiving the notification read the hint value and its revision, then attempt an atomic update with the decremented value
-3. **Expire**: Keys auto-expire after 60 seconds via the bucket's TTL
+1. **Create / add**: the publisher calls `provideWakeHint(typeName, count)`. If the key doesn't exist, the adapter creates it with `kv.create`; otherwise it reads the current value and writes back `current + count` via CAS, retrying on revision conflicts.
+2. **Decrement**: workers receiving the notification call `consumeWakeHint(typeName)`, which reads the value and revision then attempts an atomic update with the decremented value.
+3. **Expire**: keys auto-expire after 60 seconds via the bucket's TTL.
+
+If `consumeWakeHint` finds no key (the budget never existed or expired), it returns `true` — graceful degradation rather than silently missing wakeups.
 
 ### Revision-Based CAS
 
 NATS JetStream KV supports optimistic concurrency via revision numbers. Each `kv.put()` returns a revision, and `kv.update()` accepts an expected revision — the update fails if another writer modified the value since it was read:
 
 ```
-Worker A: kv.get("hint_abc") → { value: "3", revision: 42 }
-Worker B: kv.get("hint_abc") → { value: "3", revision: 42 }
+Worker A: kv.get("hint_process-order") → { value: "3", revision: 42 }
+Worker B: kv.get("hint_process-order") → { value: "3", revision: 42 }
 
-Worker A: kv.update("hint_abc", "2", 42) → succeeds (revision 43)
-Worker B: kv.update("hint_abc", "2", 42) → fails ("wrong last sequence")
-Worker B: kv.get("hint_abc") → { value: "2", revision: 43 }
-Worker B: kv.update("hint_abc", "1", 43) → succeeds (revision 44)
+Worker A: kv.update("hint_process-order", "2", 42) → succeeds (revision 43)
+Worker B: kv.update("hint_process-order", "2", 42) → fails ("wrong last sequence")
+Worker B: kv.get("hint_process-order") → { value: "2", revision: 43 }
+Worker B: kv.update("hint_process-order", "1", 43) → succeeds (revision 44)
 ```
 
-The adapter retries up to 5 times on "wrong last sequence" errors before giving up. A failed CAS means another worker already claimed the slot — the retrying worker reads the updated value and tries again with the new revision.
+The adapter retries up to 5 times on "wrong last sequence" errors before giving up. A failed CAS means another writer modified the value — the retrying caller reads the new value and tries again. Both `provideWakeHint` (additive contributions from concurrent publishers) and `consumeWakeHint` (workers racing to claim slots) use the same retry loop.
 
 ### Decrement Logic
 
 ```
 1. Read hint value and revision
-2. If value ≤ 0: return false (no jobs to claim)
-3. Try kv.update(key, value - 1, revision)
-4. If success: return true (worker should query database)
-5. If "wrong last sequence": retry from step 1 (max 5 times)
-6. If max retries exceeded: return false (skip this notification)
+2. If key missing: return true (graceful degradation — wake)
+3. If value ≤ 0: return false (budget exhausted)
+4. Try kv.update(key, value - 1, revision)
+5. If success: return true (slot claimed, worker should query database)
+6. If "wrong last sequence": retry from step 1 (max 5 times)
+7. If max retries exceeded: return false (skip this notification)
 ```
 
 This provides the same thundering herd prevention as Redis Lua scripts, using NATS-native primitives instead of atomic scripting.
 
 ## Without JetStream KV
 
-When no KV bucket is provided, the adapter skips hint optimization entirely:
+When no KV bucket is provided, `provideWakeHint`/`consumeWakeHint` become no-ops:
 
-- `notifyJobScheduled` publishes the notification without creating a hint
-- All listeners query the database on every notification
-- Job acquisition still works correctly — `FOR UPDATE SKIP LOCKED` (PostgreSQL) or exclusive locking (SQLite) prevents duplicate processing
+- `provideWakeHint` does nothing
+- `consumeWakeHint` always returns `true`
+- `notifyJobScheduled` still publishes
+- All listeners wake on every notification; the database (`FOR UPDATE SKIP LOCKED` in PostgreSQL, exclusive locking in SQLite) prevents duplicate processing
 
 This mode is simpler to deploy but generates more database queries under high worker counts.
 
@@ -93,7 +97,7 @@ The NATS adapter uses the same shared listener pattern as Redis — a single NAT
 - **Lazy start**: Subscription created on first listener registration
 - **Shared**: Additional listeners attach without new subscriptions
 - **Lazy stop**: Subscription torn down when last listener unsubscribes
-- **State machine**: Tracks `idle` → `starting` → `running` → `stopping` transitions
+- **Serialization**: All mutations serialize on a single async write lock — no intermediate `starting`/`stopping` states
 
 ## Connection Model
 

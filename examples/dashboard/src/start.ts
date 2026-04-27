@@ -10,7 +10,7 @@
 
 import { createInProcessWorker, createProcessors, withTransactionHooks } from "queuert";
 
-import { client, db, jobTypes, stateAdapter } from "./client.js";
+import { client, db, jobTypes, notifyAdapter, stateAdapter } from "./client.js";
 
 const worker = await createInProcessWorker({
   client,
@@ -199,6 +199,8 @@ console.log('Created scheduled-report (in 1 hour). Use "Trigger now" in the dash
 
 // Cleanup
 await stopWorker();
+await notifyAdapter.close();
+await stateAdapter.close();
 db.close();
 
 console.log("\nDone! Open http://localhost:3333 to view the dashboard.");

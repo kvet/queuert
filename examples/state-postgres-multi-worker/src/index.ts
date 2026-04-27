@@ -175,6 +175,7 @@ const stopPromises = processes.map(
 );
 
 await Promise.all(stopPromises);
-await notifyProvider.close();
+await notifyAdapter.close();
+await stateAdapter.close();
 await pool.end();
 console.log("Done!");

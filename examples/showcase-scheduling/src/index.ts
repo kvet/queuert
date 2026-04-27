@@ -473,4 +473,6 @@ console.log(`Reminders sent: ${reminderCount.count}`);
 assert.equal(Number(reminderCount.count), 1);
 
 await stopWorker();
+await notifyAdapter.close();
+await stateAdapter.close();
 await sql.end();

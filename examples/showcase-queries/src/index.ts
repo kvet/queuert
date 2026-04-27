@@ -265,4 +265,6 @@ for (const j of blockedByValidate.items) {
 }
 
 await stopWorker();
+await notifyAdapter.close();
+await stateAdapter.close();
 await sql.end();

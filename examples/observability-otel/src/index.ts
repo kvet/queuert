@@ -341,6 +341,8 @@ console.log("Result:", approvalResult.output);
 
 // Cleanup
 await stopWorker();
+await notifyAdapter.close();
+await stateAdapter.close();
 console.log("\nFlushing telemetry...");
 await flush();
 await shutdown();

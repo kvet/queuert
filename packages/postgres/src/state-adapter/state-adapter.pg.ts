@@ -667,6 +667,10 @@ export const createPgStateAdapter = async <
       };
     },
 
+    close: async () => {
+      await stateProvider.close?.();
+    },
+
     listBlockedJobs: async ({ txCtx, chainId, orderDirection, page }) => {
       const cursor = page.cursor ? decodeCreatedAtCursor(page.cursor) : null;
       const conditions: string[] = [

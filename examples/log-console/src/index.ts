@@ -108,3 +108,5 @@ console.log(`\n[app] Retry job output: ${JSON.stringify(retryCompleted.output)}`
 
 // 6. Cleanup
 await stopWorker();
+await notifyAdapter.close();
+await stateAdapter.close();

@@ -42,6 +42,7 @@ type PgStateProvider<TTxContext> = {
     sql: string;
     params?: unknown[];
   }) => Promise<unknown[]>;
+  close: () => Promise<void>; // Pass-through providers return async () => {}
 };
 ```
 
@@ -69,6 +70,7 @@ type PgNotifyProvider = {
     channel: string,
     onMessage: (message: string) => void,
   ) => Promise<() => Promise<void>>;
+  close: () => Promise<void>; // Pass-through providers return async () => {}
 };
 ```
 

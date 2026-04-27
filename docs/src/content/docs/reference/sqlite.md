@@ -49,6 +49,7 @@ type SqliteStateProvider<TTxContext> = {
     columnTypes: Record<string, RuntimeType>; // Non-empty when the query returns rows
     readOnly?: boolean; // true for pure SELECTs (no FOR UPDATE)
   }) => Promise<unknown[]>;
+  close: () => Promise<void>; // Pass-through providers return async () => {}
 };
 ```
 

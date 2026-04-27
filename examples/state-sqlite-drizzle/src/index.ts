@@ -127,4 +127,6 @@ console.log(`Welcome email sent at: ${result.output.sentAt}`);
 
 // 10. Cleanup
 await stopWorker();
+await notifyAdapter.close();
+await stateAdapter.close();
 sqlite.close();

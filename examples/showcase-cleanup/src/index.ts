@@ -245,4 +245,6 @@ console.log("SHOWCASE COMPLETED");
 console.log("-".repeat(40));
 
 await stopWorker();
+await notifyAdapter.close();
+await stateAdapter.close();
 await sql.end();

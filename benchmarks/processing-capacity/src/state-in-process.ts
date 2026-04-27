@@ -1,4 +1,4 @@
-import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert";
+import { createInProcessStateAdapter } from "queuert";
 
 import { parseConcurrency, printHeader, runBenchmark } from "./utils.js";
 
@@ -10,7 +10,6 @@ const stateAdapter = await createInProcessStateAdapter();
 
 await runBenchmark({
   stateAdapter,
-  notifyAdapter: await createInProcessNotifyAdapter(),
   withTransaction: stateAdapter.withTransaction,
   concurrency,
 });

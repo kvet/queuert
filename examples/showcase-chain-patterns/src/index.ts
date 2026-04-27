@@ -358,4 +358,6 @@ assert.equal(Number(sub2.total_charged), 0);
 assert.ok("expiredAt" in result2.output);
 
 await stopWorker();
+await notifyAdapter.close();
+await stateAdapter.close();
 await sql.end();

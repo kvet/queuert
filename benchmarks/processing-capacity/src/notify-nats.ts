@@ -1,39 +1,29 @@
 import { createNatsNotifyAdapter } from "@queuert/nats";
-import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import { NatsContainer } from "@testcontainers/nats";
-import Database from "better-sqlite3";
 import { connect } from "nats";
+import { createInProcessStateAdapter } from "queuert";
 
-import { createSqliteStateProvider } from "./sqlite-state-provider.js";
 import { parseConcurrency, printHeader, runBenchmark } from "./utils.js";
 
 printHeader("PROCESSING CAPACITY — NATS NOTIFY");
 
 const concurrency = parseConcurrency();
 
-const db = new Database(":memory:");
-db.pragma("journal_mode = WAL");
-db.pragma("auto_vacuum = INCREMENTAL");
-db.pragma("foreign_keys = ON");
-
-const stateProvider = createSqliteStateProvider({ db, lock: createAsyncRwLock() });
-const stateAdapter = await createSqliteStateAdapter({ stateProvider });
-await stateAdapter.migrateToLatest();
+const stateAdapter = await createInProcessStateAdapter();
 
 console.log("\nStarting NATS container...");
 const natsContainer = await new NatsContainer("nats:2.10").withExposedPorts(4222).start();
 
 const nc = await connect(natsContainer.getConnectionOptions());
 const notifyAdapter = await createNatsNotifyAdapter({ nc, subjectPrefix: "queuert_bench" });
-console.log("SQLite + NATS ready.");
+console.log("NATS ready.");
 
 await runBenchmark({
   stateAdapter,
   notifyAdapter,
-  withTransaction: stateProvider.withTransaction,
+  withTransaction: stateAdapter.withTransaction,
   concurrency,
 });
 
 await nc.close();
 await natsContainer.stop();
-db.close();

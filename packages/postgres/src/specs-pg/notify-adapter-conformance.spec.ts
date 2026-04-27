@@ -28,7 +28,7 @@ describe("PostgreSQL Notify Adapter Conformance - Default Channel Prefix", () =>
 
         await use(notifyAdapter);
 
-        await notifyProvider.close();
+        await notifyProvider.close?.();
         await pool.end();
       },
       { scope: "test" },
@@ -55,7 +55,7 @@ describe("PostgreSQL Notify Adapter Conformance - Custom Channel Prefix", () => 
 
         await use(notifyAdapter);
 
-        await notifyProvider.close();
+        await notifyProvider.close?.();
         await pool.end();
       },
       { scope: "test" },

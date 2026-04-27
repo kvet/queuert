@@ -279,4 +279,6 @@ console.log(`Final output: ${JSON.stringify(apiResult.output)}`);
 assert.ok("data" in apiResult.output);
 
 await stopWorker();
+await notifyAdapter.close();
+await stateAdapter.close();
 await sql.end();

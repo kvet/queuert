@@ -1,108 +1,8 @@
 import { type NotifyAdapter } from "queuert";
+import { createSharedListener } from "queuert/internal";
 
 import { type RedisNotifyProvider } from "../notify-provider/notify-provider.redis.js";
-import { DECR_IF_POSITIVE_SCRIPT, SET_AND_PUBLISH_SCRIPT } from "./lua.js";
-
-type SharedListenerState =
-  | { status: "idle" }
-  | { status: "starting"; readyPromise: Promise<void> }
-  | {
-      status: "running";
-      callbacks: Set<(payload: string) => void>;
-      unsubscribe: () => Promise<void>;
-    }
-  | { status: "stopping"; stoppedPromise: Promise<void> };
-
-/**
- * Multiplexes many application-level listeners onto a single Redis SUBSCRIBE
- * per channel. Opens the underlying subscription lazily on first listener,
- * reuses it for all subsequent listeners, and tears it down when the last
- * listener unsubscribes. The returned `subscribe` resolves with an
- * unsubscribe function scoped to that one callback.
- */
-const createSharedListener = (
-  provider: RedisNotifyProvider,
-  channel: string,
-): {
-  subscribe: (callback: (payload: string) => void) => Promise<() => Promise<void>>;
-} => {
-  let state: SharedListenerState = { status: "idle" };
-
-  /**
-   * Returns the callback set for the running subscription, opening it if
-   * needed. Concurrent callers either win the idle→starting transition and
-   * open the subscription, or wait on an in-flight `starting`/`stopping`
-   * transition and retry — so only one `provider.subscribe` is ever in
-   * flight at a time for this channel.
-   */
-  const ensureRunning = async (): Promise<Set<(payload: string) => void>> => {
-    while (true) {
-      if (state.status === "idle") {
-        const callbacks = new Set<(payload: string) => void>();
-        const { promise: readyPromise, resolve: resolveReady } = Promise.withResolvers<void>();
-
-        state = { status: "starting", readyPromise };
-
-        const unsubscribe = await provider.subscribe(channel, (payload) => {
-          if (state.status === "running") {
-            for (const callback of state.callbacks) {
-              callback(payload);
-            }
-          }
-        });
-
-        resolveReady();
-        state = { status: "running", callbacks, unsubscribe };
-        return callbacks;
-      }
-
-      if (state.status === "starting") {
-        await state.readyPromise;
-        continue;
-      }
-
-      if (state.status === "running") {
-        return state.callbacks;
-      }
-
-      if (state.status === "stopping") {
-        await state.stoppedPromise;
-        continue;
-      }
-
-      throw new Error(`Unknown state: ${(state as { status: string }).status}`);
-    }
-  };
-
-  /**
-   * Tears down the subscription when the last listener leaves. No-op if
-   * other listeners remain, or if we're mid-transition (`ensureRunning`
-   * handles the race).
-   */
-  const stopIfEmpty = async (): Promise<void> => {
-    if (state.status !== "running") return;
-    if (state.callbacks.size > 0) return;
-
-    const { unsubscribe } = state;
-    const stoppedPromise = unsubscribe();
-    state = { status: "stopping", stoppedPromise };
-
-    await stoppedPromise;
-    state = { status: "idle" };
-  };
-
-  return {
-    subscribe: async (callback) => {
-      const callbacks = await ensureRunning();
-      callbacks.add(callback);
-
-      return async () => {
-        callbacks.delete(callback);
-        await stopIfEmpty();
-      };
-    },
-  };
-};
+import { CONSUME_WAKE_HINT_SCRIPT, PROVIDE_WAKE_HINT_SCRIPT } from "./lua.js";
 
 /** Create a notify adapter backed by Redis pub/sub. */
 export const createRedisNotifyAdapter = async ({
@@ -117,66 +17,99 @@ export const createRedisNotifyAdapter = async ({
   const ownershipLostChannel = `${channelPrefix}:owls`;
   const hintKeyPrefix = `${channelPrefix}:hint:`;
 
-  const jobScheduledListener = createSharedListener(notifyProvider, jobScheduledChannel);
-  const chainCompletedListener = createSharedListener(notifyProvider, chainCompletedChannel);
-  const ownershipLostListener = createSharedListener(notifyProvider, ownershipLostChannel);
+  const jobScheduledListener = createSharedListener(async (dispatch) =>
+    notifyProvider.subscribe(jobScheduledChannel, (payload) => {
+      dispatch(payload, payload);
+    }),
+  );
+  const chainCompletedListener = createSharedListener(async (dispatch) =>
+    notifyProvider.subscribe(chainCompletedChannel, (payload) => {
+      dispatch(payload, payload);
+    }),
+  );
+  const ownershipLostListener = createSharedListener(async (dispatch) =>
+    notifyProvider.subscribe(ownershipLostChannel, (payload) => {
+      dispatch(payload, payload);
+    }),
+  );
+
+  let closed = false;
+  const assertOpen = (): void => {
+    if (closed) throw new Error("NotifyAdapter is closed");
+  };
 
   return {
-    notifyJobScheduled: async (typeName, count) => {
-      const hintId = crypto.randomUUID();
-      const hintKey = `${hintKeyPrefix}${hintId}`;
-
-      await notifyProvider.eval(
-        SET_AND_PUBLISH_SCRIPT,
-        [hintKey],
-        [String(count), jobScheduledChannel, `${hintId}:${typeName}`],
-      );
+    notifyJobScheduled: async (typeName) => {
+      assertOpen();
+      await notifyProvider.publish(jobScheduledChannel, typeName);
     },
 
     listenJobScheduled: async (typeNames, onNotification) => {
-      const typeNameSet = new Set(typeNames);
-
-      return jobScheduledListener.subscribe((payload) => {
-        const separatorIndex = payload.indexOf(":");
-        if (separatorIndex === -1) return;
-
-        const hintId = payload.slice(0, separatorIndex);
-        const typeName = payload.slice(separatorIndex + 1);
-
-        if (!typeNameSet.has(typeName)) return;
-
-        const hintKey = `${hintKeyPrefix}${hintId}`;
-        void (async () => {
-          const result = await notifyProvider.eval(DECR_IF_POSITIVE_SCRIPT, [hintKey], []);
-          if (result === 1) {
+      assertOpen();
+      const unsubs = await Promise.all(
+        typeNames.map(async (typeName) =>
+          jobScheduledListener.subscribe(typeName, () => {
             onNotification(typeName);
-          }
-        })();
-      });
+          }),
+        ),
+      );
+      return async () => {
+        await Promise.all(unsubs.map(async (u) => u()));
+      };
+    },
+
+    provideWakeHint: async (typeName, count) => {
+      assertOpen();
+      await notifyProvider.eval(
+        PROVIDE_WAKE_HINT_SCRIPT,
+        [`${hintKeyPrefix}${typeName}`],
+        [String(count)],
+      );
+    },
+
+    consumeWakeHint: async (typeName) => {
+      assertOpen();
+      const result = await notifyProvider.eval(
+        CONSUME_WAKE_HINT_SCRIPT,
+        [`${hintKeyPrefix}${typeName}`],
+        [],
+      );
+      return result === 1;
     },
 
     notifyJobChainCompleted: async (chainId) => {
+      assertOpen();
       await notifyProvider.publish(chainCompletedChannel, chainId);
     },
 
     listenJobChainCompleted: async (chainId, onNotification) => {
-      return chainCompletedListener.subscribe((payload) => {
-        if (payload === chainId) {
-          onNotification();
-        }
+      assertOpen();
+      return chainCompletedListener.subscribe(chainId, () => {
+        onNotification();
       });
     },
 
     notifyJobOwnershipLost: async (jobId) => {
+      assertOpen();
       await notifyProvider.publish(ownershipLostChannel, jobId);
     },
 
     listenJobOwnershipLost: async (jobId, onNotification) => {
-      return ownershipLostListener.subscribe((payload) => {
-        if (payload === jobId) {
-          onNotification();
-        }
+      assertOpen();
+      return ownershipLostListener.subscribe(jobId, () => {
+        onNotification();
       });
+    },
+
+    close: async () => {
+      if (closed) return;
+      closed = true;
+      await Promise.all([
+        jobScheduledListener.dispose(),
+        chainCompletedListener.dispose(),
+        ownershipLostListener.dispose(),
+      ]);
+      await notifyProvider.close?.();
     },
   };
 };

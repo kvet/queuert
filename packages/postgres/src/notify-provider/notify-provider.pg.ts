@@ -20,4 +20,12 @@ export type PgNotifyProvider = {
     channel: string,
     onMessage: (message: string) => void,
   ) => Promise<() => Promise<void>>;
+
+  /**
+   * Releases provider-owned resources (e.g. a dedicated LISTEN client).
+   * Optional — pass-through providers (user-owned pool/client) can omit it.
+   * When defined, must be idempotent: the second call is a no-op, and after
+   * close `publish` and `subscribe` reject.
+   */
+  close?: () => Promise<void>;
 };

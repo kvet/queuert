@@ -7,12 +7,13 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 
 const benchmarkModules: Record<string, string> = {
-  postgres: "postgres.ts",
-  sqlite: "sqlite.ts",
-  "in-process": "in-process.ts",
+  "state-postgres": "state-postgres.ts",
+  "state-sqlite": "state-sqlite.ts",
+  "state-in-process": "state-in-process.ts",
   "notify-redis": "notify-redis.ts",
   "notify-postgres": "notify-postgres.ts",
   "notify-nats": "notify-nats.ts",
+  "notify-in-process": "notify-in-process.ts",
 };
 
 const runBenchmarkInChildProcess = async (name: string, extraArgs: string[]): Promise<void> =>

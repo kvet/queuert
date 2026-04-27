@@ -116,5 +116,7 @@ console.log(`Welcome email sent at: ${result.output.sentAt}`);
 
 // 11. Cleanup
 await stopWorker();
+await notifyAdapter.close();
+await stateAdapter.close();
 await prisma.$disconnect();
 rmSync(tempDir, { recursive: true, force: true });

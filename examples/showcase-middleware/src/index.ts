@@ -167,4 +167,6 @@ assert.equal(auditLog.length, 1);
 assert.equal(auditLog[0].event, "invoice-created");
 
 await stopWorker();
+await notifyAdapter.close();
+await stateAdapter.close();
 await sql.end();

@@ -2,6 +2,7 @@ import { type ConformanceGroup } from "./runner.js";
 import { acquireJobGroup } from "./state-adapter-cases/acquire-job.js";
 import { addJobsBlockersTraceContextsGroup } from "./state-adapter-cases/add-jobs-blockers-trace-contexts.js";
 import { addJobsBlockersGroup } from "./state-adapter-cases/add-jobs-blockers.js";
+import { closeGroup } from "./state-adapter-cases/close.js";
 import { completeJobGroup } from "./state-adapter-cases/complete-job.js";
 import { concurrencyGroup } from "./state-adapter-cases/concurrency.js";
 import { createJobsGroup } from "./state-adapter-cases/create-jobs.js";
@@ -54,4 +55,5 @@ export const stateAdapterConformanceGroups: ConformanceGroup<StateAdapterConform
   withSavepointGroup,
   concurrencyGroup,
   readIsolationGroup,
+  closeGroup,
 ];

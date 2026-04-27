@@ -12,7 +12,7 @@ import { createServer } from "node:http";
 
 import { createDashboard } from "@queuert/dashboard";
 
-import { client, db } from "./client.js";
+import { client, db, notifyAdapter, stateAdapter } from "./client.js";
 
 const PORT = 3333;
 
@@ -33,7 +33,11 @@ server.listen(PORT, () => {
 });
 
 process.on("SIGINT", () => {
-  server.close();
-  db.close();
-  process.exit(0);
+  void (async () => {
+    server.close();
+    await notifyAdapter.close();
+    await stateAdapter.close();
+    db.close();
+    process.exit(0);
+  })();
 });

@@ -2,11 +2,7 @@ import { type Pool, type PoolClient } from "pg";
 
 import { type PgNotifyProvider } from "./notify-provider.pg.js";
 
-export type PgPoolNotifyProvider = PgNotifyProvider & {
-  close: () => Promise<void>;
-};
-
-export const createPgPoolNotifyProvider = ({ pool }: { pool: Pool }): PgPoolNotifyProvider => {
+export const createPgPoolNotifyProvider = ({ pool }: { pool: Pool }): PgNotifyProvider => {
   let listenClient: PoolClient | null = null;
   let connectingPromise: Promise<PoolClient> | null = null;
   let closed = false;
@@ -65,6 +61,7 @@ export const createPgPoolNotifyProvider = ({ pool }: { pool: Pool }): PgPoolNoti
 
   return {
     publish: async (channel, message) => {
+      if (closed) throw new Error("Provider is closed");
       const client = await pool.connect();
       try {
         await client.query("SELECT pg_notify($1, $2)", [channel, message]);

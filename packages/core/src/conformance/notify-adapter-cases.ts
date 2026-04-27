@@ -39,7 +39,7 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyAdapterConfo
             received.resolve(typeName);
           });
 
-          await notifyAdapter.notifyJobScheduled("type-a", 1);
+          await notifyAdapter.notifyJobScheduled("type-a");
 
           const result = await waitFor(received.promise, "notification");
 
@@ -48,18 +48,18 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyAdapterConfo
         },
       },
       {
-        name: "listener receives notification when count > 1",
+        name: "multiple notifications all reach the listener",
         run: async ({ notifyAdapter }, expect) => {
-          const received = Promise.withResolvers<string>();
-          const unsubscribe = await notifyAdapter.listenJobScheduled(["type-a"], (typeName) => {
-            received.resolve(typeName);
+          let count = 0;
+          const unsubscribe = await notifyAdapter.listenJobScheduled(["type-a"], () => {
+            count++;
           });
 
-          await notifyAdapter.notifyJobScheduled("type-a", 5);
+          await notifyAdapter.notifyJobScheduled("type-a");
+          await notifyAdapter.notifyJobScheduled("type-a");
+          await notifyAdapter.notifyJobScheduled("type-a");
 
-          const result = await waitFor(received.promise, "notification");
-
-          expect(result).toBe("type-a");
+          await expect.poll(() => count, { timeout: DELIVERY_TIMEOUT_MS }).toBe(3);
           await unsubscribe();
         },
       },
@@ -71,7 +71,7 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyAdapterConfo
             callCount++;
           });
 
-          await notifyAdapter.notifyJobScheduled("type-b", 1);
+          await notifyAdapter.notifyJobScheduled("type-b");
           await sleep(NEGATIVE_ASSERTION_DELAY_MS);
 
           expect(callCount).toBe(0);
@@ -89,7 +89,7 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyAdapterConfo
             },
           );
 
-          await notifyAdapter.notifyJobScheduled("type-b", 1);
+          await notifyAdapter.notifyJobScheduled("type-b");
 
           const result = await waitFor(received.promise, "notification");
 
@@ -106,7 +106,7 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyAdapterConfo
           });
 
           await unsubscribe();
-          await notifyAdapter.notifyJobScheduled("type-a", 1);
+          await notifyAdapter.notifyJobScheduled("type-a");
           await sleep(NEGATIVE_ASSERTION_DELAY_MS);
 
           expect(callCount).toBe(0);
@@ -115,9 +115,56 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyAdapterConfo
       {
         name: "publish without listeners does not error",
         run: async ({ notifyAdapter }) => {
-          await notifyAdapter.notifyJobScheduled("type-a", 1);
+          await notifyAdapter.notifyJobScheduled("type-a");
           await notifyAdapter.notifyJobChainCompleted("chain-1");
           await notifyAdapter.notifyJobOwnershipLost("job-1");
+        },
+      },
+    ],
+  },
+  {
+    name: "provideWakeHint / consumeWakeHint",
+    cases: [
+      {
+        name: "consumeWakeHint returns true when no budget is tracked (graceful degradation)",
+        run: async ({ notifyAdapter }, expect) => {
+          const typeName = `type-untracked-${crypto.randomUUID()}`;
+          const result = await notifyAdapter.consumeWakeHint(typeName);
+          expect(result).toBe(true);
+        },
+      },
+      {
+        name: "consumeWakeHint claims slots up to the provided budget",
+        run: async ({ notifyAdapter }, expect) => {
+          const typeName = `type-budget-${crypto.randomUUID()}`;
+          await notifyAdapter.provideWakeHint(typeName, 2);
+
+          const first = await notifyAdapter.consumeWakeHint(typeName);
+          const second = await notifyAdapter.consumeWakeHint(typeName);
+          const third = await notifyAdapter.consumeWakeHint(typeName);
+
+          expect(first).toBe(true);
+          expect(second).toBe(true);
+          // Adapters without hint support always return true; honoring adapters return false.
+          // Both behaviors are valid per the contract.
+          expect([true, false]).toContain(third);
+        },
+      },
+      {
+        name: "provideWakeHint composes additively across calls",
+        run: async ({ notifyAdapter }, expect) => {
+          const typeName = `type-additive-${crypto.randomUUID()}`;
+          await notifyAdapter.provideWakeHint(typeName, 2);
+          await notifyAdapter.provideWakeHint(typeName, 3);
+
+          const claims = await Promise.all(
+            Array.from({ length: 6 }, async () => notifyAdapter.consumeWakeHint(typeName)),
+          );
+          const claimed = claims.filter((c) => c).length;
+
+          // Honoring adapters: exactly 5 of the 6 attempts succeed (budget = 2 + 3 = 5).
+          // No-op adapters: all 6 succeed.
+          expect([5, 6]).toContain(claimed);
         },
       },
     ],
@@ -344,7 +391,7 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyAdapterConfo
             received.resolve(typeName);
           });
 
-          await notifyAdapter.notifyJobScheduled("type-a", 1);
+          await notifyAdapter.notifyJobScheduled("type-a");
 
           const result = await waitFor(received.promise, "notification");
 
@@ -373,6 +420,90 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyAdapterConfo
 
           expect(count1).toBe(0);
           await unsubscribe2();
+        },
+      },
+    ],
+  },
+  {
+    name: "listener fault isolation",
+    cases: [
+      {
+        name: "throwing callback does not break peer callback or surface to publisher",
+        run: async ({ notifyAdapter }) => {
+          const peerCalled = Promise.withResolvers<void>();
+          const unsubBad = await notifyAdapter.listenJobChainCompleted("chain-throw", () => {
+            throw new Error("bad listener");
+          });
+          const unsubGood = await notifyAdapter.listenJobChainCompleted("chain-throw", () => {
+            peerCalled.resolve();
+          });
+
+          await notifyAdapter.notifyJobChainCompleted("chain-throw");
+          await waitFor(peerCalled.promise, "peer notification");
+
+          await unsubBad();
+          await unsubGood();
+        },
+      },
+    ],
+  },
+  {
+    name: "no unhandled rejections",
+    cases: [
+      {
+        name: "normal subscribe/notify/unsubscribe cycle does not produce unhandled rejections",
+        run: async ({ notifyAdapter }, expect) => {
+          const unhandled: unknown[] = [];
+          const handler = (reason: unknown): void => {
+            unhandled.push(reason);
+          };
+          process.on("unhandledRejection", handler);
+          try {
+            const u1 = await notifyAdapter.listenJobScheduled(["type-a"], () => {});
+            const u2 = await notifyAdapter.listenJobChainCompleted("chain-1", () => {});
+            const u3 = await notifyAdapter.listenJobOwnershipLost("job-1", () => {});
+
+            await notifyAdapter.notifyJobScheduled("type-a");
+            await notifyAdapter.notifyJobChainCompleted("chain-1");
+            await notifyAdapter.notifyJobOwnershipLost("job-1");
+
+            await sleep(NEGATIVE_ASSERTION_DELAY_MS);
+
+            await u1();
+            await u2();
+            await u3();
+
+            await sleep(NEGATIVE_ASSERTION_DELAY_MS);
+
+            expect(unhandled).toEqual([]);
+          } finally {
+            process.off("unhandledRejection", handler);
+          }
+        },
+      },
+    ],
+  },
+  {
+    name: "close",
+    cases: [
+      {
+        name: "close is idempotent, rejects subsequent calls, and previously returned unsubscribes remain safe",
+        run: async ({ notifyAdapter }, expect) => {
+          const unsubscribe = await notifyAdapter.listenJobChainCompleted("chain-1", () => {});
+
+          await notifyAdapter.close();
+          await notifyAdapter.close();
+
+          await unsubscribe();
+
+          await expect(notifyAdapter.notifyJobScheduled("type-a")).rejects.toThrow();
+          await expect(notifyAdapter.listenJobScheduled(["type-a"], () => {})).rejects.toThrow();
+          await expect(notifyAdapter.notifyJobChainCompleted("chain-1")).rejects.toThrow();
+          await expect(
+            notifyAdapter.listenJobChainCompleted("chain-1", () => {}),
+          ).rejects.toThrow();
+          await expect(notifyAdapter.notifyJobOwnershipLost("job-1")).rejects.toThrow();
+          await expect(notifyAdapter.listenJobOwnershipLost("job-1", () => {})).rejects.toThrow();
         },
       },
     ],

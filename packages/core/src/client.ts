@@ -817,12 +817,16 @@ export const createClient = async <
           : null;
       };
 
-      const completedChain = await checkChain();
-      if (completedChain) {
-        return completedChain;
-      }
-
-      const timeoutSignal = AbortSignal.timeout(timeoutMs);
+      const timeoutController = new AbortController();
+      const timeoutId = setTimeout(() => {
+        timeoutController.abort(
+          new WaitChainTimeoutError(
+            `Timeout waiting for job chain ${id} to complete after ${timeoutMs}ms`,
+            { chainId: id as string, timeoutMs },
+          ),
+        );
+      }, timeoutMs);
+      const timeoutSignal = timeoutController.signal;
       const combinedSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
 
       let resolveNotification: (() => void) | null = null;
@@ -836,11 +840,15 @@ export const createClient = async <
 
       let dispose: () => Promise<void> = async () => {};
       try {
-        dispose = await helpers.notifyAdapter.listenJobChainCompleted(id, () => {
-          resolveNotification?.();
-        });
-      } catch {}
-      try {
+        try {
+          dispose = await helpers.notifyAdapter.listenJobChainCompleted(id, () => {
+            resolveNotification?.();
+          });
+        } catch {}
+
+        const completedChain = await checkChain();
+        if (completedChain) return completedChain;
+
         while (!combinedSignal.aborted) {
           await raceWithSleep(notificationPromise, pollIntervalMs, { signal: combinedSignal });
           resetNotificationPromise();
@@ -858,6 +866,7 @@ export const createClient = async <
           { chainId: id as string, timeoutMs, cause: signal?.reason },
         );
       } finally {
+        clearTimeout(timeoutId);
         await dispose();
       }
     },

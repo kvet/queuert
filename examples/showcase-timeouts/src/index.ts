@@ -176,4 +176,6 @@ assert.ok("completed" in result3.output);
 assert.equal(result3.output.attempt, 1);
 
 await stopWorker();
+await notifyAdapter.close();
+await stateAdapter.close();
 await sql.end();

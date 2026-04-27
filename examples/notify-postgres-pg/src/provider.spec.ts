@@ -20,7 +20,7 @@ test("notify-postgres-pg provider passes notify adapter conformance", async () =
     return {
       notifyAdapter,
       dispose: async () => {
-        await notifyProvider.close();
+        await notifyAdapter.close();
         await pool.end();
       },
     };

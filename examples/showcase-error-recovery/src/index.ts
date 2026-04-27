@@ -296,4 +296,6 @@ console.log(`Completed on attempt ${flakyResult.output.attempt}`);
 assert.equal(flakyResult.output.attempt, 3);
 
 await stopWorker();
+await notifyAdapter.close();
+await stateAdapter.close();
 await sql.end();

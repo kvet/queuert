@@ -54,4 +54,10 @@ export type SqliteStateProvider<TTxContext extends BaseTxContext> = {
     columnTypes: Record<string, RuntimeType>;
     readOnly: boolean;
   }) => Promise<unknown[]>;
+
+  /**
+   * Releases provider-owned resources. Optional — pass-through providers
+   * (user-owned driver) can omit it. When defined, must be idempotent.
+   */
+  close?: () => Promise<void>;
 };

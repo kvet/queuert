@@ -94,6 +94,7 @@ console.log(`Report ready! ID: ${result.output.reportId}, Rows: ${result.output.
 
 // 10. Cleanup
 await stopWorker();
-await notifyProvider.close();
+await notifyAdapter.close();
+await stateAdapter.close();
 await pool.end();
 console.log("Done!");

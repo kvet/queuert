@@ -83,6 +83,9 @@ interface PgStateProvider<TTxContext> {
     paramTypes: Record<number, RuntimeType>;
     columnTypes: Record<string, RuntimeType>;
   }) => Promise<unknown[]>;
+
+  // Optional — only define when the provider owns resources beyond the caller-supplied client/pool
+  close?: () => Promise<void>;
 }
 ```
 
@@ -106,6 +109,8 @@ interface PgNotifyProvider {
     channel: string,
     onMessage: (message: string) => void,
   ) => Promise<() => Promise<void>>;
+  // Optional — only define when the provider owns resources (e.g. a dedicated LISTEN client)
+  close?: () => Promise<void>;
 }
 ```
 
@@ -125,24 +130,51 @@ The `reapExpiredJobLease` method supports an `ignoredJobIds` parameter to preven
 
 All notifications use broadcast (pub/sub) semantics with three notify/listen pairs: job scheduling, chain completion, and ownership loss. See the `NotifyAdapter` type TSDoc for method details.
 
-### Hint-Based Optimization
+### Wake-Hint Methods
 
-To prevent thundering herd when many workers are idle, notifications include a hint count:
+To prevent thundering herd when many workers are idle, the publisher attaches a per-typeName budget that gates how many listeners actually wake. Hints are an opt-in pair of methods on `NotifyAdapter`, both keyed by `typeName`:
 
-1. **Scheduling**: `notifyJobScheduled(typeName, count)` creates a hint key with the count and publishes with a unique hintId
-2. **Receiving**: Workers atomically decrement the hint count. Only workers that successfully decrement (hint > 0) proceed to query the database
-3. **Effect**: When N jobs are scheduled, exactly N workers query the database; others skip and wait for the next notification
+- `provideWakeHint(typeName, count)` — publisher adds `count` to the budget. Composes additively across concurrent publishers (two `provideWakeHint(t, 3)` calls yield a budget of 6).
+- `consumeWakeHint(typeName)` — listener atomically claims one slot. Returns `true` if a slot was claimed, or if no budget is currently tracked (graceful degradation). Returns `false` only when an explicit budget was set and is now exhausted.
+
+Flow when scheduling N jobs of `typeName`:
+
+1. Publisher calls `provideWakeHint(typeName, N)` followed by `notifyJobScheduled(typeName)`.
+2. Each receiving worker calls `consumeWakeHint(typeName)`. The first N return `true` (worker queries the database); subsequent calls return `false` (worker skips).
+3. When the hint key never existed or the TTL expired, `consumeWakeHint` falls back to `true` so listeners don't silently miss wakeups.
+
+Adapters that don't support hints implement the pair as no-ops (`provideWakeHint: async () => {}`, `consumeWakeHint: async () => true`) — no parameter lies, no thundering-herd protection, but everything else still works.
 
 Implementation varies by adapter:
 
-- **Redis**: Lua scripts for atomic decrement
-- **NATS with JetStream KV**: Revision-based CAS operations
-- **PostgreSQL/NATS without KV**: No optimization (all listeners query database)
-- **In-process**: Synchronous counter operations
+- **Redis**: Lua scripts. `PROVIDE_WAKE_HINT_SCRIPT` reads the current value and writes `current + count` with a 60s TTL refresh; `CONSUME_WAKE_HINT_SCRIPT` performs the atomic decrement with graceful-degradation on missing keys.
+- **NATS with JetStream KV**: revision-based CAS retry loops for both add and decrement.
+- **PostgreSQL / NATS without KV**: hint methods are no-ops; every listener wakes and the database (FOR UPDATE SKIP LOCKED in `acquireJob`) handles contention.
+- **In-process**: synchronous counter operations on a `Map<typeName, count>`.
+
+Atomicity note: `provideWakeHint` and `notifyJobScheduled` are two separate calls. If `notifyJobScheduled` fails after `provideWakeHint` succeeds, the budget is consumed by the _next_ notification for that typeName (slight over-wake on the next batch, harmless). If `provideWakeHint` fails, the publish doesn't happen (the buffered helper short-circuits on the first throw).
 
 ### Callback Pattern
 
 All `listen*` methods accept a callback and return a dispose function. Subscription is active when the promise resolves, and the callback is called synchronously when notifications arrive (no race condition).
+
+## Lifecycle and Teardown
+
+Both `StateAdapter` and `NotifyAdapter` expose `close(): Promise<void>`. The contract:
+
+- **Idempotent** — calling `close()` a second time is a no-op.
+- **Cascades into the provider when defined** — `adapter.close()` invokes `provider.close?.()`. Provider `close` is optional, so pass-through providers (postgres.js state, `pg.Pool` state, `better-sqlite3`/`node:sqlite` state, postgres.js notify, user-owned redis clients) simply omit it. Only providers that own resources beyond the caller-supplied client/pool (e.g. the `pg.Pool` notify provider with its dedicated LISTEN client) need to implement it.
+- **Force-tears shared listeners** — `NotifyAdapter.close()` tears down the pg/redis/nats shared-listener multiplex regardless of remaining callbacks, waits for any in-flight `subscribe` to complete, then releases the provider's dedicated LISTEN/subscribe client.
+- **Post-close behavior** — after close, `notify*`/`listen*`/`publish`/`subscribe` reject. Previously returned unsubscribe functions are safe to call (no-op).
+
+Recommended teardown order:
+
+```ts
+await stopWorker(); // 1. Stop polling, drain in-flight jobs
+await notifyAdapter.close(); // 2. Unsubscribe listeners, release LISTEN client
+await stateAdapter.close(); // 3. Release state-provider resources (if any)
+await pool.end(); // 4. Finally, close caller-owned clients/pools
+```
 
 ## ObservabilityAdapter Design
 

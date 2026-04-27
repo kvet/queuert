@@ -113,13 +113,21 @@ export const extendWithNotifyInProcess = <T extends {}>(
         };
 
         const flakyNotifyAdapter: NotifyAdapter = {
-          notifyJobScheduled: async (typeName, count) => {
+          notifyJobScheduled: async (typeName) => {
             maybeThrow();
-            return notifyAdapter.notifyJobScheduled(typeName, count);
+            return notifyAdapter.notifyJobScheduled(typeName);
           },
           listenJobScheduled: async (typeNames, onNotification) => {
             maybeThrow();
             return notifyAdapter.listenJobScheduled(typeNames, onNotification);
+          },
+          provideWakeHint: async (typeName, count) => {
+            maybeThrow();
+            return notifyAdapter.provideWakeHint(typeName, count);
+          },
+          consumeWakeHint: async (typeName) => {
+            maybeThrow();
+            return notifyAdapter.consumeWakeHint(typeName);
           },
           notifyJobChainCompleted: async (chainId) => {
             maybeThrow();
@@ -137,6 +145,7 @@ export const extendWithNotifyInProcess = <T extends {}>(
             maybeThrow();
             return notifyAdapter.listenJobOwnershipLost(jobId, onNotification);
           },
+          close: notifyAdapter.close,
         };
 
         await use(flakyNotifyAdapter);

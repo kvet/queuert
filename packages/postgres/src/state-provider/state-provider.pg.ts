@@ -49,4 +49,11 @@ export type PgStateProvider<TTxContext extends BaseTxContext> = {
     columnTypes: Record<string, RuntimeType>;
     readOnly: boolean;
   }) => Promise<unknown[]>;
+
+  /**
+   * Releases provider-owned resources. Optional — pass-through providers
+   * (postgres.js, user-owned pool) can omit it. When defined, must be
+   * idempotent.
+   */
+  close?: () => Promise<void>;
 };

@@ -2,8 +2,9 @@
  * Redis Notify Adapter Memory Measurement
  */
 
-import { type RedisNotifyProvider, createRedisNotifyAdapter } from "@queuert/redis";
+import { createRedisNotifyAdapter } from "@queuert/redis";
 import { RedisContainer } from "@testcontainers/redis";
+import { createNodeRedisNotifyProvider } from "example-notify-redis-redis/provider";
 import {
   createClient,
   createInProcessStateAdapter,
@@ -11,122 +12,111 @@ import {
   createProcessors,
   withTransactionHooks,
 } from "queuert";
-import { createClient as createRedisClient } from "redis";
+import { type RedisClientType, createClient as createRedisClient } from "redis";
 
 import {
   diffMemory,
   jobTypes,
-  measureBaseline,
   measureMemory,
   printHeader,
-  printSummary,
+  runDoubleRunBenchmark,
 } from "./utils.js";
 
 printHeader("REDIS NOTIFY ADAPTER");
 
-const baseline = await measureBaseline();
-
-console.log("\nStarting Redis container...");
-const [beforeContainer, afterContainer, redisContainer] = await measureMemory(async () =>
-  new RedisContainer("redis:8").withExposedPorts(6379).start(),
-);
-console.log("\nAfter starting container (testcontainers overhead):");
-diffMemory(beforeContainer, afterContainer);
-
-const redisUrl = redisContainer.getConnectionUrl();
-
-const [beforeConnection, afterConnection, { redis, redisSubscription }] = await measureMemory(
-  async () => {
-    const redis = createRedisClient({ url: redisUrl });
-    const redisSubscription = createRedisClient({ url: redisUrl });
-    await redis.connect();
-    await redisSubscription.connect();
-    return { redis, redisSubscription };
-  },
-);
-console.log("\nAfter creating Redis connections (2 clients):");
-diffMemory(beforeConnection, afterConnection);
-
-const notifyProvider: RedisNotifyProvider = {
-  publish: async (channel, message) => {
-    await redis.publish(channel, message);
-  },
-  subscribe: async (channel, onMessage) => {
-    await redisSubscription.subscribe(channel, onMessage);
-    return async () => {
-      await redisSubscription.unsubscribe(channel);
-    };
-  },
-  eval: async (script, keys, args) => {
-    return redis.eval(script, { keys, arguments: args });
-  },
+type Infra = {
+  redis: RedisClientType;
+  redisSubscription: RedisClientType;
 };
 
-const stateAdapter = await createInProcessStateAdapter();
-const [beforeAdapter, afterAdapter, notifyAdapter] = await measureMemory(async () =>
-  createRedisNotifyAdapter({ notifyProvider }),
-);
-console.log("\nAfter creating RedisNotifyAdapter:");
-diffMemory(beforeAdapter, afterAdapter);
-
-const [beforeSetup, afterSetup, { client, stopWorker }] = await measureMemory(async () => {
-  const client = await createClient({
-    stateAdapter,
-    notifyAdapter,
-    jobTypes,
-  });
-
-  const worker = await createInProcessWorker({
-    client,
-    processors: createProcessors({
-      client,
-      jobTypes,
-      processors: {
-        "test-job": {
-          attemptHandler: async ({ complete }) => complete(async () => ({ processed: true })),
-        },
-      },
-    }),
-  });
-
-  const stopWorker = await worker.start();
-  return { client, stopWorker };
-});
-console.log("\nAfter creating client + worker:");
-diffMemory(beforeSetup, afterSetup);
-
-console.log("\nProcessing 100 jobs...");
-const [beforeProcessing, afterProcessing] = await measureMemory(async () => {
-  const promises = [];
-  for (let i = 0; i < 100; i++) {
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      stateAdapter.withTransaction(async (ctx) =>
-        client.startJobChain({
-          ...ctx,
-          transactionHooks,
-          typeName: "test-job",
-          input: { message: `Test message ${i}` },
-        }),
-      ),
+await runDoubleRunBenchmark<Infra>({
+  name: "notify-redis",
+  setupInfrastructure: async () => {
+    console.log("\nStarting Redis container...");
+    const [beforeContainer, afterContainer, redisContainer] = await measureMemory(async () =>
+      new RedisContainer("redis:8").withExposedPorts(6379).start(),
     );
-    promises.push(client.awaitJobChain(jobChain, { timeoutMs: 5000 }));
-  }
-  await Promise.all(promises);
+    console.log("\nAfter starting container (testcontainers overhead):");
+    diffMemory(beforeContainer, afterContainer);
+
+    const [beforeConnection, afterConnection, conns] = await measureMemory(async () => {
+      const redisClient = createRedisClient({
+        url: redisContainer.getConnectionUrl(),
+      }) as RedisClientType;
+      const redisSubscription = createRedisClient({
+        url: redisContainer.getConnectionUrl(),
+      }) as RedisClientType;
+      await redisClient.connect();
+      await redisSubscription.connect();
+      return { redisClient, redisSubscription };
+    });
+    console.log("\nAfter creating Redis connections (2 clients, node-redis overhead):");
+    diffMemory(beforeConnection, afterConnection);
+
+    return {
+      infra: {
+        redis: conns.redisClient,
+        redisSubscription: conns.redisSubscription,
+      },
+      teardown: async () => {
+        await conns.redisClient.quit();
+        await conns.redisSubscription.quit();
+        await redisContainer.stop();
+      },
+    };
+  },
+  runLifecycle: async ({ redis, redisSubscription }, { step, processStep }) => {
+    const stateAdapter = await step("After creating state adapter", async () =>
+      createInProcessStateAdapter(),
+    );
+
+    const notifyAdapter = await step("After creating notify adapter", async () =>
+      createRedisNotifyAdapter({
+        notifyProvider: createNodeRedisNotifyProvider({
+          client: redis,
+          subscribeClient: redisSubscription,
+        }),
+      }),
+    );
+
+    const setup = await step("After creating client + worker", async () => {
+      const client = await createClient({ stateAdapter, notifyAdapter, jobTypes });
+      const worker = await createInProcessWorker({
+        client,
+        processors: createProcessors({
+          client,
+          jobTypes,
+          processors: {
+            "test-job": {
+              attemptHandler: async ({ complete }) => complete(async () => ({ processed: true })),
+            },
+          },
+        }),
+      });
+      const stopWorker = await worker.start();
+      return { client, stopWorker };
+    });
+
+    await processStep("After processing 100 jobs", async () => {
+      const promises = [];
+      for (let i = 0; i < 100; i++) {
+        const jobChain = await withTransactionHooks(async (transactionHooks) =>
+          stateAdapter.withTransaction(async (ctx) =>
+            setup.client.startJobChain({
+              ...ctx,
+              transactionHooks,
+              typeName: "test-job",
+              input: { message: `Test message ${i}` },
+            }),
+          ),
+        );
+        promises.push(setup.client.awaitJobChain(jobChain, { timeoutMs: 5000 }));
+      }
+      await Promise.all(promises);
+    });
+
+    await setup.stopWorker();
+    await notifyAdapter.close();
+    await stateAdapter.close();
+  },
 });
-console.log("\nAfter processing 100 jobs:");
-diffMemory(beforeProcessing, afterProcessing);
-
-await stopWorker();
-await redis.quit();
-await redisSubscription.quit();
-await redisContainer.stop();
-
-const [, afterCleanup] = await measureMemory(async () => {});
-console.log("\nAfter cleanup (delta from baseline):");
-diffMemory(baseline, afterCleanup);
-
-printSummary([
-  ["Container + driver:", afterConnection.heapUsed - baseline.heapUsed],
-  ["Notify adapter:", afterAdapter.heapUsed - beforeAdapter.heapUsed],
-  ["Client + worker:", afterSetup.heapUsed - beforeSetup.heapUsed],
-]);

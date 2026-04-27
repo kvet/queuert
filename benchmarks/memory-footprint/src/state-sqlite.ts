@@ -16,92 +16,88 @@ import {
 import {
   diffMemory,
   jobTypes,
-  measureBaseline,
   measureMemory,
   printHeader,
-  printSummary,
+  runDoubleRunBenchmark,
 } from "./utils.js";
 
 printHeader("SQLITE STATE ADAPTER");
 
-const baseline = await measureBaseline();
+type Infra = {
+  db: Database.Database;
+  stateProvider: ReturnType<typeof createBetterSqlite3StateProvider>;
+};
 
-const [beforeDb, afterDb, db] = await measureMemory(async () => {
-  const db = new Database(":memory:");
-  db.pragma("auto_vacuum = INCREMENTAL");
-  db.pragma("foreign_keys = ON");
-  return db;
-});
-console.log("\nAfter creating better-sqlite3 database:");
-diffMemory(beforeDb, afterDb);
+await runDoubleRunBenchmark<Infra>({
+  name: "state-sqlite",
+  setupInfrastructure: async () => {
+    const [beforeDb, afterDb, db] = await measureMemory(async () => {
+      const db = new Database(":memory:");
+      db.pragma("auto_vacuum = INCREMENTAL");
+      db.pragma("foreign_keys = ON");
+      return db;
+    });
+    console.log("\nAfter creating better-sqlite3 database:");
+    diffMemory(beforeDb, afterDb);
 
-const stateProvider = createBetterSqlite3StateProvider({ db, lock: createAsyncRwLock() });
+    const stateProvider = createBetterSqlite3StateProvider({ db, lock: createAsyncRwLock() });
 
-const notifyAdapter = await createInProcessNotifyAdapter();
-const [beforeAdapter, afterAdapter, stateAdapter] = await measureMemory(async () => {
-  const stateAdapter = await createSqliteStateAdapter({ stateProvider });
-  await stateAdapter.migrateToLatest();
-  return stateAdapter;
-});
-console.log("\nAfter creating SqliteStateAdapter (with migrations):");
-diffMemory(beforeAdapter, afterAdapter);
-
-const [beforeSetup, afterSetup, { client, stopWorker }] = await measureMemory(async () => {
-  const client = await createClient({
-    stateAdapter,
-    notifyAdapter,
-    jobTypes,
-  });
-
-  const worker = await createInProcessWorker({
-    client,
-    processors: createProcessors({
-      client,
-      jobTypes,
-      processors: {
-        "test-job": {
-          attemptHandler: async ({ complete }) => complete(async () => ({ processed: true })),
-        },
+    return {
+      infra: { db, stateProvider },
+      teardown: async () => {
+        db.close();
       },
-    }),
-  });
-
-  const stopWorker = await worker.start();
-  return { client, stopWorker };
-});
-console.log("\nAfter creating client + worker:");
-diffMemory(beforeSetup, afterSetup);
-
-console.log("\nProcessing 100 jobs...");
-const [beforeProcessing, afterProcessing] = await measureMemory(async () => {
-  const promises = [];
-  for (let i = 0; i < 100; i++) {
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      stateProvider.withTransaction(async (ctx) =>
-        client.startJobChain({
-          ...ctx,
-          transactionHooks,
-          typeName: "test-job",
-          input: { message: `Test message ${i}` },
-        }),
-      ),
+    };
+  },
+  runLifecycle: async ({ stateProvider }, { step, processStep }) => {
+    const notifyAdapter = await step("After creating notify adapter", async () =>
+      createInProcessNotifyAdapter(),
     );
-    promises.push(client.awaitJobChain(jobChain, { timeoutMs: 5000 }));
-  }
-  await Promise.all(promises);
+
+    const stateAdapter = await step("After creating state adapter (with migrations)", async () => {
+      const adapter = await createSqliteStateAdapter({ stateProvider });
+      await adapter.migrateToLatest();
+      return adapter;
+    });
+
+    const setup = await step("After creating client + worker", async () => {
+      const client = await createClient({ stateAdapter, notifyAdapter, jobTypes });
+      const worker = await createInProcessWorker({
+        client,
+        processors: createProcessors({
+          client,
+          jobTypes,
+          processors: {
+            "test-job": {
+              attemptHandler: async ({ complete }) => complete(async () => ({ processed: true })),
+            },
+          },
+        }),
+      });
+      const stopWorker = await worker.start();
+      return { client, stopWorker };
+    });
+
+    await processStep("After processing 100 jobs", async () => {
+      const promises = [];
+      for (let i = 0; i < 100; i++) {
+        const jobChain = await withTransactionHooks(async (transactionHooks) =>
+          stateProvider.withTransaction(async (ctx) =>
+            setup.client.startJobChain({
+              ...ctx,
+              transactionHooks,
+              typeName: "test-job",
+              input: { message: `Test message ${i}` },
+            }),
+          ),
+        );
+        promises.push(setup.client.awaitJobChain(jobChain, { timeoutMs: 5000 }));
+      }
+      await Promise.all(promises);
+    });
+
+    await setup.stopWorker();
+    await stateAdapter.close();
+    await notifyAdapter.close();
+  },
 });
-console.log("\nAfter processing 100 jobs:");
-diffMemory(beforeProcessing, afterProcessing);
-
-await stopWorker();
-db.close();
-
-const [, afterCleanup] = await measureMemory(async () => {});
-console.log("\nAfter cleanup (delta from baseline):");
-diffMemory(baseline, afterCleanup);
-
-printSummary([
-  ["SQLite driver:", afterDb.heapUsed - beforeDb.heapUsed],
-  ["State adapter:", afterAdapter.heapUsed - beforeAdapter.heapUsed],
-  ["Client + worker:", afterSetup.heapUsed - beforeSetup.heapUsed],
-]);

@@ -108,4 +108,6 @@ console.log(`Welcome email sent at: ${result.output.sentAt}`);
 
 // 7. Cleanup
 await stopWorker();
+await notifyAdapter.close();
+await stateAdapter.close();
 db.close();

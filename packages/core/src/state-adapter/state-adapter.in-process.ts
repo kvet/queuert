@@ -49,6 +49,10 @@ class SortedSet<T> {
     }
   }
 
+  clear(): void {
+    this.items.length = 0;
+  }
+
   *iterate(direction: "asc" | "desc"): IterableIterator<T> {
     if (direction === "asc") {
       for (let i = 0; i < this.items.length; i++) yield this.items[i];
@@ -481,21 +485,42 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
     };
   };
 
+  let closed = false;
+  const assertOpen = (): void => {
+    if (closed) throw new Error("StateAdapter is closed");
+  };
+
   const withWriteLock = async <T>(txCtx: InProcessContext | undefined, fn: () => T): Promise<T> => {
     if (txCtx?.inTransaction) return fn();
     using _h = await lock.acquireWrite();
+    assertOpen();
     return fn();
   };
 
   const withReadLock = async <T>(txCtx: InProcessContext | undefined, fn: () => T): Promise<T> => {
     if (txCtx?.inTransaction) return fn();
     using _h = await lock.acquireRead();
+    assertOpen();
     return fn();
+  };
+
+  const clearAll = (): void => {
+    jobs.clear();
+    pendingByType.clear();
+    runningByType.clear();
+    jobsByChain.clear();
+    lastByChain.clear();
+    dedupByKey.clear();
+    jobBlockers.clear();
+    blockedByChain.clear();
+    rootJobsByCreatedAt.clear();
+    seqByJobId.clear();
   };
 
   const adapter: InProcessStateAdapter = {
     withTransaction: async (fn) => {
       using _h = await lock.acquireWrite();
+      assertOpen();
       const journal: JournalEntry[] = [];
       const txCtx: InProcessContext = { inTransaction: true, journal };
       try {
@@ -1024,6 +1049,13 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
         }
         return paginateByCreatedAt(matched, page, orderDirection);
       }),
+
+    close: async () => {
+      using _h = await lock.acquireWrite();
+      if (closed) return;
+      closed = true;
+      clearAll();
+    },
   };
 
   return adapter;

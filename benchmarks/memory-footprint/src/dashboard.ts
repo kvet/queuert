@@ -12,88 +12,73 @@ import {
   withTransactionHooks,
 } from "queuert";
 
-import {
-  diffMemory,
-  jobTypes,
-  measureBaseline,
-  measureMemory,
-  printHeader,
-  printSummary,
-} from "./utils.js";
+import { jobTypes, printHeader, runDoubleRunBenchmark } from "./utils.js";
 
 printHeader("DASHBOARD");
 
-const baseline = await measureBaseline();
-
-const stateAdapter = await createInProcessStateAdapter();
-const notifyAdapter = await createInProcessNotifyAdapter();
-
-const client = await createClient({
-  stateAdapter,
-  notifyAdapter,
-  jobTypes,
-});
-
-const [beforeDashboard, afterDashboard, dashboard] = await measureMemory(async () =>
-  createDashboard({ client }),
-);
-console.log("\nAfter creating dashboard:");
-diffMemory(beforeDashboard, afterDashboard);
-
-const [beforeSetup, afterSetup, stopWorker] = await measureMemory(async () => {
-  const worker = await createInProcessWorker({
-    client,
-    processors: createProcessors({
-      client,
-      jobTypes,
-      processors: {
-        "test-job": {
-          attemptHandler: async ({ complete }) => complete(async () => ({ processed: true })),
-        },
-      },
-    }),
-  });
-
-  return worker.start();
-});
-console.log("\nAfter creating worker:");
-diffMemory(beforeSetup, afterSetup);
-
-console.log("\nProcessing 100 jobs...");
-const [beforeProcessing, afterProcessing] = await measureMemory(async () => {
-  const promises = [];
-  for (let i = 0; i < 100; i++) {
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
-      stateAdapter.withTransaction(async (ctx) =>
-        client.startJobChain({
-          ...ctx,
-          transactionHooks,
-          typeName: "test-job",
-          input: { message: `Test message ${i}` },
-        }),
-      ),
+await runDoubleRunBenchmark<Record<string, never>>({
+  name: "dashboard",
+  setupInfrastructure: async () => ({
+    infra: {},
+    teardown: async () => {},
+  }),
+  runLifecycle: async (_infra, { step, processStep }) => {
+    const stateAdapter = await step("After creating state adapter", async () =>
+      createInProcessStateAdapter(),
     );
-    promises.push(client.awaitJobChain(jobChain, { timeoutMs: 5000 }));
-  }
-  await Promise.all(promises);
+
+    const notifyAdapter = await step("After creating notify adapter", async () =>
+      createInProcessNotifyAdapter(),
+    );
+
+    const client = await step("After creating client", async () =>
+      createClient({ stateAdapter, notifyAdapter, jobTypes }),
+    );
+
+    const dashboard = await step("After creating dashboard", async () =>
+      createDashboard({ client }),
+    );
+
+    const stopWorker = await step("After creating worker", async () => {
+      const worker = await createInProcessWorker({
+        client,
+        processors: createProcessors({
+          client,
+          jobTypes,
+          processors: {
+            "test-job": {
+              attemptHandler: async ({ complete }) => complete(async () => ({ processed: true })),
+            },
+          },
+        }),
+      });
+      return worker.start();
+    });
+
+    await processStep("After processing 100 jobs", async () => {
+      const promises = [];
+      for (let i = 0; i < 100; i++) {
+        const jobChain = await withTransactionHooks(async (transactionHooks) =>
+          stateAdapter.withTransaction(async (ctx) =>
+            client.startJobChain({
+              ...ctx,
+              transactionHooks,
+              typeName: "test-job",
+              input: { message: `Test message ${i}` },
+            }),
+          ),
+        );
+        promises.push(client.awaitJobChain(jobChain, { timeoutMs: 5000 }));
+      }
+      await Promise.all(promises);
+    });
+
+    await step("After first dashboard API request", async () => {
+      await dashboard.fetch(new Request("http://localhost/api/chains"));
+    });
+
+    await stopWorker();
+    await notifyAdapter.close();
+    await stateAdapter.close();
+  },
 });
-console.log("\nAfter processing 100 jobs:");
-diffMemory(beforeProcessing, afterProcessing);
-
-// Exercise dashboard fetch to load assets
-const [beforeFetch, afterFetch] = await measureMemory(async () => {
-  await dashboard.fetch(new Request("http://localhost/api/chains"));
-});
-console.log("\nAfter first dashboard API request:");
-diffMemory(beforeFetch, afterFetch);
-
-await stopWorker();
-
-const [, afterCleanup] = await measureMemory(async () => {});
-console.log("\nAfter cleanup (delta from baseline):");
-diffMemory(baseline, afterCleanup);
-
-printSummary([
-  ["Dashboard:", afterDashboard.heapUsed - beforeDashboard.heapUsed],
-  ["Worker:", afterSetup.heapUsed - beforeSetup.heapUsed],
-]);

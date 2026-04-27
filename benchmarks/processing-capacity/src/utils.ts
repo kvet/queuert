@@ -46,7 +46,7 @@ export const runBenchmark = async ({
   concurrency,
 }: {
   stateAdapter: BenchmarkStateAdapter;
-  notifyAdapter: NotifyAdapter;
+  notifyAdapter?: NotifyAdapter;
   withTransaction: <T>(fn: (txCtx: Record<string, unknown>) => Promise<T>) => Promise<T>;
   concurrency: number;
 }): Promise<void> => {
@@ -56,6 +56,12 @@ export const runBenchmark = async ({
     jobTypes,
   });
 
+  let completed = 0;
+  let lastProgressMilestone = 0;
+  const allDone = Promise.withResolvers<void>();
+  let processBegin = 0;
+  const PROGRESS_STEP = Math.max(Math.floor(JOB_COUNT / 10), 1);
+
   const worker = await createInProcessWorker({
     client,
     concurrency,
@@ -64,7 +70,20 @@ export const runBenchmark = async ({
       jobTypes,
       processors: {
         "test-job": {
-          attemptHandler: async ({ complete }) => complete(async () => ({ done: true as const })),
+          attemptHandler: async ({ complete }) =>
+            complete(async () => {
+              completed++;
+              if (completed - lastProgressMilestone >= PROGRESS_STEP || completed === JOB_COUNT) {
+                lastProgressMilestone = completed;
+                const elapsed = performance.now() - processBegin;
+                const rate = completed / (elapsed / 1_000);
+                console.log(
+                  `  ${formatNumber(completed).padStart(7)} processed — ${formatDuration(elapsed)} — ${formatNumber(Math.round(rate))} jobs/s`,
+                );
+              }
+              if (completed === JOB_COUNT) allDone.resolve();
+              return { done: true as const };
+            }),
         },
       },
     }),
@@ -74,12 +93,9 @@ export const runBenchmark = async ({
 
   console.log(`\nPhase 1: Starting ${formatNumber(JOB_COUNT)} job chains...`);
   const startBegin = performance.now();
-  const jobChains: { id: string }[] = [];
-
-  const PROGRESS_STEP = Math.max(Math.floor(JOB_COUNT / 10), 1);
 
   for (let i = 0; i < JOB_COUNT; i++) {
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
         client.startJobChain({
           ...txCtx,
@@ -89,7 +105,6 @@ export const runBenchmark = async ({
         }),
       ),
     );
-    jobChains.push(jobChain);
 
     if ((i + 1) % PROGRESS_STEP === 0) {
       const elapsed = performance.now() - startBegin;
@@ -107,26 +122,10 @@ export const runBenchmark = async ({
   );
 
   console.log(`\nPhase 2: Processing ${formatNumber(JOB_COUNT)} jobs...`);
-  const processBegin = performance.now();
+  processBegin = performance.now();
 
   const stopWorker = await worker.start();
-
-  const awaitPromises = jobChains.map(async (jobChain) =>
-    client.awaitJobChain(jobChain, { timeoutMs: 600_000 }),
-  );
-  let completed = 0;
-
-  for (const promise of awaitPromises) {
-    await promise;
-    completed++;
-    if (completed % PROGRESS_STEP === 0) {
-      const elapsed = performance.now() - processBegin;
-      const rate = completed / (elapsed / 1_000);
-      console.log(
-        `  ${formatNumber(completed).padStart(7)} processed — ${formatDuration(elapsed)} — ${formatNumber(Math.round(rate))} jobs/s`,
-      );
-    }
-  }
+  await allDone.promise;
 
   const processDuration = performance.now() - processBegin;
   const processRate = JOB_COUNT / (processDuration / 1_000);

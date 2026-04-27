@@ -65,6 +65,65 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
     expect(completedChain.output).toEqual({ result: "done" });
   });
 
+  it("releases the timeout timer when chain completes before timeoutMs", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: {
+        entry: true;
+        input: null;
+        output: { result: string };
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+      ),
+    );
+
+    const countTimeouts = (): number =>
+      process.getActiveResourcesInfo().filter((r) => r === "Timeout").length;
+
+    const before = countTimeouts();
+    // Small pollIntervalMs so the noop notify spec also discovers completion quickly.
+    const awaitPromise = client.awaitJobChain(jobChain, {
+      timeoutMs: 60_000,
+      pollIntervalMs: 50,
+    });
+
+    // Complete the chain after the awaiter has installed its timer.
+    await new Promise((resolve) => setImmediate(resolve));
+    await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.completeJobChain({
+          ...txCtx,
+          transactionHooks,
+          ...jobChain,
+          complete: async ({ job, complete }) => complete(job, async () => ({ result: "done" })),
+        }),
+      ),
+    );
+
+    await awaitPromise;
+    // Without the fix, the inner timeout (timeoutMs: 60_000) leaves a Timeout
+    // pending for 60 seconds even after the chain resolves.
+    expect(countTimeouts()).toBeLessThanOrEqual(before);
+  });
+
   it("throws timeout error when chain does not complete in time with abort signal", async ({
     stateAdapter,
     notifyAdapter,

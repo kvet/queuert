@@ -158,4 +158,6 @@ console.log("Chain completed:", result.output);
 
 // 5. Cleanup
 await stopWorker();
+await notifyAdapter.close();
+await stateAdapter.close();
 console.log("\n=== Done ===");

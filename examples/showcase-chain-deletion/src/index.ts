@@ -264,4 +264,6 @@ for (const chain of cascadeDeleted) {
 assert.equal(cascadeDeleted.length, 4);
 
 await stopWorker();
+await notifyAdapter.close();
+await stateAdapter.close();
 await sql.end();

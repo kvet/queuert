@@ -94,5 +94,7 @@ console.log(`Report ready! ID: ${result.output.reportId}, Rows: ${result.output.
 
 // 10. Cleanup
 await stopWorker();
+await notifyAdapter.close();
+await stateAdapter.close();
 await sql.end();
 console.log("Done!");

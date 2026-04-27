@@ -218,4 +218,6 @@ assert.equal(finalProduct.stock, 3);
 assert.ok(finalOrder.payment_id.startsWith("pay_"));
 
 await stopWorker();
+await notifyAdapter.close();
+await stateAdapter.close();
 await sql.end();

@@ -61,7 +61,8 @@ process.on("message", (msg) => {
   if (msg === "stop") {
     void (async () => {
       await stop();
-      await notifyProvider.close();
+      await notifyAdapter.close();
+      await stateAdapter.close();
       await pool.end();
       process.send!({ type: "stopped" });
       process.exit(0);

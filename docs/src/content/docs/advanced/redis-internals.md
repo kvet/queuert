@@ -15,88 +15,89 @@ This document describes the internal implementation of `@queuert/redis`. Redis i
 
 Three channels carry notifications between processes (configurable prefix, default `queuert`):
 
-| Channel           | Published When      | Payload Format        | Purpose                       |
-| ----------------- | ------------------- | --------------------- | ----------------------------- |
-| `{prefix}:sched`  | Jobs become pending | `{hintId}:{typeName}` | Wake idle workers             |
-| `{prefix}:chainc` | Chain completes     | `{chainId}`           | Wake clients awaiting results |
-| `{prefix}:owls`   | Lease reaped        | `{jobId}`             | Notify ownership loss         |
+| Channel           | Published When      | Payload Format | Purpose                       |
+| ----------------- | ------------------- | -------------- | ----------------------------- |
+| `{prefix}:sched`  | Jobs become pending | `{typeName}`   | Wake idle workers             |
+| `{prefix}:chainc` | Chain completes     | `{chainId}`    | Wake clients awaiting results |
+| `{prefix}:owls`   | Lease reaped        | `{jobId}`      | Notify ownership loss         |
 
 Channels use Redis Pub/Sub — messages are fire-and-forget with no persistence. If no subscriber is listening when a message is published, it is lost. This is acceptable because workers fall back to polling when notifications are missed.
 
 ### Hint Keys
 
-Hint counters are stored as Redis strings with a 60-second TTL:
+Hint counters are stored as Redis strings keyed by typeName, with a 60-second TTL:
 
 ```
-{prefix}:hint:{hintId}
+{prefix}:hint:{typeName}
 ```
 
 - **Type**: String (integer value)
-- **TTL**: 60 seconds (auto-expires)
-- **Value**: Number of jobs available for workers to claim
+- **TTL**: 60 seconds (auto-expires; refreshed on each `provideWakeHint` call)
+- **Value**: Cumulative wakeup budget contributed by all publishers
 
-Example: `queuert:hint:550e8400-e29b-41d4-a716-446655440000` → `"5"`
+Example: `queuert:hint:process-order` → `"5"`
 
-Each `notifyJobScheduled` call generates a unique hint ID (UUID), sets the counter to the job count, and publishes the hint ID with the type name. Workers receiving the notification atomically decrement the counter — only workers that successfully decrement proceed to query the database.
+Hints are managed via the `provideWakeHint`/`consumeWakeHint` pair on `NotifyAdapter`. The publisher calls `provideWakeHint(typeName, count)` (which adds `count` to the budget for this typeName), then `notifyJobScheduled(typeName)`. Workers receiving the notification call `consumeWakeHint(typeName)` and only query the database if the call returns `true`. Concurrent publishers contributing to the same typeName compose additively — two `provideWakeHint(t, 3)` calls produce a budget of 6.
 
 ## Lua Scripts
 
 Two Lua scripts ensure atomicity for hint operations. Redis executes Lua scripts atomically — no other command can interleave.
 
-### SET and PUBLISH
+### Provide Wake Hint
 
-Atomically creates a hint counter and publishes the notification:
+Adds `count` to the hint counter, refreshing the 60-second TTL:
 
 ```lua
-redis.call('SET', KEYS[1], ARGV[1], 'EX', 60)
-redis.call('PUBLISH', ARGV[2], ARGV[3])
+local current = tonumber(redis.call('GET', KEYS[1])) or 0
+redis.call('SET', KEYS[1], current + tonumber(ARGV[1]), 'EX', 60)
 ```
 
-- `KEYS[1]`: Hint key (e.g., `queuert:hint:{hintId}`)
-- `ARGV[1]`: Job count
-- `ARGV[2]`: Channel (e.g., `queuert:sched`)
-- `ARGV[3]`: Message payload (`{hintId}:{typeName}`)
+- `KEYS[1]`: Hint key (e.g., `queuert:hint:process-order`)
+- `ARGV[1]`: Count to add
 
-Atomicity prevents a race where a worker receives the notification before the hint counter exists.
+The atomic GET-then-SET ensures concurrent `provideWakeHint` calls compose additively without losing increments. The TTL refresh keeps long-lived budgets alive across notification batches.
 
-The channel is passed via `ARGV` rather than `KEYS` so the script declares only one key. On Redis Cluster, all `KEYS[]` declared by an `EVAL` must hash to the same slot; the server rejects the script pre-execution otherwise (`CROSSSLOT`). `PUBLISH` is slot-agnostic — it broadcasts across the cluster — so the channel name does not need to participate in slot routing, and declaring it as a key would only cause spurious cross-slot rejections.
+### Consume Wake Hint
 
-### Decrement If Positive
-
-Atomically decrements the hint counter, returning whether the worker should query:
+Atomically claims one slot of the budget, returning whether the worker should wake:
 
 ```lua
-local result = redis.call('DECR', KEYS[1])
-if result >= 0 then
-    return 1
+local current = redis.call('GET', KEYS[1])
+if not current then
+  return 1
 end
-redis.call('SET', KEYS[1], '0')
+local n = tonumber(current)
+if n and n > 0 then
+  redis.call('DECR', KEYS[1])
+  return 1
+end
 return 0
 ```
 
-- Returns `1`: Counter was positive — worker should query the database
-- Returns `0`: Counter was already zero or negative — worker should skip
+- Returns `1`: caller should wake (slot claimed, **or** hint key absent — graceful degradation)
+- Returns `0`: budget exhausted by other consumers
 
-If `DECR` goes below zero (more workers than jobs), the script resets to `0` to prevent unbounded negative drift.
+The `not current` branch is the graceful-degradation case: if the hint key never existed or the TTL expired, listeners wake unconditionally rather than silently miss notifications. This trades a one-shot thundering herd for never losing a wakeup.
 
 ## Thundering Herd Prevention
 
-The hint mechanism ensures that when N jobs are scheduled, approximately N workers query the database — not all idle workers:
+The hint mechanism ensures that when N jobs are scheduled for a typeName, approximately N workers query the database — not all idle workers:
 
 ```
-1. notifyJobScheduled("process-order", 3)
-2. SET queuert:hint:{uuid} "3" EX 60
-3. PUBLISH queuert:sched "{uuid}:process-order"
+1. provideWakeHint("process-order", 3) → SET queuert:hint:process-order "3" EX 60
+2. notifyJobScheduled("process-order")  → PUBLISH queuert:sched "process-order"
 
 Workers A, B, C, D, E receive the notification:
-  A: DECR hint → 2 (≥0) → queries database ✓
-  B: DECR hint → 1 (≥0) → queries database ✓
-  C: DECR hint → 0 (≥0) → queries database ✓
-  D: DECR hint → -1 (<0) → SET 0, skips ✗
-  E: DECR hint → -1 (<0) → SET 0, skips ✗
+  A: consumeWakeHint("process-order") → DECR hint to 2 → returns 1 → queries database ✓
+  B: consumeWakeHint("process-order") → DECR hint to 1 → returns 1 → queries database ✓
+  C: consumeWakeHint("process-order") → DECR hint to 0 → returns 1 → queries database ✓
+  D: consumeWakeHint("process-order") → GET hint = "0" → returns 0 → skips ✗
+  E: consumeWakeHint("process-order") → GET hint = "0" → returns 0 → skips ✗
 ```
 
-Without hints, all 5 workers would query the database for 3 available jobs — wasted I/O. With hints, only 3 query. The hint counter has a 60-second TTL as a safety net — if a worker crashes before decrementing, the key expires naturally.
+Concurrent publishers compose: if two publishers each schedule 3 jobs of `process-order`, both call `provideWakeHint(t, 3)`, the budget becomes 6, and 6 workers wake across the two notifications.
+
+Without hints, all 5 workers would query the database for 3 available jobs — wasted I/O. With hints, only 3 query. The hint counter has a 60-second TTL refreshed on each `provideWakeHint` call — if a budget goes unused, it eventually expires and the next notification triggers graceful-degradation wakeup.
 
 ## Connection Model
 
@@ -119,11 +120,11 @@ Channel: queuert:sched
       └── Worker C callback (filters for "process-order")
 ```
 
-The shared listener tracks state transitions: `idle` → `starting` → `running` → `stopping`:
+All mutations (subscribe / unsubscribe / dispose) serialize on a single async write lock so concurrent callers execute one at a time. The state is just `running` or `not running` — no intermediate `starting`/`stopping` bookkeeping.
 
-- **Lazy start**: The Redis subscription is created when the first listener registers
-- **Shared**: Additional listeners attach callbacks without creating new subscriptions
-- **Lazy stop**: The subscription is torn down when the last listener unsubscribes
+- **Lazy start**: The Redis subscription is created when the first listener registers.
+- **Shared**: Additional listeners attach callbacks without creating new subscriptions.
+- **Lazy stop**: The subscription is torn down when the last listener unsubscribes.
 
 This avoids creating a separate Redis subscription for each worker or job type.
 

@@ -816,7 +816,7 @@ SET status = 'running',
     attempt = attempt + 1
 WHERE id = (
   SELECT id
-  FROM {{table_prefix}}job
+  FROM {{table_prefix}}job INDEXED BY {{table_prefix}}job_acquisition_idx
   WHERE type_name IN (SELECT value FROM json_each(?))
     AND status = 'pending'
     AND scheduled_at <= datetime('now', 'subsec')
@@ -826,7 +826,7 @@ WHERE id = (
 RETURNING *,
   EXISTS(
     SELECT 1
-    FROM {{table_prefix}}job
+    FROM {{table_prefix}}job INDEXED BY {{table_prefix}}job_acquisition_idx
     WHERE type_name IN (SELECT value FROM json_each(?))
       AND status = 'pending'
       AND scheduled_at <= datetime('now', 'subsec')
@@ -843,7 +843,7 @@ RETURNING *,
     /* sql */ `
 SELECT
   MAX(0, CAST((julianday(job.scheduled_at) - julianday(datetime('now', 'subsec'))) * 86400000 AS INTEGER)) AS available_in_ms
-FROM {{table_prefix}}job as job
+FROM {{table_prefix}}job as job INDEXED BY {{table_prefix}}job_acquisition_idx
 WHERE job.type_name IN (SELECT value FROM json_each(?))
   AND job.status = 'pending'
 ORDER BY job.scheduled_at ASC
@@ -864,7 +864,7 @@ SET leased_by = NULL,
   status = 'pending'
 WHERE id = (
   SELECT id
-  FROM {{table_prefix}}job
+  FROM {{table_prefix}}job INDEXED BY {{table_prefix}}job_expired_lease_idx
   WHERE leased_until IS NOT NULL
     AND leased_until <= datetime('now', 'subsec')
     AND status = 'running'

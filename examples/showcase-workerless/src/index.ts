@@ -230,4 +230,6 @@ assert.ok("completed" in result3.output);
 assert.ok(result3.output.result.includes("confirm"));
 
 await stopWorker();
+await notifyAdapter.close();
+await stateAdapter.close();
 await sql.end();

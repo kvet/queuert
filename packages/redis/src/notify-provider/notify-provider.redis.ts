@@ -26,4 +26,10 @@ export type RedisNotifyProvider = {
    * Internally uses the command client.
    */
   eval: (script: string, keys: string[], args: string[]) => Promise<unknown>;
+
+  /**
+   * Releases provider-owned resources. Optional — pass-through providers
+   * (user-owned client) can omit it. When defined, must be idempotent.
+   */
+  close?: () => Promise<void>;
 };
