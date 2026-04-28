@@ -4,30 +4,21 @@ import { createPgPoolNotifyProvider } from "example-notify-postgres-pg/provider"
 import { Pool } from "pg";
 import { createInProcessStateAdapter } from "queuert";
 
-import { parseConcurrency, printHeader, runBenchmark } from "./utils.js";
-
-printHeader("PROCESSING CAPACITY — PG NOTIFY (pg)");
-
-const concurrency = parseConcurrency();
-
-const stateAdapter = await createInProcessStateAdapter();
+import { runBenchmark } from "./utils.js";
 
 console.log("\nStarting PostgreSQL container...");
 const pgContainer = await new PostgreSqlContainer("postgres:18").withExposedPorts(5432).start();
 
 const pool = new Pool({ connectionString: pgContainer.getConnectionUri(), max: 20 });
-const notifyProvider = createPgPoolNotifyProvider({ pool });
-const notifyAdapter = await createPgNotifyAdapter({ notifyProvider });
 console.log("PostgreSQL (notify) ready.");
 
 await runBenchmark({
-  stateAdapter,
-  notifyAdapter,
-  withTransaction: stateAdapter.withTransaction,
-  concurrency,
+  title: "PROCESSING CAPACITY — PG NOTIFY (pg)",
+  stateAdapter: await createInProcessStateAdapter(),
+  notifyAdapter: await createPgNotifyAdapter({
+    notifyProvider: createPgPoolNotifyProvider({ pool }),
+  }),
 });
 
-await notifyAdapter.close();
-await stateAdapter.close();
 await pool.end();
 await pgContainer.stop();

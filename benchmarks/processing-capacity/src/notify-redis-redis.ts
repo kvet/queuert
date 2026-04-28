@@ -4,13 +4,7 @@ import { createNodeRedisNotifyProvider } from "example-notify-redis-redis/provid
 import { createInProcessStateAdapter } from "queuert";
 import { type RedisClientType, createClient as createRedisClient } from "redis";
 
-import { parseConcurrency, printHeader, runBenchmark } from "./utils.js";
-
-printHeader("PROCESSING CAPACITY — REDIS NOTIFY (redis)");
-
-const concurrency = parseConcurrency();
-
-const stateAdapter = await createInProcessStateAdapter();
+import { runBenchmark } from "./utils.js";
 
 console.log("\nStarting Redis container...");
 const redisContainer = await new RedisContainer("redis:8").withExposedPorts(6379).start();
@@ -21,19 +15,17 @@ const redisSubscription = createRedisClient({ url: redisUrl }) as RedisClientTyp
 await redis.connect();
 await redisSubscription.connect();
 
-const notifyProvider = createNodeRedisNotifyProvider({
-  client: redis,
-  subscribeClient: redisSubscription,
-});
-
-const notifyAdapter = await createRedisNotifyAdapter({ notifyProvider });
 console.log("Redis ready.");
 
 await runBenchmark({
-  stateAdapter,
-  notifyAdapter,
-  withTransaction: stateAdapter.withTransaction,
-  concurrency,
+  title: "PROCESSING CAPACITY — REDIS NOTIFY (redis)",
+  stateAdapter: await createInProcessStateAdapter(),
+  notifyAdapter: await createRedisNotifyAdapter({
+    notifyProvider: createNodeRedisNotifyProvider({
+      client: redis,
+      subscribeClient: redisSubscription,
+    }),
+  }),
 });
 
 await redis.quit();

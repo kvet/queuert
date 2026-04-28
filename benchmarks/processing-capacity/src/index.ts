@@ -49,7 +49,20 @@ const runBenchmarkInChildProcess = async (name: string, extraArgs: string[]): Pr
   });
 
 const main = async (): Promise<void> => {
-  const passthrough = args.filter((a) => a.startsWith("--concurrency="));
+  const passthrough = args.filter(
+    (a) => a.startsWith("--concurrency=") || a.startsWith("--start-mode="),
+  );
+
+  const processModeFlag = args.find((a) => a.startsWith("--process-mode="));
+  const allProcessModes: ("atomic" | "staged")[] = ["atomic", "staged"];
+  const processModes: ("atomic" | "staged")[] = (() => {
+    if (!processModeFlag) return allProcessModes;
+    const value = processModeFlag.split("=")[1];
+    if (value !== "atomic" && value !== "staged") {
+      throw new Error(`Invalid --process-mode=${value}, expected "atomic" or "staged"`);
+    }
+    return [value];
+  })();
 
   const knownFlags = Object.keys(benchmarkModules);
   const selected = knownFlags.filter((name) => args.includes(`--${name}`));
@@ -57,9 +70,13 @@ const main = async (): Promise<void> => {
   const toRun = args.includes("--all") || selected.length === 0 ? knownFlags : selected;
 
   for (const name of toRun) {
-    console.log(`\n>>> Running benchmark: ${name} (in child process)\n`);
-    await runBenchmarkInChildProcess(name, passthrough);
-    console.log("");
+    for (const processMode of processModes) {
+      console.log(
+        `\n>>> Running benchmark: ${name} (process-mode=${processMode}, in child process)\n`,
+      );
+      await runBenchmarkInChildProcess(name, [...passthrough, `--process-mode=${processMode}`]);
+      console.log("");
+    }
   }
 };
 

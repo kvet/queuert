@@ -1,13 +1,11 @@
 # Triage
 
-- [?,REF] Adopt dispose and asyncDispose
 - [?,REF] Research some analytic storage for jobs (in a separate readonly storage)
 - [?,REF] Create some otel 'plugin' that reports information from state or andlytics storage
-- [?,REF] Get 'for update' semantics that belong to postgres. Switch to something like 'lock: true'
-- [?,REF] Staged and atomic modes benchmark; verify that numbers look good
 
 # Short term
 
+- [?,REF] Get 'for update' semantics that belong to postgres. Switch to something like 'lock: true'
 - [TASK] Name internal types properly. No underscore. Add to code-style guide.
 - [REF] Standardize chain-ID parameter names across `Client`. Today the same concept is spelled three different ways depending on method: `id` on `getJobChain`/`deleteJobChain`/`triggerJob`/`completeJobChain`/`awaitJobChain`, `jobChainId` on `listJobChainJobs`/`listBlockedJobs`, and mixed `id`/`chainId` inside `listJobChains({ filter })` / `listJobs({ filter: { jobChainId } })`. Users have to memorize which key each method wants and autocomplete doesn't help disambiguate chain vs job ids. Pick one spelling (likely `chainId` at the filter level where a job id also appears, `id` where the chain is the sole subject) and migrate all methods in one breaking pass.
 
@@ -22,6 +20,7 @@
 - [REVIEW] Review `addJobBlocker` design — see `design/add-job-blocker.md`
 - [TASK,COMPLEX] Better dashboard UI
 - [REF] Add input and output filtering
+- [TASK] Benchmark query performance (`listJobChains`, `listJobs`, `listJobChainJobs`, `listBlockedJobs`, `getJobChain`) across state adapters with seeded datasets — separate tool from `processing-capacity`, dimensions: dataset size, filter selectivity, page size
 - [EPIC] Docs website enhancements
   - [TASK] Add interactive examples / live demos
   - [TASK] Custom branding and styling

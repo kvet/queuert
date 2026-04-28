@@ -2,11 +2,7 @@ import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import Database from "better-sqlite3";
 import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
 
-import { parseConcurrency, printHeader, runBenchmark } from "./utils.js";
-
-printHeader("PROCESSING CAPACITY — SQLITE (better-sqlite3)");
-
-const concurrency = parseConcurrency();
+import { runBenchmark } from "./utils.js";
 
 const db = new Database(":memory:");
 db.pragma("journal_mode = WAL");
@@ -19,9 +15,8 @@ await stateAdapter.migrateToLatest();
 console.log("SQLite ready (in-memory).");
 
 await runBenchmark({
+  title: "PROCESSING CAPACITY — SQLITE (better-sqlite3)",
   stateAdapter,
-  withTransaction: stateProvider.withTransaction,
-  concurrency,
 });
 
 db.close();

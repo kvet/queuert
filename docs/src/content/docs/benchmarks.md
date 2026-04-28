@@ -5,30 +5,32 @@ description: Processing capacity, memory footprint, and type complexity benchmar
 
 ## Processing Capacity
 
-End-to-end job throughput measured in two phases: starting job chains (chains/s) and processing them to completion (jobs/s). Each adapter runs in a separate child process for isolation (Node.js v22, 10,000 jobs, concurrency 10, Apple M1 Pro). State and notify are measured along separate axes — when one is varied, the other is held at the in-process default. PostgreSQL, Redis, and NATS run as Dockerized containers on macOS (Docker Desktop), so per-RTT latency includes the VM bridge — numbers reflect that environment rather than a host-native or production deployment.
+Job throughput measured in two phases: starting job chains (chains/s) and processing them to completion (jobs/s). Each adapter is exercised across four orthogonal modes — single vs. batched start (`startJobChain` one at a time vs. `startJobChains` in batches of 100), and atomic vs. staged processing (see [Job Processing Modes](./guides/processing-modes/)). To avoid doubling the wall-clock, the four numbers are folded into two runs per adapter: atomic-process pairs with batched-start, staged-process pairs with single-start. The pairing is layout-only — start mode and process mode are independent in production. Each run uses 5,000 chains × concurrency 10, in its own child process for isolation (Node.js v22, Apple M1 Pro). State and notify are measured along separate axes — when one is varied, the other is held at the in-process default. PostgreSQL, Redis, and NATS run as Dockerized containers on macOS (Docker Desktop), so per-RTT latency includes the VM bridge — numbers reflect that environment rather than a host-native or production deployment.
 
-The two phases run **sequentially** (start all chains, then process all jobs), so the end-to-end column is `(start × process) / (start + process)` — the harmonic mean of the two rates, ≈ half of either when they're similar. It's the right number for "first chain in to last chain out, no overlap." A real Queuert deployment accepts new chains and processes existing ones concurrently, so its steady-state throughput is bounded by `min(start, process)`, not the end-to-end column.
+The Start columns measure two ends of the realistic range: **single** is a tight `await client.startJobChain(...)` loop, dominated by per-call RTT (HTTP-handler-shaped traffic); **batched** is `client.startJobChains({ items: [...100] })`, amortizing transaction and notify overhead across the batch (bulk-enqueue / migration / replay traffic). Real workloads sit between the two depending on call shape and concurrency.
+
+The Process columns measure how fast a single worker drains the queue once it's full. Atomic mode wraps each attempt in one transaction; staged mode adds an empty `prepare({ mode: "staged" })` round-trip before `complete`, isolating the pure cost of the second transaction without confounding with handler work. Steady-state deployment throughput is bounded by `min(start, process)`.
 
 ### State adapter (no notify)
 
-| State adapter            | Start (chains/s) | Process (jobs/s) | End-to-end (jobs/s) |
-| ------------------------ | ---------------: | ---------------: | ------------------: |
-| In-process               |          ~88,564 |          ~17,782 |             ~14,809 |
-| SQLite (better-sqlite3)  |          ~26,338 |          ~12,324 |              ~8,396 |
-| SQLite (node:sqlite)     |          ~25,473 |          ~10,193 |              ~7,280 |
-| PostgreSQL (postgres-js) |             ~569 |             ~579 |                ~287 |
-| PostgreSQL (pg)          |             ~584 |             ~627 |                ~302 |
+| State adapter            | Start single (chains/s) | Start batched (chains/s) | Process atomic (jobs/s) | Process staged (jobs/s) |
+| ------------------------ | ----------------------: | -----------------------: | ----------------------: | ----------------------: |
+| In-process               |                 ~76,783 |                 ~234,622 |                 ~20,145 |                 ~13,997 |
+| SQLite (better-sqlite3)  |                 ~26,059 |                  ~58,494 |                 ~11,237 |                  ~8,547 |
+| SQLite (node:sqlite)     |                 ~24,000 |                  ~62,286 |                 ~10,300 |                  ~7,262 |
+| PostgreSQL (postgres-js) |                    ~598 |                  ~19,591 |                    ~843 |                    ~634 |
+| PostgreSQL (pg)          |                    ~423 |                  ~13,970 |                    ~602 |                    ~534 |
 
 ### Notify adapter (in-process state)
 
-| Notify adapter           | Start (chains/s) | Process (jobs/s) | End-to-end (jobs/s) |
-| ------------------------ | ---------------: | ---------------: | ------------------: |
-| In-process               |          ~75,407 |          ~16,117 |             ~13,279 |
-| Redis (redis)            |           ~2,318 |           ~9,670 |              ~1,870 |
-| Redis (ioredis)          |           ~1,815 |          ~10,585 |              ~1,550 |
-| PostgreSQL (pg)          |           ~2,571 |           ~8,043 |              ~1,948 |
-| PostgreSQL (postgres-js) |           ~1,577 |           ~8,423 |              ~1,329 |
-| NATS                     |           ~1,760 |           ~9,194 |              ~1,478 |
+| Notify adapter           | Start single (chains/s) | Start batched (chains/s) | Process atomic (jobs/s) | Process staged (jobs/s) |
+| ------------------------ | ----------------------: | -----------------------: | ----------------------: | ----------------------: |
+| In-process               |                 ~66,528 |                 ~217,790 |                 ~19,369 |                 ~13,084 |
+| Redis (redis)            |                  ~1,445 |                  ~53,122 |                  ~9,139 |                  ~5,426 |
+| Redis (ioredis)          |                  ~1,131 |                  ~39,647 |                  ~8,372 |                  ~5,696 |
+| PostgreSQL (pg)          |                  ~1,790 |                  ~78,561 |                  ~5,776 |                  ~4,934 |
+| PostgreSQL (postgres-js) |                  ~1,877 |                  ~80,676 |                  ~6,640 |                  ~3,858 |
+| NATS                     |                  ~2,187 |                  ~81,373 |                  ~9,066 |                  ~6,271 |
 
 See [processing-capacity](https://github.com/kvet/queuert/tree/main/benchmarks/processing-capacity) for the full benchmark tool.
 

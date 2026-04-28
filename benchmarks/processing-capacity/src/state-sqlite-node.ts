@@ -3,11 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import { createNodeSqliteStateProvider } from "example-state-sqlite-node/provider";
 
-import { parseConcurrency, printHeader, runBenchmark } from "./utils.js";
-
-printHeader("PROCESSING CAPACITY — SQLITE (node:sqlite)");
-
-const concurrency = parseConcurrency();
+import { runBenchmark } from "./utils.js";
 
 const db = new DatabaseSync(":memory:");
 db.exec("PRAGMA journal_mode = WAL");
@@ -20,9 +16,8 @@ await stateAdapter.migrateToLatest();
 console.log("SQLite ready (in-memory).");
 
 await runBenchmark({
+  title: "PROCESSING CAPACITY — SQLITE (node:sqlite)",
   stateAdapter,
-  withTransaction: stateProvider.withTransaction,
-  concurrency,
 });
 
 db.close();

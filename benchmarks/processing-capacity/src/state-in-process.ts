@@ -1,15 +1,8 @@
 import { createInProcessStateAdapter } from "queuert";
 
-import { parseConcurrency, printHeader, runBenchmark } from "./utils.js";
-
-printHeader("PROCESSING CAPACITY — IN-PROCESS");
-
-const concurrency = parseConcurrency();
-
-const stateAdapter = await createInProcessStateAdapter();
+import { runBenchmark } from "./utils.js";
 
 await runBenchmark({
-  stateAdapter,
-  withTransaction: stateAdapter.withTransaction,
-  concurrency,
+  title: "PROCESSING CAPACITY — IN-PROCESS",
+  stateAdapter: await createInProcessStateAdapter(),
 });

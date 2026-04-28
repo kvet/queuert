@@ -3,11 +3,7 @@ import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import { createPgPoolStateProvider } from "example-state-postgres-pg/provider";
 import { Pool } from "pg";
 
-import { parseConcurrency, printHeader, runBenchmark } from "./utils.js";
-
-printHeader("PROCESSING CAPACITY — POSTGRESQL (pg)");
-
-const concurrency = parseConcurrency();
+import { runBenchmark } from "./utils.js";
 
 console.log("\nStarting PostgreSQL container...");
 const pgContainer = await new PostgreSqlContainer("postgres:18").withExposedPorts(5432).start();
@@ -20,9 +16,8 @@ await stateAdapter.migrateToLatest();
 console.log("PostgreSQL ready.");
 
 await runBenchmark({
+  title: "PROCESSING CAPACITY — POSTGRESQL (pg)",
   stateAdapter,
-  withTransaction: stateProvider.withTransaction,
-  concurrency,
 });
 
 await pool.end();
