@@ -197,7 +197,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         name: "withTransaction",
         status: "committed",
         children: [
-          expect.objectContaining({ name: "getJobForUpdate" }), // TODO: why do we need it?
+          expect.objectContaining({ name: "getJobForUpdate" }),
           expect.objectContaining({
             name: "withSavepoint",
             status: "committed",
@@ -308,7 +308,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         name: "withTransaction",
         status: "committed",
         children: [
-          expect.objectContaining({ name: "getJobForUpdate" }), // TODO: why do we need it?
+          expect.objectContaining({ name: "getJobForUpdate" }),
           expect.objectContaining({
             name: "withSavepoint",
             status: "committed",
@@ -411,7 +411,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         name: "withTransaction",
         status: "committed",
         children: [
-          expect.objectContaining({ name: "getJobForUpdate" }), // TODO: why do we need it?
+          expect.objectContaining({ name: "getJobForUpdate" }),
           expect.objectContaining({
             name: "withSavepoint",
             status: "committed",
