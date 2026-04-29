@@ -6,7 +6,6 @@
 
 # Short term
 
-- [TASK] Name internal types properly. No underscore. Add to code-style guide.
 - [REF] Standardize chain-ID parameter names across `Client`. Today the same concept is spelled three different ways depending on method: `id` on `getJobChain`/`deleteJobChain`/`triggerJob`/`completeJobChain`/`awaitJobChain`, `jobChainId` on `listJobChainJobs`/`listBlockedJobs`, and mixed `id`/`chainId` inside `listJobChains({ filter })` / `listJobs({ filter: { jobChainId } })`. Users have to memorize which key each method wants and autocomplete doesn't help disambiguate chain vs job ids. Pick one spelling (likely `chainId` at the filter level where a job id also appears, `id` where the chain is the sole subject) and migrate all methods in one breaking pass. See `design/chain-id-naming.md`
 - [TASK] Get rid of 'for update' semantics that belong to postgres. Switch to something like 'lock: true'
 - [TASK] Update lease in one operation (currently two: `getJobForUpdate` + `renewJobLease` in `commitLease`/`runInGuardedTransaction`). Collapse into a single guarded `UPDATE ... WHERE id=$1 AND leased_by=$2 AND status<>'completed' RETURNING *` and map zero rows to the existing `JobNotFoundError` / `JobTakenByAnotherWorkerError` / `JobAlreadyCompletedError` cases.

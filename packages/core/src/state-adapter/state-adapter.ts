@@ -266,7 +266,7 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
 };
 
 export type GetStateAdapterTxContext<TStateAdapter> =
-  TStateAdapter extends StateAdapter<infer TTxContext, infer _TJobId> ? TTxContext : never;
+  TStateAdapter extends StateAdapter<infer TTxContext, any> ? TTxContext : never;
 
 export type GetStateAdapterJobId<TStateAdapter> =
-  TStateAdapter extends StateAdapter<infer _TTxContext, infer TJobId> ? TJobId : never;
+  TStateAdapter extends StateAdapter<any, infer TJobId> ? TJobId : never;

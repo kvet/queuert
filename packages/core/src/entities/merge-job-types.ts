@@ -33,14 +33,12 @@ export type MergeDefinitions<T extends readonly JobTypes<any>[]> = T extends rea
     : never;
 
 /** Distributive keyof that works on unions — returns all keys, not just common ones. @internal */
-type _AllKeys<T> = T extends any ? keyof T & string : never;
+type AllKeys<T> = T extends any ? keyof T & string : never;
 
 /** Identity when no duplicates; error string when duplicates exist. @internal */
-type AssertNoDuplicates<Existing, New, Success> = [_AllKeys<Existing> & _AllKeys<New>] extends [
-  never,
-]
+type AssertNoDuplicates<Existing, New, Success> = [AllKeys<Existing> & AllKeys<New>] extends [never]
   ? Success
-  : `Duplicate job type: ${_AllKeys<Existing> & _AllKeys<New>}`;
+  : `Duplicate job type: ${AllKeys<Existing> & AllKeys<New>}`;
 
 /** Recursively validate each slice against accumulated definitions (4-at-a-time). @internal */
 export type ValidatedSlices<

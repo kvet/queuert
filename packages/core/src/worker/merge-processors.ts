@@ -25,14 +25,14 @@ export type MergedProcessorDefinitions<T extends readonly Processors[]> = T exte
     : never;
 
 /** Distributive `keyof T & string` — returns processor keys across a union of slices. @internal */
-type _AllProcessorKeys<T> = T extends any ? keyof T & string : never;
+type AllProcessorKeys<T> = T extends any ? keyof T & string : never;
 
 /** Identity when no duplicates; error string when duplicates exist. @internal */
 type AssertNoDuplicateProcessors<Existing, New, Success> = [
-  _AllProcessorKeys<Existing> & _AllProcessorKeys<New>,
+  AllProcessorKeys<Existing> & AllProcessorKeys<New>,
 ] extends [never]
   ? Success
-  : `Duplicate job type: ${_AllProcessorKeys<Existing> & _AllProcessorKeys<New>}`;
+  : `Duplicate job type: ${AllProcessorKeys<Existing> & AllProcessorKeys<New>}`;
 
 /**
  * Recursively validate each slice's processor keys against accumulated keys
