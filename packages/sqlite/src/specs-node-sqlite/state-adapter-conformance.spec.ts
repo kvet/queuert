@@ -108,7 +108,7 @@ it("infers custom ID types through the full stack", async () => {
 
     const jobChain = await withTransactionHooks(async (transactionHooks) => {
       using _h = await lock.acquireWrite();
-      db.exec("BEGIN IMMEDIATE");
+      db.exec("BEGIN");
       try {
         const result = await client.startJobChain({
           db,

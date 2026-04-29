@@ -201,7 +201,7 @@ Observability events emitted inside database transactions are buffered and only 
 
 - **Span starts**: Need trace context immediately for DB writes that store trace IDs
 - **Events outside transactions**: `jobAttemptStarted`, `jobAttemptDuration`, `jobAttemptLeaseRenewed`, attempt span ends (these occur outside the guarded transaction)
-- **Read-only observations**: `refetchJobForUpdate` events observe state without making write claims
+- **Read-only observations**: `refetchJobLocked` events observe state without making write claims
 
 ### Self-Cleaning
 

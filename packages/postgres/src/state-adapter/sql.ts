@@ -321,8 +321,8 @@ export type PgSqlDefinitions = {
       >;
     }
   >;
-  readonly getJobForUpdateSql: TypedSql<readonly [Id], PgDbJobCols>;
-  readonly getLatestChainJobForUpdateSql: TypedSql<readonly [Id], PgDbJobCols>;
+  readonly getJobByIdLockedSql: TypedSql<readonly [Id], PgDbJobCols>;
+  readonly getJobChainByIdLockedSql: TypedSql<readonly [Id], PgRowToJsonCols>;
 };
 
 export const createPgSqlDefinitions = (id: DataType<RuntimeType, string>): PgSqlDefinitions => {
@@ -973,7 +973,7 @@ SELECT
     },
   );
 
-  const getJobForUpdateSql = sql(
+  const getJobByIdLockedSql = sql(
     /* sql */ `
 SELECT *
 FROM {{schema}}.{{table_prefix}}job
@@ -981,25 +981,32 @@ WHERE id = $1
 FOR UPDATE
 `,
     {
-      id: "getJobForUpdate",
+      id: "getJobByIdLocked",
       params: [id],
       columns: { ...dbJobColumns },
     },
   );
 
-  const getLatestChainJobForUpdateSql = sql(
+  const getJobChainByIdLockedSql = sql(
     /* sql */ `
-SELECT *
-FROM {{schema}}.{{table_prefix}}job
-WHERE chain_id = $1
-ORDER BY chain_index DESC
-LIMIT 1
-FOR UPDATE
+SELECT
+  row_to_json(j)  AS root_job,
+  row_to_json(lc) AS last_chain_job
+FROM {{schema}}.{{table_prefix}}job AS j
+LEFT JOIN LATERAL (
+  SELECT *
+  FROM {{schema}}.{{table_prefix}}job
+  WHERE chain_id = j.id
+  ORDER BY chain_index DESC
+  LIMIT 1
+  FOR UPDATE
+) AS lc ON TRUE
+WHERE j.id = $1
 `,
     {
-      id: "getLatestChainJobForUpdate",
+      id: "getJobChainByIdLocked",
       params: [id],
-      columns: { ...dbJobColumns },
+      columns: rowToJsonJobColumns,
     },
   );
 
@@ -1024,7 +1031,7 @@ FOR UPDATE
     reapExpiredJobLeaseSql,
     getConnectedChainIdsSql,
     deleteJobChainsSql,
-    getJobForUpdateSql,
-    getLatestChainJobForUpdateSql,
+    getJobByIdLockedSql,
+    getJobChainByIdLockedSql,
   } as const;
 };

@@ -6,7 +6,7 @@ import {
 import { type Helpers } from "../setup-helpers.js";
 import { type BaseTxContext, type StateJob } from "../state-adapter/state-adapter.js";
 
-export const refetchJobForUpdate = async (
+export const refetchJobLocked = async (
   helpers: Helpers,
   {
     txCtx,
@@ -18,9 +18,10 @@ export const refetchJobForUpdate = async (
     workerId: string;
   },
 ): Promise<StateJob> => {
-  const fetchedJob = await helpers.stateAdapter.getJobForUpdate({
+  const fetchedJob = await helpers.stateAdapter.getJobById({
     txCtx,
     jobId: job.id,
+    lock: "exclusive",
   });
 
   if (!fetchedJob) {

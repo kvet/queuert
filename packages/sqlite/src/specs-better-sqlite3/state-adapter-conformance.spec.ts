@@ -100,7 +100,7 @@ typeInferenceIt("infers custom ID types through the full stack", async ({ db }) 
 
   const outerDb = db;
   const withTransaction = async <T>(fn: (db: typeof outerDb) => Promise<T>): Promise<T> => {
-    db.exec("BEGIN IMMEDIATE");
+    db.exec("BEGIN");
     try {
       const result = await fn(outerDb);
       db.exec("COMMIT");

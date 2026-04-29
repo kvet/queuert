@@ -43,11 +43,6 @@ export const wrapStateAdapterWithLogging = <
     completeJob: wrap("completeJob", stateAdapter.completeJob),
     reapExpiredJobLease: wrap("reapExpiredJobLease", stateAdapter.reapExpiredJobLease),
     deleteJobChains: wrap("deleteJobChains", stateAdapter.deleteJobChains),
-    getJobForUpdate: wrap("getJobForUpdate", stateAdapter.getJobForUpdate),
-    getLatestChainJobForUpdate: wrap(
-      "getLatestChainJobForUpdate",
-      stateAdapter.getLatestChainJobForUpdate,
-    ),
     listJobChains: wrap("listJobChains", stateAdapter.listJobChains),
     listJobs: wrap("listJobs", stateAdapter.listJobs),
     listJobChainJobs: wrap("listJobChainJobs", stateAdapter.listJobChainJobs),

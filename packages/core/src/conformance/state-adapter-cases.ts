@@ -10,8 +10,6 @@ import { deleteJobChainsGroup } from "./state-adapter-cases/delete-job-chains.js
 import { getJobBlockersGroup } from "./state-adapter-cases/get-job-blockers.js";
 import { getJobByIdGroup } from "./state-adapter-cases/get-job-by-id.js";
 import { getJobChainByIdGroup } from "./state-adapter-cases/get-job-chain-by-id.js";
-import { getJobForUpdateGroup } from "./state-adapter-cases/get-job-for-update.js";
-import { getLatestChainJobForUpdateGroup } from "./state-adapter-cases/get-latest-chain-job-for-update.js";
 import { getNextJobAvailableInMsGroup } from "./state-adapter-cases/get-next-job-available-in-ms.js";
 import { listBlockedJobsGroup } from "./state-adapter-cases/list-blocked-jobs.js";
 import { listJobChainJobsGroup } from "./state-adapter-cases/list-job-chain-jobs.js";
@@ -46,8 +44,6 @@ export const stateAdapterConformanceGroups: ConformanceGroup<StateAdapterConform
   reapExpiredJobLeaseGroup,
   deleteJobChainsGroup,
   getJobByIdGroup,
-  getJobForUpdateGroup,
-  getLatestChainJobForUpdateGroup,
   listJobChainsGroup,
   listJobsGroup,
   listJobChainJobsGroup,

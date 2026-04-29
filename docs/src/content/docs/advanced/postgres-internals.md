@@ -176,7 +176,7 @@ Operations that modify a specific job (e.g., completing a job, renewing a lease)
 SELECT * FROM job WHERE id = $1 FOR UPDATE
 ```
 
-This blocks until the row is available, ensuring the operation sees the latest state. Used in `getJobForUpdate` and `getLatestChainJobForUpdate`.
+This blocks until the row is available, ensuring the operation sees the latest state. Used by `getJobById` and `getJobChainById` when called with `lock: "exclusive"` from inside a transaction.
 
 ### Deadlock Prevention in Deletion
 

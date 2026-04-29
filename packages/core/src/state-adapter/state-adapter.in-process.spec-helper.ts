@@ -89,8 +89,6 @@ export const extendWithStateInProcess = <T>(
           completeJob: wrap(stateAdapter.completeJob),
           reapExpiredJobLease: wrap(stateAdapter.reapExpiredJobLease),
           deleteJobChains: wrap(stateAdapter.deleteJobChains),
-          getJobForUpdate: wrap(stateAdapter.getJobForUpdate),
-          getLatestChainJobForUpdate: wrap(stateAdapter.getLatestChainJobForUpdate),
           listJobChains: wrap(stateAdapter.listJobChains),
           listJobs: wrap(stateAdapter.listJobs),
           listJobChainJobs: wrap(stateAdapter.listJobChainJobs),

@@ -91,17 +91,19 @@ The SQLite adapter creates the same set of indexes as PostgreSQL, using partial 
 
 SQLite's concurrency model differs fundamentally from PostgreSQL. There is no row-level locking — writes are serialized at the database level.
 
-### BEGIN IMMEDIATE
+### BEGIN (DEFERRED) + operation-level locking
 
-The adapter uses `BEGIN IMMEDIATE` for all write transactions:
+The bundled providers start transactions with plain `BEGIN`:
 
 ```sql
-BEGIN IMMEDIATE;
+BEGIN;
 -- operations
 COMMIT;
 ```
 
-`BEGIN IMMEDIATE` acquires a `RESERVED` lock at transaction start, preventing other writers from starting. This differs from the default `BEGIN DEFERRED` which only acquires a lock on the first write, avoiding `SQLITE_BUSY` errors mid-transaction.
+Under `BEGIN DEFERRED`, no lock is taken until the first write. Operations that need write-intent on a row before reading it (worker lease refetches, chain extension in `triggerJobs`) pass `lock: "exclusive"` to `getJobById` / `getJobChainById`. The SQLite adapter implements this with a no-op `UPDATE ... SET id = id RETURNING *`, which promotes the transaction to `RESERVED` and blocks other writers until commit. This mirrors the role `FOR UPDATE` plays in the Postgres adapter.
+
+`BEGIN IMMEDIATE` is _not_ used by the bundled providers — it would force every transaction to take `RESERVED` upfront, including read-only ones. With WAL + a connection pool, that defeats the point of allowing concurrent readers.
 
 ### AsyncRwLock
 

@@ -72,7 +72,7 @@ const stopWorker = await worker.start();
 // 5. Register a new user and queue welcome email atomically
 const jobChain = await withTransactionHooks(async (transactionHooks) => {
   using _h = await lock.acquireWrite();
-  db.exec("BEGIN IMMEDIATE");
+  db.exec("BEGIN");
   try {
     const insertStmt = db.prepare("INSERT INTO users (name, email) VALUES (?, ?) RETURNING *");
     const user = insertStmt.get("Alice", "alice@example.com") as {

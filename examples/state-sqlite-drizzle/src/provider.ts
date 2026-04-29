@@ -31,7 +31,7 @@ export const createDrizzleSqliteStateProvider = ({
     withTransaction: async (fn) => {
       using _h = await lock.acquireWrite();
       try {
-        db.exec("BEGIN IMMEDIATE");
+        db.exec("BEGIN");
         const result = await fn({ db });
         db.exec("COMMIT");
         return result;

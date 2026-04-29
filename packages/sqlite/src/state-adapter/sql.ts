@@ -307,6 +307,8 @@ export type SqliteSqlDefinitions<TRuntime extends RuntimeType = RuntimeType> = {
   >;
   readonly getJobBlockersSql: TypedSql<readonly [Id<TRuntime>], SqliteDbJobChainRowCols<TRuntime>>;
   readonly getJobByIdSql: TypedSql<readonly [Id<TRuntime>], SqliteDbJobCols<TRuntime>>;
+  readonly getJobByIdLockedSql: TypedSql<readonly [Id<TRuntime>], SqliteDbJobCols<TRuntime>>;
+  readonly lockLatestChainJobSql: TypedSql<readonly [Id<TRuntime>], Record<string, never>>;
   readonly rescheduleJobSql: TypedSql<
     readonly [
       DataType<"string?", string | null>,
@@ -360,11 +362,6 @@ export type SqliteSqlDefinitions<TRuntime extends RuntimeType = RuntimeType> = {
   readonly deleteJobChainsSql: TypedSql<
     readonly [DataType<"string", string>],
     Record<string, never>
-  >;
-  readonly getJobForUpdateSql: TypedSql<readonly [Id<TRuntime>], SqliteDbJobCols<TRuntime>>;
-  readonly getLatestChainJobForUpdateSql: TypedSql<
-    readonly [Id<TRuntime>],
-    SqliteDbJobCols<TRuntime>
   >;
 };
 
@@ -759,6 +756,46 @@ WHERE id = ?
     },
   );
 
+  // SQLite has no row-level FOR UPDATE; an UPDATE that touches the row promotes
+  // the deferred transaction to RESERVED, blocking other writers (including
+  // concurrent locked reads) until commit. `SET id = id` is an explicit no-op
+  // write that still takes the lock. RETURNING * gives us the row in the same
+  // shape as `getJobByIdSql`, so callers can use this in place of read+lock.
+  const getJobByIdLockedSql = sql(
+    /* sql */ `
+UPDATE {{table_prefix}}job
+SET id = id
+WHERE id = ?
+RETURNING *
+`,
+    {
+      id: "getJobByIdLocked",
+      params: [id],
+      columns: { ...dbJobColumns },
+    },
+  );
+
+  // Promote the transaction to RESERVED on the latest job in a chain. Used
+  // before `getJobChainByIdSql` when callers want write-intent on the row
+  // they're about to extend.
+  const lockLatestChainJobSql = sql(
+    /* sql */ `
+UPDATE {{table_prefix}}job
+SET id = id
+WHERE id = (
+  SELECT id FROM {{table_prefix}}job
+  WHERE chain_id = ?
+  ORDER BY chain_index DESC
+  LIMIT 1
+)
+`,
+    {
+      id: "lockLatestChainJob",
+      params: [id],
+      columns: {} as Record<string, never>,
+    },
+  );
+
   const rescheduleJobSql = sql(
     /* sql */ `
 UPDATE {{table_prefix}}job
@@ -991,36 +1028,6 @@ WHERE chain_id IN (SELECT value FROM json_each(?))
     },
   );
 
-  const getJobForUpdateSql = sql(
-    /* sql */ `
-SELECT *
-FROM {{table_prefix}}job
-WHERE id = ?
-`,
-    {
-      id: "getJobForUpdate",
-      params: [id],
-      columns: { ...dbJobColumns },
-      readOnly: true,
-    },
-  );
-
-  const getLatestChainJobForUpdateSql = sql(
-    /* sql */ `
-SELECT *
-FROM {{table_prefix}}job
-WHERE chain_id = ?
-ORDER BY chain_index DESC
-LIMIT 1
-`,
-    {
-      id: "getLatestChainJobForUpdate",
-      params: [id],
-      columns: { ...dbJobColumns },
-      readOnly: true,
-    },
-  );
-
   return {
     dbJobColumns,
     dbJobChainRowColumns,
@@ -1042,6 +1049,8 @@ LIMIT 1
     getJobChainByIdSql,
     getJobBlockersSql,
     getJobByIdSql,
+    getJobByIdLockedSql,
+    lockLatestChainJobSql,
     rescheduleJobSql,
     triggerJobsSql,
     getJobStatusesByIdsSql,
@@ -1054,7 +1063,5 @@ LIMIT 1
     deleteBlockersByChainIdsSql,
     getJobChainsByChainIdsSql,
     deleteJobChainsSql,
-    getJobForUpdateSql,
-    getLatestChainJobForUpdateSql,
   } as const;
 };

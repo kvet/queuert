@@ -154,7 +154,7 @@ unblockJobsByChainIds(params: { txCtx?; blockedByChainIds })
 reapExpiredJobLeases(params: …) → …  // see Open Questions: group reap
 ```
 
-Removed: `acquireJob`, `getJobBlockers`, `renewJobLease`, `getJobForUpdate`, `completeJob`, `rescheduleJob`, `unblockJobs`, `reapExpiredJobLease`. `createJobs` and `addJobsBlockers` are already array-shaped.
+Removed: `acquireJob`, `getJobBlockers`, `renewJobLease`, `getJobById`, `completeJob`, `rescheduleJob`, `unblockJobs`, `reapExpiredJobLease`. `createJobs` and `addJobsBlockers` are already array-shaped.
 
 PG: `... = ANY($1)` rewrites + `LIMIT N`. SQLite: `IN (?, ...)`. In-process: trivial loops.
 

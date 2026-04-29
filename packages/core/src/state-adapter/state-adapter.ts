@@ -64,14 +64,35 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
    */
   withSavepoint: <T>(txCtx: TTxContext, fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
 
-  /** Gets a job chain by its chain ID. Returns [rootJob, lastJob] or undefined. */
+  /**
+   * Gets a job chain by its chain ID. Returns [rootJob, lastJob] or undefined.
+   *
+   * Pass `lock: "exclusive"` from inside a transaction to acquire a write-intent
+   * lock on the latest job in the chain — i.e. the row callers typically extend
+   * (rootJob when the chain has no continuation, otherwise the last
+   * continuation). The rootJob is not locked when a continuation exists, since
+   * `chainTypeName` is immutable and no caller mutates the rootJob via this
+   * path. Backends that support row-level locking (Postgres, MySQL/MariaDB)
+   * block concurrent locked reads on the same row until the transaction ends.
+   */
   getJobChainById: (params: {
     txCtx?: TTxContext;
     chainId: TJobId;
+    lock?: "exclusive";
   }) => Promise<[StateJob, StateJob | undefined] | undefined>;
 
-  /** Gets a job by its ID. */
-  getJobById: (params: { txCtx?: TTxContext; jobId: TJobId }) => Promise<StateJob | undefined>;
+  /**
+   * Gets a job by its ID.
+   *
+   * Pass `lock: "exclusive"` from inside a transaction to acquire a write-intent
+   * lock on the row; backends that support row-level locking (Postgres,
+   * MySQL/MariaDB) will block concurrent writers until the transaction ends.
+   */
+  getJobById: (params: {
+    txCtx?: TTxContext;
+    jobId: TJobId;
+    lock?: "exclusive";
+  }) => Promise<StateJob | undefined>;
 
   /** Creates jobs. Returns results in the same order as input. */
   createJobs: (params: {
@@ -128,7 +149,17 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     typeNames: string[];
   }) => Promise<number | null>;
 
-  /** Acquires a pending job for processing. Returns the job and whether more jobs are waiting. */
+  /**
+   * Acquires a pending job for processing. Returns the job and whether more
+   * jobs are waiting.
+   *
+   * Implicit-lock contract: must atomically select a pending row and flip its
+   * status to `running` (typically a single `FOR UPDATE SKIP LOCKED` + `UPDATE`
+   * on Postgres/MySQL). Two parallel callers must never receive the same job,
+   * and a row already locked by another caller must be *skipped* rather than
+   * waited on — otherwise concurrent workers serialize on contended rows
+   * instead of fanning out across the queue.
+   */
   acquireJob: (params: {
     txCtx?: TTxContext;
     typeNames: string[];
@@ -158,7 +189,14 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     workerId: string | null;
   }) => Promise<StateJob>;
 
-  /** Removes an expired lease and resets the job to pending. */
+  /**
+   * Removes an expired lease and resets the job to pending.
+   *
+   * Implicit-lock contract: same shape as `acquireJob` — atomic select-and-update
+   * on a single row, skipping rows already locked by another caller rather than
+   * waiting on them, so parallel reapers don't bottleneck on the same expired
+   * row.
+   */
   reapExpiredJobLease: (params: {
     txCtx?: TTxContext;
     typeNames: string[];
@@ -183,15 +221,6 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     deleted: [StateJob, StateJob | undefined][];
     blockerRefs: BlockerReference[];
   }>;
-
-  /** Gets a job by ID with a FOR UPDATE lock. */
-  getJobForUpdate: (params: { txCtx?: TTxContext; jobId: TJobId }) => Promise<StateJob | undefined>;
-
-  /** Gets the latest job in a chain with a FOR UPDATE lock. */
-  getLatestChainJobForUpdate: (params: {
-    txCtx?: TTxContext;
-    chainId: TJobId;
-  }) => Promise<StateJob | undefined>;
 
   /** Lists chains with pagination and filtering. */
   listJobChains: (params: {

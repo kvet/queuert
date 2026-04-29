@@ -198,24 +198,26 @@ export const createPgStateAdapter = async <
         }
       }),
 
-    getJobChainById: async ({ txCtx, chainId }) => {
+    getJobChainById: async ({ txCtx, chainId, lock }) => {
       const [jobChain] = await executeTypedSql({
         txCtx,
-        sql: defs.getJobChainByIdSql,
+        sql: lock === "exclusive" ? defs.getJobChainByIdLockedSql : defs.getJobChainByIdSql,
         params: [chainId],
       });
 
       return jobChain
         ? [
             mapDbJobToStateJob(jobChain.root_job),
-            jobChain.last_chain_job ? mapDbJobToStateJob(jobChain.last_chain_job) : undefined,
+            jobChain.last_chain_job && jobChain.last_chain_job.id !== jobChain.root_job.id
+              ? mapDbJobToStateJob(jobChain.last_chain_job)
+              : undefined,
           ]
         : undefined;
     },
-    getJobById: async ({ txCtx, jobId }) => {
+    getJobById: async ({ txCtx, jobId, lock }) => {
       const [job] = await executeTypedSql({
         txCtx,
-        sql: defs.getJobByIdSql,
+        sql: lock === "exclusive" ? defs.getJobByIdLockedSql : defs.getJobByIdSql,
         params: [jobId],
       });
 
@@ -401,23 +403,6 @@ export const createPgStateAdapter = async <
         })),
       };
     },
-    getJobForUpdate: async ({ txCtx, jobId }) => {
-      const [job] = await executeTypedSql({
-        txCtx,
-        sql: defs.getJobForUpdateSql,
-        params: [jobId],
-      });
-      return job ? mapDbJobToStateJob(job) : undefined;
-    },
-    getLatestChainJobForUpdate: async ({ txCtx, chainId }) => {
-      const [job] = await executeTypedSql({
-        txCtx,
-        sql: defs.getLatestChainJobForUpdateSql,
-        params: [chainId],
-      });
-      return job ? mapDbJobToStateJob(job) : undefined;
-    },
-
     listJobChains: async ({ txCtx, filter, orderDirection, page }) => {
       const cursor = page.cursor ? decodeCreatedAtCursor(page.cursor) : null;
       const conditions: string[] = ["root_job.chain_index = 0"];

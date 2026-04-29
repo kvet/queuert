@@ -31,7 +31,7 @@ export const createNodeSqliteStateProvider = ({
   return {
     withTransaction: async (fn) => {
       using _h = await lock.acquireWrite();
-      db.exec("BEGIN IMMEDIATE");
+      db.exec("BEGIN");
       try {
         const result = await fn({ db });
         db.exec("COMMIT");

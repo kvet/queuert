@@ -1,4 +1,4 @@
-import { randomUUID, type UUID } from "node:crypto";
+import { type UUID, randomUUID } from "node:crypto";
 
 import {
   type DataType,
@@ -278,7 +278,14 @@ export const createSqliteStateAdapter = async <
         }
       }),
 
-    getJobChainById: async ({ txCtx, chainId }) => {
+    getJobChainById: async ({ txCtx, chainId, lock }) => {
+      if (lock === "exclusive" && txCtx) {
+        await executeTypedSql({
+          txCtx,
+          sql: defs.lockLatestChainJobSql,
+          params: [chainId],
+        });
+      }
       const [row] = await executeTypedSql({
         txCtx,
         sql: defs.getJobChainByIdSql,
@@ -296,10 +303,10 @@ export const createSqliteStateAdapter = async <
           : undefined,
       ];
     },
-    getJobById: async ({ txCtx, jobId }) => {
+    getJobById: async ({ txCtx, jobId, lock }) => {
       const [job] = await executeTypedSql({
         txCtx,
-        sql: defs.getJobByIdSql,
+        sql: lock === "exclusive" && txCtx ? defs.getJobByIdLockedSql : defs.getJobByIdSql,
         params: [jobId],
       });
 
@@ -634,23 +641,6 @@ export const createSqliteStateAdapter = async <
       });
       return { deleted, blockerRefs: [] };
     },
-    getJobForUpdate: async ({ txCtx, jobId }) => {
-      const [job] = await executeTypedSql({
-        txCtx,
-        sql: defs.getJobForUpdateSql,
-        params: [jobId],
-      });
-      return job ? mapDbJobToStateJob(job) : undefined;
-    },
-    getLatestChainJobForUpdate: async ({ txCtx, chainId }) => {
-      const [job] = await executeTypedSql({
-        txCtx,
-        sql: defs.getLatestChainJobForUpdateSql,
-        params: [chainId],
-      });
-      return job ? mapDbJobToStateJob(job) : undefined;
-    },
-
     listJobChains: async ({ txCtx, filter, orderDirection, page }) => {
       const cursor = page.cursor ? decodeCreatedAtCursor(page.cursor) : null;
       const conditions: string[] = ["j.chain_index = 0"];

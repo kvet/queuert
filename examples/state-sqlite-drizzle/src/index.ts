@@ -90,7 +90,7 @@ const stopWorker = await worker.start();
 // 8. Register a new user and queue welcome email atomically
 const jobChain = await withTransactionHooks(async (transactionHooks) => {
   using _h = await lock.acquireWrite();
-  sqlite.exec("BEGIN IMMEDIATE");
+  sqlite.exec("BEGIN");
   try {
     // Use Drizzle to insert the user
     const [user] = db

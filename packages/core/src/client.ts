@@ -665,16 +665,20 @@ export const createClient = async <
     ): Promise<TResult> => {
       const { id, typeName, complete: completeCallback, transactionHooks, ...rest } = options;
       const txCtx = requireTxCtx(rest);
-      const currentJob = await helpers.stateAdapter.getLatestChainJobForUpdate({
+      const jobChainPair = await helpers.stateAdapter.getJobChainById({
         txCtx,
         chainId: id,
+        lock: "exclusive",
       });
 
-      if (!currentJob) {
+      if (!jobChainPair) {
         throw new JobChainNotFoundError(`Job chain with id ${id} not found`, {
           chainId: id as string,
         });
       }
+
+      const [rootJob, lastJob] = jobChainPair;
+      const currentJob = lastJob ?? rootJob;
 
       if (currentJob.chainTypeName !== typeName) {
         throw new JobTypeMismatchError(

@@ -934,11 +934,6 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
         return { deleted, blockerRefs: [] };
       }),
 
-    getJobForUpdate: async ({ txCtx, jobId }) => withReadLock(txCtx, () => jobs.get(jobId)),
-
-    getLatestChainJobForUpdate: async ({ txCtx, chainId }) =>
-      withReadLock(txCtx, () => getLastJobInChain(chainId)),
-
     listJobChains: async ({ txCtx, filter, orderDirection, page }) =>
       withReadLock(txCtx, () => {
         const idMatchChainIds = filter?.chainId ? new Set<string>(filter.chainId) : undefined;

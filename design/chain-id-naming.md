@@ -22,9 +22,9 @@ Users have to memorize per-method spellings. Autocomplete cannot disambiguate `i
 
 ### 2. The `Job`-prefix-on-`JobChain` is doing no work
 
-The internal contract already disagrees with the public name. `StateAdapter` uses `chainId` (not `jobChainId`); `Job.chainId` is the entity field. The client maps `jobChainId → chainId` in three places today purely to bridge the public and internal names ([client.ts:1008](../packages/core/src/client.ts#L1008), [:1052](../packages/core/src/client.ts#L1052), [:1136](../packages/core/src/client.ts#L1136)).
+The internal contract already disagrees with the public name. `StateAdapter` parameters use `chainId` (not `jobChainId`); `Job.chainId` is the entity field. The client maps `jobChainId → chainId` in three places today purely to bridge the public and internal names ([client.ts:1008](../packages/core/src/client.ts#L1008), [:1052](../packages/core/src/client.ts#L1052), [:1136](../packages/core/src/client.ts#L1136)). The drift is already visible in code: [`ResolvedChainJobs`](../packages/core/src/entities/job-types.resolvers.ts#L239) and [`WaitChainTimeoutError`](../packages/core/src/errors.ts) already drop the `Job` qualifier, the existing style rule notwithstanding.
 
-The current style rule ([code-style.md:39-51](../code-style.md#L39-L51)) says `jobChain` is preferred over `chain` "to be explicit about what's being referenced." But the reference is not actually ambiguous: in a library called Queuert whose only nouns are `Job` and `JobChain`, "chain" can only mean one thing. The rule preserves an `Job` prefix for an unambiguous concept, costs four characters everywhere it appears, and forces the awkward `jobChainId` → `chainId` rebinding inside `Client`.
+The current style rule ([code-style.md:39-51](../code-style.md#L39-L51)) says `jobChain` is preferred over `chain` "to be explicit about what's being referenced." But the reference is not actually ambiguous: in a library called Queuert whose only nouns are `Job` and `JobChain`, "chain" can only mean one thing. The rule preserves a `Job` prefix for an unambiguous concept, costs four characters everywhere it appears, and forces the awkward `jobChainId` → `chainId` rebinding inside `Client`.
 
 The two problems are the same problem at different scales: the public API is over-qualified relative to the entity model and the internal contract.
 
@@ -36,13 +36,16 @@ The two problems are the same problem at different scales: the public API is ove
 
 Across the codebase, `jobChain` → `chain` and `JobChain` → `Chain`. This applies to:
 
-- Type names: `JobChain`, `CompletedJobChain`, `ResolvedJobChain` → `Chain`, `CompletedChain`, `ResolvedChain`.
-- Method names: `getJobChain`, `startJobChain(s)`, `deleteJobChain(s)`, `completeJobChain`, `awaitJobChain`, `listJobChains`, `listJobChainJobs` → `getChain`, `startChain(s)`, `deleteChain(s)`, `completeChain`, `awaitChain`, `listChains`, `listChainJobs`.
+- Type names: `JobChain`, `CompletedJobChain`, `ResolvedJobChain`, `JobChainData`, `JobChainStatus` → `Chain`, `CompletedChain`, `ResolvedChain`, `ChainData`, `ChainStatus`.
+- `Client` method names: `getJobChain`, `startJobChain(s)`, `deleteJobChain(s)`, `completeJobChain`, `awaitJobChain`, `listJobChains`, `listJobChainJobs` → `getChain`, `startChain(s)`, `deleteChain(s)`, `completeChain`, `awaitChain`, `listChains`, `listChainJobs`.
+- `StateAdapter` method names: `getJobChainById`, `listJobChains`, `listJobChainJobs`, `deleteJobChains` → `getChainById`, `listChains`, `listChainJobs`, `deleteChains`.
+- `NotifyAdapter` method names: `notifyJobChainCompleted`, `listenJobChainCompleted` → `notifyChainCompleted`, `listenChainCompleted`.
+- `ObservabilityAdapter` event names: `jobChainCreated`, `jobChainCompleted`, `jobChainDeleted`, `jobChainDuration` → `chainCreated`, `chainCompleted`, `chainDeleted`, `chainDuration`.
 - Error classes: `JobChainNotFoundError` → `ChainNotFoundError`.
-- Variable / field names: every `jobChain` local, every `jobChainTypeName` filter key, etc.
+- Field / option names on the public surface: `jobChainTypeName` filter key, `excludeJobChainIds` on `DeduplicationOptions`, every `jobChain` local — all become `chain*`.
 - Documentation, examples, README, package READMEs, comments.
 
-`Job` stays. The rename is one-directional: the _job_ concept is unaffected, only the _chain_ concept loses its qualifier.
+`Job` stays. The rename is one-directional: the _job_ concept is unaffected, only the _chain_ concept loses its qualifier. Note that `chainTypeName` (a chain-typed namespace, not the noun "chain" itself) is unaffected — it is already the disambiguated form and stays as-is.
 
 ### Parameter rule (post-rename)
 
@@ -70,8 +73,8 @@ client.listJobs({ filter: { jobId, chainId, status } });
 The case for "always qualify" over the more REST-conventional `{ id }`-on-the-subject:
 
 1. **The argument that justifies Rule 2 is the same argument at the top level.** A literal `{ id: "..." }` in isolation tells you nothing; an IDE tooltip showing `id: string` tells you nothing; a developer reading a one-line PR diff can't tell if it's a chain or a job. The only thing that makes the bare-`id` form readable is the surrounding method name, which a reader has to keep in their head. Qualifying eliminates the head-juggling.
-2. **It matches the entity model.** `Job.chainId` is the field name. `client.getChain({ chainId: job.chainId })` reads as the same word twice, not as a coercion between two conventions.
-3. **It matches the internal contract.** `StateAdapter` uses `chainId` / `jobId` everywhere ([state-adapter.ts:70](../packages/core/src/state-adapter/state-adapter.ts#L70), [:193](../packages/core/src/state-adapter/state-adapter.ts#L193)). Removing the `{ id }` aberration on `Client` removes the only place the names disagreed.
+2. **It matches the foreign-key shape on `Job`.** `Job.chainId` is the field that points at a chain. `client.getChain({ chainId: job.chainId })` reads as the same word twice. The chain's _own_ primary key is still `Chain.id` (per Alt #4 below — `id` always means "this row's PK"), so when the chain is already in hand you write `client.getChain({ chainId: chain.id })`. That asymmetry is intentional: cross-entity references qualify, intra-entity identity does not.
+3. **It matches the internal contract.** `StateAdapter` parameters use `chainId` / `jobId` everywhere ([state-adapter.ts:78](../packages/core/src/state-adapter/state-adapter.ts#L78), [:91](../packages/core/src/state-adapter/state-adapter.ts#L91)). Removing the `{ id }` aberration on `Client` removes the only place the names disagreed.
 4. **One rule replaces two.** Easier to teach, easier to enforce in review, easier for users to predict the spelling without reading docs.
 
 The cost is verbosity — `client.getChain({ chainId })` is six characters longer than `client.getChain({ id })`. That cost lands on every call site. We accept it: the legibility win at every read site outweighs the keystroke cost at every write site, and the keystroke cost is mostly absorbed by autocomplete.
@@ -91,23 +94,29 @@ The "Prefer `jobChain` over `chain`" rule ([code-style.md:39-51](../code-style.m
 ### `packages/core`
 
 - [client.ts](../packages/core/src/client.ts): rename `Client` methods (`startJobChain` → `startChain`, etc.); rename every `id` / `ids` parameter on chain methods to `chainId` / `chainIds`, every `id` / `ids` on job methods to `jobId` / `jobIds`; drop the `jobChainId → chainId` rebindings at [:1037](../packages/core/src/client.ts#L1037), [:1115](../packages/core/src/client.ts#L1115), and the `chainId: filter?.jobChainId` mapping at [:1008](../packages/core/src/client.ts#L1008). Filter shapes update to qualified names.
-- [entities/job-chain.types.ts](../packages/core/src/entities/job-chain.types.ts): `JobChain` → `Chain`, `CompletedJobChain` → `CompletedChain`. File renames to `entities/chain.types.ts`.
+- [state-adapter/state-adapter.ts](../packages/core/src/state-adapter/state-adapter.ts): rename `getJobChainById`, `listJobChains`, `listJobChainJobs`, `deleteJobChains` (parameters already correct).
+- [notify-adapter/notify-adapter.ts](../packages/core/src/notify-adapter/notify-adapter.ts): rename `notifyJobChainCompleted`, `listenJobChainCompleted` ([:32-34](../packages/core/src/notify-adapter/notify-adapter.ts#L32-L34)). All wrappers under `notify-adapter/` and the in-process implementation update accordingly.
+- [observability-adapter/observability-adapter.ts](../packages/core/src/observability-adapter/observability-adapter.ts): rename `JobChainData` and the `jobChain*` event methods ([:175-193](../packages/core/src/observability-adapter/observability-adapter.ts#L175-L193)).
+- [entities/job-chain.types.ts](../packages/core/src/entities/job-chain.types.ts): `JobChain`, `CompletedJobChain`, `JobChainStatus` → `Chain`, `CompletedChain`, `ChainStatus`. File renames to `entities/chain.types.ts`.
 - [entities/job-chain.ts](../packages/core/src/entities/job-chain.ts) → `entities/chain.ts`. `mapStateJobPairToJobChain` → `mapStatePairToChain`.
 - [entities/job-types.resolvers.ts](../packages/core/src/entities/job-types.resolvers.ts): `ResolvedJobChain` → `ResolvedChain`.
+- [entities/deduplication.ts](../packages/core/src/entities/deduplication.ts): `excludeJobChainIds` → `excludeChainIds` (also threads through `state-adapter.ts:110` and the in-process adapter).
 - `errors.ts`: `JobChainNotFoundError` → `ChainNotFoundError`.
-- All internal call sites in `implementation/`, `worker/`, `notify-adapter/`, `observability-adapter/`, `setup-helpers.ts`.
+- All internal call sites: `implementation/`, `worker/`, `helpers/notify-hooks.ts`, `helpers/observability-hooks.ts`, `setup-helpers.ts`.
 - `index.ts` exports update to the new names. No deprecation re-exports — see migration.
-- All test suites in `suites/` (~25 call sites in `client-queries.test-suite.ts` alone).
+- All test suites in `suites/` (~25 call sites in `client-queries.test-suite.ts` alone) and `conformance/` cases.
 
-### `packages/postgres`, `packages/sqlite`, `packages/redis`, `packages/nats`, `packages/otel`
+### `packages/postgres`, `packages/sqlite`, `packages/redis`, `packages/nats`, `packages/otel`, `packages/dashboard`
 
-- No state-adapter contract changes (already uses `chainId` internally).
-- Update spec files that touch renamed types/methods.
+- State adapter implementations (`postgres`, `sqlite`, in-process) update method names to match the renamed `StateAdapter` contract — parameter names are already correct.
+- Notify adapter implementations (`postgres`, `redis`, `nats`) update method names to match the renamed `NotifyAdapter` contract.
+- `@queuert/otel` updates `ObservabilityAdapter` event names and the `JobChainData` import.
+- `packages/dashboard` API routes pass `jobChainId` to `listJobs` filter at [routes/jobs.ts:26](../packages/dashboard/src/api/routes/jobs.ts#L26), [:54](../packages/dashboard/src/api/routes/jobs.ts#L54), [routes/chains.ts:46](../packages/dashboard/src/api/routes/chains.ts#L46), [:105](../packages/dashboard/src/api/routes/chains.ts#L105) — rename to `chainId`. Method calls (`getJobChain`, `listJobChainJobs`, `deleteJobChains`) rename per `Client`.
+- Spec files that touch renamed types/methods update across all packages.
 
-### `packages/dashboard`
+### Dashboard UI copy
 
-- API routes that pass `jobChainId` to `listJobs` filter ([routes/jobs.ts:26](../packages/dashboard/src/api/routes/jobs.ts#L26), [:54](../packages/dashboard/src/api/routes/jobs.ts#L54), [routes/chains.ts:46](../packages/dashboard/src/api/routes/chains.ts#L46), [:105](../packages/dashboard/src/api/routes/chains.ts#L105)) — rename to `chainId`.
-- UI strings/components: keep current user-facing copy ("Job Chain") if that wording is preferred for end users; the rename is about the API surface, not the UI labels. Confirm during implementation.
+The rename is API-surface only. End-user-facing UI labels in `packages/dashboard` keep "Job Chain" as the rendered string — the disambiguation argument that justifies dropping the `Job` qualifier on the API side ("the only nouns are `Job` and `Chain`") doesn't transfer to a non-developer reader looking at a dashboard, who benefits from the more descriptive label. Internal component / variable names follow the rename; rendered strings do not.
 
 ### `examples/`
 
@@ -123,12 +132,12 @@ The "Prefer `jobChain` over `chain`" rule ([code-style.md:39-51](../code-style.m
 
 ## Migration
 
-This is a typed breaking change on a public surface. TypeScript will flag every wrong call site at compile time — no runtime fallback or deprecation period is needed.
+This is a typed breaking change on a public surface. TypeScript will flag every wrong call site at compile time — no runtime fallback or deprecation period is needed. Premise: Queuert is pre-1.0; we accept the migration tax this generation in exchange for a coherent surface for everything that comes after.
 
-- Single PR, single major-version bump (`@queuert/core` and every adapter package, since types from core flow through).
-- Changeset entry tagged as breaking, with a complete rename table.
+- Single PR, single coordinated major-version bump across `@queuert/core`, `@queuert/postgres`, `@queuert/sqlite`, `@queuert/redis`, `@queuert/nats`, `@queuert/otel`, `@queuert/dashboard`. Adapter contracts (state, notify, observability) all change, so every adapter package needs the bump even if its only diff is method names.
+- Changeset entry tagged as breaking, with a complete rename table covering type names, `Client` methods, adapter contract methods, error class, and field/option renames.
 - No accept-both shim. The cost of a two-name accept-both is exactly the cost the rename is meant to remove (users see two ways to spell the same thing); the typecheck error is the better migration aid.
-- Provide a codemod or a `sed` recipe in the changeset notes covering the mechanical renames (`JobChain` → `Chain`, `getJobChain` → `getChain`, etc.) — the rename is purely textual on the surface, so a 10-line script handles 95% of user code.
+- Ship a `jscodeshift` transform (not a raw `sed` recipe) scoped to imports from `queuert*` packages and the known renamed identifiers. A naive `s/JobChain/Chain/g` would mangle user code that legitimately contains the substring `JobChain` in unrelated identifiers; a scoped transform is worth the additional setup cost given how visible the surface is.
 
 ## Alternatives considered
 
@@ -140,6 +149,4 @@ This is a typed breaking change on a public surface. TypeScript will flag every 
 
 ## Open questions
 
-- **Dashboard UI copy.** Should "Job Chain" stay in the rendered UI as a more descriptive label for end users, or follow the API rename to "Chain"? The design doc assumes API surface only and defers the UI question to implementation. Default to following the rename unless usability testing pushes back.
-- **Codemod scope.** Does the changeset notes block ship with a `sed`/`jscodeshift` snippet, or only a rename table? Lean toward the snippet — the renames are mechanical and scriptable.
 - **`Job` prefix elsewhere.** Are there other `Job`-prefixed names that should be reconsidered under the same logic (`JobType`, `JobTypeDefinitions`)? Out of scope for this pass — `Job` is load-bearing on those (it distinguishes job types from, say, an entry-handler type system) and there's no internal/external mismatch driving the change. Revisit only if a follow-up surfaces friction.

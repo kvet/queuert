@@ -30,7 +30,7 @@ import {
 import { continueWith } from "../implementation/continue-with.js";
 import { finishJob } from "../implementation/finish-job.js";
 import { handleJobHandlerError } from "../implementation/handle-job-handler-error.js";
-import { refetchJobForUpdate as refetchJobForUpdateImpl } from "../implementation/refetch-job-for-update.js";
+import { refetchJobLocked as refetchJobLockedImpl } from "../implementation/refetch-job-locked.js";
 import { type Helpers } from "../setup-helpers.js";
 import {
   type BaseTxContext,
@@ -264,7 +264,7 @@ export const runJobProcess = async ({
   let completeTransactionContext: TransactionContext<BaseTxContext> | null = null;
 
   const abortController = new AbortController() as TypedAbortController<JobAbortReason>;
-  const refetchJobForUpdate = async (txCtx: BaseTxContext) => {
+  const refetchJobLocked = async (txCtx: BaseTxContext) => {
     if (abortController.signal.aborted && abortController.signal.reason) {
       if (abortController.signal.reason === "already_completed") {
         throw new JobAlreadyCompletedError("Job already completed (signal aborted)", {
@@ -283,7 +283,7 @@ export const runJobProcess = async ({
       throw new Error(`Job processing aborted: ${abortController.signal.reason}`);
     }
 
-    await refetchJobForUpdateImpl(helpers, {
+    await refetchJobLockedImpl(helpers, {
       txCtx,
       job,
       workerId,
@@ -332,7 +332,7 @@ export const runJobProcess = async ({
 
     return withTransactionHooks(async (transactionHooks) =>
       helpers.stateAdapter.withTransaction(async (txCtx) => {
-        await refetchJobForUpdate(txCtx);
+        await refetchJobLocked(txCtx);
         return cb(txCtx, transactionHooks);
       }),
     );
@@ -478,7 +478,7 @@ export const runJobProcess = async ({
           helpers.stateAdapter.withTransaction,
         );
         await completeTransactionContext.run(async (txCtx) => {
-          await refetchJobForUpdate(txCtx);
+          await refetchJobLocked(txCtx);
         });
       }
 
