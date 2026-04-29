@@ -16,7 +16,7 @@
     "lint": "oxlint --type-aware",
     "fmt": "oxlint --type-aware --fix && oxfmt",
     "fmt:check": "oxfmt --check",
-    "test": "vitest --run --retry 2",
+    "test": "vitest --run",
     "typecheck": "bun run --filter '*' typecheck",
     "benchmarks": "bun run --filter './benchmarks/*' --sequential start",
     "examples": "bun run --filter './examples/*' start",

@@ -12,7 +12,7 @@
 
 # Medium term
 
-- [TASK] Fix flaky `handles transient database errors gracefully with multiple workers` test in state-resilience suite — fails intermittently in CI even with `--retry 2`; investigate root cause (timing-sensitive concurrent workers + injected errors)
+- [TASK] Fix flaky tests currently masked by per-test `retry: 5`
 - [EPIC] test against bun and its built-in sqlite, postgres, redis clients
 - [TASK] Enforce json-serializable inputs and outputs (like no Date in job definitions) — see `design/json-serializable-types.md`
 - [EPIC,COMPLEX] Batched processors — opt-in `batchLimit` on a processor; opportunistic batching (process up to N when available, never wait to accumulate). Array-shaped `attemptHandler({ jobs, prepare, complete })`, one prepare/complete per batch, group lease/complete/reap. Replaces the singular state-adapter methods with array-only counterparts. Open questions: `complete`/`continueWith` shape, group reaping, OTel mapping. See `design/batched-processors.md`

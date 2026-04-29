@@ -3,7 +3,7 @@ import {
   NatsContainer,
   type StartedNatsContainer,
 } from "@testcontainers/nats";
-import { type TestAPI } from "vitest";
+import { type TestAPI, beforeAll } from "vitest";
 
 import { withContainerLock } from "./with-container-lock.js";
 
@@ -54,13 +54,18 @@ export const extendWithNats = <T>(
     natsConnectionOptions: NatsConnectionOptions;
   }
 > => {
+  let container: StartedNatsContainer;
+
+  beforeAll(async () => {
+    container = await startContainer("nats:2.10");
+  }, 60_000);
+
   return api.extend<{
     natsConnectionOptions: NatsConnectionOptions;
   }>({
     natsConnectionOptions: [
       // eslint-disable-next-line no-empty-pattern
       async ({}, use) => {
-        const container = await startContainer("nats:2.10");
         await use(container.getConnectionOptions());
       },
       { scope: "worker" },
