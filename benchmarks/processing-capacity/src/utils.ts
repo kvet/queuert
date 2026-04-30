@@ -133,7 +133,7 @@ export const runBenchmark = async ({
     `\nConfiguration: ${formatNumber(JOB_COUNT)} jobs, concurrency ${concurrency}, process ${processMode}, start ${startLabel}`,
   );
 
-  console.log(`\nPhase 1: Starting ${formatNumber(JOB_COUNT)} job chains (${startLabel})...`);
+  console.log(`\nPhase 1: Starting ${formatNumber(JOB_COUNT)} chains (${startLabel})...`);
   const startBegin = performance.now();
   let lastStartMilestone = 0;
   const reportStartProgress = (count: number) => {
@@ -151,7 +151,7 @@ export const runBenchmark = async ({
     for (let i = 0; i < JOB_COUNT; i++) {
       await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startJobChain({
+          client.startChain({
             ...txCtx,
             transactionHooks,
             typeName: "test-job",
@@ -170,7 +170,7 @@ export const runBenchmark = async ({
       }
       await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startJobChains({
+          client.startChains({
             ...txCtx,
             transactionHooks,
             items,

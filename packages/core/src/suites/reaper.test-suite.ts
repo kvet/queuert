@@ -61,9 +61,9 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -73,7 +73,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(jobChain, completionOptions);
+      await client.awaitChain(chain, completionOptions);
     });
 
     expect(log).toHaveBeenCalledWith(
@@ -178,9 +178,9 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       }),
     });
 
-    const failJobChain = await withTransactionHooks(async (transactionHooks) =>
+    const failChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -193,9 +193,9 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       await jobStarted.promise;
       await sleep(10);
 
-      const successJobChain = await withTransactionHooks(async (transactionHooks) =>
+      const successChain = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startJobChain({
+          client.startChain({
             ...txCtx,
             transactionHooks,
             typeName: "test",
@@ -205,8 +205,8 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       );
 
       await Promise.all([
-        client.awaitJobChain(successJobChain, completionOptions),
-        client.awaitJobChain(failJobChain, completionOptions),
+        client.awaitChain(successChain, completionOptions),
+        client.awaitChain(failChain, completionOptions),
       ]);
 
       await jobCompleted.promise;
@@ -319,9 +319,9 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       }),
     });
 
-    const failJobChain = await withTransactionHooks(async (transactionHooks) =>
+    const failChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -334,9 +334,9 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       await jobStarted.promise;
       await sleep(10);
 
-      const successJobChain = await withTransactionHooks(async (transactionHooks) =>
+      const successChain = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startJobChain({
+          client.startChain({
             ...txCtx,
             transactionHooks,
             typeName: "test",
@@ -346,8 +346,8 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       );
 
       await Promise.all([
-        client.awaitJobChain(successJobChain, completionOptions),
-        client.awaitJobChain(failJobChain, completionOptions),
+        client.awaitChain(successChain, completionOptions),
+        client.awaitChain(failChain, completionOptions),
       ]);
 
       await jobCompleted.promise;
@@ -416,9 +416,9 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       }),
     });
 
-    const jobChain1 = await withTransactionHooks(async (transactionHooks) =>
+    const chain1 = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -432,9 +432,9 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
       await sleep(leaseConfig.leaseMs * 5);
 
-      const jobChain2 = await withTransactionHooks(async (transactionHooks) =>
+      const chain2 = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startJobChain({
+          client.startChain({
             ...txCtx,
             transactionHooks,
             typeName: "test",
@@ -446,8 +446,8 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       jobsCanComplete.resolve();
 
       await Promise.all([
-        client.awaitJobChain(jobChain1, completionOptions),
-        client.awaitJobChain(jobChain2, completionOptions),
+        client.awaitChain(chain1, completionOptions),
+        client.awaitChain(chain2, completionOptions),
       ]);
     });
 

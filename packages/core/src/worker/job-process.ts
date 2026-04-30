@@ -1,8 +1,4 @@
-import {
-  type CompletedJobChain,
-  type JobChain,
-  mapStateJobPairToJobChain,
-} from "../entities/job-chain.js";
+import { type CompletedChain, type Chain, mapStatePairToChain } from "../entities/chain.js";
 import { type BaseJobTypeDefinitions } from "../entities/job-type.js";
 import {
   type BlockerChains,
@@ -370,9 +366,7 @@ export const runJobProcess = async ({
   );
   const runningJob = {
     ...mapStateJobToJob(job),
-    blockers: blockerPairs.map(mapStateJobPairToJobChain) as CompletedJobChain<
-      JobChain<any, any, any, any>
-    >[],
+    blockers: blockerPairs.map(mapStatePairToChain) as CompletedChain<Chain<any, any, any, any>>[],
   } as ResolvedJobWithBlockers<any, any, any, any> & { status: "running" };
 
   const runJobAttempt = async (handlerCtx: Record<string, unknown>) => {
@@ -457,7 +451,7 @@ export const runJobProcess = async ({
               typeName: string;
               input: unknown;
               schedule?: ScheduleOptions;
-              blockers?: JobChain<any, any, any, any>[];
+              blockers?: Chain<any, any, any, any>[];
             } & BaseTxContext,
           ) => Promise<unknown>;
         } & { transactionHooks: TransactionHooks } & BaseTxContext,

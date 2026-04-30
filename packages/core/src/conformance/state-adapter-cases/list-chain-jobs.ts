@@ -1,13 +1,13 @@
 import { type ConformanceGroup } from "../runner.js";
 import { type StateAdapterConformanceContext } from "./types.js";
 
-export const listJobChainJobsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
-  name: "listJobChainJobs",
+export const listChainJobsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
+  name: "listChainJobs",
   cases: [
     {
       name: "returns empty page for nonexistent chain",
       run: async ({ stateAdapter }, expect) => {
-        const result = await stateAdapter.listJobChainJobs({
+        const result = await stateAdapter.listChainJobs({
           chainId: crypto.randomUUID(),
           orderDirection: "asc",
           page: { limit: 10 },
@@ -62,7 +62,7 @@ export const listJobChainJobsGroup: ConformanceGroup<StateAdapterConformanceCont
           }),
         );
 
-        const result = await stateAdapter.listJobChainJobs({
+        const result = await stateAdapter.listChainJobs({
           chainId: root.chainId,
           orderDirection: "asc",
           page: { limit: 10 },
@@ -105,7 +105,7 @@ export const listJobChainJobsGroup: ConformanceGroup<StateAdapterConformanceCont
           }),
         );
 
-        const result = await stateAdapter.listJobChainJobs({
+        const result = await stateAdapter.listChainJobs({
           chainId: root.chainId,
           orderDirection: "desc",
           page: { limit: 10 },
@@ -149,7 +149,7 @@ export const listJobChainJobsGroup: ConformanceGroup<StateAdapterConformanceCont
           );
         }
 
-        const page1 = await stateAdapter.listJobChainJobs({
+        const page1 = await stateAdapter.listChainJobs({
           chainId: root.chainId,
           orderDirection: "asc",
           page: { limit: 2 },
@@ -159,7 +159,7 @@ export const listJobChainJobsGroup: ConformanceGroup<StateAdapterConformanceCont
         expect(page1.items[0].chainIndex).toBe(0);
         expect(page1.items[1].chainIndex).toBe(1);
 
-        const page2 = await stateAdapter.listJobChainJobs({
+        const page2 = await stateAdapter.listChainJobs({
           chainId: root.chainId,
           orderDirection: "asc",
           page: { limit: 2, cursor: page1.nextCursor! },
@@ -169,7 +169,7 @@ export const listJobChainJobsGroup: ConformanceGroup<StateAdapterConformanceCont
         expect(page2.items[0].chainIndex).toBe(2);
         expect(page2.items[1].chainIndex).toBe(3);
 
-        const page3 = await stateAdapter.listJobChainJobs({
+        const page3 = await stateAdapter.listChainJobs({
           chainId: root.chainId,
           orderDirection: "asc",
           page: { limit: 2, cursor: page2.nextCursor! },
@@ -210,7 +210,7 @@ export const listJobChainJobsGroup: ConformanceGroup<StateAdapterConformanceCont
           }),
         );
 
-        const result = await stateAdapter.listJobChainJobs({
+        const result = await stateAdapter.listChainJobs({
           chainId: chain1Root.chainId,
           orderDirection: "asc",
           page: { limit: 10 },

@@ -1,7 +1,7 @@
 /**
  * Workerless Completion Showcase
  *
- * Demonstrates completing jobs externally without a worker using completeJobChain.
+ * Demonstrates completing jobs externally without a worker using completeChain.
  *
  * Scenarios:
  * 1. Approval Workflow: Job waits for external approval, completed via API
@@ -117,7 +117,7 @@ console.log("Job is completed externally before worker timeout.\n");
 
 const approval1 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startJobChain({
+    client.startChain({
       sql: txSql,
       transactionHooks,
       typeName: "await-approval",
@@ -131,11 +131,10 @@ console.log(`Created approval request: ${approval1.id} (scheduled for 5s timeout
 console.log(`Approving externally...`);
 await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.completeJobChain({
+    client.completeChain({
       sql: txSql,
       transactionHooks,
-      id: approval1.id,
-      typeName: "await-approval",
+      ...approval1,
       complete: async ({ job, complete }) => {
         if (job.typeName !== "await-approval") return;
         await complete(job, async ({ continueWith }) =>
@@ -149,7 +148,7 @@ await withTransactionHooks(async (transactionHooks) =>
   ),
 );
 
-const result1 = await client.awaitJobChain(approval1, { timeoutMs: 10000 });
+const result1 = await client.awaitChain(approval1, { timeoutMs: 10000 });
 console.log(`Result: ${JSON.stringify(result1.output)}`);
 assert.ok("processed" in result1.output);
 
@@ -159,7 +158,7 @@ console.log("Job is rejected externally.\n");
 
 const approval2 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startJobChain({
+    client.startChain({
       sql: txSql,
       transactionHooks,
       typeName: "await-approval",
@@ -173,11 +172,10 @@ console.log(`Created approval request: ${approval2.id}`);
 console.log(`Rejecting externally...`);
 await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.completeJobChain({
+    client.completeChain({
       sql: txSql,
       transactionHooks,
-      id: approval2.id,
-      typeName: "await-approval",
+      ...approval2,
       complete: async ({ job, complete }) => {
         if (job.typeName !== "await-approval") return;
         await complete(job, async () => ({ rejected: true, reason: "manager_denied" }));
@@ -186,7 +184,7 @@ await withTransactionHooks(async (transactionHooks) =>
   ),
 );
 
-const result2 = await client.awaitJobChain(approval2, { timeoutMs: 10000 });
+const result2 = await client.awaitChain(approval2, { timeoutMs: 10000 });
 console.log(`Result: ${JSON.stringify(result2.output)}`);
 assert.ok("rejected" in result2.output);
 assert.equal(result2.output.reason, "manager_denied");
@@ -197,7 +195,7 @@ console.log("Job scheduled to expire, but completed early.\n");
 
 const action = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startJobChain({
+    client.startChain({
       sql: txSql,
       transactionHooks,
       typeName: "pending-action",
@@ -211,11 +209,10 @@ console.log(`Created pending action: ${action.id} (expires in 5s)`);
 console.log(`Completing early...`);
 await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.completeJobChain({
+    client.completeChain({
       sql: txSql,
       transactionHooks,
-      id: action.id,
-      typeName: "pending-action",
+      ...action,
       complete: async ({ job, complete }) => {
         if (job.typeName !== "pending-action") return;
         await complete(job, async () => ({ completed: true, result: "User clicked confirm" }));
@@ -224,7 +221,7 @@ await withTransactionHooks(async (transactionHooks) =>
   ),
 );
 
-const result3 = await client.awaitJobChain(action, { timeoutMs: 10000 });
+const result3 = await client.awaitChain(action, { timeoutMs: 10000 });
 console.log(`Result: ${JSON.stringify(result3.output)}`);
 assert.ok("completed" in result3.output);
 assert.ok(result3.output.result.includes("confirm"));

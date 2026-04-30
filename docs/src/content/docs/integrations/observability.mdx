@@ -53,7 +53,7 @@ The adapter emits:
 The `ObservabilityAdapter` interface provides pluggable observability with two mechanisms:
 
 - **Metrics** -- Counters, histograms, and gauges for quantitative monitoring. All methods accept primitive data types (strings, numbers, booleans) rather than domain objects, decoupling observability from internal types and ensuring stability across versions.
-- **Tracing** -- Distributed spans for end-to-end visibility into job chain execution. Uses a handle-based lifecycle: `startJobSpan` and `startAttemptSpan` return handles for managing span lifecycle. Spans follow OpenTelemetry messaging conventions with PRODUCER spans for job creation and CONSUMER spans for processing.
+- **Tracing** -- Distributed spans for end-to-end visibility into chain execution. Uses a handle-based lifecycle: `startJobSpan` and `startAttemptSpan` return handles for managing span lifecycle. Spans follow OpenTelemetry messaging conventions with PRODUCER spans for job creation and CONSUMER spans for processing.
 
 When no adapter is provided, a noop implementation is used automatically, making observability fully opt-in.
 

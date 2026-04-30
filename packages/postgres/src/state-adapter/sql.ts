@@ -170,6 +170,26 @@ ALTER TABLE {{schema}}.{{table_prefix}}job_blocker SET (
       },
     ],
   },
+  {
+    name: "20260430000000_rename_chain_indexes",
+    statements: [
+      {
+        sql: sql(/* sql */ `
+ALTER INDEX IF EXISTS {{schema}}.{{table_prefix}}job_chain_index_idx
+RENAME TO {{table_prefix}}chain_index_idx`),
+      },
+      {
+        sql: sql(/* sql */ `
+ALTER INDEX IF EXISTS {{schema}}.{{table_prefix}}job_chain_listing_idx
+RENAME TO {{table_prefix}}chain_listing_idx`),
+      },
+      {
+        sql: sql(/* sql */ `
+ALTER INDEX IF EXISTS {{schema}}.{{table_prefix}}job_chain_listing_type_name_idx
+RENAME TO {{table_prefix}}chain_listing_type_name_idx`),
+      },
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -268,9 +288,9 @@ export type PgSqlDefinitions = {
       readonly blocker_trace_contexts: DataType<"json", (string | null)[]>;
     }
   >;
-  readonly getJobChainByIdSql: TypedSql<readonly [Id], PgRowToJsonCols>;
+  readonly getChainSql: TypedSql<readonly [Id], PgRowToJsonCols>;
   readonly getJobBlockersSql: TypedSql<readonly [Id], PgRowToJsonCols>;
-  readonly getJobByIdSql: TypedSql<readonly [Id], PgDbJobCols>;
+  readonly getJobSql: TypedSql<readonly [Id], PgDbJobCols>;
   readonly rescheduleJobSql: TypedSql<
     readonly [
       Id,
@@ -308,7 +328,7 @@ export type PgSqlDefinitions = {
     readonly [DataType<"array", string[]>],
     { readonly chain_id: Id }
   >;
-  readonly deleteJobChainsSql: TypedSql<
+  readonly deleteChainsSql: TypedSql<
     readonly [DataType<"array", string[]>],
     {
       readonly deleted: DataType<
@@ -321,8 +341,8 @@ export type PgSqlDefinitions = {
       >;
     }
   >;
-  readonly getJobByIdLockedSql: TypedSql<readonly [Id], PgDbJobCols>;
-  readonly getJobChainByIdLockedSql: TypedSql<readonly [Id], PgRowToJsonCols>;
+  readonly getJobLockedSql: TypedSql<readonly [Id], PgDbJobCols>;
+  readonly getChainLockedSql: TypedSql<readonly [Id], PgRowToJsonCols>;
 };
 
 export const createPgSqlDefinitions = (id: DataType<RuntimeType, string>): PgSqlDefinitions => {
@@ -673,7 +693,7 @@ SELECT
     },
   );
 
-  const getJobChainByIdSql = sql(
+  const getChainSql = sql(
     /* sql */ `
 SELECT
   row_to_json(j)  AS root_job,
@@ -689,7 +709,7 @@ LEFT JOIN LATERAL (
 WHERE j.id = $1
 `,
     {
-      id: "getJobChainById",
+      id: "getChain",
       params: [id],
       columns: rowToJsonJobColumns,
       readOnly: true,
@@ -722,14 +742,14 @@ ORDER BY b.index ASC
     },
   );
 
-  const getJobByIdSql = sql(
+  const getJobSql = sql(
     /* sql */ `
 SELECT *
 FROM {{schema}}.{{table_prefix}}job
 WHERE id = $1
 `,
     {
-      id: "getJobById",
+      id: "getJob",
       params: [id],
       columns: { ...dbJobColumns },
       readOnly: true,
@@ -918,7 +938,7 @@ SELECT chain_id FROM connected
     },
   );
 
-  const deleteJobChainsSql = sql(
+  const deleteChainsSql = sql(
     /* sql */ `
 WITH _locked AS (
   -- Lock all jobs in chains being deleted before checking external refs, so
@@ -964,7 +984,7 @@ SELECT
   COALESCE((SELECT json_agg(row_to_json(r)) FROM _external_refs r), '[]'::json) AS blocker_refs
 `,
     {
-      id: "deleteJobChains",
+      id: "deleteChains",
       params: [t.array()],
       columns: {
         deleted: t.json<{ root_job: DbJob; last_chain_job: DbJob | null }[]>(),
@@ -973,7 +993,7 @@ SELECT
     },
   );
 
-  const getJobByIdLockedSql = sql(
+  const getJobLockedSql = sql(
     /* sql */ `
 SELECT *
 FROM {{schema}}.{{table_prefix}}job
@@ -981,13 +1001,13 @@ WHERE id = $1
 FOR UPDATE
 `,
     {
-      id: "getJobByIdLocked",
+      id: "getJobLocked",
       params: [id],
       columns: { ...dbJobColumns },
     },
   );
 
-  const getJobChainByIdLockedSql = sql(
+  const getChainLockedSql = sql(
     /* sql */ `
 SELECT
   row_to_json(j)  AS root_job,
@@ -1004,7 +1024,7 @@ LEFT JOIN LATERAL (
 WHERE j.id = $1
 `,
     {
-      id: "getJobChainByIdLocked",
+      id: "getChainLocked",
       params: [id],
       columns: rowToJsonJobColumns,
     },
@@ -1020,9 +1040,9 @@ WHERE j.id = $1
     addJobsBlockersSql,
     completeJobSql,
     unblockJobsSql,
-    getJobChainByIdSql,
+    getChainSql,
     getJobBlockersSql,
-    getJobByIdSql,
+    getJobSql,
     rescheduleJobSql,
     triggerJobsSql,
     renewJobLeaseSql,
@@ -1030,8 +1050,8 @@ WHERE j.id = $1
     getNextJobAvailableInMsSql,
     reapExpiredJobLeaseSql,
     getConnectedChainIdsSql,
-    deleteJobChainsSql,
-    getJobByIdLockedSql,
-    getJobChainByIdLockedSql,
+    deleteChainsSql,
+    getJobLockedSql,
+    getChainLockedSql,
   } as const;
 };

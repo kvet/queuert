@@ -1,7 +1,7 @@
 /**
  * Cleanup Showcase
  *
- * Demonstrates how to implement automatic cleanup of completed job chains
+ * Demonstrates how to implement automatic cleanup of completed chains
  * as a custom job type using standard Queuert primitives.
  *
  * Scenarios:
@@ -77,24 +77,24 @@ const cleanupProcessorRegistry = createProcessors({
         let cursor: string | undefined;
 
         do {
-          const page = await client.listJobChains({
+          const page = await client.listChains({
             filter: { root: true, to: cutoffDate },
             orderDirection: "asc",
             limit: CLEANUP_BATCH_SIZE,
             ...(cursor != null ? { cursor } : {}),
           });
 
-          const jobChainsToDelete = page.items.filter(
-            (jobChain) => jobChain.id !== job.chainId && jobChain.status === "completed",
+          const chainsToDelete = page.items.filter(
+            (chain) => chain.id !== job.chainId && chain.status === "completed",
           );
 
-          if (jobChainsToDelete.length > 0) {
+          if (chainsToDelete.length > 0) {
             const deleted = await withTransactionHooks(async (transactionHooks) =>
               sql.begin(async (txSql) => {
-                const result = await client.deleteJobChains({
+                const result = await client.deleteChains({
                   sql: txSql,
                   transactionHooks,
-                  ids: jobChainsToDelete.map((jobChain) => jobChain.id),
+                  ids: chainsToDelete.map((chain) => chain.id),
                 });
                 return result;
               }),
@@ -110,7 +110,7 @@ const cleanupProcessorRegistry = createProcessors({
         await stateAdapter.vacuum();
 
         return complete(async ({ sql, transactionHooks }) => {
-          await client.startJobChain({
+          await client.startChain({
             sql,
             transactionHooks,
             typeName: "queuert.cleanup",
@@ -119,7 +119,7 @@ const cleanupProcessorRegistry = createProcessors({
             deduplication: {
               key: "queuert.cleanup",
               scope: "incomplete",
-              excludeJobChainIds: [job.chainId],
+              excludeChainIds: [job.chainId],
             },
           });
 
@@ -154,9 +154,9 @@ const stopWorker = await worker.start();
 // --- Scenario 1: Create and complete some work chains ---
 console.log("\n--- Scenario 1: Create work chains ---\n");
 
-const jobChains = await withTransactionHooks(async (transactionHooks) =>
+const chains = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
-    const result = await client.startJobChains({
+    const result = await client.startChains({
       sql: txSql,
       transactionHooks,
       items: [
@@ -172,18 +172,18 @@ const jobChains = await withTransactionHooks(async (transactionHooks) =>
   }),
 );
 
-console.log(`Created ${jobChains.length} work chains`);
-assert.equal(jobChains.length, 6);
+console.log(`Created ${chains.length} work chains`);
+assert.equal(chains.length, 6);
 
 // Wait for immediate work chains to complete (chain #6 is scheduled in the future)
-const immediateJobChains = jobChains.slice(0, 5);
+const immediateChains = chains.slice(0, 5);
 await Promise.all(
-  immediateJobChains.map(async (jobChain) => client.awaitJobChain(jobChain, { timeoutMs: 10000 })),
+  immediateChains.map(async (chain) => client.awaitChain(chain, { timeoutMs: 10000 })),
 );
-console.log(`${immediateJobChains.length} work chains completed, 1 scheduled for later`);
+console.log(`${immediateChains.length} work chains completed, 1 scheduled for later`);
 
 // Check chain count before cleanup
-const beforeCleanup = await client.listJobChains({
+const beforeCleanup = await client.listChains({
   filter: { typeName: ["work.process"] },
   limit: 100,
 });
@@ -196,7 +196,7 @@ console.log("\n--- Scenario 2: Schedule cleanup ---\n");
 const scheduleCleanup = async () =>
   withTransactionHooks(async (transactionHooks) =>
     sql.begin(async (txSql) => {
-      const result = await client.startJobChain({
+      const result = await client.startChain({
         sql: txSql,
         transactionHooks,
         typeName: "queuert.cleanup",
@@ -207,24 +207,24 @@ const scheduleCleanup = async () =>
     }),
   );
 
-const cleanupJobChain = await scheduleCleanup();
-console.log(`Cleanup chain started: ${cleanupJobChain.id}`);
-console.log(`Deduplicated: ${cleanupJobChain.deduplicated}`);
-assert.equal(cleanupJobChain.deduplicated, false);
+const cleanupChain = await scheduleCleanup();
+console.log(`Cleanup chain started: ${cleanupChain.id}`);
+console.log(`Deduplicated: ${cleanupChain.deduplicated}`);
+assert.equal(cleanupChain.deduplicated, false);
 
 // --- Idempotent scheduling ---
 const duplicate = await scheduleCleanup();
 console.log(`\nSecond schedule attempt: ${duplicate.id}`);
 console.log(`Deduplicated: ${duplicate.deduplicated} (same chain returned)`);
 assert.equal(duplicate.deduplicated, true);
-assert.equal(duplicate.id, cleanupJobChain.id);
+assert.equal(duplicate.id, cleanupChain.id);
 
 // Wait for cleanup to finish
-await client.awaitJobChain({ id: cleanupJobChain.id }, { timeoutMs: 10000 });
+await client.awaitChain(cleanupChain, { timeoutMs: 10000 });
 console.log("\nCleanup completed!");
 
 // Check chain count after cleanup
-const afterCleanup = await client.listJobChains({
+const afterCleanup = await client.listChains({
   filter: { typeName: ["work.process"] },
   limit: 100,
 });

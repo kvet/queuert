@@ -195,7 +195,7 @@ export const triggerJobsGroup: ConformanceGroup<StateAdapterConformanceContext> 
         expect(result.notFound).toEqual([missingId]);
         expect(result.notTriggerable).toEqual([]);
 
-        const after = await stateAdapter.getJobById({ jobId: created.id });
+        const after = await stateAdapter.getJob({ jobId: created.id });
         expect(Math.abs(after!.scheduledAt.getTime() - futureDate.getTime())).toBeLessThan(1000);
       },
     },
@@ -240,7 +240,7 @@ export const triggerJobsGroup: ConformanceGroup<StateAdapterConformanceContext> 
         expect(result.notFound).toEqual([]);
         expect(result.notTriggerable).toEqual([{ id: toComplete.id, status: "completed" }]);
 
-        const after = await stateAdapter.getJobById({ jobId: pending.id });
+        const after = await stateAdapter.getJob({ jobId: pending.id });
         expect(Math.abs(after!.scheduledAt.getTime() - futureDate.getTime())).toBeLessThan(1000);
       },
     },

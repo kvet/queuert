@@ -211,7 +211,7 @@ The possible abort reasons passed through `TypedAbortSignal` in worker job handl
 
 - [Client](/queuert/reference/queuert/client/) — Client API reference
 - [Utilities](/queuert/reference/queuert/utilities/) — `createProcessors`, `defineJobTypes`, `createJobTypes`
-- [Entities](/queuert/reference/queuert/entities/) — `Job`, `JobChain`, and resolved variants
+- [Entities](/queuert/reference/queuert/entities/) — `Job`, `Chain`, and resolved variants
 - [Errors](/queuert/reference/queuert/errors/) — error reference
 - [In-Process Worker](/queuert/advanced/in-process-worker/) — Worker lifecycle and concurrency model
 - [Job Processing](/queuert/advanced/job-processing/) — Transactional design and prepare/complete pattern

@@ -1,5 +1,5 @@
 ---
-title: Job Chain Patterns
+title: Chain Patterns
 description: Linear, branched, loop, and go-to patterns.
 sidebar:
   order: 5
@@ -132,4 +132,4 @@ const jobTypes = defineJobTypes<{
 
 All examples above use **nominal references** — `{ typeName: "..." }`. Queuert also supports **structural references** (`{ input: {...} }`) that match any job type with a compatible input shape, enabling loose coupling. See [Job Type References](/queuert/advanced/job-type-references/) for details and examples.
 
-See [examples/showcase-chain-patterns](https://github.com/kvet/queuert/tree/main/examples/showcase-chain-patterns) for a complete working example demonstrating all four patterns through a subscription lifecycle workflow. See also [Job Blockers](../job-blockers/) for parallel dependencies and [Job Chain Model](/queuert/advanced/job-chain-model/) reference.
+See [examples/showcase-chain-patterns](https://github.com/kvet/queuert/tree/main/examples/showcase-chain-patterns) for a complete working example demonstrating all four patterns through a subscription lifecycle workflow. See also [Job Blockers](../job-blockers/) for parallel dependencies and [Chain Model](/queuert/advanced/chain-model/) reference.

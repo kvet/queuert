@@ -123,10 +123,10 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       }),
     });
 
-    const [prepareJobChain, completeJobChain, prepareAfterAutoSetupJobChain, continueWithJobChain] =
+    const [prepareChain, completeChain, prepareAfterAutoSetupChain, continueWithChain] =
       await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startJobChains({
+          client.startChains({
             ...txCtx,
             transactionHooks,
             items: [
@@ -141,10 +141,10 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
 
     await withWorkers([await worker.start()], async () => {
       await Promise.all([
-        client.awaitJobChain(prepareJobChain, completionOptions),
-        client.awaitJobChain(completeJobChain, completionOptions),
-        client.awaitJobChain(prepareAfterAutoSetupJobChain, completionOptions),
-        client.awaitJobChain(continueWithJobChain, completionOptions),
+        client.awaitChain(prepareChain, completionOptions),
+        client.awaitChain(completeChain, completionOptions),
+        client.awaitChain(prepareAfterAutoSetupChain, completionOptions),
+        client.awaitChain(continueWithChain, completionOptions),
       ]);
     });
   });
@@ -217,9 +217,9 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -228,7 +228,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       ),
     );
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(jobChain, completionOptions);
+      await client.awaitChain(chain, completionOptions);
     });
 
     expect(attempts).toEqual([1, 2, 3]);
@@ -291,7 +291,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
 
     const job = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -301,7 +301,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(job, completionOptions);
+      await client.awaitChain(job, completionOptions);
     });
 
     expect(errors).toHaveLength(3);
@@ -385,9 +385,9 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -395,23 +395,23 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
         }),
       ),
     );
-    // expectTypeOf<(typeof jobChain)["status"]>().toEqualTypeOf<"pending" | "blocked">();
-    expectTypeOf<(typeof jobChain)["input"]>().toEqualTypeOf<{ test: boolean }>();
-    expectTypeOf<(typeof jobChain)["typeName"]>().toEqualTypeOf<"test">();
-    expect(jobChain.input).toEqual({ test: true });
+    // expectTypeOf<(typeof chain)["status"]>().toEqualTypeOf<"pending" | "blocked">();
+    expectTypeOf<(typeof chain)["input"]>().toEqualTypeOf<{ test: boolean }>();
+    expectTypeOf<(typeof chain)["typeName"]>().toEqualTypeOf<"test">();
+    expect(chain.input).toEqual({ test: true });
 
     await withWorkers([await worker.start()], async () => {
-      const completedJobChain = await client.awaitJobChain(jobChain, completionOptions);
-      expectTypeOf<(typeof completedJobChain)["status"]>().toEqualTypeOf<"completed">();
-      expectTypeOf<(typeof completedJobChain)["output"]>().toEqualTypeOf<{
+      const completedChain = await client.awaitChain(chain, completionOptions);
+      expectTypeOf<(typeof completedChain)["status"]>().toEqualTypeOf<"completed">();
+      expectTypeOf<(typeof completedChain)["output"]>().toEqualTypeOf<{
         result: boolean;
       }>();
-      expect(completedJobChain.status).toBe("completed");
-      expect(completedJobChain.output).toEqual({ result: true });
+      expect(completedChain.status).toBe("completed");
+      expect(completedChain.output).toEqual({ result: true });
     });
 
     // Verify completedBy is set to workerId for worker completion
-    const completedJob = await stateAdapter.getJobById({ jobId: jobChain.id });
+    const completedJob = await stateAdapter.getJob({ jobId: chain.id });
     expect(completedJob?.status).toBe("completed");
     expect(completedJob?.completedBy).toBe("worker");
   });

@@ -114,9 +114,9 @@ const stopWorker = await worker.start();
 
 // 6. Run successful job
 logger.info("--- Running successful job ---");
-const successJob = await withTransactionHooks(async (transactionHooks) =>
+const successChain = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
-    client.startJobChain({
+    client.startChain({
       ...ctx,
       transactionHooks,
       typeName: "greet",
@@ -125,16 +125,16 @@ const successJob = await withTransactionHooks(async (transactionHooks) =>
   ),
 );
 
-const successCompleted = await client.awaitJobChain(successJob, {
+const successCompleted = await client.awaitChain(successChain, {
   timeoutMs: 5000,
 });
 logger.info({ output: successCompleted.output }, "Successful job completed");
 
 // 7. Run job that fails then succeeds (demonstrates error logging with stack trace)
 logger.info("--- Running job that fails first attempt ---");
-const failThenSucceedJob = await withTransactionHooks(async (transactionHooks) =>
+const failThenSucceedChain = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
-    client.startJobChain({
+    client.startChain({
       ...ctx,
       transactionHooks,
       typeName: "might-fail",
@@ -143,7 +143,7 @@ const failThenSucceedJob = await withTransactionHooks(async (transactionHooks) =
   ),
 );
 
-const retryCompleted = await client.awaitJobChain(failThenSucceedJob, {
+const retryCompleted = await client.awaitChain(failThenSucceedChain, {
   timeoutMs: 5000,
 });
 logger.info({ output: retryCompleted.output }, "Retry job eventually succeeded");

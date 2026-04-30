@@ -148,7 +148,7 @@ const worker = await createInProcessWorker({
 
             if (shouldContinue) {
               console.log(`  Scheduling next digest in ${DIGEST_INTERVAL_MS}ms...`);
-              await client.startJobChain({
+              await client.startChain({
                 sql: txSql,
                 transactionHooks,
                 typeName: "daily-digest",
@@ -183,7 +183,7 @@ const worker = await createInProcessWorker({
 
             if (shouldContinue) {
               console.log(`  Scheduling next check in ${HEALTH_CHECK_INTERVAL_MS}ms...`);
-              await client.startJobChain({
+              await client.startChain({
                 sql: txSql,
                 transactionHooks,
                 typeName: "health-check",
@@ -194,7 +194,7 @@ const worker = await createInProcessWorker({
                 schedule: { afterMs: HEALTH_CHECK_INTERVAL_MS },
                 deduplication: {
                   key: `health:${job.input.serviceId}`,
-                  excludeJobChainIds: [job.chainId],
+                  excludeChainIds: [job.chainId],
                 },
               });
             } else {
@@ -262,7 +262,7 @@ userSubscribed = true;
 
 await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startJobChain({
+    client.startChain({
       sql: txSql,
       transactionHooks,
       typeName: "daily-digest",
@@ -297,7 +297,7 @@ serviceRunning = true;
 // Start first health check with deduplication
 const healthChain1 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startJobChain({
+    client.startChain({
       sql: txSql,
       transactionHooks,
       typeName: "health-check",
@@ -316,7 +316,7 @@ assert.equal(healthChain1.deduplicated, false);
 // Try to start another health check - should be deduplicated
 const healthChain2 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startJobChain({
+    client.startChain({
       sql: txSql,
       transactionHooks,
       typeName: "health-check",
@@ -357,7 +357,7 @@ console.log(`Rate-limiting syncs with ${SYNC_WINDOW_MS}ms window.\n`);
 // First sync - should succeed
 const sync1 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startJobChain({
+    client.startChain({
       sql: txSql,
       transactionHooks,
       typeName: "sync-data",
@@ -374,12 +374,12 @@ console.log(`First sync started: ${sync1.id}`);
 console.log(`Deduplicated: ${sync1.deduplicated}`);
 assert.equal(sync1.deduplicated, false);
 
-await client.awaitJobChain(sync1, { timeoutMs: 5000 });
+await client.awaitChain(sync1, { timeoutMs: 5000 });
 
 // Second sync immediately after - should be deduplicated (within window)
 const sync2 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startJobChain({
+    client.startChain({
       sql: txSql,
       transactionHooks,
       typeName: "sync-data",
@@ -403,7 +403,7 @@ await new Promise((r) => setTimeout(r, SYNC_WINDOW_MS + 100));
 // Third sync after window - should succeed
 const sync3 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startJobChain({
+    client.startChain({
       sql: txSql,
       transactionHooks,
       typeName: "sync-data",
@@ -420,7 +420,7 @@ console.log(`\nThird sync (after window): ${sync3.id}`);
 console.log(`Deduplicated: ${sync3.deduplicated} (new chain created)`);
 assert.equal(sync3.deduplicated, false);
 
-await client.awaitJobChain(sync3, { timeoutMs: 5000 });
+await client.awaitChain(sync3, { timeoutMs: 5000 });
 
 const [syncCount] = await sql.unsafe<{ count: string }[]>(
   "SELECT COUNT(*) as count FROM sync_logs WHERE source_id = 'db-primary'",
@@ -440,7 +440,7 @@ const ONE_HOUR_MS = 60 * 60 * 1000;
 
 const reminder = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startJobChain({
+    client.startChain({
       sql: txSql,
       transactionHooks,
       typeName: "reminder",
@@ -460,7 +460,7 @@ await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => client.triggerJob({ sql: txSql, transactionHooks, id: reminder.id })),
 );
 
-await client.awaitJobChain(reminder, { timeoutMs: 5000 });
+await client.awaitChain(reminder, { timeoutMs: 5000 });
 
 const [reminderCount] = await sql.unsafe<{ count: string }[]>(
   "SELECT COUNT(*) as count FROM reminder_logs WHERE user_id = 'user-123'",

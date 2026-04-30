@@ -1,7 +1,7 @@
 /**
- * Job Chain Awaiting Showcase
+ * Chain Awaiting Showcase
  *
- * Demonstrates waiting for job chain completion with polling and notifications.
+ * Demonstrates waiting for chain completion with polling and notifications.
  *
  * Scenarios:
  * 1. Basic Awaiting: Wait for a chain to complete and access typed output
@@ -120,7 +120,7 @@ console.log("Start a price lookup chain and await its result.\n");
 
 const priceChain = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startJobChain({
+    client.startChain({
       sql: txSql,
       transactionHooks,
       typeName: "fetch-price",
@@ -129,7 +129,7 @@ const priceChain = await withTransactionHooks(async (transactionHooks) =>
   ),
 );
 
-const result = await client.awaitJobChain(priceChain, { timeoutMs: 10000 });
+const result = await client.awaitChain(priceChain, { timeoutMs: 10000 });
 console.log(`\nResult: ${result.output.productId} → $${result.output.finalPrice}`);
 console.log(`Completed at: ${result.completedAt.toISOString()}`);
 assert.equal(result.output.productId, "widget");
@@ -141,7 +141,7 @@ console.log("Await multiple chains concurrently with Promise.all.\n");
 
 const chains = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startJobChains({
+    client.startChains({
       sql: txSql,
       transactionHooks,
       items: [
@@ -154,7 +154,7 @@ const chains = await withTransactionHooks(async (transactionHooks) =>
 );
 
 const results = await Promise.all(
-  chains.map(async (c) => client.awaitJobChain(c, { timeoutMs: 10000 })),
+  chains.map(async (c) => client.awaitChain(c, { timeoutMs: 10000 })),
 );
 
 console.log("\nAll prices:");
@@ -170,7 +170,7 @@ console.log("Await a slow chain with a short timeout.\n");
 
 const slowChain = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startJobChain({
+    client.startChain({
       sql: txSql,
       transactionHooks,
       typeName: "long-running",
@@ -180,7 +180,7 @@ const slowChain = await withTransactionHooks(async (transactionHooks) =>
 );
 
 try {
-  await client.awaitJobChain(slowChain, { timeoutMs: 100 });
+  await client.awaitChain(slowChain, { timeoutMs: 100 });
 } catch (err) {
   if (err instanceof WaitChainTimeoutError) {
     console.log(`Timeout: ${err.message}`);
@@ -194,7 +194,7 @@ console.log("Cancel awaiting with an AbortSignal.\n");
 
 const abortChain = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startJobChain({
+    client.startChain({
       sql: txSql,
       transactionHooks,
       typeName: "long-running",
@@ -209,7 +209,7 @@ setTimeout(() => {
 }, 100);
 
 try {
-  await client.awaitJobChain(abortChain, {
+  await client.awaitChain(abortChain, {
     timeoutMs: 30000,
     signal: controller.signal,
   });

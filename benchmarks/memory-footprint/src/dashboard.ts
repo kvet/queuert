@@ -58,9 +58,9 @@ await runDoubleRunBenchmark<Record<string, never>>({
     await processStep("After processing 100 jobs", async () => {
       const promises = [];
       for (let i = 0; i < 100; i++) {
-        const jobChain = await withTransactionHooks(async (transactionHooks) =>
+        const chain = await withTransactionHooks(async (transactionHooks) =>
           stateAdapter.withTransaction(async (ctx) =>
-            client.startJobChain({
+            client.startChain({
               ...ctx,
               transactionHooks,
               typeName: "test-job",
@@ -68,7 +68,7 @@ await runDoubleRunBenchmark<Record<string, never>>({
             }),
           ),
         );
-        promises.push(client.awaitJobChain(jobChain, { timeoutMs: 5000 }));
+        promises.push(client.awaitChain(chain, { timeoutMs: 5000 }));
       }
       await Promise.all(promises);
     });

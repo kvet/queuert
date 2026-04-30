@@ -85,7 +85,7 @@ const notificationWorker = await createInProcessWorker({
 });
 ```
 
-This works because job chains are stored in the database, not in worker memory. A chain that starts with `images.resize` (picked up by an image worker thread) can `continueWith` to `notifications.send-email` (picked up by the notification worker in the main thread) — the handoff happens through the database.
+This works because chains are stored in the database, not in worker memory. A chain that starts with `images.resize` (picked up by an image worker thread) can `continueWith` to `notifications.send-email` (picked up by the notification worker in the main thread) — the handoff happens through the database.
 
 You can also combine slices when a single worker should handle multiple domains:
 

@@ -30,8 +30,8 @@ export const wrapStateAdapterWithLogging = <
     withSavepoint: stateAdapter.withSavepoint,
 
     // Operation methods - wrap with error logging
-    getJobChainById: wrap("getJobChainById", stateAdapter.getJobChainById),
-    getJobById: wrap("getJobById", stateAdapter.getJobById),
+    getChain: wrap("getChain", stateAdapter.getChain),
+    getJob: wrap("getJob", stateAdapter.getJob),
     createJobs: wrap("createJobs", stateAdapter.createJobs),
     addJobsBlockers: wrap("addJobsBlockers", stateAdapter.addJobsBlockers),
     unblockJobs: wrap("unblockJobs", stateAdapter.unblockJobs),
@@ -42,10 +42,10 @@ export const wrapStateAdapterWithLogging = <
     rescheduleJob: wrap("rescheduleJob", stateAdapter.rescheduleJob),
     completeJob: wrap("completeJob", stateAdapter.completeJob),
     reapExpiredJobLease: wrap("reapExpiredJobLease", stateAdapter.reapExpiredJobLease),
-    deleteJobChains: wrap("deleteJobChains", stateAdapter.deleteJobChains),
-    listJobChains: wrap("listJobChains", stateAdapter.listJobChains),
+    deleteChains: wrap("deleteChains", stateAdapter.deleteChains),
+    listChains: wrap("listChains", stateAdapter.listChains),
     listJobs: wrap("listJobs", stateAdapter.listJobs),
-    listJobChainJobs: wrap("listJobChainJobs", stateAdapter.listJobChainJobs),
+    listChainJobs: wrap("listChainJobs", stateAdapter.listChainJobs),
     listBlockedJobs: wrap("listBlockedJobs", stateAdapter.listBlockedJobs),
     triggerJobs: wrap("triggerJobs", stateAdapter.triggerJobs),
 

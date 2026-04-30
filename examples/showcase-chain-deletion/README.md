@@ -1,6 +1,6 @@
 # Chain Deletion Showcase
 
-Deleting job chains with blocker safety checks and cascade deletion.
+Deleting chains with blocker safety checks and cascade deletion.
 
 Scenarios: simple deletion, blocker safety, co-deletion, cascade deletion.
 

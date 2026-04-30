@@ -54,11 +54,11 @@ All StateAdapter methods must complete in a **single database round-trip**, wher
 
 - **O(1) round trips**: Each method—regardless of how many jobs it affects—executes exactly one database operation
 - **O(n) is incorrect**: If an adapter implementation requires multiple round trips proportional to input size, the implementation is wrong
-- **Batch operations**: Methods accepting arrays (e.g., `deleteJobChains`, `addJobBlockers`) must use batch SQL (multi-row INSERT, UPDATE with IN clause, CTEs) rather than loops
+- **Batch operations**: Methods accepting arrays (e.g., `deleteChains`, `addJobBlockers`) must use batch SQL (multi-row INSERT, UPDATE with IN clause, CTEs) rather than loops
 
 This principle ensures predictable performance and proper atomicity. Use batch SQL (multi-row INSERT, UPDATE with IN/ANY clause, CTEs) rather than loops.
 
-**SQLite exception**: SQLite does not support writeable CTEs with RETURNING in the same way as PostgreSQL. Operations like `addJobBlockers` and `deleteJobChains` use multiple sequential queries within a single transaction instead of a single CTE. This is safe under SQLite's exclusive transaction locking model (which serializes all writes), but results in more round-trips per operation. This is an accepted trade-off for SQLite support.
+**SQLite exception**: SQLite does not support writeable CTEs with RETURNING in the same way as PostgreSQL. Operations like `addJobBlockers` and `deleteChains` use multiple sequential queries within a single transaction instead of a single CTE. This is safe under SQLite's exclusive transaction locking model (which serializes all writes), but results in more round-trips per operation. This is an accepted trade-off for SQLite support.
 
 ### Context Architecture
 
@@ -192,8 +192,8 @@ Observability events emitted inside database transactions are buffered and only 
 
 **Buffered** -- events that represent write claims inside transactions:
 
-- **Creation**: `jobChainCreated`, `jobCreated`, `jobBlocked`, and PRODUCER span ends from `createStateJobs`
-- **Completion**: `jobCompleted`, `jobDuration`, `completeJobSpan` (workerless), `jobChainCompleted`, `jobChainDuration`, `completeBlockerSpan`, `jobUnblocked` from `finishJob`
+- **Creation**: `chainCreated`, `jobCreated`, `jobBlocked`, and PRODUCER span ends from `createStateJobs`
+- **Completion**: `jobCompleted`, `jobDuration`, `completeJobSpan` (workerless), `chainCompleted`, `chainDuration`, `completeBlockerSpan`, `jobUnblocked` from `finishJob`
 - **Worker complete**: `jobAttemptCompleted` and continuation PRODUCER span ends from the complete transaction in `job-process`
 - **Error handling**: `jobAttemptFailed` from the error-handling transaction in `job-process`
 

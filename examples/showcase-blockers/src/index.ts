@@ -1,7 +1,7 @@
 /**
  * Job Blockers Showcase
  *
- * Demonstrates how jobs can depend on other job chains to complete before starting.
+ * Demonstrates how jobs can depend on other chains to complete before starting.
  *
  * Scenarios:
  * 1. Fan-out/Fan-in: Multiple fetch jobs run in parallel, aggregate waits for all
@@ -153,7 +153,7 @@ console.log("Three fetch jobs run in parallel, aggregate waits for all.\n");
 
 const aggregateChain = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
-    const fetchBlockers = await client.startJobChains({
+    const fetchBlockers = await client.startChains({
       sql: txSql,
       transactionHooks,
       items: [
@@ -162,7 +162,7 @@ const aggregateChain = await withTransactionHooks(async (transactionHooks) =>
         { typeName: "fetch-source", input: { sourceId: "products", url: "/products" } },
       ],
     });
-    return client.startJobChain({
+    return client.startChain({
       sql: txSql,
       transactionHooks,
       typeName: "aggregate-data",
@@ -172,7 +172,7 @@ const aggregateChain = await withTransactionHooks(async (transactionHooks) =>
   }),
 );
 
-const result1 = await client.awaitJobChain(aggregateChain, { timeoutMs: 10000 });
+const result1 = await client.awaitChain(aggregateChain, { timeoutMs: 10000 });
 console.log(`\nResult: ${result1.output.totalSources} sources → "${result1.output.combinedData}"`);
 assert.equal(result1.output.totalSources, 3);
 assert.equal(result1.output.reportId, "report-001");
@@ -183,7 +183,7 @@ console.log("Action requires exactly: validate-user + load-config.\n");
 
 const actionChain = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
-    const [userBlocker, configBlocker] = await client.startJobChains({
+    const [userBlocker, configBlocker] = await client.startChains({
       sql: txSql,
       transactionHooks,
       items: [
@@ -191,7 +191,7 @@ const actionChain = await withTransactionHooks(async (transactionHooks) =>
         { typeName: "load-config", input: { configKey: "settings" } },
       ],
     });
-    return client.startJobChain({
+    return client.startChain({
       sql: txSql,
       transactionHooks,
       typeName: "perform-action",
@@ -201,7 +201,7 @@ const actionChain = await withTransactionHooks(async (transactionHooks) =>
   }),
 );
 
-const result2 = await client.awaitJobChain(actionChain, { timeoutMs: 10000 });
+const result2 = await client.awaitChain(actionChain, { timeoutMs: 10000 });
 console.log(`\nResult: "${result2.output.result}"`);
 assert.equal(result2.output.actionId, "action-001");
 assert.ok(result2.output.result.includes("admin"));

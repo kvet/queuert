@@ -112,9 +112,9 @@ await Promise.all(readyPromises);
 console.log(`\nQueueing ${JOBS_TO_PROCESS} orders...\n`);
 
 const products = ["Widget", "Gadget", "Gizmo", "Doohickey", "Thingamajig", "Contraption"];
-const jobChains = await withTransactionHooks(async (transactionHooks) =>
+const chains = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
-    client.startJobChains({
+    client.startChains({
       ...ctx,
       transactionHooks,
       items: Array.from({ length: JOBS_TO_PROCESS }, (_, i) => {
@@ -133,9 +133,7 @@ const jobChains = await withTransactionHooks(async (transactionHooks) =>
   ),
 );
 
-await Promise.all(
-  jobChains.map(async (chain) => client.awaitJobChain(chain, { timeoutMs: 30000 })),
-);
+await Promise.all(chains.map(async (chain) => client.awaitChain(chain, { timeoutMs: 30000 })));
 
 console.log("\n" + "=".repeat(60));
 console.log("Processing Summary");

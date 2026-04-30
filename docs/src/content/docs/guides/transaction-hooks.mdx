@@ -17,7 +17,7 @@ import { Tabs, TabItem, Aside } from "@astrojs/starlight/components";
     ```ts
     await withTransactionHooks(async (transactionHooks) =>
       sql.begin(async (sql) => {
-        await client.startJobChain({ sql, transactionHooks, typeName: "send-email", input });
+        await client.startChain({ sql, transactionHooks, typeName: "send-email", input });
         // If the transaction rolls back, no notifications are sent
       }),
     );
@@ -38,7 +38,7 @@ import { Tabs, TabItem, Aside } from "@astrojs/starlight/components";
     const connection = await db.connect();
     try {
       await connection.query("BEGIN");
-      const result = await client.startJobChain({
+      const result = await client.startChain({
         connection,
         transactionHooks,
         typeName: "send-email",

@@ -29,26 +29,26 @@ Returns `Promise<Client>`.
 
 All mutating methods require `transactionHooks` and a transaction context (`tx`). Side effects are buffered via hooks and flushed after commit.
 
-### startJobChain
+### startChain
 
 ```typescript
-const chain = await client.startJobChain({
+const chain = await client.startChain({
   typeName: "send-email",
   input: { to: "alice@..." },
   transactionHooks,
   tx,
   deduplication?: DeduplicationOptions,
   schedule?: ScheduleOptions,
-  blockers?: JobChain[],
+  blockers?: Chain[],
 });
 ```
 
-Returns `JobChain & { deduplicated: boolean }`.
+Returns `Chain & { deduplicated: boolean }`.
 
-### startJobChains
+### startChains
 
 ```typescript
-const chains = await client.startJobChains({
+const chains = await client.startChains({
   items: [
     { typeName: "send-email", input: { to: "alice@..." } },
     { typeName: "send-email", input: { to: "bob@..." } },
@@ -58,12 +58,12 @@ const chains = await client.startJobChains({
 });
 ```
 
-Returns `Array<JobChain & { deduplicated: boolean }>`.
+Returns `Array<Chain & { deduplicated: boolean }>`.
 
-### deleteJobChain
+### deleteChain
 
 ```typescript
-const deleted = await client.deleteJobChain({
+const deleted = await client.deleteChain({
   id: chainId,
   cascade?: boolean,
   transactionHooks,
@@ -71,14 +71,14 @@ const deleted = await client.deleteJobChain({
 });
 ```
 
-Returns `JobChain | undefined`.
+Returns `Chain | undefined`.
 
-Deletes a single job chain by ID. Returns the deleted chain, or `undefined` if no chain with that ID exists. When **cascade** is `true`, transitive dependencies are included (default: `false`). Throws `BlockerReferenceError` if external jobs depend on it.
+Deletes a single chain by ID. Returns the deleted chain, or `undefined` if no chain with that ID exists. When **cascade** is `true`, transitive dependencies are included (default: `false`). Throws `BlockerReferenceError` if external jobs depend on it.
 
-### deleteJobChains
+### deleteChains
 
 ```typescript
-const deleted = await client.deleteJobChains({
+const deleted = await client.deleteChains({
   ids: [chainId1, chainId2],
   cascade?: boolean,
   transactionHooks,
@@ -86,9 +86,9 @@ const deleted = await client.deleteJobChains({
 });
 ```
 
-Returns `JobChain[]`.
+Returns `Chain[]`.
 
-Deletes the specified job chains. Missing IDs are silently skipped (use `deleteJobChain` for strict lookup). When **cascade** is `true`, transitive dependencies are included (default: `false`). Throws `BlockerReferenceError` if external jobs depend on the targeted chains.
+Deletes the specified chains. Missing IDs are silently skipped (use `deleteChain` for strict lookup). When **cascade** is `true`, transitive dependencies are included (default: `false`). Throws `BlockerReferenceError` if external jobs depend on the targeted chains.
 
 ### triggerJob
 
@@ -118,10 +118,10 @@ Returns `Job[]` in input order.
 
 Triggers multiple pending jobs in one call. Validation is atomic — if any job is missing or not pending, the entire call fails with `JobNotFoundError` or `JobNotTriggerableError` before any job is triggered. Empty `ids` returns `[]`.
 
-### completeJobChain
+### completeChain
 
 ```typescript
-const chain = await client.completeJobChain({
+const chain = await client.completeChain({
   typeName: "send-email",
   id: chainId,
   transactionHooks,
@@ -134,26 +134,26 @@ const chain = await client.completeJobChain({
 });
 ```
 
-Returns `CompletedJobChain` when the chain is completed, or `JobChain` when continued via `continueWith`.
+Returns `CompletedChain` when the chain is completed, or `Chain` when continued via `continueWith`.
 
 The **complete** callback receives the current (latest) job in the chain. Call `complete(job, callback)` to finalize the job. Inside the callback, return an output value to finish the chain, or call `continueWith({ typeName, input })` to schedule the next job in the chain.
 
-Throws `JobChainNotFoundError`, `JobTypeMismatchError`, or `JobAlreadyCompletedError`.
+Throws `ChainNotFoundError`, `JobTypeMismatchError`, or `JobAlreadyCompletedError`.
 
 ## Client — Read-Only Methods
 
 Read-only methods accept an optional transaction context. When omitted, the adapter acquires its own connection.
 
-### getJobChain
+### getChain
 
 ```typescript
-const chain = await client.getJobChain({
+const chain = await client.getChain({
   id: chainId,
   typeName?: "send-email",
 });
 ```
 
-Returns `JobChain | undefined`.
+Returns `Chain | undefined`.
 
 When **typeName** is provided, the return type is narrowed to that job type. Throws `JobTypeMismatchError` if the chain exists but has a different type.
 
@@ -170,10 +170,10 @@ Returns `Job | undefined`.
 
 When **typeName** is provided, the return type is narrowed to that job type.
 
-### awaitJobChain
+### awaitChain
 
 ```typescript
-const completed = await client.awaitJobChain(
+const completed = await client.awaitChain(
   { id: chainId, typeName?: "send-email" },
   {
     timeoutMs: 30_000,
@@ -183,7 +183,7 @@ const completed = await client.awaitJobChain(
 );
 ```
 
-Returns `CompletedJobChain`.
+Returns `CompletedChain`.
 
 Waits for the specified chain to complete.
 
@@ -191,12 +191,12 @@ Waits for the specified chain to complete.
 - **pollIntervalMs** — polling fallback interval (default: `15_000`)
 - **signal** — optional `AbortSignal` for external cancellation
 
-Throws `WaitChainTimeoutError` on timeout or abort, `JobChainNotFoundError`, or `JobTypeMismatchError`.
+Throws `WaitChainTimeoutError` on timeout or abort, `ChainNotFoundError`, or `JobTypeMismatchError`.
 
-### listJobChains
+### listChains
 
 ```typescript
-const page = await client.listJobChains({
+const page = await client.listChains({
   filter?: {
     typeName?: string[],
     status?: JobStatus[],
@@ -212,9 +212,9 @@ const page = await client.listJobChains({
 });
 ```
 
-Returns `Page<JobChain>`.
+Returns `Page<Chain>`.
 
-Paginated listing of job chains. **root** filters to only root chains (not blockers). Default **orderDirection** is `"desc"`. Default **limit** is `50`.
+Paginated listing of chains. **root** filters to only root chains (not blockers). Default **orderDirection** is `"desc"`. Default **limit** is `50`.
 
 ### listJobs
 
@@ -224,8 +224,8 @@ const page = await client.listJobs({
     typeName?: string[],
     status?: JobStatus[],
     id?: string[],
-    jobChainTypeName?: string[],
-    jobChainId?: string[],
+    chainTypeName?: string[],
+    chainId?: string[],
     from?: Date,
     to?: Date,
   },
@@ -237,13 +237,13 @@ const page = await client.listJobs({
 
 Returns `Page<Job>`.
 
-Paginated listing of jobs. **jobChainTypeName** filters to jobs belonging to chains started by the given entry type names. Default **orderDirection** is `"desc"`. Default **limit** is `50`.
+Paginated listing of jobs. **chainTypeName** filters to jobs belonging to chains started by the given entry type names. Default **orderDirection** is `"desc"`. Default **limit** is `50`.
 
-### listJobChainJobs
+### listChainJobs
 
 ```typescript
-const page = await client.listJobChainJobs({
-  jobChainId: chainId,
+const page = await client.listChainJobs({
+  chainId: chainId,
   typeName?: "send-email",
   orderDirection?: "asc" | "desc",
   cursor?: string,
@@ -264,7 +264,7 @@ const blockers = await client.getJobBlockers({
 });
 ```
 
-Returns `JobChain[]`.
+Returns `Chain[]`.
 
 Returns the blocker chains for a given job. The result is not paginated because blockers are bounded by design.
 
@@ -272,7 +272,7 @@ Returns the blocker chains for a given job. The result is not paginated because 
 
 ```typescript
 const page = await client.listBlockedJobs({
-  jobChainId: chainId,
+  chainId: chainId,
   typeName?: "send-email",
   orderDirection?: "asc" | "desc",
   cursor?: string,
@@ -293,16 +293,16 @@ type DeduplicationOptions<TJobId> = {
   key: string;
   scope?: "incomplete" | "any"; // default: "incomplete"
   windowMs?: number; // required when scope is "any"
-  excludeJobChainIds?: TJobId[];
+  excludeChainIds?: TJobId[];
 };
 ```
 
-Chain deduplication configuration passed to `startJobChain`.
+Chain deduplication configuration passed to `startChain`.
 
 - **key** — identifies the logical operation
 - **scope** — match incomplete chains only (`"incomplete"`, the default) or all chains within the time window (`"any"`)
 - **windowMs** — required when scope is `"any"`
-- **excludeJobChainIds** — chain IDs to exclude from deduplication matching; useful for recurring jobs that self-schedule within a completion callback where the current chain is still incomplete
+- **excludeChainIds** — chain IDs to exclude from deduplication matching; useful for recurring jobs that self-schedule within a completion callback where the current chain is still incomplete
 
 ### ScheduleOptions
 
@@ -337,7 +337,7 @@ Controls sort order in list queries. Most list methods default to `"desc"`.
 ## See Also
 
 - [Worker](/queuert/reference/queuert/worker/) — Worker configuration and job processing
-- [Entities](/queuert/reference/queuert/entities/) — `Job`, `JobChain`, and resolved variants
+- [Entities](/queuert/reference/queuert/entities/) — `Job`, `Chain`, and resolved variants
 - [Utilities](/queuert/reference/queuert/utilities/) — Composition helpers and utility functions
 - [Transaction Hooks](/queuert/reference/queuert/transaction-hooks/) — Transaction hooks API reference
 - [Errors](/queuert/reference/queuert/errors/) — Error classes reference

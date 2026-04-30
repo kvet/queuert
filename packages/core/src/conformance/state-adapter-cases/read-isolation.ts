@@ -5,7 +5,7 @@ export const readIsolationGroup: ConformanceGroup<StateAdapterConformanceContext
   name: "read isolation",
   cases: [
     {
-      name: "non-transactional getJobById does not observe an uncommitted insert",
+      name: "non-transactional getJob does not observe an uncommitted insert",
       run: async ({ stateAdapter }, expect) => {
         let release: (() => void) | undefined;
         const gate = new Promise<void>((r) => {
@@ -39,7 +39,7 @@ export const readIsolationGroup: ConformanceGroup<StateAdapterConformanceContext
           .catch(() => {});
 
         await txReady;
-        const readPromise = stateAdapter.getJobById({ jobId: insertedId! });
+        const readPromise = stateAdapter.getJob({ jobId: insertedId! });
         release!();
         await txPromise;
 
@@ -48,7 +48,7 @@ export const readIsolationGroup: ConformanceGroup<StateAdapterConformanceContext
       },
     },
     {
-      name: "non-transactional getJobById does not observe an uncommitted status update",
+      name: "non-transactional getJob does not observe an uncommitted status update",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: seed }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
@@ -88,7 +88,7 @@ export const readIsolationGroup: ConformanceGroup<StateAdapterConformanceContext
           .catch(() => {});
 
         await txReady;
-        const readPromise = stateAdapter.getJobById({ jobId: seed.id });
+        const readPromise = stateAdapter.getJob({ jobId: seed.id });
         release!();
         await txPromise;
 
@@ -197,7 +197,7 @@ export const readIsolationGroup: ConformanceGroup<StateAdapterConformanceContext
 
         await txReady;
         const blockersPromise = stateAdapter.getJobBlockers({ jobId: target.id });
-        const targetReadPromise = stateAdapter.getJobById({ jobId: target.id });
+        const targetReadPromise = stateAdapter.getJob({ jobId: target.id });
         release!();
         await txPromise;
 
@@ -208,7 +208,7 @@ export const readIsolationGroup: ConformanceGroup<StateAdapterConformanceContext
       },
     },
     {
-      name: "non-transactional getJobById does not observe an uncommitted delete",
+      name: "non-transactional getJob does not observe an uncommitted delete",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: seed }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
@@ -236,7 +236,7 @@ export const readIsolationGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const txPromise = stateAdapter
           .withTransaction(async (txCtx) => {
-            await stateAdapter.deleteJobChains({ txCtx, chainIds: [seed.chainId] });
+            await stateAdapter.deleteChains({ txCtx, chainIds: [seed.chainId] });
             signalTxReady!();
             await gate;
             throw new Error("rollback");
@@ -244,7 +244,7 @@ export const readIsolationGroup: ConformanceGroup<StateAdapterConformanceContext
           .catch(() => {});
 
         await txReady;
-        const readPromise = stateAdapter.getJobById({ jobId: seed.id });
+        const readPromise = stateAdapter.getJob({ jobId: seed.id });
         release!();
         await txPromise;
 
@@ -253,7 +253,7 @@ export const readIsolationGroup: ConformanceGroup<StateAdapterConformanceContext
       },
     },
     {
-      name: "non-transactional getJobChainById does not observe an uncommitted chain creation",
+      name: "non-transactional getChain does not observe an uncommitted chain creation",
       run: async ({ stateAdapter }, expect) => {
         let release: (() => void) | undefined;
         const gate = new Promise<void>((r) => {
@@ -287,7 +287,7 @@ export const readIsolationGroup: ConformanceGroup<StateAdapterConformanceContext
           .catch(() => {});
 
         await txReady;
-        const readPromise = stateAdapter.getJobChainById({ chainId: newChainId! });
+        const readPromise = stateAdapter.getChain({ chainId: newChainId! });
         release!();
         await txPromise;
 
@@ -337,7 +337,7 @@ export const readIsolationGroup: ConformanceGroup<StateAdapterConformanceContext
       },
     },
     {
-      name: "non-transactional locked getJobById does not observe an uncommitted status update",
+      name: "non-transactional locked getJob does not observe an uncommitted status update",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: seed }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
@@ -373,7 +373,7 @@ export const readIsolationGroup: ConformanceGroup<StateAdapterConformanceContext
           .catch(() => {});
 
         await txReady;
-        const readPromise = stateAdapter.getJobById({ jobId: seed.id, lock: "exclusive" });
+        const readPromise = stateAdapter.getJob({ jobId: seed.id, lock: "exclusive" });
         release!();
         await txPromise;
 
@@ -383,7 +383,7 @@ export const readIsolationGroup: ConformanceGroup<StateAdapterConformanceContext
       },
     },
     {
-      name: "non-transactional locked getJobChainById does not observe an uncommitted continuation",
+      name: "non-transactional locked getChain does not observe an uncommitted continuation",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: seed }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
@@ -430,7 +430,7 @@ export const readIsolationGroup: ConformanceGroup<StateAdapterConformanceContext
           .catch(() => {});
 
         await txReady;
-        const readPromise = stateAdapter.getJobChainById({
+        const readPromise = stateAdapter.getChain({
           chainId: seed.chainId,
           lock: "exclusive",
         });
@@ -446,7 +446,7 @@ export const readIsolationGroup: ConformanceGroup<StateAdapterConformanceContext
       },
     },
     {
-      name: "non-transactional listJobChains does not observe an uncommitted chain creation",
+      name: "non-transactional listChains does not observe an uncommitted chain creation",
       run: async ({ stateAdapter }, expect) => {
         let release: (() => void) | undefined;
         const gate = new Promise<void>((r) => {
@@ -478,7 +478,7 @@ export const readIsolationGroup: ConformanceGroup<StateAdapterConformanceContext
           .catch(() => {});
 
         await txReady;
-        const listPromise = stateAdapter.listJobChains({
+        const listPromise = stateAdapter.listChains({
           filter: { typeName: ["iso-list-chains"] },
           orderDirection: "desc",
           page: { limit: 10 },
@@ -491,7 +491,7 @@ export const readIsolationGroup: ConformanceGroup<StateAdapterConformanceContext
       },
     },
     {
-      name: "non-transactional listJobChainJobs does not observe an uncommitted continuation",
+      name: "non-transactional listChainJobs does not observe an uncommitted continuation",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: seed }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
@@ -538,7 +538,7 @@ export const readIsolationGroup: ConformanceGroup<StateAdapterConformanceContext
           .catch(() => {});
 
         await txReady;
-        const listPromise = stateAdapter.listJobChainJobs({
+        const listPromise = stateAdapter.listChainJobs({
           chainId: seed.chainId,
           orderDirection: "asc",
           page: { limit: 10 },

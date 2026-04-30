@@ -4,11 +4,11 @@ import { type StateAdapterConformanceContext } from "./types.js";
 
 const LOCK_BLOCK_OBSERVATION_MS = 100;
 
-export const getJobChainByIdGroup: ConformanceGroup<StateAdapterConformanceContext> = {
-  name: "getJobChainById",
+export const getChainGroup: ConformanceGroup<StateAdapterConformanceContext> = {
+  name: "getChain",
   cases: [
     {
-      name: "handles job chain relationships correctly",
+      name: "handles chain relationships correctly",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: rootJob }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
@@ -25,15 +25,15 @@ export const getJobChainByIdGroup: ConformanceGroup<StateAdapterConformanceConte
           }),
         );
 
-        const jobChain = await stateAdapter.getJobChainById({ chainId: rootJob.id });
+        const chain = await stateAdapter.getChain({ chainId: rootJob.id });
 
-        expect(jobChain).toBeDefined();
-        expect(jobChain![0].id).toBe(rootJob.id);
-        expect(jobChain![0].chainId).toBe(rootJob.id);
+        expect(chain).toBeDefined();
+        expect(chain![0].id).toBe(rootJob.id);
+        expect(chain![0].chainId).toBe(rootJob.id);
       },
     },
     {
-      name: "returns [rootJob, lastJob] for multi-job chain",
+      name: "returns [rootJob, lastJob] for multi-chain",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: rootJob }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
@@ -65,11 +65,11 @@ export const getJobChainByIdGroup: ConformanceGroup<StateAdapterConformanceConte
           }),
         );
 
-        const jobChain = await stateAdapter.getJobChainById({ chainId: rootJob.id });
-        expect(jobChain).toBeDefined();
-        expect(jobChain![0].id).toBe(rootJob.id);
-        expect(jobChain![1]).toBeDefined();
-        expect(jobChain![1]!.id).toBe(continuation.id);
+        const chain = await stateAdapter.getChain({ chainId: rootJob.id });
+        expect(chain).toBeDefined();
+        expect(chain![0].id).toBe(rootJob.id);
+        expect(chain![1]).toBeDefined();
+        expect(chain![1]!.id).toBe(continuation.id);
       },
     },
     {
@@ -90,7 +90,7 @@ export const getJobChainByIdGroup: ConformanceGroup<StateAdapterConformanceConte
           }),
         );
 
-        const chain = await stateAdapter.getJobChainById({ chainId: rootJob.id });
+        const chain = await stateAdapter.getChain({ chainId: rootJob.id });
 
         expect(chain).toBeDefined();
         expect(chain![0].id).toBe(rootJob.id);
@@ -116,7 +116,7 @@ export const getJobChainByIdGroup: ConformanceGroup<StateAdapterConformanceConte
         );
 
         const chain = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.getJobChainById({ txCtx, chainId: rootJob.id, lock: "exclusive" }),
+          stateAdapter.getChain({ txCtx, chainId: rootJob.id, lock: "exclusive" }),
         );
 
         expect(chain).toBeDefined();
@@ -142,7 +142,7 @@ export const getJobChainByIdGroup: ConformanceGroup<StateAdapterConformanceConte
           }),
         );
         const nonexistentId = real.chainId.slice(0, -1) + (real.chainId.endsWith("0") ? "1" : "0");
-        const chain = await stateAdapter.getJobChainById({
+        const chain = await stateAdapter.getChain({
           chainId: nonexistentId,
         });
         expect(chain).toBeUndefined();
@@ -191,7 +191,7 @@ export const getJobChainByIdGroup: ConformanceGroup<StateAdapterConformanceConte
         });
 
         const holderTx = stateAdapter.withTransaction(async (txCtx) => {
-          await stateAdapter.getJobChainById({
+          await stateAdapter.getChain({
             txCtx,
             chainId: rootJob.chainId,
             lock: "exclusive",
@@ -205,7 +205,7 @@ export const getJobChainByIdGroup: ConformanceGroup<StateAdapterConformanceConte
         let waiterResolved = false;
         const waiterTx = stateAdapter
           .withTransaction(async (txCtx) =>
-            stateAdapter.getJobChainById({ txCtx, chainId: rootJob.chainId, lock: "exclusive" }),
+            stateAdapter.getChain({ txCtx, chainId: rootJob.chainId, lock: "exclusive" }),
           )
           .then((chain) => {
             waiterResolved = true;

@@ -56,10 +56,10 @@ describe("middleware ctx cannot shadow built-in handler/prepare/complete keys", 
     const stop = await worker.start();
     const chain = await withTransactionHooks(async (transactionHooks) =>
       stateAdapter.withTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, transactionHooks, typeName: "foo", input: { v: 1 } }),
+        client.startChain({ ...txCtx, transactionHooks, typeName: "foo", input: { v: 1 } }),
       ),
     );
-    await client.awaitJobChain(chain, { timeoutMs: 5000, pollIntervalMs: 50 });
+    await client.awaitChain(chain, { timeoutMs: 5000, pollIntervalMs: 50 });
     await stop();
 
     expect(observedSignalIsAbortSignal).toBe(true);
@@ -125,15 +125,15 @@ describe("middleware ctx cannot shadow built-in handler/prepare/complete keys", 
     const stop = await worker.start();
     const chain = await withTransactionHooks(async (transactionHooks) =>
       wrappedAdapter.withTransaction(async (txCtx) =>
-        wrappedClient.startJobChain({
+        wrappedClient.startChain({
           ...(txCtx as unknown as object),
           transactionHooks,
           typeName: "foo",
           input: { v: 1 },
-        } as Parameters<typeof wrappedClient.startJobChain>[0]),
+        } as Parameters<typeof wrappedClient.startChain>[0]),
       ),
     );
-    await wrappedClient.awaitJobChain(chain, { timeoutMs: 5000, pollIntervalMs: 50 });
+    await wrappedClient.awaitChain(chain, { timeoutMs: 5000, pollIntervalMs: 50 });
     await stop();
 
     expect(observedMarkerIsReal).toBe(true);
@@ -193,15 +193,15 @@ describe("middleware ctx cannot shadow built-in handler/prepare/complete keys", 
     const stop = await worker.start();
     const chain = await withTransactionHooks(async (transactionHooks) =>
       wrappedAdapter.withTransaction(async (txCtx) =>
-        wrappedClient.startJobChain({
+        wrappedClient.startChain({
           ...(txCtx as unknown as object),
           transactionHooks,
           typeName: "foo",
           input: { v: 1 },
-        } as Parameters<typeof wrappedClient.startJobChain>[0]),
+        } as Parameters<typeof wrappedClient.startChain>[0]),
       ),
     );
-    await wrappedClient.awaitJobChain(chain, { timeoutMs: 5000, pollIntervalMs: 50 });
+    await wrappedClient.awaitChain(chain, { timeoutMs: 5000, pollIntervalMs: 50 });
     await stop();
 
     expect(observedMarkerIsReal).toBe(true);
@@ -244,10 +244,10 @@ describe("middleware ctx cannot shadow built-in handler/prepare/complete keys", 
     const stop = await worker.start();
     const chain = await withTransactionHooks(async (transactionHooks) =>
       stateAdapter.withTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, transactionHooks, typeName: "foo", input: { v: 1 } }),
+        client.startChain({ ...txCtx, transactionHooks, typeName: "foo", input: { v: 1 } }),
       ),
     );
-    await client.awaitJobChain(chain, { timeoutMs: 5000, pollIntervalMs: 50 });
+    await client.awaitChain(chain, { timeoutMs: 5000, pollIntervalMs: 50 });
     await stop();
 
     expect(observedContinueWithIsFn).toBe(true);
@@ -308,16 +308,16 @@ describe("registry-level attemptMiddleware — runtime per-slice isolation", () 
 
     const chainA = await withTransactionHooks(async (transactionHooks) =>
       sa.withTransaction(async (txCtx) =>
-        abClient.startJobChain({ ...txCtx, transactionHooks, typeName: "a", input: {} }),
+        abClient.startChain({ ...txCtx, transactionHooks, typeName: "a", input: {} }),
       ),
     );
     const chainB = await withTransactionHooks(async (transactionHooks) =>
       sa.withTransaction(async (txCtx) =>
-        abClient.startJobChain({ ...txCtx, transactionHooks, typeName: "b", input: {} }),
+        abClient.startChain({ ...txCtx, transactionHooks, typeName: "b", input: {} }),
       ),
     );
-    await abClient.awaitJobChain(chainA, { timeoutMs: 5000, pollIntervalMs: 100 });
-    await abClient.awaitJobChain(chainB, { timeoutMs: 5000, pollIntervalMs: 100 });
+    await abClient.awaitChain(chainA, { timeoutMs: 5000, pollIntervalMs: 100 });
+    await abClient.awaitChain(chainB, { timeoutMs: 5000, pollIntervalMs: 100 });
     await stop();
 
     expect(sliceACalls).toEqual(["a"]);

@@ -68,9 +68,9 @@ export const createOtelObservabilityAdapter = async ({
   const jobCompletedCounter = meter?.createCounter("queuert.job.completed");
   const jobReapedCounter = meter?.createCounter("queuert.job.reaped");
 
-  const jobChainCreatedCounter = meter?.createCounter("queuert.job_chain.created");
-  const jobChainCompletedCounter = meter?.createCounter("queuert.job_chain.completed");
-  const jobChainDeletedCounter = meter?.createCounter("queuert.job_chain.deleted");
+  const chainCreatedCounter = meter?.createCounter("queuert.chain.created");
+  const chainCompletedCounter = meter?.createCounter("queuert.chain.completed");
+  const chainDeletedCounter = meter?.createCounter("queuert.chain.deleted");
 
   const jobTriggeredCounter = meter?.createCounter("queuert.job.triggered");
 
@@ -81,9 +81,9 @@ export const createOtelObservabilityAdapter = async ({
 
   const stateAdapterErrorCounter = meter?.createCounter("queuert.state_adapter.error");
 
-  const jobChainDurationHistogram = meter?.createHistogram("queuert.job_chain.duration", {
+  const chainDurationHistogram = meter?.createHistogram("queuert.chain.duration", {
     unit: "s",
-    description: "Duration of job chain from creation to completion",
+    description: "Duration of chain from creation to completion",
   });
   const jobDurationHistogram = meter?.createHistogram("queuert.job.duration", {
     unit: "s",
@@ -175,14 +175,14 @@ export const createOtelObservabilityAdapter = async ({
       });
     },
 
-    jobChainCreated: ({ typeName }) => {
-      jobChainCreatedCounter?.add(1, { chainTypeName: typeName });
+    chainCreated: ({ typeName }) => {
+      chainCreatedCounter?.add(1, { chainTypeName: typeName });
     },
-    jobChainCompleted: ({ typeName }) => {
-      jobChainCompletedCounter?.add(1, { chainTypeName: typeName });
+    chainCompleted: ({ typeName }) => {
+      chainCompletedCounter?.add(1, { chainTypeName: typeName });
     },
-    jobChainDeleted: ({ typeName }) => {
-      jobChainDeletedCounter?.add(1, { chainTypeName: typeName });
+    chainDeleted: ({ typeName }) => {
+      chainDeletedCounter?.add(1, { chainTypeName: typeName });
     },
 
     jobTriggered: ({ typeName, chainTypeName }) => {
@@ -204,8 +204,8 @@ export const createOtelObservabilityAdapter = async ({
       stateAdapterErrorCounter?.add(1, { operation });
     },
 
-    jobChainDuration: ({ typeName, durationMs }) => {
-      jobChainDurationHistogram?.record(durationMs / 1000, { chainTypeName: typeName });
+    chainDuration: ({ typeName, durationMs }) => {
+      chainDurationHistogram?.record(durationMs / 1000, { chainTypeName: typeName });
     },
     jobDuration: ({ typeName, chainTypeName, durationMs }) => {
       jobDurationHistogram?.record(durationMs / 1000, { typeName, chainTypeName });

@@ -72,9 +72,9 @@ export const notifyResilienceTestSuite = ({
 
     await withWorkers([await worker.start()], async () => {
       // at least one notify pushes worker to process jobs
-      const jobChains = await withTransactionHooks(async (transactionHooks) =>
+      const chains = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startJobChains({
+          client.startChains({
             ...txCtx,
             transactionHooks,
             items: Array.from({ length: 20 }, (_, i) => ({
@@ -86,9 +86,9 @@ export const notifyResilienceTestSuite = ({
       );
 
       await Promise.all(
-        jobChains.map(async (chain) =>
+        chains.map(async (chain) =>
           // we have to rely on polling here since notify adapter is flaky
-          client.awaitJobChain(chain, { pollIntervalMs: 1000, timeoutMs: 5000 }),
+          client.awaitChain(chain, { pollIntervalMs: 1000, timeoutMs: 5000 }),
         ),
       );
     });

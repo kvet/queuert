@@ -1,6 +1,6 @@
 # Blockers Showcase
 
-Jobs that depend on other job chains completing before they start.
+Jobs that depend on other chains completing before they start.
 
 Scenarios: fan-out/fan-in, fixed slots.
 

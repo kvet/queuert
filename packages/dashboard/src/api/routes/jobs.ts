@@ -22,9 +22,9 @@ export const handleJobsList = async (url: URL, client: Client<any, any>): Promis
     filter: {
       status,
       typeName,
-      jobChainTypeName: chainTypeName,
-      jobChainId: chainId ? [chainId] : undefined,
-      id: id ? [id] : undefined,
+      chainTypeName,
+      chainId: chainId ? [chainId] : undefined,
+      jobId: id ? [id] : undefined,
     },
     orderDirection: "desc",
     cursor,
@@ -50,8 +50,8 @@ export const handleJobDetail = async (
   const cursor = encodeCursor({ type: "chainIndex", id: job.id, chainIndex: job.chainIndex });
   const [blockers, continuationPage] = await Promise.all([
     client.getJobBlockers({ jobId: job.id }),
-    client.listJobChainJobs({
-      jobChainId: job.chainId,
+    client.listChainJobs({
+      chainId: job.chainId,
       orderDirection: "asc",
       cursor,
       limit: 1,

@@ -79,13 +79,13 @@ export const extendWithNotifyPostgres = <
             maybeThrow();
             return notifyAdapter.consumeWakeHint(typeName);
           },
-          notifyJobChainCompleted: async (chainId) => {
+          notifyChainCompleted: async (chainId) => {
             maybeThrow();
-            return notifyAdapter.notifyJobChainCompleted(chainId);
+            return notifyAdapter.notifyChainCompleted(chainId);
           },
-          listenJobChainCompleted: async (chainId, onNotification) => {
+          listenChainCompleted: async (chainId, onNotification) => {
             maybeThrow();
-            return notifyAdapter.listenJobChainCompleted(chainId, onNotification);
+            return notifyAdapter.listenChainCompleted(chainId, onNotification);
           },
           notifyJobOwnershipLost: async (jobId) => {
             maybeThrow();

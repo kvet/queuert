@@ -41,7 +41,7 @@ await withTransactionHooks(async (transactionHooks) =>
       email: "alice@example.com",
     });
 
-    await client.startJobChain({
+    await client.startChain({
       tx,
       transactionHooks,
       typeName: "send-welcome-email",
@@ -91,7 +91,7 @@ const stop = await worker.start();
     Full TypeScript inference for inputs, outputs, continuations, and blockers. Catch errors at
     compile time.
   </Card>
-  <Card title="Job Chains" icon="right-arrow">
+  <Card title="Chains" icon="right-arrow">
     Model multi-step workflows as typed chains. Each step continues, loops, branches, or terminates
     — like Promise chains, but persistent and resumable.
   </Card>

@@ -77,12 +77,12 @@ export const createRedisNotifyAdapter = async ({
       return result === 1;
     },
 
-    notifyJobChainCompleted: async (chainId) => {
+    notifyChainCompleted: async (chainId) => {
       assertOpen();
       await notifyProvider.publish(chainCompletedChannel, chainId);
     },
 
-    listenJobChainCompleted: async (chainId, onNotification) => {
+    listenChainCompleted: async (chainId, onNotification) => {
       assertOpen();
       return chainCompletedListener.subscribe(chainId, () => {
         onNotification();

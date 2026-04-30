@@ -116,7 +116,7 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyAdapterConfo
         name: "publish without listeners does not error",
         run: async ({ notifyAdapter }) => {
           await notifyAdapter.notifyJobScheduled("type-a");
-          await notifyAdapter.notifyJobChainCompleted("chain-1");
+          await notifyAdapter.notifyChainCompleted("chain-1");
           await notifyAdapter.notifyJobOwnershipLost("job-1");
         },
       },
@@ -170,17 +170,17 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyAdapterConfo
     ],
   },
   {
-    name: "notifyJobChainCompleted / listenJobChainCompleted",
+    name: "notifyChainCompleted / listenChainCompleted",
     cases: [
       {
         name: "listener receives chain completion for matching chain ID",
         run: async ({ notifyAdapter }) => {
           const received = Promise.withResolvers<void>();
-          const unsubscribe = await notifyAdapter.listenJobChainCompleted("chain-123", () => {
+          const unsubscribe = await notifyAdapter.listenChainCompleted("chain-123", () => {
             received.resolve();
           });
 
-          await notifyAdapter.notifyJobChainCompleted("chain-123");
+          await notifyAdapter.notifyChainCompleted("chain-123");
 
           await waitFor(received.promise, "notification");
 
@@ -191,11 +191,11 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyAdapterConfo
         name: "listener does not receive chain completion for different chain ID",
         run: async ({ notifyAdapter }, expect) => {
           let callCount = 0;
-          const unsubscribe = await notifyAdapter.listenJobChainCompleted("chain-123", () => {
+          const unsubscribe = await notifyAdapter.listenChainCompleted("chain-123", () => {
             callCount++;
           });
 
-          await notifyAdapter.notifyJobChainCompleted("chain-456");
+          await notifyAdapter.notifyChainCompleted("chain-456");
           await sleep(NEGATIVE_ASSERTION_DELAY_MS);
 
           expect(callCount).toBe(0);
@@ -208,14 +208,14 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyAdapterConfo
           const received1 = Promise.withResolvers<void>();
           const received2 = Promise.withResolvers<void>();
 
-          const unsubscribe1 = await notifyAdapter.listenJobChainCompleted("chain-multi", () => {
+          const unsubscribe1 = await notifyAdapter.listenChainCompleted("chain-multi", () => {
             received1.resolve();
           });
-          const unsubscribe2 = await notifyAdapter.listenJobChainCompleted("chain-multi", () => {
+          const unsubscribe2 = await notifyAdapter.listenChainCompleted("chain-multi", () => {
             received2.resolve();
           });
 
-          await notifyAdapter.notifyJobChainCompleted("chain-multi");
+          await notifyAdapter.notifyChainCompleted("chain-multi");
 
           await waitFor(Promise.all([received1.promise, received2.promise]), "notifications");
 
@@ -227,15 +227,12 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyAdapterConfo
         name: "unsubscribe stops chain completion notifications",
         run: async ({ notifyAdapter }, expect) => {
           let callCount = 0;
-          const unsubscribe = await notifyAdapter.listenJobChainCompleted(
-            "chain-unsubscribe",
-            () => {
-              callCount++;
-            },
-          );
+          const unsubscribe = await notifyAdapter.listenChainCompleted("chain-unsubscribe", () => {
+            callCount++;
+          });
 
           await unsubscribe();
-          await notifyAdapter.notifyJobChainCompleted("chain-unsubscribe");
+          await notifyAdapter.notifyChainCompleted("chain-unsubscribe");
           await sleep(NEGATIVE_ASSERTION_DELAY_MS);
 
           expect(callCount).toBe(0);
@@ -327,14 +324,14 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyAdapterConfo
 
           const unsubscribes = await Promise.all(
             chainIds.map(async (id) =>
-              notifyAdapter.listenJobChainCompleted(id, () => {
+              notifyAdapter.listenChainCompleted(id, () => {
                 received++;
               }),
             ),
           );
 
           for (let i = 0; i < half; i++) {
-            await notifyAdapter.notifyJobChainCompleted(chainIds[i]);
+            await notifyAdapter.notifyChainCompleted(chainIds[i]);
           }
           // Let fire-and-forget transports drain already-published messages.
           // A batch-at-end impl would show 0 here; an incremental impl makes progress.
@@ -342,7 +339,7 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyAdapterConfo
           const receivedMidLoop = received;
 
           for (let i = half; i < count; i++) {
-            await notifyAdapter.notifyJobChainCompleted(chainIds[i]);
+            await notifyAdapter.notifyChainCompleted(chainIds[i]);
           }
 
           await expect.poll(() => received, { timeout: 2000 }).toBe(count);
@@ -360,7 +357,7 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyAdapterConfo
         name: "listen methods return async unsubscribe functions",
         run: async ({ notifyAdapter }, expect) => {
           const unsubscribe1 = await notifyAdapter.listenJobScheduled(["type-a"], () => {});
-          const unsubscribe2 = await notifyAdapter.listenJobChainCompleted("chain-1", () => {});
+          const unsubscribe2 = await notifyAdapter.listenChainCompleted("chain-1", () => {});
           const unsubscribe3 = await notifyAdapter.listenJobOwnershipLost("job-1", () => {});
 
           expect(typeof unsubscribe1).toBe("function");
@@ -405,16 +402,16 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyAdapterConfo
           let count1 = 0;
           const received2 = Promise.withResolvers<void>();
 
-          const unsubscribe1 = await notifyAdapter.listenJobChainCompleted("chain-partial", () => {
+          const unsubscribe1 = await notifyAdapter.listenChainCompleted("chain-partial", () => {
             count1++;
           });
-          const unsubscribe2 = await notifyAdapter.listenJobChainCompleted("chain-partial", () => {
+          const unsubscribe2 = await notifyAdapter.listenChainCompleted("chain-partial", () => {
             received2.resolve();
           });
 
           await unsubscribe1();
 
-          await notifyAdapter.notifyJobChainCompleted("chain-partial");
+          await notifyAdapter.notifyChainCompleted("chain-partial");
 
           await waitFor(received2.promise, "notification");
 
@@ -431,14 +428,14 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyAdapterConfo
         name: "throwing callback does not break peer callback or surface to publisher",
         run: async ({ notifyAdapter }) => {
           const peerCalled = Promise.withResolvers<void>();
-          const unsubBad = await notifyAdapter.listenJobChainCompleted("chain-throw", () => {
+          const unsubBad = await notifyAdapter.listenChainCompleted("chain-throw", () => {
             throw new Error("bad listener");
           });
-          const unsubGood = await notifyAdapter.listenJobChainCompleted("chain-throw", () => {
+          const unsubGood = await notifyAdapter.listenChainCompleted("chain-throw", () => {
             peerCalled.resolve();
           });
 
-          await notifyAdapter.notifyJobChainCompleted("chain-throw");
+          await notifyAdapter.notifyChainCompleted("chain-throw");
           await waitFor(peerCalled.promise, "peer notification");
 
           await unsubBad();
@@ -460,11 +457,11 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyAdapterConfo
           process.on("unhandledRejection", handler);
           try {
             const u1 = await notifyAdapter.listenJobScheduled(["type-a"], () => {});
-            const u2 = await notifyAdapter.listenJobChainCompleted("chain-1", () => {});
+            const u2 = await notifyAdapter.listenChainCompleted("chain-1", () => {});
             const u3 = await notifyAdapter.listenJobOwnershipLost("job-1", () => {});
 
             await notifyAdapter.notifyJobScheduled("type-a");
-            await notifyAdapter.notifyJobChainCompleted("chain-1");
+            await notifyAdapter.notifyChainCompleted("chain-1");
             await notifyAdapter.notifyJobOwnershipLost("job-1");
 
             await sleep(NEGATIVE_ASSERTION_DELAY_MS);
@@ -489,7 +486,7 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyAdapterConfo
       {
         name: "close is idempotent, rejects subsequent calls, and previously returned unsubscribes remain safe",
         run: async ({ notifyAdapter }, expect) => {
-          const unsubscribe = await notifyAdapter.listenJobChainCompleted("chain-1", () => {});
+          const unsubscribe = await notifyAdapter.listenChainCompleted("chain-1", () => {});
 
           await notifyAdapter.close();
           await notifyAdapter.close();
@@ -498,10 +495,8 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyAdapterConfo
 
           await expect(notifyAdapter.notifyJobScheduled("type-a")).rejects.toThrow();
           await expect(notifyAdapter.listenJobScheduled(["type-a"], () => {})).rejects.toThrow();
-          await expect(notifyAdapter.notifyJobChainCompleted("chain-1")).rejects.toThrow();
-          await expect(
-            notifyAdapter.listenJobChainCompleted("chain-1", () => {}),
-          ).rejects.toThrow();
+          await expect(notifyAdapter.notifyChainCompleted("chain-1")).rejects.toThrow();
+          await expect(notifyAdapter.listenChainCompleted("chain-1", () => {})).rejects.toThrow();
           await expect(notifyAdapter.notifyJobOwnershipLost("job-1")).rejects.toThrow();
           await expect(notifyAdapter.listenJobOwnershipLost("job-1", () => {})).rejects.toThrow();
         },

@@ -68,7 +68,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         withTransaction(async (txCtx) => {
           const base = { ...txCtx, transactionHooks };
           if (typeName === "report") {
-            return client.startJobChain({
+            return client.startChain({
               ...base,
               typeName,
               input: input as { type: string },
@@ -76,13 +76,13 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
             });
           }
           if (typeName === "order") {
-            return client.startJobChain({
+            return client.startChain({
               ...base,
               typeName,
               input: input as { amount: number },
             });
           }
-          return client.startJobChain({
+          return client.startChain({
             ...base,
             typeName: typeName as "notification",
             input: input as { message: string },
@@ -93,8 +93,8 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     return { client, startChain };
   };
 
-  describe("getJobChain", () => {
-    it("getJobChain returns undefined for nonexistent chain", async ({
+  describe("getChain", () => {
+    it("getChain returns undefined for nonexistent chain", async ({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -110,15 +110,15 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         withTransaction,
       });
 
-      const jobChain = await client.getJobChain({
+      const chain = await client.getChain({
         typeName: "order",
         id: "00000000-0000-0000-0000-000000000000",
       });
 
-      expect(jobChain).toBeUndefined();
+      expect(chain).toBeUndefined();
     });
 
-    it("getJobChain returns chain by id", async ({
+    it("getChain returns chain by id", async ({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -135,16 +135,16 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       });
       const created = await startChain("order", { amount: 42 });
 
-      const jobChain = await client.getJobChain({ typeName: "order", id: created.id });
+      const chain = await client.getChain({ id: created.id });
 
-      expect(jobChain).not.toBeNull();
-      expect(jobChain!.id).toBe(created.id);
-      expect(jobChain!.typeName).toBe("order");
-      expect(jobChain!.input).toEqual({ amount: 42 });
-      expect(jobChain!.status).toBe("pending");
+      expect(chain).not.toBeNull();
+      expect(chain!.id).toBe(created.id);
+      expect(chain!.typeName).toBe("order");
+      expect(chain!.input).toEqual({ amount: 42 });
+      expect(chain!.status).toBe("pending");
     });
 
-    it("getJobChain narrows return type by typeName", async ({
+    it("getChain narrows return type by typeName", async ({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -161,13 +161,13 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       });
       const created = await startChain("notification", { message: "hello" });
 
-      const jobChain = await client.getJobChain({ typeName: "notification", id: created.id });
+      const chain = await client.getChain({ typeName: "notification", id: created.id });
 
-      expect(jobChain).not.toBeNull();
-      expectTypeOf(jobChain!.typeName).toEqualTypeOf<"notification">();
+      expect(chain).not.toBeNull();
+      expectTypeOf(chain!.typeName).toEqualTypeOf<"notification">();
     });
 
-    it("getJobChain returns without typeName", async ({
+    it("getChain returns without typeName", async ({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -184,13 +184,13 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       });
       const created = await startChain("order", { amount: 42 });
 
-      const jobChain = await client.getJobChain({ id: created.id });
+      const chain = await client.getChain({ id: created.id });
 
-      expect(jobChain).not.toBeNull();
-      expect(jobChain!.typeName).toBe("order");
+      expect(chain).not.toBeNull();
+      expect(chain!.typeName).toBe("order");
     });
 
-    it("getJobChain throws on typeName mismatch", async ({
+    it("getChain throws on typeName mismatch", async ({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -207,9 +207,9 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       });
       const created = await startChain("order", { amount: 42 });
 
-      await expect(
-        client.getJobChain({ typeName: "notification", id: created.id }),
-      ).rejects.toThrow(JobTypeMismatchError);
+      await expect(client.getChain({ typeName: "notification", id: created.id })).rejects.toThrow(
+        JobTypeMismatchError,
+      );
     });
   });
 
@@ -253,12 +253,12 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         log,
         withTransaction,
       });
-      const jobChain = await startChain("notification", { message: "hello" });
+      const chain = await startChain("notification", { message: "hello" });
 
-      const job = await client.getJob({ typeName: "notification", id: jobChain.id });
+      const job = await client.getJob({ id: chain.id });
 
       expect(job).not.toBeNull();
-      expect(job!.id).toBe(jobChain.id);
+      expect(job!.id).toBe(chain.id);
       expect(job!.typeName).toBe("notification");
       expect(job!.input).toEqual({ message: "hello" });
       expect(job!.status).toBe("pending");
@@ -279,9 +279,9 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         log,
         withTransaction,
       });
-      const jobChain = await startChain("notification", { message: "hello" });
+      const chain = await startChain("notification", { message: "hello" });
 
-      const job = await client.getJob({ id: jobChain.id });
+      const job = await client.getJob({ id: chain.id });
 
       expect(job).not.toBeNull();
       expect(job!.typeName).toBe("notification");
@@ -302,16 +302,16 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         log,
         withTransaction,
       });
-      const jobChain = await startChain("notification", { message: "hello" });
+      const chain = await startChain("notification", { message: "hello" });
 
-      await expect(client.getJob({ typeName: "order", id: jobChain.id })).rejects.toThrow(
+      await expect(client.getJob({ typeName: "order", id: chain.id })).rejects.toThrow(
         JobTypeMismatchError,
       );
     });
   });
 
-  describe("listJobChains", () => {
-    it("listJobChains returns empty page when no chains exist", async ({
+  describe("listChains", () => {
+    it("listChains returns empty page when no chains exist", async ({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -327,13 +327,13 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         withTransaction,
       });
 
-      const page = await client.listJobChains({});
+      const page = await client.listChains({});
 
       expect(page.items).toEqual([]);
       expect(page.nextCursor).toBeNull();
     });
 
-    it("listJobChains returns all chains", async ({
+    it("listChains returns all chains", async ({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -351,7 +351,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       const chain1 = await startChain("order", { amount: 100 });
       const chain2 = await startChain("notification", { message: "hi" });
 
-      const page = await client.listJobChains({});
+      const page = await client.listChains({});
 
       expect(page.items).toHaveLength(2);
       const ids = page.items.map((c) => c.id);
@@ -359,7 +359,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       expect(ids).toContain(chain2.id);
     });
 
-    it("listJobChains filters by typeName", async ({
+    it("listChains filters by typeName", async ({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -377,7 +377,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       await startChain("order", { amount: 100 });
       const notif = await startChain("notification", { message: "hi" });
 
-      const page = await client.listJobChains({
+      const page = await client.listChains({
         filter: { typeName: ["notification"] },
       });
 
@@ -386,7 +386,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       expect(page.items[0].typeName).toBe("notification");
     });
 
-    it("listJobChains filters by id", async ({
+    it("listChains filters by id", async ({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -404,15 +404,15 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       const chain1 = await startChain("order", { amount: 100 });
       await startChain("notification", { message: "hi" });
 
-      const page = await client.listJobChains({
-        filter: { id: [chain1.id] },
+      const page = await client.listChains({
+        filter: { chainId: [chain1.id] },
       });
 
       expect(page.items).toHaveLength(1);
       expect(page.items[0].id).toBe(chain1.id);
     });
 
-    it("listJobChains filters root-only (excludes blocker chains)", async ({
+    it("listChains filters root-only (excludes blocker chains)", async ({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -430,15 +430,15 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       const order = await startChain("order", { amount: 50 });
       await startChain("report", { type: "summary" }, [order]);
 
-      const allChains = await client.listJobChains({});
-      const rootChains = await client.listJobChains({ filter: { root: true } });
+      const allChains = await client.listChains({});
+      const rootChains = await client.listChains({ filter: { root: true } });
 
       expect(allChains.items).toHaveLength(2);
       expect(rootChains.items).toHaveLength(1);
       expect(rootChains.items[0].typeName).toBe("report");
     });
 
-    it("listJobChains filters by status", async ({
+    it("listChains filters by status", async ({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -457,15 +457,15 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       await startChain("notification", { message: "hi" });
       await startChain("report", { type: "summary" }, [order]);
 
-      const blocked = await client.listJobChains({ filter: { status: ["blocked"] } });
-      const pending = await client.listJobChains({ filter: { status: ["pending"] } });
+      const blocked = await client.listChains({ filter: { status: ["blocked"] } });
+      const pending = await client.listChains({ filter: { status: ["pending"] } });
 
       expect(blocked.items).toHaveLength(1);
       expect(blocked.items[0].typeName).toBe("report");
       expect(pending.items).toHaveLength(2);
     });
 
-    it("listJobChains orders ascending", async ({
+    it("listChains orders ascending", async ({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -484,8 +484,8 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       await sleep(5);
       await startChain("order", { amount: 2 });
 
-      const desc = await client.listJobChains({});
-      const asc = await client.listJobChains({ orderDirection: "asc" });
+      const desc = await client.listChains({});
+      const asc = await client.listChains({ orderDirection: "asc" });
 
       expect(desc.items).toHaveLength(2);
       expect(asc.items).toHaveLength(2);
@@ -493,7 +493,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       expect(asc.items[1].id).toBe(desc.items[0].id);
     });
 
-    it("listJobChains paginates with cursor", async ({
+    it("listChains paginates with cursor", async ({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -512,11 +512,11 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       await startChain("order", { amount: 2 });
       await startChain("order", { amount: 3 });
 
-      const page1 = await client.listJobChains({ limit: 2 });
+      const page1 = await client.listChains({ limit: 2 });
       expect(page1.items).toHaveLength(2);
       expect(page1.nextCursor).not.toBeNull();
 
-      const page2 = await client.listJobChains({ limit: 2, cursor: page1.nextCursor! });
+      const page2 = await client.listChains({ limit: 2, cursor: page1.nextCursor! });
       expect(page2.items).toHaveLength(1);
       expect(page2.nextCursor).toBeNull();
 
@@ -524,7 +524,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       expect(new Set(allIds).size).toBe(3);
     });
 
-    it("listJobChains filters by date range", async ({
+    it("listChains filters by date range", async ({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -542,19 +542,19 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       await startChain("order", { amount: 1 });
       await startChain("order", { amount: 2 });
 
-      const page = await client.listJobChains({
+      const page = await client.listChains({
         filter: { from: new Date(Date.now() - 5000), to: new Date() },
       });
 
       expect(page.items).toHaveLength(2);
 
-      const empty = await client.listJobChains({
+      const empty = await client.listChains({
         filter: { from: new Date(Date.now() + 60_000) },
       });
       expect(empty.items).toHaveLength(0);
     });
 
-    it("listJobChains filters by jobId", async ({
+    it("listChains filters by jobId", async ({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -572,7 +572,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       const chain1 = await startChain("order", { amount: 100 });
       await startChain("notification", { message: "hi" });
 
-      const page = await client.listJobChains({
+      const page = await client.listChains({
         filter: { jobId: [chain1.id] },
       });
 
@@ -580,7 +580,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       expect(page.items[0].id).toBe(chain1.id);
     });
 
-    it("listJobChains returns correct chain shape", async ({
+    it("listChains returns correct chain shape", async ({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -595,14 +595,14 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         log,
         withTransaction,
       });
-      const jobChain = await startChain("order", { amount: 42 });
+      const chain = await startChain("order", { amount: 42 });
 
-      const page = await client.listJobChains({
+      const page = await client.listChains({
         filter: { typeName: ["order"] },
       });
 
       const result = page.items[0];
-      expect(result.id).toBe(jobChain.id);
+      expect(result.id).toBe(chain.id);
       expect(result.typeName).toBe("order");
       expect(result.input).toEqual({ amount: 42 });
       expect(result.status).toBe("pending");
@@ -682,7 +682,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       expect(page.items[0].typeName).toBe("notification");
     });
 
-    it("listJobs filters by jobChainTypeName", async ({
+    it("listJobs filters by chainTypeName", async ({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -701,23 +701,23 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       await startChain("notification", { message: "hi" });
 
       const page = await client.listJobs({
-        filter: { jobChainTypeName: ["order"] },
+        filter: { chainTypeName: ["order"] },
       });
 
       expect(page.items).toHaveLength(1);
       expect(page.items[0].chainTypeName).toBe("order");
 
-      // Type-level: jobChainTypeName only accepts entry job type names
+      // Type-level: chainTypeName only accepts entry job type names
       expectTypeOf(client.listJobs)
         .parameter(0)
         .toHaveProperty("filter")
         .exclude<undefined>()
-        .toHaveProperty("jobChainTypeName")
+        .toHaveProperty("chainTypeName")
         .exclude<undefined>()
         .items.toEqualTypeOf<"order" | "notification" | "report">();
     });
 
-    it("listJobs filters by jobChainId", async ({
+    it("listJobs filters by chainId", async ({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -732,15 +732,15 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         log,
         withTransaction,
       });
-      const jobChain = await startChain("order", { amount: 100 });
+      const chain = await startChain("order", { amount: 100 });
       await startChain("notification", { message: "hi" });
 
       const page = await client.listJobs({
-        filter: { jobChainId: [jobChain.id] },
+        filter: { chainId: [chain.id] },
       });
 
       expect(page.items).toHaveLength(1);
-      expect(page.items[0].chainId).toBe(jobChain.id);
+      expect(page.items[0].chainId).toBe(chain.id);
     });
 
     it("listJobs filters by status", async ({
@@ -890,8 +890,8 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     });
   });
 
-  describe("listJobChainJobs", () => {
-    it("listJobChainJobs returns empty page for nonexistent chain", async ({
+  describe("listChainJobs", () => {
+    it("listChainJobs returns empty page for nonexistent chain", async ({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -907,14 +907,14 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         withTransaction,
       });
 
-      const page = await client.listJobChainJobs({
-        jobChainId: "00000000-0000-0000-0000-000000000000",
+      const page = await client.listChainJobs({
+        chainId: "00000000-0000-0000-0000-000000000000",
       });
 
       expect(page.items).toEqual([]);
     });
 
-    it("listJobChainJobs returns jobs in chain ordered by chainIndex", async ({
+    it("listChainJobs returns jobs in chain ordered by chainIndex", async ({
       stateAdapter,
       notifyAdapter,
       withTransaction,
@@ -959,17 +959,17 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         }),
       });
 
-      const jobChain = await withTransactionHooks(async (transactionHooks) =>
+      const chain = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startJobChain({ ...txCtx, transactionHooks, typeName: "step", input: { n: 0 } }),
+          client.startChain({ ...txCtx, transactionHooks, typeName: "step", input: { n: 0 } }),
         ),
       );
 
       await withWorkers([await worker.start()], async () => {
-        await client.awaitJobChain(jobChain, completionOptions);
+        await client.awaitChain(chain, completionOptions);
       });
 
-      const page = await client.listJobChainJobs({ jobChainId: jobChain.id });
+      const page = await client.listChainJobs({ chainId: chain.id });
 
       expect(page.items.length).toBe(3);
       expect(page.items[0].chainIndex).toBe(0);
@@ -979,12 +979,12 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       expect(page.items[1].input).toEqual({ n: 1 });
       expect(page.items[2].input).toEqual({ n: 2 });
       for (const job of page.items) {
-        expect(job.chainId).toBe(jobChain.id);
+        expect(job.chainId).toBe(chain.id);
         expect(job.status).toBe("completed");
       }
     });
 
-    it("listJobChainJobs orders descending", async ({
+    it("listChainJobs orders descending", async ({
       stateAdapter,
       notifyAdapter,
       withTransaction,
@@ -1029,19 +1029,19 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         }),
       });
 
-      const jobChain = await withTransactionHooks(async (transactionHooks) =>
+      const chain = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startJobChain({ ...txCtx, transactionHooks, typeName: "step", input: { n: 0 } }),
+          client.startChain({ ...txCtx, transactionHooks, typeName: "step", input: { n: 0 } }),
         ),
       );
 
       await withWorkers([await worker.start()], async () => {
-        await client.awaitJobChain(jobChain, completionOptions);
+        await client.awaitChain(chain, completionOptions);
       });
 
-      const asc = await client.listJobChainJobs({ jobChainId: jobChain.id });
-      const desc = await client.listJobChainJobs({
-        jobChainId: jobChain.id,
+      const asc = await client.listChainJobs({ chainId: chain.id });
+      const desc = await client.listChainJobs({
+        chainId: chain.id,
         orderDirection: "desc",
       });
 
@@ -1051,7 +1051,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       expect(desc.items[1].chainIndex).toBe(0);
     });
 
-    it("listJobChainJobs paginates", async ({
+    it("listChainJobs paginates", async ({
       stateAdapter,
       notifyAdapter,
       withTransaction,
@@ -1096,24 +1096,24 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         }),
       });
 
-      const jobChain = await withTransactionHooks(async (transactionHooks) =>
+      const chain = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startJobChain({ ...txCtx, transactionHooks, typeName: "step", input: { n: 0 } }),
+          client.startChain({ ...txCtx, transactionHooks, typeName: "step", input: { n: 0 } }),
         ),
       );
 
       await withWorkers([await worker.start()], async () => {
-        await client.awaitJobChain(jobChain, completionOptions);
+        await client.awaitChain(chain, completionOptions);
       });
 
-      const page1 = await client.listJobChainJobs({ jobChainId: jobChain.id, limit: 2 });
+      const page1 = await client.listChainJobs({ chainId: chain.id, limit: 2 });
       expect(page1.items).toHaveLength(2);
       expect(page1.nextCursor).not.toBeNull();
       expect(page1.items[0].chainIndex).toBe(0);
       expect(page1.items[1].chainIndex).toBe(1);
 
-      const page2 = await client.listJobChainJobs({
-        jobChainId: jobChain.id,
+      const page2 = await client.listChainJobs({
+        chainId: chain.id,
         limit: 2,
         cursor: page1.nextCursor!,
       });
@@ -1122,7 +1122,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       expect(page2.items[0].chainIndex).toBe(2);
     });
 
-    it("listJobChainJobs only returns jobs from the specified chain", async ({
+    it("listChainJobs only returns jobs from the specified chain", async ({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -1140,13 +1140,13 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       const chain1 = await startChain("order", { amount: 1 });
       await startChain("notification", { message: "hi" });
 
-      const page = await client.listJobChainJobs({ jobChainId: chain1.id });
+      const page = await client.listChainJobs({ chainId: chain1.id });
 
       expect(page.items).toHaveLength(1);
       expect(page.items[0].chainId).toBe(chain1.id);
     });
 
-    it("listJobChainJobs narrows return type when typeName is provided", async ({
+    it("listChainJobs narrows return type when typeName is provided", async ({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -1161,9 +1161,9 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         log,
         withTransaction,
       });
-      const jobChain = await startChain("order", { amount: 42 });
+      const chain = await startChain("order", { amount: 42 });
 
-      const page = await client.listJobChainJobs({ jobChainId: jobChain.id, typeName: "order" });
+      const page = await client.listChainJobs({ chainId: chain.id, typeName: "order" });
 
       expect(page.items).toHaveLength(1);
       expect(page.items[0].typeName).toBe("order");
@@ -1171,7 +1171,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       expectTypeOf(page.items[0].input).toEqualTypeOf<{ amount: number } | { orderId: string }>();
     });
 
-    it("listJobChainJobs throws on typeName mismatch", async ({
+    it("listChainJobs throws on typeName mismatch", async ({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -1186,10 +1186,10 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         log,
         withTransaction,
       });
-      const jobChain = await startChain("order", { amount: 42 });
+      const chain = await startChain("order", { amount: 42 });
 
       await expect(
-        client.listJobChainJobs({ jobChainId: jobChain.id, typeName: "notification" }),
+        client.listChainJobs({ chainId: chain.id, typeName: "notification" }),
       ).rejects.toThrow(JobTypeMismatchError);
     });
   });
@@ -1210,9 +1210,9 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         log,
         withTransaction,
       });
-      const jobChain = await startChain("order", { amount: 100 });
+      const chain = await startChain("order", { amount: 100 });
 
-      const blockers = await client.getJobBlockers({ jobId: jobChain.id });
+      const blockers = await client.getJobBlockers({ jobId: chain.id });
 
       expect(blockers).toEqual([]);
     });
@@ -1346,13 +1346,13 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
       const { mainChain } = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) => {
-          const depChain = await client.startJobChain({
+          const depChain = await client.startChain({
             ...txCtx,
             transactionHooks,
             typeName: "dep",
             input: { v: 1 },
           });
-          const mainChain = await client.startJobChain({
+          const mainChain = await client.startChain({
             ...txCtx,
             transactionHooks,
             typeName: "main",
@@ -1367,7 +1367,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       expect(blockersBefore[0].status).not.toBe("completed");
 
       await withWorkers([await worker.start()], async () => {
-        await client.awaitJobChain(mainChain, completionOptions);
+        await client.awaitChain(mainChain, completionOptions);
       });
 
       const blockersAfter = await client.getJobBlockers({ jobId: mainChain.id });
@@ -1391,9 +1391,9 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         log,
         withTransaction,
       });
-      const jobChain = await startChain("order", { amount: 100 });
+      const chain = await startChain("order", { amount: 100 });
 
-      const page = await client.listBlockedJobs({ jobChainId: jobChain.id });
+      const page = await client.listBlockedJobs({ chainId: chain.id });
 
       expect(page.items).toEqual([]);
       expect(page.nextCursor).toBeNull();
@@ -1417,7 +1417,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       const order = await startChain("order", { amount: 50 });
       const report = await startChain("report", { type: "summary" }, [order]);
 
-      const page = await client.listBlockedJobs({ jobChainId: order.id });
+      const page = await client.listBlockedJobs({ chainId: order.id });
 
       expect(page.items).toHaveLength(1);
       expect(page.items[0].id).toBe(report.id);
@@ -1445,12 +1445,12 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       await startChain("report", { type: "b" }, [order]);
       await startChain("report", { type: "c" }, [order]);
 
-      const page1 = await client.listBlockedJobs({ jobChainId: order.id, limit: 2 });
+      const page1 = await client.listBlockedJobs({ chainId: order.id, limit: 2 });
       expect(page1.items).toHaveLength(2);
       expect(page1.nextCursor).not.toBeNull();
 
       const page2 = await client.listBlockedJobs({
-        jobChainId: order.id,
+        chainId: order.id,
         limit: 2,
         cursor: page1.nextCursor!,
       });
@@ -1477,7 +1477,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       const report = await startChain("report", { type: "summary" }, [order]);
 
       const page = await client.listBlockedJobs({
-        jobChainId: order.id,
+        chainId: order.id,
         typeName: "order",
       });
 
@@ -1508,7 +1508,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       await startChain("report", { type: "summary" }, [order]);
 
       await expect(
-        client.listBlockedJobs({ jobChainId: order.id, typeName: "notification" }),
+        client.listBlockedJobs({ chainId: order.id, typeName: "notification" }),
       ).rejects.toThrow(JobTypeMismatchError);
     });
 
@@ -1532,8 +1532,8 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       await sleep(5);
       await startChain("report", { type: "b" }, [order]);
 
-      const desc = await client.listBlockedJobs({ jobChainId: order.id });
-      const asc = await client.listBlockedJobs({ jobChainId: order.id, orderDirection: "asc" });
+      const desc = await client.listBlockedJobs({ chainId: order.id });
+      const asc = await client.listBlockedJobs({ chainId: order.id, orderDirection: "asc" });
 
       expect(desc.items).toHaveLength(2);
       expect(asc.items).toHaveLength(2);
@@ -1594,31 +1594,31 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         }),
       });
 
-      const jobChain = await withTransactionHooks(async (transactionHooks) =>
+      const chain = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startJobChain({ ...txCtx, transactionHooks, typeName: "task", input: { n: 1 } }),
+          client.startChain({ ...txCtx, transactionHooks, typeName: "task", input: { n: 1 } }),
         ),
       );
 
       await withWorkers([await worker.start()], async () => {
-        await client.awaitJobChain(jobChain, completionOptions);
+        await client.awaitChain(chain, completionOptions);
       });
 
-      const rootJob = await client.getJob({ typeName: "task", id: jobChain.id });
+      const rootJob = await client.getJob({ id: chain.id });
       expect(rootJob).not.toBeNull();
       expect(rootJob!.status).toBe("completed");
 
-      const chains = await client.listJobChains({ filter: { typeName: ["task"] } });
+      const chains = await client.listChains({ filter: { typeName: ["task"] } });
       expect(chains.items).toHaveLength(1);
       const completedChain = chains.items[0];
       expect(completedChain.status).toBe("completed");
       expect((completedChain as { output: unknown }).output).toEqual({ final: 20 });
 
-      const jobs = await client.listJobs({ filter: { jobChainId: [jobChain.id] } });
+      const jobs = await client.listJobs({ filter: { chainId: [chain.id] } });
       expect(jobs.items).toHaveLength(2);
       expect(jobs.items.every((j) => j.status === "completed")).toBe(true);
 
-      const chainJobs = await client.listJobChainJobs({ jobChainId: jobChain.id });
+      const chainJobs = await client.listChainJobs({ chainId: chain.id });
       expect(chainJobs.items).toHaveLength(2);
       expect(chainJobs.items[0].typeName).toBe("task");
       expect(chainJobs.items[1].typeName).toBe("task_next");
@@ -1674,13 +1674,13 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
       const { depChain, mainChain } = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) => {
-          const depChain = await client.startJobChain({
+          const depChain = await client.startChain({
             ...txCtx,
             transactionHooks,
             typeName: "dep",
             input: { v: 1 },
           });
-          const mainChain = await client.startJobChain({
+          const mainChain = await client.startChain({
             ...txCtx,
             transactionHooks,
             typeName: "main",
@@ -1691,10 +1691,10 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         }),
       );
 
-      const mainJob = await client.getJob({ typeName: "main", id: mainChain.id });
+      const mainJob = await client.getJob({ id: mainChain.id });
       expect(mainJob!.status).toBe("blocked");
 
-      const blocked = await client.listBlockedJobs({ jobChainId: depChain.id });
+      const blocked = await client.listBlockedJobs({ chainId: depChain.id });
       expect(blocked.items).toHaveLength(1);
       expect(blocked.items[0].id).toBe(mainChain.id);
 
@@ -1703,13 +1703,13 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       expect(blockers[0].id).toBe(depChain.id);
 
       await withWorkers([await worker.start()], async () => {
-        await client.awaitJobChain(mainChain, completionOptions);
+        await client.awaitChain(mainChain, completionOptions);
       });
 
-      const completedMain = await client.getJob({ typeName: "main", id: mainChain.id });
+      const completedMain = await client.getJob({ id: mainChain.id });
       expect(completedMain!.status).toBe("completed");
 
-      const completedDep = await client.getJob({ typeName: "dep", id: depChain.id });
+      const completedDep = await client.getJob({ id: depChain.id });
       expect(completedDep!.status).toBe("completed");
     });
 
@@ -1730,7 +1730,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       });
       await startChain("order", { amount: 1 });
 
-      const chains = await client.listJobChains({});
+      const chains = await client.listChains({});
       const jobs = await client.listJobs({});
 
       expect(chains.items).toHaveLength(1);

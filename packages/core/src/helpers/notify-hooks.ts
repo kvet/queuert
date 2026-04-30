@@ -46,7 +46,7 @@ export const bufferNotifyChainCompletion = (
         await Promise.all(
           Array.from(state).map(async (chainId) => {
             try {
-              await notifyAdapter.notifyJobChainCompleted(chainId);
+              await notifyAdapter.notifyChainCompleted(chainId);
             } catch {}
           }),
         );

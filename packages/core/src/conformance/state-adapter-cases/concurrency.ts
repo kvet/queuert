@@ -31,7 +31,7 @@ export const concurrencyGroup: ConformanceGroup<StateAdapterConformanceContext> 
         expect(ids.size).toBe(count);
 
         for (const [{ job }] of results) {
-          const fetched = await stateAdapter.getJobById({ jobId: job.id });
+          const fetched = await stateAdapter.getJob({ jobId: job.id });
           expect(fetched).toBeDefined();
         }
       },
@@ -61,7 +61,7 @@ export const concurrencyGroup: ConformanceGroup<StateAdapterConformanceContext> 
 
         const jobIds = created.map(([r]) => r.job.id);
         const fetched = await Promise.all(
-          jobIds.map(async (id) => stateAdapter.getJobById({ jobId: id })),
+          jobIds.map(async (id) => stateAdapter.getJob({ jobId: id })),
         );
 
         expect(fetched.every((job) => job !== undefined)).toBe(true);
@@ -106,7 +106,7 @@ export const concurrencyGroup: ConformanceGroup<StateAdapterConformanceContext> 
         );
 
         const readWork = Promise.all(
-          Array.from({ length: 5 }, async () => stateAdapter.getJobById({ jobId: seedJob.id })),
+          Array.from({ length: 5 }, async () => stateAdapter.getJob({ jobId: seedJob.id })),
         );
 
         const [txResults, readResults] = await Promise.all([txWork, readWork]);
@@ -220,7 +220,7 @@ export const concurrencyGroup: ConformanceGroup<StateAdapterConformanceContext> 
         ).then((results) => results.filter((id): id is string => id !== undefined));
 
         const finalStates = await Promise.all(
-          mainJobIds.map(async (jobId) => stateAdapter.getJobById({ jobId })),
+          mainJobIds.map(async (jobId) => stateAdapter.getJob({ jobId })),
         );
 
         const stranded = finalStates.filter((job) => job?.status === "blocked");

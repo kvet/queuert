@@ -111,7 +111,7 @@ export const createJobsGroup: ConformanceGroup<StateAdapterConformanceContext> =
           }),
         );
 
-        const retrieved = await stateAdapter.getJobById({ jobId: created.id });
+        const retrieved = await stateAdapter.getJob({ jobId: created.id });
 
         expect(retrieved).toBeDefined();
         expect(retrieved!.id).toBe(created.id);
@@ -185,7 +185,7 @@ export const createJobsGroup: ConformanceGroup<StateAdapterConformanceContext> =
           }),
         );
 
-        const retrieved = await stateAdapter.getJobById({ jobId: job.id });
+        const retrieved = await stateAdapter.getJob({ jobId: job.id });
         expect(retrieved!.input).toEqual(complexInput);
       },
     },
@@ -507,7 +507,7 @@ export const createJobsGroup: ConformanceGroup<StateAdapterConformanceContext> =
       },
     },
     {
-      name: "excludeJobChainIds skips specified chains during deduplication",
+      name: "excludeChainIds skips specified chains during deduplication",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: first }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
@@ -557,7 +557,7 @@ export const createJobsGroup: ConformanceGroup<StateAdapterConformanceContext> =
                   chainIndex: 0,
                   chainTypeName: "exclude-test",
                   input: null,
-                  deduplication: { key: "exclude-key", excludeJobChainIds: [first.chainId] },
+                  deduplication: { key: "exclude-key", excludeChainIds: [first.chainId] },
                 },
               ],
             }),
@@ -633,7 +633,7 @@ export const createJobsGroup: ConformanceGroup<StateAdapterConformanceContext> =
           }),
         );
 
-        const retrieved = await stateAdapter.getJobById({ jobId: job.id });
+        const retrieved = await stateAdapter.getJob({ jobId: job.id });
         expect(retrieved!.chainTraceContext).toEqual(chainTraceContext);
         expect(retrieved!.traceContext).toEqual(traceContext);
       },

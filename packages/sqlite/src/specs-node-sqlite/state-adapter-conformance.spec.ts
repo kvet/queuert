@@ -106,11 +106,11 @@ it("infers custom ID types through the full stack", async () => {
 
     const lock = createAsyncRwLock();
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) => {
+    const chain = await withTransactionHooks(async (transactionHooks) => {
       using _h = await lock.acquireWrite();
       db.exec("BEGIN");
       try {
-        const result = await client.startJobChain({
+        const result = await client.startChain({
           db,
           transactionHooks,
           typeName: "test",
@@ -127,10 +127,10 @@ it("infers custom ID types through the full stack", async () => {
         throw error;
       }
     });
-    expectTypeOf(jobChain.id).toEqualTypeOf<`job.${UUID}`>();
+    expectTypeOf(chain.id).toEqualTypeOf<`job.${UUID}`>();
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(jobChain, { timeoutMs: 1000 });
+      await client.awaitChain(chain, { timeoutMs: 1000 });
     });
   } finally {
     db.close();

@@ -1,7 +1,7 @@
 /**
  * Error Handling Showcase
  *
- * Demonstrates error handling patterns in Queuert job chains.
+ * Demonstrates error handling patterns in Queuert chains.
  *
  * Scenarios:
  * 1. Discriminated Unions: Success/failure represented in typed outputs
@@ -186,7 +186,7 @@ console.log("Payment results are typed as success | failure.\n");
 
 const payment1 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
-    const result = await client.startJobChain({
+    const result = await client.startChain({
       sql: txSql,
       transactionHooks,
       typeName: "process-payment",
@@ -195,7 +195,7 @@ const payment1 = await withTransactionHooks(async (transactionHooks) =>
     return result;
   }),
 );
-const result1 = await client.awaitJobChain(payment1, { timeoutMs: 5000 });
+const result1 = await client.awaitChain(payment1, { timeoutMs: 5000 });
 console.log(
   `Result: ${result1.output.success ? `SUCCESS (${result1.output.transactionId})` : `FAILED (${result1.output.error})`}`,
 );
@@ -203,7 +203,7 @@ assert.equal(result1.output.success, true);
 
 const payment2 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
-    const result = await client.startJobChain({
+    const result = await client.startChain({
       sql: txSql,
       transactionHooks,
       typeName: "process-payment",
@@ -212,7 +212,7 @@ const payment2 = await withTransactionHooks(async (transactionHooks) =>
     return result;
   }),
 );
-const result2 = await client.awaitJobChain(payment2, { timeoutMs: 5000 });
+const result2 = await client.awaitChain(payment2, { timeoutMs: 5000 });
 console.log(
   `Result: ${result2.output.success ? `SUCCESS (${result2.output.transactionId})` : `FAILED (${result2.output.error})`}`,
 );
@@ -225,7 +225,7 @@ console.log("Charge -> Ship succeeds.\n");
 shipmentShouldFail = false;
 const order1 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
-    const result = await client.startJobChain({
+    const result = await client.startChain({
       sql: txSql,
       transactionHooks,
       typeName: "charge-card",
@@ -234,7 +234,7 @@ const order1 = await withTransactionHooks(async (transactionHooks) =>
     return result;
   }),
 );
-const orderResult1 = await client.awaitJobChain(order1, { timeoutMs: 5000 });
+const orderResult1 = await client.awaitChain(order1, { timeoutMs: 5000 });
 console.log(`Final output: ${JSON.stringify(orderResult1.output)}`);
 assert.ok("shipped" in orderResult1.output);
 
@@ -245,7 +245,7 @@ console.log("Charge -> Ship fails -> Refund.\n");
 shipmentShouldFail = true;
 const order2 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
-    const result = await client.startJobChain({
+    const result = await client.startChain({
       sql: txSql,
       transactionHooks,
       typeName: "charge-card",
@@ -254,7 +254,7 @@ const order2 = await withTransactionHooks(async (transactionHooks) =>
     return result;
   }),
 );
-const orderResult2 = await client.awaitJobChain(order2, { timeoutMs: 5000 });
+const orderResult2 = await client.awaitChain(order2, { timeoutMs: 5000 });
 console.log(`Final output: ${JSON.stringify(orderResult2.output)}`);
 assert.ok("refunded" in orderResult2.output);
 
@@ -265,7 +265,7 @@ console.log("API is rate-limited, job reschedules itself.\n");
 apiRateLimited = true;
 const apiCall = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
-    const result = await client.startJobChain({
+    const result = await client.startChain({
       sql: txSql,
       transactionHooks,
       typeName: "call-rate-limited-api",
@@ -274,7 +274,7 @@ const apiCall = await withTransactionHooks(async (transactionHooks) =>
     return result;
   }),
 );
-const apiResult = await client.awaitJobChain(apiCall, { timeoutMs: 5000 });
+const apiResult = await client.awaitChain(apiCall, { timeoutMs: 5000 });
 console.log(`Final output: ${JSON.stringify(apiResult.output)}`);
 assert.ok("data" in apiResult.output);
 

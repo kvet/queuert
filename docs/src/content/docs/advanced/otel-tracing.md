@@ -7,7 +7,7 @@ sidebar:
 
 ## Overview
 
-This document describes Queuert's OpenTelemetry tracing implementation. Tracing provides end-to-end visibility into job chain execution, including job dependencies, retry attempts, and blocker relationships.
+This document describes Queuert's OpenTelemetry tracing implementation. Tracing provides end-to-end visibility into chain execution, including job dependencies, retry attempts, and blocker relationships.
 
 ## Span Hierarchy
 
@@ -40,21 +40,21 @@ PRODUCER: create chain.{type}          ← Chain published (ends immediately)
 
 Span kinds use OpenTelemetry's PRODUCER/CONSUMER/INTERNAL semantics. The chain has both a PRODUCER (creation) and CONSUMER (completion) span for symmetry.
 
-| Span                         | Kind     | Created                             | Ended                   | Duration         |
-| ---------------------------- | -------- | ----------------------------------- | ----------------------- | ---------------- |
-| **create chain.{type}**      | PRODUCER | `startJobChain()`                   | Immediately             | ~0ms             |
-| **create job.{type}**        | PRODUCER | `startJobChain()`, `continueWith()` | Immediately             | ~0ms             |
-| **await chain.{type}**       | PRODUCER | `startJobChain()` with blockers     | Immediately             | ~0ms             |
-| **resolve chain.{type}**     | CONSUMER | Blocker chain completes             | Immediately             | ~0ms             |
-| **start job-attempt.{type}** | CONSUMER | Worker claims job                   | Attempt completes/fails | Processing time  |
-| **prepare**                  | INTERNAL | `prepare()` called                  | `prepare()` returns     | Transaction time |
-| **complete**                 | INTERNAL | `complete()` called                 | `complete()` returns    | Transaction time |
-| **complete job.{type}**      | CONSUMER | Workerless completion               | Immediately             | ~0ms             |
-| **complete chain.{type}**    | CONSUMER | Final job completes                 | Immediately             | ~0ms             |
+| Span                         | Kind     | Created                          | Ended                   | Duration         |
+| ---------------------------- | -------- | -------------------------------- | ----------------------- | ---------------- |
+| **create chain.{type}**      | PRODUCER | `startChain()`                   | Immediately             | ~0ms             |
+| **create job.{type}**        | PRODUCER | `startChain()`, `continueWith()` | Immediately             | ~0ms             |
+| **await chain.{type}**       | PRODUCER | `startChain()` with blockers     | Immediately             | ~0ms             |
+| **resolve chain.{type}**     | CONSUMER | Blocker chain completes          | Immediately             | ~0ms             |
+| **start job-attempt.{type}** | CONSUMER | Worker claims job                | Attempt completes/fails | Processing time  |
+| **prepare**                  | INTERNAL | `prepare()` called               | `prepare()` returns     | Transaction time |
+| **complete**                 | INTERNAL | `complete()` called              | `complete()` returns    | Transaction time |
+| **complete job.{type}**      | CONSUMER | Workerless completion            | Immediately             | ~0ms             |
+| **complete chain.{type}**    | CONSUMER | Final job completes              | Immediately             | ~0ms             |
 
 ## Blocker Relationships
 
-When a job has blockers (dependencies on other chains), each blocker gets a PRODUCER/CONSUMER span pair as a child of the blocked job's PRODUCER span. The PRODUCER (`await chain.{type}`) is created at `startJobChain` time with a link to the blocker chain. The CONSUMER (`resolve chain.{type}`) is created when the blocker chain completes, so the time between them represents the blocking duration.
+When a job has blockers (dependencies on other chains), each blocker gets a PRODUCER/CONSUMER span pair as a child of the blocked job's PRODUCER span. The PRODUCER (`await chain.{type}`) is created at `startChain` time with a link to the blocker chain. The CONSUMER (`resolve chain.{type}`) is created when the blocker chain completes, so the time between them represents the blocking duration.
 
 The blocker PRODUCER span's trace context is persisted in the `job_blocker` table so the CONSUMER can be created later by a different process (the one completing the blocker chain).
 
@@ -98,7 +98,7 @@ EXTERNAL span (e.g., HTTP request)
 
 ### Blocker Span Lifecycle
 
-1. **PRODUCER created and ended** in `startJobChain` when the job has blockers — one PRODUCER span per blocker, as a child of the job's PRODUCER span, with a link to the blocker chain's trace context
+1. **PRODUCER created and ended** in `startChain` when the job has blockers — one PRODUCER span per blocker, as a child of the job's PRODUCER span, with a link to the blocker chain's trace context
 2. **Persisted** — the PRODUCER span context is stored in the `job_blocker` table (`trace_context` column) so the CONSUMER can be created by another process
 3. **CONSUMER created** when `unblockJobs` detects the blocker chain has completed — the PRODUCER span context is read from `job_blocker` and a CONSUMER span is created as its child
 
@@ -127,7 +127,7 @@ The origin link shows the causal flow: "step-two was created by step-one's compl
 
 ## Workerless Completion
 
-When a job is completed via `completeJobChain` (without a worker), there is no job-attempt. Instead, a CONSUMER job span marks the completion, and if the chain is fully completed, a CONSUMER chain span closes the trace:
+When a job is completed via `completeChain` (without a worker), there is no job-attempt. Instead, a CONSUMER job span marks the completion, and if the chain is fully completed, a CONSUMER chain span closes the trace:
 
 ```
 PRODUCER: create chain.approve-order ─────────────────────
@@ -168,7 +168,7 @@ This provides end-to-end visibility even though individual PRODUCER/CONSUMER spa
 
 ## Deduplication
 
-When `startJobChain` is called with deduplication options and a matching chain already exists, no new chain is created. The span must reflect this outcome correctly.
+When `startChain` is called with deduplication options and a matching chain already exists, no new chain is created. The span must reflect this outcome correctly.
 
 Deduplication is **not an error**—it's expected behavior that successfully returned an existing chain. Per [OpenTelemetry status conventions](https://opentelemetry.io/docs/specs/otel/trace/api/#set-status), the span status should remain `UNSET` (not `ERROR`), with an attribute indicating deduplication occurred.
 
@@ -179,7 +179,7 @@ When deduplication occurs:
 3. Optionally links to the existing chain's trace context
 
 ```
-Caller requests startJobChain with deduplication key "user-123":
+Caller requests startChain with deduplication key "user-123":
 
 First call (creates new chain):
 PRODUCER create chain.process-user [0ms] ──────────────
@@ -201,8 +201,8 @@ PRODUCER create chain.process-user [0ms] ─────────────
 
 | Attribute                    | Type    | Description                        |
 | ---------------------------- | ------- | ---------------------------------- |
-| `queuert.chain.id`           | string  | Job chain ID                       |
-| `queuert.chain.type`         | string  | Job chain type name                |
+| `queuert.chain.id`           | string  | Chain ID                           |
+| `queuert.chain.type`         | string  | Chain type name                    |
 | `queuert.chain.deduplicated` | boolean | `true` when chain was deduplicated |
 
 ### Job Attributes
@@ -246,7 +246,7 @@ PRODUCER create chain.process-user [0ms] ─────────────
 
 - [OTEL Metrics](../otel-metrics/) — Counters, histograms, and gauges
 - [OTEL Internals](../otel-internals/) — Adapter architecture, W3C context propagation, and transactional buffering
-- [Job Chain Model](../job-chain-model/) — Chain identity and continuation model
+- [Chain Model](../chain-model/) — Chain identity and continuation model
 - [Job Processing](../job-processing/) — Prepare/complete pattern
 - [Adapters](../adapters/) — Overall adapter design philosophy
 - [In-Process Worker](../in-process-worker/) — Worker lifecycle and attempt handling

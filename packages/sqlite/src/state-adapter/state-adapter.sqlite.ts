@@ -24,7 +24,7 @@ import {
 import { type SqliteStateProvider } from "../state-provider/state-provider.sqlite.js";
 import {
   type DbJob,
-  type DbJobChainRow,
+  type DbChainRow,
   createSqliteSqlDefinitions,
   jobColumnsPrefixedSelect,
   jobColumnsSelect,
@@ -82,7 +82,7 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
   };
 };
 
-const parseDbJobChainRow = (row: DbJobChainRow): { rootJob: DbJob; lastChainJob: DbJob | null } => {
+const parseDbChainRow = (row: DbChainRow): { rootJob: DbJob; lastChainJob: DbJob | null } => {
   const rootJob: DbJob = {
     id: row.id,
     type_name: row.type_name,
@@ -278,7 +278,7 @@ export const createSqliteStateAdapter = async <
         }
       }),
 
-    getJobChainById: async ({ txCtx, chainId, lock }) => {
+    getChain: async ({ txCtx, chainId, lock }) => {
       if (lock === "exclusive" && txCtx) {
         await executeTypedSql({
           txCtx,
@@ -288,13 +288,13 @@ export const createSqliteStateAdapter = async <
       }
       const [row] = await executeTypedSql({
         txCtx,
-        sql: defs.getJobChainByIdSql,
+        sql: defs.getChainSql,
         params: [chainId, chainId],
       });
 
       if (!row) return undefined;
 
-      const { rootJob, lastChainJob } = parseDbJobChainRow(row);
+      const { rootJob, lastChainJob } = parseDbChainRow(row);
 
       return [
         mapDbJobToStateJob(rootJob),
@@ -303,10 +303,10 @@ export const createSqliteStateAdapter = async <
           : undefined,
       ];
     },
-    getJobById: async ({ txCtx, jobId, lock }) => {
+    getJob: async ({ txCtx, jobId, lock }) => {
       const [job] = await executeTypedSql({
         txCtx,
-        sql: lock === "exclusive" && txCtx ? defs.getJobByIdLockedSql : defs.getJobByIdSql,
+        sql: lock === "exclusive" && txCtx ? defs.getJobLockedSql : defs.getJobSql,
         params: [jobId],
       });
 
@@ -336,8 +336,8 @@ export const createSqliteStateAdapter = async <
         const deduplicationKey = deduplication?.key ?? null;
         const deduplicationScope = deduplication ? (deduplication.scope ?? "incomplete") : null;
         const deduplicationWindowMs = deduplication?.windowMs ?? null;
-        const deduplicationExcludeChainIds = deduplication?.excludeJobChainIds
-          ? JSON.stringify(deduplication.excludeJobChainIds)
+        const deduplicationExcludeChainIds = deduplication?.excludeChainIds
+          ? JSON.stringify(deduplication.excludeChainIds)
           : null;
 
         if (chainId) {
@@ -484,7 +484,7 @@ export const createSqliteStateAdapter = async <
 
         const [job] = await executeTypedSql({
           txCtx,
-          sql: defs.getJobByIdForBlockersSql,
+          sql: defs.getJobForBlockersSql,
           params: [jobId],
         });
         results.push({
@@ -534,7 +534,7 @@ export const createSqliteStateAdapter = async <
       });
 
       return rows.map((row) => {
-        const { rootJob, lastChainJob } = parseDbJobChainRow(row);
+        const { rootJob, lastChainJob } = parseDbChainRow(row);
         return [
           mapDbJobToStateJob(rootJob),
           lastChainJob && lastChainJob.id !== rootJob.id
@@ -607,7 +607,7 @@ export const createSqliteStateAdapter = async <
       });
       return job ? mapDbJobToStateJob(job) : undefined;
     },
-    deleteJobChains: async ({ txCtx, chainIds, cascade }) => {
+    deleteChains: async ({ txCtx, chainIds, cascade }) => {
       const effectiveChainIds = cascade ? await expandChainIds(txCtx, chainIds) : chainIds;
       if (effectiveChainIds.length === 0) return { deleted: [], blockerRefs: [] };
 
@@ -617,7 +617,7 @@ export const createSqliteStateAdapter = async <
       const chainIdsJson = JSON.stringify(effectiveChainIds);
       const rows = await executeTypedSql({
         txCtx,
-        sql: defs.getJobChainsByChainIdsSql,
+        sql: defs.getChainsByChainIdsSql,
         params: [chainIdsJson],
       });
       await executeTypedSql({
@@ -627,11 +627,11 @@ export const createSqliteStateAdapter = async <
       });
       await executeTypedSql({
         txCtx,
-        sql: defs.deleteJobChainsSql,
+        sql: defs.deleteChainsSql,
         params: [chainIdsJson],
       });
       const deleted = rows.map((row) => {
-        const { rootJob, lastChainJob } = parseDbJobChainRow(row);
+        const { rootJob, lastChainJob } = parseDbChainRow(row);
         return [
           mapDbJobToStateJob(rootJob),
           lastChainJob && lastChainJob.id !== rootJob.id
@@ -641,7 +641,7 @@ export const createSqliteStateAdapter = async <
       });
       return { deleted, blockerRefs: [] };
     },
-    listJobChains: async ({ txCtx, filter, orderDirection, page }) => {
+    listChains: async ({ txCtx, filter, orderDirection, page }) => {
       const cursor = page.cursor ? decodeCreatedAtCursor(page.cursor) : null;
       const conditions: string[] = ["j.chain_index = 0"];
       const params: unknown[] = [];
@@ -696,15 +696,15 @@ export const createSqliteStateAdapter = async <
         sql: sqlStr,
         params,
         paramTypes: {},
-        columnTypes: extractColumnTypes(defs.dbJobChainRowColumns),
+        columnTypes: extractColumnTypes(defs.dbChainRowColumns),
         readOnly: true,
-      })) as DbJobChainRow[];
+      })) as DbChainRow[];
 
       const hasMore = rows.length > page.limit;
       const pageRows = hasMore ? rows.slice(0, page.limit) : rows;
 
       const items: [StateJob, StateJob | undefined][] = pageRows.map((row) => {
-        const { rootJob, lastChainJob } = parseDbJobChainRow(row);
+        const { rootJob, lastChainJob } = parseDbChainRow(row);
         return [
           mapDbJobToStateJob(rootJob),
           lastChainJob && lastChainJob.id !== rootJob.id
@@ -716,7 +716,7 @@ export const createSqliteStateAdapter = async <
       const lastRow = pageRows[pageRows.length - 1];
       let nextCursor: string | null = null;
       if (hasMore && lastRow) {
-        const { rootJob } = parseDbJobChainRow(lastRow);
+        const { rootJob } = parseDbChainRow(lastRow);
         nextCursor = encodeCursor({
           type: "createdAt",
           id: rootJob.id,
@@ -801,7 +801,7 @@ export const createSqliteStateAdapter = async <
       return { items, nextCursor };
     },
 
-    listJobChainJobs: async ({ txCtx, chainId, orderDirection, page }) => {
+    listChainJobs: async ({ txCtx, chainId, orderDirection, page }) => {
       const cursor = page.cursor ? decodeChainIndexCursor(page.cursor) : null;
       const conditions: string[] = ["j.chain_id = ?"];
       const params: unknown[] = [chainId];

@@ -18,7 +18,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     timeoutMs: 5000,
   };
 
-  it("completes a simple job chain without worker", async ({
+  it("completes a simple chain without worker", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -42,9 +42,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       jobTypes,
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -55,11 +55,10 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const completedChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.completeJobChain({
+        client.completeChain({
           ...txCtx,
           transactionHooks,
-          typeName: "test",
-          id: jobChain.id,
+          ...chain,
           complete: async ({ job, complete }) => {
             expect(job.typeName).toEqual("test");
             expect(job.status).toEqual("pending");
@@ -78,7 +77,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     expect(completedChain.output).toEqual({ result: 84 });
   });
 
-  it("completes a complex job chain without worker", async ({
+  it("completes a complex chain without worker", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -106,9 +105,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       jobTypes,
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "awaiting-approval",
@@ -117,15 +116,14 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       ),
     );
 
-    expect(jobChain.status).toEqual("pending");
+    expect(chain.status).toEqual("pending");
 
     const completedChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.completeJobChain({
+        client.completeChain({
           ...txCtx,
           transactionHooks,
-          typeName: "awaiting-approval",
-          id: jobChain.id,
+          ...chain,
           complete: async ({ job, complete }) => {
             if (job.typeName === "awaiting-approval") {
               job = await complete(job, async ({ continueWith }) => {
@@ -146,7 +144,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     expect(completedChain.output).toEqual({ done: true });
   });
 
-  it("rejects continueWith typeName/input mismatches in completeJobChain", async ({
+  it("rejects continueWith typeName/input mismatches in completeChain", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -177,9 +175,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       jobTypes,
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "start",
@@ -190,11 +188,10 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.completeJobChain({
+        client.completeChain({
           ...txCtx,
           transactionHooks,
-          typeName: "start",
-          id: jobChain.id,
+          ...chain,
           complete: async ({ job, complete }) => {
             // @ts-expect-error complete() rejects un-narrowed union job types
             void complete(job, async () => ({ result: "done" }));
@@ -234,7 +231,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
   });
 
-  it("partially completes a complex job chain without worker", async ({
+  it("partially completes a complex chain without worker", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -279,9 +276,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "awaiting-approval",
@@ -290,15 +287,14 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       ),
     );
 
-    expect(jobChain.status).toEqual("pending");
+    expect(chain.status).toEqual("pending");
 
     const partiallyCompletedChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.completeJobChain({
+        client.completeChain({
           ...txCtx,
           transactionHooks,
-          typeName: "awaiting-approval",
-          id: jobChain.id,
+          ...chain,
           complete: async ({ job, complete }) => {
             if (job.typeName === "awaiting-approval") {
               job = await complete(job, async ({ continueWith }) => {
@@ -315,7 +311,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
 
     await withWorkers([await worker.start()], async () => {
-      const succeededChain = await client.awaitJobChain(partiallyCompletedChain, completionOptions);
+      const succeededChain = await client.awaitChain(partiallyCompletedChain, completionOptions);
 
       expectTypeOf<(typeof succeededChain)["status"]>().toEqualTypeOf<"completed">();
       expect(succeededChain.output).toEqual({ done: true });
@@ -346,9 +342,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       jobTypes,
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -359,11 +355,10 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.completeJobChain({
+        client.completeChain({
           ...txCtx,
           transactionHooks,
-          typeName: "test",
-          id: jobChain.id,
+          ...chain,
           complete: async ({ job, complete }) => {
             return complete(job, async () => ({ result: false }));
           },
@@ -374,11 +369,10 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     await expect(
       withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.completeJobChain({
+          client.completeChain({
             ...txCtx,
             transactionHooks,
-            typeName: "test",
-            id: jobChain.id,
+            ...chain,
             complete: async ({ job, complete }) => {
               return complete(job, async () => ({ result: false }));
             },
@@ -412,9 +406,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       jobTypes,
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -426,11 +420,10 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     const completeFn = vi.fn();
     const updatedChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.completeJobChain({
+        client.completeChain({
           ...txCtx,
           transactionHooks,
-          typeName: "test",
-          id: jobChain.id,
+          ...chain,
           complete: completeFn,
         }),
       ),
@@ -442,7 +435,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     );
     expect(updatedChain).toMatchObject({
-      id: jobChain.id,
+      id: chain.id,
       status: "pending",
     });
   });
@@ -505,9 +498,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -522,11 +515,10 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
       await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.completeJobChain({
+          client.completeChain({
             ...txCtx,
             transactionHooks,
-            typeName: "test",
-            id: jobChain.id,
+            ...chain,
             complete: async ({ job, complete }) => {
               await complete(job, async () => ({ result: "from-external" }));
             },
@@ -539,7 +531,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     });
   });
 
-  it("correctly narrows chainTypeName in completeJobChain", async ({
+  it("correctly narrows chainTypeName in completeChain", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -561,19 +553,18 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       jobTypes,
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, transactionHooks, typeName: "entryA", input: null }),
+        client.startChain({ ...txCtx, transactionHooks, typeName: "entryA", input: null }),
       ),
     );
 
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.completeJobChain({
+        client.completeChain({
           ...txCtx,
           transactionHooks,
-          typeName: "entryA",
-          id: jobChain.id,
+          ...chain,
           complete: async ({ job, complete }) => {
             expectTypeOf(job.chainTypeName).toEqualTypeOf<"entryA">();
             expect(job.chainTypeName).toBe("entryA");
@@ -594,7 +585,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
   });
 
-  it("completeJobChain throws when called without transaction context", async ({
+  it("completeChain throws when called without transaction context", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -618,9 +609,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       jobTypes,
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -632,17 +623,17 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     await expect(
       withTransactionHooks(async (transactionHooks) =>
         // @ts-expect-error missing txCtx
-        client.completeJobChain({
+        client.completeChain({
           transactionHooks,
           typeName: "test",
-          id: jobChain.id,
+          id: chain.id,
           complete: async ({ job, complete }) => complete(job, async () => ({ result: 84 })),
         }),
       ),
     ).rejects.toThrow(TransactionContextRequiredError);
   });
 
-  it("completeJobChain throws on typeName mismatch", async ({
+  it("completeChain throws on typeName mismatch", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -663,9 +654,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       jobTypes,
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "order",
@@ -677,11 +668,11 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     await expect(
       withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.completeJobChain({
+          client.completeChain({
             ...txCtx,
             transactionHooks,
             typeName: "notification",
-            id: jobChain.id,
+            id: chain.id,
             complete: async ({ job, complete }) => complete(job, async () => ({ sent: true })),
           }),
         ),
@@ -689,7 +680,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     ).rejects.toThrow(JobTypeMismatchError);
   });
 
-  it("awaitJobChain throws on typeName mismatch", async ({
+  it("awaitChain throws on typeName mismatch", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -710,9 +701,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       jobTypes,
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "order",
@@ -722,7 +713,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
 
     await expect(
-      client.awaitJobChain({ typeName: "notification", id: jobChain.id }, { timeoutMs: 1000 }),
+      client.awaitChain({ typeName: "notification", id: chain.id }, { timeoutMs: 1000 }),
     ).rejects.toThrow(JobTypeMismatchError);
   });
 };

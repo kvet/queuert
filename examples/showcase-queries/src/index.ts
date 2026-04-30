@@ -1,7 +1,7 @@
 /**
  * Job & Chain Queries Showcase
  *
- * Demonstrates read-only query methods for inspecting job chains and jobs.
+ * Demonstrates read-only query methods for inspecting chains and jobs.
  *
  * Scenarios:
  * 1. Single Lookups: Get a chain or job by ID with type narrowing
@@ -131,7 +131,7 @@ const stopWorker = await worker.start();
 const [validateChain, _stockChain, orderChain] = await withTransactionHooks(
   async (transactionHooks) =>
     sql.begin(async (txSql) => {
-      const [validate, stock] = await client.startJobChains({
+      const [validate, stock] = await client.startChains({
         sql: txSql,
         transactionHooks,
         items: [
@@ -142,7 +142,7 @@ const [validateChain, _stockChain, orderChain] = await withTransactionHooks(
           { typeName: "check-stock", input: { orderId: "ORD-001", items: ["widget", "gadget"] } },
         ],
       });
-      const order = await client.startJobChain({
+      const order = await client.startChain({
         sql: txSql,
         transactionHooks,
         typeName: "process-order",
@@ -155,7 +155,7 @@ const [validateChain, _stockChain, orderChain] = await withTransactionHooks(
 
 const notifyChains = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startJobChains({
+    client.startChains({
       sql: txSql,
       transactionHooks,
       items: [
@@ -167,36 +167,36 @@ const notifyChains = await withTransactionHooks(async (transactionHooks) =>
 );
 
 await Promise.all([
-  client.awaitJobChain(orderChain, { timeoutMs: 10000 }),
-  ...notifyChains.map(async (c) => client.awaitJobChain(c, { timeoutMs: 10000 })),
+  client.awaitChain(orderChain, { timeoutMs: 10000 }),
+  ...notifyChains.map(async (c) => client.awaitChain(c, { timeoutMs: 10000 })),
 ]);
 
 // Scenario 1: Single lookups with type narrowing
 console.log("\n--- Scenario 1: Single Lookups ---\n");
 
-const jobChain = await client.getJobChain({ id: orderChain.id, typeName: "process-order" });
-if (jobChain) {
-  console.log(`Chain: ${jobChain.typeName} (${jobChain.status})`);
-  console.log(`  Input: ${JSON.stringify(jobChain.input)}`);
-  if (jobChain.status === "completed") {
-    console.log(`  Output: ${JSON.stringify(jobChain.output)}`);
+const chain = await client.getChain({ id: orderChain.id });
+if (chain) {
+  console.log(`Chain: ${chain.typeName} (${chain.status})`);
+  console.log(`  Input: ${JSON.stringify(chain.input)}`);
+  if (chain.status === "completed") {
+    console.log(`  Output: ${JSON.stringify(chain.output)}`);
   }
 }
 
-const job = await client.getJob({ id: orderChain.id, typeName: "process-order" });
+const job = await client.getJob({ id: orderChain.id });
 if (job) {
   console.log(`Job: ${job.typeName} (${job.status})`);
   console.log(`  Chain index: ${job.chainIndex}`);
 }
 
-const missing = await client.getJobChain({ id: "00000000-0000-0000-0000-000000000000" as any });
+const missing = await client.getChain({ id: "00000000-0000-0000-0000-000000000000" as any });
 console.log("Missing chain:", missing);
 assert.equal(missing, undefined);
 
 // Scenario 2: Paginated lists with filters
 console.log("\n--- Scenario 2: Paginated Lists ---\n");
 
-const completedChains = await client.listJobChains({
+const completedChains = await client.listChains({
   filter: { status: ["completed"] },
   limit: 3,
 });
@@ -207,7 +207,7 @@ for (const c of completedChains.items) {
 }
 
 if (completedChains.nextCursor) {
-  const page2 = await client.listJobChains({
+  const page2 = await client.listChains({
     filter: { status: ["completed"] },
     cursor: completedChains.nextCursor,
     limit: 3,
@@ -230,8 +230,8 @@ assert.equal(notifyJobs.items.length, 2);
 // Scenario 3: List jobs within a chain
 console.log("\n--- Scenario 3: Chain Jobs ---\n");
 
-const chainJobs = await client.listJobChainJobs({
-  jobChainId: orderChain.id,
+const chainJobs = await client.listChainJobs({
+  chainId: orderChain.id,
   typeName: "process-order",
 });
 console.log(`Jobs in order chain (${orderChain.id}):`);
@@ -256,7 +256,7 @@ for (const b of blockers) {
 assert.equal(blockers.length, 2);
 
 const blockedByValidate = await client.listBlockedJobs({
-  jobChainId: validateChain.id,
+  chainId: validateChain.id,
   typeName: "validate-input",
 });
 console.log(`\nJobs blocked by validate-input chain:`);

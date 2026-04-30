@@ -15,7 +15,7 @@ Jobs can be scheduled to start at a future time using the `schedule` option. The
   <TabItem label="Relative delay (afterMs)">
     ```ts
     await withTransactionHooks(async (transactionHooks) =>
-      client.startJobChain({
+      client.startChain({
         transactionHooks,
         typeName: "send-reminder",
         input: { userId: "123" },
@@ -27,7 +27,7 @@ Jobs can be scheduled to start at a future time using the `schedule` option. The
   <TabItem label="Specific time (at)">
     ```ts
     await withTransactionHooks(async (transactionHooks) =>
-      client.startJobChain({
+      client.startChain({
         transactionHooks,
         typeName: "send-reminder",
         input: { userId: "123" },
@@ -75,7 +75,7 @@ await withTransactionHooks(async (transactionHooks) =>
 
 ## Recurring Jobs
 
-For periodic tasks like daily digests, health checks, or billing cycles, start a new independent job chain from within the handler instead of using `continueWith`. This keeps each execution as its own short-lived chain rather than building an ever-growing chain history.
+For periodic tasks like daily digests, health checks, or billing cycles, start a new independent chain from within the handler instead of using `continueWith`. This keeps each execution as its own short-lived chain rather than building an ever-growing chain history.
 
 ```ts
 const jobTypes = defineJobTypes<{
@@ -93,7 +93,7 @@ const jobTypes = defineJobTypes<{
 
     return complete(async ({ sql, transactionHooks }) => {
       if (userStillSubscribed) {
-        await client.startJobChain({
+        await client.startChain({
           sql,
           transactionHooks,
           typeName: 'daily-digest',
@@ -101,7 +101,7 @@ const jobTypes = defineJobTypes<{
           schedule: { afterMs: 24 * 60 * 60 * 1000 }, // Run again tomorrow
           deduplication: {
             key: `digest:${job.input.userId}`,
-            excludeJobChainIds: [job.chainId], // Skip the completing chain
+            excludeChainIds: [job.chainId], // Skip the completing chain
           },
         });
       }

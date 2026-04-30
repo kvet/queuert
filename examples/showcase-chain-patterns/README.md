@@ -1,6 +1,6 @@
 # Chain Patterns Showcase
 
-Job chain execution patterns through a subscription lifecycle.
+Chain execution patterns through a subscription lifecycle.
 
 Scenarios: linear, branched, loops, go-to.
 

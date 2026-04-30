@@ -44,11 +44,11 @@ export const withTransactionGroup: ConformanceGroup<StateAdapterConformanceConte
           // Expected
         }
 
-        const original = await stateAdapter.getJobById({ jobId: job.id });
+        const original = await stateAdapter.getJob({ jobId: job.id });
         expect(original).toBeDefined();
 
         if (rolledBackJobId) {
-          const rolledBack = await stateAdapter.getJobById({ jobId: rolledBackJobId });
+          const rolledBack = await stateAdapter.getJob({ jobId: rolledBackJobId });
           expect(rolledBack).toBeUndefined();
         }
       },
@@ -80,7 +80,7 @@ export const withTransactionGroup: ConformanceGroup<StateAdapterConformanceConte
           // Expected
         }
 
-        const after = await stateAdapter.getJobById({ jobId: job.id });
+        const after = await stateAdapter.getJob({ jobId: job.id });
         expect(after?.status).toBe("pending");
         expect(after?.attempt).toBe(0);
 
@@ -111,14 +111,14 @@ export const withTransactionGroup: ConformanceGroup<StateAdapterConformanceConte
 
         try {
           await stateAdapter.withTransaction(async (txCtx) => {
-            await stateAdapter.deleteJobChains({ txCtx, chainIds: [job.chainId] });
+            await stateAdapter.deleteChains({ txCtx, chainIds: [job.chainId] });
             throw new Error("rollback after delete");
           });
         } catch {
           // Expected
         }
 
-        const after = await stateAdapter.getJobById({ jobId: job.id });
+        const after = await stateAdapter.getJob({ jobId: job.id });
         expect(after?.id).toBe(job.id);
 
         const reacquired = await stateAdapter.withTransaction(async (txCtx) =>
@@ -171,7 +171,7 @@ export const withTransactionGroup: ConformanceGroup<StateAdapterConformanceConte
           // Expected
         }
 
-        const after = await stateAdapter.getJobById({ jobId: target.id });
+        const after = await stateAdapter.getJob({ jobId: target.id });
         expect(after?.status).toBe("pending");
 
         const blockers = await stateAdapter.getJobBlockers({ jobId: target.id });
@@ -236,7 +236,7 @@ export const withTransactionGroup: ConformanceGroup<StateAdapterConformanceConte
         await txPromise;
         const [{ job: outside }] = await nonTxPromise;
 
-        const survived = await stateAdapter.getJobById({ jobId: outside.id });
+        const survived = await stateAdapter.getJob({ jobId: outside.id });
         expect(survived?.id).toBe(outside.id);
         expect(survived?.input).toEqual({ side: "non-tx" });
       },
@@ -282,15 +282,15 @@ export const withTransactionGroup: ConformanceGroup<StateAdapterConformanceConte
               output: { ok: true },
               workerId: "w1",
             });
-            await stateAdapter.deleteJobChains({ txCtx, chainIds: [b.chainId] });
+            await stateAdapter.deleteChains({ txCtx, chainIds: [b.chainId] });
             throw new Error("rollback after mixed mutations");
           });
         } catch {
           // Expected
         }
 
-        const aAfter = await stateAdapter.getJobById({ jobId: a.id });
-        const bAfter = await stateAdapter.getJobById({ jobId: b.id });
+        const aAfter = await stateAdapter.getJob({ jobId: a.id });
+        const bAfter = await stateAdapter.getJob({ jobId: b.id });
         expect(aAfter?.status).toBe("pending");
         expect(aAfter?.completedAt).toBeNull();
         expect(bAfter?.status).toBe("pending");

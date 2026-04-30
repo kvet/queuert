@@ -1,5 +1,5 @@
 import { type Job } from "../entities/job.js";
-import { JobChainNotFoundError } from "../errors.js";
+import { ChainNotFoundError } from "../errors.js";
 import { bufferNotifyChainCompletion, bufferNotifyJobScheduled } from "../helpers/notify-hooks.js";
 import { bufferObservabilityEvent } from "../helpers/observability-hooks.js";
 import { type Helpers } from "../setup-helpers.js";
@@ -57,32 +57,32 @@ export const finishJob = async (
   }
 
   if (!hasContinuedJob) {
-    const jobChainStartJob = await helpers.stateAdapter.getJobById({
+    const chainStartJob = await helpers.stateAdapter.getJob({
       txCtx,
       jobId: job.chainId,
     });
 
-    if (!jobChainStartJob) {
-      throw new JobChainNotFoundError(`Job chain with id ${job.chainId} not found`, {
+    if (!chainStartJob) {
+      throw new ChainNotFoundError(`Chain with id ${job.chainId} not found`, {
         chainId: job.chainId,
       });
     }
 
     bufferObservabilityEvent(transactionHooks, () => {
-      helpers.observabilityHelper.jobChainCompleted(jobChainStartJob, { output });
-      helpers.observabilityHelper.jobChainDuration(jobChainStartJob, job);
+      helpers.observabilityHelper.chainCompleted(chainStartJob, { output });
+      helpers.observabilityHelper.chainDuration(chainStartJob, job);
     });
     bufferNotifyChainCompletion(transactionHooks, helpers.notifyAdapter, job);
 
     const { unblockedJobs, blockerTraceContexts } = await helpers.stateAdapter.unblockJobs({
       txCtx,
-      blockedByChainId: jobChainStartJob.id,
+      blockedByChainId: chainStartJob.id,
     });
     for (const traceContext of blockerTraceContexts) {
       bufferObservabilityEvent(transactionHooks, () => {
         helpers.observabilityHelper.completeBlockerSpan({
           traceContext,
-          blockerChainTypeName: jobChainStartJob.chainTypeName,
+          blockerChainTypeName: chainStartJob.chainTypeName,
         });
       });
     }
@@ -92,7 +92,7 @@ export const finishJob = async (
         bufferNotifyJobScheduled(transactionHooks, helpers.notifyAdapter, unblockedJob);
         bufferObservabilityEvent(transactionHooks, () => {
           helpers.observabilityHelper.jobUnblocked(unblockedJob, {
-            unblockedByChain: jobChainStartJob,
+            unblockedByChain: chainStartJob,
           });
         });
       });

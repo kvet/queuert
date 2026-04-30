@@ -65,7 +65,7 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
   withSavepoint: <T>(txCtx: TTxContext, fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
 
   /**
-   * Gets a job chain by its chain ID. Returns [rootJob, lastJob] or undefined.
+   * Gets a chain by its chain ID. Returns [rootJob, lastJob] or undefined.
    *
    * Pass `lock: "exclusive"` from inside a transaction to acquire a write-intent
    * lock on the latest job in the chain — i.e. the row callers typically extend
@@ -75,7 +75,7 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
    * path. Backends that support row-level locking (Postgres, MySQL/MariaDB)
    * block concurrent locked reads on the same row until the transaction ends.
    */
-  getJobChainById: (params: {
+  getChain: (params: {
     txCtx?: TTxContext;
     chainId: TJobId;
     lock?: "exclusive";
@@ -88,7 +88,7 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
    * lock on the row; backends that support row-level locking (Postgres,
    * MySQL/MariaDB) will block concurrent writers until the transaction ends.
    */
-  getJobById: (params: {
+  getJob: (params: {
     txCtx?: TTxContext;
     jobId: TJobId;
     lock?: "exclusive";
@@ -107,7 +107,7 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
         key: string;
         scope?: "incomplete" | "any";
         windowMs?: number;
-        excludeJobChainIds?: TJobId[];
+        excludeChainIds?: TJobId[];
       };
       schedule?: ScheduleOptions;
       chainTraceContext?: string | null;
@@ -213,17 +213,13 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
    * `chainIds` to include transitive dependencies (downward only) before
    * checking and deleting.
    */
-  deleteJobChains: (params: {
-    txCtx?: TTxContext;
-    chainIds: TJobId[];
-    cascade?: boolean;
-  }) => Promise<{
+  deleteChains: (params: { txCtx?: TTxContext; chainIds: TJobId[]; cascade?: boolean }) => Promise<{
     deleted: [StateJob, StateJob | undefined][];
     blockerRefs: BlockerReference[];
   }>;
 
   /** Lists chains with pagination and filtering. */
-  listJobChains: (params: {
+  listChains: (params: {
     txCtx?: TTxContext;
     filter?: {
       typeName?: string[];
@@ -255,7 +251,7 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
   }) => Promise<Page<StateJob>>;
 
   /** Lists jobs within a specific chain, ordered by chain index. */
-  listJobChainJobs: (params: {
+  listChainJobs: (params: {
     txCtx?: TTxContext;
     chainId: TJobId;
     orderDirection: OrderDirection;

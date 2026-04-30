@@ -1,6 +1,6 @@
 ---
 title: Cleanup
-description: How to implement automatic cleanup of completed job chains.
+description: How to implement automatic cleanup of completed chains.
 sidebar:
   order: 15
 ---
@@ -39,24 +39,24 @@ const cleanupProcessorRegistry = createProcessors({
         let cursor: string | undefined;
 
         do {
-          const page = await client.listJobChains({
+          const page = await client.listChains({
             filter: { root: true, to: cutoffDate },
             orderDirection: "asc",
             limit: CLEANUP_BATCH_SIZE,
             ...(cursor != null ? { cursor } : {}),
           });
 
-          const jobChainsToDelete = page.items.filter(
-            (jobChain) => jobChain.id !== job.chainId && jobChain.status === "completed",
+          const chainsToDelete = page.items.filter(
+            (chain) => chain.id !== job.chainId && chain.status === "completed",
           );
 
-          if (jobChainsToDelete.length > 0) {
+          if (chainsToDelete.length > 0) {
             const deleted = await withTransactionHooks(async (transactionHooks) =>
               stateProvider.withTransaction(async (txCtx) =>
-                client.deleteJobChains({
+                client.deleteChains({
                   ...txCtx,
                   transactionHooks,
-                  ids: jobChainsToDelete.map((jobChain) => jobChain.id),
+                  ids: chainsToDelete.map((chain) => chain.id),
                 }),
               ),
             );
@@ -69,7 +69,7 @@ const cleanupProcessorRegistry = createProcessors({
         await stateAdapter.vacuum();
 
         return complete(async ({ transactionHooks, ...txCtx }) => {
-          await client.startJobChain({
+          await client.startChain({
             ...txCtx,
             transactionHooks,
             typeName: "queuert.cleanup",
@@ -78,7 +78,7 @@ const cleanupProcessorRegistry = createProcessors({
             deduplication: {
               key: "queuert.cleanup",
               scope: "incomplete",
-              excludeJobChainIds: [job.chainId],
+              excludeChainIds: [job.chainId],
             },
           });
 
@@ -94,10 +94,10 @@ Key patterns used:
 
 - **Retention cutoff** — `CLEANUP_RETENTION_MS` controls how long completed chains are kept before deletion
 - **Self-exclusion filter** — the cleanup chain filters itself out of the deletion list to avoid deleting its own chain
-- **Cursor pagination** — processes chains in bounded batches using `listJobChains` cursor, preventing unbounded memory usage
+- **Cursor pagination** — processes chains in bounded batches using `listChains` cursor, preventing unbounded memory usage
 - **Vacuum** — reclaims disk space after all deletions complete
 - **`deduplication`** with `scope: "incomplete"` — ensures only one cleanup chain is active at a time
-- **`excludeJobChainIds`** — prevents the finishing cleanup chain from deduplicating against itself
+- **`excludeChainIds`** — prevents the finishing cleanup chain from deduplicating against itself
 - **`schedule`** — defers the next run by `CLEANUP_INTERVAL_MS`
 
 ## Merge and Start
@@ -124,7 +124,7 @@ Schedule the initial cleanup at application startup. Deduplication makes this id
 ```ts
 await withTransactionHooks(async (transactionHooks) =>
   stateProvider.withTransaction(async (txCtx) =>
-    client.startJobChain({
+    client.startChain({
       ...txCtx,
       transactionHooks,
       typeName: "queuert.cleanup",
@@ -158,7 +158,7 @@ Since this is your own job type, you can adapt the logic freely:
 - **Metrics** — emit the `deletedChainCount` to your observability system
 - **Alerting** — fail the cleanup job if deletion count exceeds a threshold
 
-See [examples/showcase-cleanup](https://github.com/kvet/queuert/tree/main/examples/showcase-cleanup) for a complete working example demonstrating automatic cleanup of completed job chains.
+See [examples/showcase-cleanup](https://github.com/kvet/queuert/tree/main/examples/showcase-cleanup) for a complete working example demonstrating automatic cleanup of completed chains.
 
 ## See Also
 

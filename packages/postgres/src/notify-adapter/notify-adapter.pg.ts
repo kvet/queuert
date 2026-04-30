@@ -66,12 +66,12 @@ export const createPgNotifyAdapter = async ({
     provideWakeHint: async () => {},
     consumeWakeHint: async () => true,
 
-    notifyJobChainCompleted: async (chainId) => {
+    notifyChainCompleted: async (chainId) => {
       assertOpen();
       await notifyProvider.publish(chainCompletedChannel, chainId);
     },
 
-    listenJobChainCompleted: async (chainId, onNotification) => {
+    listenChainCompleted: async (chainId, onNotification) => {
       assertOpen();
       return chainCompletedListener.subscribe(chainId, () => {
         onNotification();

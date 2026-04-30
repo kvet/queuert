@@ -364,8 +364,8 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
 
     const now = Date.now();
     const scope = deduplication.scope ?? "incomplete";
-    const exclude = deduplication.excludeJobChainIds
-      ? new Set(deduplication.excludeJobChainIds)
+    const exclude = deduplication.excludeChainIds
+      ? new Set(deduplication.excludeChainIds)
       : undefined;
     const windowStart =
       deduplication.windowMs !== undefined ? now - deduplication.windowMs : undefined;
@@ -545,7 +545,7 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
       }
     },
 
-    getJobChainById: async ({ txCtx, chainId }) =>
+    getChain: async ({ txCtx, chainId }) =>
       withReadLock(txCtx, () => {
         const rootJob = jobs.get(chainId);
         if (!rootJob) return undefined;
@@ -553,7 +553,7 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
         return [rootJob, lastJob && lastJob.id !== rootJob.id ? lastJob : undefined];
       }),
 
-    getJobById: async ({ txCtx, jobId }) => withReadLock(txCtx, () => jobs.get(jobId)),
+    getJob: async ({ txCtx, jobId }) => withReadLock(txCtx, () => jobs.get(jobId)),
 
     createJobs: async ({ txCtx, jobs: jobInputs }) =>
       withWriteLock(txCtx, () => {
@@ -899,7 +899,7 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
         return updatedJob;
       }),
 
-    deleteJobChains: async ({ txCtx, chainIds, cascade }) =>
+    deleteChains: async ({ txCtx, chainIds, cascade }) =>
       withWriteLock(txCtx, () => {
         const journal = txCtx?.journal;
         const effectiveChainIds = cascade ? expandChainIds(chainIds) : chainIds;
@@ -934,7 +934,7 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
         return { deleted, blockerRefs: [] };
       }),
 
-    listJobChains: async ({ txCtx, filter, orderDirection, page }) =>
+    listChains: async ({ txCtx, filter, orderDirection, page }) =>
       withReadLock(txCtx, () => {
         const idMatchChainIds = filter?.chainId ? new Set<string>(filter.chainId) : undefined;
 
@@ -984,7 +984,7 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
         return paginateByCreatedAt(matched, page, orderDirection);
       }),
 
-    listJobChainJobs: async ({ txCtx, chainId, orderDirection, page }) =>
+    listChainJobs: async ({ txCtx, chainId, orderDirection, page }) =>
       withReadLock(txCtx, () => {
         const chainMap = jobsByChain.get(chainId);
         const matched: StateJob[] = chainMap ? Array.from(chainMap.values()) : [];

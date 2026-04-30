@@ -34,7 +34,7 @@ All metric methods accept primitive data types (strings, numbers) rather than do
 
 ### ObservabilityHelper
 
-The helper layer maps domain objects (`StateJob`, `Job`, `JobChain`) to the adapter's primitive parameters. It also handles logging via the `Log` interface. This separation means the OTEL adapter never needs to import or understand Queuert's domain types.
+The helper layer maps domain objects (`StateJob`, `Job`, `Chain`) to the adapter's primitive parameters. It also handles logging via the `Log` interface. This separation means the OTEL adapter never needs to import or understand Queuert's domain types.
 
 ### Noop Default
 
@@ -68,7 +68,7 @@ The OTEL adapter serializes `SpanContext` objects to this format for storage and
 
 ### Context Flow
 
-1. **Chain creation** (`startJobChain`): Creates PRODUCER chain span → serializes to `chainTraceContext`. Creates PRODUCER job span as child → serializes to `traceContext`. Both stored with the job in the database.
+1. **Chain creation** (`startChain`): Creates PRODUCER chain span → serializes to `chainTraceContext`. Creates PRODUCER job span as child → serializes to `traceContext`. Both stored with the job in the database.
 
 2. **Blockers**: For each blocker dependency, creates a PRODUCER `await chain` span as child of the job span → serializes to `trace_context` in the `job_blocker` table.
 
@@ -99,8 +99,8 @@ Without buffering, a rolled-back transaction could emit metrics and spans for st
 
 Events representing write claims inside transactions:
 
-- **Creation**: `jobChainCreated`, `jobCreated`, `jobBlocked`, PRODUCER span ends
-- **Completion**: `jobCompleted`, `jobDuration`, `completeJobSpan`, `jobChainCompleted`, `jobChainDuration`, `completeBlockerSpan`, `jobUnblocked`
+- **Creation**: `chainCreated`, `jobCreated`, `jobBlocked`, PRODUCER span ends
+- **Completion**: `jobCompleted`, `jobDuration`, `completeJobSpan`, `chainCompleted`, `chainDuration`, `completeBlockerSpan`, `jobUnblocked`
 - **Worker complete**: `jobAttemptCompleted`, continuation PRODUCER span ends
 - **Error handling**: `jobAttemptFailed`
 
@@ -118,13 +118,13 @@ Both `createStateJobs` and `finishJob` use savepoints to automatically roll back
 
 ### TransactionHooks
 
-The buffering mechanism is shared with notification events (`notifyJobScheduled`, `notifyJobChainCompleted`). Both observability and notification events register callbacks on `TransactionHooks`, which flushes all hooks after commit so callbacks run only for committed state changes. Each hook owns its own ordering: observability events register every callback under a single shared hook key and the hook flushes them sequentially, so the order of observability events matches the order of operations. Notification events use separate hook keys and flush in parallel — order across distinct hooks is not guaranteed.
+The buffering mechanism is shared with notification events (`notifyJobScheduled`, `notifyChainCompleted`). Both observability and notification events register callbacks on `TransactionHooks`, which flushes all hooks after commit so callbacks run only for committed state changes. Each hook owns its own ordering: observability events register every callback under a single shared hook key and the hook flushes them sequentially, so the order of observability events matches the order of operations. Notification events use separate hook keys and flush in parallel — order across distinct hooks is not guaranteed.
 
 ## See Also
 
 - [OTEL Metrics](../otel-metrics/) — Counters, histograms, and gauges
 - [OTEL Tracing](../otel-tracing/) — Span hierarchy and attributes
 - [Adapter Architecture](../adapters/) — Transactional buffering design
-- [Job Chain Model](../job-chain-model/) — Chain identity and continuation model
+- [Chain Model](../chain-model/) — Chain identity and continuation model
 - [Job Processing](../job-processing/) — Prepare/complete pattern
 - [In-Process Worker](../in-process-worker/) — Worker lifecycle and attempt handling

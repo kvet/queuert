@@ -237,6 +237,6 @@ See [Adapter Architecture](/queuert/advanced/adapters/) for full interface defin
 
 - [Client](/queuert/reference/queuert/client/) — Client API reference
 - [Worker](/queuert/reference/queuert/worker/) — Worker and job processing reference
-- [Entities](/queuert/reference/queuert/entities/) — `Job`, `JobChain`, and resolved variants
+- [Entities](/queuert/reference/queuert/entities/) — `Job`, `Chain`, and resolved variants
 - [Errors](/queuert/reference/queuert/errors/) — Error classes reference
 - [Adapter Architecture](/queuert/advanced/adapters/) — Full adapter interface definitions

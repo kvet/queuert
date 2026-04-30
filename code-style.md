@@ -37,18 +37,18 @@ import { createClient, createInProcessWorker, Client } from "queuert";
 import { createQueuertClient, createQueuertInProcessWorker, QueuertClient } from "queuert";
 ```
 
-### Prefer "jobChain" over "chain"
+### Use `chain`, not `jobChain`
 
-In variable names, documentation, and comments, use `jobChain` (not `chain`) to be explicit about what's being referenced. The abbreviated form `chain` is acceptable only in compound API names where the `Job` prefix is already present (e.g., `listJobChainJobs`, `JobChain`, `startJobChain`).
+In variable names, type names, method names, and documentation, use `chain` (not `jobChain`). The library's only nouns are `Job` and `Chain`; the qualifier `Job` adds no information. This applies to the entire public surface — `Chain`, `getChain`, `startChain`, `client.listChainJobs`, etc. Internal references on entities (`Job.chainId`, `StateAdapter.chainId`) follow the same rule.
 
 ```typescript
 // Good
+const chain = await client.getChain({ id });
+const chains = await client.listChains({ filter });
+
+// Bad - over-qualified
 const jobChain = await client.getJobChain({ id });
 const jobChains = await client.listJobChains({ filter });
-
-// Bad - ambiguous abbreviation
-const chain = await client.getJobChain({ id });
-const chains = await client.listJobChains({ filter });
 ```
 
 ### Concise Error Names

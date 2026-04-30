@@ -111,9 +111,9 @@ typeInferenceIt("infers custom ID types through the full stack", async ({ db }) 
     }
   };
 
-  const jobChain = await withTransactionHooks(async (transactionHooks) =>
+  const chain = await withTransactionHooks(async (transactionHooks) =>
     withTransaction(async (db) =>
-      client.startJobChain({
+      client.startChain({
         db,
         transactionHooks,
         typeName: "test",
@@ -121,9 +121,9 @@ typeInferenceIt("infers custom ID types through the full stack", async ({ db }) 
       }),
     ),
   );
-  expectTypeOf(jobChain.id).toEqualTypeOf<`job.${UUID}`>();
+  expectTypeOf(chain.id).toEqualTypeOf<`job.${UUID}`>();
 
   await withWorkers([await worker.start()], async () => {
-    await client.awaitJobChain(jobChain, { timeoutMs: 1000 });
+    await client.awaitChain(chain, { timeoutMs: 1000 });
   });
 });

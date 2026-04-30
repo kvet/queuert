@@ -62,7 +62,18 @@ For non-trivial changes, brainstorm alternative approaches:
 - Alternative algorithms or data structures
 - Trade-off analysis for each approach
 
-### Step 5: Report
+### Step 5: Verify Changeset Coverage
+
+Inspect the diff for user-facing changes — public API renames or signature changes, behavior changes, schema/migration changes, user-visible bug fixes, breaking changes. If any are present, confirm a `.changeset/*.md` entry exists that:
+
+- Bumps every package whose published surface or runtime behavior changed (`patch` / `minor` / `major`).
+- Describes the change in language a user reading release notes would understand.
+- For breaking changes, bumps `major` and includes migration guidance.
+- For schema/migration changes, calls out what runs against existing databases.
+
+Treat a missing changeset as a CRITICAL issue when the diff has user-facing changes. Internal-only changes (refactors with no API impact, tests, types-only tightening, doc-only edits, build/CI/tooling, benchmarks, examples) do not need a changeset.
+
+### Step 6: Report
 
 Provide a structured report with:
 
@@ -116,6 +127,6 @@ Provide a structured report with:
 
 ## Severity Definitions
 
-- **CRITICAL**: Bugs, security issues, data loss risks, breaking changes
-- **CONCERN**: Design flaws, missing edge cases, unclear intent, potential issues
+- **CRITICAL**: Bugs, security issues, data loss risks, breaking changes, missing changeset for user-facing changes
+- **CONCERN**: Design flaws, missing edge cases, unclear intent, potential issues, changeset present but incomplete (wrong bump level, missing affected package, unclear description)
 - **SUGGESTION**: Style, readability, minor optimizations, documentation

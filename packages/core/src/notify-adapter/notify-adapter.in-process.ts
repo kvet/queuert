@@ -93,7 +93,7 @@ export const createInProcessNotifyAdapter = async (): Promise<NotifyAdapter> => 
       return false;
     },
 
-    notifyJobChainCompleted: async (chainId: string) => {
+    notifyChainCompleted: async (chainId: string) => {
       assertOpen();
       const listeners = chainCompletedListeners.get(chainId);
       if (!listeners) return;
@@ -102,7 +102,7 @@ export const createInProcessNotifyAdapter = async (): Promise<NotifyAdapter> => 
       }
     },
 
-    listenJobChainCompleted: async (targetChainId, onNotification) => {
+    listenChainCompleted: async (targetChainId, onNotification) => {
       assertOpen();
       const listener = (): void => {
         onNotification();

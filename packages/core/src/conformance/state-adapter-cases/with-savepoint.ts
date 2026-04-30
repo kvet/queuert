@@ -33,7 +33,7 @@ export const withSavepointGroup: ConformanceGroup<StateAdapterConformanceContext
           return results;
         });
 
-        const retrieved = await stateAdapter.getJobById({ jobId: job.id });
+        const retrieved = await stateAdapter.getJob({ jobId: job.id });
         expect(retrieved!.status).toBe("completed");
         expect(retrieved!.output).toEqual({ done: true });
       },
@@ -70,7 +70,7 @@ export const withSavepointGroup: ConformanceGroup<StateAdapterConformanceContext
           return results;
         });
 
-        const retrieved = await stateAdapter.getJobById({ jobId: job.id });
+        const retrieved = await stateAdapter.getJob({ jobId: job.id });
         expect(retrieved!.status).toBe("pending");
         expect(retrieved!.output).toBeNull();
       },
@@ -126,8 +126,8 @@ export const withSavepointGroup: ConformanceGroup<StateAdapterConformanceContext
           return [job1, job2];
         });
 
-        const job1 = await stateAdapter.getJobById({ jobId: jobs[0].id });
-        const job2 = await stateAdapter.getJobById({ jobId: jobs[1].id });
+        const job1 = await stateAdapter.getJob({ jobId: jobs[0].id });
+        const job2 = await stateAdapter.getJob({ jobId: jobs[1].id });
         expect(job1).toBeDefined();
         expect(job1!.input).toEqual({ before: true });
         expect(job2).toBeDefined();
@@ -176,7 +176,7 @@ export const withSavepointGroup: ConformanceGroup<StateAdapterConformanceContext
           return results;
         });
 
-        const retrieved = await stateAdapter.getJobById({ jobId: job.id });
+        const retrieved = await stateAdapter.getJob({ jobId: job.id });
         expect(retrieved!.status).toBe("completed");
         expect(retrieved!.output).toEqual({ step: 1 });
       },
@@ -242,8 +242,8 @@ export const withSavepointGroup: ConformanceGroup<StateAdapterConformanceContext
           },
         );
 
-        const before = await stateAdapter.getJobById({ jobId: jobBefore.id });
-        const after = await stateAdapter.getJobById({ jobId: jobAfter.id });
+        const before = await stateAdapter.getJob({ jobId: jobBefore.id });
+        const after = await stateAdapter.getJob({ jobId: jobAfter.id });
         expect(before).toBeDefined();
         expect(after).toBeDefined();
       },

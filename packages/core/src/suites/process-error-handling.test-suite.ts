@@ -75,9 +75,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -87,7 +87,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.awaitJobChain(jobChain, completionOptions);
+      const completed = await client.awaitChain(chain, completionOptions);
       expect(completed.output).toEqual({ result: 20 });
     });
 
@@ -165,9 +165,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -177,7 +177,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.awaitJobChain(jobChain, completionOptions);
+      const completed = await client.awaitChain(chain, completionOptions);
       expect(completed.output).toEqual({ result: 20 });
     });
 
@@ -254,9 +254,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -266,7 +266,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.awaitJobChain(jobChain, completionOptions);
+      const completed = await client.awaitChain(chain, completionOptions);
       expect(completed.output).toEqual({ result: 20 });
     });
 
@@ -343,9 +343,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -355,7 +355,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.awaitJobChain(jobChain, completionOptions);
+      const completed = await client.awaitChain(chain, completionOptions);
       expect(completed.output).toEqual({ result: 20 });
     });
 
@@ -374,7 +374,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         name: "withTransaction",
         status: "committed",
         children: [
-          expect.objectContaining({ name: "getJobById", args: { lock: "exclusive" } }),
+          expect.objectContaining({ name: "getJob", args: { lock: "exclusive" } }),
           expect.objectContaining({ name: "rescheduleJob" }),
         ],
       }),
@@ -441,9 +441,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -453,7 +453,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.awaitJobChain(jobChain, completionOptions);
+      const completed = await client.awaitChain(chain, completionOptions);
       expect(completed.output).toEqual({ result: 20 });
     });
 
@@ -533,9 +533,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -545,7 +545,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.awaitJobChain(jobChain, completionOptions);
+      const completed = await client.awaitChain(chain, completionOptions);
       expect(completed.output).toEqual({ result: 20 });
     });
 
@@ -564,7 +564,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         name: "withTransaction",
         status: "committed",
         children: [
-          expect.objectContaining({ name: "getJobById", args: { lock: "exclusive" } }),
+          expect.objectContaining({ name: "getJob", args: { lock: "exclusive" } }),
           expect.objectContaining({ name: "withSavepoint", status: "rolled-back" }),
           expect.objectContaining({ name: "rescheduleJob" }),
         ],
@@ -633,9 +633,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -645,7 +645,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.awaitJobChain(jobChain, completionOptions);
+      const completed = await client.awaitChain(chain, completionOptions);
       expect(completed.output).toEqual({ result: 20 });
     });
 
@@ -663,7 +663,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
             status: "rolled-back",
             children: [
               expect.objectContaining({ name: "completeJob" }),
-              expect.objectContaining({ name: "getJobById" }),
+              expect.objectContaining({ name: "getJob" }),
               expect.objectContaining({ name: "unblockJobs" }),
             ],
           }),
@@ -736,9 +736,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -748,7 +748,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.awaitJobChain(jobChain, completionOptions);
+      const completed = await client.awaitChain(chain, completionOptions);
       expect(completed.output).toEqual({ result: 20 });
     });
 
@@ -769,13 +769,13 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         name: "withTransaction",
         status: "committed",
         children: [
-          expect.objectContaining({ name: "getJobById", args: { lock: "exclusive" } }),
+          expect.objectContaining({ name: "getJob", args: { lock: "exclusive" } }),
           expect.objectContaining({
             name: "withSavepoint",
             status: "rolled-back",
             children: [
               expect.objectContaining({ name: "completeJob" }),
-              expect.objectContaining({ name: "getJobById" }),
+              expect.objectContaining({ name: "getJob" }),
               expect.objectContaining({ name: "unblockJobs" }),
             ],
           }),
@@ -846,9 +846,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -858,7 +858,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.awaitJobChain(jobChain, completionOptions);
+      const completed = await client.awaitChain(chain, completionOptions);
       expect(completed.output).toEqual({ result: 20 });
     });
 
@@ -942,9 +942,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -954,7 +954,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.awaitJobChain(jobChain, completionOptions);
+      const completed = await client.awaitChain(chain, completionOptions);
       expect(completed.output).toEqual({ result: 20 });
     });
 
@@ -1039,9 +1039,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -1051,7 +1051,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.awaitJobChain(jobChain, completionOptions);
+      const completed = await client.awaitChain(chain, completionOptions);
       expect(completed.output).toEqual({ result: 20 });
     });
 
@@ -1137,9 +1137,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -1149,7 +1149,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.awaitJobChain(jobChain, completionOptions);
+      const completed = await client.awaitChain(chain, completionOptions);
       expect(completed.output).toEqual({ result: 20 });
     });
 
@@ -1168,7 +1168,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         name: "withTransaction",
         status: "committed",
         children: [
-          expect.objectContaining({ name: "getJobById", args: { lock: "exclusive" } }),
+          expect.objectContaining({ name: "getJob", args: { lock: "exclusive" } }),
           expect.objectContaining({
             name: "withSavepoint",
             status: "rolled-back",
@@ -1249,9 +1249,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "step1",
@@ -1261,13 +1261,13 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.awaitJobChain(jobChain, completionOptions);
+      const completed = await client.awaitChain(chain, completionOptions);
       expect(completed.output).toEqual({ result: 20 });
     });
 
     expect(step1Attempts).toBe(2);
 
-    const allJobs = await client.listJobChainJobs({ jobChainId: jobChain.id });
+    const allJobs = await client.listChainJobs({ chainId: chain.id });
     expect(allJobs.items).toHaveLength(2);
 
     const expected = [
@@ -1362,9 +1362,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "step1",
@@ -1374,13 +1374,13 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.awaitJobChain(jobChain, completionOptions);
+      const completed = await client.awaitChain(chain, completionOptions);
       expect(completed.output).toEqual({ result: 20 });
     });
 
     expect(step1Attempts).toBe(2);
 
-    const allJobs = await client.listJobChainJobs({ jobChainId: jobChain.id });
+    const allJobs = await client.listChainJobs({ chainId: chain.id });
     expect(allJobs.items).toHaveLength(2);
 
     const expected = [
@@ -1398,7 +1398,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         name: "withTransaction",
         status: "committed",
         children: [
-          expect.objectContaining({ name: "getJobById", args: { lock: "exclusive" } }),
+          expect.objectContaining({ name: "getJob", args: { lock: "exclusive" } }),
           expect.objectContaining({
             name: "withSavepoint",
             status: "rolled-back",
@@ -1478,7 +1478,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const blockerChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "blocker",
@@ -1488,7 +1488,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
     const dependentChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "dependent",
@@ -1499,7 +1499,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.awaitJobChain(dependentChain, completionOptions);
+      const completed = await client.awaitChain(dependentChain, completionOptions);
       expect(completed.output).toEqual({ result: "ok" });
     });
 
@@ -1571,7 +1571,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const blockerChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "blocker",
@@ -1581,7 +1581,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
     const dependentChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "dependent",
@@ -1592,7 +1592,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.awaitJobChain(dependentChain, completionOptions);
+      const completed = await client.awaitChain(dependentChain, completionOptions);
       expect(completed.output).toEqual({ result: "ok" });
     });
 
@@ -1658,9 +1658,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -1670,7 +1670,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(jobChain, completionOptions);
+      await client.awaitChain(chain, completionOptions);
     });
 
     expect(recordedErrors).toHaveLength(3);

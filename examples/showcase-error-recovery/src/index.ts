@@ -204,7 +204,7 @@ console.log(
 
 const transfer = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
-    const result = await client.startJobChain({
+    const result = await client.startChain({
       sql: txSql,
       transactionHooks,
       typeName: "transfer-funds",
@@ -219,7 +219,7 @@ setTimeout(() => {
   sql`UPDATE accounts SET balance = 300 WHERE id = 2`.catch(() => {});
 }, 200);
 
-const transferResult = await client.awaitJobChain(transfer, { timeoutMs: 5000 });
+const transferResult = await client.awaitChain(transfer, { timeoutMs: 5000 });
 assert.deepStrictEqual(transferResult.output, { transferred: true });
 
 const [alice1] = await sql<{ balance: string }[]>`SELECT balance FROM accounts WHERE id = 1`;
@@ -234,7 +234,7 @@ console.log("Credit $50 to Alice. Handler crashes after complete(), completion i
 
 const credit = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
-    const result = await client.startJobChain({
+    const result = await client.startChain({
       sql: txSql,
       transactionHooks,
       typeName: "credit-account",
@@ -244,7 +244,7 @@ const credit = await withTransactionHooks(async (transactionHooks) =>
   }),
 );
 
-const creditResult = await client.awaitJobChain(credit, { timeoutMs: 5000 });
+const creditResult = await client.awaitChain(credit, { timeoutMs: 5000 });
 assert.deepStrictEqual(creditResult.output, { credited: true });
 
 const [alice2] = await sql<{ balance: string }[]>`SELECT balance FROM accounts WHERE id = 1`;
@@ -258,7 +258,7 @@ console.log("External API fails between phases. Prepare committed, job retries.\
 externalApiShouldFail = true;
 const externalTransfer = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
-    const result = await client.startJobChain({
+    const result = await client.startChain({
       sql: txSql,
       transactionHooks,
       typeName: "external-transfer",
@@ -268,7 +268,7 @@ const externalTransfer = await withTransactionHooks(async (transactionHooks) =>
   }),
 );
 
-const externalResult = await client.awaitJobChain(externalTransfer, { timeoutMs: 5000 });
+const externalResult = await client.awaitChain(externalTransfer, { timeoutMs: 5000 });
 assert.deepStrictEqual(externalResult.output, { confirmed: true });
 
 const [bob3] = await sql<{ balance: string }[]>`SELECT balance FROM accounts WHERE id = 2`;
@@ -279,9 +279,9 @@ assert.equal(Number(bob3.balance), 125);
 console.log("\n--- Scenario 4: lastAttemptError Inspection ---");
 console.log("Job throws different error types, inspects lastAttemptError on retry.\n");
 
-const flakyJob = await withTransactionHooks(async (transactionHooks) =>
+const flakyChain = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
-    const result = await client.startJobChain({
+    const result = await client.startChain({
       sql: txSql,
       transactionHooks,
       typeName: "flaky-job",
@@ -291,7 +291,7 @@ const flakyJob = await withTransactionHooks(async (transactionHooks) =>
   }),
 );
 
-const flakyResult = await client.awaitJobChain(flakyJob, { timeoutMs: 5000 });
+const flakyResult = await client.awaitChain(flakyChain, { timeoutMs: 5000 });
 console.log(`Completed on attempt ${flakyResult.output.attempt}`);
 assert.equal(flakyResult.output.attempt, 3);
 

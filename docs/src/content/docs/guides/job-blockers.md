@@ -5,7 +5,7 @@ sidebar:
   order: 6
 ---
 
-Jobs can depend on other job chains to complete before they start. A job with incomplete blockers starts as `blocked` and transitions to `pending` when all blockers complete.
+Jobs can depend on other chains to complete before they start. A job with incomplete blockers starts as `blocked` and transitions to `pending` when all blockers complete.
 
 ```ts
 const jobTypes = defineJobTypes<{
@@ -24,7 +24,7 @@ const jobTypes = defineJobTypes<{
 
 // Start with blockers (transactionHooks required — see Transaction Hooks guide)
 const fetchBlockers = await withTransactionHooks(async (transactionHooks) =>
-  client.startJobChains({
+  client.startChains({
     transactionHooks,
     items: [
       { typeName: "fetch-data", input: { url: "/a" } },
@@ -33,7 +33,7 @@ const fetchBlockers = await withTransactionHooks(async (transactionHooks) =>
   }),
 );
 await withTransactionHooks(async (transactionHooks) =>
-  client.startJobChain({
+  client.startChain({
     transactionHooks,
     typeName: "process-all",
     input: { ids: ["a", "b", "c"] },

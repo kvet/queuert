@@ -89,7 +89,7 @@ Speeds up `acquireJob` — only pending jobs participate in the index.
 ### Chain Uniqueness
 
 ```sql
-CREATE UNIQUE INDEX job_chain_index_idx
+CREATE UNIQUE INDEX chain_index_idx
   ON job (chain_id, chain_index)
 ```
 
@@ -126,14 +126,14 @@ Fast reverse lookup — given a completed chain, find all jobs it was blocking.
 
 ### Listing Indexes
 
-Five indexes support the listing and filtering queries used by the dashboard and `listJobs`/`listJobChains` APIs:
+Five indexes support the listing and filtering queries used by the dashboard and `listJobs`/`listChains` APIs:
 
 ```sql
-CREATE INDEX job_chain_listing_idx            ON job (created_at DESC) WHERE chain_index = 0
+CREATE INDEX chain_listing_idx            ON job (created_at DESC) WHERE chain_index = 0
 CREATE INDEX job_listing_idx                  ON job (created_at DESC)
 CREATE INDEX job_listing_status_idx           ON job (status, created_at DESC)
 CREATE INDEX job_listing_type_name_idx        ON job (type_name, created_at DESC)
-CREATE INDEX job_chain_listing_type_name_idx  ON job (type_name, created_at DESC) WHERE chain_index = 0
+CREATE INDEX chain_listing_type_name_idx  ON job (type_name, created_at DESC) WHERE chain_index = 0
 ```
 
 ## Locking
@@ -176,7 +176,7 @@ Operations that modify a specific job (e.g., completing a job, renewing a lease)
 SELECT * FROM job WHERE id = $1 FOR UPDATE
 ```
 
-This blocks until the row is available, ensuring the operation sees the latest state. Used by `getJobById` and `getJobChainById` when called with `lock: "exclusive"` from inside a transaction.
+This blocks until the row is available, ensuring the operation sees the latest state. Used by `getJob` and `getChain` when called with `lock: "exclusive"` from inside a transaction.
 
 ### Deadlock Prevention in Deletion
 
@@ -289,7 +289,7 @@ PostgreSQL's `VACUUM` (without `FULL`) does not block reads or writes — it rec
 
 ## Listing Queries and Vacuum
 
-`listJobChains` joins each root row with the last job in the chain via a lateral subquery. The `status` filter applies to the joined last job and cannot use an index — only `typeName` and date range filters narrow the scan before the join. Without these filters, every root row is scanned and joined.
+`listChains` joins each root row with the last job in the chain via a lateral subquery. The `status` filter applies to the joined last job and cannot use an index — only `typeName` and date range filters narrow the scan before the join. Without these filters, every root row is scanned and joined.
 
 Listing queries hold an MVCC snapshot for their duration. On tables with frequent writes, unfiltered scans hold snapshots longer, preventing autovacuum from reclaiming dead tuples and causing table bloat over time. The aggressive autovacuum settings above help mitigate this by reclaiming dead tuples more frequently between listing scans.
 

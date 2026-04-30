@@ -181,14 +181,14 @@ const stopWorker = await worker.start();
 console.log("\n--- Processing Modes: Order Fulfillment Workflow ---");
 console.log("Auto-setup atomic -> Staged -> Auto-setup staged processing modes.\n");
 
-const jobChain = await withTransactionHooks(async (transactionHooks) =>
+const chain = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
     const [order] = await txSql<
       { id: number }[]
     >`INSERT INTO orders (product_id, quantity, status) VALUES (1, 2, 'pending') RETURNING id`;
     console.log(`Created order #${order.id} for 2x Widget Pro`);
 
-    const result = await client.startJobChain({
+    const result = await client.startChain({
       sql: txSql,
       transactionHooks,
       typeName: "reserve-inventory",
@@ -198,7 +198,7 @@ const jobChain = await withTransactionHooks(async (transactionHooks) =>
   }),
 );
 
-const result = await client.awaitJobChain(jobChain, { timeoutMs: 10000 });
+const result = await client.awaitChain(chain, { timeoutMs: 10000 });
 
 console.log("\n" + "-".repeat(40));
 console.log("WORKFLOW COMPLETED");
@@ -206,7 +206,7 @@ console.log("-".repeat(40));
 
 const [finalOrder] = await sql<
   { status: string; payment_id: string }[]
->`SELECT status, payment_id FROM orders WHERE id = ${jobChain.input.orderId}`;
+>`SELECT status, payment_id FROM orders WHERE id = ${chain.input.orderId}`;
 const [finalProduct] = await sql<{ stock: number }[]>`SELECT stock FROM products WHERE id = 1`;
 
 console.log(`Order status: ${finalOrder.status}`);

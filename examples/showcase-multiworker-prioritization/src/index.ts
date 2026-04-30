@@ -183,7 +183,7 @@ console.log(
 
 const marketingChains = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startJobChains({
+    client.startChains({
       sql: txSql,
       transactionHooks,
       items: Array.from({ length: 10 }, (_, index) => ({
@@ -198,7 +198,7 @@ await new Promise((resolve) => setTimeout(resolve, 50));
 
 const transactionalChains = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startJobChains({
+    client.startChains({
       sql: txSql,
       transactionHooks,
       items: [
@@ -220,8 +220,8 @@ const transactionalChains = await withTransactionHooks(async (transactionHooks) 
 );
 
 await Promise.all([
-  ...transactionalChains.map(async (chain) => client.awaitJobChain(chain, { timeoutMs: 30_000 })),
-  ...marketingChains.map(async (chain) => client.awaitJobChain(chain, { timeoutMs: 30_000 })),
+  ...transactionalChains.map(async (chain) => client.awaitChain(chain, { timeoutMs: 30_000 })),
+  ...marketingChains.map(async (chain) => client.awaitChain(chain, { timeoutMs: 30_000 })),
 ]);
 
 console.log("\nCompletion order:");
@@ -256,7 +256,7 @@ console.log(
 
 const alertChain = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startJobChain({
+    client.startChain({
       sql: txSql,
       transactionHooks,
       typeName: "alert.dispatch",
@@ -265,7 +265,7 @@ const alertChain = await withTransactionHooks(async (transactionHooks) =>
   ),
 );
 
-const alertResult = await client.awaitJobChain(alertChain, { timeoutMs: 30_000 });
+const alertResult = await client.awaitChain(alertChain, { timeoutMs: 30_000 });
 
 assert.equal(typeof alertResult.output.archivedAt, "number");
 

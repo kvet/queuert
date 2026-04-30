@@ -146,9 +146,9 @@ const worker = await createInProcessWorker({
 const stopWorker = await worker.start();
 
 console.log("--- processing send-invoice job ---");
-const jobChain = await withTransactionHooks(async (transactionHooks) =>
+const chain = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startJobChain({
+    client.startChain({
       sql: txSql,
       transactionHooks,
       typeName: "send-invoice",
@@ -156,7 +156,7 @@ const jobChain = await withTransactionHooks(async (transactionHooks) =>
     }),
   ),
 );
-const result = await client.awaitJobChain(jobChain, { timeoutMs: 5000 });
+const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 
 console.log("\n--- result ---");
 console.log(`output: ${JSON.stringify(result.output)}`);

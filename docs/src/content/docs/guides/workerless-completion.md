@@ -5,7 +5,7 @@ sidebar:
   order: 12
 ---
 
-Jobs can be completed without a worker using `completeJobChain`. This enables approval workflows, webhook-triggered completions, and patterns where jobs wait for external events. Deferred start pairs well with this -- schedule a job to auto-reject after a timeout, but allow early completion based on user action.
+Jobs can be completed without a worker using `completeChain`. This enables approval workflows, webhook-triggered completions, and patterns where jobs wait for external events. Deferred start pairs well with this -- schedule a job to auto-reject after a timeout, but allow early completion based on user action.
 
 ```ts
 const jobTypes = defineJobTypes<{
@@ -23,7 +23,7 @@ const jobTypes = defineJobTypes<{
 
 // Start a job that auto-rejects in 2 hours if not handled
 const chain = await withTransactionHooks(async (transactionHooks) =>
-  client.startJobChain({
+  client.startChain({
     transactionHooks,
     typeName: "await-approval",
     input: { requestId: "123" },
@@ -55,10 +55,9 @@ const stop = await worker.start();
 
 // The job can be completed early without a worker (e.g., via API call)
 await withTransactionHooks(async (transactionHooks) =>
-  client.completeJobChain({
+  client.completeChain({
     transactionHooks,
-    id: chain.id,
-    typeName: "await-approval",
+    ...chain,
     complete: async ({ job, complete }) => {
       if (job.typeName !== "await-approval") {
         return; // Already past approval stage
@@ -79,14 +78,14 @@ await withTransactionHooks(async (transactionHooks) =>
 );
 ```
 
-This pattern lets you interweave external actions with your job chains -- waiting for user input, third-party callbacks, or manual approval steps.
+This pattern lets you interweave external actions with your chains -- waiting for user input, third-party callbacks, or manual approval steps.
 
 See [examples/showcase-workerless](https://github.com/kvet/queuert/tree/main/examples/showcase-workerless) for a complete working example demonstrating approval workflows and deferred start with early completion. See also [Transaction Hooks](../transaction-hooks/) and [Scheduling](../scheduling/) (deferred start).
 
 ## How It Works
 
-The `completeJobChain` method receives the current job and a `complete` function. Inside `complete`, the caller can return an output to finish the chain or call `continueWith` to add the next job -- the same interface as the worker's prepare/complete pattern.
+The `completeChain` method receives the current job and a `complete` function. Inside `complete`, the caller can return an output to finish the chain or call `continueWith` to add the next job -- the same interface as the worker's prepare/complete pattern.
 
 Internally, `complete` uses `FOR UPDATE` to lock the current job, preventing concurrent completion by a worker or another caller. The completed job has `completedBy: null` (no worker identity), distinguishing it from worker-completed jobs.
 
-If a worker is already processing the job when `completeJobChain` runs, the worker detects the external completion via `JobAlreadyCompletedError`. The worker's abort signal fires with reason `"already_completed"`, and the worker abandons its attempt gracefully.
+If a worker is already processing the job when `completeChain` runs, the worker detects the external completion via `JobAlreadyCompletedError`. The worker's abort signal fires with reason `"already_completed"`, and the worker abandons its attempt gracefully.

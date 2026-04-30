@@ -1,5 +1,5 @@
 ---
-title: Job Chain Model
+title: Chain Model
 description: Promise-like chain model, identity, and execution patterns.
 sidebar:
   order: 3
@@ -26,9 +26,9 @@ Each job:
 - Can `continueWith` to create a linked follow-up job
 - Can depend on **blockers** (other chains that must complete first)
 
-### Job Chain
+### Chain
 
-A **Job Chain** is a series of linked jobs where each job can continue to the next—just like a JavaScript Promise chain.
+A **Chain** is a series of linked jobs where each job can continue to the next—just like a JavaScript Promise chain.
 
 ```
 Job A → Job B → Job C → (completed)
@@ -46,13 +46,13 @@ const chain = fetch(url)           // chain === this promise
   .then(processResponse)           // continuation
   .then(formatResult);             // continuation
 
-// Queuert: A Job Chain IS its first job
-const chain = startJobChain(...)   // chain.id === firstJob.id
+// Queuert: A Chain IS its first job
+const chain = startChain(...)   // chain.id === firstJob.id
   .continueWith(processStep)       // continuation
   .continueWith(formatStep);       // continuation
 ```
 
-The fundamental insight: **the first job IS the chain**. Job Chains work like Promises but persist across process restarts and distribute across workers.
+The fundamental insight: **the first job IS the chain**. Chains work like Promises but persist across process restarts and distribute across workers.
 
 ## Identity Model
 
@@ -79,7 +79,7 @@ Having the first job BE the chain (rather than a separate entity) provides:
 ### Simplicity
 
 - One table, one type, one set of operations
-- No separate `job_chain` table to manage
+- No separate `chain` table to manage
 - No joins, no synchronization issues
 
 ### Flexibility
@@ -139,20 +139,20 @@ Chains can depend on other chains to complete before starting:
 └──────────────┘
 ```
 
-Blockers are declared at the type level and provided via the `blockers` array when creating a job chain. The main job starts as `blocked` and transitions to `pending` when all blockers complete.
+Blockers are declared at the type level and provided via the `blockers` array when creating a chain. The main job starts as `blocked` and transitions to `pending` when all blockers complete.
 
 ## Consistent Terminology
 
 Parallel entities use consistent lifecycle terminology to reduce cognitive load:
 
 - Job: `blocked`/`pending` → `running` → `completed`
-- JobChain: `blocked`/`pending` → `running` → `completed` (reflects status of current job in chain)
+- Chain: `blocked`/`pending` → `running` → `completed` (reflects status of current job in chain)
 
 Avoid asymmetric naming (e.g., `started`/`finished` vs `created`/`completed`) even if individual terms seem natural. Consistency across the API produces fewer questions and faster comprehension.
 
 ## Summary
 
-The Job Chain model:
+The Chain model:
 
 1. **Mirrors Promises**: Familiar mental model for JavaScript developers
 2. **Unified identity**: The first job IS the chain—no separate entity

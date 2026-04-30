@@ -1,4 +1,4 @@
-import { type JobChain } from "../entities/job-chain.js";
+import { type Chain } from "../entities/chain.js";
 import { type BaseJobTypeDefinitions } from "../entities/job-type.js";
 import { type ResolvedJob } from "../entities/job-types.resolvers.js";
 import { mapStateJobToJob } from "../entities/job.js";
@@ -29,7 +29,7 @@ export const continueWith = async <TJobTypeName extends string, TInput>(
     txCtx: any;
     transactionHooks: TransactionHooks;
     schedule?: ScheduleOptions;
-    blockers?: JobChain<any, any, any, any>[];
+    blockers?: Chain<any, any, any, any>[];
     chainId: string;
     chainIndex: number;
     chainTypeName: string;

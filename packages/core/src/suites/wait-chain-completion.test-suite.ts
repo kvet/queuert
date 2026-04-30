@@ -35,18 +35,18 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
       jobTypes,
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.completeJobChain({
+        client.completeChain({
           ...txCtx,
           transactionHooks,
-          ...jobChain,
+          ...chain,
           complete: async ({ job, complete }) => {
             return complete(job, async () => ({ result: "done" }));
           },
@@ -55,7 +55,7 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
     );
 
     const signal = AbortSignal.timeout(100);
-    const completedChain = await client.awaitJobChain(jobChain, {
+    const completedChain = await client.awaitChain(chain, {
       signal,
       timeoutMs: 5000,
     });
@@ -89,9 +89,9 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
       jobTypes,
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
@@ -100,7 +100,7 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
 
     const before = countTimeouts();
     // Small pollIntervalMs so the noop notify spec also discovers completion quickly.
-    const awaitPromise = client.awaitJobChain(jobChain, {
+    const awaitPromise = client.awaitChain(chain, {
       timeoutMs: 60_000,
       pollIntervalMs: 50,
     });
@@ -109,10 +109,10 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
     await new Promise((resolve) => setImmediate(resolve));
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.completeJobChain({
+        client.completeChain({
           ...txCtx,
           transactionHooks,
-          ...jobChain,
+          ...chain,
           complete: async ({ job, complete }) => complete(job, async () => ({ result: "done" })),
         }),
       ),
@@ -148,16 +148,16 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
       jobTypes,
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
     const fastSignal = AbortSignal.timeout(1);
     const slowSignal = AbortSignal.timeout(100);
     await expect(
-      client.awaitJobChain(jobChain, {
+      client.awaitChain(chain, {
         signal: fastSignal,
         timeoutMs: 5000,
       }),
@@ -190,14 +190,14 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
       jobTypes,
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
     await expect(
-      client.awaitJobChain(jobChain, {
+      client.awaitChain(chain, {
         timeoutMs: 1,
       }),
     ).rejects.toThrow(WaitChainTimeoutError);
@@ -228,7 +228,7 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
 
     const nonExistentId = crypto.randomUUID();
     await expect(
-      client.awaitJobChain({ typeName: "test", id: nonExistentId }, { timeoutMs: 5000 }),
-    ).rejects.toThrow(`Job chain with id ${nonExistentId} not found`);
+      client.awaitChain({ typeName: "test", id: nonExistentId }, { timeoutMs: 5000 }),
+    ).rejects.toThrow(`Chain with id ${nonExistentId} not found`);
   });
 };

@@ -59,9 +59,9 @@ it("should work end-to-end with NATS notify adapter", async ({ natsConnectionOpt
     }),
   });
 
-  const jobChain = await withTransactionHooks(async (transactionHooks) =>
+  const chain = await withTransactionHooks(async (transactionHooks) =>
     stateAdapter.withTransaction(async (txCtx) =>
-      client.startJobChain({
+      client.startChain({
         ...txCtx,
         transactionHooks,
         typeName: "test",
@@ -71,7 +71,7 @@ it("should work end-to-end with NATS notify adapter", async ({ natsConnectionOpt
   );
 
   await withWorkers([await worker.start()], async () => {
-    await client.awaitJobChain(jobChain, { timeoutMs: 5000 });
+    await client.awaitChain(chain, { timeoutMs: 5000 });
   });
 
   await nc.close();
@@ -117,9 +117,9 @@ it("should work end-to-end without JetStream KV", async ({ natsConnectionOptions
     }),
   });
 
-  const jobChain = await withTransactionHooks(async (transactionHooks) =>
+  const chain = await withTransactionHooks(async (transactionHooks) =>
     stateAdapter.withTransaction(async (txCtx) =>
-      client.startJobChain({
+      client.startChain({
         ...txCtx,
         transactionHooks,
         typeName: "test",
@@ -129,7 +129,7 @@ it("should work end-to-end without JetStream KV", async ({ natsConnectionOptions
   );
 
   await withWorkers([await worker.start()], async () => {
-    await client.awaitJobChain(jobChain, { timeoutMs: 5000 });
+    await client.awaitChain(chain, { timeoutMs: 5000 });
   });
 
   await nc.close();

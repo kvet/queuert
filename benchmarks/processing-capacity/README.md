@@ -2,8 +2,8 @@
 
 Job throughput along two independent axes: state adapter (with the in-process notify default) and notify adapter (with the in-process state default). Measures two phases — start (chains/s) and process (jobs/s) — and runs each adapter twice across orthogonal modes:
 
-- **Atomic run** — starts chains via `startJobChains` (batched, size 100), processes them atomically.
-- **Staged run** — starts chains via `startJobChain` (single), processes them in staged mode.
+- **Atomic run** — starts chains via `startChains` (batched, size 100), processes them atomically.
+- **Staged run** — starts chains via `startChain` (single), processes them in staged mode.
 
 The pairing is layout-only — start mode and process mode are independent in production. Folding them into one run per pair avoids doubling wall-clock while exposing all four numbers (single/batched start, atomic/staged process). Each run executes in a separate child process for isolation.
 

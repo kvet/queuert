@@ -1,16 +1,16 @@
 ---
 title: Deduplication
-description: Prevent duplicate job chains with deduplication keys.
+description: Prevent duplicate chains with deduplication keys.
 sidebar:
   order: 10
 ---
 
-Deduplication prevents duplicate job chains from being created. When you start a job chain with a deduplication key, Queuert checks if a chain with that key already exists and returns the existing chain instead of creating a new one.
+Deduplication prevents duplicate chains from being created. When you start a chain with a deduplication key, Queuert checks if a chain with that key already exists and returns the existing chain instead of creating a new one.
 
 ```ts
 // First call creates the chain
 const chain1 = await withTransactionHooks(async (transactionHooks) =>
-  client.startJobChain({
+  client.startChain({
     transactionHooks,
     typeName: "sync-user",
     input: { userId: "123" },
@@ -20,7 +20,7 @@ const chain1 = await withTransactionHooks(async (transactionHooks) =>
 
 // Second call with same key returns existing chain
 const chain2 = await withTransactionHooks(async (transactionHooks) =>
-  client.startJobChain({
+  client.startChain({
     transactionHooks,
     typeName: "sync-user",
     input: { userId: "123" },
@@ -42,7 +42,7 @@ The `scope` option controls what jobs to check for duplicates:
 ```ts
 // Only one active health check at a time, but can start new after completion
 await withTransactionHooks(async (transactionHooks) =>
-  client.startJobChain({
+  client.startChain({
     transactionHooks,
     typeName: "health-check",
     input: { serviceId: "api-server" },
@@ -61,7 +61,7 @@ Use `windowMs` to rate-limit job creation. Duplicates are prevented only within 
 ```ts
 // No duplicate syncs within 1 hour
 await withTransactionHooks(async (transactionHooks) =>
-  client.startJobChain({
+  client.startChain({
     transactionHooks,
     typeName: "sync-data",
     input: { sourceId: "db-primary" },
@@ -76,12 +76,12 @@ await withTransactionHooks(async (transactionHooks) =>
 
 ## Excluding Chains
 
-Use `excludeJobChainIds` to skip specific chains during deduplication matching. This is essential for recurring jobs that self-schedule within a completion callback — the current chain is still incomplete at that point, so without exclusion the new chain would be deduplicated against it.
+Use `excludeChainIds` to skip specific chains during deduplication matching. This is essential for recurring jobs that self-schedule within a completion callback — the current chain is still incomplete at that point, so without exclusion the new chain would be deduplicated against it.
 
 ```ts
 // Inside a processor's completion callback
 return complete(async ({ sql, transactionHooks }) => {
-  await client.startJobChain({
+  await client.startChain({
     sql,
     transactionHooks,
     typeName: "health-check",
@@ -89,7 +89,7 @@ return complete(async ({ sql, transactionHooks }) => {
     schedule: { afterMs: 5 * 60 * 1000 },
     deduplication: {
       key: `health:${job.input.serviceId}`,
-      excludeJobChainIds: [job.chainId],
+      excludeChainIds: [job.chainId],
     },
   });
   return { checkedAt: new Date().toISOString() };

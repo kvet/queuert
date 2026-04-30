@@ -37,9 +37,9 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       jobTypes,
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "report",
@@ -49,14 +49,14 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       ),
     );
 
-    const beforeTrigger = await client.getJob({ id: jobChain.id });
+    const beforeTrigger = await client.getJob({ id: chain.id });
     expect(beforeTrigger!.status).toBe("pending");
     expect(beforeTrigger!.scheduledAt.getTime()).toBeGreaterThan(Date.now() + 30_000);
 
     const before = Date.now();
     const triggered = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.triggerJob({ ...txCtx, transactionHooks, id: jobChain.id }),
+        client.triggerJob({ ...txCtx, transactionHooks, id: chain.id }),
       ),
     );
 
@@ -107,9 +107,9 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "task",
@@ -121,12 +121,12 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
 
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.triggerJob({ ...txCtx, transactionHooks, id: jobChain.id }),
+        client.triggerJob({ ...txCtx, transactionHooks, id: chain.id }),
       ),
     );
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.awaitJobChain(jobChain, {
+      const completed = await client.awaitChain(chain, {
         timeoutMs: 5000,
         pollIntervalMs: 100,
       });
@@ -158,13 +158,13 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, transactionHooks, typeName: "task", input: null }),
+        client.startChain({ ...txCtx, transactionHooks, typeName: "task", input: null }),
       ),
     );
 
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.deleteJobChains({ ...txCtx, transactionHooks, ids: [chain.id] }),
+        client.deleteChains({ ...txCtx, transactionHooks, ids: [chain.id] }),
       ),
     );
 
@@ -212,20 +212,20 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, transactionHooks, typeName: "task", input: null }),
+        client.startChain({ ...txCtx, transactionHooks, typeName: "task", input: null }),
       ),
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(jobChain, { timeoutMs: 5000, pollIntervalMs: 100 });
+      await client.awaitChain(chain, { timeoutMs: 5000, pollIntervalMs: 100 });
     });
 
     await expect(
       withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.triggerJob({ ...txCtx, transactionHooks, id: jobChain.id }),
+          client.triggerJob({ ...txCtx, transactionHooks, id: chain.id }),
         ),
       ),
     ).rejects.toThrow(JobNotTriggerableError);
@@ -255,9 +255,9 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       jobTypes,
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "report",
@@ -270,7 +270,7 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     await expect(
       withTransactionHooks(async (transactionHooks) =>
         // @ts-expect-error missing txCtx
-        client.triggerJob({ transactionHooks, id: jobChain.id }),
+        client.triggerJob({ transactionHooks, id: chain.id }),
       ),
     ).rejects.toThrow(TransactionContextRequiredError);
   });
@@ -303,13 +303,13 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
 
     const blockerChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, transactionHooks, typeName: "blocker", input: null }),
+        client.startChain({ ...txCtx, transactionHooks, typeName: "blocker", input: null }),
       ),
     );
 
     const blockedChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "blocked",
@@ -353,7 +353,7 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
 
     const chains = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChains({
+        client.startChains({
           ...txCtx,
           transactionHooks,
           items: [
@@ -429,7 +429,7 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
 
     const [chainA, chainB] = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChains({
+        client.startChains({
           ...txCtx,
           transactionHooks,
           items: [
@@ -442,7 +442,7 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
 
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.deleteJobChains({ ...txCtx, transactionHooks, ids: [chainB.id] }),
+        client.deleteChains({ ...txCtx, transactionHooks, ids: [chainB.id] }),
       ),
     );
 
@@ -499,7 +499,7 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
 
     const completedChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "task",
@@ -509,12 +509,12 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(completedChain, { timeoutMs: 5000, pollIntervalMs: 100 });
+      await client.awaitChain(completedChain, { timeoutMs: 5000, pollIntervalMs: 100 });
     });
 
     const pendingChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "task",
@@ -562,7 +562,7 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "task",

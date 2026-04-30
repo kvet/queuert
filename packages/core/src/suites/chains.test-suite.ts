@@ -1,7 +1,7 @@
 import { type TestAPI, expectTypeOf } from "vitest";
 
 import {
-  type CompletedJobChain,
+  type CompletedChain,
   createClient,
   createInProcessWorker,
   createProcessors,
@@ -57,8 +57,8 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         processors: {
           linear: {
             attemptHandler: async ({ job, complete }) => {
-              expect(job.id).toEqual(jobChain.id);
-              expect(job.chainId).toEqual(jobChain.id);
+              expect(job.id).toEqual(chain.id);
+              expect(job.chainId).toEqual(chain.id);
 
               return complete(async ({ continueWith }) => {
                 expectTypeOf<
@@ -73,15 +73,15 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
                 expectTypeOf(continuedJob.status).toEqualTypeOf<"pending" | "blocked">();
                 expect(continuedJob.typeName).toBe("linear_next");
                 expect(continuedJob.status).toBeOneOf(["pending", "blocked"]);
-                expect(continuedJob.chainId).toEqual(jobChain.id);
+                expect(continuedJob.chainId).toEqual(chain.id);
                 return continuedJob;
               });
             },
           },
           linear_next: {
             attemptHandler: async ({ job, complete }) => {
-              expect(job.id).not.toEqual(jobChain.id);
-              expect(job.chainId).toEqual(jobChain.id);
+              expect(job.id).not.toEqual(chain.id);
+              expect(job.chainId).toEqual(chain.id);
 
               return complete(async ({ continueWith }) => {
                 expectTypeOf<
@@ -100,8 +100,8 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
           },
           linear_next_next: {
             attemptHandler: async ({ job, complete }) => {
-              expect(job.id).not.toEqual(jobChain.id);
-              expect(job.chainId).toEqual(jobChain.id);
+              expect(job.id).not.toEqual(chain.id);
+              expect(job.chainId).toEqual(chain.id);
 
               const result = await complete(async () => ({
                 result: job.input.valueNextNext,
@@ -115,9 +115,9 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) => {
-        return client.startJobChain({
+        return client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "linear",
@@ -125,21 +125,21 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         });
       }),
     );
-    expectTypeOf<CompletedJobChain<typeof jobChain>["output"]>().toEqualTypeOf<{
+    expectTypeOf<CompletedChain<typeof chain>["output"]>().toEqualTypeOf<{
       result: number;
     }>();
     expectTypeOf<
-      Parameters<(typeof client)["startJobChain"]>[0]["typeName"]
+      Parameters<(typeof client)["startChain"]>[0]["typeName"]
     >().toEqualTypeOf<"linear">();
-    expectTypeOf<Parameters<(typeof client)["getJobChain"]>[0]["typeName"]>().toEqualTypeOf<
+    expectTypeOf<Parameters<(typeof client)["getChain"]>[0]["typeName"]>().toEqualTypeOf<
       "linear" | undefined
     >();
 
     await withWorkers([await worker.start()], async () => {
-      const finishedJobChain = await client.awaitJobChain(jobChain, completionOptions);
+      const finishedChain = await client.awaitChain(chain, completionOptions);
 
-      expectTypeOf(finishedJobChain.output).toEqualTypeOf<{ result: number }>();
-      expect(finishedJobChain.output).toEqual({ result: 3 });
+      expectTypeOf(finishedChain.output).toEqualTypeOf<{ result: number }>();
+      expect(finishedChain.output).toEqual({ result: 3 });
     });
   });
 
@@ -217,9 +217,9 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       }),
     });
 
-    const evenJobChain = await withTransactionHooks(async (transactionHooks) =>
+    const evenChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "main",
@@ -227,9 +227,9 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         }),
       ),
     );
-    const oddJobChain = await withTransactionHooks(async (transactionHooks) =>
+    const oddChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "main",
@@ -237,17 +237,17 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         }),
       ),
     );
-    expectTypeOf<CompletedJobChain<typeof evenJobChain>["output"]>().toEqualTypeOf<
+    expectTypeOf<CompletedChain<typeof evenChain>["output"]>().toEqualTypeOf<
       { result1: number } | { result2: number }
     >();
-    expectTypeOf<CompletedJobChain<typeof oddJobChain>["output"]>().toEqualTypeOf<
+    expectTypeOf<CompletedChain<typeof oddChain>["output"]>().toEqualTypeOf<
       { result1: number } | { result2: number }
     >();
 
     await withWorkers([await worker.start()], async () => {
       const [succeededJobEven, succeededJobOdd] = await Promise.all([
-        client.awaitJobChain(evenJobChain, completionOptions),
-        client.awaitJobChain(oddJobChain, completionOptions),
+        client.awaitChain(evenChain, completionOptions),
+        client.awaitChain(oddChain, completionOptions),
       ]);
 
       expectTypeOf(succeededJobEven.output).toEqualTypeOf<
@@ -350,9 +350,9 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       }),
     });
 
-    const evenJobChain = await withTransactionHooks(async (transactionHooks) =>
+    const evenChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "main",
@@ -360,9 +360,9 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         }),
       ),
     );
-    const oddJobChain = await withTransactionHooks(async (transactionHooks) =>
+    const oddChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "main",
@@ -370,17 +370,17 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         }),
       ),
     );
-    expectTypeOf<CompletedJobChain<typeof evenJobChain>["output"]>().toEqualTypeOf<{
+    expectTypeOf<CompletedChain<typeof evenChain>["output"]>().toEqualTypeOf<{
       result: number;
     }>();
-    expectTypeOf<CompletedJobChain<typeof oddJobChain>["output"]>().toEqualTypeOf<{
+    expectTypeOf<CompletedChain<typeof oddChain>["output"]>().toEqualTypeOf<{
       result: number;
     }>();
 
     await withWorkers([await worker.start()], async () => {
       const [succeededJobEven, succeededJobOdd] = await Promise.all([
-        client.awaitJobChain(evenJobChain, completionOptions),
-        client.awaitJobChain(oddJobChain, completionOptions),
+        client.awaitChain(evenChain, completionOptions),
+        client.awaitChain(oddChain, completionOptions),
       ]);
 
       expectTypeOf(succeededJobEven.output).toEqualTypeOf<{ result: number }>();
@@ -443,9 +443,9 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "loop",
@@ -453,13 +453,13 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         }),
       ),
     );
-    expectTypeOf<CompletedJobChain<typeof jobChain>["output"]>().toEqualTypeOf<{
+    expectTypeOf<CompletedChain<typeof chain>["output"]>().toEqualTypeOf<{
       done: true;
     }>();
 
     await withWorkers([await worker.start()], async () => {
-      const succeededJobChain = await client.awaitJobChain(jobChain, completionOptions);
-      expect(succeededJobChain.output).toEqual({ done: true });
+      const succeededChain = await client.awaitChain(chain, completionOptions);
+      expect(succeededChain.output).toEqual({ done: true });
     });
   });
 
@@ -537,9 +537,9 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "start",
@@ -547,15 +547,15 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         }),
       ),
     );
-    expectTypeOf<CompletedJobChain<typeof jobChain>["output"]>().toEqualTypeOf<{
+    expectTypeOf<CompletedChain<typeof chain>["output"]>().toEqualTypeOf<{
       finalResult: number;
     }>();
 
     await withWorkers([await worker.start()], async () => {
-      const succeededJobChain = await client.awaitJobChain(jobChain, completionOptions);
+      const succeededChain = await client.awaitChain(chain, completionOptions);
 
-      expectTypeOf(succeededJobChain.output).toEqualTypeOf<{ finalResult: number }>();
-      expect(succeededJobChain.output).toEqual({ finalResult: 3 });
+      expectTypeOf(succeededChain.output).toEqualTypeOf<{ finalResult: number }>();
+      expect(succeededChain.output).toEqual({ finalResult: 3 });
     });
   });
 
@@ -622,7 +622,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
     const chainA = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "entryA",
@@ -632,7 +632,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     );
     const chainB = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "entryB",
@@ -643,8 +643,8 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
     await withWorkers([await worker.start()], async () => {
       const [resultA, resultB] = await Promise.all([
-        client.awaitJobChain(chainA, { pollIntervalMs: 100, timeoutMs: 5000 }),
-        client.awaitJobChain(chainB, { pollIntervalMs: 100, timeoutMs: 5000 }),
+        client.awaitChain(chainA, { pollIntervalMs: 100, timeoutMs: 5000 }),
+        client.awaitChain(chainB, { pollIntervalMs: 100, timeoutMs: 5000 }),
       ]);
       expect(resultA.output).toEqual({ done: true });
       expect(resultB.output).toEqual({ done: true });
@@ -694,7 +694,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
               // Create an independent chain during job processing
               const independentChain = await withTransactionHooks(async (transactionHooks) =>
                 withTransaction(async (txCtx) =>
-                  client.startJobChain({
+                  client.startChain({
                     ...txCtx,
                     transactionHooks,
                     typeName: "independent",
@@ -723,7 +723,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
     const parentChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "parent",
@@ -735,14 +735,14 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     await withWorkers([await worker.start()], async () => {
       // Wait for both chains to complete
       const [completedParent] = await Promise.all([
-        client.awaitJobChain(parentChain, completionOptions),
+        client.awaitChain(parentChain, completionOptions),
         // Wait for independent chain using a polling approach since we don't have its reference yet
         (async () => {
           // oxlint-disable-next-line no-unmodified-loop-condition -- modified asynchronously via event handler
           while (!independentChainId) {
             await new Promise((resolve) => setTimeout(resolve, 50));
           }
-          return client.awaitJobChain(
+          return client.awaitChain(
             { id: independentChainId, typeName: "independent" },
             completionOptions,
           );

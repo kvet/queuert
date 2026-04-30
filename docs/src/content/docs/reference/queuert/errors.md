@@ -17,15 +17,15 @@ class JobNotFoundError extends Error {
 
 Thrown when a job cannot be found by ID.
 
-## JobChainNotFoundError
+## ChainNotFoundError
 
 ```typescript
-class JobChainNotFoundError extends Error {
+class ChainNotFoundError extends Error {
   readonly chainId: string | undefined;
 }
 ```
 
-Thrown when a job chain cannot be found by ID. Raised by `awaitJobChain` and `completeJobChain`. Deletion APIs do not throw this: `deleteJobChain` returns `undefined` for missing chains, and `deleteJobChains` silently skips missing IDs.
+Thrown when a chain cannot be found by ID. Raised by `awaitChain` and `completeChain`. Deletion APIs do not throw this: `deleteChain` returns `undefined` for missing chains, and `deleteChains` silently skips missing IDs.
 
 ## JobAlreadyCompletedError
 
@@ -103,7 +103,7 @@ class WaitChainTimeoutError extends Error {
 }
 ```
 
-Thrown by `awaitJobChain` when the timeout expires or the signal is aborted.
+Thrown by `awaitChain` when the timeout expires or the signal is aborted.
 
 ## RescheduleJobError
 
@@ -128,7 +128,7 @@ type BlockerReference = {
 };
 ```
 
-Thrown by `deleteJobChains` when external chains depend on the deletion targets as blockers. **references** lists each dependency, pairing the blocker **chainId** with the **referencedByJobId** that depends on it.
+Thrown by `deleteChains` when external chains depend on the deletion targets as blockers. **references** lists each dependency, pairing the blocker **chainId** with the **referencedByJobId** that depends on it.
 
 ## DuplicateJobTypeError
 
@@ -170,12 +170,12 @@ Thrown when a transaction hook is accessed before being registered.
 class TransactionContextRequiredError extends Error {}
 ```
 
-Thrown when a mutating client method (e.g. `startJobChain`, `triggerJob`, `triggerJobs`, `deleteJobChain`, `deleteJobChains`) is called without a `tx` provided by `withTransaction`. Mutations must run inside a transaction so the transactional outbox pattern holds.
+Thrown when a mutating client method (e.g. `startChain`, `triggerJob`, `triggerJobs`, `deleteChain`, `deleteChains`) is called without a `tx` provided by `withTransaction`. Mutations must run inside a transaction so the transactional outbox pattern holds.
 
 ## See Also
 
 - [Client](/queuert/reference/queuert/client/) — Client API reference
 - [Worker](/queuert/reference/queuert/worker/) — Worker and job processing reference
-- [Entities](/queuert/reference/queuert/entities/) — `Job`, `JobChain`, and resolved variants
+- [Entities](/queuert/reference/queuert/entities/) — `Job`, `Chain`, and resolved variants
 - [Utilities](/queuert/reference/queuert/utilities/) — Composition helpers and utility functions
 - [Error Handling](/queuert/guides/error-handling/) — Error handling patterns guide

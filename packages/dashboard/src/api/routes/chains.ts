@@ -13,12 +13,12 @@ export const handleChainsList = async (url: URL, client: Client<any, any>): Prom
   const cursor = parseCursor(url.searchParams.get("cursor") ?? undefined);
   const limit = parseLimit(url.searchParams.get("limit") ?? undefined);
 
-  const result = await client.listJobChains({
+  const result = await client.listChains({
     filter: {
       typeName,
       status,
       root,
-      id: id ? [id] : undefined,
+      chainId: id ? [id] : undefined,
       jobId: jobId ? [jobId] : undefined,
     },
     orderDirection: "desc",
@@ -37,13 +37,13 @@ export const handleChainDetail = async (
   client: Client<any, any>,
   chainId: string,
 ): Promise<Response> => {
-  const jobChain = await client.getJobChain({ id: chainId });
-  if (!jobChain) {
+  const chain = await client.getChain({ id: chainId });
+  if (!chain) {
     return serovalResponse({ error: "Chain not found" }, 404);
   }
 
-  const jobs = await client.listJobChainJobs({
-    jobChainId: chainId,
+  const jobs = await client.listChainJobs({
+    chainId,
     orderDirection: "asc",
     limit: 1000,
   });
@@ -56,7 +56,7 @@ export const handleChainDetail = async (
   );
 
   return serovalResponse({
-    chain: jobChain,
+    chain,
     jobs: jobs.items,
     jobBlockers: Object.fromEntries(jobBlockers),
   });
@@ -67,8 +67,8 @@ export const handleChainDelete = async (
   chainId: string,
   options?: { cascade?: boolean },
 ): Promise<Response> => {
-  const jobChain = await client.getJobChain({ id: chainId });
-  if (!jobChain) {
+  const chain = await client.getChain({ id: chainId });
+  if (!chain) {
     return serovalResponse({ error: "Chain not found" }, 404);
   }
 
@@ -76,7 +76,7 @@ export const handleChainDelete = async (
     const { stateAdapter } = client[helpersSymbol];
     const deleted = await stateAdapter.withTransaction(async (txCtx) =>
       withTransactionHooks(async (transactionHooks) =>
-        client.deleteJobChains({
+        client.deleteChains({
           ids: [chainId],
           cascade: options?.cascade,
           transactionHooks,
@@ -102,7 +102,7 @@ export const handleChainBlocking = async (
   chainId: string,
 ): Promise<Response> => {
   const result = await client.listBlockedJobs({
-    jobChainId: chainId,
+    chainId,
     orderDirection: "desc",
     limit: 1000,
   });

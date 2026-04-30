@@ -4,6 +4,7 @@
 
 - **Consult [reference docs](docs/src/content/docs/advanced/) before changes**: When modifying adapters, job processing, workers, or other core systems, read the corresponding reference doc first to understand architectural decisions that must be preserved
 - **Changes require tests**: All code changes must include corresponding tests
+- **Meaningful changes require a changeset**: Any change that alters the public surface, runtime behavior, or persisted state needs a `.changeset/<short-name>.md` entry with the affected packages bumped (`patch` / `minor` / `major`) and a one-paragraph description framed for the user reading release notes. This includes API renames or signature changes, behavior changes users would observe, schema/migration changes (because they execute on the user's DB), bug fixes that fix something a user could hit, and breaking changes (always `major`). It does **not** include internal refactors with no API impact, tests, types-only tightening, doc-only edits, build/CI/tooling, benchmarks, examples, or comment tweaks. Fold related multi-package or multi-step work into a single changeset rather than creating one per commit. When in doubt, write the changeset — a small note is cheap; a missed release note is not.
 - No obvious comments
 - Run `bun run fmt` before running checks to fix formatting issues
 - Run individual tests during development (e.g., `bun vitest run packages/core/src/specs/some.spec.ts`)

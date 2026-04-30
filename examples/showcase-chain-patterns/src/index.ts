@@ -1,7 +1,7 @@
 /**
  * Chain Patterns Showcase
  *
- * Demonstrates job chain execution patterns through a subscription lifecycle.
+ * Demonstrates chain execution patterns through a subscription lifecycle.
  *
  * Scenarios:
  * 1. Linear: Jobs execute one after another
@@ -293,7 +293,7 @@ userConverts = true;
 
 const chain1 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startJobChain({
+    client.startChain({
       sql: txSql,
       transactionHooks,
       typeName: "create-subscription",
@@ -302,7 +302,7 @@ const chain1 = await withTransactionHooks(async (transactionHooks) =>
   ),
 );
 
-const result1 = await client.awaitJobChain(chain1, { timeoutMs: 10000 });
+const result1 = await client.awaitChain(chain1, { timeoutMs: 10000 });
 
 const [sub1] = (await sql.unsafe(
   "SELECT status, current_cycle, total_charged FROM subscriptions WHERE id = 1",
@@ -330,7 +330,7 @@ userConverts = false;
 
 const chain2 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startJobChain({
+    client.startChain({
       sql: txSql,
       transactionHooks,
       typeName: "create-subscription",
@@ -339,7 +339,7 @@ const chain2 = await withTransactionHooks(async (transactionHooks) =>
   ),
 );
 
-const result2 = await client.awaitJobChain(chain2, { timeoutMs: 10000 });
+const result2 = await client.awaitChain(chain2, { timeoutMs: 10000 });
 
 const [sub2] = (await sql.unsafe(
   "SELECT status, current_cycle, total_charged FROM subscriptions WHERE id = 2",

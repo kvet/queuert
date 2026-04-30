@@ -69,9 +69,9 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "atomic-complete",
@@ -81,7 +81,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     );
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.awaitJobChain(jobChain, completionOptions);
+      const completed = await client.awaitChain(chain, completionOptions);
       expect(completed.output).toEqual({ result: 20 });
     });
 
@@ -98,7 +98,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
             children: [
               expect.objectContaining({ name: "user-completion" }),
               expect.objectContaining({ name: "completeJob" }),
-              expect.objectContaining({ name: "getJobById" }),
+              expect.objectContaining({ name: "getJob" }),
               expect.objectContaining({ name: "unblockJobs" }),
             ],
           }),
@@ -164,9 +164,9 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "staged-complete",
@@ -176,7 +176,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     );
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.awaitJobChain(jobChain, completionOptions);
+      const completed = await client.awaitChain(chain, completionOptions);
       expect(completed.output).toEqual({ result: 30 });
     });
 
@@ -197,14 +197,14 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         name: "withTransaction",
         status: "committed",
         children: [
-          expect.objectContaining({ name: "getJobById", args: { lock: "exclusive" } }),
+          expect.objectContaining({ name: "getJob", args: { lock: "exclusive" } }),
           expect.objectContaining({
             name: "withSavepoint",
             status: "committed",
             children: [
               expect.objectContaining({ name: "user-completion" }),
               expect.objectContaining({ name: "completeJob" }),
-              expect.objectContaining({ name: "getJobById" }),
+              expect.objectContaining({ name: "getJob" }),
               expect.objectContaining({ name: "unblockJobs" }),
             ],
           }),
@@ -270,9 +270,9 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "staged-with-callback",
@@ -282,7 +282,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     );
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.awaitJobChain(jobChain, completionOptions);
+      const completed = await client.awaitChain(chain, completionOptions);
       expect(completed.output).toEqual({ result: 40 });
     });
 
@@ -308,14 +308,14 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         name: "withTransaction",
         status: "committed",
         children: [
-          expect.objectContaining({ name: "getJobById", args: { lock: "exclusive" } }),
+          expect.objectContaining({ name: "getJob", args: { lock: "exclusive" } }),
           expect.objectContaining({
             name: "withSavepoint",
             status: "committed",
             children: [
               expect.objectContaining({ name: "user-completion" }),
               expect.objectContaining({ name: "completeJob" }),
-              expect.objectContaining({ name: "getJobById" }),
+              expect.objectContaining({ name: "getJob" }),
               expect.objectContaining({ name: "unblockJobs" }),
             ],
           }),
@@ -378,9 +378,9 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "staged-without-callback",
@@ -390,7 +390,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     );
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.awaitJobChain(jobChain, completionOptions);
+      const completed = await client.awaitChain(chain, completionOptions);
       expect(completed.output).toEqual({ result: 50 });
     });
 
@@ -411,14 +411,14 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         name: "withTransaction",
         status: "committed",
         children: [
-          expect.objectContaining({ name: "getJobById", args: { lock: "exclusive" } }),
+          expect.objectContaining({ name: "getJob", args: { lock: "exclusive" } }),
           expect.objectContaining({
             name: "withSavepoint",
             status: "committed",
             children: [
               expect.objectContaining({ name: "user-completion" }),
               expect.objectContaining({ name: "completeJob" }),
-              expect.objectContaining({ name: "getJobById" }),
+              expect.objectContaining({ name: "getJob" }),
               expect.objectContaining({ name: "unblockJobs" }),
             ],
           }),
@@ -484,9 +484,9 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "atomic-with-callback",
@@ -496,7 +496,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     );
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.awaitJobChain(jobChain, completionOptions);
+      const completed = await client.awaitChain(chain, completionOptions);
       expect(completed.output).toEqual({ result: 60 });
     });
 
@@ -518,7 +518,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
             children: [
               expect.objectContaining({ name: "user-completion" }),
               expect.objectContaining({ name: "completeJob" }),
-              expect.objectContaining({ name: "getJobById" }),
+              expect.objectContaining({ name: "getJob" }),
               expect.objectContaining({ name: "unblockJobs" }),
             ],
           }),
@@ -584,9 +584,9 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "atomic-without-callback",
@@ -596,7 +596,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     );
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.awaitJobChain(jobChain, completionOptions);
+      const completed = await client.awaitChain(chain, completionOptions);
       expect(completed.output).toEqual({ result: 70 });
     });
 
@@ -613,7 +613,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
             children: [
               expect.objectContaining({ name: "user-completion" }),
               expect.objectContaining({ name: "completeJob" }),
-              expect.objectContaining({ name: "getJobById" }),
+              expect.objectContaining({ name: "getJob" }),
               expect.objectContaining({ name: "unblockJobs" }),
             ],
           }),

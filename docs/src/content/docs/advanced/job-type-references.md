@@ -169,5 +169,5 @@ When using validation libraries (Zod, Valibot, etc.), references are validated a
 
 - [Chain Patterns](/queuert/guides/chain-patterns/) — Continuation patterns (linear, branched, loops, go-to)
 - [Job Blockers](/queuert/guides/job-blockers/) — Fan-out/fan-in dependencies
-- [Job Chain Model](../job-chain-model/) — Chain structure, Promise analogy
+- [Chain Model](../chain-model/) — Chain structure, Promise analogy
 - [Job Processing](../job-processing/) — Prepare/complete pattern

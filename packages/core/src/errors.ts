@@ -33,14 +33,14 @@ export class JobNotFoundError extends Error {
   }
 }
 
-/** Thrown when a job chain does not exist. */
-export class JobChainNotFoundError extends Error {
+/** Thrown when a chain does not exist. */
+export class ChainNotFoundError extends Error {
   /** The chain ID that was looked up. */
   readonly chainId: string | undefined;
 
   constructor(message: string, options?: { chainId?: string; cause?: unknown }) {
     super(message, options?.cause !== undefined ? { cause: options.cause } : undefined);
-    this.name = "JobChainNotFoundError";
+    this.name = "ChainNotFoundError";
     this.chainId = options?.chainId;
   }
 }
@@ -72,7 +72,7 @@ export class JobNotTriggerableError extends Error {
   }
 }
 
-/** Thrown when {@link Client.awaitJobChain | awaitJobChain} exceeds its timeout or is aborted. */
+/** Thrown when {@link Client.awaitChain | awaitChain} exceeds its timeout or is aborted. */
 export class WaitChainTimeoutError extends Error {
   /** The chain that timed out. */
   readonly chainId: string | undefined;

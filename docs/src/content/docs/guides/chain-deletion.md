@@ -1,26 +1,26 @@
 ---
 title: Chain Deletion
-description: Delete job chains with blocker safety and cascade support.
+description: Delete chains with blocker safety and cascade support.
 sidebar:
   order: 13
 ---
 
-Job chains can be deleted using `deleteJobChains` (plural) or `deleteJobChain` (singular). All jobs in the chain (entry job and continuations) are removed together.
+Chains can be deleted using `deleteChains` (plural) or `deleteChain` (singular). All jobs in the chain (entry job and continuations) are removed together.
 
 ```ts
 await withTransactionHooks(async (transactionHooks) =>
-  client.deleteJobChains({
+  client.deleteChains({
     transactionHooks,
     ids: [chain.id],
   }),
 );
 ```
 
-Use `deleteJobChain` to target a single chain — it returns the deleted chain or `undefined` if no chain with that ID exists. `deleteJobChains` silently skips missing IDs and returns the chains that were actually deleted. Both calls are idempotent:
+Use `deleteChain` to target a single chain — it returns the deleted chain or `undefined` if no chain with that ID exists. `deleteChains` silently skips missing IDs and returns the chains that were actually deleted. Both calls are idempotent:
 
 ```ts
 await withTransactionHooks(async (transactionHooks) =>
-  client.deleteJobChain({
+  client.deleteChain({
     transactionHooks,
     id: chain.id,
   }),
@@ -31,11 +31,11 @@ If a chain is referenced as a blocker by another chain, deletion is rejected unl
 
 ```ts
 await withTransactionHooks(async (transactionHooks) =>
-  client.deleteJobChains({ transactionHooks, ids: [blockerChain.id] }),
+  client.deleteChains({ transactionHooks, ids: [blockerChain.id] }),
 ); // throws
 
 await withTransactionHooks(async (transactionHooks) =>
-  client.deleteJobChains({ transactionHooks, ids: [mainChain.id, blockerChain.id] }),
+  client.deleteChains({ transactionHooks, ids: [mainChain.id, blockerChain.id] }),
 ); // ok
 ```
 
@@ -45,7 +45,7 @@ Use `cascade: true` to automatically resolve and delete transitive dependencies 
 
 ```ts
 await withTransactionHooks(async (transactionHooks) =>
-  client.deleteJobChains({
+  client.deleteChains({
     transactionHooks,
     ids: [mainChain.id],
     cascade: true,
@@ -72,8 +72,8 @@ Before deleting, the system checks whether any external chain depends on the tar
 ```
 Chain A (blocker) --> Chain B (blocked)
 
-deleteJobChains({ ids: [A] })    // BlockerReferenceError -- B depends on A
-deleteJobChains({ ids: [A, B] }) // Both in deletion set -- no external refs
+deleteChains({ ids: [A] })    // BlockerReferenceError -- B depends on A
+deleteChains({ ids: [A, B] }) // Both in deletion set -- no external refs
 ```
 
 ### Cascade Resolution Algorithm

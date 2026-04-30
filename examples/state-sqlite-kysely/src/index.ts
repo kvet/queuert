@@ -90,7 +90,7 @@ const worker = await createInProcessWorker({
 const stopWorker = await worker.start();
 
 // 9. Register a new user and queue welcome email atomically
-const jobChain = await withTransactionHooks(async (transactionHooks) =>
+const chain = await withTransactionHooks(async (transactionHooks) =>
   db.transaction().execute(async (txDb) => {
     const user = await txDb
       .insertInto("users")
@@ -99,7 +99,7 @@ const jobChain = await withTransactionHooks(async (transactionHooks) =>
       .executeTakeFirstOrThrow();
 
     // Queue welcome email - if user creation fails, no email job is created
-    return client.startJobChain({
+    return client.startChain({
       db: txDb,
       transactionHooks,
       typeName: "send_welcome_email",
@@ -108,8 +108,8 @@ const jobChain = await withTransactionHooks(async (transactionHooks) =>
   }),
 );
 
-// 10. Wait for the job chain to complete
-const result = await client.awaitJobChain(jobChain, { timeoutMs: 5000 });
+// 10. Wait for the chain to complete
+const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);
 
 // 11. Cleanup

@@ -1,5 +1,5 @@
+import { type Chain } from "../entities/chain.js";
 import { type DeduplicationOptions } from "../entities/deduplication.js";
-import { type JobChain } from "../entities/job-chain.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
 import { bufferNotifyJobScheduled } from "../helpers/notify-hooks.js";
 import {
@@ -22,7 +22,7 @@ export const createStateJobs = async (
       chainTypeName: string;
       chainIndex: number;
       input: unknown;
-      blockers?: JobChain<any, any, any, any>[];
+      blockers?: Chain<any, any, any, any>[];
       chainId?: string;
       isChainStart: boolean;
       originChainTraceContext?: string | null;
@@ -183,7 +183,7 @@ export const createStateJobs = async (
 
       if (jobInput.isChainStart) {
         bufferObservabilityEvent(transactionHooks, () => {
-          helpers.observabilityHelper.jobChainCreated(job, { input: jobInput.input });
+          helpers.observabilityHelper.chainCreated(job, { input: jobInput.input });
         });
       }
 

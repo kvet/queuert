@@ -1,10 +1,10 @@
-import { type JobChain } from "../entities/job-chain.js";
+import { type Chain } from "../entities/chain.js";
 import { type Job } from "../entities/job.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
 import { type JobTypeValidationError } from "../errors.js";
 import { type NotifyAdapter } from "../notify-adapter/notify-adapter.js";
 import { type StateAdapter, type StateJob } from "../state-adapter/state-adapter.js";
-import { type JobBasicData, type JobChainData, type JobProcessingData, type Log } from "./log.js";
+import { type ChainData, type JobBasicData, type JobProcessingData, type Log } from "./log.js";
 import {
   type BlockerSpanHandle,
   type BlockerSpanInputData,
@@ -29,12 +29,12 @@ const mapStateJobToJobProcessingData = (job: StateJob): JobProcessingData => ({
   attempt: job.attempt,
 });
 
-const mapStateJobToJobChainData = (job: StateJob): JobChainData => ({
+const mapStateJobToChainData = (job: StateJob): ChainData => ({
   id: job.chainId,
   typeName: job.chainTypeName,
 });
 
-const mapJobChainToData = (chain: JobChain<any, any, any, any>): JobChainData => ({
+const mapChainToData = (chain: Chain<any, any, any, any>): ChainData => ({
   id: chain.id,
   typeName: chain.typeName,
 });
@@ -49,7 +49,7 @@ const mapJobToJobBasicData = (job: Job<any, any, any, any, any>): JobBasicData =
 /**
  * High-level helper that wraps both Log and ObservabilityAdapter.
  *
- * Accepts domain objects (StateJob, Job, JobChain) and emits to both
+ * Accepts domain objects (StateJob, Job, Chain) and emits to both
  * logging and metrics on each event. This ensures consistency between
  * logs and metrics.
  */
@@ -64,7 +64,7 @@ export type ObservabilityHelper = {
     job: StateJob,
     options: {
       input: unknown;
-      blockers: JobChain<any, any, any, any>[];
+      blockers: Chain<any, any, any, any>[];
       schedule?: ScheduleOptions;
     },
   ) => void;
@@ -90,14 +90,14 @@ export type ObservabilityHelper = {
     },
   ) => void;
   jobReaped: (job: StateJob, options: { workerId: string }) => void;
-  // job chain
-  jobChainCreated: (job: StateJob, options: { input: unknown }) => void;
-  jobChainCompleted: (jobChainStartJob: StateJob, options: { output: unknown }) => void;
-  jobChainDeleted: (job: StateJob) => void;
+  // chain
+  chainCreated: (job: StateJob, options: { input: unknown }) => void;
+  chainCompleted: (chainStartJob: StateJob, options: { output: unknown }) => void;
+  chainDeleted: (job: StateJob) => void;
   // trigger
   jobTriggered: (job: StateJob) => void;
   // blockers
-  jobBlocked: (job: StateJob, options: { blockedByChains: JobChain<any, any, any, any>[] }) => void;
+  jobBlocked: (job: StateJob, options: { blockedByChains: Chain<any, any, any, any>[] }) => void;
   jobUnblocked: (job: StateJob, options: { unblockedByChain: StateJob }) => void;
   // notify adapter
   notifyAdapterError: (operation: keyof NotifyAdapter, error: unknown) => void;
@@ -106,7 +106,7 @@ export type ObservabilityHelper = {
   // job type validation
   jobTypeValidationError: (error: JobTypeValidationError) => void;
   // histograms
-  jobChainDuration: (firstJob: StateJob, lastJob: StateJob) => void;
+  chainDuration: (firstJob: StateJob, lastJob: StateJob) => void;
   jobDuration: (job: StateJob) => void;
   jobAttemptDuration: (job: StateJob, options: { durationMs: number; workerId: string }) => void;
   // gauges
@@ -177,7 +177,7 @@ export const createObservabilityHelper = ({
   // job
   jobCreated(job, options) {
     const jobData = mapStateJobToJobBasicData(job);
-    const blockersData = options.blockers.map(mapJobChainToData);
+    const blockersData = options.blockers.map(mapChainToData);
     const scheduledAt = options.schedule?.at;
     const scheduleAfterMs = options.schedule?.afterMs;
 
@@ -349,38 +349,38 @@ export const createObservabilityHelper = ({
     adapter.jobCompleted(data);
   },
 
-  // job chain
-  jobChainCreated(job, options) {
-    const data = { ...mapStateJobToJobChainData(job), input: options.input };
+  // chain
+  chainCreated(job, options) {
+    const data = { ...mapStateJobToChainData(job), input: options.input };
     log({
-      type: "job_chain_created",
+      type: "chain_created",
       level: "info",
-      message: "Job chain created",
+      message: "Chain created",
       data,
     });
-    adapter.jobChainCreated(data);
+    adapter.chainCreated(data);
   },
 
-  jobChainCompleted(jobChainStartJob, options) {
-    const data = { ...mapStateJobToJobChainData(jobChainStartJob), output: options.output };
+  chainCompleted(chainStartJob, options) {
+    const data = { ...mapStateJobToChainData(chainStartJob), output: options.output };
     log({
-      type: "job_chain_completed",
+      type: "chain_completed",
       level: "info",
-      message: "Job chain completed",
+      message: "Chain completed",
       data,
     });
-    adapter.jobChainCompleted(data);
+    adapter.chainCompleted(data);
   },
 
-  jobChainDeleted(job) {
-    const data = mapStateJobToJobChainData(job);
+  chainDeleted(job) {
+    const data = mapStateJobToChainData(job);
     log({
-      type: "job_chain_deleted",
+      type: "chain_deleted",
       level: "info",
-      message: "Job chain deleted",
+      message: "Chain deleted",
       data,
     });
-    adapter.jobChainDeleted(data);
+    adapter.chainDeleted(data);
   },
 
   // trigger
@@ -397,7 +397,7 @@ export const createObservabilityHelper = ({
 
   // blockers
   jobBlocked(job, options) {
-    const blockedByChains = options.blockedByChains.map(mapJobChainToData);
+    const blockedByChains = options.blockedByChains.map(mapChainToData);
     const data = { ...mapStateJobToJobBasicData(job), blockedByChains };
     log({
       type: "job_blocked",
@@ -409,7 +409,7 @@ export const createObservabilityHelper = ({
   },
 
   jobUnblocked(job, options) {
-    const unblockedByChain = mapStateJobToJobChainData(options.unblockedByChain);
+    const unblockedByChain = mapStateJobToChainData(options.unblockedByChain);
     log({
       type: "job_unblocked",
       level: "info",
@@ -459,10 +459,10 @@ export const createObservabilityHelper = ({
   },
 
   // histograms (no logging, metrics only)
-  jobChainDuration(firstJob, lastJob) {
+  chainDuration(firstJob, lastJob) {
     if (lastJob.completedAt && firstJob.createdAt) {
       const durationMs = lastJob.completedAt.getTime() - firstJob.createdAt.getTime();
-      adapter.jobChainDuration({ ...mapStateJobToJobChainData(firstJob), durationMs });
+      adapter.chainDuration({ ...mapStateJobToChainData(firstJob), durationMs });
     }
   },
 

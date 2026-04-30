@@ -73,9 +73,9 @@ const worker = await createInProcessWorker({
 const stopWorker = await worker.start();
 
 console.log("Requesting sales report...");
-const jobChain = await withTransactionHooks(async (transactionHooks) =>
+const chain = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
-    client.startJobChain({
+    client.startChain({
       ...ctx,
       transactionHooks,
       typeName: "generate_report",
@@ -93,7 +93,7 @@ await new Promise((resolve) => setTimeout(resolve, 100));
 
 // 9. Now wait for the report to be ready
 console.log("Waiting for report...");
-const result = await client.awaitJobChain(jobChain, { timeoutMs: 5000 });
+const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Report ready! ID: ${result.output.reportId}, Rows: ${result.output.rowCount}`);
 
 // 10. Cleanup

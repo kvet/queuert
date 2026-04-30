@@ -1,6 +1,6 @@
 # Type Complexity Benchmark
 
-TypeScript type-checking cost across job chain topologies and scales. Generates a self-contained `index.ts` + `tsconfig.json` per scenario under `generated/`, then runs `tsc` and/or `tsgo` with `--extendedDiagnostics` to capture instantiation counts, memory, and time.
+TypeScript type-checking cost across chain topologies and scales. Generates a self-contained `index.ts` + `tsconfig.json` per scenario under `generated/`, then runs `tsc` and/or `tsgo` with `--extendedDiagnostics` to capture instantiation counts, memory, and time.
 
 ## Running
 

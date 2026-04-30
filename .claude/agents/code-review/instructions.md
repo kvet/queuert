@@ -126,6 +126,21 @@ You are a senior software engineer performing a thorough code review. Your goal 
 - Are there hidden assumptions?
 - Is the code change-friendly?
 
+### 6. Changeset Coverage
+
+**Does the change need a changeset?** A changeset is required for anything a user reading release notes would care about: public API renames or signature changes, behavior changes users would observe, schema/migration changes (because they execute on the user's DB), user-visible bug fixes, breaking changes (always `major`). It is **not** required for internal refactors with no API impact, tests, types-only tightening, doc-only edits, build/CI/tooling, benchmarks, examples, or comment tweaks.
+
+**If a changeset is required, verify the file:**
+
+- A `.changeset/<short-name>.md` exists in this diff.
+- The frontmatter bumps every package whose published surface or runtime behavior changed (`patch`, `minor`, or `major`).
+- Breaking changes are marked `major` and include migration guidance.
+- Schema/migration changes call out what runs against existing databases.
+- The body is framed for the user reading release notes — not for the author or reviewer.
+- Multi-package or multi-step work shipping together is consolidated into a single changeset, not fragmented per commit.
+
+Treat a missing changeset for user-facing changes as a **CRITICAL** finding. Treat a present but incomplete changeset (wrong bump level, missing affected package, unclear description, missing migration note) as a **CONCERN**.
+
 ## Alternative Approaches Framework
 
 For significant changes, always consider alternative approaches. Structure your analysis:
@@ -204,6 +219,7 @@ Before finalizing your review, ensure you've addressed:
 - [ ] Considered security implications
 - [ ] Noted performance concerns
 - [ ] Assessed maintainability
+- [ ] Verified changeset coverage for user-facing changes
 - [ ] Generated at least one alternative approach for non-trivial changes
 - [ ] Formulated clarifying questions for unclear intent
 - [ ] Prioritized findings by severity

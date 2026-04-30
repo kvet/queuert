@@ -93,9 +93,9 @@ describe("Logging", () => {
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -105,22 +105,22 @@ describe("Logging", () => {
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(jobChain, completionOptions);
+      await client.awaitChain(chain, completionOptions);
     });
 
     const workerArgs = { workerId: "worker" };
-    const jobChainArgs = {
+    const chainArgs = {
       typeName: "test",
-      id: jobChain.id,
+      id: chain.id,
     };
     const jobArgs = {
       typeName: "test",
-      id: jobChain.id,
-      chainId: jobChain.id,
+      id: chain.id,
+      chainId: chain.id,
       chainTypeName: "test",
     };
     expectLogs([
-      { type: "job_chain_created", data: { ...jobChainArgs, input: { test: true } } },
+      { type: "chain_created", data: { ...chainArgs, input: { test: true } } },
       { type: "job_created", data: { ...jobArgs, input: { test: true } } },
       { type: "worker_started", data: { ...workerArgs, jobTypeNames: ["test"] } },
       {
@@ -148,8 +148,8 @@ describe("Logging", () => {
         },
       },
       {
-        type: "job_chain_completed",
-        data: { ...jobChainArgs, output: { result: true } },
+        type: "chain_completed",
+        data: { ...chainArgs, output: { result: true } },
       },
       { type: "worker_stopping", data: { ...workerArgs } },
       { type: "worker_stopped", data: { ...workerArgs } },
@@ -206,7 +206,7 @@ describe("Logging", () => {
 
     const job = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -216,7 +216,7 @@ describe("Logging", () => {
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(job, completionOptions);
+      await client.awaitChain(job, completionOptions);
     });
 
     const failedLogs = log.mock.calls
@@ -311,9 +311,9 @@ describe("Logging", () => {
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "linear",
@@ -323,11 +323,11 @@ describe("Logging", () => {
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(jobChain, completionOptions);
+      await client.awaitChain(chain, completionOptions);
     });
 
     expectLogs([
-      { type: "job_chain_created", data: { typeName: "linear" } },
+      { type: "chain_created", data: { typeName: "linear" } },
       { type: "job_created", data: { typeName: "linear" } },
       { type: "worker_started" },
       { type: "job_attempt_started", data: { typeName: "linear" } },
@@ -335,7 +335,7 @@ describe("Logging", () => {
         type: "job_created",
         data: {
           typeName: "linear_next",
-          chainId: jobChain.id,
+          chainId: chain.id,
           chainTypeName: "linear",
         },
       },
@@ -346,7 +346,7 @@ describe("Logging", () => {
         type: "job_created",
         data: {
           typeName: "linear_next_next",
-          chainId: jobChain.id,
+          chainId: chain.id,
           chainTypeName: "linear",
         },
       },
@@ -355,7 +355,7 @@ describe("Logging", () => {
       { type: "job_attempt_started", data: { typeName: "linear_next_next" } },
       { type: "job_attempt_completed", data: { typeName: "linear_next_next" } },
       { type: "job_completed", data: { typeName: "linear_next_next" } },
-      { type: "job_chain_completed", data: { typeName: "linear" } },
+      { type: "chain_completed", data: { typeName: "linear" } },
       { type: "worker_stopping" },
       { type: "worker_stopped" },
     ]);
@@ -428,41 +428,41 @@ describe("Logging", () => {
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) => {
-        const dependencyJobChain = await client.startJobChain({
+        const dependencyChain = await client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "blocker",
           input: { value: 0 },
         });
-        blockerChainId = dependencyJobChain.id;
+        blockerChainId = dependencyChain.id;
 
-        const jobChain = await client.startJobChain({
+        const chain = await client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "main",
           input: { start: true },
-          blockers: [dependencyJobChain],
+          blockers: [dependencyChain],
         });
 
-        return jobChain;
+        return chain;
       }),
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(jobChain, completionOptions);
+      await client.awaitChain(chain, completionOptions);
     });
 
     expectLogs([
       {
-        type: "job_chain_created",
+        type: "chain_created",
         data: {
           typeName: "blocker",
         },
       },
       { type: "job_created", data: { typeName: "blocker" } },
-      { type: "job_chain_created", data: { typeName: "main" } },
+      { type: "chain_created", data: { typeName: "main" } },
       {
         type: "job_created",
         data: {
@@ -495,7 +495,7 @@ describe("Logging", () => {
       { type: "job_attempt_started", data: { typeName: "blocker" } },
       { type: "job_attempt_completed", data: { typeName: "blocker" } },
       { type: "job_completed", data: { typeName: "blocker" } },
-      { type: "job_chain_completed", data: { typeName: "blocker" } },
+      { type: "chain_completed", data: { typeName: "blocker" } },
       {
         type: "job_unblocked",
         data: {
@@ -509,7 +509,7 @@ describe("Logging", () => {
       { type: "job_attempt_started", data: { typeName: "main" } },
       { type: "job_attempt_completed", data: { typeName: "main" } },
       { type: "job_completed", data: { typeName: "main" } },
-      { type: "job_chain_completed", data: { typeName: "main" } },
+      { type: "chain_completed", data: { typeName: "main" } },
       { type: "worker_stopping" },
       { type: "worker_stopped" },
     ]);
@@ -539,9 +539,9 @@ describe("Logging", () => {
       jobTypes,
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -552,11 +552,10 @@ describe("Logging", () => {
 
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.completeJobChain({
+        client.completeChain({
           ...txCtx,
           transactionHooks,
-          typeName: "test",
-          id: jobChain.id,
+          ...chain,
           complete: async ({ job, complete }) => {
             return complete(job, async () => ({ result: 84 }));
           },
@@ -565,10 +564,10 @@ describe("Logging", () => {
     );
 
     expectLogs([
-      { type: "job_chain_created", data: { input: { value: 42 } } },
+      { type: "chain_created", data: { input: { value: 42 } } },
       { type: "job_created", data: { input: { value: 42 } } },
       { type: "job_completed", data: { output: { result: 84 }, workerId: null } },
-      { type: "job_chain_completed", data: { output: { result: 84 } } },
+      { type: "chain_completed", data: { output: { result: 84 } } },
     ]);
   });
 
@@ -610,14 +609,14 @@ describe("Logging", () => {
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(jobChain, completionOptions);
+      await client.awaitChain(chain, completionOptions);
     });
 
     const renewalLogs = log.mock.calls
@@ -671,14 +670,14 @@ describe("Logging", () => {
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(jobChain, completionOptions);
+      await client.awaitChain(chain, completionOptions);
     });
 
     const expiredLogs = log.mock.calls
@@ -776,9 +775,9 @@ describe("Logging", () => {
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
@@ -786,15 +785,15 @@ describe("Logging", () => {
       await jobStarted.promise;
       await sleep(10);
 
-      const successJob = await withTransactionHooks(async (transactionHooks) =>
+      const successChain = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+          client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
         ),
       );
 
       await Promise.all([
-        client.awaitJobChain(jobChain, completionOptions),
-        client.awaitJobChain(successJob, completionOptions),
+        client.awaitChain(chain, completionOptions),
+        client.awaitChain(successChain, completionOptions),
       ]);
       await jobCompleted.promise;
     });
@@ -865,14 +864,14 @@ describe("Logging", () => {
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(jobChain, completionOptions);
+      await client.awaitChain(chain, completionOptions);
     });
 
     const logTypes = new Set(log.mock.calls.map((call) => call[0].type));
@@ -924,14 +923,14 @@ describe("Logging", () => {
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(jobChain, {
+      await client.awaitChain(chain, {
         pollIntervalMs: 100,
         timeoutMs: 5000,
       });
@@ -976,13 +975,13 @@ describe("Logging rollback", () => {
 
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) => {
-        await client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null });
+        await client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null });
         throw new Error("simulated rollback");
       }),
     ).catch(() => {});
 
     const logTypes = log.mock.calls.map((call) => call[0].type);
-    expect(logTypes).not.toContain("job_chain_created");
+    expect(logTypes).not.toContain("chain_created");
     expect(logTypes).not.toContain("job_created");
   });
 
@@ -1014,13 +1013,13 @@ describe("Logging rollback", () => {
 
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) => {
-        const blocker = await client.startJobChain({
+        const blocker = await client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "blocker",
           input: null,
         });
-        await client.startJobChain({
+        await client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "main",
@@ -1032,7 +1031,7 @@ describe("Logging rollback", () => {
     ).catch(() => {});
 
     const logTypes = log.mock.calls.map((call) => call[0].type);
-    expect(logTypes).not.toContain("job_chain_created");
+    expect(logTypes).not.toContain("chain_created");
     expect(logTypes).not.toContain("job_created");
     expect(logTypes).not.toContain("job_blocked");
   });
@@ -1057,9 +1056,9 @@ describe("Logging rollback", () => {
       jobTypes,
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
@@ -1067,11 +1066,10 @@ describe("Logging rollback", () => {
 
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) => {
-        await client.completeJobChain({
+        await client.completeChain({
           ...txCtx,
           transactionHooks,
-          typeName: "test",
-          id: jobChain.id,
+          ...chain,
           complete: async ({ job, complete }) => complete(job, async () => ({ result: 42 })),
         });
         throw new Error("simulated rollback");
@@ -1080,7 +1078,7 @@ describe("Logging rollback", () => {
 
     const logTypes = log.mock.calls.map((call) => call[0].type);
     expect(logTypes).not.toContain("job_completed");
-    expect(logTypes).not.toContain("job_chain_completed");
+    expect(logTypes).not.toContain("chain_completed");
   });
 
   it("discards completion events on worker complete rollback", async ({
@@ -1138,14 +1136,14 @@ describe("Logging rollback", () => {
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(jobChain, completionOptions);
+      await client.awaitChain(chain, completionOptions);
     });
 
     const logEntries = log.mock.calls.map((call) => call[0]);
@@ -1222,14 +1220,14 @@ describe("Logging rollback", () => {
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(jobChain, completionOptions);
+      await client.awaitChain(chain, completionOptions);
     });
 
     const logEntries = log.mock.calls.map((call) => call[0]);
@@ -1294,14 +1292,14 @@ describe("Logging rollback", () => {
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, transactionHooks, typeName: "linear", input: null }),
+        client.startChain({ ...txCtx, transactionHooks, typeName: "linear", input: null }),
       ),
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(jobChain, completionOptions);
+      await client.awaitChain(chain, completionOptions);
     });
 
     const logEntries = log.mock.calls.map((call) => call[0]);
@@ -1373,14 +1371,14 @@ describe("Logging rollback", () => {
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(jobChain, completionOptions);
+      await client.awaitChain(chain, completionOptions);
     });
 
     const logEntries = log.mock.calls.map((call) => call[0]);
@@ -1388,14 +1386,12 @@ describe("Logging rollback", () => {
       (e) => e.type === "job_attempt_completed",
     ).length;
     const jobCompletedCount = logEntries.filter((e) => e.type === "job_completed").length;
-    const jobChainCompletedCount = logEntries.filter(
-      (e) => e.type === "job_chain_completed",
-    ).length;
+    const chainCompletedCount = logEntries.filter((e) => e.type === "chain_completed").length;
     const attemptFailedCount = logEntries.filter((e) => e.type === "job_attempt_failed").length;
 
     expect(attemptCompletedCount).toBe(1);
     expect(jobCompletedCount).toBe(1);
-    expect(jobChainCompletedCount).toBe(1);
+    expect(chainCompletedCount).toBe(1);
     expect(attemptFailedCount).toBe(1);
   });
 
@@ -1438,9 +1434,9 @@ describe("Logging rollback", () => {
       jobTypes,
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
@@ -1449,11 +1445,10 @@ describe("Logging rollback", () => {
     // First attempt: unblockJobs fails inside finishJob → entire transaction rolls back
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        erroringClient.completeJobChain({
+        erroringClient.completeChain({
           ...txCtx,
           transactionHooks,
-          typeName: "test",
-          id: jobChain.id,
+          ...chain,
           complete: async ({ job, complete }) => complete(job, async () => ({ result: 42 })),
         }),
       ),
@@ -1461,16 +1456,15 @@ describe("Logging rollback", () => {
 
     const logTypesAfterFailure = log.mock.calls.map((call) => call[0].type);
     expect(logTypesAfterFailure).not.toContain("job_completed");
-    expect(logTypesAfterFailure).not.toContain("job_chain_completed");
+    expect(logTypesAfterFailure).not.toContain("chain_completed");
 
     // Second attempt: succeeds
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.completeJobChain({
+        client.completeChain({
           ...txCtx,
           transactionHooks,
-          typeName: "test",
-          id: jobChain.id,
+          ...chain,
           complete: async ({ job, complete }) => complete(job, async () => ({ result: 42 })),
         }),
       ),
@@ -1478,11 +1472,9 @@ describe("Logging rollback", () => {
 
     const logEntries = log.mock.calls.map((call) => call[0]);
     const jobCompletedCount = logEntries.filter((e) => e.type === "job_completed").length;
-    const jobChainCompletedCount = logEntries.filter(
-      (e) => e.type === "job_chain_completed",
-    ).length;
+    const chainCompletedCount = logEntries.filter((e) => e.type === "chain_completed").length;
     expect(jobCompletedCount).toBe(1);
-    expect(jobChainCompletedCount).toBe(1);
+    expect(chainCompletedCount).toBe(1);
   });
 
   it("discards continuation events on createJob rollback", async ({
@@ -1554,14 +1546,14 @@ describe("Logging rollback", () => {
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, transactionHooks, typeName: "linear", input: null }),
+        client.startChain({ ...txCtx, transactionHooks, typeName: "linear", input: null }),
       ),
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(jobChain, completionOptions);
+      await client.awaitChain(chain, completionOptions);
     });
 
     const logEntries = log.mock.calls.map((call) => call[0]);
@@ -1574,7 +1566,7 @@ describe("Logging rollback", () => {
     expect(attemptFailedCount).toBe(1);
   });
 
-  it("logs job chain deletion", async ({
+  it("logs chain deletion", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -1594,22 +1586,22 @@ describe("Logging rollback", () => {
       jobTypes,
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.deleteJobChains({ ...txCtx, transactionHooks, ids: [jobChain.id] }),
+        client.deleteChains({ ...txCtx, transactionHooks, ids: [chain.id] }),
       ),
     );
 
     expectLogs([
-      { type: "job_chain_created", data: { typeName: "test" } },
+      { type: "chain_created", data: { typeName: "test" } },
       { type: "job_created", data: { typeName: "test" } },
-      { type: "job_chain_deleted", data: { id: jobChain.id, typeName: "test" } },
+      { type: "chain_deleted", data: { id: chain.id, typeName: "test" } },
     ]);
   });
 
@@ -1633,9 +1625,9 @@ describe("Logging rollback", () => {
       jobTypes,
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -1647,16 +1639,16 @@ describe("Logging rollback", () => {
 
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.triggerJob({ ...txCtx, transactionHooks, id: jobChain.id }),
+        client.triggerJob({ ...txCtx, transactionHooks, id: chain.id }),
       ),
     );
 
     expectLogs([
-      { type: "job_chain_created", data: { typeName: "test" } },
+      { type: "chain_created", data: { typeName: "test" } },
       { type: "job_created", data: { typeName: "test" } },
       {
         type: "job_triggered",
-        data: { id: jobChain.id, typeName: "test", chainId: jobChain.id, chainTypeName: "test" },
+        data: { id: chain.id, typeName: "test", chainId: chain.id, chainTypeName: "test" },
       },
     ]);
   });

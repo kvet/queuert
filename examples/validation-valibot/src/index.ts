@@ -142,9 +142,9 @@ const stopWorker = await worker.start();
 
 // 4. Run a chain
 console.log("\n=== Running fetch-data chain ===");
-const jobChain = await withTransactionHooks(async (transactionHooks) =>
+const chain = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
-    client.startJobChain({
+    client.startChain({
       ...ctx,
       transactionHooks,
       typeName: "fetch-data",
@@ -153,7 +153,7 @@ const jobChain = await withTransactionHooks(async (transactionHooks) =>
   ),
 );
 
-const result = await client.awaitJobChain(jobChain, { timeoutMs: 5000 });
+const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log("Chain completed:", result.output);
 
 // 5. Cleanup

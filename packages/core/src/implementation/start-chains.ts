@@ -1,54 +1,54 @@
+import { type Chain, mapStatePairToChain } from "../entities/chain.js";
 import { type DeduplicationOptions } from "../entities/deduplication.js";
-import { type JobChain, mapStateJobPairToJobChain } from "../entities/job-chain.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
 import { type Helpers } from "../setup-helpers.js";
 import { type BaseTxContext } from "../state-adapter/state-adapter.js";
 import { type TransactionHooks } from "../transaction-hooks.js";
 import { createStateJobs } from "./create-state-jobs.js";
 
-type JobChainInput = {
+type ChainInput = {
   typeName: string;
   input: unknown;
-  blockers?: JobChain<any, any, any, any>[];
+  blockers?: Chain<any, any, any, any>[];
   deduplication?: DeduplicationOptions<string>;
   schedule?: ScheduleOptions;
 };
 
-export const startJobChains = async (
+export const startChains = async (
   helpers: Helpers,
   {
-    jobChains,
+    chains,
     txCtx,
     transactionHooks,
   }: {
-    jobChains: JobChainInput[];
+    chains: ChainInput[];
     txCtx: BaseTxContext;
     transactionHooks: TransactionHooks;
   },
-): Promise<(JobChain<string, string, unknown, unknown> & { deduplicated: boolean })[]> => {
-  if (jobChains.length === 0) return [];
+): Promise<(Chain<string, string, unknown, unknown> & { deduplicated: boolean })[]> => {
+  if (chains.length === 0) return [];
 
-  for (const jobChain of jobChains) {
-    helpers.jobTypes.validateEntry(jobChain.typeName);
+  for (const chain of chains) {
+    helpers.jobTypes.validateEntry(chain.typeName);
   }
 
   const results = await createStateJobs(helpers, {
-    jobs: jobChains.map((jobChain) => ({
-      typeName: jobChain.typeName,
-      chainTypeName: jobChain.typeName,
+    jobs: chains.map((chain) => ({
+      typeName: chain.typeName,
+      chainTypeName: chain.typeName,
       chainIndex: 0,
-      input: jobChain.input,
-      blockers: jobChain.blockers,
+      input: chain.input,
+      blockers: chain.blockers,
       isChainStart: true,
-      deduplication: jobChain.deduplication,
-      schedule: jobChain.schedule,
+      deduplication: chain.deduplication,
+      schedule: chain.schedule,
     })),
     txCtx,
     transactionHooks,
   });
 
   return results.map((r) => ({
-    ...mapStateJobPairToJobChain([r.job, undefined]),
+    ...mapStatePairToChain([r.job, undefined]),
     deduplicated: r.deduplicated,
   }));
 };

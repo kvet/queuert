@@ -11,7 +11,7 @@ import {
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
-  it("startJobChain with schedule.afterMs defers job processing", async ({
+  it("startChain with schedule.afterMs defers job processing", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -53,9 +53,9 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -66,10 +66,10 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     );
 
     await withWorkers([await worker.start()], async () => {
-      await expect(client.awaitJobChain(jobChain, { timeoutMs: 200 })).rejects.toThrow();
+      await expect(client.awaitChain(chain, { timeoutMs: 200 })).rejects.toThrow();
 
       await expect(
-        client.awaitJobChain(jobChain, {
+        client.awaitChain(chain, {
           pollIntervalMs: 100,
           timeoutMs: 400,
         }),
@@ -77,7 +77,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
   });
 
-  it("startJobChain with schedule.at defers job processing", async ({
+  it("startChain with schedule.at defers job processing", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -119,9 +119,9 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -132,10 +132,10 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     );
 
     await withWorkers([await worker.start()], async () => {
-      await expect(client.awaitJobChain(jobChain, { timeoutMs: 200 })).rejects.toThrow();
+      await expect(client.awaitChain(chain, { timeoutMs: 200 })).rejects.toThrow();
 
       await expect(
-        client.awaitJobChain(jobChain, {
+        client.awaitChain(chain, {
           pollIntervalMs: 100,
           timeoutMs: 400,
         }),
@@ -207,9 +207,9 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "first",
@@ -221,10 +221,10 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     await withWorkers([await worker.start()], async () => {
       await firstCompleted.promise;
 
-      await expect(client.awaitJobChain(jobChain, { timeoutMs: 200 })).rejects.toThrow();
+      await expect(client.awaitChain(chain, { timeoutMs: 200 })).rejects.toThrow();
 
       await expect(
-        client.awaitJobChain(jobChain, {
+        client.awaitChain(chain, {
           pollIntervalMs: 100,
           timeoutMs: 400,
         }),
@@ -296,9 +296,9 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "first",
@@ -310,10 +310,10 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     await withWorkers([await worker.start()], async () => {
       await firstCompleted.promise;
 
-      await expect(client.awaitJobChain(jobChain, { timeoutMs: 200 })).rejects.toThrow();
+      await expect(client.awaitChain(chain, { timeoutMs: 200 })).rejects.toThrow();
 
       await expect(
-        client.awaitJobChain(jobChain, {
+        client.awaitChain(chain, {
           pollIntervalMs: 100,
           timeoutMs: 400,
         }),
@@ -372,9 +372,9 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -386,10 +386,10 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     await withWorkers([await worker.start()], async () => {
       await firstAttemptDone.promise;
 
-      await expect(client.awaitJobChain(jobChain, { timeoutMs: 200 })).rejects.toThrow();
+      await expect(client.awaitChain(chain, { timeoutMs: 200 })).rejects.toThrow();
 
       await expect(
-        client.awaitJobChain(jobChain, {
+        client.awaitChain(chain, {
           pollIntervalMs: 100,
           timeoutMs: 400,
         }),
@@ -399,7 +399,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
   });
 
-  it("recurring job self-schedules using deduplication with excludeJobChainIds", async ({
+  it("recurring job self-schedules using deduplication with excludeChainIds", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -441,14 +441,14 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
               return complete(async ({ transactionHooks, ...txCtx }) => {
                 completionCount++;
                 if (completionCount < 3) {
-                  await client.startJobChain({
+                  await client.startChain({
                     ...txCtx,
                     transactionHooks,
                     typeName: "recurring",
                     input: null,
                     deduplication: {
                       key: "recurring",
-                      excludeJobChainIds: [job.chainId],
+                      excludeChainIds: [job.chainId],
                     },
                   });
                 } else {
@@ -464,7 +464,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
 
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "recurring",
@@ -477,7 +477,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     await withWorkers([await worker.start()], async () => {
       await allDone.promise;
 
-      const { items: chains } = await client.listJobChains({
+      const { items: chains } = await client.listChains({
         filter: { typeName: ["recurring"] },
         limit: 10,
       });
@@ -537,9 +537,9 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -551,10 +551,10 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     await withWorkers([await worker.start()], async () => {
       await firstAttemptDone.promise;
 
-      await expect(client.awaitJobChain(jobChain, { timeoutMs: 200 })).rejects.toThrow();
+      await expect(client.awaitChain(chain, { timeoutMs: 200 })).rejects.toThrow();
 
       await expect(
-        client.awaitJobChain(jobChain, {
+        client.awaitChain(chain, {
           pollIntervalMs: 100,
           timeoutMs: 400,
         }),

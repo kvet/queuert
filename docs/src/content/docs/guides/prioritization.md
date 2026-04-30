@@ -92,8 +92,8 @@ With `alert.dispatch` on the urgent worker and `alert.archive` on the bulk worke
 
 ```ts
 // Two chains — the key is namespaced by typeName, so these don't collide.
-await client.startJobChain({ typeName: "sync.transactional", deduplication: { key: "sync:user:42" }, ... });
-await client.startJobChain({ typeName: "sync.marketing", deduplication: { key: "sync:user:42" }, ... });
+await client.startChain({ typeName: "sync.transactional", deduplication: { key: "sync:user:42" }, ... });
+await client.startChain({ typeName: "sync.marketing", deduplication: { key: "sync:user:42" }, ... });
 ```
 
 Decide which workload a job belongs to before enqueueing, then submit to exactly one type. Don't rely on the dedup key alone to collapse duplicates across workloads.

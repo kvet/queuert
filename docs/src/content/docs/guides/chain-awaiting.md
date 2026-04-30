@@ -1,19 +1,19 @@
 ---
 title: Awaiting Chains
-description: Wait for job chains to complete with polling and notifications.
+description: Wait for chains to complete with polling and notifications.
 sidebar:
   order: 11
 ---
 
-`awaitJobChain` waits for a job chain to complete by combining polling with notify adapter events. Between polls, it listens for completion notifications to react immediately.
+`awaitChain` waits for a chain to complete by combining polling with notify adapter events. Between polls, it listens for completion notifications to react immediately.
 
 ```ts
-const completedJobChain = await client.awaitJobChain(
-  { id: jobChainId },
+const completedChain = await client.awaitChain(
+  { id: chainId },
   { timeoutMs: 30_000, pollIntervalMs: 5_000 },
 );
 
-console.log(completedJobChain.output); // Typed output from the final job
+console.log(completedChain.output); // Typed output from the final job
 ```
 
 Throws `WaitChainTimeoutError` on timeout. Supports an `AbortSignal` for cancellation.

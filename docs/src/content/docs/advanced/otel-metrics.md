@@ -51,13 +51,13 @@ The `ObservabilityAdapter` interface accepts milliseconds; the `@queuert/otel` a
 | `queuert.job.attempt.lease_expired`           | `typeName`, `chainTypeName`, `workerId` | Lease expired before attempt finished                 |
 | `queuert.job.attempt.lease_renewed`           | `typeName`, `chainTypeName`, `workerId` | Lease successfully renewed during processing          |
 
-### Job Chain Lifecycle
+### Chain Lifecycle
 
-| Metric                        | Attributes      | Description         |
-| ----------------------------- | --------------- | ------------------- |
-| `queuert.job_chain.created`   | `chainTypeName` | Job chain created   |
-| `queuert.job_chain.completed` | `chainTypeName` | Job chain completed |
-| `queuert.job_chain.deleted`   | `chainTypeName` | Job chain deleted   |
+| Metric                    | Attributes      | Description     |
+| ------------------------- | --------------- | --------------- |
+| `queuert.chain.created`   | `chainTypeName` | Chain created   |
+| `queuert.chain.completed` | `chainTypeName` | Chain completed |
+| `queuert.chain.deleted`   | `chainTypeName` | Chain deleted   |
 
 ### Adapter Errors
 
@@ -72,14 +72,14 @@ Histograms track duration distributions at three levels. Unit is seconds.
 
 | Metric                         | Attributes                              | Description                                |
 | ------------------------------ | --------------------------------------- | ------------------------------------------ |
-| `queuert.job_chain.duration`   | `chainTypeName`                         | Duration from chain creation to completion |
+| `queuert.chain.duration`       | `chainTypeName`                         | Duration from chain creation to completion |
 | `queuert.job.duration`         | `typeName`, `chainTypeName`             | Duration from job creation to completion   |
 | `queuert.job.attempt.duration` | `typeName`, `chainTypeName`, `workerId` | Duration of a single attempt               |
 
 These form a hierarchy — chain duration encompasses job durations (plus wait time between continuations), and job duration encompasses attempt durations (plus wait time between retries):
 
 ```
-queuert.job_chain.duration
+queuert.chain.duration
 ├── queuert.job.duration (first job)
 │   ├── queuert.job.attempt.duration (attempt 1)
 │   └── queuert.job.attempt.duration (attempt 2, retry)

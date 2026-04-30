@@ -1,24 +1,24 @@
 ---
 name: publish-review
-description: Run a comprehensive review of the Queuert library before publishing, launching 8 parallel agents to check documentation coherence, API design, implementation verification, feature completeness, API consistency, schema design, code style, and benchmarks. Use when preparing to publish or validating publish readiness.
+description: Run a comprehensive review of the Queuert library before publishing, launching 9 parallel agents to check documentation coherence, API design, implementation verification, feature completeness, API consistency, schema design, code style, benchmarks, and changeset coverage. Use when preparing to publish or validating publish readiness.
 ---
 
 # Publish Readiness Review
 
-Run a comprehensive review of the Queuert library before publishing. This skill launches 8 specialized review agents in parallel to check different aspects of publish readiness.
+Run a comprehensive review of the Queuert library before publishing. This skill launches 9 specialized review agents in parallel to check different aspects of publish readiness.
 
 ## Instructions
 
 When this skill is invoked, you MUST:
 
-1. Launch all 8 review agents IN PARALLEL using the Task tool with a single message containing 8 tool calls
+1. Launch all 9 review agents IN PARALLEL using the Task tool with a single message containing 9 tool calls
 2. Wait for all agents to complete
 3. Write a combined report to `docs/publish-readiness-report.md`
 4. Display a summary of findings in the conversation
 
 ## Agents to Launch
 
-Launch these 7 agents in parallel using the Task tool (all in one message with 7 Task tool calls):
+Launch these 9 agents in parallel using the Task tool (all in one message with 9 Task tool calls):
 
 ### 1. Documentation Coherence Agent
 
@@ -178,6 +178,69 @@ prompt: |
   Return a structured report.
 ```
 
+### 9. Changeset Coverage Agent
+
+```
+subagent_type: general-purpose
+description: Verify changeset coverage
+prompt: |
+  You are a changeset coverage auditor for the Queuert library.
+
+  Goal: verify that every user-facing change pending for the next release is
+  covered by a `.changeset/*.md` entry, and that each entry is well-formed.
+
+  Steps:
+
+  1. List the pending changeset files: every `.md` file under `.changeset/` other
+     than `README.md`. Read each one — capture the frontmatter (which packages
+     are bumped and at what level) and the body (description, any migration
+     notes).
+
+  2. Determine the diff range to audit. The last published state is whatever
+     was tagged on `main`. Use:
+        git fetch origin main --tags
+        git log -1 --pretty=%H origin/main   # or the latest release tag
+     and diff that against `HEAD`. List every changed file with `git diff
+     --name-status <base>..HEAD`.
+
+  3. Classify each changed file as user-facing or internal-only:
+     - **User-facing**: anything under `packages/*/src/**` that affects the
+       public API, runtime behavior, or wire/schema format; new or changed
+       migrations under `packages/*/src/state-adapter/sql.ts`; changes to
+       `packages/*/src/index.ts` exports; package.json `exports`,
+       `dependencies`, `peerDependencies`, or `version`.
+     - **Internal-only**: tests (`*.test.ts`, `*.spec.ts`, suites), types-only
+       tightening, doc-only edits (`docs/`, `*.md` outside `.changeset/`),
+       build/CI/tooling, `benchmarks/`, `examples/`, comment tweaks.
+
+  4. For every user-facing change, verify a changeset entry covers it:
+     - The affected package appears in some changeset's frontmatter.
+     - The bump level is appropriate (major for breaking API/behavior/schema
+       removals or renames; minor for additive changes; patch for bug fixes).
+     - Schema/migration changes are explicitly mentioned in the body, with
+       guidance on what runs against existing databases.
+     - Breaking changes include migration guidance.
+
+  5. Flag any of the following:
+     - **CRITICAL**: User-facing change with no changeset for its package; a
+       breaking change shipped without a major bump; a schema migration with
+       no mention in any changeset body.
+     - **WARNING**: Changeset present but body is sparse or written for the
+       author rather than users; bump level looks too low for the change;
+       multiple changesets fragmenting one logical release; affected package
+       missing from frontmatter despite being touched in user-facing ways.
+     - **SUGGESTION**: Wording, ordering, formatting, or consolidation
+       improvements to the existing changeset bodies.
+
+  Return a structured report with:
+  - The set of pending changesets and what each one covers (one bullet per
+    file).
+  - The set of user-facing files in the diff and which changeset (if any)
+    covers each.
+  - Findings categorized CRITICAL / WARNING / SUGGESTION with specific file
+    paths and remediation.
+```
+
 ## Report Format
 
 After all agents complete, write the combined report to `docs/publish-readiness-report.md` with this structure:
@@ -224,6 +287,10 @@ Generated: [current date]
 ## 8. Benchmarks
 
 [Agent 8 findings]
+
+## 9. Changeset Coverage
+
+[Agent 9 findings]
 
 ## Action Items
 

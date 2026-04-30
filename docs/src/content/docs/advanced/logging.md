@@ -76,13 +76,13 @@ All entries are strongly typed — the `type` field determines the exact shape o
 | `job_attempt_lease_expired`           | `warn`  | Job lease expired                       | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `leasedBy`, `leasedUntil`, `workerId`                        |
 | `job_attempt_lease_renewed`           | `info`  | Job lease renewed                       | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `leasedBy`, `leasedUntil`, `workerId`                        |
 
-### Job Chain Lifecycle
+### Chain Lifecycle
 
-| Type                  | Level  | Message             | Data                       |
-| --------------------- | ------ | ------------------- | -------------------------- |
-| `job_chain_created`   | `info` | Job chain created   | `id`, `typeName`, `input`  |
-| `job_chain_completed` | `info` | Job chain completed | `id`, `typeName`, `output` |
-| `job_chain_deleted`   | `info` | Job chain deleted   | `id`, `typeName`           |
+| Type              | Level  | Message         | Data                       |
+| ----------------- | ------ | --------------- | -------------------------- |
+| `chain_created`   | `info` | Chain created   | `id`, `typeName`, `input`  |
+| `chain_completed` | `info` | Chain completed | `id`, `typeName`, `output` |
+| `chain_deleted`   | `info` | Chain deleted   | `id`, `typeName`           |
 
 ### Adapter Errors
 
@@ -103,7 +103,7 @@ Log entry data fields compose from a few base shapes:
 
 - **JobBasicData** — `id`, `typeName`, `chainId`, `chainTypeName`
 - **JobProcessingData** — extends JobBasicData with `status`, `attempt`
-- **JobChainData** — `id`, `typeName`
+- **ChainData** — `id`, `typeName`
 
 ## Relationship to ObservabilityAdapter
 

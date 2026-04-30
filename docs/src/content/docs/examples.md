@@ -48,7 +48,7 @@ How to set up real-time job notifications between client and workers.
 
 ## Patterns & Features
 
-Job chain patterns, error handling, scheduling, and other core features.
+Chain patterns, error handling, scheduling, and other core features.
 
 | Example                                                                                                                       | What it demonstrates                                                      |
 | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
@@ -58,12 +58,12 @@ Job chain patterns, error handling, scheduling, and other core features.
 | [showcase-scheduling](https://github.com/kvet/queuert/tree/main/examples/showcase-scheduling)                                 | Delayed and time-scheduled jobs                                           |
 | [showcase-blockers](https://github.com/kvet/queuert/tree/main/examples/showcase-blockers)                                     | Cross-chain job dependencies                                              |
 | [showcase-chain-awaiting](https://github.com/kvet/queuert/tree/main/examples/showcase-chain-awaiting)                         | Awaiting chain completion programmatically                                |
-| [showcase-chain-deletion](https://github.com/kvet/queuert/tree/main/examples/showcase-chain-deletion)                         | Deleting job chains                                                       |
+| [showcase-chain-deletion](https://github.com/kvet/queuert/tree/main/examples/showcase-chain-deletion)                         | Deleting chains                                                           |
 | [showcase-processing-modes](https://github.com/kvet/queuert/tree/main/examples/showcase-processing-modes)                     | Atomic vs staged processing modes                                         |
 | [showcase-queries](https://github.com/kvet/queuert/tree/main/examples/showcase-queries)                                       | Querying jobs and chains                                                  |
 | [showcase-timeouts](https://github.com/kvet/queuert/tree/main/examples/showcase-timeouts)                                     | Job and chain timeouts                                                    |
 | [showcase-slices](https://github.com/kvet/queuert/tree/main/examples/showcase-slices)                                         | Feature slices with merged job types and processors                       |
-| [showcase-cleanup](https://github.com/kvet/queuert/tree/main/examples/showcase-cleanup)                                       | Automatic cleanup of completed job chains                                 |
+| [showcase-cleanup](https://github.com/kvet/queuert/tree/main/examples/showcase-cleanup)                                       | Automatic cleanup of completed chains                                     |
 | [showcase-workerless](https://github.com/kvet/queuert/tree/main/examples/showcase-workerless)                                 | Running without a worker (polling only)                                   |
 | [showcase-multiworker-prioritization](https://github.com/kvet/queuert/tree/main/examples/showcase-multiworker-prioritization) | Priority tiers via specialized workers; cross-worker chain handoff        |
 | [showcase-middleware](https://github.com/kvet/queuert/tree/main/examples/showcase-middleware)                                 | Attempt middleware: wrapHandler, wrapPrepare, wrapComplete with typed ctx |

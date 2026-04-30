@@ -1,8 +1,8 @@
 import { type ConformanceGroup } from "../runner.js";
 import { type StateAdapterConformanceContext } from "./types.js";
 
-export const deleteJobChainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
-  name: "deleteJobChains",
+export const deleteChainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
+  name: "deleteChains",
   cases: [
     {
       name: "deletes all jobs in the given chains",
@@ -23,7 +23,7 @@ export const deleteJobChainsGroup: ConformanceGroup<StateAdapterConformanceConte
         );
 
         const { deleted } = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.deleteJobChains({
+          stateAdapter.deleteChains({
             txCtx,
             chainIds: [job.chainId],
           }),
@@ -32,7 +32,7 @@ export const deleteJobChainsGroup: ConformanceGroup<StateAdapterConformanceConte
         expect(deleted).toHaveLength(1);
         expect(deleted[0][0].id).toBe(job.id);
         expect(deleted[0][1]).toBeUndefined();
-        expect(await stateAdapter.getJobById({ jobId: job.id })).toBeUndefined();
+        expect(await stateAdapter.getJob({ jobId: job.id })).toBeUndefined();
       },
     },
     {
@@ -69,14 +69,14 @@ export const deleteJobChainsGroup: ConformanceGroup<StateAdapterConformanceConte
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.deleteJobChains({
+          stateAdapter.deleteChains({
             txCtx,
             chainIds: [jobA.chainId],
           }),
         );
 
-        expect(await stateAdapter.getJobById({ jobId: jobA.id })).toBeUndefined();
-        expect(await stateAdapter.getJobById({ jobId: jobB.id })).toBeDefined();
+        expect(await stateAdapter.getJob({ jobId: jobA.id })).toBeUndefined();
+        expect(await stateAdapter.getJob({ jobId: jobB.id })).toBeDefined();
       },
     },
     {
@@ -120,7 +120,7 @@ export const deleteJobChainsGroup: ConformanceGroup<StateAdapterConformanceConte
         );
 
         const blocked = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.deleteJobChains({ txCtx, chainIds: [blockerJob.chainId] }),
+          stateAdapter.deleteChains({ txCtx, chainIds: [blockerJob.chainId] }),
         );
         expect(blocked.deleted).toEqual([]);
         expect(blocked.blockerRefs).toEqual([
@@ -128,11 +128,11 @@ export const deleteJobChainsGroup: ConformanceGroup<StateAdapterConformanceConte
         ]);
 
         // Blocker chain is still intact
-        expect(await stateAdapter.getJobById({ jobId: blockerJob.id })).toBeDefined();
+        expect(await stateAdapter.getJob({ jobId: blockerJob.id })).toBeDefined();
 
         // Deleting both together succeeds
         const { deleted, blockerRefs } = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.deleteJobChains({
+          stateAdapter.deleteChains({
             txCtx,
             chainIds: [mainJob.chainId, blockerJob.chainId],
           }),
@@ -183,7 +183,7 @@ export const deleteJobChainsGroup: ConformanceGroup<StateAdapterConformanceConte
         );
 
         const { deleted } = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.deleteJobChains({
+          stateAdapter.deleteChains({
             txCtx,
             chainIds: [mainJob.chainId],
             cascade: true,
@@ -191,8 +191,8 @@ export const deleteJobChainsGroup: ConformanceGroup<StateAdapterConformanceConte
         );
 
         expect(deleted).toHaveLength(2);
-        expect(await stateAdapter.getJobById({ jobId: blockerJob.id })).toBeUndefined();
-        expect(await stateAdapter.getJobById({ jobId: mainJob.id })).toBeUndefined();
+        expect(await stateAdapter.getJob({ jobId: blockerJob.id })).toBeUndefined();
+        expect(await stateAdapter.getJob({ jobId: mainJob.id })).toBeUndefined();
       },
     },
     {
@@ -236,7 +236,7 @@ export const deleteJobChainsGroup: ConformanceGroup<StateAdapterConformanceConte
         );
 
         const { deleted, blockerRefs } = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.deleteJobChains({
+          stateAdapter.deleteChains({
             txCtx,
             chainIds: [blockerJob.chainId],
             cascade: true,
@@ -313,7 +313,7 @@ export const deleteJobChainsGroup: ConformanceGroup<StateAdapterConformanceConte
 
         // Delete from C (topmost dependent) — cascades down to B and A
         const { deleted } = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.deleteJobChains({
+          stateAdapter.deleteChains({
             txCtx,
             chainIds: [jobC.chainId],
             cascade: true,
@@ -321,9 +321,9 @@ export const deleteJobChainsGroup: ConformanceGroup<StateAdapterConformanceConte
         );
 
         expect(deleted).toHaveLength(3);
-        expect(await stateAdapter.getJobById({ jobId: jobA.id })).toBeUndefined();
-        expect(await stateAdapter.getJobById({ jobId: jobB.id })).toBeUndefined();
-        expect(await stateAdapter.getJobById({ jobId: jobC.id })).toBeUndefined();
+        expect(await stateAdapter.getJob({ jobId: jobA.id })).toBeUndefined();
+        expect(await stateAdapter.getJob({ jobId: jobB.id })).toBeUndefined();
+        expect(await stateAdapter.getJob({ jobId: jobC.id })).toBeUndefined();
       },
     },
     {
@@ -416,7 +416,7 @@ export const deleteJobChainsGroup: ConformanceGroup<StateAdapterConformanceConte
         );
 
         const { deleted } = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.deleteJobChains({
+          stateAdapter.deleteChains({
             txCtx,
             chainIds: [jobD.chainId],
             cascade: true,
@@ -424,10 +424,10 @@ export const deleteJobChainsGroup: ConformanceGroup<StateAdapterConformanceConte
         );
 
         expect(deleted).toHaveLength(4);
-        expect(await stateAdapter.getJobById({ jobId: jobA.id })).toBeUndefined();
-        expect(await stateAdapter.getJobById({ jobId: jobB.id })).toBeUndefined();
-        expect(await stateAdapter.getJobById({ jobId: jobC.id })).toBeUndefined();
-        expect(await stateAdapter.getJobById({ jobId: jobD.id })).toBeUndefined();
+        expect(await stateAdapter.getJob({ jobId: jobA.id })).toBeUndefined();
+        expect(await stateAdapter.getJob({ jobId: jobB.id })).toBeUndefined();
+        expect(await stateAdapter.getJob({ jobId: jobC.id })).toBeUndefined();
+        expect(await stateAdapter.getJob({ jobId: jobD.id })).toBeUndefined();
       },
     },
     {
@@ -464,7 +464,7 @@ export const deleteJobChainsGroup: ConformanceGroup<StateAdapterConformanceConte
         );
 
         const { deleted } = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.deleteJobChains({
+          stateAdapter.deleteChains({
             txCtx,
             chainIds: [jobA.chainId],
             cascade: true,
@@ -473,8 +473,8 @@ export const deleteJobChainsGroup: ConformanceGroup<StateAdapterConformanceConte
 
         expect(deleted).toHaveLength(1);
         expect(deleted[0][0].id).toBe(jobA.id);
-        expect(await stateAdapter.getJobById({ jobId: jobA.id })).toBeUndefined();
-        expect(await stateAdapter.getJobById({ jobId: jobB.id })).toBeDefined();
+        expect(await stateAdapter.getJob({ jobId: jobA.id })).toBeUndefined();
+        expect(await stateAdapter.getJob({ jobId: jobB.id })).toBeDefined();
       },
     },
   ],

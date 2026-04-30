@@ -43,7 +43,7 @@ import { JobTypeValidationError } from "queuert";
 
 try {
   await stateAdapter.withTransaction((ctx) =>
-    client.startJobChain({ ...ctx, transactionHooks, typeName: "send-email", input: untrusted }),
+    client.startChain({ ...ctx, transactionHooks, typeName: "send-email", input: untrusted }),
   );
 } catch (err) {
   if (err instanceof JobTypeValidationError && err.code === "invalid_input") {

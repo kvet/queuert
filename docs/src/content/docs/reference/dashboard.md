@@ -24,7 +24,7 @@ const dashboard = await createDashboard({
 
 The `fetch` handler serves both API routes and the pre-built SolidJS frontend. Mount it on any server runtime that accepts a standard `fetch` handler (Node.js, Bun, Deno).
 
-The state adapter must implement dashboard listing methods (`listJobChains`, `listJobs`, `listBlockedJobs`). The PostgreSQL and SQLite adapters support these.
+The state adapter must implement dashboard listing methods (`listChains`, `listJobs`, `listBlockedJobs`). The PostgreSQL and SQLite adapters support these.
 
 ### options.basePath
 

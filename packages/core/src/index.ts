@@ -1,11 +1,7 @@
 export { createClient, type Client } from "./client.js";
 export { type DeduplicationOptions } from "./entities/deduplication.js";
 export { defineJobTypes } from "./entities/define-job-types.js";
-export {
-  type CompletedJobChain,
-  type JobChain,
-  type JobChainStatus,
-} from "./entities/job-chain.js";
+export { type Chain, type ChainStatus, type CompletedChain } from "./entities/chain.js";
 export {
   type BaseJobTypeDefinition,
   type BaseJobTypeDefinitions,
@@ -31,18 +27,18 @@ export {
   type JobTypeEntryNames,
   type JobTypeNames,
   type JobTypeProperty,
+  type ResolvedChain,
   type ResolvedChainJobs,
   type ResolvedJob,
-  type ResolvedJobChain,
 } from "./entities/job-types.resolvers.js";
 export { type Job, type JobStatus } from "./entities/job.js";
 export { type ScheduleOptions } from "./entities/schedule.js";
 export {
   BlockerReferenceError,
+  ChainNotFoundError,
   DuplicateJobTypeError,
   HookNotRegisteredError,
   JobAlreadyCompletedError,
-  JobChainNotFoundError,
   JobNotFoundError,
   JobNotTriggerableError,
   JobTakenByAnotherWorkerError,

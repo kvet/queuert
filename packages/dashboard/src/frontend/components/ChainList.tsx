@@ -1,7 +1,7 @@
 import { useNavigate, useSearchParams } from "@solidjs/router";
 import { For, Show, createResource, createSignal } from "solid-js";
 
-import { type UnknownJobChain, listJobChains } from "../api.js";
+import { type UnknownChain, listChains } from "../api.js";
 import { StatusBadge } from "./StatusBadge.js";
 import { TimeAgo } from "./TimeAgo.js";
 
@@ -15,7 +15,7 @@ export function ChainList() {
   const jobId = () => (searchParams.jobId ?? "") as string;
   const root = () => searchParams.root !== "false";
 
-  const [items, setItems] = createSignal<UnknownJobChain[]>([]);
+  const [items, setItems] = createSignal<UnknownChain[]>([]);
   const [cursor, setCursor] = createSignal<string | null>(null);
   let loadMoreController: AbortController | null = null;
 
@@ -30,7 +30,7 @@ export function ChainList() {
     async (params) => {
       loadMoreController?.abort();
       loadMoreController = null;
-      const result = await listJobChains({ ...params, limit: 25 });
+      const result = await listChains({ ...params, limit: 25 });
       setItems(result.items);
       setCursor(result.nextCursor);
       return result;
@@ -43,9 +43,9 @@ export function ChainList() {
     loadMoreController?.abort();
     const controller = new AbortController();
     loadMoreController = controller;
-    let result: Awaited<ReturnType<typeof listJobChains>>;
+    let result: Awaited<ReturnType<typeof listChains>>;
     try {
-      result = await listJobChains({
+      result = await listChains({
         typeName: typeName(),
         status: status(),
         id: id(),

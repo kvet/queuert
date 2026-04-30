@@ -14,7 +14,7 @@
  * - `JobTypeReachingEntry<TJobTypeDefinitions, K>` — which entry types can reach K via chain walking
  */
 
-import { type CompletedJobChain, type JobChain } from "./job-chain.types.js";
+import { type Chain, type CompletedChain } from "./chain.types.js";
 import {
   type BaseJobTypeDefinitions,
   type JobTypeReference,
@@ -220,14 +220,14 @@ export type ContinuationJobs<
       }[TContinuation]
     : never;
 
-export type ResolvedJobChain<
+export type ResolvedChain<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
 > =
   JobTypeChainNames<TJobTypeDefinitions, TJobTypeName> extends infer TChainTypeNames extends string
     ? {
-        [K in TChainTypeNames]: JobChain<
+        [K in TChainTypeNames]: Chain<
           TJobId,
           TJobTypeName,
           JobTypeProperty<TJobTypeDefinitions, K, "input">,
@@ -262,7 +262,7 @@ type MapBlockersToChains<
   TBlockers extends readonly unknown[],
 > = {
   [K in keyof TBlockers]: TBlockers[K] extends JobTypeReference
-    ? ResolvedJobChain<
+    ? ResolvedChain<
         TJobId,
         TJobTypeDefinitions,
         ResolveReferenceDistributive<TJobTypeDefinitions, TBlockers[K]> & string
@@ -307,8 +307,8 @@ export type JobTypeBlockedNames<
   : never;
 
 type MapToCompletedChains<TJobId, TBlockers extends readonly unknown[]> = {
-  [K in keyof TBlockers]: TBlockers[K] extends JobChain<TJobId, string, unknown, unknown>
-    ? CompletedJobChain<TBlockers[K]>
+  [K in keyof TBlockers]: TBlockers[K] extends Chain<TJobId, string, unknown, unknown>
+    ? CompletedChain<TBlockers[K]>
     : TBlockers[K];
 };
 

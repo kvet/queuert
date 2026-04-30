@@ -64,7 +64,7 @@ export type DbJob = {
   trace_context: string | null;
 };
 
-export type DbJobChainRow = DbJob & {
+export type DbChainRow = DbJob & {
   [K in keyof DbJob as `lc_${K}`]: DbJob[K] | null;
 };
 
@@ -174,6 +174,35 @@ ON {{table_prefix}}job (type_name, created_at DESC) WHERE chain_index = 0`),
       },
     ],
   },
+  {
+    name: "20260430000000_rename_chain_indexes",
+    statements: [
+      {
+        sql: sql(/* sql */ `DROP INDEX IF EXISTS {{table_prefix}}job_chain_index_idx`),
+      },
+      {
+        sql: sql(/* sql */ `
+CREATE UNIQUE INDEX IF NOT EXISTS {{table_prefix}}chain_index_idx
+ON {{table_prefix}}job (chain_id, chain_index)`),
+      },
+      {
+        sql: sql(/* sql */ `DROP INDEX IF EXISTS {{table_prefix}}job_chain_listing_idx`),
+      },
+      {
+        sql: sql(/* sql */ `
+CREATE INDEX IF NOT EXISTS {{table_prefix}}chain_listing_idx
+ON {{table_prefix}}job (created_at DESC) WHERE chain_index = 0`),
+      },
+      {
+        sql: sql(/* sql */ `DROP INDEX IF EXISTS {{table_prefix}}job_chain_listing_type_name_idx`),
+      },
+      {
+        sql: sql(/* sql */ `
+CREATE INDEX IF NOT EXISTS {{table_prefix}}chain_listing_type_name_idx
+ON {{table_prefix}}job (type_name, created_at DESC) WHERE chain_index = 0`),
+      },
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -205,7 +234,7 @@ type SqliteDbJobCols<TRuntime extends RuntimeType> = {
   readonly trace_context: DataType<"string?", string | null>;
 };
 
-type SqliteDbJobChainRowCols<TRuntime extends RuntimeType> = SqliteDbJobCols<TRuntime> & {
+type SqliteDbChainRowCols<TRuntime extends RuntimeType> = SqliteDbJobCols<TRuntime> & {
   readonly lc_id: DataType<"string?", string | null>;
   readonly lc_type_name: DataType<"string?", string | null>;
   readonly lc_chain_id: DataType<"string?", string | null>;
@@ -234,7 +263,7 @@ type SqliteDbJobChainRowCols<TRuntime extends RuntimeType> = SqliteDbJobCols<TRu
 
 export type SqliteSqlDefinitions<TRuntime extends RuntimeType = RuntimeType> = {
   readonly dbJobColumns: SqliteDbJobCols<TRuntime>;
-  readonly dbJobChainRowColumns: SqliteDbJobChainRowCols<TRuntime>;
+  readonly dbChainRowColumns: SqliteDbChainRowCols<TRuntime>;
   readonly createMigrationTableSql: TypedSql<readonly [], Record<string, never>>;
   readonly getAppliedMigrationsSql: TypedSql<
     readonly [],
@@ -280,7 +309,7 @@ export type SqliteSqlDefinitions<TRuntime extends RuntimeType = RuntimeType> = {
     }
   >;
   readonly updateJobToBlockedSql: TypedSql<readonly [Id<TRuntime>], SqliteDbJobCols<TRuntime>>;
-  readonly getJobByIdForBlockersSql: TypedSql<readonly [Id<TRuntime>], SqliteDbJobCols<TRuntime>>;
+  readonly getJobForBlockersSql: TypedSql<readonly [Id<TRuntime>], SqliteDbJobCols<TRuntime>>;
   readonly completeJobSql: TypedSql<
     readonly [DataType<"string?", string | null>, DataType<"string?", string | null>, Id<TRuntime>],
     SqliteDbJobCols<TRuntime>
@@ -301,13 +330,13 @@ export type SqliteSqlDefinitions<TRuntime extends RuntimeType = RuntimeType> = {
       readonly chain_trace_context: DataType<"string?", string | null>;
     }
   >;
-  readonly getJobChainByIdSql: TypedSql<
+  readonly getChainSql: TypedSql<
     readonly [Id<TRuntime>, Id<TRuntime>],
-    SqliteDbJobChainRowCols<TRuntime>
+    SqliteDbChainRowCols<TRuntime>
   >;
-  readonly getJobBlockersSql: TypedSql<readonly [Id<TRuntime>], SqliteDbJobChainRowCols<TRuntime>>;
-  readonly getJobByIdSql: TypedSql<readonly [Id<TRuntime>], SqliteDbJobCols<TRuntime>>;
-  readonly getJobByIdLockedSql: TypedSql<readonly [Id<TRuntime>], SqliteDbJobCols<TRuntime>>;
+  readonly getJobBlockersSql: TypedSql<readonly [Id<TRuntime>], SqliteDbChainRowCols<TRuntime>>;
+  readonly getJobSql: TypedSql<readonly [Id<TRuntime>], SqliteDbJobCols<TRuntime>>;
+  readonly getJobLockedSql: TypedSql<readonly [Id<TRuntime>], SqliteDbJobCols<TRuntime>>;
   readonly lockLatestChainJobSql: TypedSql<readonly [Id<TRuntime>], Record<string, never>>;
   readonly rescheduleJobSql: TypedSql<
     readonly [
@@ -355,14 +384,11 @@ export type SqliteSqlDefinitions<TRuntime extends RuntimeType = RuntimeType> = {
     readonly [DataType<"string", string>],
     Record<string, never>
   >;
-  readonly getJobChainsByChainIdsSql: TypedSql<
+  readonly getChainsByChainIdsSql: TypedSql<
     readonly [DataType<"string", string>],
-    SqliteDbJobChainRowCols<TRuntime>
+    SqliteDbChainRowCols<TRuntime>
   >;
-  readonly deleteJobChainsSql: TypedSql<
-    readonly [DataType<"string", string>],
-    Record<string, never>
-  >;
+  readonly deleteChainsSql: TypedSql<readonly [DataType<"string", string>], Record<string, never>>;
 };
 
 export const createSqliteSqlDefinitions = <TRuntime extends RuntimeType>(
@@ -391,7 +417,7 @@ export const createSqliteSqlDefinitions = <TRuntime extends RuntimeType>(
     trace_context: t["string?"](),
   } as const;
 
-  const dbJobChainRowColumns = {
+  const dbChainRowColumns = {
     ...dbJobColumns,
     lc_id: t["string?"](),
     lc_type_name: t["string?"](),
@@ -588,8 +614,8 @@ RETURNING *
     },
   );
 
-  const getJobByIdForBlockersSql = sql(/* sql */ `SELECT * FROM {{table_prefix}}job WHERE id = ?`, {
-    id: "getJobByIdForBlockers",
+  const getJobForBlockersSql = sql(/* sql */ `SELECT * FROM {{table_prefix}}job WHERE id = ?`, {
+    id: "getJobForBlockers",
     params: [id],
     columns: { ...dbJobColumns },
     readOnly: true,
@@ -693,7 +719,7 @@ ORDER BY j.id
     },
   );
 
-  const getJobChainByIdSql = sql(
+  const getChainSql = sql(
     /* sql */ `
 SELECT
   {{job_columns:j}},
@@ -709,9 +735,9 @@ LEFT JOIN (
 WHERE j.id = ?
 `,
     {
-      id: "getJobChainById",
+      id: "getChain",
       params: [id, id],
-      columns: { ...dbJobChainRowColumns },
+      columns: { ...dbChainRowColumns },
       readOnly: true,
     },
   );
@@ -737,19 +763,19 @@ ORDER BY b."index" ASC
     {
       id: "getJobBlockers",
       params: [id],
-      columns: { ...dbJobChainRowColumns },
+      columns: { ...dbChainRowColumns },
       readOnly: true,
     },
   );
 
-  const getJobByIdSql = sql(
+  const getJobSql = sql(
     /* sql */ `
 SELECT *
 FROM {{table_prefix}}job
 WHERE id = ?
 `,
     {
-      id: "getJobById",
+      id: "getJob",
       params: [id],
       columns: { ...dbJobColumns },
       readOnly: true,
@@ -760,8 +786,8 @@ WHERE id = ?
   // the deferred transaction to RESERVED, blocking other writers (including
   // concurrent locked reads) until commit. `SET id = id` is an explicit no-op
   // write that still takes the lock. RETURNING * gives us the row in the same
-  // shape as `getJobByIdSql`, so callers can use this in place of read+lock.
-  const getJobByIdLockedSql = sql(
+  // shape as `getJobSql`, so callers can use this in place of read+lock.
+  const getJobLockedSql = sql(
     /* sql */ `
 UPDATE {{table_prefix}}job
 SET id = id
@@ -769,14 +795,14 @@ WHERE id = ?
 RETURNING *
 `,
     {
-      id: "getJobByIdLocked",
+      id: "getJobLocked",
       params: [id],
       columns: { ...dbJobColumns },
     },
   );
 
   // Promote the transaction to RESERVED on the latest job in a chain. Used
-  // before `getJobChainByIdSql` when callers want write-intent on the row
+  // before `getChainSql` when callers want write-intent on the row
   // they're about to extend.
   const lockLatestChainJobSql = sql(
     /* sql */ `
@@ -993,7 +1019,7 @@ WHERE job_id IN (
     },
   );
 
-  const getJobChainsByChainIdsSql = sql(
+  const getChainsByChainIdsSql = sql(
     /* sql */ `
 SELECT
   {{job_columns:j}},
@@ -1009,20 +1035,20 @@ WHERE j.id = j.chain_id
   AND j.chain_id IN (SELECT value FROM json_each(?))
 `,
     {
-      id: "getJobChainsByChainIds",
+      id: "getChainsByChainIds",
       params: [t.string()],
-      columns: { ...dbJobChainRowColumns },
+      columns: { ...dbChainRowColumns },
       readOnly: true,
     },
   );
 
-  const deleteJobChainsSql = sql(
+  const deleteChainsSql = sql(
     /* sql */ `
 DELETE FROM {{table_prefix}}job
 WHERE chain_id IN (SELECT value FROM json_each(?))
 `,
     {
-      id: "deleteJobChains",
+      id: "deleteChains",
       params: [t.string()],
       columns: {},
     },
@@ -1030,7 +1056,7 @@ WHERE chain_id IN (SELECT value FROM json_each(?))
 
   return {
     dbJobColumns,
-    dbJobChainRowColumns,
+    dbChainRowColumns,
     createMigrationTableSql,
     getAppliedMigrationsSql,
     recordMigrationSql,
@@ -1040,16 +1066,16 @@ WHERE chain_id IN (SELECT value FROM json_each(?))
     insertJobBlockersSql,
     checkBlockersStatusSql,
     updateJobToBlockedSql,
-    getJobByIdForBlockersSql,
+    getJobForBlockersSql,
     completeJobSql,
     findReadyJobsSql,
     scheduleBlockedJobsSql,
     getJobBlockerTraceContextsSql,
     getBlockerChainTraceContextsSql,
-    getJobChainByIdSql,
+    getChainSql,
     getJobBlockersSql,
-    getJobByIdSql,
-    getJobByIdLockedSql,
+    getJobSql,
+    getJobLockedSql,
     lockLatestChainJobSql,
     rescheduleJobSql,
     triggerJobsSql,
@@ -1061,7 +1087,7 @@ WHERE chain_id IN (SELECT value FROM json_each(?))
     getConnectedChainIdsSql,
     checkExternalBlockerRefsSql,
     deleteBlockersByChainIdsSql,
-    getJobChainsByChainIdsSql,
-    deleteJobChainsSql,
+    getChainsByChainIdsSql,
+    deleteChainsSql,
   } as const;
 };

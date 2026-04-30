@@ -28,10 +28,10 @@ export type NotifyAdapter = {
    * hint support always return true.
    */
   consumeWakeHint: (typeName: string) => Promise<boolean>;
-  /** Notify that a job chain has completed. */
-  notifyJobChainCompleted: (chainId: string) => Promise<void>;
+  /** Notify that a chain has completed. */
+  notifyChainCompleted: (chainId: string) => Promise<void>;
   /** Listen for a specific chain's completion. Returns a dispose function. */
-  listenJobChainCompleted: (
+  listenChainCompleted: (
     chainId: string,
     onNotification: () => void,
   ) => Promise<() => Promise<void>>;

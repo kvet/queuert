@@ -1,9 +1,9 @@
-import { type Job as CoreJob, type JobChain as CoreJobChain } from "queuert";
+import { type Job as CoreJob, type Chain as CoreChain } from "queuert";
 // @ts-expect-error tsgo doesn't resolve export * re-exports from seroval
 import { deserialize } from "seroval";
 
 export type UnknownJob = CoreJob<string, string, string, unknown, unknown>;
-export type UnknownJobChain = CoreJobChain<string, string, unknown, unknown>;
+export type UnknownChain = CoreChain<string, string, unknown, unknown>;
 
 const BASE = "./api";
 
@@ -19,7 +19,7 @@ export type PageResult<T> = {
   nextCursor: string | null;
 };
 
-export const listJobChains = async (
+export const listChains = async (
   params: {
     typeName?: string;
     status?: string;
@@ -30,7 +30,7 @@ export const listJobChains = async (
     limit?: number;
     signal?: AbortSignal;
   } = {},
-): Promise<PageResult<UnknownJobChain>> => {
+): Promise<PageResult<UnknownChain>> => {
   const searchParams = new URLSearchParams();
   if (params.typeName) searchParams.set("typeName", params.typeName);
   if (params.status) searchParams.set("status", params.status);
@@ -40,12 +40,9 @@ export const listJobChains = async (
   if (params.cursor) searchParams.set("cursor", params.cursor);
   if (params.limit) searchParams.set("limit", String(params.limit));
   const queryString = searchParams.toString();
-  return fetchSeroval<PageResult<UnknownJobChain>>(
-    `/chains${queryString ? `?${queryString}` : ""}`,
-    {
-      signal: params.signal,
-    },
-  );
+  return fetchSeroval<PageResult<UnknownChain>>(`/chains${queryString ? `?${queryString}` : ""}`, {
+    signal: params.signal,
+  });
 };
 
 export const listJobs = async (
@@ -75,9 +72,9 @@ export const listJobs = async (
 export const getChainDetail = async (
   chainId: string,
 ): Promise<{
-  chain: UnknownJobChain;
+  chain: UnknownChain;
   jobs: UnknownJob[];
-  jobBlockers: Record<string, UnknownJobChain[]>;
+  jobBlockers: Record<string, UnknownChain[]>;
 }> => fetchSeroval(`/chains/${chainId}`);
 
 export const getChainBlocking = async (chainId: string): Promise<{ items: UnknownJob[] }> =>
@@ -103,5 +100,5 @@ export const getJobDetail = async (
 ): Promise<{
   job: UnknownJob;
   continuation: UnknownJob | null;
-  blockers: UnknownJobChain[];
+  blockers: UnknownChain[];
 }> => fetchSeroval(`/jobs/${jobId}`);

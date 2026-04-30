@@ -1,6 +1,6 @@
 # Cleanup Showcase
 
-Automatic cleanup of completed job chains implemented as a Queuert job type — batched deletion with cursor pagination, `stateAdapter.vacuum()`, and idempotent rescheduling via deduplication.
+Automatic cleanup of completed chains implemented as a Queuert job type — batched deletion with cursor pagination, `stateAdapter.vacuum()`, and idempotent rescheduling via deduplication.
 
 ## Running
 

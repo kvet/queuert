@@ -85,9 +85,9 @@ export const stateResilienceTestSuite = ({
       }),
     });
 
-    const jobChains = await withTransactionHooks(async (transactionHooks) =>
+    const chains = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChains({
+        client.startChains({
           ...txCtx,
           transactionHooks,
           items: Array.from({ length: 20 }, (_, i) => ({
@@ -99,9 +99,7 @@ export const stateResilienceTestSuite = ({
     );
 
     await withWorkers([await flakyWorker.start()], async () => {
-      await Promise.all(
-        jobChains.map(async (chain) => client.awaitJobChain(chain, completionOptions)),
-      );
+      await Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions)));
     });
   });
 
@@ -175,9 +173,9 @@ export const stateResilienceTestSuite = ({
         }),
       });
 
-      const jobChains = await withTransactionHooks(async (transactionHooks) =>
+      const chains = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startJobChains({
+          client.startChains({
             ...txCtx,
             transactionHooks,
             items: Array.from({ length: 20 }, (_, i) => ({
@@ -189,9 +187,7 @@ export const stateResilienceTestSuite = ({
       );
 
       await withWorkers([await flakyWorker.start()], async () => {
-        await Promise.all(
-          jobChains.map(async (chain) => client.awaitJobChain(chain, completionOptions)),
-        );
+        await Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions)));
       });
     },
   );
@@ -289,9 +285,9 @@ export const stateResilienceTestSuite = ({
         }),
       });
 
-      const jobChains = await withTransactionHooks(async (transactionHooks) =>
+      const chains = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startJobChains({
+          client.startChains({
             ...txCtx,
             transactionHooks,
             items: Array.from({ length: 20 }, (_, i) => ({
@@ -303,9 +299,7 @@ export const stateResilienceTestSuite = ({
       );
 
       await withWorkers([await flakyWorker1.start(), await flakyWorker2.start()], async () => {
-        await Promise.all(
-          jobChains.map(async (chain) => client.awaitJobChain(chain, completionOptions)),
-        );
+        await Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions)));
       });
     },
   );
@@ -376,9 +370,9 @@ export const stateResilienceTestSuite = ({
       }),
     });
 
-    const jobChains = await withTransactionHooks(async (transactionHooks) =>
+    const chains = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChains({
+        client.startChains({
           ...txCtx,
           transactionHooks,
           items: Array.from({ length: 20 }, (_, i) => ({
@@ -390,9 +384,7 @@ export const stateResilienceTestSuite = ({
     );
 
     await withWorkers([await flakyWorker.start()], async () => {
-      await Promise.all(
-        jobChains.map(async (chain) => client.awaitJobChain(chain, completionOptions)),
-      );
+      await Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions)));
     });
   });
 
@@ -464,9 +456,9 @@ export const stateResilienceTestSuite = ({
         }),
       });
 
-      const jobChains = await withTransactionHooks(async (transactionHooks) =>
+      const chains = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startJobChains({
+          client.startChains({
             ...txCtx,
             transactionHooks,
             items: Array.from({ length: 20 }, (_, i) => ({
@@ -478,9 +470,7 @@ export const stateResilienceTestSuite = ({
       );
 
       await withWorkers([await flakyWorker.start()], async () => {
-        await Promise.all(
-          jobChains.map(async (chain) => client.awaitJobChain(chain, completionOptions)),
-        );
+        await Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions)));
       });
     },
   );
@@ -575,9 +565,9 @@ export const stateResilienceTestSuite = ({
         }),
       });
 
-      const jobChains = await withTransactionHooks(async (transactionHooks) =>
+      const chains = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startJobChains({
+          client.startChains({
             ...txCtx,
             transactionHooks,
             items: Array.from({ length: 20 }, (_, i) => ({
@@ -589,9 +579,7 @@ export const stateResilienceTestSuite = ({
       );
 
       await withWorkers([await flakyWorker1.start(), await flakyWorker2.start()], async () => {
-        await Promise.all(
-          jobChains.map(async (chain) => client.awaitJobChain(chain, completionOptions)),
-        );
+        await Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions)));
       });
     },
   );

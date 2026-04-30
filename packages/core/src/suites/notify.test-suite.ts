@@ -56,9 +56,9 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       });
 
       await withWorkers([await worker.start()], async () => {
-        const jobChain = await withTransactionHooks(async (transactionHooks) =>
+        const chain = await withTransactionHooks(async (transactionHooks) =>
           withTransaction(async (txCtx) =>
-            client.startJobChain({
+            client.startChain({
               ...txCtx,
               transactionHooks,
               typeName: "test",
@@ -68,9 +68,9 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         );
 
         const signal = AbortSignal.timeout(200);
-        await client.awaitJobChain(jobChain, { timeoutMs: 200 });
+        await client.awaitChain(chain, { timeoutMs: 200 });
         if (signal.aborted) {
-          expect.fail("Timed out waiting for job chain completion");
+          expect.fail("Timed out waiting for chain completion");
         }
       });
     },
@@ -122,9 +122,9 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     await withWorkers(
       await Promise.all(Array.from({ length: 5 }, async () => (await createWorker()).start())),
       async () => {
-        const jobChains = await withTransactionHooks(async (transactionHooks) =>
+        const chains = await withTransactionHooks(async (transactionHooks) =>
           withTransaction(async (txCtx) =>
-            client.startJobChains({
+            client.startChains({
               ...txCtx,
               transactionHooks,
               items: Array.from({ length: 5 }, (_, i) => ({
@@ -137,10 +137,10 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
         const signal = AbortSignal.timeout(200);
         await Promise.all(
-          jobChains.map(async (chain) => client.awaitJobChain(chain, { timeoutMs: 200 })),
+          chains.map(async (chain) => client.awaitChain(chain, { timeoutMs: 200 })),
         );
         if (signal.aborted) {
-          expect.fail("Timed out waiting for job chain completions");
+          expect.fail("Timed out waiting for chain completions");
         }
       },
     );
@@ -210,15 +210,15 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     await withWorkers([await worker1.start(), await worker2.start()], async () => {
-      const jobChain = await withTransactionHooks(async (transactionHooks) =>
+      const chain = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) => {
-          const blockerChain = await client.startJobChain({
+          const blockerChain = await client.startChain({
             ...txCtx,
             transactionHooks,
             typeName: "blocker",
             input: null,
           });
-          return client.startJobChain({
+          return client.startChain({
             ...txCtx,
             transactionHooks,
             typeName: "main",
@@ -229,12 +229,12 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       );
 
       const signal = AbortSignal.timeout(100);
-      await client.awaitJobChain(jobChain, {
+      await client.awaitChain(chain, {
         signal,
         timeoutMs: 200,
       });
       if (signal.aborted) {
-        expect.fail("Timed out waiting for job chain completion");
+        expect.fail("Timed out waiting for chain completion");
       }
     });
   });
@@ -306,9 +306,9 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     await withWorkers([await worker1.start(), await worker2.start()], async () => {
-      const jobChain = await withTransactionHooks(async (transactionHooks) =>
+      const chain = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startJobChain({
+          client.startChain({
             ...txCtx,
             transactionHooks,
             typeName: "step1",
@@ -318,9 +318,9 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       );
 
       const signal = AbortSignal.timeout(100);
-      await client.awaitJobChain(jobChain, { timeoutMs: 200 });
+      await client.awaitChain(chain, { timeoutMs: 200 });
       if (signal.aborted) {
-        expect.fail("Timed out waiting for job chain completion");
+        expect.fail("Timed out waiting for chain completion");
       }
     });
   });
@@ -382,9 +382,9 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     await withWorkers([await worker.start()], async () => {
-      const jobChain = await withTransactionHooks(async (transactionHooks) =>
+      const chain = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startJobChain({
+          client.startChain({
             ...txCtx,
             transactionHooks,
             typeName: "test",
@@ -397,11 +397,10 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
       await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.completeJobChain({
+          client.completeChain({
             ...txCtx,
             transactionHooks,
-            typeName: "test",
-            id: jobChain.id,
+            ...chain,
             complete: async ({ job, complete }) => {
               return complete(job, async () => ({ result: "from-external" }));
             },
@@ -479,9 +478,9 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         });
 
       await withWorkers([await (await createWorker()).start()], async () => {
-        const jobChain = await withTransactionHooks(async (transactionHooks) =>
+        const chain = await withTransactionHooks(async (transactionHooks) =>
           withTransaction(async (txCtx) =>
-            client.startJobChain({
+            client.startChain({
               ...txCtx,
               transactionHooks,
               typeName: "test",
@@ -494,7 +493,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         await sleep(10);
 
         await withWorkers([await (await createWorker()).start()], async () => {
-          await client.awaitJobChain(jobChain, { timeoutMs: 5000 });
+          await client.awaitChain(chain, { timeoutMs: 5000 });
         });
 
         await jobCompleted.promise;

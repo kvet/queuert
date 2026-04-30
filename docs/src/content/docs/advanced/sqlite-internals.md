@@ -74,18 +74,18 @@ Same structure as PostgreSQL, tracking applied migrations by name and timestamp.
 
 The SQLite adapter creates the same set of indexes as PostgreSQL, using partial indexes (`WHERE` clauses) where supported:
 
-| Index                             | Definition                                                                                     | Purpose                     |
-| --------------------------------- | ---------------------------------------------------------------------------------------------- | --------------------------- |
-| `job_acquisition_idx`             | `(type_name, scheduled_at) WHERE status = 'pending'`                                           | Job acquisition             |
-| `job_chain_index_idx`             | `UNIQUE (chain_id, chain_index)`                                                               | Chain position uniqueness   |
-| `job_deduplication_idx`           | `(deduplication_key, created_at DESC) WHERE deduplication_key IS NOT NULL AND chain_index = 0` | Deduplication lookup        |
-| `job_expired_lease_idx`           | `(type_name, leased_until) WHERE status = 'running' AND leased_until IS NOT NULL`              | Lease reaping               |
-| `job_blocker_chain_idx`           | `(blocked_by_chain_id)` on job_blocker                                                         | Blocker resolution          |
-| `job_chain_listing_idx`           | `(created_at DESC) WHERE chain_index = 0`                                                      | Chain listing               |
-| `job_listing_idx`                 | `(created_at DESC)`                                                                            | Job listing                 |
-| `job_listing_status_idx`          | `(status, created_at DESC)`                                                                    | Filtered listing            |
-| `job_listing_type_name_idx`       | `(type_name, created_at DESC)`                                                                 | Type-filtered listing       |
-| `job_chain_listing_type_name_idx` | `(type_name, created_at DESC) WHERE chain_index = 0`                                           | Type-filtered chain listing |
+| Index                         | Definition                                                                                     | Purpose                     |
+| ----------------------------- | ---------------------------------------------------------------------------------------------- | --------------------------- |
+| `job_acquisition_idx`         | `(type_name, scheduled_at) WHERE status = 'pending'`                                           | Job acquisition             |
+| `chain_index_idx`             | `UNIQUE (chain_id, chain_index)`                                                               | Chain position uniqueness   |
+| `job_deduplication_idx`       | `(deduplication_key, created_at DESC) WHERE deduplication_key IS NOT NULL AND chain_index = 0` | Deduplication lookup        |
+| `job_expired_lease_idx`       | `(type_name, leased_until) WHERE status = 'running' AND leased_until IS NOT NULL`              | Lease reaping               |
+| `job_blocker_chain_idx`       | `(blocked_by_chain_id)` on job_blocker                                                         | Blocker resolution          |
+| `chain_listing_idx`           | `(created_at DESC) WHERE chain_index = 0`                                                      | Chain listing               |
+| `job_listing_idx`             | `(created_at DESC)`                                                                            | Job listing                 |
+| `job_listing_status_idx`      | `(status, created_at DESC)`                                                                    | Filtered listing            |
+| `job_listing_type_name_idx`   | `(type_name, created_at DESC)`                                                                 | Type-filtered listing       |
+| `chain_listing_type_name_idx` | `(type_name, created_at DESC) WHERE chain_index = 0`                                           | Type-filtered chain listing |
 
 ## Locking and Concurrency
 
@@ -101,7 +101,7 @@ BEGIN;
 COMMIT;
 ```
 
-Under `BEGIN DEFERRED`, no lock is taken until the first write. Operations that need write-intent on a row before reading it (worker lease refetches, chain extension in `triggerJobs`) pass `lock: "exclusive"` to `getJobById` / `getJobChainById`. The SQLite adapter implements this with a no-op `UPDATE ... SET id = id RETURNING *`, which promotes the transaction to `RESERVED` and blocks other writers until commit. This mirrors the role `FOR UPDATE` plays in the Postgres adapter.
+Under `BEGIN DEFERRED`, no lock is taken until the first write. Operations that need write-intent on a row before reading it (worker lease refetches, chain extension in `triggerJobs`) pass `lock: "exclusive"` to `getJob` / `getChain`. The SQLite adapter implements this with a no-op `UPDATE ... SET id = id RETURNING *`, which promotes the transaction to `RESERVED` and blocks other writers until commit. This mirrors the role `FOR UPDATE` plays in the Postgres adapter.
 
 `BEGIN IMMEDIATE` is _not_ used by the bundled providers — it would force every transaction to take `RESERVED` upfront, including read-only ones. With WAL + a connection pool, that defeats the point of allowing concurrent readers.
 
@@ -165,7 +165,7 @@ Used for partial rollback within transactions — if a user callback or observab
 SQLite does not support writeable CTEs with RETURNING in the same way as PostgreSQL. Operations that PostgreSQL handles in a single CTE are split into multiple sequential queries within a transaction:
 
 - **`addJobBlockers`**: Separate INSERT for blockers, then UPDATE for job status
-- **`deleteJobChains`**: Separate SELECT to find connected chains, DELETE blockers, DELETE jobs
+- **`deleteChains`**: Separate SELECT to find connected chains, DELETE blockers, DELETE jobs
 - **`unblockJobs`**: Separate DELETE for resolved blockers, SELECT to check remaining, UPDATE for unblocked jobs
 
 This results in more round-trips per operation, but is safe under SQLite's exclusive locking model. See [Adapter Architecture](../adapters/) for the design rationale.
@@ -208,7 +208,7 @@ Incremental vacuum frees pages that are already marked as free by prior DELETE o
 
 ## Listing Queries and Locking
 
-`listJobChains` joins each root row with the last job in the chain. The `status` filter applies to the joined last job and cannot use an index — only `typeName` and date range filters narrow the scan before the join. Without these filters, every root row is scanned and joined. On deployments with frequent writes, unfiltered scans over large tables can extend write queue wait times because the read lock is held longer.
+`listChains` joins each root row with the last job in the chain. The `status` filter applies to the joined last job and cannot use an index — only `typeName` and date range filters narrow the scan before the join. Without these filters, every root row is scanned and joined. On deployments with frequent writes, unfiltered scans over large tables can extend write queue wait times because the read lock is held longer.
 
 `listJobs` uses straightforward indexed scans without a join and is efficient at any scale.
 

@@ -69,9 +69,9 @@ describe("Metrics", () => {
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -81,24 +81,24 @@ describe("Metrics", () => {
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(jobChain, completionOptions);
+      await client.awaitChain(chain, completionOptions);
     });
 
     await expectMetrics([
-      { method: "jobChainCreated", args: { typeName: "test" } },
+      { method: "chainCreated", args: { typeName: "test" } },
       { method: "jobCreated", args: { typeName: "test" } },
       { method: "workerStarted", args: { workerId: "worker" } },
       { method: "jobAttemptStarted", args: { typeName: "test", status: "running" } },
       { method: "jobAttemptCompleted", args: { typeName: "test", output: { result: true } } },
       { method: "jobCompleted", args: { typeName: "test", output: { result: true } } },
-      { method: "jobChainCompleted", args: { typeName: "test", output: { result: true } } },
+      { method: "chainCompleted", args: { typeName: "test", output: { result: true } } },
       { method: "workerStopping", args: { workerId: "worker" } },
       { method: "workerStopped", args: { workerId: "worker" } },
     ]);
 
     await expectHistograms([
       { method: "jobDuration", args: { typeName: "test" } },
-      { method: "jobChainDuration", args: { typeName: "test" } },
+      { method: "chainDuration", args: { typeName: "test" } },
       { method: "jobAttemptDuration", args: { typeName: "test", workerId: "worker" } },
     ]);
   });
@@ -153,7 +153,7 @@ describe("Metrics", () => {
 
     const job = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -163,11 +163,11 @@ describe("Metrics", () => {
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(job, completionOptions);
+      await client.awaitChain(job, completionOptions);
     });
 
     await expectMetrics([
-      { method: "jobChainCreated" },
+      { method: "chainCreated" },
       { method: "jobCreated" },
       { method: "workerStarted" },
       { method: "jobAttemptStarted" },
@@ -179,7 +179,7 @@ describe("Metrics", () => {
       { method: "jobAttemptStarted" },
       { method: "jobAttemptCompleted" },
       { method: "jobCompleted" },
-      { method: "jobChainCompleted" },
+      { method: "chainCompleted" },
       { method: "workerStopping" },
       { method: "workerStopped" },
     ]);
@@ -253,9 +253,9 @@ describe("Metrics", () => {
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "linear",
@@ -265,11 +265,11 @@ describe("Metrics", () => {
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(jobChain, completionOptions);
+      await client.awaitChain(chain, completionOptions);
     });
 
     await expectMetrics([
-      { method: "jobChainCreated", args: { typeName: "linear" } },
+      { method: "chainCreated", args: { typeName: "linear" } },
       { method: "jobCreated", args: { typeName: "linear" } },
       { method: "workerStarted" },
       { method: "jobAttemptStarted", args: { typeName: "linear" } },
@@ -283,7 +283,7 @@ describe("Metrics", () => {
       { method: "jobAttemptStarted", args: { typeName: "linear_next_next" } },
       { method: "jobAttemptCompleted", args: { typeName: "linear_next_next" } },
       { method: "jobCompleted", args: { typeName: "linear_next_next" } },
-      { method: "jobChainCompleted", args: { typeName: "linear" } },
+      { method: "chainCompleted", args: { typeName: "linear" } },
       { method: "workerStopping" },
       { method: "workerStopped" },
     ]);
@@ -294,7 +294,7 @@ describe("Metrics", () => {
       { method: "jobDuration", args: { typeName: "linear_next" } },
       { method: "jobAttemptDuration", args: { typeName: "linear_next" } },
       { method: "jobDuration", args: { typeName: "linear_next_next" } },
-      { method: "jobChainDuration", args: { typeName: "linear" } },
+      { method: "chainDuration", args: { typeName: "linear" } },
       { method: "jobAttemptDuration", args: { typeName: "linear_next_next" } },
     ]);
   });
@@ -364,33 +364,33 @@ describe("Metrics", () => {
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) => {
-        const dependencyJobChain = await client.startJobChain({
+        const dependencyChain = await client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "blocker",
           input: { value: 0 },
         });
 
-        return client.startJobChain({
+        return client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "main",
           input: { start: true },
-          blockers: [dependencyJobChain],
+          blockers: [dependencyChain],
         });
       }),
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(jobChain, completionOptions);
+      await client.awaitChain(chain, completionOptions);
     });
 
     await expectMetrics([
-      { method: "jobChainCreated", args: { typeName: "blocker" } },
+      { method: "chainCreated", args: { typeName: "blocker" } },
       { method: "jobCreated", args: { typeName: "blocker" } },
-      { method: "jobChainCreated", args: { typeName: "main" } },
+      { method: "chainCreated", args: { typeName: "main" } },
       { method: "jobCreated", args: { typeName: "main" } },
       { method: "jobBlocked", args: { typeName: "main" } },
       { method: "workerStarted" },
@@ -401,12 +401,12 @@ describe("Metrics", () => {
       { method: "jobAttemptStarted", args: { typeName: "blocker" } },
       { method: "jobAttemptCompleted", args: { typeName: "blocker" } },
       { method: "jobCompleted", args: { typeName: "blocker" } },
-      { method: "jobChainCompleted", args: { typeName: "blocker" } },
+      { method: "chainCompleted", args: { typeName: "blocker" } },
       { method: "jobUnblocked", args: { typeName: "main" } },
       { method: "jobAttemptStarted", args: { typeName: "main" } },
       { method: "jobAttemptCompleted", args: { typeName: "main" } },
       { method: "jobCompleted", args: { typeName: "main" } },
-      { method: "jobChainCompleted", args: { typeName: "main" } },
+      { method: "chainCompleted", args: { typeName: "main" } },
       { method: "workerStopping" },
       { method: "workerStopped" },
     ]);
@@ -436,9 +436,9 @@ describe("Metrics", () => {
       jobTypes,
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -449,11 +449,10 @@ describe("Metrics", () => {
 
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.completeJobChain({
+        client.completeChain({
           ...txCtx,
           transactionHooks,
-          typeName: "test",
-          id: jobChain.id,
+          ...chain,
           complete: async ({ job, complete }) => {
             return complete(job, async () => ({ result: 84 }));
           },
@@ -462,10 +461,10 @@ describe("Metrics", () => {
     );
 
     await expectMetrics([
-      { method: "jobChainCreated", args: { input: { value: 42 } } },
+      { method: "chainCreated", args: { input: { value: 42 } } },
       { method: "jobCreated", args: { input: { value: 42 } } },
       { method: "jobCompleted", args: { output: { result: 84 }, workerId: null } },
-      { method: "jobChainCompleted", args: { output: { result: 84 } } },
+      { method: "chainCompleted", args: { output: { result: 84 } } },
     ]);
   });
 
@@ -508,14 +507,14 @@ describe("Metrics", () => {
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(jobChain, completionOptions);
+      await client.awaitChain(chain, completionOptions);
     });
 
     const metricNames = await getMetricNames();
@@ -561,14 +560,14 @@ describe("Metrics", () => {
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(jobChain, completionOptions);
+      await client.awaitChain(chain, completionOptions);
     });
 
     const metricNames = await getMetricNames();
@@ -657,9 +656,9 @@ describe("Metrics", () => {
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
@@ -667,15 +666,15 @@ describe("Metrics", () => {
       await jobStarted.promise;
       await sleep(10);
 
-      const successJob = await withTransactionHooks(async (transactionHooks) =>
+      const successChain = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+          client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
         ),
       );
 
       await Promise.all([
-        client.awaitJobChain(jobChain, completionOptions),
-        client.awaitJobChain(successJob, completionOptions),
+        client.awaitChain(chain, completionOptions),
+        client.awaitChain(successChain, completionOptions),
       ]);
       await jobCompleted.promise;
     });
@@ -748,14 +747,14 @@ describe("Metrics", () => {
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(jobChain, completionOptions);
+      await client.awaitChain(chain, completionOptions);
     });
 
     const metricNames = await getMetricNames();
@@ -808,14 +807,14 @@ describe("Metrics", () => {
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(jobChain, {
+      await client.awaitChain(chain, {
         pollIntervalMs: 100,
         timeoutMs: 5000,
       });
@@ -825,7 +824,7 @@ describe("Metrics", () => {
     expect(metricNames).toContain("queuert.notify_adapter.error");
   });
 
-  it("tracks metrics for job chain deletion", async ({
+  it("tracks metrics for chain deletion", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -845,22 +844,22 @@ describe("Metrics", () => {
       jobTypes,
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.deleteJobChains({ ...txCtx, transactionHooks, ids: [jobChain.id] }),
+        client.deleteChains({ ...txCtx, transactionHooks, ids: [chain.id] }),
       ),
     );
 
     await expectMetrics([
-      { method: "jobChainCreated", args: { typeName: "test" } },
+      { method: "chainCreated", args: { typeName: "test" } },
       { method: "jobCreated", args: { typeName: "test" } },
-      { method: "jobChainDeleted", args: { typeName: "test" } },
+      { method: "chainDeleted", args: { typeName: "test" } },
     ]);
   });
 
@@ -884,9 +883,9 @@ describe("Metrics", () => {
       jobTypes,
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -898,12 +897,12 @@ describe("Metrics", () => {
 
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.triggerJob({ ...txCtx, transactionHooks, id: jobChain.id }),
+        client.triggerJob({ ...txCtx, transactionHooks, id: chain.id }),
       ),
     );
 
     await expectMetrics([
-      { method: "jobChainCreated", args: { typeName: "test" } },
+      { method: "chainCreated", args: { typeName: "test" } },
       { method: "jobCreated", args: { typeName: "test" } },
       { method: "jobTriggered", args: { typeName: "test" } },
     ]);
@@ -952,9 +951,9 @@ describe("Spans", () => {
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -964,7 +963,7 @@ describe("Spans", () => {
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(jobChain, completionOptions);
+      await client.awaitChain(chain, completionOptions);
     });
 
     await expectSpans([
@@ -1032,7 +1031,7 @@ describe("Spans", () => {
 
     const job = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -1042,7 +1041,7 @@ describe("Spans", () => {
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(job, completionOptions);
+      await client.awaitChain(job, completionOptions);
     });
 
     await expectSpans([
@@ -1154,9 +1153,9 @@ describe("Spans", () => {
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "linear",
@@ -1166,7 +1165,7 @@ describe("Spans", () => {
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(jobChain, completionOptions);
+      await client.awaitChain(chain, completionOptions);
     });
 
     await expectSpans([
@@ -1275,27 +1274,27 @@ describe("Spans", () => {
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) => {
-        const dependencyJobChain = await client.startJobChain({
+        const dependencyChain = await client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "blocker",
           input: { value: 0 },
         });
 
-        return client.startJobChain({
+        return client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "main",
           input: { start: true },
-          blockers: [dependencyJobChain],
+          blockers: [dependencyChain],
         });
       }),
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(jobChain, completionOptions);
+      await client.awaitChain(chain, completionOptions);
     });
 
     await expectSpans([
@@ -1394,9 +1393,9 @@ describe("Spans", () => {
     });
 
     // Create and complete the blocker chain first
-    const dependencyJobChain = await withTransactionHooks(async (transactionHooks) =>
+    const dependencyChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "blocker",
@@ -1406,24 +1405,24 @@ describe("Spans", () => {
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(dependencyJobChain, completionOptions);
+      await client.awaitChain(dependencyChain, completionOptions);
     });
 
     // Now create main chain with already-completed blocker
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "main",
           input: { start: true },
-          blockers: [dependencyJobChain],
+          blockers: [dependencyChain],
         }),
       ),
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(jobChain, completionOptions);
+      await client.awaitChain(chain, completionOptions);
     });
 
     await expectSpans([
@@ -1481,21 +1480,21 @@ describe("Spans", () => {
 
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) => [
-        await client.startJobChain({
+        await client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
           input: { value: 1 },
           deduplication: { key: "same-key" },
         }),
-        await client.startJobChain({
+        await client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
           input: { value: 2 },
           deduplication: { key: "same-key" },
         }),
-        await client.startJobChain({
+        await client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -1550,9 +1549,9 @@ describe("Spans", () => {
       jobTypes,
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -1563,11 +1562,10 @@ describe("Spans", () => {
 
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.completeJobChain({
+        client.completeChain({
           ...txCtx,
           transactionHooks,
-          typeName: "test",
-          id: jobChain.id,
+          ...chain,
           complete: async ({ job, complete }) => {
             return complete(job, async () => ({ result: 84 }));
           },
@@ -1612,9 +1610,9 @@ describe("Spans", () => {
       jobTypes,
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "awaiting-approval",
@@ -1625,11 +1623,10 @@ describe("Spans", () => {
 
     const completedChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.completeJobChain({
+        client.completeChain({
           ...txCtx,
           transactionHooks,
-          typeName: "awaiting-approval",
-          id: jobChain.id,
+          ...chain,
           complete: async ({ job, complete }) => {
             if (job.typeName === "awaiting-approval") {
               job = await complete(job, async ({ continueWith }) => {
@@ -1721,9 +1718,9 @@ describe("Gauges", () => {
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -1737,7 +1734,7 @@ describe("Gauges", () => {
       jobTypeProcessingChange: [],
     });
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(jobChain, completionOptions);
+      await client.awaitChain(chain, completionOptions);
 
       await sleep(100);
       await expectGauges({
@@ -1806,9 +1803,9 @@ describe("Gauges", () => {
       }),
     });
 
-    const emailJob = await withTransactionHooks(async (transactionHooks) =>
+    const emailChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "email",
@@ -1816,9 +1813,9 @@ describe("Gauges", () => {
         }),
       ),
     );
-    const smsJob = await withTransactionHooks(async (transactionHooks) =>
+    const smsChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({
+        client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "sms",
@@ -1829,8 +1826,8 @@ describe("Gauges", () => {
 
     await withWorkers([await worker.start()], async () => {
       await Promise.all([
-        client.awaitJobChain(emailJob, completionOptions),
-        client.awaitJobChain(smsJob, completionOptions),
+        client.awaitChain(emailChain, completionOptions),
+        client.awaitChain(smsChain, completionOptions),
       ]);
 
       expect(processedTypes).toContain("email");
@@ -1895,7 +1892,7 @@ describe("Rollback", () => {
 
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) => {
-        await client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null });
+        await client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null });
         throw new Error("simulated rollback");
       }),
     ).catch(() => {});
@@ -1943,13 +1940,13 @@ describe("Rollback", () => {
 
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) => {
-        const blocker = await client.startJobChain({
+        const blocker = await client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "blocker",
           input: null,
         });
-        await client.startJobChain({
+        await client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "main",
@@ -2001,26 +1998,25 @@ describe("Rollback", () => {
       jobTypes,
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) => {
-        await client.completeJobChain({
+        await client.completeChain({
           ...txCtx,
           transactionHooks,
-          typeName: "test",
-          id: jobChain.id,
+          ...chain,
           complete: async ({ job, complete }) => complete(job, async () => ({ result: 42 })),
         });
         throw new Error("simulated rollback");
       }),
     ).catch(() => {});
 
-    await expectMetrics([{ method: "jobChainCreated" }, { method: "jobCreated" }]);
+    await expectMetrics([{ method: "chainCreated" }, { method: "jobCreated" }]);
 
     await expectSpans([
       { name: "create chain.test", kind: "PRODUCER" },
@@ -2083,18 +2079,18 @@ describe("Rollback", () => {
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(jobChain, completionOptions);
+      await client.awaitChain(chain, completionOptions);
     });
 
     await expectMetrics([
-      { method: "jobChainCreated" },
+      { method: "chainCreated" },
       { method: "jobCreated" },
       { method: "workerStarted" },
       { method: "jobAttemptStarted" },
@@ -2103,7 +2099,7 @@ describe("Rollback", () => {
       { method: "jobAttemptStarted" },
       { method: "jobAttemptCompleted" },
       { method: "jobCompleted" },
-      { method: "jobChainCompleted" },
+      { method: "chainCompleted" },
       { method: "workerStopping" },
       { method: "workerStopped" },
     ]);
@@ -2171,18 +2167,18 @@ describe("Rollback", () => {
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(jobChain, completionOptions);
+      await client.awaitChain(chain, completionOptions);
     });
 
     await expectMetrics([
-      { method: "jobChainCreated" },
+      { method: "chainCreated" },
       { method: "jobCreated" },
       { method: "workerStarted" },
       { method: "jobAttemptStarted" },
@@ -2191,7 +2187,7 @@ describe("Rollback", () => {
       { method: "jobAttemptStarted" },
       { method: "jobAttemptCompleted" },
       { method: "jobCompleted" },
-      { method: "jobChainCompleted" },
+      { method: "chainCompleted" },
       { method: "workerStopping" },
       { method: "workerStopped" },
     ]);
@@ -2254,18 +2250,18 @@ describe("Rollback", () => {
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, transactionHooks, typeName: "linear", input: null }),
+        client.startChain({ ...txCtx, transactionHooks, typeName: "linear", input: null }),
       ),
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(jobChain, completionOptions);
+      await client.awaitChain(chain, completionOptions);
     });
 
     await expectMetrics([
-      { method: "jobChainCreated" },
+      { method: "chainCreated" },
       { method: "jobCreated" },
       { method: "workerStarted" },
       { method: "jobAttemptStarted" },
@@ -2277,7 +2273,7 @@ describe("Rollback", () => {
       { method: "jobAttemptStarted" },
       { method: "jobAttemptCompleted" },
       { method: "jobCompleted" },
-      { method: "jobChainCompleted" },
+      { method: "chainCompleted" },
       { method: "workerStopping" },
       { method: "workerStopped" },
     ]);
@@ -2338,18 +2334,18 @@ describe("Rollback", () => {
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(jobChain, completionOptions);
+      await client.awaitChain(chain, completionOptions);
     });
 
     await expectMetrics([
-      { method: "jobChainCreated" },
+      { method: "chainCreated" },
       { method: "jobCreated" },
       { method: "workerStarted" },
       { method: "jobAttemptStarted" },
@@ -2358,7 +2354,7 @@ describe("Rollback", () => {
       { method: "jobAttemptStarted" },
       { method: "jobAttemptCompleted" },
       { method: "jobCompleted" },
-      { method: "jobChainCompleted" },
+      { method: "chainCompleted" },
       { method: "workerStopping" },
       { method: "workerStopped" },
     ]);
@@ -2403,20 +2399,19 @@ describe("Rollback", () => {
       jobTypes,
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
     // First attempt: unblockJobs fails inside finishJob → entire transaction rolls back
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        erroringClient.completeJobChain({
+        erroringClient.completeChain({
           ...txCtx,
           transactionHooks,
-          typeName: "test",
-          id: jobChain.id,
+          ...chain,
           complete: async ({ job, complete }) => complete(job, async () => ({ result: 42 })),
         }),
       ),
@@ -2425,22 +2420,21 @@ describe("Rollback", () => {
     // Second attempt: succeeds
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.completeJobChain({
+        client.completeChain({
           ...txCtx,
           transactionHooks,
-          typeName: "test",
-          id: jobChain.id,
+          ...chain,
           complete: async ({ job, complete }) => complete(job, async () => ({ result: 42 })),
         }),
       ),
     );
 
     await expectMetrics([
-      { method: "jobChainCreated" },
+      { method: "chainCreated" },
       { method: "jobCreated" },
       { method: "stateAdapterError" },
       { method: "jobCompleted" },
-      { method: "jobChainCompleted" },
+      { method: "chainCompleted" },
     ]);
   });
 
@@ -2513,18 +2507,18 @@ describe("Rollback", () => {
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, transactionHooks, typeName: "linear", input: null }),
+        client.startChain({ ...txCtx, transactionHooks, typeName: "linear", input: null }),
       ),
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(jobChain, completionOptions);
+      await client.awaitChain(chain, completionOptions);
     });
 
     await expectMetrics([
-      { method: "jobChainCreated" },
+      { method: "chainCreated" },
       { method: "jobCreated" },
       { method: "workerStarted" },
       { method: "jobAttemptStarted" },
@@ -2537,7 +2531,7 @@ describe("Rollback", () => {
       { method: "jobAttemptStarted" },
       { method: "jobAttemptCompleted" },
       { method: "jobCompleted" },
-      { method: "jobChainCompleted" },
+      { method: "chainCompleted" },
       { method: "workerStopping" },
       { method: "workerStopped" },
     ]);
@@ -2565,7 +2559,7 @@ describe("Rollback", () => {
 
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) => {
-        await client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null });
+        await client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null });
         throw new Error("simulated rollback");
       }),
     ).catch(() => {});
@@ -2642,14 +2636,14 @@ describe("Rollback", () => {
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, transactionHooks, typeName: "linear", input: null }),
+        client.startChain({ ...txCtx, transactionHooks, typeName: "linear", input: null }),
       ),
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(jobChain, completionOptions);
+      await client.awaitChain(chain, completionOptions);
     });
 
     // The first attempt's continueWith creates a "create job.linear_next" span
@@ -2703,7 +2697,7 @@ describe("Rollback", () => {
     ]);
   });
 
-  it("ends rolled-back startJobChain spans when handler throws after complete returns", async ({
+  it("ends rolled-back startChain spans when handler throws after complete returns", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -2739,7 +2733,7 @@ describe("Rollback", () => {
             attemptHandler: async ({ complete }) => {
               const result = await complete(
                 async ({ continueWith: _, transactionHooks, ...txCtx }) => {
-                  await client.startJobChain({
+                  await client.startChain({
                     ...txCtx,
                     transactionHooks,
                     typeName: "other",
@@ -2759,17 +2753,17 @@ describe("Rollback", () => {
       }),
     });
 
-    const jobChain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startJobChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitJobChain(jobChain, completionOptions);
+      await client.awaitChain(chain, completionOptions);
     });
 
-    // startJobChain inside complete creates chain + job spans eagerly.
+    // startChain inside complete creates chain + job spans eagerly.
     // When the handler throws after complete returns,
     // completeSavepointContext.reject() rolls back hooks — discarding the
     // buffered span end() calls and orphaning both spans.
@@ -2778,7 +2772,7 @@ describe("Rollback", () => {
       { name: "create job.test", kind: "PRODUCER", parentName: "create chain.test" },
       // First attempt: complete span ends before savepoint rollback ends the other spans
       { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.test" },
-      // Rolled-back startJobChain spans are ended with ERROR
+      // Rolled-back startChain spans are ended with ERROR
       { name: "create chain.other", kind: "PRODUCER", status: "ERROR" },
       {
         name: "create job.other",

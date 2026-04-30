@@ -4,8 +4,8 @@ import { type StateAdapterConformanceContext } from "./types.js";
 
 const LOCK_BLOCK_OBSERVATION_MS = 100;
 
-export const getJobByIdGroup: ConformanceGroup<StateAdapterConformanceContext> = {
-  name: "getJobById",
+export const getJobGroup: ConformanceGroup<StateAdapterConformanceContext> = {
+  name: "getJob",
   cases: [
     {
       name: "returns undefined for nonexistent job ID",
@@ -26,7 +26,7 @@ export const getJobByIdGroup: ConformanceGroup<StateAdapterConformanceContext> =
           }),
         );
         const nonexistentId = real.id.slice(0, -1) + (real.id.endsWith("0") ? "1" : "0");
-        const job = await stateAdapter.getJobById({ jobId: nonexistentId });
+        const job = await stateAdapter.getJob({ jobId: nonexistentId });
         expect(job).toBeUndefined();
       },
     },
@@ -59,7 +59,7 @@ export const getJobByIdGroup: ConformanceGroup<StateAdapterConformanceContext> =
 
         // Tx A: acquire the exclusive lock on `seed`, then wait on the gate.
         const holderTx = stateAdapter.withTransaction(async (txCtx) => {
-          await stateAdapter.getJobById({ txCtx, jobId: seed.id, lock: "exclusive" });
+          await stateAdapter.getJob({ txCtx, jobId: seed.id, lock: "exclusive" });
           signalLockHeld!();
           await holderGate;
         });
@@ -70,7 +70,7 @@ export const getJobByIdGroup: ConformanceGroup<StateAdapterConformanceContext> =
         let waiterResolved = false;
         const waiterTx = stateAdapter
           .withTransaction(async (txCtx) =>
-            stateAdapter.getJobById({ txCtx, jobId: seed.id, lock: "exclusive" }),
+            stateAdapter.getJob({ txCtx, jobId: seed.id, lock: "exclusive" }),
           )
           .then((job) => {
             waiterResolved = true;

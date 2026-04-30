@@ -58,7 +58,7 @@ type JobCreatedLogEntry = LogEntry<
   "Job created",
   {
     input: unknown;
-    blockers: JobChainData[];
+    blockers: ChainData[];
     scheduledAt?: Date;
     scheduleAfterMs?: number;
   } & JobBasicData
@@ -119,29 +119,24 @@ type JobCompletedLogEntry = LogEntry<
   { output?: unknown; continuedWith?: JobBasicData } & JobProcessingData & WorkerBasicData
 >;
 
-/** Job chain identification data included in log entries. */
-export type JobChainData = {
+/** Chain identification data included in log entries. */
+export type ChainData = {
   id: string;
   typeName: string;
 };
-type JobChainCreatedLogEntry = LogEntry<
-  "job_chain_created",
+type ChainCreatedLogEntry = LogEntry<
+  "chain_created",
   "info",
-  "Job chain created",
-  JobChainData & { input: unknown }
+  "Chain created",
+  ChainData & { input: unknown }
 >;
-type JobChainCompletedLogEntry = LogEntry<
-  "job_chain_completed",
+type ChainCompletedLogEntry = LogEntry<
+  "chain_completed",
   "info",
-  "Job chain completed",
-  { output: unknown } & JobChainData
+  "Chain completed",
+  { output: unknown } & ChainData
 >;
-type JobChainDeletedLogEntry = LogEntry<
-  "job_chain_deleted",
-  "info",
-  "Job chain deleted",
-  JobChainData
->;
+type ChainDeletedLogEntry = LogEntry<"chain_deleted", "info", "Chain deleted", ChainData>;
 
 type JobTriggeredLogEntry = LogEntry<"job_triggered", "info", "Job triggered", JobBasicData>;
 
@@ -149,13 +144,13 @@ type JobBlockedLogEntry = LogEntry<
   "job_blocked",
   "info",
   "Job blocked by incomplete chains",
-  { blockedByChains: JobChainData[] } & JobBasicData
+  { blockedByChains: ChainData[] } & JobBasicData
 >;
 type JobUnblockedLogEntry = LogEntry<
   "job_unblocked",
   "info",
   "Job unblocked",
-  { unblockedByChain: JobChainData } & JobBasicData
+  { unblockedByChain: ChainData } & JobBasicData
 >;
 
 type NotifyAdapterErrorLogEntry = LogEntry<
@@ -199,10 +194,10 @@ type TypedLogEntry =
   | JobAttemptFailedLogEntry
   | JobAttemptCompletedLogEntry
   | JobCompletedLogEntry
-  // job chain
-  | JobChainCreatedLogEntry
-  | JobChainCompletedLogEntry
-  | JobChainDeletedLogEntry
+  // chain
+  | ChainCreatedLogEntry
+  | ChainCompletedLogEntry
+  | ChainDeletedLogEntry
   // trigger
   | JobTriggeredLogEntry
   // blockers

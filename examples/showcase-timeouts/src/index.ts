@@ -126,7 +126,7 @@ console.log("Fetch completes before timeout.\n");
 
 const fetch1 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startJobChain({
+    client.startChain({
       sql: txSql,
       transactionHooks,
       typeName: "fetch-with-timeout",
@@ -134,7 +134,7 @@ const fetch1 = await withTransactionHooks(async (transactionHooks) =>
     }),
   ),
 );
-const result1 = await client.awaitJobChain(fetch1, { timeoutMs: 5000 });
+const result1 = await client.awaitChain(fetch1, { timeoutMs: 5000 });
 console.log(`Result: ${JSON.stringify(result1.output)}`);
 assert.ok("data" in result1.output);
 
@@ -144,7 +144,7 @@ console.log("Fetch times out before completing.\n");
 
 const fetch2 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startJobChain({
+    client.startChain({
       sql: txSql,
       transactionHooks,
       typeName: "fetch-with-timeout",
@@ -152,7 +152,7 @@ const fetch2 = await withTransactionHooks(async (transactionHooks) =>
     }),
   ),
 );
-const result2 = await client.awaitJobChain(fetch2, { timeoutMs: 5000 });
+const result2 = await client.awaitChain(fetch2, { timeoutMs: 5000 });
 console.log(`Result: ${JSON.stringify(result2.output)}`);
 assert.ok("timedOut" in result2.output);
 
@@ -160,9 +160,9 @@ assert.ok("timedOut" in result2.output);
 console.log("\n--- Scenario 2: Hard Timeout via Lease ---");
 console.log("Job with leaseConfig completes within lease period.\n");
 
-const longJob = await withTransactionHooks(async (transactionHooks) =>
+const longChain = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startJobChain({
+    client.startChain({
       sql: txSql,
       transactionHooks,
       typeName: "long-running-job",
@@ -170,7 +170,7 @@ const longJob = await withTransactionHooks(async (transactionHooks) =>
     }),
   ),
 );
-const result3 = await client.awaitJobChain(longJob, { timeoutMs: 5000 });
+const result3 = await client.awaitChain(longChain, { timeoutMs: 5000 });
 console.log(`Result: ${JSON.stringify(result3.output)}`);
 assert.ok("completed" in result3.output);
 assert.equal(result3.output.attempt, 1);

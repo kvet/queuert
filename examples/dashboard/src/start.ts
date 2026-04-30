@@ -1,7 +1,7 @@
 /**
  * Job Populator
  *
- * Creates job chains matching the 4 standard demo scenarios and processes them,
+ * Creates chains matching the 4 standard demo scenarios and processes them,
  * populating the shared SQLite database for the dashboard to display.
  *
  * Usage: bun run start
@@ -116,19 +116,19 @@ console.log("\n=== Dashboard Job Populator ===\n");
 
 // Scenario 1: Single Job
 console.log("--- Scenario 1: Single Job ---");
-const greetJob = await withTransactionHooks(async (transactionHooks) =>
+const greetChain = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
-    client.startJobChain({ ...ctx, transactionHooks, typeName: "greet", input: { name: "World" } }),
+    client.startChain({ ...ctx, transactionHooks, typeName: "greet", input: { name: "World" } }),
   ),
 );
-const greetResult = await client.awaitJobChain(greetJob, { timeoutMs: 5000 });
+const greetResult = await client.awaitChain(greetChain, { timeoutMs: 5000 });
 console.log("Result:", greetResult.output);
 
 // Scenario 2: Continuations
 console.log("\n--- Scenario 2: Continuations ---");
-const orderJob = await withTransactionHooks(async (transactionHooks) =>
+const orderChain = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
-    client.startJobChain({
+    client.startChain({
       ...ctx,
       transactionHooks,
       typeName: "order:validate",
@@ -136,26 +136,26 @@ const orderJob = await withTransactionHooks(async (transactionHooks) =>
     }),
   ),
 );
-const orderResult = await client.awaitJobChain(orderJob, { timeoutMs: 10000 });
+const orderResult = await client.awaitChain(orderChain, { timeoutMs: 10000 });
 console.log("Result:", orderResult.output);
 
 // Scenario 3: Blockers (fan-out/fan-in)
 console.log("\n--- Scenario 3: Blockers ---");
-const blockerJob = await withTransactionHooks(async (transactionHooks) =>
+const blockerChain = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) => {
-    const userBlocker = await client.startJobChain({
+    const userBlocker = await client.startChain({
       ...ctx,
       transactionHooks,
       typeName: "fetch-user",
       input: { userId: "user-1" },
     });
-    const permBlocker = await client.startJobChain({
+    const permBlocker = await client.startChain({
       ...ctx,
       transactionHooks,
       typeName: "fetch-permissions",
       input: { userId: "user-1" },
     });
-    return client.startJobChain({
+    return client.startChain({
       ...ctx,
       transactionHooks,
       typeName: "process-with-blockers",
@@ -164,14 +164,14 @@ const blockerJob = await withTransactionHooks(async (transactionHooks) =>
     });
   }),
 );
-const blockerResult = await client.awaitJobChain(blockerJob, { timeoutMs: 10000 });
+const blockerResult = await client.awaitChain(blockerChain, { timeoutMs: 10000 });
 console.log("Result:", blockerResult.output);
 
 // Scenario 4: Retries
 console.log("\n--- Scenario 4: Retries ---");
-const retryJob = await withTransactionHooks(async (transactionHooks) =>
+const retryChain = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
-    client.startJobChain({
+    client.startChain({
       ...ctx,
       transactionHooks,
       typeName: "might-fail",
@@ -179,14 +179,14 @@ const retryJob = await withTransactionHooks(async (transactionHooks) =>
     }),
   ),
 );
-const retryResult = await client.awaitJobChain(retryJob, { timeoutMs: 5000 });
+const retryResult = await client.awaitChain(retryChain, { timeoutMs: 5000 });
 console.log("Result:", retryResult.output);
 
 // Scenario 5: Scheduled Job (1 hour in the future — trigger it from the dashboard)
 console.log("\n--- Scenario 5: Scheduled Job ---");
 await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
-    client.startJobChain({
+    client.startChain({
       ...ctx,
       transactionHooks,
       typeName: "scheduled-report",

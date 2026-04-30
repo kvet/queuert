@@ -1,11 +1,11 @@
 import { type StateJob } from "../state-adapter/state-adapter.js";
-import { type JobChain } from "./job-chain.types.js";
+import { type Chain } from "./chain.types.js";
 
-export type * from "./job-chain.types.js";
+export type * from "./chain.types.js";
 
-export const mapStateJobPairToJobChain = (
+export const mapStatePairToChain = (
   stateJobPair: [StateJob, StateJob | undefined],
-): JobChain<any, any, any, any> => {
+): Chain<any, any, any, any> => {
   const [initialJob, currentJob] = stateJobPair;
   const effectiveJob = currentJob ?? initialJob;
 

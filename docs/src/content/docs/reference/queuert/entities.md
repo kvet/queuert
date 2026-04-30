@@ -1,6 +1,6 @@
 ---
 title: Entities
-description: Core entity types — Job, JobChain, and resolved variants — for the queuert core package.
+description: Core entity types — Job, Chain, and resolved variants — for the queuert core package.
 sidebar:
   order: 4
 ---
@@ -61,10 +61,10 @@ type ResolvedJobWithBlockers<
 
 A `ResolvedJob` extended with resolved blocker chains. **blockers** contains the completed blocker chain data, available inside worker handlers when the job type declares blockers.
 
-## JobChain
+## Chain
 
 ```typescript
-type JobChain<TJobId, TChainTypeName, TInput, TOutput> = {
+type Chain<TJobId, TChainTypeName, TInput, TOutput> = {
   id: TJobId;
   typeName: TChainTypeName;
   input: TInput;
@@ -79,31 +79,31 @@ type JobChain<TJobId, TChainTypeName, TInput, TOutput> = {
 
 A discriminated union on **status**. Represents the full lifecycle of a chain from creation to completion. The **completed** variant includes the chain output and completion timestamp.
 
-## JobChainStatus
+## ChainStatus
 
 ```typescript
-type JobChainStatus = "blocked" | "pending" | "running" | "completed";
+type ChainStatus = "blocked" | "pending" | "running" | "completed";
 ```
 
 The four possible chain states. Used in list filters and discriminated union narrowing.
 
-## CompletedJobChain
+## CompletedChain
 
 ```typescript
-type CompletedJobChain<TJobChain extends JobChain<any, any, any, any>> = TJobChain & {
+type CompletedChain<TChain extends Chain<any, any, any, any>> = TChain & {
   status: "completed";
 };
 ```
 
-`JobChain` narrowed to `status: "completed"`. Guarantees the presence of **output** and **completedAt** fields.
+`Chain` narrowed to `status: "completed"`. Guarantees the presence of **output** and **completedAt** fields.
 
-## ResolvedJobChain
+## ResolvedChain
 
 ```typescript
-type ResolvedJobChain<TJobId, TJobTypeDefinitions, TJobTypeName>;
+type ResolvedChain<TJobId, TJobTypeDefinitions, TJobTypeName>;
 ```
 
-A `JobChain` whose generic parameters have been resolved against job type definitions — typed input, output, and type name derived from the declared job types. Returned by client read methods like `getJobChain` and `listJobChains` when narrowed by `typeName`.
+A `Chain` whose generic parameters have been resolved against job type definitions — typed input, output, and type name derived from the declared job types. Returned by client read methods like `getChain` and `listChains` when narrowed by `typeName`.
 
 ## See Also
 
@@ -111,5 +111,5 @@ A `JobChain` whose generic parameters have been resolved against job type defini
 - [Worker](/queuert/reference/queuert/worker/) — Worker and job processing reference
 - [Utilities](/queuert/reference/queuert/utilities/) — Composition helpers and job-type-system types
 - [Errors](/queuert/reference/queuert/errors/) — Error classes reference
-- [Core Concepts](/queuert/getting-started/core-concepts/) — Job chain model introduction
+- [Core Concepts](/queuert/getting-started/core-concepts/) — Chain model introduction
 - [Chain Patterns](/queuert/guides/chain-patterns/) — Continuation references and patterns

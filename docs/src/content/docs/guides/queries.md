@@ -5,35 +5,35 @@ sidebar:
   order: 14
 ---
 
-The client provides read-only methods for inspecting job chains and jobs. All query methods accept an optional transaction context and don't require `transactionHooks`.
+The client provides read-only methods for inspecting chains and jobs. All query methods accept an optional transaction context and don't require `transactionHooks`.
 
 ```ts
-// Look up a single job chain or job by ID
-const jobChain = await client.getJobChain({ id: jobChainId });
+// Look up a single chain or job by ID
+const chain = await client.getChain({ id: chainId });
 const job = await client.getJob({ id: jobId });
 
 // Paginated lists with filters
-const jobChains = await client.listJobChains({
+const chains = await client.listChains({
   filter: { typeName: ["send-email"], status: ["running"] },
   limit: 20,
 });
 
 const jobs = await client.listJobs({
-  filter: { jobChainId: [jobChainId], status: ["completed"] },
+  filter: { chainId: [chainId], status: ["completed"] },
 });
 
 // Cursor-based pagination
-const nextPage = await client.listJobChains({
+const nextPage = await client.listChains({
   filter: { typeName: ["send-email"] },
-  cursor: jobChains.nextCursor,
+  cursor: chains.nextCursor,
 });
 
-// Jobs within a specific job chain, ordered by chain index
-const jobChainJobs = await client.listJobChainJobs({ jobChainId });
+// Jobs within a specific chain, ordered by chain index
+const chainJobs = await client.listChainJobs({ chainId });
 
 // Blocker relationships
 const blockers = await client.getJobBlockers({ jobId });
-const blockedJobs = await client.listBlockedJobs({ jobChainId });
+const blockedJobs = await client.listBlockedJobs({ chainId });
 ```
 
 All lookup methods accept an optional `typeName` for type narrowing -- the return type narrows to the specified type. If the entity exists but has a different type, `JobTypeMismatchError` is thrown.
@@ -42,16 +42,16 @@ See [examples/showcase-queries](https://github.com/kvet/queuert/tree/main/exampl
 
 ## Performance considerations
 
-`listJobChains` joins each root row with the last job in the chain to resolve chain status. Filtering by `status` is not optimized — it applies to the joined last job and cannot use an index. Always provide a `typeName` or date range (`from`/`to`) filter to narrow the scan:
+`listChains` joins each root row with the last job in the chain to resolve chain status. Filtering by `status` is not optimized — it applies to the joined last job and cannot use an index. Always provide a `typeName` or date range (`from`/`to`) filter to narrow the scan:
 
 ```ts
 // Expensive — status filter alone still scans every root row
-const all = await client.listJobChains({
+const all = await client.listChains({
   filter: { status: ["running"] },
 });
 
 // Efficient — typeName narrows the scan via a partial index
-const filtered = await client.listJobChains({
+const filtered = await client.listChains({
   filter: { typeName: ["send-email"], status: ["running"] },
 });
 ```

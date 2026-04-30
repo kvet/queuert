@@ -21,7 +21,7 @@ await withTransactionHooks(async (transactionHooks) =>
 
     // Job creation in the same transaction
     // The transaction context property name matches your StateProvider
-    await client.startJobChain({
+    await client.startChain({
       tx,
       transactionHooks,
       typeName: "process-image",
@@ -128,6 +128,6 @@ For hard timeouts (forceful termination), the lease mechanism already handles th
 ## See Also
 
 - [Job Processing Reliability](../../guides/processing-reliability/) — Savepoint protection, automatic rollback
-- [Client API](/queuert/reference/queuert/client/) — Mutation methods, query methods, awaitJobChain
+- [Client API](/queuert/reference/queuert/client/) — Mutation methods, query methods, awaitChain
 - [In-Process Worker](../in-process-worker/) — Worker lifecycle, leasing, reaper
 - [Adapters](../adapters/) — StateAdapter context architecture

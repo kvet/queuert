@@ -13,18 +13,18 @@ describe("In-Process Notify Adapter — indexed routing", () => {
     const disposes: (() => Promise<void>)[] = [];
     for (let i = 0; i < N; i++) {
       disposes.push(
-        await adapter.listenJobChainCompleted(`chain-${i}`, () => {
+        await adapter.listenChainCompleted(`chain-${i}`, () => {
           unrelatedCalls++;
         }),
       );
     }
     disposes.push(
-      await adapter.listenJobChainCompleted("chain-target", () => {
+      await adapter.listenChainCompleted("chain-target", () => {
         targetCalls.count++;
       }),
     );
 
-    await adapter.notifyJobChainCompleted("chain-target");
+    await adapter.notifyChainCompleted("chain-target");
 
     expect(targetCalls.count).toBe(1);
     expect(unrelatedCalls).toBe(0);
@@ -39,19 +39,19 @@ describe("In-Process Notify Adapter — indexed routing", () => {
     let aCalls = 0;
     let bCalls = 0;
 
-    const disposeA = await adapter.listenJobChainCompleted("c", () => {
+    const disposeA = await adapter.listenChainCompleted("c", () => {
       aCalls++;
     });
-    const disposeB = await adapter.listenJobChainCompleted("c", () => {
+    const disposeB = await adapter.listenChainCompleted("c", () => {
       bCalls++;
     });
 
-    await adapter.notifyJobChainCompleted("c");
+    await adapter.notifyChainCompleted("c");
     expect(aCalls).toBe(1);
     expect(bCalls).toBe(1);
 
     await disposeA();
-    await adapter.notifyJobChainCompleted("c");
+    await adapter.notifyChainCompleted("c");
     expect(aCalls).toBe(1);
     expect(bCalls).toBe(2);
 
@@ -86,14 +86,14 @@ describe("In-Process Notify Adapter — indexed routing", () => {
     let peerCalls = 0;
 
     let disposeSelf: (() => Promise<void>) | null = null;
-    disposeSelf = await adapter.listenJobChainCompleted("c", () => {
+    disposeSelf = await adapter.listenChainCompleted("c", () => {
       void disposeSelf?.();
     });
-    const disposePeer = await adapter.listenJobChainCompleted("c", () => {
+    const disposePeer = await adapter.listenChainCompleted("c", () => {
       peerCalls++;
     });
 
-    await adapter.notifyJobChainCompleted("c");
+    await adapter.notifyChainCompleted("c");
     expect(peerCalls).toBe(1);
 
     await disposePeer();

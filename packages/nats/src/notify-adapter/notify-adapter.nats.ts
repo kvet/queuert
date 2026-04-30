@@ -128,13 +128,13 @@ export const createNatsNotifyAdapter = async ({
       return tryDecrementHint(kv, `${hintKeyPrefix}${typeName}`);
     },
 
-    notifyJobChainCompleted: async (chainId) => {
+    notifyChainCompleted: async (chainId) => {
       assertOpen();
       nc.publish(chainCompletedSubject, encoder.encode(chainId));
       await nc.flush();
     },
 
-    listenJobChainCompleted: async (chainId, onNotification) => {
+    listenChainCompleted: async (chainId, onNotification) => {
       assertOpen();
       return chainCompletedListener.subscribe(chainId, () => {
         onNotification();

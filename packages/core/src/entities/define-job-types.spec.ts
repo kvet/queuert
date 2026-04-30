@@ -11,7 +11,7 @@ import {
   type JobTypeEntryDefinitions,
   type JobTypeReachingEntry,
   type ResolvedJob,
-  type ResolvedJobChain,
+  type ResolvedChain,
 } from "./job-types.resolvers.js";
 
 describe("defineJobTypes", () => {
@@ -643,7 +643,7 @@ describe("BlockerChains", () => {
 
     expectTypeOf<JobTypeChainNames<MergedDefs, "notif.send">>().toEqualTypeOf<"notif.send">();
 
-    type Chain = ResolvedJobChain<string, MergedDefs, "notif.send">;
+    type Chain = ResolvedChain<string, MergedDefs, "notif.send">;
     expectTypeOf<Chain["typeName"]>().toEqualTypeOf<"notif.send">();
 
     expectTypeOf<Chains[number]["typeName"]>().toEqualTypeOf<"notif.send">();
@@ -712,7 +712,7 @@ describe("JobTypeBlockedNames", () => {
   });
 });
 
-describe("ResolvedJobChain", () => {
+describe("ResolvedChain", () => {
   it("extracts input types correctly for chains", () => {
     const defs = defineJobTypes<{
       first: { entry: true; input: { start: number }; continueWith: { typeName: "second" } };
@@ -722,7 +722,7 @@ describe("ResolvedJobChain", () => {
       };
     }>();
 
-    type Chain = ResolvedJobChain<string, JobTypeDefinitions<typeof defs>, "first">;
+    type Chain = ResolvedChain<string, JobTypeDefinitions<typeof defs>, "first">;
 
     // The chain input should be the type from each job in the chain
     type ChainInput = Chain extends { input: infer I } ? I : never;
@@ -1158,7 +1158,7 @@ describe("rest/variadic blocker slots", () => {
     expectTypeOf<MainBlockers>().toBeArray();
   });
 
-  it("ResolvedJobChain output excludes undefined from intermediate steps", () => {
+  it("ResolvedChain output excludes undefined from intermediate steps", () => {
     type Defs = {
       entry: {
         entry: true;
@@ -1172,7 +1172,7 @@ describe("rest/variadic blocker slots", () => {
       };
     };
 
-    type Chain = ResolvedJobChain<string, Defs, "entry">;
+    type Chain = ResolvedChain<string, Defs, "entry">;
     type Completed = Extract<Chain, { status: "completed" }>;
 
     expectTypeOf<Completed["output"]>().toEqualTypeOf<{ result: number }>();

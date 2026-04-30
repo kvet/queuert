@@ -35,7 +35,7 @@ console.log("\n--- Pattern 1: Independent Slices ---\n");
 
 const orderChain = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startJobChain({
+    client.startChain({
       sql: txSql,
       transactionHooks,
       typeName: "orders.create-order",
@@ -47,7 +47,7 @@ const orderChain = await withTransactionHooks(async (transactionHooks) =>
   ),
 );
 
-const orderResult = await client.awaitJobChain(orderChain, { timeoutMs: 10000 });
+const orderResult = await client.awaitChain(orderChain, { timeoutMs: 10000 });
 console.log(`Order completed: #${orderResult.output.orderId} at ${orderResult.output.fulfilledAt}`);
 assert.ok(orderResult.output.orderId > 0);
 assert.ok(orderResult.output.fulfilledAt);
@@ -63,7 +63,7 @@ console.log("\n--- Pattern 2: Fire-and-forget ---\n");
 
 const orderChain2 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startJobChain({
+    client.startChain({
       sql: txSql,
       transactionHooks,
       typeName: "orders.create-order",
@@ -78,7 +78,7 @@ const orderChain2 = await withTransactionHooks(async (transactionHooks) =>
   ),
 );
 
-const orderResult2 = await client.awaitJobChain(orderChain2, { timeoutMs: 10000 });
+const orderResult2 = await client.awaitChain(orderChain2, { timeoutMs: 10000 });
 console.log(
   `Order completed: #${orderResult2.output.orderId} at ${orderResult2.output.fulfilledAt}`,
 );
@@ -100,7 +100,7 @@ console.log("\n--- Pattern 3: Cross-slice Blockers ---\n");
 
 const placeOrderChain = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startJobChain({
+    client.startChain({
       sql: txSql,
       transactionHooks,
       typeName: "orders.place-order",
@@ -115,7 +115,7 @@ const placeOrderChain = await withTransactionHooks(async (transactionHooks) =>
   ),
 );
 
-const placeOrderResult = await client.awaitJobChain(placeOrderChain, { timeoutMs: 10000 });
+const placeOrderResult = await client.awaitChain(placeOrderChain, { timeoutMs: 10000 });
 console.log(
   `Order confirmed: #${placeOrderResult.output.orderId} at ${placeOrderResult.output.confirmedAt}`,
 );

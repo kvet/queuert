@@ -6,14 +6,14 @@ import { closeGroup } from "./state-adapter-cases/close.js";
 import { completeJobGroup } from "./state-adapter-cases/complete-job.js";
 import { concurrencyGroup } from "./state-adapter-cases/concurrency.js";
 import { createJobsGroup } from "./state-adapter-cases/create-jobs.js";
-import { deleteJobChainsGroup } from "./state-adapter-cases/delete-job-chains.js";
+import { deleteChainsGroup } from "./state-adapter-cases/delete-chains.js";
+import { getChainGroup } from "./state-adapter-cases/get-chain.js";
 import { getJobBlockersGroup } from "./state-adapter-cases/get-job-blockers.js";
-import { getJobByIdGroup } from "./state-adapter-cases/get-job-by-id.js";
-import { getJobChainByIdGroup } from "./state-adapter-cases/get-job-chain-by-id.js";
+import { getJobGroup } from "./state-adapter-cases/get-job.js";
 import { getNextJobAvailableInMsGroup } from "./state-adapter-cases/get-next-job-available-in-ms.js";
 import { listBlockedJobsGroup } from "./state-adapter-cases/list-blocked-jobs.js";
-import { listJobChainJobsGroup } from "./state-adapter-cases/list-job-chain-jobs.js";
-import { listJobChainsGroup } from "./state-adapter-cases/list-job-chains.js";
+import { listChainJobsGroup } from "./state-adapter-cases/list-chain-jobs.js";
+import { listChainsGroup } from "./state-adapter-cases/list-chains.js";
 import { listJobsGroup } from "./state-adapter-cases/list-jobs.js";
 import { readIsolationGroup } from "./state-adapter-cases/read-isolation.js";
 import { reapExpiredJobLeaseGroup } from "./state-adapter-cases/reap-expired-job-lease.js";
@@ -30,7 +30,7 @@ export { type StateAdapterConformanceContext } from "./state-adapter-cases/types
 export const stateAdapterConformanceGroups: ConformanceGroup<StateAdapterConformanceContext>[] = [
   createJobsGroup,
   withTransactionGroup,
-  getJobChainByIdGroup,
+  getChainGroup,
   addJobsBlockersGroup,
   unblockJobsGroup,
   addJobsBlockersTraceContextsGroup,
@@ -42,11 +42,11 @@ export const stateAdapterConformanceGroups: ConformanceGroup<StateAdapterConform
   triggerJobsGroup,
   completeJobGroup,
   reapExpiredJobLeaseGroup,
-  deleteJobChainsGroup,
-  getJobByIdGroup,
-  listJobChainsGroup,
+  deleteChainsGroup,
+  getJobGroup,
+  listChainsGroup,
   listJobsGroup,
-  listJobChainJobsGroup,
+  listChainJobsGroup,
   listBlockedJobsGroup,
   withSavepointGroup,
   concurrencyGroup,

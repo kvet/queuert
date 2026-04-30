@@ -60,7 +60,7 @@ describe("Dashboard API", () => {
       expect(body.nextCursor).toBeNull();
     });
 
-    it("returns chains as serialized job chain objects", async () => {
+    it("returns chains as serialized chain objects", async () => {
       const { request, stateAdapter } = await createTestDashboard();
       const root = await createJob(stateAdapter, "test-type", { key: "value" });
 

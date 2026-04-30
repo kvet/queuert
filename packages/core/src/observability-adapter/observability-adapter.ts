@@ -1,6 +1,6 @@
 import { type NotifyAdapter } from "../notify-adapter/notify-adapter.js";
 import { type StateAdapter } from "../state-adapter/state-adapter.js";
-import { type JobBasicData, type JobChainData, type JobProcessingData } from "./log.js";
+import { type JobBasicData, type ChainData, type JobProcessingData } from "./log.js";
 
 /** Input data for creating a job span. */
 export type JobSpanInputData = {
@@ -127,7 +127,7 @@ export type ObservabilityAdapter = {
   jobCreated: (
     data: JobBasicData & {
       input: unknown;
-      blockers: JobChainData[];
+      blockers: ChainData[];
       scheduledAt?: Date;
       scheduleAfterMs?: number;
     },
@@ -171,17 +171,17 @@ export type ObservabilityAdapter = {
     data: JobBasicData & { leasedBy: string; leasedUntil: Date; workerId: string },
   ) => void;
 
-  // job chain
-  jobChainCreated: (data: JobChainData & { input: unknown }) => void;
-  jobChainCompleted: (data: JobChainData & { output: unknown }) => void;
-  jobChainDeleted: (data: JobChainData) => void;
+  // chain
+  chainCreated: (data: ChainData & { input: unknown }) => void;
+  chainCompleted: (data: ChainData & { output: unknown }) => void;
+  chainDeleted: (data: ChainData) => void;
 
   // trigger
   jobTriggered: (data: JobBasicData) => void;
 
   // blockers
-  jobBlocked: (data: JobBasicData & { blockedByChains: JobChainData[] }) => void;
-  jobUnblocked: (data: JobBasicData & { unblockedByChain: JobChainData }) => void;
+  jobBlocked: (data: JobBasicData & { blockedByChains: ChainData[] }) => void;
+  jobUnblocked: (data: JobBasicData & { unblockedByChain: ChainData }) => void;
 
   // notify adapter
   notifyAdapterError: (data: { operation: keyof NotifyAdapter; error: unknown }) => void;
@@ -190,7 +190,7 @@ export type ObservabilityAdapter = {
   stateAdapterError: (data: { operation: keyof StateAdapter<any, any>; error: unknown }) => void;
 
   // histograms
-  jobChainDuration: (data: JobChainData & { durationMs: number }) => void;
+  chainDuration: (data: ChainData & { durationMs: number }) => void;
   jobDuration: (data: JobProcessingData & { durationMs: number }) => void;
   jobAttemptDuration: (data: JobProcessingData & { durationMs: number; workerId: string }) => void;
 

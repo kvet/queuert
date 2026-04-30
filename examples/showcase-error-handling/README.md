@@ -1,6 +1,6 @@
 # Error Handling Showcase
 
-Error handling patterns in job chains.
+Error handling patterns in chains.
 
 Scenarios: discriminated unions, compensation pattern, explicit rescheduling via `rescheduleJob`.
 
