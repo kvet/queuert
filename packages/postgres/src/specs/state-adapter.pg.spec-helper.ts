@@ -10,7 +10,7 @@ import {
   createPgPoolProvider,
 } from "../state-provider/state-provider.pg-pool.js";
 
-export type PgStateAdapter = StateAdapter<PgPoolContext, string>;
+export type PgPoolStateAdapter = StateAdapter<PgPoolContext, string>;
 
 export const extendWithStatePostgres = <
   T extends {
@@ -36,9 +36,9 @@ export const extendWithStatePostgres = <
     stateProvider: PgPoolProvider;
     flakyStateProvider: PgPoolProvider;
     flakyDbStateProvider: PgPoolProvider;
-    stateAdapter: PgStateAdapter;
-    flakyStateAdapter: PgStateAdapter;
-    flakyDbStateAdapter: PgStateAdapter | undefined;
+    stateAdapter: PgPoolStateAdapter;
+    flakyStateAdapter: PgPoolStateAdapter;
+    flakyDbStateAdapter: PgPoolStateAdapter | undefined;
     poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
     poisonExecute:
       | ((cb: (adapter: StateAdapter<{ $test: true }, string>) => Promise<void>) => Promise<void>)

@@ -151,7 +151,7 @@ export class RescheduleJobError extends Error {
       cause?: unknown;
     },
   ) {
-    super(message, { cause: options.cause });
+    super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
     this.name = "RescheduleJobError";
     this.schedule = options.schedule;
   }

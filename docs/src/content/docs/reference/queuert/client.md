@@ -200,7 +200,7 @@ const page = await client.listChains({
   filter?: {
     typeName?: string[],
     status?: JobStatus[],
-    id?: string[],
+    chainId?: string[],
     jobId?: string[],
     root?: boolean,
     from?: Date,
@@ -223,7 +223,7 @@ const page = await client.listJobs({
   filter?: {
     typeName?: string[],
     status?: JobStatus[],
-    id?: string[],
+    jobId?: string[],
     chainTypeName?: string[],
     chainId?: string[],
     from?: Date,

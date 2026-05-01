@@ -12,9 +12,8 @@ import {
   extractParamTypes,
   t,
 } from "@queuert/typed-sql";
-import { type StateAdapter } from "queuert";
+import { type BaseTxContext, type StateAdapter } from "queuert";
 import {
-  type BaseTxContext,
   type StateJob,
   decodeChainIndexCursor,
   decodeCreatedAtCursor,

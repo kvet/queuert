@@ -39,14 +39,24 @@ type PgStateProvider<TTxContext> = {
   withSavepoint?: <T>(txCtx: TTxContext, fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
   executeSql: (options: {
     txCtx?: TTxContext;
+    id?: string; // Stable cache key for prepared statements (omitted for one-off SQL)
     sql: string;
-    params?: unknown[];
+    params: unknown[];
+    paramTypes: Record<number, RuntimeType>; // Positional param runtime types
+    columnTypes: Record<string, RuntimeType>; // Column runtime types for result rows
+    readOnly: boolean; // true for pure SELECTs (no FOR UPDATE)
   }) => Promise<unknown[]>;
-  close: () => Promise<void>; // Pass-through providers return async () => {}
+  close?: () => Promise<void>; // Optional. Pass-through providers can omit it; when defined, must be idempotent.
 };
 ```
 
 `withSavepoint` is optional. When not provided, the adapter uses raw `SAVEPOINT` SQL via `executeSql`. Override it when your driver tracks transaction state client-side (e.g. `postgres.js` — use `txCtx.sql.savepoint()`).
+
+`id` is a stable cache key — providers MAY use it to opt the statement into server-side preparation (`postgres.js`: `prepare: true`; `pg`: `name = hash(id+sql)`). When omitted, the provider must execute the statement unprepared.
+
+`paramTypes` / `columnTypes` are type hints for drivers that don't auto-serialize/parse (e.g. `postgres.js` `unsafe()`). Drivers that handle these natively (e.g. `pg`) can ignore them.
+
+`readOnly` lets providers route to a read replica or a separate reader pool. The built-in pool / `postgres.js` providers ignore it.
 
 ## createPgNotifyAdapter
 
@@ -70,7 +80,7 @@ type PgNotifyProvider = {
     channel: string,
     onMessage: (message: string) => void,
   ) => Promise<() => Promise<void>>;
-  close: () => Promise<void>; // Pass-through providers return async () => {}
+  close?: () => Promise<void>; // Optional. Pass-through providers can omit it; when defined, must be idempotent.
 };
 ```
 

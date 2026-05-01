@@ -43,13 +43,14 @@ type SqliteStateProvider<TTxContext> = {
   withSavepoint?: <T>(txCtx: TTxContext, fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
   executeSql: (options: {
     txCtx?: TTxContext;
+    id?: string; // Stable cache key for `db.prepare(sql)` handles (omitted for one-off SQL)
     sql: string;
-    params?: unknown[];
+    params: unknown[];
     paramTypes: Record<number, RuntimeType>; // Positional param runtime types
     columnTypes: Record<string, RuntimeType>; // Non-empty when the query returns rows
-    readOnly?: boolean; // true for pure SELECTs (no FOR UPDATE)
+    readOnly: boolean; // true for pure SELECTs (no FOR UPDATE)
   }) => Promise<unknown[]>;
-  close: () => Promise<void>; // Pass-through providers return async () => {}
+  close?: () => Promise<void>; // Optional. Pass-through providers can omit it; when defined, must be idempotent.
 };
 ```
 

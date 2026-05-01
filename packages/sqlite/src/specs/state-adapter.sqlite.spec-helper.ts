@@ -12,7 +12,7 @@ import {
   createBetterSqlite3Provider,
 } from "../state-provider/state-provider.better-sqlite3.js";
 
-export type SqliteStateAdapter = StateAdapter<SqliteContext, UUID>;
+export type BetterSqlite3StateAdapter = StateAdapter<SqliteContext, UUID>;
 
 export const extendWithStateSqlite = <T>(
   api: TestAPI<T>,
@@ -35,9 +35,9 @@ export const extendWithStateSqlite = <T>(
     stateProvider: BetterSqlite3Provider;
     flakyStateProvider: BetterSqlite3Provider;
     flakyDbStateProvider: BetterSqlite3Provider;
-    stateAdapter: SqliteStateAdapter;
-    flakyStateAdapter: SqliteStateAdapter;
-    flakyDbStateAdapter: SqliteStateAdapter | undefined;
+    stateAdapter: BetterSqlite3StateAdapter;
+    flakyStateAdapter: BetterSqlite3StateAdapter;
+    flakyDbStateAdapter: BetterSqlite3StateAdapter | undefined;
     poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
     poisonExecute:
       | ((cb: (adapter: StateAdapter<{ $test: true }, string>) => Promise<void>) => Promise<void>)

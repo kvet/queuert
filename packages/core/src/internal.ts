@@ -16,8 +16,4 @@ export {
   type ChainIndexCursor,
   type CreatedAtCursor,
 } from "./state-adapter/cursor.js";
-export {
-  type BaseTxContext,
-  type StateJob,
-  type StateJobStatus,
-} from "./state-adapter/state-adapter.js";
+export { type StateJob, type StateJobStatus } from "./state-adapter/state-adapter.js";

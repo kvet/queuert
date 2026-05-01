@@ -7,6 +7,7 @@
 
 # Short term
 
+- [REVIEW] `completeJob` and `renewJobLease` lack status/leasedBy guards — a worker whose lease was reaped can still complete (overwriting a fresh retry attempt) or renew (resurrecting a dead row back to `running`). Affects PG (`packages/postgres/src/state-adapter/sql.ts:622-639,827-841`) and SQLite (`packages/sqlite/src/state-adapter/sql.ts:624-641,881-895`). Verify with a focused test before adding `WHERE status = 'running' AND leased_by = $workerId` guards and surfacing "lease lost" at the adapter boundary.
 - [EPIC] test against bun and its built-in sqlite, postgres, redis clients
 - [TASK] Enforce json-serializable inputs and outputs (like no Date in job definitions) — see `design/json-serializable-types.md`
 - [EPIC,COMPLEX] SQLite production-readiness — concurrency model (WAL, busy_timeout, drop the `createAsyncRwLock` prescription), batched `createJobs`/`addJobsBlockers`, rewrite examples to production patterns + add multi-worker example, validate `PRAGMA foreign_keys` at init, drop `skipConcurrencyTests`. See `design/sqlite-ready.md`

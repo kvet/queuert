@@ -34,7 +34,7 @@ await withTransactionHooks(async (transactionHooks) =>
       email: "alice@example.com",
     });
 
-    await client.startJobChain({
+    await client.startChain({
       tx,
       transactionHooks,
       typeName: "send-welcome-email",
@@ -80,7 +80,7 @@ const stop = await worker.start(); // Call stop() for graceful shutdown
 - **Your database is the source of truth** — No separate persistence layer. Jobs live alongside your application data.
 - **True transactional consistency** — Start jobs inside your database transactions. If the transaction rolls back, the job is never created. No dual-write problems.
 - **No vendor lock-in** — Works with PostgreSQL and SQLite. Bring your own ORM (Kysely, Drizzle, Prisma, raw drivers).
-- **Simple mental model** — Job chains work like Promise chains. No determinism requirements, no replay semantics to learn.
+- **Simple mental model** — Chains work like Promise chains. No determinism requirements, no replay semantics to learn.
 - **Full type safety** — TypeScript inference for inputs, outputs, continuations, and blockers. Catch errors at compile time.
 - **Flexible notifications** — Use Redis, NATS, or PostgreSQL LISTEN/NOTIFY for low-latency. Or just poll—no extra infrastructure required.
 - **MIT licensed** — No enterprise licensing concerns.
