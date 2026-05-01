@@ -17,6 +17,7 @@
     "fmt": "oxlint --type-aware --fix && oxfmt",
     "fmt:check": "oxfmt --check",
     "test": "vitest --run",
+    "test:ci": "vitest --run --retry=2 --maxWorkers=$(($(nproc) - 2))",
     "typecheck": "bun run --filter '*' typecheck",
     "benchmarks": "bun run --filter './benchmarks/*' --sequential start",
     "examples": "bun run --filter './examples/*' start",

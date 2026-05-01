@@ -29,5 +29,6 @@
     "editor.defaultFormatter": "oxc.oxc-vscode"
   },
   "vitest.disableWorkspaceWarning": true,
-  "js/ts.experimental.useTsgo": true
+  "js/ts.experimental.useTsgo": true,
+  "typescript.native-preview.tsdk": "/Users/kvet/Projects/Testing/queuert/node_modules/@typescript/native-preview"
 }

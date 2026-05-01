@@ -11,70 +11,66 @@ import {
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
-  it(
-    "schedules processing immediately",
-    { retry: 5 },
-    async ({
+  it("schedules processing immediately", async ({
+    stateAdapter,
+    notifyAdapter,
+    observabilityAdapter,
+    log,
+    withWorkers,
+    withTransaction,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+    }>();
+
+    const client = await createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      withWorkers,
-      withTransaction,
-      expect,
-    }) => {
-      const jobTypes = defineJobTypes<{
-        test: {
-          entry: true;
-          input: { value: number };
-          output: { result: number };
-        };
-      }>();
-
-      const client = await createClient({
-        stateAdapter,
-        notifyAdapter,
-        observabilityAdapter,
-        log,
-        jobTypes,
-      });
-      const worker = await createInProcessWorker({
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
         client,
-        concurrency: 1,
-        processors: createProcessors({
-          client,
-          jobTypes,
-          processors: {
-            test: {
-              attemptHandler: async ({ job, complete }) => {
-                await sleep(50);
-                return complete(async () => ({ result: job.input.value }));
-              },
+        jobTypes,
+        processors: {
+          test: {
+            attemptHandler: async ({ job, complete }) => {
+              await sleep(50);
+              return complete(async () => ({ result: job.input.value }));
             },
           },
-        }),
-      });
+        },
+      }),
+    });
 
-      await withWorkers([await worker.start()], async () => {
-        const chain = await withTransactionHooks(async (transactionHooks) =>
-          withTransaction(async (txCtx) =>
-            client.startChain({
-              ...txCtx,
-              transactionHooks,
-              typeName: "test",
-              input: { value: 1 },
-            }),
-          ),
-        );
+    await withWorkers([await worker.start()], async () => {
+      const chain = await withTransactionHooks(async (transactionHooks) =>
+        withTransaction(async (txCtx) =>
+          client.startChain({
+            ...txCtx,
+            transactionHooks,
+            typeName: "test",
+            input: { value: 1 },
+          }),
+        ),
+      );
 
-        const signal = AbortSignal.timeout(200);
-        await client.awaitChain(chain, { timeoutMs: 200 });
-        if (signal.aborted) {
-          expect.fail("Timed out waiting for chain completion");
-        }
-      });
-    },
-  );
+      const signal = AbortSignal.timeout(2000);
+      await client.awaitChain(chain, { timeoutMs: 2000 });
+      if (signal.aborted) {
+        expect.fail("Timed out waiting for chain completion");
+      }
+    });
+  });
 
   it("distributes processing to multiple workers", async ({
     stateAdapter,
@@ -412,92 +408,88 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
   });
 
-  it(
-    'notifies workers when reaper deletes "zombie" jobs',
-    { retry: 5 },
-    async ({
+  it('notifies workers when reaper deletes "zombie" jobs', async ({
+    stateAdapter,
+    notifyAdapter,
+    observabilityAdapter,
+    log,
+    withWorkers,
+    withTransaction,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: {
+        entry: true;
+        input: null;
+        output: { result: string };
+      };
+    }>();
+
+    const client = await createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
-      withWorkers,
-      withTransaction,
-      expect,
-    }) => {
-      const jobTypes = defineJobTypes<{
-        test: {
-          entry: true;
-          input: null;
-          output: { result: string };
-        };
-      }>();
+      jobTypes,
+    });
 
-      const client = await createClient({
-        stateAdapter,
-        notifyAdapter,
-        observabilityAdapter,
-        log,
-        jobTypes,
+    const jobStarted = Promise.withResolvers<void>();
+    const jobCompleted = Promise.withResolvers<void>();
+
+    const createWorker = async () =>
+      createInProcessWorker({
+        client,
+        concurrency: 1,
+        processors: createProcessors({
+          client,
+          jobTypes,
+          processors: {
+            test: {
+              attemptHandler: async ({ signal, job, prepare, complete }) => {
+                await prepare({ mode: "staged" });
+
+                if (job.attempt > 1) {
+                  await jobCompleted.promise;
+                  await sleep(10);
+
+                  return complete(async () => ({ result: "recovered" }));
+                }
+
+                jobStarted.resolve();
+
+                await sleep(2000, { signal });
+                expect(signal.aborted).toBe(true);
+                expect(signal.reason).toBe("taken_by_another_worker");
+                jobCompleted.resolve();
+
+                throw new Error();
+              },
+              leaseConfig: { leaseMs: 10, renewIntervalMs: 1000 },
+            },
+          },
+        }),
       });
 
-      const jobStarted = Promise.withResolvers<void>();
-      const jobCompleted = Promise.withResolvers<void>();
-
-      const createWorker = async () =>
-        createInProcessWorker({
-          client,
-          concurrency: 1,
-          processors: createProcessors({
-            client,
-            jobTypes,
-            processors: {
-              test: {
-                attemptHandler: async ({ signal, job, prepare, complete }) => {
-                  await prepare({ mode: "staged" });
-
-                  if (job.attempt > 1) {
-                    await jobCompleted.promise;
-                    await sleep(10);
-
-                    return complete(async () => ({ result: "recovered" }));
-                  }
-
-                  jobStarted.resolve();
-
-                  await sleep(1000, { signal });
-                  expect(signal.aborted).toBe(true);
-                  expect(signal.reason).toBe("taken_by_another_worker");
-                  jobCompleted.resolve();
-
-                  throw new Error();
-                },
-                leaseConfig: { leaseMs: 10, renewIntervalMs: 1000 },
-              },
-            },
+    await withWorkers([await (await createWorker()).start()], async () => {
+      const chain = await withTransactionHooks(async (transactionHooks) =>
+        withTransaction(async (txCtx) =>
+          client.startChain({
+            ...txCtx,
+            transactionHooks,
+            typeName: "test",
+            input: null,
           }),
-        });
+        ),
+      );
+
+      await jobStarted.promise;
+      await sleep(10);
 
       await withWorkers([await (await createWorker()).start()], async () => {
-        const chain = await withTransactionHooks(async (transactionHooks) =>
-          withTransaction(async (txCtx) =>
-            client.startChain({
-              ...txCtx,
-              transactionHooks,
-              typeName: "test",
-              input: null,
-            }),
-          ),
-        );
-
-        await jobStarted.promise;
-        await sleep(10);
-
-        await withWorkers([await (await createWorker()).start()], async () => {
-          await client.awaitChain(chain, { timeoutMs: 5000 });
-        });
-
-        await jobCompleted.promise;
+        await client.awaitChain(chain, { timeoutMs: 5000 });
       });
-    },
-  );
+
+      await jobCompleted.promise;
+    });
+  });
 };

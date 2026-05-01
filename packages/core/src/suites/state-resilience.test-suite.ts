@@ -194,7 +194,6 @@ export const stateResilienceTestSuite = ({
 
   it.skipIf(skipConcurrencyTests)(
     "handles transient database errors gracefully with multiple workers",
-    { retry: 5 },
     async ({
       flakyStateAdapter,
       stateAdapter,

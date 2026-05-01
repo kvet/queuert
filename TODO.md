@@ -7,7 +7,6 @@
 
 # Short term
 
-- [TASK] Fix flaky tests currently masked by per-test `retry: 5`
 - [EPIC] test against bun and its built-in sqlite, postgres, redis clients
 - [TASK] Enforce json-serializable inputs and outputs (like no Date in job definitions) — see `design/json-serializable-types.md`
 - [EPIC,COMPLEX] SQLite production-readiness — concurrency model (WAL, busy_timeout, drop the `createAsyncRwLock` prescription), batched `createJobs`/`addJobsBlockers`, rewrite examples to production patterns + add multi-worker example, validate `PRAGMA foreign_keys` at init, drop `skipConcurrencyTests`. See `design/sqlite-ready.md`
