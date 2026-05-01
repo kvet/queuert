@@ -26,13 +26,14 @@ jobs:
 
       - uses: ./.github/actions/setup-repo
         with:
+          node-version: "24"
           registry-url: "https://registry.npmjs.org"
 
       - name: Install pnpm
         run: npm install -g pnpm
 
       - name: Upgrade npm for OIDC trusted publishing
-        run: corepack enable && corepack prepare npm@latest --activate
+        run: npm install -g npm@latest
 
       - name: Publish packages
         run: pnpm -r publish --access public --no-git-checks --provenance
