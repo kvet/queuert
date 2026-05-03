@@ -189,6 +189,7 @@ state-postgres-drizzle      # Drizzle ORM
 state-postgres-kysely       # Kysely
 
 state-sqlite-node           # node:sqlite
+state-sqlite-bun            # bun:sqlite
 state-sqlite-better-sqlite3 # better-sqlite3
 state-sqlite-prisma         # Prisma
 state-sqlite-drizzle        # Drizzle ORM

@@ -8,7 +8,7 @@
 # Short term
 
 - [REVIEW] `completeJob` and `renewJobLease` lack status/leasedBy guards — a worker whose lease was reaped can still complete (overwriting a fresh retry attempt) or renew (resurrecting a dead row back to `running`). Affects PG (`packages/postgres/src/state-adapter/sql.ts:622-639,827-841`) and SQLite (`packages/sqlite/src/state-adapter/sql.ts:624-641,881-895`). Verify with a focused test before adding `WHERE status = 'running' AND leased_by = $workerId` guards and surfacing "lease lost" at the adapter boundary.
-- [EPIC] test against bun and its built-in sqlite, postgres, redis clients
+- [TASK] Make `id` on `TypedSql` a sufficient prepared-statement cache key. Today `id` is only an opt-in flag — providers (`state-sqlite-node`, `state-sqlite-better-sqlite3`, `pg` `query.name`) must key by `sql` (or `sha1(id+sql)`) because `createTemplateApplier` substitutes variables (table prefixes) into the SQL, so a single `id` resolves to multiple SQL strings within one DB. Fix at the typed-sql layer: have the template applier produce a resolved `id` (e.g. `${id}@${variantHash}`) so providers can cache `id → Statement` directly. Drops the per-provider `WeakMap<Database, Map<sql, Statement>>` plumbing and the pg name-hash, and lets `bun:sqlite`'s built-in `db.query()` cache work without relying on it being SQL-keyed.
 - [TASK] Enforce json-serializable inputs and outputs (like no Date in job definitions) — see `design/json-serializable-types.md`
 - [EPIC,COMPLEX] SQLite production-readiness — concurrency model (WAL, busy_timeout, drop the `createAsyncRwLock` prescription), batched `createJobs`/`addJobsBlockers`, rewrite examples to production patterns + add multi-worker example, validate `PRAGMA foreign_keys` at init, drop `skipConcurrencyTests`. See `design/sqlite-ready.md`
 - [EPIC] State-snapshot OTel gauges — opt-in `@queuert/otel-state` package emitting `incomplete_jobs/chains{type,status}`, `oldest_pending_job/chain_age_seconds{type}`, `stuck_jobs/chains{type}` from a periodic metrics chain (cleanup-style). Adds `attempts_since_reschedule` int column to track retries that aren't progressing via user `rescheduleJob`, three partial indexes over the active working set, and a `getMetricsSnapshot` adapter method. Open questions: single-runner snapshot distribution (DB-stored vs per-process), default stuck threshold. See `design/state-snapshot-metrics.md`
@@ -29,6 +29,10 @@
 
 # Long term
 
+- [EPIC,BLOCKED] test against bun and its built-in postgres, redis clients — blocked by https://github.com/oven-sh/bun/issues/21342 (testcontainers hangs under Bun, preventing on-demand container provisioning in examples and conformance specs)
+  - [TASK] postgres-state example
+  - [TASK] postgres-notify example
+  - [TASK] redis-notify example
 - [IDEA] MCP server
 - [IDEA] Add OpenTelemetry logs support to @queuert/otel adapter (OTEL logs API is experimental)
 - [IDEA] Hard timeout (worker threads) - True isolation with `terminate()`; enables memory limits and untrusted code sandboxing

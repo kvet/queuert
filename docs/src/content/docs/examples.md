@@ -27,6 +27,7 @@ How to connect Queuert to your database using different ORMs and drivers.
 | Example                                                                                                       | ORM / Driver   |
 | ------------------------------------------------------------------------------------------------------------- | -------------- |
 | [state-sqlite-node](https://github.com/kvet/queuert/tree/main/examples/state-sqlite-node)                     | node:sqlite    |
+| [state-sqlite-bun](https://github.com/kvet/queuert/tree/main/examples/state-sqlite-bun)                       | bun:sqlite     |
 | [state-sqlite-better-sqlite3](https://github.com/kvet/queuert/tree/main/examples/state-sqlite-better-sqlite3) | better-sqlite3 |
 | [state-sqlite-kysely](https://github.com/kvet/queuert/tree/main/examples/state-sqlite-kysely)                 | Kysely         |
 | [state-sqlite-drizzle](https://github.com/kvet/queuert/tree/main/examples/state-sqlite-drizzle)               | Drizzle ORM    |

@@ -1,0 +1,27 @@
+{
+  "name": "example-state-sqlite-bun",
+  "version": "0.0.1",
+  "private": true,
+  "description": "An example demonstrating the SQLite state adapter with Bun's built-in bun:sqlite module.",
+  "license": "MIT",
+  "author": "kvet",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kvet/queuert.git"
+  },
+  "type": "module",
+  "exports": {
+    "./provider": "./src/provider.ts"
+  },
+  "scripts": {
+    "start": "bun run --bun src/index.ts",
+    "test": "bun test",
+    "typecheck": "tsgo --noEmit"
+  },
+  "devDependencies": {
+    "@queuert/sqlite": "workspace:*",
+    "@queuert/tsconfig": "workspace:*",
+    "@types/bun": "1.3.12",
+    "queuert": "workspace:*"
+  }
+}

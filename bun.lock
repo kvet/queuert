@@ -606,6 +606,16 @@
         "vitest": "4.1.4",
       },
     },
+    "examples/state-sqlite-bun": {
+      "name": "example-state-sqlite-bun",
+      "version": "0.0.1",
+      "devDependencies": {
+        "@queuert/sqlite": "workspace:*",
+        "@queuert/tsconfig": "workspace:*",
+        "@types/bun": "1.3.12",
+        "queuert": "workspace:*",
+      },
+    },
     "examples/state-sqlite-drizzle": {
       "name": "example-state-sqlite-drizzle",
       "version": "0.0.1",
@@ -741,14 +751,14 @@
     },
     "packages/core": {
       "name": "queuert",
-      "version": "0.11.0",
+      "version": "0.12.0",
       "devDependencies": {
         "@queuert/tsconfig": "workspace:*",
       },
     },
     "packages/dashboard": {
       "name": "@queuert/dashboard",
-      "version": "0.11.0",
+      "version": "0.12.0",
       "devDependencies": {
         "@queuert/tsconfig": "workspace:*",
         "@solidjs/router": "0.16.1",
@@ -764,7 +774,7 @@
     },
     "packages/nats": {
       "name": "@queuert/nats",
-      "version": "0.11.0",
+      "version": "0.12.0",
       "devDependencies": {
         "@queuert/testcontainers": "workspace:*",
         "@queuert/tsconfig": "workspace:*",
@@ -778,7 +788,7 @@
     },
     "packages/otel": {
       "name": "@queuert/otel",
-      "version": "0.11.0",
+      "version": "0.12.0",
       "devDependencies": {
         "@opentelemetry/api": "1.9.1",
         "@opentelemetry/sdk-metrics": "2.6.1",
@@ -793,7 +803,7 @@
     },
     "packages/postgres": {
       "name": "@queuert/postgres",
-      "version": "0.11.0",
+      "version": "0.12.0",
       "devDependencies": {
         "@queuert/testcontainers": "workspace:*",
         "@queuert/tsconfig": "workspace:*",
@@ -809,7 +819,7 @@
     },
     "packages/redis": {
       "name": "@queuert/redis",
-      "version": "0.11.0",
+      "version": "0.12.0",
       "devDependencies": {
         "@queuert/testcontainers": "workspace:*",
         "@queuert/tsconfig": "workspace:*",
@@ -823,7 +833,7 @@
     },
     "packages/sqlite": {
       "name": "@queuert/sqlite",
-      "version": "0.11.0",
+      "version": "0.12.0",
       "devDependencies": {
         "@queuert/tsconfig": "workspace:*",
         "@queuert/typed-sql": "workspace:*",
@@ -1481,6 +1491,8 @@
 
     "@types/braces": ["@types/braces@3.0.5", "", {}, "sha512-SQFof9H+LXeWNz8wDe7oN5zu7ket0qwMu5vZubW4GCJ8Kkeh6nBWUz87+KTz/G3Kqsrp0j/W253XJb3KMEeg3w=="],
 
+    "@types/bun": ["@types/bun@1.3.12", "", { "dependencies": { "bun-types": "1.3.12" } }, "sha512-DBv81elK+/VSwXHDlnH3Qduw+KxkTIWi7TXkAeh24zpi5l0B2kUg9Ga3tb4nJaPcOFswflgi/yAvMVBPrxMB+A=="],
+
     "@types/chai": ["@types/chai@5.2.3", "", { "dependencies": { "@types/deep-eql": "*", "assertion-error": "^2.0.1" } }, "sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA=="],
 
     "@types/debug": ["@types/debug@4.1.13", "", { "dependencies": { "@types/ms": "*" } }, "sha512-KSVgmQmzMwPlmtljOomayoR89W4FynCAi3E8PPs7vmDVPe84hT+vGPKkJfThkmXs0x0jAaa9U8uW8bbfyS2fWw=="],
@@ -1696,6 +1708,8 @@
     "buffer-crc32": ["buffer-crc32@1.0.0", "", {}, "sha512-Db1SbgBS/fg/392AblrMJk97KggmvYhr4pB5ZIMTWtaivCPMWLkmb7m21cJvpvgK+J3nsU2CmmixNBZx4vFj/w=="],
 
     "buildcheck": ["buildcheck@0.0.7", "", {}, "sha512-lHblz4ahamxpTmnsk+MNTRWsjYKv965MwOrSJyeD588rR3Jcu7swE+0wN5F+PbL5cjgu/9ObkhfzEPuofEMwLA=="],
+
+    "bun-types": ["bun-types@1.3.12", "", { "dependencies": { "@types/node": "*" } }, "sha512-HqOLj5PoFajAQciOMRiIZGNoKxDJSr6qigAttOX40vJuSp6DN/CxWp9s3C1Xwm4oH7ybueITwiaOcWXoYVoRkA=="],
 
     "byline": ["byline@5.0.0", "", {}, "sha512-s6webAy+R4SR8XVuJWt2V2rGvhnrhxN+9S15GNuTK3wKPOXFF6RNc+8ug2XhH+2s4f+uudG4kUVYmYOQWL2g0Q=="],
 
@@ -1988,6 +2002,8 @@
     "example-state-postgres-prisma": ["example-state-postgres-prisma@workspace:examples/state-postgres-prisma"],
 
     "example-state-sqlite-better-sqlite3": ["example-state-sqlite-better-sqlite3@workspace:examples/state-sqlite-better-sqlite3"],
+
+    "example-state-sqlite-bun": ["example-state-sqlite-bun@workspace:examples/state-sqlite-bun"],
 
     "example-state-sqlite-drizzle": ["example-state-sqlite-drizzle@workspace:examples/state-sqlite-drizzle"],
 
@@ -3167,6 +3183,8 @@
 
     "bl/buffer": ["buffer@5.7.1", "", { "dependencies": { "base64-js": "^1.3.1", "ieee754": "^1.1.13" } }, "sha512-EHcyIPBQ4BSGlvjB16k5KgAJ27CIsHY/2JBmCRReo48y9rQ3MaUzWX3KVlBa4U7MyX02HdVj0K7C3WaB3ju7FQ=="],
 
+    "bun-types/@types/node": ["@types/node@24.12.2", "", { "dependencies": { "undici-types": "~7.16.0" } }, "sha512-A1sre26ke7HDIuY/M23nd9gfB+nrmhtYyMINbjI1zHJxYteKR6qSMX56FsmjMcDb3SMcjJg5BiRRgOCC/yBD0g=="],
+
     "c12/chokidar": ["chokidar@4.0.3", "", { "dependencies": { "readdirp": "^4.0.1" } }, "sha512-Qgzu8kfBvo+cA4962jnP1KkS6Dop5NS6g7R5LFYJr4b8Ub94PPQXUksCw9PvXoeXPRRddRNC5C1JQUR2SMGtnA=="],
 
     "cacache/chownr": ["chownr@2.0.0", "", {}, "sha512-bIomtDF5KGpdogkLd9VspvFzk9KfpyyGlS8YFVZl7TGPBHL5snIOnxeshwVgPteQ9b4Eydl+pVbIyE1DcvCWgQ=="],
@@ -3336,6 +3354,8 @@
     "babel-plugin-jsx-dom-expressions/@babel/types/@babel/helper-string-parser": ["@babel/helper-string-parser@7.27.1", "", {}, "sha512-qMlSxKbpRlAridDExk92nSobyDdpPijUq2DW6oDnUqd0iOGxmQjyqhMIihI9+zv4LPyZdRje2cavWPbCbWm3eA=="],
 
     "babel-plugin-jsx-dom-expressions/@babel/types/@babel/helper-validator-identifier": ["@babel/helper-validator-identifier@7.28.5", "", {}, "sha512-qSs4ifwzKJSV39ucNjsvc6WVHs6b7S03sOh2OcHF9UHfVPqWWALUsNUVzhSBiItjRZoLHx7nIarVjqKVusUZ1Q=="],
+
+    "bun-types/@types/node/undici-types": ["undici-types@7.16.0", "", {}, "sha512-Zz+aZWSj8LE6zoxD+xrjh4VfkIG8Ya6LvYkZqtUQGJPZjYl53ypCaUwWqo7eI0x66KBGeRo+mlBEkMSeSZ38Nw=="],
 
     "c12/chokidar/readdirp": ["readdirp@4.1.2", "", {}, "sha512-GDhwkLfywWL2s6vEjyhri+eXmfH6j1L7JE27WhqLeYzoh/A3DBaYGEj2H/HFZCn/kMfim73FXxEJTw06WtxQwg=="],
 

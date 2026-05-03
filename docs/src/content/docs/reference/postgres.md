@@ -58,6 +58,27 @@ type PgStateProvider<TTxContext> = {
 
 `readOnly` lets providers route to a read replica or a separate reader pool. The built-in pool / `postgres.js` providers ignore it.
 
+## RuntimeType
+
+Runtime tag describing each parameter or column type. Providers use it to drive serialization (for parameters) and parsing (for columns). Optional variants (`string?`, `uuid?`, etc.) accept `null`:
+
+```typescript
+type RuntimeType =
+  | "string"
+  | "number"
+  | "boolean"
+  | "uuid"
+  | "json"
+  | "array"
+  | "jsonArray"
+  | "string?"
+  | "number?"
+  | "boolean?"
+  | "uuid?"
+  | "json?"
+  | "date?";
+```
+
 ## createPgNotifyAdapter
 
 ```typescript

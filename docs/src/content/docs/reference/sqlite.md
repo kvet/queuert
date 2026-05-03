@@ -35,7 +35,7 @@ type SqliteStateAdapter = StateAdapter & {
 
 ## SqliteStateProvider
 
-**SqliteStateProvider** — you implement this to bridge your SQLite client (`node:sqlite`, `better-sqlite3`, ORMs, etc.). Note the extra `columnTypes` parameter compared to `PgStateProvider`:
+**SqliteStateProvider** — you implement this to bridge your SQLite client (`node:sqlite`, `bun:sqlite`, `better-sqlite3`, ORMs, etc.). Note the extra `columnTypes` parameter compared to `PgStateProvider`:
 
 ```typescript
 type SqliteStateProvider<TTxContext> = {
@@ -55,6 +55,27 @@ type SqliteStateProvider<TTxContext> = {
 ```
 
 The adapter pre-serializes non-primitive values, so the built-in `better-sqlite3` and `node:sqlite` providers ignore `paramTypes`. It exists for custom providers backed by drivers that need explicit type hints (e.g. remote SQLite bridges).
+
+## RuntimeType
+
+Runtime tag describing each parameter or column type. Providers use it to drive serialization (for parameters) and parsing (for columns). Optional variants (`string?`, `uuid?`, etc.) accept `null`:
+
+```typescript
+type RuntimeType =
+  | "string"
+  | "number"
+  | "boolean"
+  | "uuid"
+  | "json"
+  | "array"
+  | "jsonArray"
+  | "string?"
+  | "number?"
+  | "boolean?"
+  | "uuid?"
+  | "json?"
+  | "date?";
+```
 
 ## createAsyncRwLock / AsyncRwLock / LockHandle
 
