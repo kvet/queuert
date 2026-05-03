@@ -121,6 +121,18 @@ export type Migration = {
 // Template applier
 // ---------------------------------------------------------------------------
 
+// FNV-1a 32-bit. Not cryptographic — just a stable, dependency-free way to
+// fold a resolved SQL string into a short suffix that disambiguates `id`s
+// across different template variants (e.g. table prefixes) within one process.
+const fnv1aHex = (input: string): string => {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+};
+
 export const createTemplateApplier = (
   variables: Record<string, string>,
   functions?: Record<string, (...args: string[]) => string>,
@@ -147,7 +159,9 @@ export const createTemplateApplier = (
           return fn(...args);
         });
       }
-      cached = { ...typedSql, sql: resolvedSql };
+      const resolvedId =
+        typedSql.id !== undefined ? `${typedSql.id}@${fnv1aHex(resolvedSql)}` : undefined;
+      cached = { ...typedSql, id: resolvedId, sql: resolvedSql };
       cache.set(typedSql, cached);
     }
     return cached as TypedSql<TParams, TColumns>;

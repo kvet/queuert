@@ -12,17 +12,12 @@ export const createNodeSqliteProvider = ({
   db: DatabaseSync;
 }): SqliteStateProvider<NodeSqliteContext> => {
   const lock = createAsyncRwLock();
-  const stmtCache = new WeakMap<DatabaseSync, Map<string, StatementSync>>();
-  const prepareCached = (database: DatabaseSync, sql: string): StatementSync => {
-    let perDb = stmtCache.get(database);
-    if (!perDb) {
-      perDb = new Map();
-      stmtCache.set(database, perDb);
-    }
-    let stmt = perDb.get(sql);
+  const stmtCache = new Map<string, StatementSync>();
+  const prepareCached = (id: string, sql: string): StatementSync => {
+    let stmt = stmtCache.get(id);
     if (!stmt) {
-      stmt = database.prepare(sql);
-      perDb.set(sql, stmt);
+      stmt = db.prepare(sql);
+      stmtCache.set(id, stmt);
     }
     return stmt;
   };
@@ -50,7 +45,7 @@ export const createNodeSqliteProvider = ({
       const run = (): unknown[] => {
         const database = txCtx?.db ?? db;
         const prepare = (): StatementSync =>
-          id !== undefined ? prepareCached(database, sql) : database.prepare(sql);
+          id !== undefined ? prepareCached(id, sql) : database.prepare(sql);
         if (Object.keys(columnTypes).length > 0) {
           return prepare().all(...((params ?? []) as SQLInputValue[]));
         }
@@ -66,7 +61,7 @@ export const createNodeSqliteProvider = ({
       return run();
     },
     close: async () => {
-      stmtCache.delete(db);
+      stmtCache.clear();
     },
   };
 };

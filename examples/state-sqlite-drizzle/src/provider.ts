@@ -10,19 +10,15 @@ export const createDrizzleSqliteStateProvider = ({
   db: Database.Database;
   lock: AsyncRwLock;
 }): SqliteStateProvider<DrizzleSqliteContext> => {
-  // Statements are scoped to a Database instance; key by sql to handle
-  // template-applied variants (different table prefixes) within one db.
-  const stmtCache = new WeakMap<Database.Database, Map<string, Database.Statement>>();
-  const prepareCached = (database: Database.Database, sql: string): Database.Statement => {
-    let perDb = stmtCache.get(database);
-    if (!perDb) {
-      perDb = new Map();
-      stmtCache.set(database, perDb);
-    }
-    let stmt = perDb.get(sql);
+  // The adapter folds template variants (e.g. table prefix) into `id`, so
+  // it uniquely identifies the resolved SQL within this provider — keying
+  // the prepared-statement cache by `id` is sufficient.
+  const stmtCache = new Map<string, Database.Statement>();
+  const prepareCached = (id: string, sql: string): Database.Statement => {
+    let stmt = stmtCache.get(id);
     if (!stmt) {
-      stmt = database.prepare(sql);
-      perDb.set(sql, stmt);
+      stmt = db.prepare(sql);
+      stmtCache.set(id, stmt);
     }
     return stmt;
   };
@@ -50,7 +46,7 @@ export const createDrizzleSqliteStateProvider = ({
       const run = (): unknown[] => {
         const database = txCtx?.db ?? db;
         const prepare = (): Database.Statement =>
-          id !== undefined ? prepareCached(database, sql) : database.prepare(sql);
+          id !== undefined ? prepareCached(id, sql) : database.prepare(sql);
         if (Object.keys(columnTypes).length > 0) {
           return prepare().all(...(params ?? []));
         }
@@ -66,7 +62,7 @@ export const createDrizzleSqliteStateProvider = ({
       return run();
     },
     close: async () => {
-      stmtCache.delete(db);
+      stmtCache.clear();
     },
   };
 };

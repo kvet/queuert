@@ -39,7 +39,7 @@ type PgStateProvider<TTxContext> = {
   withSavepoint?: <T>(txCtx: TTxContext, fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
   executeSql: (options: {
     txCtx?: TTxContext;
-    id?: string; // Stable cache key for prepared statements (omitted for one-off SQL)
+    id?: string; // Stable cache key for prepared statements; unique per resolved SQL (omitted for one-off SQL)
     sql: string;
     params: unknown[];
     paramTypes: Record<number, RuntimeType>; // Positional param runtime types
@@ -52,7 +52,7 @@ type PgStateProvider<TTxContext> = {
 
 `withSavepoint` is optional. When not provided, the adapter uses raw `SAVEPOINT` SQL via `executeSql`. Override it when your driver tracks transaction state client-side (e.g. `postgres.js` — use `txCtx.sql.savepoint()`).
 
-`id` is a stable cache key — providers MAY use it to opt the statement into server-side preparation (`postgres.js`: `prepare: true`; `pg`: `name = hash(id+sql)`). When omitted, the provider must execute the statement unprepared.
+`id` is a stable cache key — the adapter folds template variants (e.g. `schema`, `tablePrefix`) into the suffix, so it uniquely identifies the resolved SQL within a provider instance. Providers MAY use it directly as the prepared-statement name (`pg`: `query.name = id`) or as a flag to opt into driver-level caching (`postgres.js`: `prepare: true`). When omitted, the provider must execute the statement unprepared.
 
 `paramTypes` / `columnTypes` are type hints for drivers that don't auto-serialize/parse (e.g. `postgres.js` `unsafe()`). Drivers that handle these natively (e.g. `pg`) can ignore them.
 

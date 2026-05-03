@@ -34,8 +34,10 @@ export type SqliteStateProvider<TTxContext extends BaseTxContext> = {
    * When txCtx is provided, uses that transaction connection.
    * When txCtx is omitted, acquires a connection, executes, and releases.
    *
-   * `id` is a stable cache key for prepared statements. Providers MAY use it to
-   * cache `db.prepare(sql)` handles by id (typical for `better-sqlite3` /
+   * `id` is a stable cache key for prepared statements. It uniquely identifies
+   * the resolved SQL within this provider instance (the adapter folds template
+   * variants like `tablePrefix` into the suffix), so providers MAY cache
+   * `db.prepare(sql)` handles by `id` alone (typical for `better-sqlite3` /
    * `node:sqlite`). When omitted, the provider must execute the statement
    * unprepared — the adapter omits `id` for one-off or dynamic SQL (e.g. savepoints).
    *

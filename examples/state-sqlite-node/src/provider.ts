@@ -11,19 +11,15 @@ export const createNodeSqliteStateProvider = ({
   db: DatabaseSync;
   lock: AsyncRwLock;
 }): SqliteStateProvider<NodeSqliteContext> => {
-  // Statements are scoped to a Database instance; key by sql to handle
-  // template-applied variants (different table prefixes) within one db.
-  const stmtCache = new WeakMap<DatabaseSync, Map<string, StatementSync>>();
-  const prepareCached = (database: DatabaseSync, sql: string): StatementSync => {
-    let perDb = stmtCache.get(database);
-    if (!perDb) {
-      perDb = new Map();
-      stmtCache.set(database, perDb);
-    }
-    let stmt = perDb.get(sql);
+  // The adapter folds template variants (e.g. table prefix) into `id`, so
+  // it uniquely identifies the resolved SQL within this provider — keying
+  // the prepared-statement cache by `id` is sufficient.
+  const stmtCache = new Map<string, StatementSync>();
+  const prepareCached = (id: string, sql: string): StatementSync => {
+    let stmt = stmtCache.get(id);
     if (!stmt) {
-      stmt = database.prepare(sql);
-      perDb.set(sql, stmt);
+      stmt = db.prepare(sql);
+      stmtCache.set(id, stmt);
     }
     return stmt;
   };
@@ -51,7 +47,7 @@ export const createNodeSqliteStateProvider = ({
       const run = (): unknown[] => {
         const database = txCtx?.db ?? db;
         const prepare = (): StatementSync =>
-          id !== undefined ? prepareCached(database, sql) : database.prepare(sql);
+          id !== undefined ? prepareCached(id, sql) : database.prepare(sql);
         if (Object.keys(columnTypes).length > 0) {
           return prepare().all(...((params ?? []) as SQLInputValue[]));
         }
@@ -67,7 +63,7 @@ export const createNodeSqliteStateProvider = ({
       return run();
     },
     close: async () => {
-      stmtCache.delete(db);
+      stmtCache.clear();
     },
   };
 };

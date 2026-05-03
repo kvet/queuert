@@ -43,7 +43,7 @@ type SqliteStateProvider<TTxContext> = {
   withSavepoint?: <T>(txCtx: TTxContext, fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
   executeSql: (options: {
     txCtx?: TTxContext;
-    id?: string; // Stable cache key for `db.prepare(sql)` handles (omitted for one-off SQL)
+    id?: string; // Stable cache key for `db.prepare(sql)` handles; unique per resolved SQL (omitted for one-off SQL)
     sql: string;
     params: unknown[];
     paramTypes: Record<number, RuntimeType>; // Positional param runtime types

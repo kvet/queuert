@@ -24,7 +24,8 @@
     }
   },
   "scripts": {
-    "typecheck": "tsgo --noEmit"
+    "typecheck": "tsgo --noEmit",
+    "test": "vitest --run"
   },
   "devDependencies": {
     "@queuert/tsconfig": "workspace:*"

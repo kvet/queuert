@@ -11,17 +11,12 @@ export const createBetterSqlite3Provider = ({
   db: Database.Database;
 }): SqliteStateProvider<SqliteContext> => {
   const lock = createAsyncRwLock();
-  const stmtCache = new WeakMap<Database.Database, Map<string, Database.Statement>>();
-  const prepareCached = (database: Database.Database, sql: string): Database.Statement => {
-    let perDb = stmtCache.get(database);
-    if (!perDb) {
-      perDb = new Map();
-      stmtCache.set(database, perDb);
-    }
-    let stmt = perDb.get(sql);
+  const stmtCache = new Map<string, Database.Statement>();
+  const prepareCached = (id: string, sql: string): Database.Statement => {
+    let stmt = stmtCache.get(id);
     if (!stmt) {
-      stmt = database.prepare(sql);
-      perDb.set(sql, stmt);
+      stmt = db.prepare(sql);
+      stmtCache.set(id, stmt);
     }
     return stmt;
   };
@@ -49,7 +44,7 @@ export const createBetterSqlite3Provider = ({
       const run = (): unknown[] => {
         const database = txCtx?.db ?? db;
         const prepare = (): Database.Statement =>
-          id !== undefined ? prepareCached(database, sql) : database.prepare(sql);
+          id !== undefined ? prepareCached(id, sql) : database.prepare(sql);
         if (Object.keys(columnTypes).length > 0) {
           return prepare().all(...(params ?? []));
         }
@@ -65,7 +60,7 @@ export const createBetterSqlite3Provider = ({
       return run();
     },
     close: async () => {
-      stmtCache.delete(db);
+      stmtCache.clear();
     },
   };
 };
