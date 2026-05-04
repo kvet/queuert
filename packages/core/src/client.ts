@@ -1,4 +1,4 @@
-import { type Chain, mapStatePairToChain } from "./entities/chain.js";
+import { type Chain, mapStatePairsToChains } from "./entities/chain.js";
 import { type DeduplicationOptions } from "./entities/deduplication.js";
 import { type BaseJobTypeDefinitions } from "./entities/job-type.js";
 import { type JobTypes, type JobTypeDefinitions } from "./entities/job-types.js";
@@ -15,7 +15,7 @@ import {
   type ResolvedChainJobs,
   type ResolvedJob,
 } from "./entities/job-types.resolvers.js";
-import { type Job, type JobStatus, mapStateJobToJob } from "./entities/job.js";
+import { type Job, type JobStatus, mapStateJobsToJobs } from "./entities/job.js";
 import {
   type MergeDefinitions,
   type ValidatedSlices,
@@ -553,10 +553,10 @@ export const createClient = async <
         );
       }
 
-      const deletedChains = deleted.map(
-        (pair) =>
-          mapStatePairToChain(pair) as ResolvedChain<TJobId, TJobTypeDefinitions, TEntryName>,
-      );
+      const deletedChains = (await mapStatePairsToChains(
+        deleted,
+        helpers.jobTypes,
+      )) as ResolvedChain<TJobId, TJobTypeDefinitions, TEntryName>[];
 
       for (const pair of deleted) {
         bufferObservabilityEvent(transactionHooks, () => {
@@ -625,9 +625,11 @@ export const createClient = async <
         });
       }
 
-      return triggered.map(
-        (job) => mapStateJobToJob(job) as ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>,
-      );
+      return (await mapStateJobsToJobs(triggered, helpers.jobTypes)) as ResolvedJob<
+        TJobId,
+        TJobTypeDefinitions,
+        TJobTypeName
+      >[];
     },
 
     /** Complete a chain from outside a worker. Validates `typeName`, then passes the current job and a `complete` function to the caller. */
@@ -756,7 +758,8 @@ export const createClient = async <
         });
       }
 
-      return mapStatePairToChain(updatedChain) as TResult;
+      const [mapped] = await mapStatePairsToChains([updatedChain], helpers.jobTypes);
+      return mapped as TResult;
     },
 
     /** Wait for a chain to complete. Combines polling with notify adapter events. Throws {@link WaitChainTimeoutError} on timeout or abort. */
@@ -799,7 +802,7 @@ export const createClient = async <
           typeValidated = true;
         }
 
-        const mapped = mapStatePairToChain(chainPair);
+        const [mapped] = await mapStatePairsToChains([chainPair], helpers.jobTypes);
         return mapped.status === "completed"
           ? (mapped as ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> & {
               status: "completed";
@@ -887,11 +890,8 @@ export const createClient = async <
         );
       }
 
-      return mapStatePairToChain(chainPair) as ResolvedChain<
-        TJobId,
-        TJobTypeDefinitions,
-        TChainTypeName
-      >;
+      const [mapped] = await mapStatePairsToChains([chainPair], helpers.jobTypes);
+      return mapped as ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName>;
     },
 
     /** Get a single job by ID. Pass `typeName` for type narrowing — throws {@link JobTypeMismatchError} on mismatch. */
@@ -916,7 +916,8 @@ export const createClient = async <
         );
       }
 
-      return mapStateJobToJob(job) as ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>;
+      const [mapped] = await mapStateJobsToJobs([job], helpers.jobTypes);
+      return mapped as ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>;
     },
     /**
      * List chains with filtering and cursor-based pagination. Defaults to newest first.
@@ -957,13 +958,12 @@ export const createClient = async <
         orderDirection,
         page: { cursor, limit },
       });
-      return {
-        items: result.items.map(
-          (pair) =>
-            mapStatePairToChain(pair) as ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName>,
-        ),
-        nextCursor: result.nextCursor,
-      };
+      const items = (await mapStatePairsToChains(result.items, helpers.jobTypes)) as ResolvedChain<
+        TJobId,
+        TJobTypeDefinitions,
+        TChainTypeName
+      >[];
+      return { items, nextCursor: result.nextCursor };
     },
 
     /** List jobs with filtering and cursor-based pagination. Blockers are not populated — use `getJobBlockers` for a specific job. Defaults to newest first. */
@@ -999,12 +999,12 @@ export const createClient = async <
         orderDirection,
         page: { cursor, limit },
       });
-      return {
-        items: result.items.map(
-          (job) => mapStateJobToJob(job) as ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>,
-        ),
-        nextCursor: result.nextCursor,
-      };
+      const items = (await mapStateJobsToJobs(result.items, helpers.jobTypes)) as ResolvedJob<
+        TJobId,
+        TJobTypeDefinitions,
+        TJobTypeName
+      >[];
+      return { items, nextCursor: result.nextCursor };
     },
 
     /** List jobs within a specific chain, ordered by `chainIndex`. Defaults to ascending order. */
@@ -1039,13 +1039,12 @@ export const createClient = async <
         orderDirection,
         page: { cursor, limit },
       });
-      return {
-        items: result.items.map(
-          (job) =>
-            mapStateJobToJob(job) as ResolvedChainJobs<TJobId, TJobTypeDefinitions, TChainTypeName>,
-        ),
-        nextCursor: result.nextCursor,
-      };
+      const items = (await mapStateJobsToJobs(result.items, helpers.jobTypes)) as ResolvedChainJobs<
+        TJobId,
+        TJobTypeDefinitions,
+        TChainTypeName
+      >[];
+      return { items, nextCursor: result.nextCursor };
     },
 
     /** Get the blocker chains for a specific job. Not paginated — blockers are bounded by design. Pass `typeName` for type narrowing. */
@@ -1076,7 +1075,7 @@ export const createClient = async <
       }
 
       const blockers = await helpers.stateAdapter.getJobBlockers({ txCtx, jobId });
-      return blockers.map((pair) => mapStatePairToChain(pair)) as unknown as TBlockers;
+      return (await mapStatePairsToChains(blockers, helpers.jobTypes)) as unknown as TBlockers;
     },
 
     /** List jobs from other chains that are blocked by a given chain. Useful for understanding downstream impact before deletion. */
@@ -1116,10 +1115,8 @@ export const createClient = async <
         orderDirection,
         page: { cursor, limit },
       });
-      return {
-        items: result.items.map((job) => mapStateJobToJob(job) as TBlockedJob),
-        nextCursor: result.nextCursor,
-      };
+      const items = (await mapStateJobsToJobs(result.items, helpers.jobTypes)) as TBlockedJob[];
+      return { items, nextCursor: result.nextCursor };
     },
   };
   return client;

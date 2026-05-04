@@ -1,5 +1,6 @@
 import { JobTypeValidationError } from "../errors.js";
 import { type BaseJobTypeDefinitions, type ResolvedJobTypeReference } from "./job-type.js";
+import { isJsonSerializable } from "./json-serializable.js";
 
 /** Symbol used to carry phantom job type definitions on a registry. */
 export const definitionsSymbol: unique symbol = Symbol("queuert.definitions");
@@ -17,39 +18,61 @@ export type ExternalJobTypeDefinitions<T extends JobTypes<any>> =
 /**
  * Set of registries produced by {@link createNoopJobTypes} (i.e. via
  * {@link defineJobTypes}). Consulted by {@link mergeJobTypes} to decide
- * whether to fall back to no-op validation when a type name is not
- * owned by any validated slice — without this marker, merged registries
- * would either swallow unknown-type validation errors or misroute them
- * to an arbitrary validated slice.
+ * whether to fall back to no-op codec routing when a type name is not
+ * owned by any validated slice.
  */
 export const noopRegistries: WeakSet<JobTypes<any>> = new WeakSet<JobTypes<any>>();
 
 /**
- * Configuration for createJobTypes.
- * Adapters implement these functions to provide validation logic.
- * Functions should throw on validation failure (any error type).
+ * A value tagged with the job type it belongs to and whether it represents an
+ * input or output. Both fields are always populated by the runtime — analogous
+ * to {@link ResolvedJobTypeReference} for codec items.
+ */
+export type ResolvedJobTypeValue = {
+  readonly typeName: string;
+  readonly direction: "input" | "output";
+  readonly value: unknown;
+};
+
+/**
+ * Configuration for {@link createJobTypes}. Adapters implement these functions
+ * to provide validation and codec logic. Functions should throw on failure
+ * (any error type) — the wrapper translates them into
+ * {@link JobTypeValidationError}.
  */
 export type JobTypesOptions = {
   /** Returns the known job type names. Used for runtime duplicate detection when {@link createClient} merges slices. */
   getTypeNames: () => readonly string[];
   /** Validate that a job type can start a chain. Throw on failure. */
   validateEntry: (typeName: string) => void;
-  /** Parse and validate input. Return transformed value or throw on failure. */
-  parseInput: (typeName: string, input: unknown) => unknown;
-  /** Parse and validate output. Return transformed value or throw on failure. */
-  parseOutput: (typeName: string, output: unknown) => unknown;
-  /** Validate continuation target. Receives { typeName, input } for nominal/structural validation. Throw on failure. */
+
+  /**
+   * Encode runtime values into their JSON-safe storage form.
+   * Heterogeneous batch: items may carry mixed `typeName`s and mixed
+   * `direction`s (input/output). Throw on validation failure.
+   */
+  encode: (items: readonly ResolvedJobTypeValue[]) => Promise<unknown[]>;
+  /**
+   * Decode persisted values back into their runtime form.
+   * Heterogeneous batch: items may carry mixed `typeName`s and mixed
+   * `direction`s (input/output). Throw on validation failure
+   * (e.g. corruption / schema drift).
+   */
+  decode: (items: readonly ResolvedJobTypeValue[]) => Promise<unknown[]>;
+
+  /** Validate continuation target. Receives `{ typeName, input }` (runtime form) for nominal/structural validation. Throw on failure. */
   validateContinueWith: (typeName: string, target: ResolvedJobTypeReference) => void;
-  /** Validate blocker references. Receives array of { typeName, input } objects. Throw on failure. */
+  /** Validate blocker references. Receives array of `{ typeName, input }` (runtime form). Throw on failure. */
   validateBlockers: (typeName: string, blockers: readonly ResolvedJobTypeReference[]) => void;
 };
 
 /**
- * Runtime registry for job type validation.
+ * Runtime registry for job type validation and codec.
  *
- * Methods are split by return type:
- * - validate* → throws JobTypeValidationError or returns void (pure validation)
- * - parse* → throws JobTypeValidationError or returns transformed value (validation + transformation)
+ * Methods split by purpose:
+ * - validate* → throws {@link JobTypeValidationError} or returns void.
+ * - encode / decode → batch async; throw on failure; encoded values are
+ *   additionally checked against {@link isJsonSerializable} by the wrapper.
  */
 export type JobTypes<
   TJobTypeDefinitions = unknown,
@@ -58,11 +81,10 @@ export type JobTypes<
   /** Validate that a job type can start a chain (is an entry point). Throws JobTypeValidationError on failure. */
   validateEntry: (typeName: string) => void;
 
-  /** Parse and validate input. Returns transformed value. Throws JobTypeValidationError on failure. */
-  parseInput: (typeName: string, input: unknown) => unknown;
-
-  /** Parse and validate output. Returns transformed value. Throws JobTypeValidationError on failure. */
-  parseOutput: (typeName: string, output: unknown) => unknown;
+  /** Encode a heterogeneous batch of runtime values to their JSON-safe storage form. */
+  encode: (items: readonly ResolvedJobTypeValue[]) => Promise<unknown[]>;
+  /** Decode a heterogeneous batch of stored values back to their runtime form. */
+  decode: (items: readonly ResolvedJobTypeValue[]) => Promise<unknown[]>;
 
   /** Validate continuation target. Throws JobTypeValidationError on failure. */
   validateContinueWith: (typeName: string, target: ResolvedJobTypeReference) => void;
@@ -80,31 +102,58 @@ export type JobTypes<
   readonly [externalDefinitionsSymbol]: TExternalJobTypeDefinitions;
 };
 
-/**
- * Create a noop registry that passes all values through without validation.
- * Used by defineJobTypes for compile-time-only type checking.
- */
-export const createNoopJobTypes = <
-  TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TExternalJobTypeDefinitions extends BaseJobTypeDefinitions = Record<never, never>,
->(): JobTypes<TJobTypeDefinitions, TExternalJobTypeDefinitions> => {
-  const registry: JobTypes<TJobTypeDefinitions, TExternalJobTypeDefinitions> = {
-    validateEntry: () => {},
-    parseInput: (_, input) => input,
-    parseOutput: (_, output) => output,
-    validateContinueWith: () => {},
-    getTypeNames: () => [],
-    validateBlockers: () => {},
-    [definitionsSymbol]: undefined as unknown as TJobTypeDefinitions,
-    [externalDefinitionsSymbol]: undefined as unknown as TExternalJobTypeDefinitions,
-  };
-  noopRegistries.add(registry);
-  return registry;
+const codeFor = (direction: "input" | "output") =>
+  direction === "input" ? "invalid_input" : "invalid_output";
+
+const wrapBatch = async (
+  fn: () => Promise<unknown[]>,
+  items: readonly ResolvedJobTypeValue[],
+  mode: "encode" | "decode",
+): Promise<unknown[]> => {
+  let result: unknown[];
+  try {
+    result = await fn();
+  } catch (cause) {
+    const first = items[0];
+    throw new JobTypeValidationError(
+      `Failed to ${mode} (${items.length} item${items.length === 1 ? "" : "s"})`,
+      {
+        code: first ? codeFor(first.direction) : "invalid_input",
+        typeName: first?.typeName ?? "",
+        details: {
+          items: items.map((i) => ({
+            typeName: i.typeName,
+            direction: i.direction,
+            value: i.value,
+          })),
+        },
+        cause,
+      },
+    );
+  }
+  if (mode === "encode") {
+    for (let i = 0; i < result.length; i++) {
+      const check = isJsonSerializable(result[i]);
+      if (check !== true) {
+        const item = items[i];
+        throw new JobTypeValidationError(
+          `Encoded ${item.direction} for job type "${item.typeName}" is not JSON-serializable at "${check.path}"`,
+          {
+            code: codeFor(item.direction),
+            typeName: item.typeName,
+            details: { path: check.path, direction: item.direction, value: result[i] },
+          },
+        );
+      }
+    }
+  }
+  return result;
 };
 
 /**
- * Create a job type registry with runtime validation.
- * Wraps adapter errors in JobTypeValidationError.
+ * Create a job type registry with runtime validation and codec.
+ * Wraps adapter errors in {@link JobTypeValidationError} and enforces
+ * {@link isJsonSerializable} on every encoded value.
  *
  * @example
  * const registry = createJobTypes<MyJobTypes>({
@@ -112,8 +161,22 @@ export const createNoopJobTypes = <
  *   validateEntry: (typeName) => {
  *     if (!entryTypes.has(typeName)) throw new Error('Not an entry point');
  *   },
- *   parseInput: (typeName, input) => schemas[typeName].input.parse(input),
- *   parseOutput: (typeName, output) => schemas[typeName].output.parse(output),
+ *   encode: async (items) =>
+ *     items.map((i) => {
+ *       const schema = i.direction === "input"
+ *         ? schemas[i.typeName].input
+ *         : schemas[i.typeName].output;
+ *       if (!schema) throw new Error(...);
+ *       return z.encode(schema, i.value);
+ *     }),
+ *   decode: async (items) =>
+ *     items.map((i) => {
+ *       const schema = i.direction === "input"
+ *         ? schemas[i.typeName].input
+ *         : schemas[i.typeName].output;
+ *       if (!schema) throw new Error(...);
+ *       return z.decode(schema, i.value);
+ *     }),
  *   validateContinueWith: (typeName, target) => schemas[typeName].continueWith.parse(target),
  *   validateBlockers: (typeName, blockers) => schemas[typeName].blockers.parse(blockers),
  * });
@@ -136,30 +199,8 @@ export const createJobTypes = <
       });
     }
   },
-  parseInput: (typeName, input) => {
-    try {
-      return config.parseInput(typeName, input);
-    } catch (cause) {
-      throw new JobTypeValidationError(`Invalid input for job type "${typeName}"`, {
-        code: "invalid_input",
-        typeName,
-        details: { input },
-        cause,
-      });
-    }
-  },
-  parseOutput: (typeName, output) => {
-    try {
-      return config.parseOutput(typeName, output);
-    } catch (cause) {
-      throw new JobTypeValidationError(`Invalid output for job type "${typeName}"`, {
-        code: "invalid_output",
-        typeName,
-        details: { output },
-        cause,
-      });
-    }
-  },
+  encode: async (items) => wrapBatch(async () => config.encode(items), items, "encode"),
+  decode: async (items) => wrapBatch(async () => config.decode(items), items, "decode"),
   validateContinueWith: (typeName, target) => {
     try {
       config.validateContinueWith(typeName, target);
@@ -185,3 +226,30 @@ export const createJobTypes = <
   [definitionsSymbol]: undefined as unknown as TJobTypeDefinitions,
   [externalDefinitionsSymbol]: undefined as unknown as TExternalJobTypeDefinitions,
 });
+
+/**
+ * Create a noop registry that passes all values through (identity codec).
+ * Used by {@link defineJobTypes} for compile-time-only type checking.
+ *
+ * Despite being identity, the registry still routes through the same wrapper
+ * as {@link createJobTypes}, so encoded values are checked against
+ * {@link isJsonSerializable} — protecting `defineJobTypes` users from
+ * silent `Date` / `Map` / `Set` corruption at write time.
+ */
+export const createNoopJobTypes = <
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TExternalJobTypeDefinitions extends BaseJobTypeDefinitions = Record<never, never>,
+>(): JobTypes<TJobTypeDefinitions, TExternalJobTypeDefinitions> => {
+  const identity = async (items: readonly ResolvedJobTypeValue[]): Promise<unknown[]> =>
+    items.map((i) => i.value);
+  const registry = createJobTypes<TJobTypeDefinitions, TExternalJobTypeDefinitions>({
+    getTypeNames: () => [],
+    validateEntry: () => {},
+    encode: identity,
+    decode: identity,
+    validateContinueWith: () => {},
+    validateBlockers: () => {},
+  });
+  noopRegistries.add(registry);
+  return registry;
+};

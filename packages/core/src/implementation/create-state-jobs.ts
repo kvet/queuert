@@ -36,10 +36,10 @@ export const createStateJobs = async (
 ): Promise<{ job: StateJob; deduplicated: boolean }[]> => {
   if (jobInputs.length === 0) return [];
 
-  const parsed = jobInputs.map((jobInput) => {
-    const parsedInput = helpers.jobTypes.parseInput(jobInput.typeName, jobInput.input);
-    return { ...jobInput, parsedInput };
-  });
+  const encodedInputs = await helpers.jobTypes.encode(
+    jobInputs.map((j) => ({ typeName: j.typeName, direction: "input", value: j.input })),
+  );
+  const parsed = jobInputs.map((jobInput, i) => ({ ...jobInput, parsedInput: encodedInputs[i] }));
 
   const spanHandles = parsed.map((jobInput) =>
     helpers.observabilityHelper.startJobSpan({

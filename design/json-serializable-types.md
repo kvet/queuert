@@ -32,17 +32,19 @@ type JsonSerializable =
 
 ```ts
 type ResolvedJobTypeReference = { typeName: string; input: unknown };
-type ResolvedJobTypeValue = { typeName: string; value: unknown };
+type ResolvedJobTypeValue = {
+  typeName: string;
+  direction: "input" | "output";
+  value: unknown;
+};
 
 type JobTypesOptions = {
   getTypeNames(): readonly string[];
   validateEntry(typeName: string): void;
 
-  // All four are async, batch-only, heterogeneous (each item carries its typeName).
-  encodeInputs(items: readonly ResolvedJobTypeValue[]): Promise<unknown[]>;
-  decodeInputs(items: readonly ResolvedJobTypeValue[]): Promise<unknown[]>;
-  encodeOutputs(items: readonly ResolvedJobTypeValue[]): Promise<unknown[]>;
-  decodeOutputs(items: readonly ResolvedJobTypeValue[]): Promise<unknown[]>;
+  // Both async, batch-only, heterogeneous in both `typeName` and `direction`.
+  encode(items: readonly ResolvedJobTypeValue[]): Promise<unknown[]>;
+  decode(items: readonly ResolvedJobTypeValue[]): Promise<unknown[]>;
 
   validateContinueWith(typeName: string, ref: ResolvedJobTypeReference): void;
   validateBlockers(typeName: string, refs: readonly ResolvedJobTypeReference[]): void;
@@ -51,30 +53,30 @@ type JobTypesOptions = {
 
 Rules:
 
-- Single-item call sites pass `[item]` and unwrap; the four codec methods are batch-only by contract.
-- `encodeInputs`/`encodeOutputs` validate the runtime form. Failures throw, wrapped as `JobTypeValidationError`.
-- `decodeInputs`/`decodeOutputs` validate the persisted form (defends against corruption / schema drift). Failures throw, wrapped as `JobTypeValidationError`.
+- Single-item call sites pass `[item]` and unwrap; the codec methods are batch-only by contract.
+- `encode` validates the runtime form. Failures throw, wrapped as `JobTypeValidationError` (code derived from the first item's `direction`).
+- `decode` validates the persisted form (defends against corruption / schema drift). Failures throw, wrapped as `JobTypeValidationError`.
 - `validateContinueWith` and `validateBlockers` operate on **runtime** form. Encoding happens afterwards in the `createStateJobs` pipeline.
-- **Heterogeneous batches**: items in a batch may have mixed `typeName`s. This matters for read paths — `listJobs` / `listChainJobs` / dashboard list endpoints decode a page of mixed-type rows in a single codec call, which is load-bearing for KMS-style outer codecs that operate on `string` ciphertext regardless of `typeName` (one `BatchDecrypt` per page, not one per type). Validator-only adapters that _don't_ need the global batching can use a small inline `perTypeName` helper (see ergonomics below) so they don't pay a dispatch-boilerplate tax.
+- **Heterogeneous batches in BOTH typeName AND direction**: read paths decode a page's worth of inputs _and_ outputs in a single `decode` call, which is load-bearing for KMS-style outer codecs that operate on `string` ciphertext regardless of typeName/direction (one `BatchDecrypt` per page, not one per type or one per direction). Validator-only adapters dispatch on `direction` per item — small mechanical boilerplate that's the cost of the simpler API.
 
 ### End-to-end flow
 
-| Stage                                                                                                         | Operation                                                                                         |
-| ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `client.startChain`                                                                                           | `validateEntry` → `encodeInputs` → state adapter persist                                          |
-| handler `continueWith`                                                                                        | `validateContinueWith` (runtime) → `encodeInputs` → persist next job                              |
-| handler returns output                                                                                        | `encodeOutputs` → state adapter persist completion                                                |
-| worker pickup                                                                                                 | state adapter `acquireJob` → `decodeInputs` → handler receives runtime form                       |
-| client read (`getJob`, `listJobs`, `listChainJobs`, `listBlockedJobs`, `getChain`, `trigger` returning a job) | state adapter fetch → `decodeInputs` + `decodeOutputs` (one batch per page) → return runtime form |
-| observability hooks                                                                                           | encoded form passed (open question — see below)                                                   |
+| Stage                                                                                                         | Operation                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `client.startChain`                                                                                           | `validateEntry` → `encode` (direction: input) → state adapter persist                                         |
+| handler `continueWith`                                                                                        | `validateContinueWith` (runtime) → `encode` (direction: input) → persist next job                             |
+| handler returns output                                                                                        | `encode` (direction: output) → state adapter persist completion                                               |
+| worker pickup                                                                                                 | state adapter `acquireJob` → `decode` (direction: input) → handler receives runtime form                      |
+| client read (`getJob`, `listJobs`, `listChainJobs`, `listBlockedJobs`, `getChain`, `trigger` returning a job) | state adapter fetch → single `decode` covering the page's inputs _and_ outputs together → return runtime form |
+| observability hooks                                                                                           | encoded form passed (open question — see below)                                                               |
 
-`mapStateJobToJob` becomes async-aware via a batch helper (`mapStateJobsToJobs`) used by every read site. Single-job sites call it with `[job]` and unwrap.
+`mapStateJobToJob` is replaced by a batch helper (`mapStateJobsToJobs`) used by every read site. Single-job sites call it with `[job]` and unwrap. Same for `mapStatePairsToChains`. Each helper issues exactly one `decode` call per call (mixing input + output items).
 
 ### Base-layer JsonSerializable enforcement
 
 The `JsonSerializable` contract is enforced **at the base layer**, inside the wrappers that `createJobTypes` and `createNoopJobTypes` build around the user-supplied codec methods. It is not the adapter author's responsibility to remember the check — every leaf registry runs it.
 
-Concretely, after `encodeInputs` / `encodeOutputs` produces a batch, the wrapper walks each value with `isJsonSerializable` (recursive type+prototype check; rejects `Date`, `Map`, `Set`, class instances, `NaN`/`Infinity`, `bigint`, functions). On failure it throws `JobTypeValidationError` with the offending path, codec name, and item index.
+Concretely, after `encode` produces a batch, the wrapper walks each value with `isJsonSerializable` (recursive type+prototype check; rejects `Date`, `Map`, `Set`, class instances, `NaN`/`Infinity`, `bigint`, functions). On failure it throws `JobTypeValidationError` with the offending path, the item's direction (input/output), and item index.
 
 ```ts
 const isJsonSerializable = (v: unknown): true | { path: string } => {
@@ -106,39 +108,25 @@ Under the codec API, the merge becomes a pure composer over its slices — every
 
 ```ts
 // pseudocode
-encodeInputs: async (items) => {
-  // 1. Group items by owning slice using typeNameMap.
+encode: async (items) => {
+  // 1. Group items by owning slice using typeNameMap (direction rides along).
   // 2. Items whose typeName isn't in the map go to a "fallback" group;
   //    in mode (3), that group routes through an *internal noop registry*
   //    (synthesized once, held by closure) — so its identity encode still
   //    runs through the base-layer JsonSerializable check.
   //    In mode (2), the unknown subset throws UnknownJobTypeError.
-  // 3. Call each slice's encodeInputs (or the internal noop's) with its subset.
+  // 3. Call each slice's `encode` (or the internal noop's) with its subset.
   // 4. Stitch results back into the original input order.
 };
 ```
 
 The key invariant: **every encoded value crosses through some leaf registry's wrapper**. Mode 3's "fallback to identity for unknown types" is what made the old design risk silent `Date` corruption — replacing the inline `() => input` with delegation to an internal noop registry preserves that semantic but routes the check through. The `noopRegistries` WeakSet stays — its meaning ("this slice was made by `defineJobTypes` and tolerates unknown types") is unaffected by the codec change.
 
-`decodeInputs` / `encodeOutputs` / `decodeOutputs` follow the same grouping-and-stitching pattern.
+`decode` follows the same grouping-and-stitching pattern.
+
+**Tradeoff for cross-slice batching codecs.** Per-slice grouping means that if multiple merged slices independently use the same codec backend (e.g. all KMS-backed), a single page's items get split into N codec calls rather than one. This is a **list-path concern only** — worker pickup, write paths, and blocker fetches are single-item or small-N, so the slice split costs nothing. Even on list paths, slice abstraction lets users apply KMS surgically (one sensitive slice, others plaintext) — the N-call cost only shows up when _multiple_ slices independently use the same heavy codec, which is uncommon. If a deployment hits this case, the answer is "collapse those slices into one registry"; the framework intentionally doesn't try to detect a shared backend across opaque slices.
 
 ### Adapter ergonomics
-
-#### `perTypeName` — an inline helper, owned by the adapter
-
-Validator-only adapters (Zod, Valibot, ArkType) typically don't need to see the heterogeneous batch as a whole. A ~10-line helper at the top of the adapter module groups items by `typeName` and stitches results back, so per-type code stays straight-line:
-
-```ts
-// inline in the adapter — NOT exported from core
-const perTypeName =
-  (fn: (typeName: string, values: unknown[]) => Promise<unknown[]>) =>
-  async (items: ReadonlyArray<{ typeName: string; value: unknown }>) => {
-    // group items by typeName, call fn(typeName, group) once per group,
-    // stitch results back into the original item order
-  };
-```
-
-Core deliberately does **not** export this. It's an adapter-author convenience, not a queuert primitive — keeping it inline means each adapter can shape it to their needs (e.g., add caching, parallelism limits, custom error wrapping) without coupling to a core utility. Codecs that genuinely need the whole heterogeneous batch (KMS BatchDecrypt) skip the helper and consume `items` directly.
 
 #### Built from scratch — identity codec, no validator
 
@@ -148,16 +136,14 @@ createJobTypes({
   validateEntry: (t) => {
     if (!spec[t].entry) throw new Error(`${t} not entry`);
   },
-  encodeInputs: async (items) => items.map((i) => i.value),
-  decodeInputs: async (items) => items.map((i) => i.value),
-  encodeOutputs: async (items) => items.map((i) => i.value),
-  decodeOutputs: async (items) => items.map((i) => i.value),
+  encode: async (items) => items.map((i) => i.value),
+  decode: async (items) => items.map((i) => i.value),
   validateContinueWith: () => {},
   validateBlockers: () => {},
 });
 ```
 
-#### Zod 4 — native `z.codec` via `perTypeName`
+#### Zod 4 — native `z.codec`
 
 ```ts
 "send-email": {
@@ -169,30 +155,33 @@ createJobTypes({
   }),
 }
 
-// In the adapter:
-encodeInputs: perTypeName((typeName, values) =>
-  Promise.all(values.map((v) => z.encode(schemas[typeName].input, v))),
-),
-decodeInputs: perTypeName((typeName, values) =>
-  Promise.all(values.map((v) => z.decode(schemas[typeName].input, v))),
-),
-// encodeOutputs / decodeOutputs symmetric over schemas[typeName].output
+// In the adapter (dispatch on direction per item):
+encode: async (items) =>
+  items.map((i) => {
+    const schema = i.direction === "input" ? schemas[i.typeName].input : schemas[i.typeName].output;
+    return z.encode(schema, i.value);
+  }),
+decode: async (items) =>
+  items.map((i) => {
+    const schema = i.direction === "input" ? schemas[i.typeName].input : schemas[i.typeName].output;
+    return z.decode(schema, i.value);
+  }),
 ```
 
 #### Zod 3 / Valibot / ArkType
 
-Pair two schemas via a `Codec<TIn, TOut>` helper (these libraries only have one-way `.transform()`). Wrap each `decodeInputs`/`encodeInputs` in `perTypeName` for the same ergonomics.
+Pair two schemas via a `Codec<TIn, TOut>` helper (these libraries only have one-way `.transform()`). Same per-item dispatch on `direction`.
 
 #### KMS / sensitive-data — operate on the whole heterogeneous batch
 
 ```ts
-decodeInputs: async (items) => {
+decode: async (items) => {
   const ciphers = items.map((i) => i.value as string);
   const plain = await kms.batchDecrypt(ciphers);
-  return inner.decodeInputs(items.map((i, n) => ({ ...i, value: plain[n] })));
+  return inner.decode(items.map((i, n) => ({ ...i, value: plain[n] })));
 },
-encodeInputs: async (items) => {
-  const inner_ = await inner.encodeInputs(items);
+encode: async (items) => {
+  const inner_ = await inner.encode(items);
   return kms.batchEncrypt(inner_.map(String));
 },
 ```
@@ -228,6 +217,7 @@ This is a **major** version bump.
 1. **Observability decode policy**. Decision made: encoded form is passed to observability hooks. Documentation pattern for users who need decoded values (decode-in-adapter using user-supplied codec, with the per-event cost / plaintext-leak tradeoff) is **left open** — revisit when writing the adapter docs.
 2. **Error context**: if persisted error rows ever reference input/output values, what form do they carry? User-side concern; revisit if/when error attachments are added.
 3. **`EnsureJsonSerializable<T>` helper**: core exports it (now decided — `defineJobTypes` and validator adapters all consume it). Open: do we want a friendlier "must-be-serializable error" message via a branded error type, or is the standard "type 'Date' is not assignable to type 'JsonSerializable'" message good enough? Defer to a usability check during Phase 5.
+4. **Batching `validateEntry` / `validateContinueWith` / `validateBlockers`**: these stay one-call-per-typeName today, while `encode`/`decode` are batch async. For most usage this is fine — they fire on individual write paths (single chain start, single continueWith, single createStateJobs call). But if/when bulk-creation paths (e.g. `client.startChains` with N entries) become hot, or if a future KMS-style validator wants to amortize a network call, these may want list versions: `validateEntries(typeNames)`, `validateContinueWiths(...)`, `validateBlockerSets(...)`. Async-ifying them also opens that door. Decide when a use case forces it; not blocking the current design.
 
 ## Files (touch list)
 
@@ -240,10 +230,10 @@ This is a **major** version bump.
 | `packages/core/src/entities/job-type.validation.ts`                | `ValidateJobType` — keep `NoVoidOrUndefined`; `JsonSerializable` constraint applied in `defineJobTypes` and validator adapters                 |
 | `packages/core/src/entities/merge-job-types.ts`                    | Group items by owning slice; route fallback (mixed-merge unknown types) through internal noop registry so JsonSerializable check still fires   |
 | `packages/core/src/entities/job.ts`                                | `mapStateJobToJob` → async/batch variant                                                                                                       |
-| `packages/core/src/implementation/create-state-jobs.ts`            | Call `encodeInputs` after validate                                                                                                             |
-| `packages/core/src/implementation/finish-job.ts`                   | Call `encodeOutputs`                                                                                                                           |
+| `packages/core/src/implementation/create-state-jobs.ts`            | Call `encode` (direction: input) after validate                                                                                                |
+| `packages/core/src/implementation/finish-job.ts`                   | Call `encode` (direction: output)                                                                                                              |
 | `packages/core/src/implementation/continue-with.ts`                | Validate runtime form (unchanged); decode after pickup elsewhere                                                                               |
-| `packages/core/src/worker/job-process.ts`                          | `decodeInputs` on pickup; mapping decoded job for handler                                                                                      |
+| `packages/core/src/worker/job-process.ts`                          | `decode` on pickup; mapping decoded job for handler                                                                                            |
 | `packages/core/src/client.ts`                                      | All read methods batch-decode pages                                                                                                            |
 | `packages/core/src/observability-adapter/observability-adapter.ts` | Document encoded form; no signature change today                                                                                               |
 | `examples/validation-zod/src/zod-adapter.ts`                       | Identity codecs                                                                                                                                |
@@ -262,12 +252,12 @@ Phased so each phase ends with a green `bun run check`. Each phase is a single P
 
 ### Phase 1 — Core API surface (registry only)
 
-Goal: replace `parseInput`/`parseOutput` with the four batch async codec methods inside the registry, with no consumers updated yet (compile errors expected outside this phase's files; gate with a temporary `parseInput`/`parseOutput` shim if necessary to keep intermediate commits compiling).
+Goal: replace `parseInput`/`parseOutput` with the two batch async codec methods (`encode`/`decode`, with `direction: "input" | "output"` on each item) inside the registry, with no consumers updated yet (compile errors expected outside this phase's files; gate with a temporary `parseInput`/`parseOutput` shim if necessary to keep intermediate commits compiling).
 
 - [ ] Add `packages/core/src/entities/json-serializable.ts`: `JsonSerializable` type, `EnsureJsonSerializable<T>` utility, and `isJsonSerializable(value): true | { path: string }` runtime check (recursive walk; rejects `Date`, `Map`, `Set`, class instances, `NaN`/`Infinity`, `bigint`, functions, symbols). Export from package root. Unit tests cover each rejection class plus deep-nesting paths.
-- [ ] Update `JobTypesOptions` and `JobTypes` in [packages/core/src/entities/job-types.ts](../packages/core/src/entities/job-types.ts): remove `parseInput`/`parseOutput`, add the four batch async codec methods. Wrap each call so that:
+- [ ] Update `JobTypesOptions` and `JobTypes` in [packages/core/src/entities/job-types.ts](../packages/core/src/entities/job-types.ts): remove `parseInput`/`parseOutput`, add the two batch async codec methods (`encode`/`decode`, with `direction: "input" | "output"` on each item). Wrap each call so that:
   1. Adapter-thrown errors are wrapped as `JobTypeValidationError` per item (preserve item index, `typeName`, and original cause).
-  2. After `encodeInputs`/`encodeOutputs` returns, every value is checked with `isJsonSerializable`; failures throw `JobTypeValidationError` with the offending path.
+  2. After `encode` returns, every value is checked with `isJsonSerializable`; failures throw `JobTypeValidationError` with the offending path and item's direction.
 - [ ] Update `createNoopJobTypes`: identity codec methods that go through the same wrapper (so `defineJobTypes` users get the runtime check for free).
 - [ ] Update `defineJobTypes` ([packages/core/src/entities/define-job-type-registry.ts](../packages/core/src/entities/define-job-type-registry.ts)) to constrain its `input`/`output` generics to `JsonSerializable` at the type level. Compile-error message points users at validator adapters with codecs.
 - [ ] Update `mergeJobTypes` ([packages/core/src/entities/merge-job-types.ts](../packages/core/src/entities/merge-job-types.ts)) for the four codec methods:
@@ -281,15 +271,15 @@ Goal: replace `parseInput`/`parseOutput` with the four batch async codec methods
 
 ### Phase 2 — Write paths (encode)
 
-- [ ] [packages/core/src/implementation/create-state-jobs.ts](../packages/core/src/implementation/create-state-jobs.ts): collect all to-be-created jobs in a single batch and call `encodeInputs` once. Replace the per-job `parseInput` call. Preserve order when assigning encoded values back to `createJobParams`.
-- [ ] [packages/core/src/implementation/finish-job.ts](../packages/core/src/implementation/finish-job.ts): replace `parseOutput` with `encodeOutputs([{typeName, value: output}])`.
+- [ ] [packages/core/src/implementation/create-state-jobs.ts](../packages/core/src/implementation/create-state-jobs.ts): collect all to-be-created jobs into a single `encode` call (each item with `direction: "input"`). Preserve order when assigning encoded values back to `createJobParams`.
+- [ ] [packages/core/src/implementation/finish-job.ts](../packages/core/src/implementation/finish-job.ts): call `encode([{typeName, direction: "output", value: output}])`.
 - [ ] [packages/core/src/implementation/continue-with.ts](../packages/core/src/implementation/continue-with.ts): no change to `validateContinueWith` (still runtime form). Encoding happens via the downstream `createStateJobs` call.
-- [ ] Tests: write-side encode happens exactly once per batch; encode failures surface as `JobTypeValidationError`; multi-job creates produce a single `encodeInputs` call.
+- [ ] Tests: write-side encode happens exactly once per batch; encode failures surface as `JobTypeValidationError`; multi-job creates produce a single `encode` call.
 
 ### Phase 3 — Read paths (decode)
 
 - [ ] [packages/core/src/entities/job.ts](../packages/core/src/entities/job.ts): replace `mapStateJobToJob` with `mapStateJobsToJobs(stateJobs, jobTypes): Promise<Job[]>`. The helper:
-  1. Builds two batches: `decodeInputs` for all jobs (status irrelevant), `decodeOutputs` for completed jobs only.
+  1. Builds a single batch covering every job's input plus every completed job's output (each item carries its `direction`), and issues one `decode` call.
   2. Awaits both.
   3. Maps decoded values back onto each job in original order.
      Single-job sites call it with `[job]` and unwrap.
@@ -297,10 +287,10 @@ Goal: replace `parseInput`/`parseOutput` with the four batch async codec methods
   - `packages/core/src/client.ts` — `trigger` (line 629), `getJob` (919), `listJobs` (1004), `listChainJobs` (1045), `listBlockedJobs` (1120). All already async.
   - `packages/core/src/implementation/continue-with.ts` (line 62).
   - `packages/core/src/worker/job-process.ts` (lines 368, 531).
-- [ ] Worker pickup specifically: ensure `decodeInputs` is called between `acquireJob` and handler invocation; runtime input is what the handler sees and what continues into `continueWith` flows.
+- [ ] Worker pickup specifically: ensure `decode` is called between `acquireJob` and handler invocation; runtime input is what the handler sees and what continues into `continueWith` flows.
 - [ ] `getChain`/`listChains` paths: if they surface job-shaped data, batch-decode that page too. Audit during implementation.
 - [ ] Tests:
-  - List of N jobs of mixed types → exactly one `decodeInputs` call + one `decodeOutputs` call per page.
+  - List of N jobs of mixed types → exactly one `decode` call per page (covering both inputs and outputs).
   - Corrupt persisted value → `JobTypeValidationError` with item context.
   - Worker handler receives runtime form, not encoded form.
   - End-to-end roundtrip with `Date` field via Zod 4 codec lands as `Date` in handler and `Date` in `getJob`.
@@ -320,7 +310,7 @@ Goal: replace `parseInput`/`parseOutput` with the four batch async codec methods
 ### Phase 6 — Reference docs and changeset
 
 - [ ] Update `docs/src/content/docs/advanced/` reference doc(s) covering job-type registries to describe the codec contract, the runtime-vs-encoded split, and the observability-decode open question.
-- [ ] Migration guide section: how to port a `parseInput`/`parseOutput` adapter to the four codec methods (identity case + codec case).
+- [ ] Migration guide section: how to port a `parseInput`/`parseOutput` adapter to the two codec methods (identity case + codec case + per-direction dispatch pattern).
 - [ ] `.changeset/codec-job-types.md` — major bump for `queuert` and any package that re-exports the registry surface; one-paragraph user-facing note + flat bullet list of changes.
 
 ### Phase 7 — Final validation

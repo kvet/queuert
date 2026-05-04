@@ -1,4 +1,4 @@
-import { type CompletedChain, type Chain, mapStatePairToChain } from "../entities/chain.js";
+import { type CompletedChain, type Chain, mapStatePairsToChains } from "../entities/chain.js";
 import { type BaseJobTypeDefinitions } from "../entities/job-type.js";
 import {
   type BlockerChains,
@@ -8,7 +8,7 @@ import {
   type JobTypeProperty,
   type ResolvedJobWithBlockers,
 } from "../entities/job-types.resolvers.js";
-import { type Job, mapStateJobToJob } from "../entities/job.js";
+import { type Job, mapStateJobsToJobs } from "../entities/job.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
 import {
   JobAlreadyCompletedError,
@@ -364,9 +364,13 @@ export const runJobProcess = async ({
   const blockerPairs = await prepareTransactionContext.run(async (txCtx) =>
     helpers.stateAdapter.getJobBlockers({ txCtx, jobId: job.id }),
   );
+  const [[mappedJob], decodedBlockers] = await Promise.all([
+    mapStateJobsToJobs([job], helpers.jobTypes),
+    mapStatePairsToChains(blockerPairs, helpers.jobTypes),
+  ]);
   const runningJob = {
-    ...mapStateJobToJob(job),
-    blockers: blockerPairs.map(mapStatePairToChain) as CompletedChain<Chain<any, any, any, any>>[],
+    ...mappedJob,
+    blockers: decodedBlockers as CompletedChain<Chain<any, any, any, any>>[],
   } as ResolvedJobWithBlockers<any, any, any, any> & { status: "running" };
 
   const runJobAttempt = async (handlerCtx: Record<string, unknown>) => {
@@ -527,10 +531,13 @@ export const runJobProcess = async ({
             ? { job, txCtx, transactionHooks, workerId, type: "continueWith", continuedJob }
             : { job, txCtx, transactionHooks, workerId, type: "completeChain", output },
         );
-        const jobResult = continuedJob ?? {
-          ...mapStateJobToJob(completedStateJob),
-          blockers: runningJob.blockers,
-        };
+        let jobResult: Job<any, any, any, any, any>;
+        if (continuedJob) {
+          jobResult = continuedJob;
+        } else {
+          const [mappedCompleted] = await mapStateJobsToJobs([completedStateJob], helpers.jobTypes);
+          jobResult = Object.assign(mappedCompleted, { blockers: runningJob.blockers });
+        }
         const continued = continuedJob
           ? {
               jobId: (continuedJob as Job<any, any, any, any, any>).id,

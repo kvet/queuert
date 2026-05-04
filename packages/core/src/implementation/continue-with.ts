@@ -1,7 +1,7 @@
 import { type Chain } from "../entities/chain.js";
 import { type BaseJobTypeDefinitions } from "../entities/job-type.js";
 import { type ResolvedJob } from "../entities/job-types.resolvers.js";
-import { mapStateJobToJob } from "../entities/job.js";
+import { mapStateJobsToJobs } from "../entities/job.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
 import { type Helpers } from "../setup-helpers.js";
 import { type TransactionHooks } from "../transaction-hooks.js";
@@ -59,5 +59,6 @@ export const continueWith = async <TJobTypeName extends string, TInput>(
     transactionHooks,
   });
 
-  return mapStateJobToJob(job) as ResolvedJob<string, BaseJobTypeDefinitions, TJobTypeName, string>;
+  const [mapped] = await mapStateJobsToJobs([job], helpers.jobTypes);
+  return mapped as ResolvedJob<string, BaseJobTypeDefinitions, TJobTypeName, string>;
 };

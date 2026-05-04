@@ -25,22 +25,25 @@ export const finishJob = async (
   ),
 ): Promise<StateJob> => {
   const hasContinuedJob = rest.type === "continueWith";
-  let output = hasContinuedJob ? null : rest.output;
+  let storedOutput: unknown = null;
 
   if (!hasContinuedJob) {
-    output = helpers.jobTypes.parseOutput(job.typeName, output);
+    const [encoded] = await helpers.jobTypes.encode([
+      { typeName: job.typeName, direction: "output", value: rest.output },
+    ]);
+    storedOutput = encoded;
   }
 
   job = await helpers.stateAdapter.completeJob({
     txCtx,
     jobId: job.id,
-    output,
+    output: storedOutput,
     workerId,
   });
 
   bufferObservabilityEvent(transactionHooks, () => {
     helpers.observabilityHelper.jobCompleted(job, {
-      output,
+      output: storedOutput,
       continuedWith: hasContinuedJob ? rest.continuedJob : undefined,
       workerId,
     });
@@ -69,7 +72,7 @@ export const finishJob = async (
     }
 
     bufferObservabilityEvent(transactionHooks, () => {
-      helpers.observabilityHelper.chainCompleted(chainStartJob, { output });
+      helpers.observabilityHelper.chainCompleted(chainStartJob, { output: storedOutput });
       helpers.observabilityHelper.chainDuration(chainStartJob, job);
     });
     bufferNotifyChainCompletion(transactionHooks, helpers.notifyAdapter, job);

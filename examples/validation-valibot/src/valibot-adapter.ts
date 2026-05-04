@@ -132,6 +132,7 @@ export const createValibotJobTypes = <
 
   return createJobTypes<InferValibotJobTypes<T>, TExternal>({
     getTypeNames: () => Object.keys(_schemas),
+
     validateEntry: (typeName) => {
       const schema = getSchema(typeName);
       if (schema.entry !== true) {
@@ -139,18 +140,25 @@ export const createValibotJobTypes = <
       }
     },
 
-    parseInput: (typeName, input) => {
-      return v.parse(getSchema(typeName).input, input);
-    },
+    encode: async (items) =>
+      items.map((i) => {
+        const schema = getSchema(i.typeName);
+        const target = i.direction === "input" ? schema.input : schema.output;
+        if (!target) {
+          throw new Error(`Job type "${i.typeName}" does not have an output schema`);
+        }
+        return v.parse(target, i.value);
+      }),
 
-    parseOutput: (typeName, output) => {
-      const schema = getSchema(typeName);
-      if (schema.output) {
-        return v.parse(schema.output, output);
-      } else {
-        throw new Error(`Job type "${typeName}" does not have an output schema`);
-      }
-    },
+    decode: async (items) =>
+      items.map((i) => {
+        const schema = getSchema(i.typeName);
+        const target = i.direction === "input" ? schema.input : schema.output;
+        if (!target) {
+          throw new Error(`Job type "${i.typeName}" does not have an output schema`);
+        }
+        return v.parse(target, i.value);
+      }),
 
     validateContinueWith: (typeName, continuation) => {
       const schema = getSchema(typeName);

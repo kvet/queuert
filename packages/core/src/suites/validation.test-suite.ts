@@ -47,19 +47,30 @@ const createTestSchemaRegistry = <T extends BaseJobTypeDefinitions>(
       if (!schema) throw new Error(`Unknown job type: "${typeName}"`);
       if (!schema.entry) throw new Error(`"${typeName}" is not an entry point`);
     },
-    parseInput: (typeName, input) => {
-      const schema = schemas[typeName];
-      if (!schema) throw new Error(`Unknown job type: "${typeName}"`);
-      validateFields(schema.input, input, "input");
-      return input;
-    },
-    parseOutput: (typeName, output) => {
-      const schema = schemas[typeName];
-      if (!schema) throw new Error(`Unknown job type: "${typeName}"`);
-      if (!schema.output) throw new Error(`"${typeName}" has no output schema`);
-      validateFields(schema.output, output, "output");
-      return output;
-    },
+    encode: async (items) =>
+      items.map((i) => {
+        const schema = schemas[i.typeName];
+        if (!schema) throw new Error(`Unknown job type: "${i.typeName}"`);
+        if (i.direction === "input") {
+          validateFields(schema.input, i.value, "input");
+        } else {
+          if (!schema.output) throw new Error(`"${i.typeName}" has no output schema`);
+          validateFields(schema.output, i.value, "output");
+        }
+        return i.value;
+      }),
+    decode: async (items) =>
+      items.map((i) => {
+        const schema = schemas[i.typeName];
+        if (!schema) throw new Error(`Unknown job type: "${i.typeName}"`);
+        if (i.direction === "input") {
+          validateFields(schema.input, i.value, "input");
+        } else {
+          if (!schema.output) throw new Error(`"${i.typeName}" has no output schema`);
+          validateFields(schema.output, i.value, "output");
+        }
+        return i.value;
+      }),
     validateContinueWith: (fromTypeName, target) => {
       const schema = schemas[fromTypeName];
       if (!schema) throw new Error(`Unknown job type: "${fromTypeName}"`);

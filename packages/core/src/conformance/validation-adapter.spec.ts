@@ -58,18 +58,22 @@ const createShapeCheckJobTypes = <
       checkKnown(typeName);
       if (!config.entryTypes.has(typeName)) throw new Error(`not entry: ${typeName}`);
     },
-    parseInput: (typeName, input) => {
-      checkKnown(typeName);
-      const shape = config.inputs[typeName];
-      if (!shape) throw new Error(`no input shape for ${typeName}`);
-      return checkShape(input, shape);
-    },
-    parseOutput: (typeName, output) => {
-      checkKnown(typeName);
-      const shape = config.outputs[typeName];
-      if (!shape) throw new Error(`no output for ${typeName}`);
-      return checkShape(output, shape);
-    },
+    encode: async (items) =>
+      items.map((i) => {
+        checkKnown(i.typeName);
+        const shape =
+          i.direction === "input" ? config.inputs[i.typeName] : config.outputs[i.typeName];
+        if (!shape) throw new Error(`no ${i.direction} shape for ${i.typeName}`);
+        return checkShape(i.value, shape);
+      }),
+    decode: async (items) =>
+      items.map((i) => {
+        checkKnown(i.typeName);
+        const shape =
+          i.direction === "input" ? config.inputs[i.typeName] : config.outputs[i.typeName];
+        if (!shape) throw new Error(`no ${i.direction} shape for ${i.typeName}`);
+        return checkShape(i.value, shape);
+      }),
     validateContinueWith: (typeName, target) => {
       checkKnown(typeName);
       const validator = config.continueWith[typeName];
