@@ -13,8 +13,6 @@ export const getJobBlockersGroup: ConformanceGroup<StateAdapterConformanceContex
             jobs: [
               {
                 typeName: "blocker",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "blocker",
                 input: null,
               },
@@ -28,8 +26,6 @@ export const getJobBlockersGroup: ConformanceGroup<StateAdapterConformanceContex
             jobs: [
               {
                 typeName: "blocker",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "blocker",
                 input: null,
               },
@@ -43,8 +39,6 @@ export const getJobBlockersGroup: ConformanceGroup<StateAdapterConformanceContex
             jobs: [
               {
                 typeName: "main",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "main",
                 input: null,
               },
@@ -84,8 +78,6 @@ export const getJobBlockersGroup: ConformanceGroup<StateAdapterConformanceContex
             jobs: [
               {
                 typeName: "blocker-root",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "blocker-root",
                 input: null,
               },
@@ -108,9 +100,7 @@ export const getJobBlockersGroup: ConformanceGroup<StateAdapterConformanceContex
             jobs: [
               {
                 typeName: "blocker-step2",
-                chainId: blockerRoot.chainId,
-                chainIndex: 1,
-                chainTypeName: "blocker-root",
+                continueFromJobId: blockerRoot.id,
                 input: null,
               },
             ],
@@ -123,8 +113,6 @@ export const getJobBlockersGroup: ConformanceGroup<StateAdapterConformanceContex
             jobs: [
               {
                 typeName: "main",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "main",
                 input: null,
               },
@@ -157,8 +145,6 @@ export const getJobBlockersGroup: ConformanceGroup<StateAdapterConformanceContex
             jobs: [
               {
                 typeName: "no-blockers",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "no-blockers",
                 input: null,
               },

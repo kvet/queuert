@@ -13,8 +13,6 @@ export const unblockJobsGroup: ConformanceGroup<StateAdapterConformanceContext> 
             jobs: [
               {
                 typeName: "blocker",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "blocker",
                 input: null,
               },
@@ -28,8 +26,6 @@ export const unblockJobsGroup: ConformanceGroup<StateAdapterConformanceContext> 
             jobs: [
               {
                 typeName: "main",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "main",
                 input: null,
               },
@@ -74,8 +70,6 @@ export const unblockJobsGroup: ConformanceGroup<StateAdapterConformanceContext> 
             jobs: [
               {
                 typeName: "blocker",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "blocker",
                 input: null,
               },
@@ -89,8 +83,6 @@ export const unblockJobsGroup: ConformanceGroup<StateAdapterConformanceContext> 
             jobs: [
               {
                 typeName: "blocker",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "blocker",
                 input: null,
               },
@@ -104,8 +96,6 @@ export const unblockJobsGroup: ConformanceGroup<StateAdapterConformanceContext> 
             jobs: [
               {
                 typeName: "main",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "main",
                 input: null,
               },
@@ -153,8 +143,6 @@ export const unblockJobsGroup: ConformanceGroup<StateAdapterConformanceContext> 
             jobs: [
               {
                 typeName: "standalone",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "standalone",
                 input: null,
               },
@@ -181,8 +169,6 @@ export const unblockJobsGroup: ConformanceGroup<StateAdapterConformanceContext> 
             jobs: [
               {
                 typeName: "blocker",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "blocker",
                 input: null,
               },
@@ -196,8 +182,6 @@ export const unblockJobsGroup: ConformanceGroup<StateAdapterConformanceContext> 
             jobs: [
               {
                 typeName: "main",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "main",
                 input: null,
               },
@@ -240,8 +224,6 @@ export const unblockJobsGroup: ConformanceGroup<StateAdapterConformanceContext> 
             jobs: [
               {
                 typeName: "standalone",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "standalone",
                 input: null,
               },
@@ -268,8 +250,6 @@ export const unblockJobsGroup: ConformanceGroup<StateAdapterConformanceContext> 
             jobs: [
               {
                 typeName: "blocker",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "blocker",
                 input: null,
               },
@@ -283,8 +263,6 @@ export const unblockJobsGroup: ConformanceGroup<StateAdapterConformanceContext> 
             jobs: [
               {
                 typeName: "main",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "main",
                 input: null,
               },

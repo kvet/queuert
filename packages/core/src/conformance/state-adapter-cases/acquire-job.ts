@@ -13,8 +13,6 @@ export const acquireJobGroup: ConformanceGroup<StateAdapterConformanceContext> =
             jobs: [
               {
                 typeName: "acquire-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "acquire-test",
                 input: { order: 1 },
               },
@@ -28,8 +26,6 @@ export const acquireJobGroup: ConformanceGroup<StateAdapterConformanceContext> =
             jobs: [
               {
                 typeName: "acquire-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "acquire-test",
                 input: { order: 2 },
               },
@@ -56,8 +52,6 @@ export const acquireJobGroup: ConformanceGroup<StateAdapterConformanceContext> =
             jobs: [
               {
                 typeName: "hasmore-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "hasmore-test",
                 input: null,
               },
@@ -71,8 +65,6 @@ export const acquireJobGroup: ConformanceGroup<StateAdapterConformanceContext> =
             jobs: [
               {
                 typeName: "hasmore-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "hasmore-test",
                 input: null,
               },
@@ -112,8 +104,6 @@ export const acquireJobGroup: ConformanceGroup<StateAdapterConformanceContext> =
             jobs: [
               {
                 typeName: "future-acquire",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "future-acquire",
                 input: null,
                 schedule: { afterMs: 60_000 },

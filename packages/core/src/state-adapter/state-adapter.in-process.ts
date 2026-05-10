@@ -2,7 +2,7 @@ import { type DeduplicationOptions } from "../entities/deduplication.js";
 import { type BlockerReference } from "../errors.js";
 import { createAsyncRwLock } from "../helpers/async-rw-lock.js";
 import { type OrderDirection, type Page, type PageParams } from "../pagination.js";
-import { decodeChainIndexCursor, decodeCreatedAtCursor, encodeCursor } from "./cursor.js";
+import { decodeCreatedAtWithIdCursor, decodeIdCursor, encodeCursor } from "./cursor.js";
 import { type StateAdapter, type StateJob, type StateJobStatus } from "./state-adapter.js";
 
 type BlockerEntry = { index: number; traceContext: string | null };
@@ -409,7 +409,7 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
 
     let startIndex = 0;
     if (page.cursor) {
-      const cursor = decodeCreatedAtCursor(page.cursor);
+      const cursor = decodeCreatedAtWithIdCursor(page.cursor);
       startIndex = sorted.findIndex((item) => {
         const sv = getCreatedAt(item).toISOString();
         const id = getId(item);
@@ -430,7 +430,7 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
       nextCursor:
         hasMore && lastItem
           ? encodeCursor({
-              type: "createdAt",
+              type: "createdAtWithId",
               id: getId(lastItem),
               createdAt: getCreatedAt(lastItem).toISOString(),
             })
@@ -452,20 +452,17 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
 
     let startIndex = 0;
     if (page.cursor) {
-      const cursor = decodeChainIndexCursor(page.cursor);
-      startIndex = sorted.findIndex((item) => {
-        if (orderDirection === "asc") {
-          return (
-            item.chainIndex > cursor.chainIndex ||
-            (item.chainIndex === cursor.chainIndex && item.id > cursor.id)
-          );
-        }
-        return (
-          item.chainIndex < cursor.chainIndex ||
-          (item.chainIndex === cursor.chainIndex && item.id < cursor.id)
-        );
-      });
-      if (startIndex === -1) startIndex = sorted.length;
+      const cursor = decodeIdCursor(page.cursor);
+      const cursorJob = jobs.get(cursor.id);
+      if (!cursorJob) {
+        startIndex = sorted.length;
+      } else {
+        startIndex = sorted.findIndex((item) => {
+          if (orderDirection === "asc") return item.chainIndex > cursorJob.chainIndex;
+          return item.chainIndex < cursorJob.chainIndex;
+        });
+        if (startIndex === -1) startIndex = sorted.length;
+      }
     }
 
     const pageItems = sorted.slice(startIndex, startIndex + page.limit);
@@ -474,14 +471,7 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
 
     return {
       items: pageItems,
-      nextCursor:
-        hasMore && lastItem
-          ? encodeCursor({
-              type: "chainIndex",
-              id: lastItem.id,
-              chainIndex: lastItem.chainIndex,
-            })
-          : null,
+      nextCursor: hasMore && lastItem ? encodeCursor({ type: "id", id: lastItem.id }) : null,
     };
   };
 
@@ -559,32 +549,46 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
       withWriteLock(txCtx, () => {
         const journal = txCtx?.journal;
         const results: { job: StateJob; deduplicated: boolean }[] = [];
-        for (const {
-          typeName,
-          chainTypeName,
-          chainIndex,
-          input,
-          chainId,
-          deduplication,
-          schedule,
-          chainTraceContext,
-          traceContext,
-        } of jobInputs) {
-          if (chainId) {
+        for (const jobInput of jobInputs) {
+          const { typeName, input, schedule, chainTraceContext, traceContext } = jobInput;
+
+          let chainId: string;
+          let chainTypeName: string;
+          let chainIndex: number;
+          let parent: StateJob | undefined;
+          let deduplication: DeduplicationOptions<string> | undefined;
+
+          if ("continueFromJobId" in jobInput) {
+            parent = jobs.get(jobInput.continueFromJobId);
+            if (!parent) {
+              throw new Error(`continueWith parent job ${jobInput.continueFromJobId} not found`);
+            }
+            chainId = parent.chainId;
+            chainTypeName = parent.chainTypeName;
+            chainIndex = parent.chainIndex + 1;
+
             const existingContinuation = findExistingContinuation(chainId, chainIndex);
             if (existingContinuation) {
               results.push({ job: existingContinuation, deduplicated: true });
               continue;
             }
-          } else if (deduplication) {
-            const existingDeduplicated = findDeduplicatedJob(chainTypeName, deduplication);
-            if (existingDeduplicated) {
-              results.push({ job: existingDeduplicated, deduplicated: true });
-              continue;
+          } else {
+            chainTypeName = jobInput.chainTypeName;
+            chainIndex = 0;
+            chainId = ""; // assigned below from generated id
+            deduplication = jobInput.deduplication;
+            if (deduplication) {
+              const existingDeduplicated = findDeduplicatedJob(chainTypeName, deduplication);
+              if (existingDeduplicated) {
+                results.push({ job: existingDeduplicated, deduplicated: true });
+                continue;
+              }
             }
           }
 
           const id = crypto.randomUUID();
+          if (!parent) chainId = id;
+
           const now = new Date();
           const resolvedScheduledAt =
             schedule?.at ?? (schedule?.afterMs ? new Date(now.getTime() + schedule.afterMs) : now);
@@ -594,9 +598,10 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
             typeName,
             chainTypeName,
             chainIndex,
+            continuedToJobId: null,
             input,
             output: null,
-            chainId: chainId ?? id,
+            chainId,
             status: "pending",
             createdAt: now,
             scheduledAt: resolvedScheduledAt,
@@ -613,6 +618,12 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
           };
 
           writeJob(journal, undefined, job);
+
+          if (parent && parent.continuedToJobId === null) {
+            const updatedParent: StateJob = { ...parent, continuedToJobId: job.id };
+            writeJob(journal, parent, updatedParent);
+          }
+
           results.push({ job, deduplicated: false });
         }
         return results;

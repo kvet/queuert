@@ -14,8 +14,6 @@ export const reapExpiredJobLeaseGroup: ConformanceGroup<StateAdapterConformanceC
             jobs: [
               {
                 typeName: "expire-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "expire-test",
                 input: null,
               },
@@ -58,8 +56,6 @@ export const reapExpiredJobLeaseGroup: ConformanceGroup<StateAdapterConformanceC
             jobs: [
               {
                 typeName: "no-expire-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "no-expire-test",
                 input: null,
               },
@@ -96,8 +92,6 @@ export const reapExpiredJobLeaseGroup: ConformanceGroup<StateAdapterConformanceC
             jobs: [
               {
                 typeName: "ignore-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "ignore-test",
                 input: { order: "a" },
               },
@@ -111,8 +105,6 @@ export const reapExpiredJobLeaseGroup: ConformanceGroup<StateAdapterConformanceC
             jobs: [
               {
                 typeName: "ignore-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "ignore-test",
                 input: { order: "b" },
               },

@@ -36,10 +36,8 @@ export const startChains = async (
     jobs: chains.map((chain) => ({
       typeName: chain.typeName,
       chainTypeName: chain.typeName,
-      chainIndex: 0,
       input: chain.input,
       blockers: chain.blockers,
-      isChainStart: true,
       deduplication: chain.deduplication,
       schedule: chain.schedule,
     })),

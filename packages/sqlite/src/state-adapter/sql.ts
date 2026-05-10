@@ -13,6 +13,7 @@ export const jobColumns = [
   "chain_id",
   "chain_type_name",
   "chain_index",
+  "continued_to_job_id",
   "input",
   "output",
   "status",
@@ -42,6 +43,7 @@ export type DbJob = {
   chain_id: string;
   chain_type_name: string;
   chain_index: number;
+  continued_to_job_id: string | null;
   input: string | null;
   output: string | null;
 
@@ -71,6 +73,7 @@ export type DbChainRow = DbJob & {
 export const migrations: Migration[] = [
   {
     name: "20240101000000_initial_schema",
+    transactional: true,
     statements: [
       {
         sql: sql(/* sql */ `
@@ -176,6 +179,7 @@ ON {{table_prefix}}job (type_name, created_at DESC) WHERE chain_index = 0`),
   },
   {
     name: "20260430000000_rename_chain_indexes",
+    transactional: true,
     statements: [
       {
         sql: sql(/* sql */ `DROP INDEX IF EXISTS {{table_prefix}}job_chain_index_idx`),
@@ -203,6 +207,32 @@ ON {{table_prefix}}job (type_name, created_at DESC) WHERE chain_index = 0`),
       },
     ],
   },
+  {
+    name: "20260507000000_continued_to_job_id",
+    transactional: true,
+    statements: [
+      {
+        sql: sql(/* sql */ `
+ALTER TABLE {{table_prefix}}job
+  ADD COLUMN continued_to_job_id {{id_type}} REFERENCES {{table_prefix}}job(id)`),
+      },
+      {
+        sql: sql(/* sql */ `
+CREATE UNIQUE INDEX IF NOT EXISTS {{table_prefix}}continued_to_job_id_idx
+ON {{table_prefix}}job (continued_to_job_id)
+WHERE continued_to_job_id IS NOT NULL`),
+      },
+      {
+        sql: sql(/* sql */ `
+UPDATE {{table_prefix}}job AS j
+SET continued_to_job_id = (
+  SELECT n.id FROM {{table_prefix}}job n
+  WHERE n.chain_id = j.chain_id AND n.chain_index = j.chain_index + 1
+)
+WHERE j.continued_to_job_id IS NULL`),
+      },
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -217,6 +247,7 @@ type SqliteDbJobCols<TRuntime extends RuntimeType> = {
   readonly type_name: DataType<"string", string>;
   readonly chain_type_name: DataType<"string", string>;
   readonly chain_index: DataType<"number", number>;
+  readonly continued_to_job_id: DataType<"string?", string | null>;
   readonly input: DataType<"string?", string | null>;
   readonly output: DataType<"string?", string | null>;
   readonly status: DataType<"string", DbJob["status"]>;
@@ -240,6 +271,7 @@ type SqliteDbChainRowCols<TRuntime extends RuntimeType> = SqliteDbJobCols<TRunti
   readonly lc_chain_id: DataType<"string?", string | null>;
   readonly lc_chain_type_name: DataType<"string?", string | null>;
   readonly lc_chain_index: DataType<"number?", number | null>;
+  readonly lc_continued_to_job_id: DataType<"string?", string | null>;
   readonly lc_input: DataType<"string?", string | null>;
   readonly lc_output: DataType<"string?", string | null>;
   readonly lc_status: DataType<"string?", DbJob["status"] | null>;
@@ -273,10 +305,6 @@ export type SqliteSqlDefinitions<TRuntime extends RuntimeType = RuntimeType> = {
     readonly [DataType<"string", string>],
     Record<string, never>
   >;
-  readonly findExistingContinuationSql: TypedSql<
-    readonly [Id<TRuntime>, DataType<"number", number>],
-    SqliteDbJobCols<TRuntime> & { readonly deduplicated: DataType<"number", number> }
-  >;
   readonly findDeduplicatedJobSql: TypedSql<
     readonly [
       DataType<"string?", string | null>,
@@ -295,6 +323,10 @@ export type SqliteSqlDefinitions<TRuntime extends RuntimeType = RuntimeType> = {
   readonly insertJobsSql: TypedSql<
     readonly [DataType<"string", string>],
     SqliteDbJobCols<TRuntime>
+  >;
+  readonly updateParentContinuedToJobIdSql: TypedSql<
+    readonly [DataType<"string", string>],
+    Record<string, never>
   >;
   readonly insertJobBlockersSql: TypedSql<
     readonly [Id<TRuntime>, DataType<"string", string>, DataType<"string", string>],
@@ -400,6 +432,7 @@ export const createSqliteSqlDefinitions = <TRuntime extends RuntimeType>(
     type_name: t.string(),
     chain_type_name: t.string(),
     chain_index: t.number(),
+    continued_to_job_id: t["string?"](),
     input: t["string?"](),
     output: t["string?"](),
     status: t.string<DbJob["status"]>(),
@@ -424,6 +457,7 @@ export const createSqliteSqlDefinitions = <TRuntime extends RuntimeType>(
     lc_chain_id: t["string?"](),
     lc_chain_type_name: t["string?"](),
     lc_chain_index: t["number?"](),
+    lc_continued_to_job_id: t["string?"](),
     lc_input: t["string?"](),
     lc_output: t["string?"](),
     lc_status: t["string?"]<DbJob["status"]>(),
@@ -473,21 +507,6 @@ CREATE TABLE IF NOT EXISTS {{table_prefix}}migration (
     },
   );
 
-  const findExistingContinuationSql = sql(
-    /* sql */ `
-SELECT *, 1 AS deduplicated
-FROM {{table_prefix}}job
-WHERE chain_id = ? AND chain_index = ? AND id != chain_id
-LIMIT 1
-`,
-    {
-      id: "findExistingContinuation",
-      params: [id, t.number()],
-      columns: { ...dbJobColumns, deduplicated: t.number() },
-      readOnly: true,
-    },
-  );
-
   const findDeduplicatedJobSql = sql(
     /* sql */ `
 SELECT *, 1 AS deduplicated
@@ -531,29 +550,69 @@ LIMIT 1
     },
   );
 
+  const updateParentContinuedToJobIdSql = sql(
+    /* sql */ `
+UPDATE {{table_prefix}}job AS p
+SET continued_to_job_id = u.new_id
+FROM (
+  SELECT
+    json_extract(value, '$.parent_id') AS parent_id,
+    json_extract(value, '$.new_id') AS new_id
+  FROM json_each(?)
+) AS u
+WHERE p.id = u.parent_id
+  AND p.continued_to_job_id IS NULL
+`,
+    {
+      id: "updateParentContinuedToJobId",
+      params: [t.string()],
+      columns: {},
+    },
+  );
+
   const insertJobsSql = sql(
     /* sql */ `
+WITH input_data AS (
+  SELECT
+    je.key                                              AS ord,
+    json_extract(je.value, '$.id')                      AS new_id,
+    json_extract(je.value, '$.continue_from_job_id')    AS continue_from_job_id,
+    json_extract(je.value, '$.type_name')               AS type_name,
+    json_extract(je.value, '$.chain_type_name')         AS raw_chain_type_name,
+    json_extract(je.value, '$.input')                   AS input,
+    json_extract(je.value, '$.deduplication_key')       AS deduplication_key,
+    json_extract(je.value, '$.scheduled_at')            AS sched_at,
+    json_extract(je.value, '$.schedule_after_ms')       AS sched_after_ms,
+    json_extract(je.value, '$.chain_trace_context')     AS chain_trace_context,
+    json_extract(je.value, '$.trace_context')           AS trace_context,
+    p.chain_id                                          AS parent_chain_id,
+    p.chain_type_name                                   AS parent_chain_type_name,
+    p.chain_index                                       AS parent_chain_index
+  FROM json_each(?) AS je
+  LEFT JOIN {{table_prefix}}job p
+    ON p.id = json_extract(je.value, '$.continue_from_job_id')
+)
 INSERT INTO {{table_prefix}}job (id, type_name, chain_id, chain_type_name, chain_index, input, deduplication_key, scheduled_at, chain_trace_context, trace_context)
 SELECT
-  json_extract(je.value, '$.id'),
-  json_extract(je.value, '$.type_name'),
-  COALESCE(json_extract(je.value, '$.chain_id'), json_extract(je.value, '$.id')),
-  json_extract(je.value, '$.chain_type_name'),
-  json_extract(je.value, '$.chain_index'),
-  json_extract(je.value, '$.input'),
-  json_extract(je.value, '$.deduplication_key'),
+  d.new_id,
+  d.type_name,
+  COALESCE(d.parent_chain_id, d.new_id),
+  COALESCE(d.parent_chain_type_name, d.raw_chain_type_name),
+  COALESCE(d.parent_chain_index + 1, 0),
+  d.input,
+  d.deduplication_key,
   COALESCE(
-    json_extract(je.value, '$.scheduled_at'),
-    CASE WHEN json_extract(je.value, '$.schedule_after_ms') IS NOT NULL
-      THEN datetime('now', 'subsec', '+' || (json_extract(je.value, '$.schedule_after_ms') / 1000.0) || ' seconds')
+    d.sched_at,
+    CASE WHEN d.sched_after_ms IS NOT NULL
+      THEN datetime('now', 'subsec', '+' || (d.sched_after_ms / 1000.0) || ' seconds')
       ELSE NULL
     END,
     datetime('now', 'subsec')
   ),
-  json_extract(je.value, '$.chain_trace_context'),
-  json_extract(je.value, '$.trace_context')
-FROM json_each(?) AS je
-WHERE true
+  d.chain_trace_context,
+  d.trace_context
+FROM input_data d
+ORDER BY d.ord
 ON CONFLICT (chain_id, chain_index) DO UPDATE SET id = {{table_prefix}}job.id
 RETURNING *
 `,
@@ -1060,9 +1119,9 @@ WHERE chain_id IN (SELECT value FROM json_each(?))
     createMigrationTableSql,
     getAppliedMigrationsSql,
     recordMigrationSql,
-    findExistingContinuationSql,
     findDeduplicatedJobSql,
     insertJobsSql,
+    updateParentContinuedToJobIdSql,
     insertJobBlockersSql,
     checkBlockersStatusSql,
     updateJobToBlockedSql,

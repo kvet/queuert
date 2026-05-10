@@ -25,7 +25,7 @@ const createJob = async (
   const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
     stateAdapter.createJobs({
       txCtx,
-      jobs: [{ typeName, chainId: undefined, chainIndex: 0, chainTypeName: typeName, input }],
+      jobs: [{ typeName, chainTypeName: typeName, input }],
     }),
   );
   return job;
@@ -34,15 +34,13 @@ const createJob = async (
 const createContinuation = async (
   stateAdapter: Awaited<ReturnType<typeof createInProcessStateAdapter>>,
   typeName: string,
-  chainId: string,
-  chainTypeName: string,
-  chainIndex: number,
+  continueFromJobId: string,
   input: unknown,
 ) => {
   const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
     stateAdapter.createJobs({
       txCtx,
-      jobs: [{ typeName, chainId, chainTypeName, chainIndex, input }],
+      jobs: [{ typeName, continueFromJobId, input }],
     }),
   );
   return job;
@@ -75,7 +73,7 @@ describe("Dashboard API", () => {
     it("returns chain with continuation", async () => {
       const { request, stateAdapter } = await createTestDashboard();
       const root = await createJob(stateAdapter, "chain-type", { step: 1 });
-      await createContinuation(stateAdapter, "chain-step2", root.chainId, "chain-type", 1, {
+      await createContinuation(stateAdapter, "chain-step2", root.id, {
         step: 2,
       });
 
@@ -115,7 +113,7 @@ describe("Dashboard API", () => {
     it("returns chain detail with jobs", async () => {
       const { request, stateAdapter } = await createTestDashboard();
       const root = await createJob(stateAdapter, "chain-type", { step: 1 });
-      await createContinuation(stateAdapter, "chain-step2", root.chainId, "chain-type", 1, {
+      await createContinuation(stateAdapter, "chain-step2", root.id, {
         step: 2,
       });
 
@@ -285,7 +283,7 @@ describe("Dashboard API", () => {
     it("filters by chainTypeName", async () => {
       const { request, stateAdapter } = await createTestDashboard();
       const root = await createJob(stateAdapter, "chain-type", null);
-      await createContinuation(stateAdapter, "chain-step2", root.chainId, "chain-type", 1, null);
+      await createContinuation(stateAdapter, "chain-step2", root.id, null);
       await createJob(stateAdapter, "other-type", null);
 
       const res = await request("/api/jobs?chainTypeName=chain-type");
@@ -300,7 +298,7 @@ describe("Dashboard API", () => {
     it("filters by chainId", async () => {
       const { request, stateAdapter } = await createTestDashboard();
       const root = await createJob(stateAdapter, "chain-type", null);
-      await createContinuation(stateAdapter, "chain-step2", root.chainId, "chain-type", 1, null);
+      await createContinuation(stateAdapter, "chain-step2", root.id, null);
       await createJob(stateAdapter, "other-type", null);
 
       const res = await request(`/api/jobs?chainId=${root.chainId}`);
@@ -329,13 +327,9 @@ describe("Dashboard API", () => {
     it("returns continuation for job in chain", async () => {
       const { request, stateAdapter } = await createTestDashboard();
       const root = await createJob(stateAdapter, "chain-type", { step: 1 });
-      const cont = await createContinuation(
-        stateAdapter,
-        "chain-step2",
-        root.chainId,
-        "chain-type",
-        1,
-        { step: 2 },
+      const cont = await createContinuation(stateAdapter, "chain-step2", root.id, { step: 2 });
+      await stateAdapter.withTransaction(async (txCtx) =>
+        stateAdapter.completeJob({ txCtx, jobId: root.id, output: null, workerId: "test" }),
       );
 
       const res = await request(`/api/jobs/${root.id}`);
@@ -344,19 +338,15 @@ describe("Dashboard API", () => {
       expect(res.status).toBe(200);
       expect(body.continuation).not.toBeNull();
       expect(body.continuation.id).toBe(cont.id);
-      expect(body.continuation.chainIndex).toBe(1);
+      expect(body.continuation.chainId).toBe(root.chainId);
     });
 
     it("returns null continuation for last job in chain", async () => {
       const { request, stateAdapter } = await createTestDashboard();
       const root = await createJob(stateAdapter, "chain-type", { step: 1 });
-      const cont = await createContinuation(
-        stateAdapter,
-        "chain-step2",
-        root.chainId,
-        "chain-type",
-        1,
-        { step: 2 },
+      const cont = await createContinuation(stateAdapter, "chain-step2", root.id, { step: 2 });
+      await stateAdapter.withTransaction(async (txCtx) =>
+        stateAdapter.completeJob({ txCtx, jobId: root.id, output: null, workerId: "test" }),
       );
 
       const res = await request(`/api/jobs/${cont.id}`);
@@ -382,8 +372,6 @@ describe("Dashboard API", () => {
           jobs: [
             {
               typeName: "scheduled-type",
-              chainId: undefined,
-              chainIndex: 0,
               chainTypeName: "scheduled-type",
               input: null,
               schedule: { afterMs: 60_000 },

@@ -25,28 +25,29 @@ PostgreSQL enums provide type safety at the database level — invalid status va
 
 The `job` table stores all job state:
 
-| Column                | Type                           | Description                                                                 |
-| --------------------- | ------------------------------ | --------------------------------------------------------------------------- |
-| `id`                  | configurable (default: `uuid`) | Primary key. Type and default expression are set via `idType` / `idDefault` |
-| `type_name`           | `text`                         | Job type identifier                                                         |
-| `chain_id`            | same as `id`                   | Foreign key to root job — every job in a chain points to the root           |
-| `chain_type_name`     | `text`                         | Type name of the chain (copied from root for query efficiency)              |
-| `chain_index`         | `integer`                      | Position in chain (0 for root, incrementing for continuations)              |
-| `input`               | `jsonb`                        | Job input data                                                              |
-| `output`              | `jsonb`                        | Completion output (null until completed)                                    |
-| `status`              | `job_status`                   | Current state: blocked, pending, running, or completed                      |
-| `created_at`          | `timestamptz`                  | When the job was created                                                    |
-| `scheduled_at`        | `timestamptz`                  | Earliest time the job can be acquired                                       |
-| `completed_at`        | `timestamptz`                  | When the job completed (null until completed)                               |
-| `completed_by`        | `text`                         | Worker ID that completed the job (null for workerless)                      |
-| `attempt`             | `integer`                      | Number of processing attempts (starts at 0)                                 |
-| `last_attempt_at`     | `timestamptz`                  | When the last attempt started                                               |
-| `last_attempt_error`  | `jsonb`                        | Error from last failed attempt                                              |
-| `leased_by`           | `text`                         | Worker ID holding the lease                                                 |
-| `leased_until`        | `timestamptz`                  | Lease expiry time                                                           |
-| `deduplication_key`   | `text`                         | Key for chain deduplication                                                 |
-| `chain_trace_context` | `text`                         | W3C traceparent for chain-level spans                                       |
-| `trace_context`       | `text`                         | W3C traceparent for job-level spans                                         |
+| Column                | Type                           | Description                                                                                                                                     |
+| --------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                  | configurable (default: `uuid`) | Primary key. Type and default expression are set via `idType` / `idDefault`                                                                     |
+| `type_name`           | `text`                         | Job type identifier                                                                                                                             |
+| `chain_id`            | same as `id`                   | Foreign key to root job — every job in a chain points to the root                                                                               |
+| `chain_type_name`     | `text`                         | Type name of the chain (copied from root for query efficiency)                                                                                  |
+| `chain_index`         | `integer`                      | Position in chain (0 for root, incrementing for continuations)                                                                                  |
+| `continued_to_job_id` | same as `id`                   | FK to the next job in the chain — non-null exactly when this job has a successor (set transactionally when `continueWith` inserts the next row) |
+| `input`               | `jsonb`                        | Job input data                                                                                                                                  |
+| `output`              | `jsonb`                        | Completion output (null until completed)                                                                                                        |
+| `status`              | `job_status`                   | Current state: blocked, pending, running, or completed                                                                                          |
+| `created_at`          | `timestamptz`                  | When the job was created                                                                                                                        |
+| `scheduled_at`        | `timestamptz`                  | Earliest time the job can be acquired                                                                                                           |
+| `completed_at`        | `timestamptz`                  | When the job completed (null until completed)                                                                                                   |
+| `completed_by`        | `text`                         | Worker ID that completed the job (null for workerless)                                                                                          |
+| `attempt`             | `integer`                      | Number of processing attempts (starts at 0)                                                                                                     |
+| `last_attempt_at`     | `timestamptz`                  | When the last attempt started                                                                                                                   |
+| `last_attempt_error`  | `jsonb`                        | Error from last failed attempt                                                                                                                  |
+| `leased_by`           | `text`                         | Worker ID holding the lease                                                                                                                     |
+| `leased_until`        | `timestamptz`                  | Lease expiry time                                                                                                                               |
+| `deduplication_key`   | `text`                         | Key for chain deduplication                                                                                                                     |
+| `chain_trace_context` | `text`                         | W3C traceparent for chain-level spans                                                                                                           |
+| `trace_context`       | `text`                         | W3C traceparent for job-level spans                                                                                                             |
 
 The `chain_id` foreign key references `job(id)`, forming a self-referential relationship where all jobs in a chain point to the root job (chain_index = 0).
 
@@ -93,7 +94,17 @@ CREATE UNIQUE INDEX chain_index_idx
   ON job (chain_id, chain_index)
 ```
 
-Guarantees each position in a chain has exactly one job.
+Guarantees each position in a chain has exactly one job. Also serves as the race-decider for `continueWith`: two concurrent attempts both compute `chain_index = N + 1`, the loser's INSERT short-circuits via `ON CONFLICT (chain_id, chain_index) DO UPDATE SET id = id RETURNING *` and returns the winner's row.
+
+### Continuation Pointer
+
+```sql
+CREATE UNIQUE INDEX continued_to_job_id_idx
+  ON job (continued_to_job_id)
+  WHERE continued_to_job_id IS NOT NULL
+```
+
+Enforces that no two jobs share the same successor and supports cursor decoding for `listChainJobs` (the cursor is an opaque job id; the SQL resolves the next-page boundary by joining `c.continued_to_job_id = n.id`).
 
 ### Deduplication
 

@@ -4,7 +4,7 @@ import {
   JobNotTriggerableError,
   withTransactionHooks,
 } from "queuert";
-import { encodeCursor, helpersSymbol } from "queuert/internal";
+import { helpersSymbol } from "queuert/internal";
 
 import { serovalResponse } from "../response.js";
 import { parseCursor, parseLimit, parseStatusFilter, parseTypeNameFilter } from "./params.js";
@@ -47,22 +47,17 @@ export const handleJobDetail = async (
     return serovalResponse({ error: "Job not found" }, 404);
   }
 
-  const cursor = encodeCursor({ type: "chainIndex", id: job.id, chainIndex: job.chainIndex });
-  const [blockers, continuationPage] = await Promise.all([
-    client.getJobBlockers({ jobId: job.id }),
-    client.listChainJobs({
-      chainId: job.chainId,
-      orderDirection: "asc",
-      cursor,
-      limit: 1,
-    }),
-  ]);
+  const continuationId =
+    job.status === "completed" && job.continuedToJobId !== null ? job.continuedToJobId : null;
 
-  const continuation = continuationPage.items[0] ?? null;
+  const [blockers, continuation] = await Promise.all([
+    client.getJobBlockers({ jobId: job.id }),
+    continuationId ? client.getJob({ id: continuationId }) : Promise.resolve(null),
+  ]);
 
   return serovalResponse({
     job,
-    continuation,
+    continuation: continuation ?? null,
     blockers,
   });
 };

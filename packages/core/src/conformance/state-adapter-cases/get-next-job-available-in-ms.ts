@@ -13,8 +13,6 @@ export const getNextJobAvailableInMsGroup: ConformanceGroup<StateAdapterConforma
             jobs: [
               {
                 typeName: "avail-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "avail-test",
                 input: null,
               },
@@ -35,8 +33,6 @@ export const getNextJobAvailableInMsGroup: ConformanceGroup<StateAdapterConforma
             jobs: [
               {
                 typeName: "future-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "future-test",
                 input: null,
                 schedule: { afterMs: 5000 },

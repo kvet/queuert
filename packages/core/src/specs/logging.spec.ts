@@ -1502,7 +1502,7 @@ describe("Logging rollback", () => {
     const erroringStateAdapter: typeof stateAdapter = {
       ...stateAdapter,
       createJobs: async (args) => {
-        if (!createJobErrorThrown && args.jobs.some((j) => j.chainIndex > 0)) {
+        if (!createJobErrorThrown && args.jobs.some((j) => "continueFromJobId" in j)) {
           createJobErrorThrown = true;
           throw new Error("simulated createJob failure");
         }

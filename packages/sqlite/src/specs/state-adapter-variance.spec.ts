@@ -112,9 +112,7 @@ describe("SQLite State Adapter Variance - Custom Table Prefix", () => {
     const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
-        jobs: [
-          { typeName: "t", chainId: undefined, chainIndex: 0, chainTypeName: "t", input: null },
-        ],
+        jobs: [{ typeName: "t", chainTypeName: "t", input: null }],
       }),
     );
     expect(UUID_PATTERN.test(job.id)).toBe(true);
@@ -170,9 +168,7 @@ describe("SQLite State Adapter Variance - Custom ID Generator", () => {
     const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
-        jobs: [
-          { typeName: "t", chainId: undefined, chainIndex: 0, chainTypeName: "t", input: null },
-        ],
+        jobs: [{ typeName: "t", chainTypeName: "t", input: null }],
       }),
     );
     expect(job.id.startsWith("custom-")).toBe(true);
@@ -228,9 +224,7 @@ describe("SQLite State Adapter Variance - All Custom Options", () => {
     const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
-        jobs: [
-          { typeName: "t", chainId: undefined, chainIndex: 0, chainTypeName: "t", input: null },
-        ],
+        jobs: [{ typeName: "t", chainTypeName: "t", input: null }],
       }),
     );
     expect(job.id.startsWith("job-")).toBe(true);

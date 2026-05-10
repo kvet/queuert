@@ -133,6 +133,7 @@ type AdapterConfig = {
   idType: string;
   idDefault: string;
   idDataType: DataType<RuntimeType, string>;
+  idNullableDataType: DataType<RuntimeType, string | null>;
 };
 
 const configs: AdapterConfig[] = [
@@ -143,6 +144,7 @@ const configs: AdapterConfig[] = [
     idType: "uuid",
     idDefault: "gen_random_uuid()",
     idDataType: t.uuid(),
+    idNullableDataType: t["uuid?"](),
   },
   {
     label: "idType=text",
@@ -151,6 +153,7 @@ const configs: AdapterConfig[] = [
     idType: "text",
     idDefault: "'job.' || gen_random_uuid()::text",
     idDataType: t.string(),
+    idNullableDataType: t["string?"](),
   },
 ];
 
@@ -211,7 +214,7 @@ const contractIt = it.extend<{
 describe("PostgreSQL SQL contract", () => {
   for (const cfg of configs) {
     describe(cfg.label, () => {
-      const defs = createPgSqlDefinitions(cfg.idDataType);
+      const defs = createPgSqlDefinitions(cfg.idDataType, cfg.idNullableDataType);
       const applyTemplate = createTemplateApplier({
         schema: cfg.schema,
         table_prefix: cfg.tablePrefix,

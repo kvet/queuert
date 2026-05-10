@@ -13,8 +13,6 @@ export const deleteChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
             jobs: [
               {
                 typeName: "delete-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "delete-test",
                 input: null,
               },
@@ -44,8 +42,6 @@ export const deleteChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
             jobs: [
               {
                 typeName: "chain-a",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "chain-a",
                 input: null,
               },
@@ -59,8 +55,6 @@ export const deleteChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
             jobs: [
               {
                 typeName: "chain-b",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "chain-b",
                 input: null,
               },
@@ -88,8 +82,6 @@ export const deleteChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
             jobs: [
               {
                 typeName: "blocker",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "blocker",
                 input: null,
               },
@@ -103,8 +95,6 @@ export const deleteChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
             jobs: [
               {
                 typeName: "main",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "main",
                 input: null,
               },
@@ -151,8 +141,6 @@ export const deleteChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
             jobs: [
               {
                 typeName: "blocker",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "blocker",
                 input: null,
               },
@@ -166,8 +154,6 @@ export const deleteChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
             jobs: [
               {
                 typeName: "main",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "main",
                 input: null,
               },
@@ -204,8 +190,6 @@ export const deleteChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
             jobs: [
               {
                 typeName: "blocker",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "blocker",
                 input: null,
               },
@@ -219,8 +203,6 @@ export const deleteChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
             jobs: [
               {
                 typeName: "main",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "main",
                 input: null,
               },
@@ -258,8 +240,6 @@ export const deleteChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
             jobs: [
               {
                 typeName: "chain-a",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "chain-a",
                 input: null,
               },
@@ -273,8 +253,6 @@ export const deleteChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
             jobs: [
               {
                 typeName: "chain-b",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "chain-b",
                 input: null,
               },
@@ -288,8 +266,6 @@ export const deleteChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
             jobs: [
               {
                 typeName: "chain-c",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "chain-c",
                 input: null,
               },
@@ -340,8 +316,6 @@ export const deleteChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
             jobs: [
               {
                 typeName: "diamond-a",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "diamond-a",
                 input: null,
               },
@@ -355,8 +329,6 @@ export const deleteChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
             jobs: [
               {
                 typeName: "diamond-b",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "diamond-b",
                 input: null,
               },
@@ -370,8 +342,6 @@ export const deleteChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
             jobs: [
               {
                 typeName: "diamond-c",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "diamond-c",
                 input: null,
               },
@@ -385,8 +355,6 @@ export const deleteChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
             jobs: [
               {
                 typeName: "diamond-d",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "diamond-d",
                 input: null,
               },
@@ -439,8 +407,6 @@ export const deleteChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
             jobs: [
               {
                 typeName: "standalone-a",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "standalone-a",
                 input: null,
               },
@@ -454,8 +420,6 @@ export const deleteChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
             jobs: [
               {
                 typeName: "standalone-b",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "standalone-b",
                 input: null,
               },

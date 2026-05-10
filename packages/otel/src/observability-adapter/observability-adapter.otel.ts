@@ -379,11 +379,11 @@ export const createOtelObservabilityAdapter = async ({
             attemptSpan.setStatus({ code: SpanStatusCode.OK });
             attemptSpan.setAttribute("queuert.attempt.result", "completed");
 
-            if (result.continued) {
-              attemptSpan.setAttribute("queuert.continued_with.job_id", result.continued.jobId);
+            if (result.continuedWith) {
+              attemptSpan.setAttribute("queuert.continued_with.job_id", result.continuedWith.jobId);
               attemptSpan.setAttribute(
                 "queuert.continued_with.job_type",
-                result.continued.jobTypeName,
+                result.continuedWith.jobTypeName,
               );
             }
 
@@ -488,9 +488,9 @@ export const createOtelObservabilityAdapter = async ({
         jobParentCtx,
       );
 
-      if (data.continued) {
-        jobSpan.setAttribute("queuert.continued_with.job_id", data.continued.jobId);
-        jobSpan.setAttribute("queuert.continued_with.job_type", data.continued.jobTypeName);
+      if (data.continuedWith) {
+        jobSpan.setAttribute("queuert.continued_with.job_id", data.continuedWith.jobId);
+        jobSpan.setAttribute("queuert.continued_with.job_type", data.continuedWith.jobTypeName);
       }
 
       const jobConsumerCtx = trace.setSpan(context.active(), jobSpan);

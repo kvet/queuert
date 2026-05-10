@@ -13,8 +13,6 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
             jobs: [
               {
                 typeName: "resched-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "resched-test",
                 input: null,
               },
@@ -62,8 +60,6 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
             jobs: [
               {
                 typeName: "resched-at-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "resched-at-test",
                 input: null,
               },

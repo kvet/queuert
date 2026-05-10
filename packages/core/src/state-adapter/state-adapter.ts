@@ -10,6 +10,7 @@ export type StateJob = {
   chainId: string;
   chainTypeName: string;
   chainIndex: number;
+  continuedToJobId: string | null;
   input: unknown;
   output: unknown;
 
@@ -94,25 +95,41 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     lock?: "exclusive";
   }) => Promise<StateJob | undefined>;
 
-  /** Creates jobs. Returns results in the same order as input. */
+  /**
+   * Creates jobs. Returns results in the same order as input.
+   *
+   * Each input is one of two shapes, distinguished structurally:
+   * - **chain start** (`chainTypeName` present): first job in a new chain.
+   *   Adapter generates the chain's id (job's id == chain id), assigns
+   *   `chainIndex = 0`, uses the provided `chainTypeName`. Supports
+   *   deduplication.
+   * - **continuation** (`continueFromJobId` present): successor of an existing
+   *   job. Adapter looks up `continueFromJobId` to inherit `chainId`,
+   *   `chainTypeName`, and assigns `chainIndex = parent.chainIndex + 1`. Sets
+   *   the parent's `continuedToJobId` to the new job's id.
+   */
   createJobs: (params: {
     txCtx?: TTxContext;
-    jobs: {
+    jobs: ({
       typeName: string;
-      chainId: TJobId | undefined;
-      chainTypeName: string;
-      chainIndex: number;
       input: unknown;
-      deduplication?: {
-        key: string;
-        scope?: "incomplete" | "any";
-        windowMs?: number;
-        excludeChainIds?: TJobId[];
-      };
       schedule?: ScheduleOptions;
       chainTraceContext?: string | null;
       traceContext?: string | null;
-    }[];
+    } & (
+      | {
+          chainTypeName: string;
+          deduplication?: {
+            key: string;
+            scope?: "incomplete" | "any";
+            windowMs?: number;
+            excludeChainIds?: TJobId[];
+          };
+        }
+      | {
+          continueFromJobId: TJobId;
+        }
+    ))[];
   }) => Promise<{ job: StateJob; deduplicated: boolean }[]>;
 
   /** Adds blocker dependencies to jobs. Returns results in the same order as input. */

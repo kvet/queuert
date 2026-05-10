@@ -1,5 +1,5 @@
 import { type JobStatus } from "queuert";
-import { decodeChainIndexCursor, decodeCreatedAtCursor } from "queuert/internal";
+import { decodeCreatedAtWithIdCursor, decodeIdCursor } from "queuert/internal";
 
 const VALID_STATUSES = new Set<string>(["blocked", "pending", "running", "completed"]);
 
@@ -18,11 +18,11 @@ export const parseStatusFilter = (raw: string | undefined): JobStatus[] | undefi
 export const parseCursor = (raw: string | undefined): string | undefined => {
   if (!raw) return undefined;
   try {
-    decodeCreatedAtCursor(raw);
+    decodeCreatedAtWithIdCursor(raw);
     return raw;
   } catch {}
   try {
-    decodeChainIndexCursor(raw);
+    decodeIdCursor(raw);
     return raw;
   } catch {
     return undefined;

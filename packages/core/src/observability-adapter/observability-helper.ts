@@ -39,7 +39,7 @@ const mapChainToData = (chain: Chain<any, any, any, any>): ChainData => ({
   typeName: chain.typeName,
 });
 
-const mapJobToJobBasicData = (job: Job<any, any, any, any, any>): JobBasicData => ({
+const mapJobToJobBasicData = (job: Job<any, any, any, any, any, boolean>): JobBasicData => ({
   id: job.id,
   typeName: job.typeName,
   chainId: job.chainId,
@@ -79,13 +79,17 @@ export type ObservabilityHelper = {
   ) => void;
   jobAttemptCompleted: (
     job: StateJob,
-    options: { output: unknown; continuedWith?: Job<any, any, any, any, any>; workerId: string },
+    options: {
+      output: unknown;
+      continuedWith?: Job<any, any, any, any, any, boolean>;
+      workerId: string;
+    },
   ) => void;
   jobCompleted: (
     job: StateJob,
     options: {
       output: unknown;
-      continuedWith?: Job<any, any, any, any, any>;
+      continuedWith?: Job<any, any, any, any, any, boolean>;
       workerId: string | null;
     },
   ) => void;
@@ -117,7 +121,7 @@ export type ObservabilityHelper = {
   startAttemptSpan: (data: JobAttemptSpanInputData) => JobAttemptSpanHandle | undefined;
   completeJobSpan: (
     job: StateJob,
-    options: { continued?: Job<any, any, any, any, any>; chainCompleted: boolean },
+    options: { continuedWith?: Job<any, any, any, any, any, boolean>; chainCompleted: boolean },
   ) => void;
   startBlockerSpan: (data: BlockerSpanInputData) => BlockerSpanHandle | undefined;
   completeBlockerSpan: (data: CompleteBlockerSpanData) => void;
@@ -532,8 +536,8 @@ export const createObservabilityHelper = ({
         chainTypeName: job.chainTypeName,
         jobId: job.id,
         jobTypeName: job.typeName,
-        continued: options.continued
-          ? { jobId: options.continued.id, jobTypeName: options.continued.typeName }
+        continuedWith: options.continuedWith
+          ? { jobId: options.continuedWith.id, jobTypeName: options.continuedWith.typeName }
           : undefined,
         chainCompleted: options.chainCompleted,
       });

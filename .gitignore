@@ -38,3 +38,6 @@ dist
 
 # ide
 .idea/
+
+# claude
+.claude/scheduled_tasks.lock

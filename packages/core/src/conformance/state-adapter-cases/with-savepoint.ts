@@ -13,8 +13,6 @@ export const withSavepointGroup: ConformanceGroup<StateAdapterConformanceContext
             jobs: [
               {
                 typeName: "sp-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "sp-test",
                 input: null,
               },
@@ -47,8 +45,6 @@ export const withSavepointGroup: ConformanceGroup<StateAdapterConformanceContext
             jobs: [
               {
                 typeName: "sp-rollback",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "sp-rollback",
                 input: null,
               },
@@ -84,8 +80,6 @@ export const withSavepointGroup: ConformanceGroup<StateAdapterConformanceContext
             jobs: [
               {
                 typeName: "sp-outer-1",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "sp-outer-1",
                 input: { before: true },
               },
@@ -99,8 +93,6 @@ export const withSavepointGroup: ConformanceGroup<StateAdapterConformanceContext
                 jobs: [
                   {
                     typeName: "sp-inner",
-                    chainId: undefined,
-                    chainIndex: 0,
                     chainTypeName: "sp-inner",
                     input: { inside: true },
                   },
@@ -115,8 +107,6 @@ export const withSavepointGroup: ConformanceGroup<StateAdapterConformanceContext
             jobs: [
               {
                 typeName: "sp-outer-2",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "sp-outer-2",
                 input: { after: true },
               },
@@ -143,8 +133,6 @@ export const withSavepointGroup: ConformanceGroup<StateAdapterConformanceContext
             jobs: [
               {
                 typeName: "sp-nested",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "sp-nested",
                 input: { step: 0 },
               },
@@ -211,8 +199,6 @@ export const withSavepointGroup: ConformanceGroup<StateAdapterConformanceContext
               jobs: [
                 {
                   typeName: "sp-poison-before",
-                  chainId: undefined,
-                  chainIndex: 0,
                   chainTypeName: "sp-poison-before",
                   input: null,
                 },
@@ -230,8 +216,6 @@ export const withSavepointGroup: ConformanceGroup<StateAdapterConformanceContext
               jobs: [
                 {
                   typeName: "sp-poison-after",
-                  chainId: undefined,
-                  chainIndex: 0,
                   chainTypeName: "sp-poison-after",
                   input: null,
                 },

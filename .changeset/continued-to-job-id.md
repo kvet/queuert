@@ -1,0 +1,10 @@
+---
+"queuert": major
+"@queuert/postgres": major
+"@queuert/sqlite": major
+"@queuert/dashboard": major
+---
+
+Surface `continuedToJobId` on completed jobs and remove `chainIndex` from the public `Job` type. A completed `Job` now splits into two variants: the _terminal_ shape (`continuedToJobId: null`, carries `output`) and the _continued_ shape (`continuedToJobId: TJobId`, no `output` field). This disambiguates "job continued via `continueWith`" from "job terminated with `output: null`", and consumers can navigate forward in a chain via `getJob({ id: continuedToJobId })` without inferring it from chain position. Postgres and SQLite gain a stored `continued_to_job_id` foreign-key column (with backfill migration), maintained transactionally when `continueWith` inserts the next job. The state-adapter `createJobs` API switches to a structurally-narrowed input shape — pass `chainTypeName` (with optional `deduplication`) for a chain start, or `continueFromJobId` for a continuation — and the worker no longer threads `chainId`/`chainTypeName`/`chainIndex + 1` through `continueWith`. `listChainJobs` cursors are now opaque id strings (`type: "id"`) decoded server-side via the FK; the prior `chainIndex` cursor type is removed. The `CreatedAtCursor` type is renamed to `CreatedAtWithIdCursor` (with matching `decodeCreatedAtWithIdCursor`) since it always carries both `createdAt` and an id tie-breaker. The dashboard's job-detail route now navigates to the next job by `getJob({ id: job.continuedToJobId })` instead of paginating chain jobs by chain index.
+
+Rolling-deploy caveat: a worker running the previous version against the upgraded schema is forward-safe — it inserts `continued_to_job_id = NULL` (default) and never violates the new constraints. Continuations created by old workers during the transition will leave their parent's `continued_to_job_id` unset, so new workers' FK-based chain navigation skips them. After the rollout completes, re-run the backfill `UPDATE` from the migration to fix up those rows.

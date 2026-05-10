@@ -21,7 +21,7 @@ export const finishJob = async (
     workerId: string | null;
   } & (
     | { type: "completeChain"; output: unknown }
-    | { type: "continueWith"; continuedJob: Job<any, any, any, any, any> }
+    | { type: "continueWith"; continuedJob: Job<any, any, any, any, any, boolean> }
   ),
 ): Promise<StateJob> => {
   const hasContinuedJob = rest.type === "continueWith";
@@ -50,7 +50,7 @@ export const finishJob = async (
   if (workerId === null) {
     bufferObservabilityEvent(transactionHooks, () => {
       helpers.observabilityHelper.completeJobSpan(job, {
-        continued: hasContinuedJob ? rest.continuedJob : undefined,
+        continuedWith: hasContinuedJob ? rest.continuedJob : undefined,
         chainCompleted: !hasContinuedJob,
       });
     });

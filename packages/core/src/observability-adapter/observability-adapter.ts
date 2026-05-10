@@ -55,7 +55,7 @@ export type JobAttemptSpanInputData = {
 export type JobAttemptSpanResult =
   | {
       status: "completed";
-      continued?: { jobId: string; jobTypeName: string };
+      continuedWith?: { jobId: string; jobTypeName: string };
       chainCompleted?: { output: unknown };
     }
   | {
@@ -87,7 +87,7 @@ export type CompleteJobSpanInputData = {
   chainTypeName: string;
   jobId: string;
   jobTypeName: string;
-  continued?: { jobId: string; jobTypeName: string };
+  continuedWith?: { jobId: string; jobTypeName: string };
   chainCompleted: boolean;
 };
 

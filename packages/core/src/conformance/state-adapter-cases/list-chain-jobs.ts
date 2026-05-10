@@ -25,24 +25,20 @@ export const listChainJobsGroup: ConformanceGroup<StateAdapterConformanceContext
             jobs: [
               {
                 typeName: "step-1",
-                chainId: undefined,
                 chainTypeName: "chain-type",
                 input: null,
-                chainIndex: 0,
               },
             ],
           }),
         );
-        await stateAdapter.withTransaction(async (txCtx) =>
+        const [{ job: step2 }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
               {
                 typeName: "step-2",
-                chainId: root.chainId,
-                chainTypeName: "chain-type",
+                continueFromJobId: root.id,
                 input: null,
-                chainIndex: 1,
               },
             ],
           }),
@@ -53,10 +49,8 @@ export const listChainJobsGroup: ConformanceGroup<StateAdapterConformanceContext
             jobs: [
               {
                 typeName: "step-3",
-                chainId: root.chainId,
-                chainTypeName: "chain-type",
+                continueFromJobId: step2.id,
                 input: null,
-                chainIndex: 2,
               },
             ],
           }),
@@ -82,10 +76,8 @@ export const listChainJobsGroup: ConformanceGroup<StateAdapterConformanceContext
             jobs: [
               {
                 typeName: "step-1",
-                chainId: undefined,
                 chainTypeName: "chain-type",
                 input: null,
-                chainIndex: 0,
               },
             ],
           }),
@@ -96,10 +88,8 @@ export const listChainJobsGroup: ConformanceGroup<StateAdapterConformanceContext
             jobs: [
               {
                 typeName: "step-2",
-                chainId: root.chainId,
-                chainTypeName: "chain-type",
+                continueFromJobId: root.id,
                 input: null,
-                chainIndex: 1,
               },
             ],
           }),
@@ -124,29 +114,27 @@ export const listChainJobsGroup: ConformanceGroup<StateAdapterConformanceContext
             jobs: [
               {
                 typeName: "step-0",
-                chainId: undefined,
                 chainTypeName: "chain-type",
                 input: null,
-                chainIndex: 0,
               },
             ],
           }),
         );
+        let prevId = root.id;
         for (let i = 1; i < 5; i++) {
-          await stateAdapter.withTransaction(async (txCtx) =>
+          const [{ job: next }] = await stateAdapter.withTransaction(async (txCtx) =>
             stateAdapter.createJobs({
               txCtx,
               jobs: [
                 {
                   typeName: `step-${i}`,
-                  chainId: root.chainId,
-                  chainTypeName: "chain-type",
+                  continueFromJobId: prevId,
                   input: null,
-                  chainIndex: i,
                 },
               ],
             }),
           );
+          prevId = next.id;
         }
 
         const page1 = await stateAdapter.listChainJobs({
@@ -179,6 +167,68 @@ export const listChainJobsGroup: ConformanceGroup<StateAdapterConformanceContext
       },
     },
     {
+      name: "paginates with cursor in desc order",
+      run: async ({ stateAdapter }, expect) => {
+        const [{ job: root }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                typeName: "step-0",
+                chainTypeName: "chain-type",
+                input: null,
+              },
+            ],
+          }),
+        );
+        let prevId = root.id;
+        for (let i = 1; i < 5; i++) {
+          const [{ job: next }] = await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                {
+                  typeName: `step-${i}`,
+                  continueFromJobId: prevId,
+                  input: null,
+                },
+              ],
+            }),
+          );
+          prevId = next.id;
+        }
+
+        const page1 = await stateAdapter.listChainJobs({
+          chainId: root.chainId,
+          orderDirection: "desc",
+          page: { limit: 2 },
+        });
+        expect(page1.items).toHaveLength(2);
+        expect(page1.nextCursor).not.toBeNull();
+        expect(page1.items[0].chainIndex).toBe(4);
+        expect(page1.items[1].chainIndex).toBe(3);
+
+        const page2 = await stateAdapter.listChainJobs({
+          chainId: root.chainId,
+          orderDirection: "desc",
+          page: { limit: 2, cursor: page1.nextCursor! },
+        });
+        expect(page2.items).toHaveLength(2);
+        expect(page2.nextCursor).not.toBeNull();
+        expect(page2.items[0].chainIndex).toBe(2);
+        expect(page2.items[1].chainIndex).toBe(1);
+
+        const page3 = await stateAdapter.listChainJobs({
+          chainId: root.chainId,
+          orderDirection: "desc",
+          page: { limit: 2, cursor: page2.nextCursor! },
+        });
+        expect(page3.items).toHaveLength(1);
+        expect(page3.items[0].chainIndex).toBe(0);
+        expect(page3.nextCursor).toBeNull();
+      },
+    },
+    {
       name: "only returns jobs from specified chain",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: chain1Root }] = await stateAdapter.withTransaction(async (txCtx) =>
@@ -187,10 +237,8 @@ export const listChainJobsGroup: ConformanceGroup<StateAdapterConformanceContext
             jobs: [
               {
                 typeName: "step-1",
-                chainId: undefined,
                 chainTypeName: "chain-type",
                 input: null,
-                chainIndex: 0,
               },
             ],
           }),
@@ -201,10 +249,8 @@ export const listChainJobsGroup: ConformanceGroup<StateAdapterConformanceContext
             jobs: [
               {
                 typeName: "other-type",
-                chainId: undefined,
                 chainTypeName: "other-type",
                 input: null,
-                chainIndex: 0,
               },
             ],
           }),

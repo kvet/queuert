@@ -8,12 +8,11 @@ sidebar:
 ## Job
 
 ```typescript
-type Job<TJobId, TJobTypeName, TChainTypeName, TInput, TOutput> = {
+type Job<TJobId, TJobTypeName, TChainTypeName, TInput, TOutput, TCanContinue extends boolean> = {
   id: TJobId;
   chainId: TJobId;
   typeName: TJobTypeName;
   chainTypeName: TChainTypeName;
-  chainIndex: number;
   input: TInput;
   createdAt: Date;
   scheduledAt: Date;
@@ -24,11 +23,26 @@ type Job<TJobId, TJobTypeName, TChainTypeName, TInput, TOutput> = {
   | { status: "blocked" }
   | { status: "pending" }
   | { status: "running"; leasedBy?: string; leasedUntil?: Date }
-  | { status: "completed"; completedAt: Date; completedBy: string | null; output: TOutput }
+  | {
+      status: "completed";
+      completedAt: Date;
+      completedBy: string | null;
+      output: TOutput;
+      continuedToJobId: null;
+    }
+  | (TCanContinue extends true
+      ? {
+          status: "completed";
+          completedAt: Date;
+          completedBy: string | null;
+          output?: never;
+          continuedToJobId: TJobId;
+        }
+      : never)
 );
 ```
 
-A discriminated union on **status**. All jobs carry their chain identity via **chainId** and **chainTypeName**, and their position via **chainIndex**. The **running** variant includes lease metadata. The **completed** variant includes completion timestamps, the worker identity, and the job's **output**.
+A discriminated union on **status**. All jobs carry their chain identity via **chainId** and **chainTypeName**. The **completed** status splits into two variants: a _terminal_ variant that carries the real **output** (`continuedToJobId: null`), and a _continued_ variant that points at the next job in the chain via **continuedToJobId** (no `output` field). This disambiguates "job continued via `continueWith`" from "job terminated with `output: null`". The **running** variant includes lease metadata.
 
 ## JobStatus
 
@@ -44,7 +58,7 @@ The four possible job states. Used in list filters and discriminated union narro
 type ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName, TChainTypeName>;
 ```
 
-A `Job` whose generic parameters have been resolved against job type definitions — typed input, output, and chain type name derived from the declared job types. Returned by client read methods like `getJob` and `listJobs` when narrowed by `typeName`.
+A `Job` whose generic parameters have been resolved against job type definitions — typed input, output, and chain type name derived from the declared job types. Job types without a `continueWith` declaration narrow to the terminal `completed` shape only, so `output` is directly readable after a single `status === "completed"` check. Returned by client read methods like `getJob` and `listJobs` when narrowed by `typeName`.
 
 ## ResolvedJobWithBlockers
 
