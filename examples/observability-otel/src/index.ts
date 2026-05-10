@@ -1,7 +1,7 @@
 /**
  * OpenTelemetry Observability Showcase
  *
- * Demonstrates tracing integration with OpenTelemetry for job queue observability.
+ * Demonstrates tracing integration with OpenTelemetry for Queuert job-chain observability.
  *
  * Scenarios:
  * 1. Single Job: Basic chain with one job → one chain span, one job span, one attempt span

@@ -3,50 +3,54 @@
 [![npm version](https://img.shields.io/npm/v/queuert.svg)](https://www.npmjs.com/package/queuert)
 [![license](https://img.shields.io/github/license/kvet/queuert.svg)](https://github.com/kvet/queuert/blob/main/LICENSE)
 
-Control flow library for your persistency layer driven applications.
+**Durable, typed job chains that commit with your database transactions.**
 
-[**Documentation**](https://kvet.github.io/queuert/) | [**Getting Started**](https://kvet.github.io/queuert/getting-started/introduction/)
+Queuert is a job-chain library — durable, typed background work in your database. Job chains compose like Promise chains (`.then`, `Promise.all`), but they survive crashes and commit with your transactions. Postgres or SQLite, no Redis required, no separate server.
 
-Run your application logic as a series of background jobs that are started alongside state change transactions in your persistency layer. Perform long-running tasks with side-effects reliably in the background and keep track of their progress in your database. Own your stack and avoid vendor lock-in by using the tools you trust.
+[**Documentation**](https://kvet.github.io/queuert/) | [**Getting Started**](https://kvet.github.io/queuert/getting-started/introduction/) | [**Comparison**](https://kvet.github.io/queuert/comparison/)
 
-## Quick Example
+## How it looks
 
-Imagine a user signs up and you want to send them a welcome email. You don't want to block the registration request, so you queue it as a background job.
+Define a typed chain of jobs. Each step's input, output, and continuation are inferred — wrong-shape continuations are compile errors.
 
 ```ts
 const jobTypes = defineJobTypes<{
-  "send-welcome-email": {
+  "provision-account": {
     entry: true;
-    input: { userId: number; email: string; name: string };
-    output: { sentAt: string };
+    input: { userId: number };
+    continueWith: { typeName: "send-welcome-email" };
+  };
+  "send-welcome-email": {
+    input: { userId: number; accountId: string };
+    continueWith: { typeName: "sync-to-crm" };
+  };
+  "sync-to-crm": {
+    input: { userId: number; accountId: string };
   };
 }>();
+```
 
-const client = await createClient({
-  stateAdapter,
-  jobTypes,
-});
+Start the chain _inside_ your DB transaction. If the transaction rolls back, the chain is never created. No outbox glue, no dual-write window.
+
+```ts
+const client = await createClient({ stateAdapter, jobTypes });
 
 await withTransactionHooks(async (transactionHooks) =>
   db.transaction(async (tx) => {
-    const user = await tx.users.create({
-      name: "Alice",
-      email: "alice@example.com",
-    });
+    const user = await tx.users.create({ name: "Alice", email: "alice@example.com" });
 
     await client.startChain({
       tx,
       transactionHooks,
-      typeName: "send-welcome-email",
-      input: { userId: user.id, email: user.email, name: user.name },
+      typeName: "provision-account",
+      input: { userId: user.id },
+      //         ↑ wrong shape here is a compile error
     });
   }),
 );
 ```
 
-We scheduled the job inside a database transaction. This ensures that if the transaction rolls back (e.g., user creation fails), the job is not started. No orphaned emails. (Refer to transactional outbox pattern.)
-
-Later, a background worker picks up the job and sends the email:
+Each handler continues with the next step. The compiler enforces that `continueWith` matches the declared next type's input.
 
 ```ts
 const worker = await createInProcessWorker({
@@ -55,74 +59,83 @@ const worker = await createInProcessWorker({
     client,
     jobTypes,
     processors: {
-      "send-welcome-email": {
+      "provision-account": {
         attemptHandler: async ({ job, complete }) => {
-          await sendEmail({
-            to: job.input.email,
-            subject: "Welcome!",
-            body: `Hello ${job.input.name}, welcome to our platform!`,
-          });
+          const accountId = await provisionAccount(job.input.userId);
 
-          return complete(async () => ({
-            sentAt: new Date().toISOString(),
-          }));
+          return complete(async ({ continueWith }) =>
+            continueWith({
+              typeName: "send-welcome-email",
+              input: { userId: job.input.userId, accountId },
+              //      ↑ missing accountId would be a compile error
+            }),
+          );
         },
       },
+      // ...handlers for "send-welcome-email" and "sync-to-crm"
     },
   }),
 });
 
-const stop = await worker.start(); // Call stop() for graceful shutdown
+const stop = await worker.start();
 ```
 
-## Why Queuert?
+## Where it fits
 
-- **Your database is the source of truth** — No separate persistence layer. Jobs live alongside your application data.
-- **True transactional consistency** — Start jobs inside your database transactions. If the transaction rolls back, the job is never created. No dual-write problems.
-- **No vendor lock-in** — Works with PostgreSQL and SQLite. Bring your own ORM (Kysely, Drizzle, Prisma, raw drivers).
-- **Simple mental model** — Chains work like Promise chains. No determinism requirements, no replay semantics to learn.
-- **Full type safety** — TypeScript inference for inputs, outputs, continuations, and blockers. Catch errors at compile time.
-- **Flexible notifications** — Use Redis, NATS, or PostgreSQL LISTEN/NOTIFY for low-latency. Or just poll—no extra infrastructure required.
-- **MIT licensed** — No enterprise licensing concerns.
+Background-work libraries trade off across two axes: what storage tier they own, and what shape of work they model.
+
+|                       | Queuert               | pg-boss             | BullMQ            | Temporal          | Inngest           |
+| --------------------- | --------------------- | ------------------- | ----------------- | ----------------- | ----------------- |
+| Category              | Job-chain library     | Job queue           | Job queue         | Workflow platform | Workflow platform |
+| Storage               | Your DB (PG / SQLite) | Postgres            | Redis             | Separate cluster  | Inngest server    |
+| Transactional enqueue | ✅ structural         | 🟡 per-call adapter | ❌ app discipline | ❌ app discipline | ❌ app discipline |
+| Operate a server?     | No                    | No                  | Redis             | Yes               | Yes               |
+
+Queuert sits between job queues and workflow engines. A one-job chain _is_ a queue; a multi-step chain with blockers is closer to a workflow. Neither label fully fits, which is why the canonical term is "job-chain library."
+
+For deeper comparisons, see the [docs site](https://kvet.github.io/queuert/comparison/) — one page per neighbor.
+
+## Why Queuert
+
+- **Transactional, both ends.** Enqueue commits inside your DB transaction; handler completion and next-step `continueWith` commit in the same transaction as your domain writes. For DB-bound work, no outbox at enqueue and no idempotency-key ritual at processing — both halves are structural.
+- **Typed job chains.** Inputs, outputs, continuations, and blockers infer end-to-end via `defineJobTypes`. Refactoring is compiler-checked.
+- **Lives in your database.** Postgres or SQLite. No Redis required, no workflow server, no separate persistence tier to operate.
+- **Sub-second wakeup.** `LISTEN/NOTIFY` (or Redis pub/sub, or NATS) wakes workers when a row commits — not on a polling timer.
+- **Schedule for later.** Delay a chain to a specific time or duration. Schedule retries with backoff. Future work, no extra infrastructure.
+- **Deduplication.** Pass a deduplication key on enqueue. Identical keys collapse to a single chain — at-most-once, by construction.
 
 ## Installation
 
 ```bash
-# Core package (required)
+# Core (required)
 npm install queuert
 
-# State adapters (pick one)
-npm install @queuert/postgres  # PostgreSQL - recommended for production
-npm install @queuert/sqlite    # SQLite (experimental)
+# State adapter (pick one)
+npm install @queuert/postgres   # PostgreSQL — recommended for production
+npm install @queuert/sqlite     # SQLite (experimental)
 
-# Notify adapters (optional, for reduced latency)
-npm install @queuert/redis     # Redis pub/sub - recommended for production
-npm install @queuert/nats      # NATS pub/sub (experimental)
-# Or use PostgreSQL LISTEN/NOTIFY via @queuert/postgres (no extra infra)
+# Notify adapter (optional, for sub-second wakeup)
+npm install @queuert/redis      # Redis pub/sub
+npm install @queuert/nats       # NATS pub/sub (experimental)
+# Or use PostgreSQL LISTEN/NOTIFY via @queuert/postgres — no extra infra
 
-# Dashboard (optional)
-npm install @queuert/dashboard  # Embeddable web UI for job observation (experimental)
+# Dashboard (optional, experimental)
+npm install @queuert/dashboard
 
 # Observability (optional)
-npm install @queuert/otel      # OpenTelemetry metrics and tracing
+npm install @queuert/otel
 ```
 
-## Learn More
+## Learn more
 
-Visit the [documentation site](https://kvet.github.io/queuert/) for guides on:
-
+- [Getting Started](https://kvet.github.io/queuert/getting-started/introduction/)
+- [Chain Patterns](https://kvet.github.io/queuert/guides/chain-patterns/)
 - [Transaction Hooks](https://kvet.github.io/queuert/guides/transaction-hooks/)
-- [Job Processing Modes](https://kvet.github.io/queuert/guides/processing-modes/)
-- [Job Chain Patterns](https://kvet.github.io/queuert/guides/chain-patterns/)
-- [Error Handling](https://kvet.github.io/queuert/guides/error-handling/)
-- [Scheduling & Recurring Jobs](https://kvet.github.io/queuert/guides/scheduling/)
-- [Deduplication](https://kvet.github.io/queuert/guides/deduplication/)
-- [Feature Slices](https://kvet.github.io/queuert/guides/slices/)
-- [Horizontal Scaling](https://kvet.github.io/queuert/guides/horizontal-scaling/)
-- [Dashboard](https://kvet.github.io/queuert/integrations/dashboard/)
-- [Observability](https://kvet.github.io/queuert/integrations/observability/)
-- And more...
+- [Job Blockers](https://kvet.github.io/queuert/guides/job-blockers/)
+- [Comparison with other libraries](https://kvet.github.io/queuert/comparison/)
+- [Benchmarks](https://kvet.github.io/queuert/benchmarks/)
+- [API Reference](https://kvet.github.io/queuert/reference/queuert/client/)
 
 ## License
 
-MIT
+MIT.

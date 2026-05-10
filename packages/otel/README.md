@@ -5,7 +5,7 @@
 [![stars](https://img.shields.io/github/stars/kvet/queuert.svg)](https://github.com/kvet/queuert)
 [![last commit](https://img.shields.io/github/last-commit/kvet/queuert.svg)](https://github.com/kvet/queuert/commits)
 
-OpenTelemetry observability adapter for [Queuert](https://github.com/kvet/queuert) — a TypeScript library for database-backed job queues. Provides distributed tracing and metrics for monitoring your job queues.
+OpenTelemetry observability adapter for [Queuert](https://github.com/kvet/queuert) — a job-chain library: durable, typed background work in your database. Provides distributed tracing and metrics for monitoring your job chains.
 
 ## Installation
 

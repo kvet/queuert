@@ -7,7 +7,7 @@
 
 > **Experimental** — API may change between minor versions.
 
-Embeddable web dashboard for [Queuert](https://github.com/kvet/queuert) — a TypeScript library for database-backed job queues. Provides a web UI for listing, filtering, inspecting, triggering, and deleting chains and jobs.
+Embeddable web dashboard for [Queuert](https://github.com/kvet/queuert) — a job-chain library: durable, typed background work in your database. Provides a web UI for listing, filtering, inspecting, triggering, and deleting chains and jobs.
 
 ## Installation
 

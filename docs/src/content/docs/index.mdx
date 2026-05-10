@@ -1,10 +1,10 @@
 ---
 title: Queuert
-description: Control flow library for your persistence-layer-driven applications.
+description: Durable, typed job chains that commit with your database transactions.
 template: splash
 hero:
   title: Queuert
-  tagline: Run your application logic as background jobs that start alongside your database transactions. No separate infrastructure. No dual-write problems. Just your database.
+  tagline: Durable, typed job chains that commit with your database transactions. A job-chain library that lives in your database — chains compose like Promises, but persist. No Redis required, no separate server.
   actions:
     - text: Get Started
       link: /queuert/getting-started/introduction/
@@ -14,44 +14,56 @@ hero:
       link: https://github.com/kvet/queuert
       icon: external
       variant: minimal
+    - text: llms.txt
+      link: /queuert/llms-full.txt
+      icon: external
+      variant: minimal
 ---
 
-import { Card, CardGrid, LinkCard, Tabs, TabItem } from "@astrojs/starlight/components";
+import { Card, CardGrid, LinkCard } from "@astrojs/starlight/components";
 
 ## See it in action
 
-Start a job inside a database transaction. The `input` type is inferred from your job type
-definition — no casting, no `any`. If the transaction rolls back, the job is never created.
+Define a typed job chain. Each step's input, output, and continuation are inferred — wrong-shape continuations are compile errors.
 
 ```ts
 const jobTypes = defineJobTypes<{
-  "send-welcome-email": {
+  "provision-account": {
     entry: true;
-    input: { userId: number; email: string; name: string };
-    output: { sentAt: string };
+    input: { userId: number };
+    continueWith: { typeName: "send-welcome-email" };
+  };
+  "send-welcome-email": {
+    input: { userId: number; accountId: string };
+    continueWith: { typeName: "sync-to-crm" };
+  };
+  "sync-to-crm": {
+    input: { userId: number; accountId: string };
   };
 }>();
+```
 
+Start the chain _inside_ your DB transaction. If the transaction rolls back, the chain is never created.
+
+```ts
 const client = await createClient({ stateAdapter, jobTypes });
 
 await withTransactionHooks(async (transactionHooks) =>
   db.transaction(async (tx) => {
-    const user = await tx.users.create({
-      name: "Alice",
-      email: "alice@example.com",
-    });
+    const user = await tx.users.create({ name: "Alice", email: "alice@example.com" });
 
     await client.startChain({
       tx,
       transactionHooks,
-      typeName: "send-welcome-email",
-      input: { userId: user.id, email: user.email, name: user.name },
+      typeName: "provision-account",
+      input: { userId: user.id },
+      //         ↑ wrong shape here is a compile error
     });
   }),
 );
 ```
 
-A background worker picks it up and runs it to completion.
+Each handler continues with the next step. The compiler enforces that `continueWith` matches the declared next type's input.
 
 ```ts
 const worker = await createInProcessWorker({
@@ -60,19 +72,20 @@ const worker = await createInProcessWorker({
     client,
     jobTypes,
     processors: {
-      "send-welcome-email": {
+      "provision-account": {
         attemptHandler: async ({ job, complete }) => {
-          await sendEmail({
-            to: job.input.email,
-            subject: "Welcome!",
-            body: `Hello ${job.input.name}, welcome to our platform!`,
-          });
+          const accountId = await provisionAccount(job.input.userId);
 
-          return complete(async () => ({
-            sentAt: new Date().toISOString(),
-          }));
+          return complete(async ({ continueWith }) =>
+            continueWith({
+              typeName: "send-welcome-email",
+              input: { userId: job.input.userId, accountId },
+              //      ↑ missing accountId would be a compile error
+            }),
+          );
         },
       },
+      // ...handlers for "send-welcome-email" and "sync-to-crm"
     },
   }),
 });
@@ -80,31 +93,40 @@ const worker = await createInProcessWorker({
 const stop = await worker.start();
 ```
 
-## Features
+## Why Queuert
 
 <CardGrid>
-  <Card title="Transactional" icon="document">
-    Jobs live alongside your application data. Start jobs inside database transactions — if the
-    transaction rolls back, the job is never created.
+  <Card title="Transactional, both ends" icon="document">
+    Enqueue commits inside your DB transaction; handler completion and next-step
+    `continueWith` commit in the same transaction as your domain writes. For DB-bound
+    work, no outbox and no idempotency-key ritual — both halves are structural.
   </Card>
-  <Card title="Type-Safe" icon="approve-check">
-    Full TypeScript inference for inputs, outputs, continuations, and blockers. Catch errors at
-    compile time.
+  <Card title="Typed job chains" icon="approve-check">
+    Inputs, outputs, continuations, and blockers infer end-to-end via `defineJobTypes`.
+    Refactoring is compiler-checked.
   </Card>
-  <Card title="Chains" icon="right-arrow">
-    Model multi-step workflows as typed chains. Each step continues, loops, branches, or terminates
-    — like Promise chains, but persistent and resumable.
+  <Card title="Lives in your database" icon="setting">
+    Postgres or SQLite. No Redis required, no workflow server, no separate persistence tier
+    to operate.
   </Card>
-  <Card title="Scheduling" icon="rocket">
-    Delay jobs to a specific time or duration. Deduplicate by key. Schedule retries or future work
-    without extra infrastructure.
+  <Card title="Sub-second wakeup" icon="rocket">
+    `LISTEN/NOTIFY` (or Redis pub/sub, or NATS) wakes workers when a row commits — not on a
+    polling timer.
   </Card>
-  <Card title="Blockers" icon="puzzle">
-    Model cross-chain dependencies. A job can wait for one or more other chains to complete before
-    proceeding.
+  <Card title="Fan-in via blockers" icon="puzzle">
+    "Wait for these N independent chains to finish, then run X" is a typed primitive — not
+    glue code.
   </Card>
-  <Card title="MIT Licensed" icon="open-book">
-    No vendor lock-in. No enterprise licensing. Own your stack.
+  <Card title="Schedule for later" icon="seti:clock">
+    Delay a chain to a specific time or duration. Schedule retries with backoff. Future
+    work, no extra infrastructure.
+  </Card>
+  <Card title="Deduplication" icon="seti:lock">
+    Pass a deduplication key on enqueue. Identical keys collapse to a single chain —
+    at-most-once, by construction.
+  </Card>
+  <Card title="MIT licensed" icon="open-book">
+    No vendor lock-in. No enterprise tier. Own your stack.
   </Card>
 </CardGrid>
 
@@ -131,6 +153,31 @@ const stop = await worker.start();
   </Card>
 </CardGrid>
 
+## Already using something else?
+
+<CardGrid>
+  <LinkCard
+    title="vs. pg-boss"
+    href="/queuert/comparison/pg-boss/"
+    description="A Postgres job queue. Different category — different shape of tool."
+  />
+  <LinkCard
+    title="vs. BullMQ"
+    href="/queuert/comparison/bullmq/"
+    description="A Redis job queue. Different storage tier, different category."
+  />
+  <LinkCard
+    title="vs. Temporal"
+    href="/queuert/comparison/temporal/"
+    description="A distributed workflow platform. Different category — both can model multi-step durable work."
+  />
+  <LinkCard
+    title="vs. Inngest"
+    href="/queuert/comparison/inngest/"
+    description="An event-driven workflow platform. Different category, different trigger model."
+  />
+</CardGrid>
+
 ## Get started
 
 <CardGrid>
@@ -153,6 +200,11 @@ const stop = await worker.start();
     title="Examples"
     href="/queuert/examples/"
     description="Runnable examples for every integration and pattern."
+  />
+  <LinkCard
+    title="Comparison"
+    href="/queuert/comparison/"
+    description="How Queuert relates to pg-boss, BullMQ, Temporal, and Inngest."
   />
   <LinkCard
     title="Benchmarks"

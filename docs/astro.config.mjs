@@ -9,7 +9,7 @@ export default defineConfig({
     starlight({
       plugins: [starlightLlmsTxt()],
       title: "Queuert",
-      description: "Control flow library for your persistence-layer-driven applications",
+      description: "Durable, typed job chains that commit with your database transactions",
       social: [
         {
           icon: "github",
@@ -49,6 +49,10 @@ export default defineConfig({
         {
           label: "Examples",
           slug: "examples",
+        },
+        {
+          label: "Comparison",
+          autogenerate: { directory: "comparison" },
         },
         {
           label: "Benchmarks",
