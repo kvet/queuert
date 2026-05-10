@@ -4,6 +4,7 @@
 - [?,REF] Add a method to attempt handler to create a transaction mid run that run guarded check
 - [?,REF] Change complete job chain to something more empirical?
 - [?,REF] Reset jobs in chains + dashboard
+- [?,REF] Review how `blocked → running` jobs get scheduled — currently they appear to jump in front of everything else once unblocked. May be fine, but needs to be reviewed (fairness vs. chain progress vs. priority interaction).
 
 # Short term
 
