@@ -16,6 +16,14 @@
 - [EPIC] State-snapshot OTel gauges — opt-in `@queuert/otel-state` package emitting `incomplete_jobs/chains{type,status}`, `oldest_pending_job/chain_age_seconds{type}`, `stuck_jobs/chains{type}` from a periodic metrics chain (cleanup-style). Adds `attempts_since_reschedule` int column to track retries that aren't progressing via user `rescheduleJob`, three partial indexes over the active working set, and a `getMetricsSnapshot` adapter method. Open questions: single-runner snapshot distribution (DB-stored vs per-process), default stuck threshold. See `design/state-snapshot-metrics.md`
 - [EPIC] Built-in job priority — add `priority` field to job schema + secondary sort in acquisition query (composite index `(type_name, priority DESC, scheduled_at ASC) WHERE status = 'pending'`). Design decisions: starvation mitigation (aging? document footgun?), dedup + priority interaction (upgrade semantics when re-enqueuing existing dedup key at higher priority), chain priority inheritance, API surface on `createJob`/`triggerJob`. Backward compatible via `DEFAULT 0`
 - [EPIC,COMPLEX] Batched processors — opt-in `batchLimit` on a processor; opportunistic batching (process up to N when available, never wait to accumulate). Array-shaped `attemptHandler({ jobs, prepare, complete })`, one prepare/complete per batch, group lease/complete/reap. Replaces the singular state-adapter methods with array-only counterparts. Open questions: `complete`/`continueWith` shape, group reaping, OTel mapping. See `design/batched-processors.md`
+- [EPIC] Marketing surface — visual / social-proof assets (Phase 2 of the May 2026 docs reframe)
+  - [TASK] Update GitHub repo description + topics to match the new tagline ("Type-safe multi-step workflows that commit with your Postgres transactions") — currently still aligned with the old "control flow library" framing
+  - [TASK] Architecture diagram on docs landing page (one PNG/SVG showing client + worker + state adapter + notify adapter against your DB)
+  - [TASK] Type-safety GIF or screenshot demonstrating `continueWith` lighting up a wrong-shape compile error in VS Code — surface in README and docs landing
+  - [TASK] Dashboard screenshot in `docs/src/content/docs/integrations/dashboard.mdx` and `docs/src/content/docs/reference/dashboard.md`
+  - [TASK] Verify and surface "0 runtime deps" claim if true (check `packages/core/package.json` dependencies are empty); if not, document what runtime deps each package brings
+  - [TASK] "Used in production by" section on README + docs landing once there's something to put there
+  - [TASK] Surface test count on README (badge or sentence) once it's a number worth quoting
 
 # Medium term
 

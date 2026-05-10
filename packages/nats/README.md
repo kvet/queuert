@@ -8,7 +8,7 @@
 
 > **Experimental** — API may change between minor versions. For production use, consider [@queuert/redis](https://github.com/kvet/queuert/tree/main/packages/redis).
 
-NATS notify adapter for [Queuert](https://github.com/kvet/queuert) — a TypeScript library for database-backed job queues.
+NATS notify adapter for [Queuert](https://github.com/kvet/queuert) — a job-chain library: durable, typed background work in your database.
 
 ## Installation
 

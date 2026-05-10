@@ -5,7 +5,7 @@
 [![stars](https://img.shields.io/github/stars/kvet/queuert.svg)](https://github.com/kvet/queuert)
 [![last commit](https://img.shields.io/github/last-commit/kvet/queuert.svg)](https://github.com/kvet/queuert/commits)
 
-Core package for [Queuert](https://github.com/kvet/queuert) — a type-safe, database-backed job queue library for TypeScript.
+Core package for [Queuert](https://github.com/kvet/queuert) — a job-chain library: durable, typed background work in your database. Job chains compose like Promise chains, but they survive crashes and commit with your DB transactions.
 
 ## Installation
 

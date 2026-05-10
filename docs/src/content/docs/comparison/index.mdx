@@ -1,0 +1,53 @@
+---
+title: Comparison
+description: How Queuert relates to other background-work libraries.
+sidebar:
+  order: 0
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+Queuert is a **job-chain library** — durable, typed background work in your database. It sits between job queues and workflow engines: a one-job chain _is_ a queue; a multi-step chain with blockers is closer to a workflow. Neither label fully fits, so Queuert isn't a drop-in replacement for any single neighbor — but readers evaluating it usually arrive from one. This section has one page per neighbor, each structured the same way: what each tool is, where they aren't directly comparable, what each is good at, practical differences worth knowing about, and how to choose between them.
+
+<CardGrid>
+  <LinkCard
+    title="vs. pg-boss"
+    href="/queuert/comparison/pg-boss/"
+    description="A Postgres-backed job queue. Same storage tier, different category."
+  />
+  <LinkCard
+    title="vs. BullMQ"
+    href="/queuert/comparison/bullmq/"
+    description="A Redis-backed job queue. Different storage tier, different category."
+  />
+  <LinkCard
+    title="vs. Temporal"
+    href="/queuert/comparison/temporal/"
+    description="A distributed workflow platform. Different category — both can model multi-step durable work."
+  />
+  <LinkCard
+    title="vs. Inngest"
+    href="/queuert/comparison/inngest/"
+    description="An event-driven workflow platform. Different category, different trigger model."
+  />
+</CardGrid>
+
+## How to read these comparisons
+
+Each page tries to be even-handed: what the neighbor is genuinely good at first, what Queuert is good at second, where they overlap, and where they don't. The decision is rarely "X is better than Y" — it's usually "are these the same shape of tool?" and, if not, "which shape fits the problem at hand?"
+
+If your problem involves multiple shapes of work — high-throughput queue lanes _and_ chain-shaped sequences, or transactional handlers _and_ long-lived signal-driven workflows — those are different concerns that may genuinely deserve different tools. They aren't strict substitutes.
+
+## At-a-glance
+
+|                                      | Queuert               | pg-boss             | BullMQ            | Temporal                   | Inngest                          |
+| ------------------------------------ | --------------------- | ------------------- | ----------------- | -------------------------- | -------------------------------- |
+| Category                             | Job-chain library     | Job queue           | Job queue         | Workflow platform          | Workflow platform                |
+| Storage                              | Your DB (PG / SQLite) | Postgres            | Redis             | Separate cluster (or SaaS) | Inngest server (managed or OSS)  |
+| Operate a server?                    | No                    | No                  | Redis             | Yes                        | Yes                              |
+| Transactional enqueue                | ✅ structural         | 🟡 per-call adapter | ❌ app discipline | ❌ app discipline          | ❌ app discipline                |
+| Transactional handler completion     | ✅ structural         | ❌ app discipline   | ❌ app discipline | ❌ app discipline          | ❌ app discipline                |
+| Typed multi-step chains              | ✅ end-to-end         | ❌                  | 🟡 FlowProducer   | ✅ workflow code           | ✅ functions + steps             |
+| Resume work days/weeks later         | ✅ schedule next step | ✅ `sendAfter`      | ✅ `delay` option | ✅ in-line `sleep('30d')`  | ✅ in-line `step.sleep('30d')`   |
+
+The full text on each row, with maintainer quotes and source citations, is on the per-neighbor pages.
