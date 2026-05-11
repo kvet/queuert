@@ -97,7 +97,7 @@ await withTransactionHooks(async (transactionHooks) =>
 
 ### Processing
 
-This is where the gap is sharper. pg-boss's README markets *"Exactly-once job delivery"* — but that phrase refers specifically to `SKIP LOCKED` on the fetch path (two workers can't claim the same row atomically). It does NOT mean handler-to-completion is exactly-once. In [`src/manager.ts`](https://github.com/timgit/pg-boss/blob/master/src/manager.ts), the handler runs, returns, and pg-boss then calls `complete()` against its own pool in a separate transaction. If your handler commits domain writes and the worker crashes before `complete()` lands (or the lease expires via `expireInSeconds`, default 15 min), the job is re-fetched and the handler runs again — domain writes commit twice. The standard `work()` API has no hook to fuse "handler tx" with "pg-boss completion tx," so idempotency at processing is application discipline.
+This is where the gap is sharper. pg-boss's README markets _"Exactly-once job delivery"_ — but that phrase refers specifically to `SKIP LOCKED` on the fetch path (two workers can't claim the same row atomically). It does NOT mean handler-to-completion is exactly-once. In [`src/manager.ts`](https://github.com/timgit/pg-boss/blob/master/src/manager.ts), the handler runs, returns, and pg-boss then calls `complete()` against its own pool in a separate transaction. If your handler commits domain writes and the worker crashes before `complete()` lands (or the lease expires via `expireInSeconds`, default 15 min), the job is re-fetched and the handler runs again — domain writes commit twice. The standard `work()` API has no hook to fuse "handler tx" with "pg-boss completion tx," so idempotency at processing is application discipline.
 
 Queuert's complete callback runs inside the state adapter's transaction. Your handler's domain writes, the chain's completion, and the next step's `continueWith` all commit in one transaction:
 
@@ -111,11 +111,11 @@ Queuert's complete callback runs inside the state adapter's transaction. Your ha
 },
 ```
 
-If the worker crashes before the transaction commits, *nothing* lands — neither the domain write nor the chain progression. The next attempt starts fresh. At-least-once delivery becomes effectively exactly-once for DB-bound work.
+If the worker crashes before the transaction commits, _nothing_ lands — neither the domain write nor the chain progression. The next attempt starts fresh. At-least-once delivery becomes effectively exactly-once for DB-bound work.
 
 ### What still needs care
 
-The precondition is that your application DB is the system of record for the data your handlers touch. *External* side effects (the email actually being sent, a Stripe charge) still need idempotency keys — Queuert structurally fixes the DB half of at-least-once, not the network half. Cross-DB writes (handler writing to a separate microservice's database via API) still need an outbox at that boundary. For the chunk of your application where one Postgres is the source of truth, both outboxes go away.
+The precondition is that your application DB is the system of record for the data your handlers touch. _External_ side effects (the email actually being sent, a Stripe charge) still need idempotency keys — Queuert structurally fixes the DB half of at-least-once, not the network half. Cross-DB writes (handler writing to a separate microservice's database via API) still need an outbox at that boundary. For the chunk of your application where one Postgres is the source of truth, both outboxes go away.
 
 ## Choosing between them
 

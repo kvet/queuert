@@ -17,13 +17,13 @@ Two of the three readiness gates (time, concurrency) are acquire-time predicates
 
 Considered: remove `blocked` from `JobStatus`, gate acquisition with `NOT EXISTS (SELECT 1 FROM job_blocker … WHERE incomplete)`. This is the cleanest model — `job_blocker` becomes the sole source of truth — but the math doesn't survive chain-heavy workloads. Benchmarked on Postgres 18 at 90k blocked / 10k pending:
 
-| shape          | `status='blocked'` (today) | `NOT EXISTS` (no denormalization) |
-| -------------- | -------------------------- | --------------------------------- |
-| random         | **0.01 ms**                | **254 ms**                        |
-| blocked-front  | 0.01 ms                    | 202 ms                            |
-| pending-front  | 0.01 ms                    | 193 ms                            |
+| shape         | `status='blocked'` (today) | `NOT EXISTS` (no denormalization) |
+| ------------- | -------------------------- | --------------------------------- |
+| random        | **0.01 ms**                | **254 ms**                        |
+| blocked-front | 0.01 ms                    | 202 ms                            |
+| pending-front | 0.01 ms                    | 193 ms                            |
 
-A ~15,000–25,000× regression in server execution time. The plan explains it: when no acquirable row exists (or it's far down the queue), Postgres' anti-join walks the full pending index, probing `job_blocker` for each row — **800k buffer hits per acquire** vs 3 for the current design. The planner doesn't short-circuit, so even *random* interleaving — not just the worst-case blocked-front shape — degrades catastrophically. At 1M jobs the cost extrapolates to seconds per acquire.
+A ~15,000–25,000× regression in server execution time. The plan explains it: when no acquirable row exists (or it's far down the queue), Postgres' anti-join walks the full pending index, probing `job_blocker` for each row — **800k buffer hits per acquire** vs 3 for the current design. The planner doesn't short-circuit, so even _random_ interleaving — not just the worst-case blocked-front shape — degrades catastrophically. At 1M jobs the cost extrapolates to seconds per acquire.
 
 No partial-index trick saves this: both SQLite and Postgres require partial-index predicates to be deterministic on the indexed row, so `WHERE NOT EXISTS (…)` is not allowed.
 
@@ -63,7 +63,7 @@ For this design, we keep `unblockJobs`'s existing detection logic (`bool_and(sta
 
 ## Interaction with `addJobBlocker` (runtime addition)
 
-[add-job-blocker.md](add-job-blocker.md) introduces a client method that adds blockers to an *existing* job at runtime (vs. only at job creation today). With `has_blockers` decoupled from `status`, the interaction is straightforward and strictly simpler than today's status flip:
+[add-job-blocker.md](add-job-blocker.md) introduces a client method that adds blockers to an _existing_ job at runtime (vs. only at job creation today). With `has_blockers` decoupled from `status`, the interaction is straightforward and strictly simpler than today's status flip:
 
 - Allowed jobs: `pending` only (today's design also allows `blocked`; under this design `blocked` no longer exists, but a `pending` job with `has_blockers = true` is the equivalent state and is allowed).
 - Operation, in one transaction:
@@ -95,7 +95,7 @@ type StateJobStatus = "blocked" | "pending" | "running" | "completed";
 type StateJobStatus = "pending" | "running" | "completed";
 
 // StateJob gains:
-hasBlockers: boolean;  // or: remainingBlockersCount, if the counter design lands
+hasBlockers: boolean; // or: remainingBlockersCount, if the counter design lands
 ```
 
 ### Modified queries
