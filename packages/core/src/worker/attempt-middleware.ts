@@ -8,7 +8,7 @@ import {
 } from "../state-adapter/state-adapter.js";
 import { type TransactionHooks } from "../transaction-hooks.js";
 
-type RunningJob<TStateAdapter extends StateAdapter<BaseTxContext, any>> = ResolvedJobWithBlockers<
+type RunningJob<TStateAdapter extends StateAdapter<any, any>> = ResolvedJobWithBlockers<
   GetStateAdapterJobId<TStateAdapter>,
   BaseJobTypeDefinitions,
   string,
@@ -33,7 +33,7 @@ type RunningJob<TStateAdapter extends StateAdapter<BaseTxContext, any>> = Resolv
  * outermost. Each `next(ctx)` accumulates ctx for inner layers.
  */
 export type AttemptMiddleware<
-  TStateAdapter extends StateAdapter<BaseTxContext, any> = StateAdapter<BaseTxContext, any>,
+  TStateAdapter extends StateAdapter<any, any>,
   THandlerCtx extends Record<string, unknown> = {},
   TPrepareCtx extends Record<string, unknown> = {},
   TCompleteCtx extends Record<string, unknown> = {},

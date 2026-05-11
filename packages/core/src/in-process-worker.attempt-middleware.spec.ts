@@ -3,7 +3,10 @@ import { describe, expect, it } from "vitest";
 import { createClient } from "./client.js";
 import { defineJobTypes } from "./entities/define-job-types.js";
 import { createInProcessWorker } from "./in-process-worker.js";
-import { createInProcessStateAdapter } from "./state-adapter/state-adapter.in-process.js";
+import {
+  createInProcessStateAdapter,
+  type InProcessStateAdapter,
+} from "./state-adapter/state-adapter.in-process.js";
 import { withTransactionHooks } from "./transaction-hooks.js";
 import { type AttemptMiddleware } from "./worker/attempt-middleware.js";
 import { createProcessors } from "./worker/create-processors.js";
@@ -19,7 +22,7 @@ const client = await createClient({ stateAdapter, jobTypes });
 describe("middleware ctx cannot shadow built-in handler/prepare/complete keys", () => {
   it("handler built-ins (signal, job, prepare, complete) win over middleware-injected ctx", async () => {
     const sentinel = { tampered: true };
-    const tampering: AttemptMiddleware = {
+    const tampering: AttemptMiddleware<InProcessStateAdapter> = {
       wrapHandler: async ({ next }) =>
         next({
           signal: sentinel,
@@ -95,7 +98,7 @@ describe("middleware ctx cannot shadow built-in handler/prepare/complete keys", 
       jobTypes,
     });
 
-    const tampering: AttemptMiddleware = {
+    const tampering: AttemptMiddleware<InProcessStateAdapter> = {
       wrapPrepare: async ({ next }) =>
         next({ [MARKER_KEY]: tamperedMarker } as unknown as Record<string, unknown>),
     };
@@ -164,7 +167,7 @@ describe("middleware ctx cannot shadow built-in handler/prepare/complete keys", 
       jobTypes,
     });
 
-    const tampering: AttemptMiddleware = {
+    const tampering: AttemptMiddleware<InProcessStateAdapter> = {
       wrapComplete: async ({ next }) =>
         next({ [MARKER_KEY]: tamperedMarker } as unknown as Record<string, unknown>),
     };
@@ -209,7 +212,7 @@ describe("middleware ctx cannot shadow built-in handler/prepare/complete keys", 
 
   it("complete built-ins (continueWith, transactionHooks) win over middleware-injected ctx", async () => {
     const sentinel = { tampered: true };
-    const tampering: AttemptMiddleware = {
+    const tampering: AttemptMiddleware<InProcessStateAdapter> = {
       wrapComplete: async ({ next }) =>
         next({
           continueWith: sentinel,
@@ -260,13 +263,13 @@ describe("registry-level attemptMiddleware — runtime per-slice isolation", () 
     const sliceACalls: string[] = [];
     const sliceBCalls: string[] = [];
 
-    const wrapA: AttemptMiddleware = {
+    const wrapA: AttemptMiddleware<InProcessStateAdapter> = {
       wrapHandler: async ({ job, next }) => {
         sliceACalls.push(job.typeName);
         return next({});
       },
     };
-    const wrapB: AttemptMiddleware = {
+    const wrapB: AttemptMiddleware<InProcessStateAdapter> = {
       wrapHandler: async ({ job, next }) => {
         sliceBCalls.push(job.typeName);
         return next({});

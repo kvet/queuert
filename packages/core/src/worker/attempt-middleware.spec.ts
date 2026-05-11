@@ -3,6 +3,7 @@ import { describe, expectTypeOf, it } from "vitest";
 import { createClient } from "../client.js";
 import { defineJobTypes } from "../entities/define-job-types.js";
 import { createInProcessStateAdapter } from "../state-adapter/state-adapter.in-process.js";
+import { type StateAdapter } from "../state-adapter/state-adapter.js";
 import {
   type AttemptMiddleware,
   type MergedAttemptHandlerCtx,
@@ -170,6 +171,36 @@ describe("tuple narrowing without `as const`", () => {
         },
       },
     });
+  });
+});
+
+describe("AttemptMiddleware accepts concrete (non-any) state adapters", () => {
+  it("accepts an adapter with a non-empty txCtx as the TStateAdapter parameter", () => {
+    type Tx = { db: { query: (sql: string) => Promise<unknown> } };
+    type DbStateAdapter = StateAdapter<Tx, string>;
+
+    expectTypeOf<AttemptMiddleware<DbStateAdapter>>().toBeObject();
+    expectTypeOf<AttemptMiddleware<DbStateAdapter, { trace: string }>>().toBeObject();
+  });
+
+  it("wrapPrepare/wrapComplete receive the adapter's txCtx fields", () => {
+    type Tx = { db: { query: (sql: string) => Promise<unknown> } };
+    type DbStateAdapter = StateAdapter<Tx, string>;
+
+    const mwPrepare: AttemptMiddleware<DbStateAdapter> = {
+      wrapPrepare: async ({ db, next }) => {
+        expectTypeOf(db).toEqualTypeOf<Tx["db"]>();
+        return next({});
+      },
+    };
+    const mwComplete: AttemptMiddleware<DbStateAdapter> = {
+      wrapComplete: async ({ db, transactionHooks: _t, next }) => {
+        expectTypeOf(db).toEqualTypeOf<Tx["db"]>();
+        return next({});
+      },
+    };
+    void mwPrepare;
+    void mwComplete;
   });
 });
 
