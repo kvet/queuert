@@ -320,7 +320,7 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     );
 
     const blockedJob = await client.getJob({ id: blockedChain.id });
-    expect(blockedJob!.status).toBe("blocked");
+    expect(blockedJob!.status).toBe("pending");
 
     await expect(
       withTransactionHooks(async (transactionHooks) =>

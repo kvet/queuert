@@ -41,10 +41,13 @@ export const addJobsBlockersGroup: ConformanceGroup<StateAdapterConformanceConte
             }),
           );
 
-        expect(updatedMain.status).toBe("blocked");
+        expect(updatedMain.status).toBe("pending");
         expect(incompleteBlockerChainIds).toContain(blockerJob.chainId);
         expect(blockerChainTraceContexts).toHaveLength(1);
         expect(blockerChainTraceContexts[0]).toBeNull();
+
+        const acquired = await stateAdapter.acquireJob({ typeNames: ["main"] });
+        expect(acquired.job).toBeUndefined();
       },
     },
     {
@@ -151,13 +154,16 @@ export const addJobsBlockersGroup: ConformanceGroup<StateAdapterConformanceConte
 
         expect(results).toHaveLength(2);
         expect(results[0].job.id).toBe(main1.id);
-        expect(results[0].job.status).toBe("blocked");
+        expect(results[0].job.status).toBe("pending");
         expect(results[0].incompleteBlockerChainIds).toContain(blocker1.chainId);
 
         expect(results[1].job.id).toBe(main2.id);
-        expect(results[1].job.status).toBe("blocked");
+        expect(results[1].job.status).toBe("pending");
         expect(results[1].incompleteBlockerChainIds).toContain(blocker1.chainId);
         expect(results[1].incompleteBlockerChainIds).toContain(blocker2.chainId);
+
+        const acquired = await stateAdapter.acquireJob({ typeNames: ["main"] });
+        expect(acquired.job).toBeUndefined();
       },
     },
     {
@@ -231,7 +237,7 @@ export const addJobsBlockersGroup: ConformanceGroup<StateAdapterConformanceConte
         expect(results[0].incompleteBlockerChainIds).toHaveLength(0);
 
         expect(results[1].job.id).toBe(main2.id);
-        expect(results[1].job.status).toBe("blocked");
+        expect(results[1].job.status).toBe("pending");
         expect(results[1].incompleteBlockerChainIds).toContain(incompleteBlocker.chainId);
       },
     },

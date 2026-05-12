@@ -457,12 +457,12 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       await startChain("notification", { message: "hi" });
       await startChain("report", { type: "summary" }, [order]);
 
-      const blocked = await client.listChains({ filter: { status: ["blocked"] } });
       const pending = await client.listChains({ filter: { status: ["pending"] } });
+      expect(pending.items).toHaveLength(3);
 
-      expect(blocked.items).toHaveLength(1);
-      expect(blocked.items[0].typeName).toBe("report");
-      expect(pending.items).toHaveLength(2);
+      const reportBlockedByOrder = await client.listBlockedJobs({ chainId: order.id });
+      expect(reportBlockedByOrder.items).toHaveLength(1);
+      expect(reportBlockedByOrder.items[0].typeName).toBe("report");
     });
 
     it("listChains orders ascending", async ({
@@ -762,12 +762,12 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       await startChain("notification", { message: "hi" });
       await startChain("report", { type: "summary" }, [order]);
 
-      const blocked = await client.listJobs({ filter: { status: ["blocked"] } });
       const pending = await client.listJobs({ filter: { status: ["pending"] } });
+      expect(pending.items).toHaveLength(3);
 
-      expect(blocked.items).toHaveLength(1);
-      expect(blocked.items[0].typeName).toBe("report");
-      expect(pending.items).toHaveLength(2);
+      const reportBlockedByOrder = await client.listBlockedJobs({ chainId: order.id });
+      expect(reportBlockedByOrder.items).toHaveLength(1);
+      expect(reportBlockedByOrder.items[0].typeName).toBe("report");
     });
 
     it("listJobs orders ascending", async ({
@@ -1426,7 +1426,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       expect(page.items).toHaveLength(1);
       expect(page.items[0].id).toBe(report.id);
       expect(page.items[0].typeName).toBe("report");
-      expect(page.items[0].status).toBe("blocked");
+      expect(page.items[0].status).toBe("pending");
     });
 
     it("listBlockedJobs paginates", async ({
@@ -1696,7 +1696,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       );
 
       const mainJob = await client.getJob({ id: mainChain.id });
-      expect(mainJob!.status).toBe("blocked");
+      expect(mainJob!.status).toBe("pending");
 
       const blocked = await client.listBlockedJobs({ chainId: depChain.id });
       expect(blocked.items).toHaveLength(1);

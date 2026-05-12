@@ -22,8 +22,8 @@ import {
 
 import { type SqliteStateProvider } from "../state-provider/state-provider.sqlite.js";
 import {
-  type DbJob,
   type DbChainRow,
+  type DbJob,
   createSqliteSqlDefinitions,
   jobColumnsPrefixedSelect,
   jobColumnsSelect,
@@ -57,9 +57,8 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
     typeName: dbJob.type_name,
     chainId: dbJob.chain_id,
     chainTypeName: dbJob.chain_type_name,
-    chainIndex: dbJob.chain_index,
-    continuedToJobId: dbJob.continued_to_job_id,
     input: parseJson(dbJob.input),
+    continuedToJobId: dbJob.continued_to_job_id,
     output: parseJson(dbJob.output),
 
     status: dbJob.status,
@@ -93,6 +92,7 @@ const parseDbChainRow = (row: DbChainRow): { rootJob: DbJob; lastChainJob: DbJob
     input: row.input,
     output: row.output,
     status: row.status,
+    has_blockers: row.has_blockers,
     created_at: row.created_at,
     scheduled_at: row.scheduled_at,
     completed_at: row.completed_at,
@@ -118,6 +118,7 @@ const parseDbChainRow = (row: DbChainRow): { rootJob: DbJob; lastChainJob: DbJob
         input: row.lc_input,
         output: row.lc_output,
         status: row.lc_status!,
+        has_blockers: row.lc_has_blockers!,
         created_at: row.lc_created_at!,
         scheduled_at: row.lc_scheduled_at!,
         completed_at: row.lc_completed_at,
@@ -882,7 +883,7 @@ export const createSqliteStateAdapter = async <
         sql: defs.getJobStatusesByIdsSql,
         params: [idsJson],
       });
-      const statusById = new Map(statusRows.map((r) => [r.id, r.status]));
+      const rowById = new Map(statusRows.map((r) => [r.id, r]));
 
       const notFound: TIdType[] = [];
       const notTriggerable: { id: TIdType; status: StateJob["status"] }[] = [];
@@ -891,11 +892,11 @@ export const createSqliteStateAdapter = async <
         const key = id as string;
         if (seen.has(key)) continue;
         seen.add(key);
-        const status = statusById.get(key);
-        if (status === undefined) {
+        const row = rowById.get(key);
+        if (row === undefined) {
           notFound.push(id);
-        } else if (status !== "pending") {
-          notTriggerable.push({ id, status: status as StateJob["status"] });
+        } else if (row.status !== "pending" || row.has_blockers === 1) {
+          notTriggerable.push({ id, status: row.status as StateJob["status"] });
         }
       }
 

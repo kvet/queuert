@@ -26,8 +26,6 @@ export const mapStatePairToChain = (
       };
     case "running":
       return { ...base, status: "running" };
-    case "blocked":
-      return { ...base, status: "blocked" };
     case "pending":
       return { ...base, status: "pending" };
   }

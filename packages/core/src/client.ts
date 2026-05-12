@@ -124,15 +124,20 @@ type CompleteChainResult<
   TCompleteReturn,
 > = [TCompleteReturn] extends [void]
   ? ResolvedChain<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TChainTypeName>
-  : TCompleteReturn extends Job<any, any, any, any, any, boolean> &
-        ({ status: "pending" } | { status: "blocked" })
+  : TCompleteReturn extends Extract<
+        Job<any, any, any, any, any, boolean>,
+        { status: "pending" }
+      >
     ? ResolvedChain<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TChainTypeName>
-    : Chain<
-        GetStateAdapterJobId<TStateAdapter>,
-        TChainTypeName,
-        JobTypeProperty<TJobTypeDefinitions, TChainTypeName, "input">,
-        TCompleteReturn
-      > & { status: "completed" };
+    : Extract<
+        Chain<
+          GetStateAdapterJobId<TStateAdapter>,
+          TChainTypeName,
+          JobTypeProperty<TJobTypeDefinitions, TChainTypeName, "input">,
+          TCompleteReturn
+        >,
+        { status: "completed" }
+      >;
 
 type CompleteChainResultFromComplete<
   TStateAdapter extends StateAdapter<any, any>,
@@ -288,7 +293,7 @@ export type Client<
       signal?: AbortSignal;
     },
   ) => Promise<
-    ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> & { status: "completed" }
+    Extract<ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName>, { status: "completed" }>
   >;
 
   /** Get a single chain by ID. Pass `typeName` for type narrowing — throws {@link JobTypeMismatchError} on mismatch. */
@@ -769,7 +774,7 @@ export const createClient = async <
         signal?: AbortSignal;
       },
     ): Promise<
-      ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> & { status: "completed" }
+      Extract<ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName>, { status: "completed" }>
     > => {
       const { id, typeName } = chain;
       const { timeoutMs, pollIntervalMs = 15_000, signal } = options;
@@ -796,9 +801,10 @@ export const createClient = async <
 
         const mapped = mapStatePairToChain(chainPair);
         return mapped.status === "completed"
-          ? (mapped as ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> & {
-              status: "completed";
-            })
+          ? (mapped as Extract<
+              ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName>,
+              { status: "completed" }
+            >)
           : null;
       };
 

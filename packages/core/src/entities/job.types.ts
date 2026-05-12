@@ -1,5 +1,5 @@
 /** Possible statuses of a job. */
-export type JobStatus = "blocked" | "pending" | "running" | "completed";
+export type JobStatus = "pending" | "running" | "completed";
 
 /**
  * A job within a chain. Discriminated union on {@link Job.status | status},
@@ -36,23 +36,22 @@ export type Job<
   lastAttemptAt: Date | null;
   lastAttemptError: string | null;
 } & (
-  | { status: "blocked" }
   | { status: "pending" }
   | { status: "running"; leasedBy?: string; leasedUntil?: Date }
   | {
       status: "completed";
       completedAt: Date;
       completedBy: string | null;
-      output: TOutput;
       continuedToJobId: null;
+      output: TOutput;
     }
   | (TCanContinue extends true
       ? {
           status: "completed";
           completedAt: Date;
           completedBy: string | null;
-          output?: never;
           continuedToJobId: TJobId;
+          output?: never;
         }
       : never)
 );

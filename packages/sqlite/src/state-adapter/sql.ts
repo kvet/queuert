@@ -17,6 +17,7 @@ export const jobColumns = [
   "input",
   "output",
   "status",
+  "has_blockers",
   "created_at",
   "scheduled_at",
   "completed_at",
@@ -47,7 +48,8 @@ export type DbJob = {
   input: string | null;
   output: string | null;
 
-  status: "blocked" | "pending" | "running" | "completed";
+  status: "pending" | "running" | "completed";
+  has_blockers: number;
   created_at: string;
   scheduled_at: string;
   completed_at: string | null;
@@ -233,6 +235,33 @@ WHERE j.continued_to_job_id IS NULL`),
       },
     ],
   },
+  {
+    name: "20260508000000_has_blockers",
+    transactional: true,
+    statements: [
+      {
+        sql: sql(/* sql */ `
+ALTER TABLE {{table_prefix}}job
+  ADD COLUMN has_blockers INTEGER NOT NULL DEFAULT 0 CHECK(has_blockers IN (0,1))`),
+      },
+      {
+        sql: sql(/* sql */ `
+UPDATE {{table_prefix}}job
+SET has_blockers = 1,
+    status = 'pending'
+WHERE status = 'blocked'`),
+      },
+      {
+        sql: sql(/* sql */ `DROP INDEX IF EXISTS {{table_prefix}}job_acquisition_idx`),
+      },
+      {
+        sql: sql(/* sql */ `
+CREATE INDEX IF NOT EXISTS {{table_prefix}}job_acquisition_idx
+ON {{table_prefix}}job (type_name, scheduled_at)
+WHERE status = 'pending' AND has_blockers = 0`),
+      },
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -251,6 +280,7 @@ type SqliteDbJobCols<TRuntime extends RuntimeType> = {
   readonly input: DataType<"string?", string | null>;
   readonly output: DataType<"string?", string | null>;
   readonly status: DataType<"string", DbJob["status"]>;
+  readonly has_blockers: DataType<"number", number>;
   readonly created_at: DataType<"string", string>;
   readonly scheduled_at: DataType<"string", string>;
   readonly completed_at: DataType<"string?", string | null>;
@@ -275,6 +305,7 @@ type SqliteDbChainRowCols<TRuntime extends RuntimeType> = SqliteDbJobCols<TRunti
   readonly lc_input: DataType<"string?", string | null>;
   readonly lc_output: DataType<"string?", string | null>;
   readonly lc_status: DataType<"string?", DbJob["status"] | null>;
+  readonly lc_has_blockers: DataType<"number?", number | null>;
   readonly lc_created_at: DataType<"string?", string | null>;
   readonly lc_scheduled_at: DataType<"string?", string | null>;
   readonly lc_completed_at: DataType<"string?", string | null>;
@@ -386,7 +417,11 @@ export type SqliteSqlDefinitions<TRuntime extends RuntimeType = RuntimeType> = {
   >;
   readonly getJobStatusesByIdsSql: TypedSql<
     readonly [DataType<"string", string>],
-    { readonly id: Id<TRuntime>; readonly status: DataType<"string", string> }
+    {
+      readonly id: Id<TRuntime>;
+      readonly status: DataType<"string", string>;
+      readonly has_blockers: DataType<"number", number>;
+    }
   >;
   readonly renewJobLeaseSql: TypedSql<
     readonly [DataType<"string", string>, DataType<"number", number>, Id<TRuntime>],
@@ -436,6 +471,7 @@ export const createSqliteSqlDefinitions = <TRuntime extends RuntimeType>(
     input: t["string?"](),
     output: t["string?"](),
     status: t.string<DbJob["status"]>(),
+    has_blockers: t.number(),
     created_at: t.string(),
     scheduled_at: t.string(),
     completed_at: t["string?"](),
@@ -461,6 +497,7 @@ export const createSqliteSqlDefinitions = <TRuntime extends RuntimeType>(
     lc_input: t["string?"](),
     lc_output: t["string?"](),
     lc_status: t["string?"]<DbJob["status"]>(),
+    lc_has_blockers: t["number?"](),
     lc_created_at: t["string?"](),
     lc_scheduled_at: t["string?"](),
     lc_completed_at: t["string?"](),
@@ -662,8 +699,8 @@ WHERE jb.job_id = ?
   const updateJobToBlockedSql = sql(
     /* sql */ `
 UPDATE {{table_prefix}}job
-SET status = 'blocked'
-WHERE id = ? AND status = 'pending'
+SET has_blockers = 1
+WHERE id = ? AND status = 'pending' AND has_blockers = 0
 RETURNING *
 `,
     {
@@ -737,8 +774,8 @@ HAVING MIN(CASE WHEN blocker_status = 'completed' THEN 1 ELSE 0 END) = 1
     /* sql */ `
 UPDATE {{table_prefix}}job
 SET scheduled_at = datetime('now', 'subsec'),
-    status = 'pending'
-WHERE id IN (SELECT value FROM json_each(?)) AND status = 'blocked'
+    has_blockers = 0
+WHERE id IN (SELECT value FROM json_each(?)) AND has_blockers = 1
 RETURNING *
 `,
     {
@@ -905,15 +942,15 @@ RETURNING *
   const triggerJobsSql = sql(
     /* sql */ `
 WITH _classified AS (
-  SELECT i.value AS input_id, j.id AS found_id, j.status AS current_status
+  SELECT i.value AS input_id, j.id AS found_id, j.status AS current_status, j.has_blockers AS current_has_blockers
   FROM json_each(?) i
   LEFT JOIN {{table_prefix}}job j ON j.id = i.value
 )
 UPDATE {{table_prefix}}job
 SET scheduled_at = datetime('now', 'subsec')
-WHERE id IN (SELECT input_id FROM _classified WHERE current_status = 'pending')
+WHERE id IN (SELECT input_id FROM _classified WHERE current_status = 'pending' AND current_has_blockers = 0)
   AND NOT EXISTS (
-    SELECT 1 FROM _classified WHERE found_id IS NULL OR current_status != 'pending'
+    SELECT 1 FROM _classified WHERE found_id IS NULL OR current_status != 'pending' OR current_has_blockers = 1
   )
 RETURNING *
 `,
@@ -926,13 +963,13 @@ RETURNING *
 
   const getJobStatusesByIdsSql = sql(
     /* sql */ `
-SELECT id, status FROM {{table_prefix}}job
+SELECT id, status, has_blockers FROM {{table_prefix}}job
 WHERE id IN (SELECT value FROM json_each(?))
 `,
     {
       id: "getJobStatusesByIds",
       params: [t.string()],
-      columns: { id, status: t.string() },
+      columns: { id, status: t.string(), has_blockers: t.number() },
       readOnly: true,
     },
   );
@@ -963,6 +1000,7 @@ WHERE id = (
   FROM {{table_prefix}}job INDEXED BY {{table_prefix}}job_acquisition_idx
   WHERE type_name IN (SELECT value FROM json_each(?))
     AND status = 'pending'
+    AND has_blockers = 0
     AND scheduled_at <= datetime('now', 'subsec')
   ORDER BY scheduled_at ASC
   LIMIT 1
@@ -973,6 +1011,7 @@ RETURNING *,
     FROM {{table_prefix}}job INDEXED BY {{table_prefix}}job_acquisition_idx
     WHERE type_name IN (SELECT value FROM json_each(?))
       AND status = 'pending'
+      AND has_blockers = 0
       AND scheduled_at <= datetime('now', 'subsec')
     LIMIT 1
   ) AS has_more
@@ -991,6 +1030,7 @@ SELECT
 FROM {{table_prefix}}job as job INDEXED BY {{table_prefix}}job_acquisition_idx
 WHERE job.type_name IN (SELECT value FROM json_each(?))
   AND job.status = 'pending'
+  AND job.has_blockers = 0
 ORDER BY job.scheduled_at ASC
 LIMIT 1
 `,

@@ -200,12 +200,15 @@ export type AttemptHandler<
 > = (
   processOptions: {
     signal: TypedAbortSignal<JobAbortReason>;
-    job: ResolvedJobWithBlockers<
-      GetStateAdapterJobId<TStateAdapter>,
-      TJobTypeDefinitions,
-      TJobTypeName,
-      TChainTypeName
-    > & { status: "running" };
+    job: Extract<
+      ResolvedJobWithBlockers<
+        GetStateAdapterJobId<TStateAdapter>,
+        TJobTypeDefinitions,
+        TJobTypeName,
+        TChainTypeName
+      >,
+      { status: "running" }
+    >;
     prepare: AttemptPrepare<TStateAdapter, TPrepareCtx>;
     complete: AttemptComplete<
       TStateAdapter,
@@ -216,12 +219,15 @@ export type AttemptHandler<
     >;
   } & THandlerCtx,
 ) => Promise<
-  | (ResolvedJobWithBlockers<
-      GetStateAdapterJobId<TStateAdapter>,
-      TJobTypeDefinitions,
-      TJobTypeName,
-      TChainTypeName
-    > & { status: "completed" })
+  | Extract<
+      ResolvedJobWithBlockers<
+        GetStateAdapterJobId<TStateAdapter>,
+        TJobTypeDefinitions,
+        TJobTypeName,
+        TChainTypeName
+      >,
+      { status: "completed" }
+    >
   | ContinuationJobs<
       GetStateAdapterJobId<TStateAdapter>,
       TJobTypeDefinitions,
@@ -367,7 +373,7 @@ export const runJobProcess = async ({
   const runningJob = {
     ...mapStateJobToJob(job),
     blockers: blockerPairs.map(mapStatePairToChain) as CompletedChain<Chain<any, any, any, any>>[],
-  } as ResolvedJobWithBlockers<any, any, any, any> & { status: "running" };
+  } as Extract<ResolvedJobWithBlockers<any, any, any, any>, { status: "running" }>;
 
   const runJobAttempt = async (handlerCtx: Record<string, unknown>) => {
     const attemptStartTime = Date.now();

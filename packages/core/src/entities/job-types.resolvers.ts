@@ -210,15 +210,17 @@ export type ContinuationJobs<
 > =
   JobTypeContinuation<TJobTypeDefinitions, TJobTypeName> extends infer TContinuation extends string
     ? {
-        [K in TContinuation]: Job<
-          TJobId,
-          K,
-          TChainTypeName,
-          JobTypeProperty<TJobTypeDefinitions, K, "input">,
-          JobTypeProperty<TJobTypeDefinitions, K, "output">,
-          [JobTypeContinuation<TJobTypeDefinitions, K>] extends [never] ? false : true
-        > &
-          ({ status: "pending" } | { status: "blocked" });
+        [K in TContinuation]: Extract<
+          Job<
+            TJobId,
+            K,
+            TChainTypeName,
+            JobTypeProperty<TJobTypeDefinitions, K, "input">,
+            JobTypeProperty<TJobTypeDefinitions, K, "output">,
+            [JobTypeContinuation<TJobTypeDefinitions, K>] extends [never] ? false : true
+          >,
+          { status: "pending" }
+        >;
       }[TContinuation]
     : never;
 

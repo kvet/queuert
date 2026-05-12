@@ -2,16 +2,15 @@ import { type ScheduleOptions } from "../entities/schedule.js";
 import { type BlockerReference } from "../errors.js";
 import { type OrderDirection, type Page, type PageParams } from "../pagination.js";
 
-export type StateJobStatus = "blocked" | "pending" | "running" | "completed";
+export type StateJobStatus = "pending" | "running" | "completed";
 
 export type StateJob = {
   id: string;
   typeName: string;
   chainId: string;
   chainTypeName: string;
-  chainIndex: number;
-  continuedToJobId: string | null;
   input: unknown;
+  continuedToJobId: string | null;
   output: unknown;
 
   status: StateJobStatus;
@@ -148,7 +147,7 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     }[]
   >;
 
-  /** Unblocks jobs when a blocker chain completes, transitioning them from blocked to pending. */
+  /** Unblocks jobs when a blocker chain completes, clearing `hasBlockers` so they become acquirable. */
   unblockJobs: (params: {
     txCtx?: TTxContext;
     blockedByChainId: TJobId;

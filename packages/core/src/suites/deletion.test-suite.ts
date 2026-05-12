@@ -288,7 +288,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       }),
     );
 
-    expect(mainChain.status).toBe("blocked");
+    expect(mainChain.status).toBe("pending");
 
     // Deleting blocker chain alone should fail — main chain depends on it
     await expect(
@@ -326,7 +326,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       id: mainChain.id,
       typeName: "main",
       input: null,
-      status: "blocked",
+      status: "pending",
     });
 
     await withTransaction(async (txCtx) => {
@@ -980,8 +980,8 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       ),
     );
 
-    expect(mainA.status).toBe("blocked");
-    expect(mainB.status).toBe("blocked");
+    expect(mainA.status).toBe("pending");
+    expect(mainB.status).toBe("pending");
 
     await expect(
       withTransactionHooks(async (transactionHooks) =>

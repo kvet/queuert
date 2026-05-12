@@ -1,5 +1,5 @@
 /** Possible statuses of a chain. Derived from the status of its latest job. */
-export type ChainStatus = "blocked" | "pending" | "running" | "completed";
+export type ChainStatus = "pending" | "running" | "completed";
 
 /**
  * A chain. Discriminated union on {@link Chain.status | status}.
@@ -20,7 +20,6 @@ export type Chain<TJobId, TChainTypeName, TInput, TOutput> = {
   input: TInput;
   createdAt: Date;
 } & (
-  | { status: "blocked" }
   | { status: "pending" }
   | { status: "running" }
   | { status: "completed"; output: TOutput; completedAt: Date }

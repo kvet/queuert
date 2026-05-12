@@ -8,12 +8,15 @@ import {
 } from "../state-adapter/state-adapter.js";
 import { type TransactionHooks } from "../transaction-hooks.js";
 
-type RunningJob<TStateAdapter extends StateAdapter<any, any>> = ResolvedJobWithBlockers<
-  GetStateAdapterJobId<TStateAdapter>,
-  BaseJobTypeDefinitions,
-  string,
-  string
-> & { status: "running" };
+type RunningJob<TStateAdapter extends StateAdapter<any, any>> = Extract<
+  ResolvedJobWithBlockers<
+    GetStateAdapterJobId<TStateAdapter>,
+    BaseJobTypeDefinitions,
+    string,
+    string
+  >,
+  { status: "running" }
+>;
 
 /**
  * Wraps job processing with cross-cutting logic for one or more phases.

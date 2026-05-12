@@ -43,8 +43,6 @@ export const mapStateJobToJob = (stateJob: StateJob): Job<any, any, any, any, an
         leasedBy: stateJob.leasedBy ?? undefined,
         leasedUntil: stateJob.leasedUntil ?? undefined,
       };
-    case "blocked":
-      return { ...base, status: "blocked" };
     case "pending":
       return { ...base, status: "pending" };
   }

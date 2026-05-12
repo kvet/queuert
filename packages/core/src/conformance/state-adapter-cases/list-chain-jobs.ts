@@ -62,9 +62,9 @@ export const listChainJobsGroup: ConformanceGroup<StateAdapterConformanceContext
           page: { limit: 10 },
         });
         expect(result.items).toHaveLength(3);
-        expect(result.items[0].chainIndex).toBe(0);
-        expect(result.items[1].chainIndex).toBe(1);
-        expect(result.items[2].chainIndex).toBe(2);
+        expect(result.items[0].typeName).toBe("step-1");
+        expect(result.items[1].typeName).toBe("step-2");
+        expect(result.items[2].typeName).toBe("step-3");
       },
     },
     {
@@ -101,8 +101,8 @@ export const listChainJobsGroup: ConformanceGroup<StateAdapterConformanceContext
           page: { limit: 10 },
         });
         expect(result.items).toHaveLength(2);
-        expect(result.items[0].chainIndex).toBe(1);
-        expect(result.items[1].chainIndex).toBe(0);
+        expect(result.items[0].typeName).toBe("step-2");
+        expect(result.items[1].typeName).toBe("step-1");
       },
     },
     {
@@ -144,8 +144,8 @@ export const listChainJobsGroup: ConformanceGroup<StateAdapterConformanceContext
         });
         expect(page1.items).toHaveLength(2);
         expect(page1.nextCursor).not.toBeNull();
-        expect(page1.items[0].chainIndex).toBe(0);
-        expect(page1.items[1].chainIndex).toBe(1);
+        expect(page1.items[0].typeName).toBe("step-0");
+        expect(page1.items[1].typeName).toBe("step-1");
 
         const page2 = await stateAdapter.listChainJobs({
           chainId: root.chainId,
@@ -154,8 +154,8 @@ export const listChainJobsGroup: ConformanceGroup<StateAdapterConformanceContext
         });
         expect(page2.items).toHaveLength(2);
         expect(page2.nextCursor).not.toBeNull();
-        expect(page2.items[0].chainIndex).toBe(2);
-        expect(page2.items[1].chainIndex).toBe(3);
+        expect(page2.items[0].typeName).toBe("step-2");
+        expect(page2.items[1].typeName).toBe("step-3");
 
         const page3 = await stateAdapter.listChainJobs({
           chainId: root.chainId,
@@ -205,8 +205,8 @@ export const listChainJobsGroup: ConformanceGroup<StateAdapterConformanceContext
         });
         expect(page1.items).toHaveLength(2);
         expect(page1.nextCursor).not.toBeNull();
-        expect(page1.items[0].chainIndex).toBe(4);
-        expect(page1.items[1].chainIndex).toBe(3);
+        expect(page1.items[0].typeName).toBe("step-4");
+        expect(page1.items[1].typeName).toBe("step-3");
 
         const page2 = await stateAdapter.listChainJobs({
           chainId: root.chainId,
@@ -215,8 +215,8 @@ export const listChainJobsGroup: ConformanceGroup<StateAdapterConformanceContext
         });
         expect(page2.items).toHaveLength(2);
         expect(page2.nextCursor).not.toBeNull();
-        expect(page2.items[0].chainIndex).toBe(2);
-        expect(page2.items[1].chainIndex).toBe(1);
+        expect(page2.items[0].typeName).toBe("step-2");
+        expect(page2.items[1].typeName).toBe("step-1");
 
         const page3 = await stateAdapter.listChainJobs({
           chainId: root.chainId,
@@ -224,7 +224,7 @@ export const listChainJobsGroup: ConformanceGroup<StateAdapterConformanceContext
           page: { limit: 2, cursor: page2.nextCursor! },
         });
         expect(page3.items).toHaveLength(1);
-        expect(page3.items[0].chainIndex).toBe(0);
+        expect(page3.items[0].typeName).toBe("step-0");
         expect(page3.nextCursor).toBeNull();
       },
     },

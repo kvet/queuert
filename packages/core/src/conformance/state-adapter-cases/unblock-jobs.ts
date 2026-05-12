@@ -131,7 +131,12 @@ export const unblockJobsGroup: ConformanceGroup<StateAdapterConformanceContext> 
         expect(unblockedJobs).toHaveLength(0);
 
         const stillBlocked = await stateAdapter.getJob({ jobId: mainJob.id });
-        expect(stillBlocked!.status).toBe("blocked");
+        expect(stillBlocked!.status).toBe("pending");
+
+        const acquired = await stateAdapter.acquireJob({
+          typeNames: [mainJob.typeName],
+        });
+        expect(acquired.job).toBeUndefined();
       },
     },
     {

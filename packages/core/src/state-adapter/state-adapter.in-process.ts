@@ -5,10 +5,13 @@ import { type OrderDirection, type Page, type PageParams } from "../pagination.j
 import { decodeCreatedAtWithIdCursor, decodeIdCursor, encodeCursor } from "./cursor.js";
 import { type StateAdapter, type StateJob, type StateJobStatus } from "./state-adapter.js";
 
+type DbJob = StateJob & { chainIndex: number; hasBlockers: boolean };
+type DbJobStatus = StateJobStatus;
+
 type BlockerEntry = { index: number; traceContext: string | null };
 
 type JournalEntry =
-  | { kind: "job"; prev: StateJob | undefined; next: StateJob | undefined }
+  | { kind: "job"; prev: DbJob | undefined; next: DbJob | undefined }
   | {
       kind: "blocker";
       jobId: string;
@@ -78,11 +81,11 @@ const compareStrings = (a: string, b: string): number => (a < b ? -1 : a > b ? 1
 const makeComparators = (
   seqByJobId: Map<string, number>,
 ): {
-  scheduledAt: Comparator<StateJob>;
-  leasedUntil: Comparator<StateJob>;
-  createdAt: Comparator<StateJob>;
+  scheduledAt: Comparator<DbJob>;
+  leasedUntil: Comparator<DbJob>;
+  createdAt: Comparator<DbJob>;
 } => {
-  const seq = (job: StateJob): number => seqByJobId.get(job.id) ?? 0;
+  const seq = (job: DbJob): number => seqByJobId.get(job.id) ?? 0;
   return {
     scheduledAt: (a, b) => {
       const d = a.scheduledAt.getTime() - b.scheduledAt.getTime();
@@ -116,29 +119,29 @@ const matchesDateRange = (createdAt: Date, from?: Date, to?: Date): boolean => {
 export type InProcessStateAdapter = StateAdapter<InProcessContext, string>;
 
 export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapter> => {
-  const jobs = new Map<string, StateJob>();
-  const pendingByType = new Map<string, SortedSet<StateJob>>();
-  const runningByType = new Map<string, SortedSet<StateJob>>();
-  const jobsByChain = new Map<string, Map<number, StateJob>>();
-  const lastByChain = new Map<string, StateJob>();
-  const dedupByKey = new Map<string, Set<StateJob>>();
+  const jobs = new Map<string, DbJob>();
+  const pendingByType = new Map<string, SortedSet<DbJob>>();
+  const runningByType = new Map<string, SortedSet<DbJob>>();
+  const jobsByChain = new Map<string, Map<number, DbJob>>();
+  const lastByChain = new Map<string, DbJob>();
+  const dedupByKey = new Map<string, Set<DbJob>>();
   const jobBlockers = new Map<string, Map<string, BlockerEntry>>();
   const blockedByChain = new Map<string, Set<string>>();
 
   const seqByJobId = new Map<string, number>();
   let nextSeq = 0;
   const cmp = makeComparators(seqByJobId);
-  const rootJobsByCreatedAt = new SortedSet<StateJob>(cmp.createdAt);
+  const rootJobsByCreatedAt = new SortedSet<DbJob>(cmp.createdAt);
 
   const lock = createAsyncRwLock();
 
-  const dedupKey = (job: StateJob): string | undefined =>
+  const dedupKey = (job: DbJob): string | undefined =>
     job.deduplicationKey != null ? `${job.chainTypeName}\u0000${job.deduplicationKey}` : undefined;
 
-  const indexInsertJob = (job: StateJob): void => {
+  const indexInsertJob = (job: DbJob): void => {
     if (!seqByJobId.has(job.id)) seqByJobId.set(job.id, nextSeq++);
 
-    if (job.status === "pending") {
+    if (job.status === "pending" && !job.hasBlockers) {
       let set = pendingByType.get(job.typeName);
       if (!set) {
         set = new SortedSet(cmp.scheduledAt);
@@ -180,8 +183,8 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
     }
   };
 
-  const indexRemoveJob = (job: StateJob): void => {
-    if (job.status === "pending") {
+  const indexRemoveJob = (job: DbJob): void => {
+    if (job.status === "pending" && !job.hasBlockers) {
       pendingByType.get(job.typeName)?.delete(job);
     } else if (job.status === "running") {
       runningByType.get(job.typeName)?.delete(job);
@@ -198,7 +201,7 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
 
     const last = lastByChain.get(job.chainId);
     if (last && last.id === job.id) {
-      let newLast: StateJob | undefined;
+      let newLast: DbJob | undefined;
       const remaining = jobsByChain.get(job.chainId);
       if (remaining) {
         for (const j of remaining.values()) {
@@ -224,8 +227,8 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
 
   const writeJob = (
     journal: JournalEntry[] | undefined,
-    prev: StateJob | undefined,
-    next: StateJob | undefined,
+    prev: DbJob | undefined,
+    next: DbJob | undefined,
   ): void => {
     if (prev) indexRemoveJob(prev);
     if (next) {
@@ -309,7 +312,7 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
     }
   };
 
-  const getLastJobInChain = (chainId: string): StateJob | undefined => lastByChain.get(chainId);
+  const getLastJobInChain = (chainId: string): DbJob | undefined => lastByChain.get(chainId);
 
   const expandChainIds = (chainIds: readonly string[]): string[] => {
     const visited = new Set(chainIds);
@@ -344,7 +347,7 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
     return refs;
   };
 
-  const findExistingContinuation = (chainId: string, chainIndex: number): StateJob | undefined => {
+  const findExistingContinuation = (chainId: string, chainIndex: number): DbJob | undefined => {
     const chainMap = jobsByChain.get(chainId);
     if (!chainMap) return undefined;
     const candidate = chainMap.get(chainIndex);
@@ -356,7 +359,7 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
   const findDeduplicatedJob = (
     chainTypeName: string,
     deduplication: DeduplicationOptions<string>,
-  ): StateJob | undefined => {
+  ): DbJob | undefined => {
     if (!deduplication.key) return undefined;
 
     const set = dedupByKey.get(`${chainTypeName}\u0000${deduplication.key}`);
@@ -370,7 +373,7 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
     const windowStart =
       deduplication.windowMs !== undefined ? now - deduplication.windowMs : undefined;
 
-    let bestMatch: StateJob | undefined;
+    let bestMatch: DbJob | undefined;
     for (const job of set) {
       if (exclude?.has(job.chainId)) continue;
       if (scope === "incomplete" && job.status === "completed") continue;
@@ -380,16 +383,16 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
     return bestMatch;
   };
 
-  const matchesStatusFilter = (job: StateJob, statuses?: StateJobStatus[]): boolean =>
+  const matchesStatusFilter = (job: DbJob, statuses?: DbJobStatus[]): boolean =>
     !statuses || statuses.length === 0 || statuses.includes(job.status);
 
-  const matchesTypeNameFilter = (job: StateJob, typeNames?: string[]): boolean =>
+  const matchesTypeNameFilter = (job: DbJob, typeNames?: string[]): boolean =>
     !typeNames || typeNames.length === 0 || typeNames.includes(job.typeName);
 
-  const matchesChainTypeNameFilter = (job: StateJob, chainTypeNames?: string[]): boolean =>
+  const matchesChainTypeNameFilter = (job: DbJob, chainTypeNames?: string[]): boolean =>
     !chainTypeNames || chainTypeNames.length === 0 || chainTypeNames.includes(job.chainTypeName);
 
-  const paginateByCreatedAt = <T extends StateJob | [StateJob, StateJob | undefined]>(
+  const paginateByCreatedAt = <T extends DbJob | [DbJob, DbJob | undefined]>(
     items: T[],
     page: PageParams,
     orderDirection: OrderDirection,
@@ -439,10 +442,10 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
   };
 
   const paginateByChainIndex = (
-    items: StateJob[],
+    items: DbJob[],
     page: PageParams,
     orderDirection: OrderDirection,
-  ): Page<StateJob> => {
+  ): Page<DbJob> => {
     const dir = orderDirection === "asc" ? 1 : -1;
     const sorted = items.toSorted((a, b) => {
       const d = a.chainIndex - b.chainIndex;
@@ -548,14 +551,14 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
     createJobs: async ({ txCtx, jobs: jobInputs }) =>
       withWriteLock(txCtx, () => {
         const journal = txCtx?.journal;
-        const results: { job: StateJob; deduplicated: boolean }[] = [];
+        const results: { job: DbJob; deduplicated: boolean }[] = [];
         for (const jobInput of jobInputs) {
           const { typeName, input, schedule, chainTraceContext, traceContext } = jobInput;
 
           let chainId: string;
           let chainTypeName: string;
           let chainIndex: number;
-          let parent: StateJob | undefined;
+          let parent: DbJob | undefined;
           let deduplication: DeduplicationOptions<string> | undefined;
 
           if ("continueFromJobId" in jobInput) {
@@ -593,7 +596,7 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
           const resolvedScheduledAt =
             schedule?.at ?? (schedule?.afterMs ? new Date(now.getTime() + schedule.afterMs) : now);
 
-          const job: StateJob = {
+          const job: DbJob = {
             id,
             typeName,
             chainTypeName,
@@ -603,6 +606,7 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
             output: null,
             chainId,
             status: "pending",
+            hasBlockers: false,
             createdAt: now,
             scheduledAt: resolvedScheduledAt,
             completedAt: null,
@@ -620,7 +624,7 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
           writeJob(journal, undefined, job);
 
           if (parent && parent.continuedToJobId === null) {
-            const updatedParent: StateJob = { ...parent, continuedToJobId: job.id };
+            const updatedParent: DbJob = { ...parent, continuedToJobId: job.id };
             writeJob(journal, parent, updatedParent);
           }
 
@@ -633,7 +637,7 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
       withWriteLock(txCtx, () => {
         const journal = txCtx?.journal;
         const results: {
-          job: StateJob;
+          job: DbJob;
           incompleteBlockerChainIds: string[];
           blockerChainTraceContexts: (string | null)[];
         }[] = [];
@@ -662,13 +666,17 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
           }
 
           if (incompleteBlockerChainIds.length > 0 && job.status === "pending") {
-            const updatedJob: StateJob = { ...job, status: "blocked" };
-            writeJob(journal, job, updatedJob);
-            results.push({
-              job: updatedJob,
-              incompleteBlockerChainIds,
-              blockerChainTraceContexts,
-            });
+            if (job.hasBlockers) {
+              results.push({ job, incompleteBlockerChainIds, blockerChainTraceContexts });
+            } else {
+              const updatedJob: DbJob = { ...job, hasBlockers: true };
+              writeJob(journal, job, updatedJob);
+              results.push({
+                job: updatedJob,
+                incompleteBlockerChainIds,
+                blockerChainTraceContexts,
+              });
+            }
           } else {
             results.push({ job, incompleteBlockerChainIds: [], blockerChainTraceContexts });
           }
@@ -680,7 +688,7 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
     unblockJobs: async ({ txCtx, blockedByChainId }) =>
       withWriteLock(txCtx, () => {
         const journal = txCtx?.journal;
-        const unblockedJobs: StateJob[] = [];
+        const unblockedJobs: DbJob[] = [];
         const blockerTraceContexts: (string | null)[] = [];
         const now = new Date();
 
@@ -701,7 +709,7 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
           }
 
           const job = jobs.get(jobId);
-          if (!job || job.status !== "blocked") continue;
+          if (!job || !job.hasBlockers) continue;
 
           let allComplete = true;
           for (const blockerChainId of blockerMap.keys()) {
@@ -713,9 +721,9 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
           }
 
           if (allComplete) {
-            const updatedJob: StateJob = {
+            const updatedJob: DbJob = {
               ...job,
-              status: "pending",
+              hasBlockers: false,
               scheduledAt: now,
             };
             writeJob(journal, job, updatedJob);
@@ -733,7 +741,7 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
 
         const entries = Array.from(blockerMap.entries()).sort((a, b) => a[1].index - b[1].index);
 
-        const result: [StateJob, StateJob | undefined][] = [];
+        const result: [DbJob, DbJob | undefined][] = [];
         for (const [blockerChainId] of entries) {
           const rootJob = jobs.get(blockerChainId);
           if (!rootJob) continue;
@@ -768,8 +776,8 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
         const now = new Date();
         const nowMs = now.getTime();
 
-        let bestJob: StateJob | undefined;
-        let bestSet: SortedSet<StateJob> | undefined;
+        let bestJob: DbJob | undefined;
+        let bestSet: SortedSet<DbJob> | undefined;
         for (const typeName of typeNames) {
           const set = pendingByType.get(typeName);
           const candidate = set?.first();
@@ -800,7 +808,7 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
           }
         }
 
-        const updatedJob: StateJob = {
+        const updatedJob: DbJob = {
           ...bestJob,
           status: "running",
           attempt: bestJob.attempt + 1,
@@ -817,7 +825,7 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
         if (!job) throw new Error("Job not found");
 
         const now = new Date();
-        const updatedJob: StateJob = {
+        const updatedJob: DbJob = {
           ...job,
           leasedBy: workerId,
           leasedUntil: new Date(now.getTime() + leaseDurationMs),
@@ -837,7 +845,7 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
         const now = new Date();
         const resolvedScheduledAt =
           schedule.at ?? (schedule.afterMs ? new Date(now.getTime() + schedule.afterMs) : now);
-        const updatedJob: StateJob = {
+        const updatedJob: DbJob = {
           ...job,
           scheduledAt: resolvedScheduledAt,
           lastAttemptAt: now,
@@ -858,7 +866,7 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
         if (!job) throw new Error("Job not found");
 
         const now = new Date();
-        const updatedJob: StateJob = {
+        const updatedJob: DbJob = {
           ...job,
           status: "completed",
           completedAt: now,
@@ -879,7 +887,7 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
         const nowMs = now.getTime();
         const ignoredSet = ignoredJobIds ? new Set(ignoredJobIds) : undefined;
 
-        let candidateJob: StateJob | undefined;
+        let candidateJob: DbJob | undefined;
         for (const typeName of typeNames) {
           const set = runningByType.get(typeName);
           if (!set) continue;
@@ -899,7 +907,7 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
 
         if (!candidateJob) return undefined;
 
-        const updatedJob: StateJob = {
+        const updatedJob: DbJob = {
           ...candidateJob,
           leasedBy: null,
           leasedUntil: null,
@@ -918,14 +926,14 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
         const blockerRefs = findExternalBlockerRefs(effectiveChainIds);
         if (blockerRefs.length > 0) return { deleted: [], blockerRefs };
 
-        const deleted: [StateJob, StateJob | undefined][] = effectiveChainIds.flatMap((chainId) => {
+        const deleted: [DbJob, DbJob | undefined][] = effectiveChainIds.flatMap((chainId) => {
           const rootJob = jobs.get(chainId);
           if (!rootJob) return [];
           const lastJob = getLastJobInChain(chainId);
           return [[rootJob, lastJob && lastJob.id !== rootJob.id ? lastJob : undefined]];
         });
 
-        const jobsToRemove: StateJob[] = [];
+        const jobsToRemove: DbJob[] = [];
         for (const chainId of effectiveChainIds) {
           const chainMap = jobsByChain.get(chainId);
           if (!chainMap) continue;
@@ -962,7 +970,7 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
           blockerChainIds = new Set<string>(blockedByChain.keys());
         }
 
-        const chains: [StateJob, StateJob | undefined][] = [];
+        const chains: [DbJob, DbJob | undefined][] = [];
         for (const job of rootJobsByCreatedAt.iterate("asc")) {
           const lastJob = getLastJobInChain(job.id);
 
@@ -981,7 +989,7 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
 
     listJobs: async ({ txCtx, filter, orderDirection, page }) =>
       withReadLock(txCtx, () => {
-        const matched: StateJob[] = [];
+        const matched: DbJob[] = [];
         for (const job of jobs.values()) {
           if (filter?.jobId && !filter.jobId.includes(job.id)) continue;
           if (!matchesStatusFilter(job, filter?.status)) continue;
@@ -998,7 +1006,7 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
     listChainJobs: async ({ txCtx, chainId, orderDirection, page }) =>
       withReadLock(txCtx, () => {
         const chainMap = jobsByChain.get(chainId);
-        const matched: StateJob[] = chainMap ? Array.from(chainMap.values()) : [];
+        const matched: DbJob[] = chainMap ? Array.from(chainMap.values()) : [];
         return paginateByChainIndex(matched, page, orderDirection);
       }),
 
@@ -1007,16 +1015,17 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
         if (jobIds.length === 0) return { triggered: [], notFound: [], notTriggerable: [] };
 
         const notFound: string[] = [];
-        const notTriggerable: { id: string; status: StateJob["status"] }[] = [];
-        const eligible: StateJob[] = [];
+        const notTriggerable: { id: string; status: DbJob["status"] }[] = [];
+        const eligible: DbJob[] = [];
         const seen = new Set<string>();
         for (const jobId of jobIds) {
           if (seen.has(jobId)) continue;
           seen.add(jobId);
           const job = jobs.get(jobId);
           if (!job) notFound.push(jobId);
-          else if (job.status !== "pending") notTriggerable.push({ id: jobId, status: job.status });
-          else eligible.push(job);
+          else if (job.status !== "pending" || job.hasBlockers) {
+            notTriggerable.push({ id: jobId, status: job.status });
+          } else eligible.push(job);
         }
 
         if (notFound.length > 0 || notTriggerable.length > 0) {
@@ -1025,14 +1034,14 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
 
         const journal = txCtx?.journal;
         const now = new Date();
-        const updatedById = new Map<string, StateJob>();
+        const updatedById = new Map<string, DbJob>();
         for (const job of eligible) {
-          const updatedJob: StateJob = { ...job, scheduledAt: now };
+          const updatedJob: DbJob = { ...job, scheduledAt: now };
           writeJob(journal, job, updatedJob);
           updatedById.set(job.id, updatedJob);
         }
 
-        const triggered: StateJob[] = [];
+        const triggered: DbJob[] = [];
         const emitted = new Set<string>();
         for (const jobId of jobIds) {
           if (emitted.has(jobId)) continue;
@@ -1046,7 +1055,7 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
     listBlockedJobs: async ({ txCtx, chainId, orderDirection, page }) =>
       withReadLock(txCtx, () => {
         const blockedJobIds = blockedByChain.get(chainId);
-        const matched: StateJob[] = [];
+        const matched: DbJob[] = [];
         if (blockedJobIds) {
           for (const jobId of blockedJobIds) {
             const job = jobs.get(jobId);

@@ -1,4 +1,4 @@
-import { randomUUID, type UUID } from "node:crypto";
+import { type UUID, randomUUID } from "node:crypto";
 
 import {
   type DataType,
@@ -49,9 +49,8 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
     typeName: dbJob.type_name,
     chainId: dbJob.chain_id,
     chainTypeName: dbJob.chain_type_name,
-    chainIndex: dbJob.chain_index,
-    continuedToJobId: dbJob.continued_to_job_id,
     input: dbJob.input,
+    continuedToJobId: dbJob.continued_to_job_id,
     output: dbJob.output,
 
     status: dbJob.status,

@@ -18,7 +18,8 @@ export type DbJob = {
   input: unknown;
   output: unknown;
 
-  status: "blocked" | "pending" | "running" | "completed";
+  status: "pending" | "running" | "completed";
+  has_blockers: boolean;
   created_at: string;
   scheduled_at: string;
   completed_at: string | null;
@@ -232,6 +233,112 @@ WHERE n.chain_id = j.chain_id
       },
     ],
   },
+  {
+    name: "20260508000000_add_has_blockers_column",
+    transactional: true,
+    statements: [
+      {
+        sql: sql(/* sql */ `
+ALTER TABLE {{schema}}.{{table_prefix}}job
+  ADD COLUMN IF NOT EXISTS has_blockers boolean NOT NULL DEFAULT false`),
+      },
+    ],
+  },
+  {
+    name: "20260508000001_backfill_has_blockers",
+    transactional: true,
+    statements: [
+      {
+        sql: sql(/* sql */ `
+UPDATE {{schema}}.{{table_prefix}}job
+SET has_blockers = true,
+    status = 'pending'
+WHERE status = 'blocked'`),
+      },
+    ],
+  },
+  {
+    name: "20260508000002_swap_acquisition_index_has_blockers",
+    transactional: false,
+    statements: [
+      {
+        sql: sql(/* sql */ `
+CREATE INDEX CONCURRENTLY IF NOT EXISTS {{table_prefix}}job_acquisition_v2_idx
+ON {{schema}}.{{table_prefix}}job (type_name, scheduled_at)
+WHERE status = 'pending' AND has_blockers = false`),
+      },
+      {
+        sql: sql(
+          /* sql */ `DROP INDEX CONCURRENTLY IF EXISTS {{schema}}.{{table_prefix}}job_acquisition_idx`,
+        ),
+      },
+      {
+        sql: sql(
+          /* sql */ `ALTER INDEX IF EXISTS {{schema}}.{{table_prefix}}job_acquisition_v2_idx RENAME TO {{table_prefix}}job_acquisition_idx`,
+        ),
+      },
+    ],
+  },
+  {
+    name: "20260508000003_drop_blocked_enum_value",
+    transactional: true,
+    statements: [
+      // Drop indexes whose predicate / key references the enum type — ALTER COLUMN TYPE
+      // can't rewrite a partial-index predicate that compares the column to an enum literal.
+      {
+        sql: sql(/* sql */ `DROP INDEX IF EXISTS {{schema}}.{{table_prefix}}job_acquisition_idx`),
+      },
+      {
+        sql: sql(/* sql */ `DROP INDEX IF EXISTS {{schema}}.{{table_prefix}}job_expired_lease_idx`),
+      },
+      {
+        sql: sql(
+          /* sql */ `DROP INDEX IF EXISTS {{schema}}.{{table_prefix}}job_listing_status_idx`,
+        ),
+      },
+      {
+        sql: sql(/* sql */ `
+ALTER TYPE {{schema}}.{{table_prefix}}job_status RENAME TO {{table_prefix}}job_status_old`),
+      },
+      {
+        sql: sql(/* sql */ `
+CREATE TYPE {{schema}}.{{table_prefix}}job_status AS ENUM ('pending','running','completed')`),
+      },
+      {
+        sql: sql(/* sql */ `
+ALTER TABLE {{schema}}.{{table_prefix}}job
+  ALTER COLUMN status DROP DEFAULT,
+  ALTER COLUMN status TYPE {{schema}}.{{table_prefix}}job_status USING status::text::{{schema}}.{{table_prefix}}job_status,
+  ALTER COLUMN status SET DEFAULT 'pending'`),
+      },
+      {
+        sql: sql(/* sql */ `DROP TYPE {{schema}}.{{table_prefix}}job_status_old`),
+      },
+    ],
+  },
+  {
+    name: "20260508000004_recreate_status_indexes_concurrently",
+    transactional: false,
+    statements: [
+      {
+        sql: sql(/* sql */ `
+CREATE INDEX CONCURRENTLY IF NOT EXISTS {{table_prefix}}job_acquisition_idx
+ON {{schema}}.{{table_prefix}}job (type_name, scheduled_at)
+WHERE status = 'pending' AND has_blockers = false`),
+      },
+      {
+        sql: sql(/* sql */ `
+CREATE INDEX CONCURRENTLY IF NOT EXISTS {{table_prefix}}job_expired_lease_idx
+ON {{schema}}.{{table_prefix}}job (type_name, leased_until)
+WHERE status = 'running' AND leased_until IS NOT NULL`),
+      },
+      {
+        sql: sql(/* sql */ `
+CREATE INDEX CONCURRENTLY IF NOT EXISTS {{table_prefix}}job_listing_status_idx
+ON {{schema}}.{{table_prefix}}job (status, created_at DESC)`),
+      },
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -250,6 +357,7 @@ type PgDbJobCols = {
   readonly input: DataType<"json">;
   readonly output: DataType<"json">;
   readonly status: DataType<"string", DbJob["status"]>;
+  readonly has_blockers: DataType<"boolean", boolean>;
   readonly created_at: DataType<"string", string>;
   readonly scheduled_at: DataType<"string", string>;
   readonly completed_at: DataType<"string?", string | null>;
@@ -401,6 +509,7 @@ export const createPgSqlDefinitions = (
     input: t.json(),
     output: t.json(),
     status: t.string<DbJob["status"]>(),
+    has_blockers: t.boolean(),
     created_at: t.string(),
     scheduled_at: t.string(),
     completed_at: t["string?"](),
@@ -563,19 +672,19 @@ parent_updates AS (
     AND p.continued_to_job_id IS NULL
   RETURNING p.id
 )
-SELECT ec.ord, ec.id, ec.type_name, ec.chain_id, ec.chain_type_name, ec.chain_index, ec.continued_to_job_id, ec.input, ec.output, ec.status, ec.created_at, ec.scheduled_at, ec.completed_at, ec.completed_by, ec.attempt, ec.last_attempt_error, ec.last_attempt_at, ec.leased_by, ec.leased_until, ec.deduplication_key, ec.chain_trace_context, ec.trace_context, TRUE AS deduplicated
+SELECT ec.ord, ec.id, ec.type_name, ec.chain_id, ec.chain_type_name, ec.chain_index, ec.continued_to_job_id, ec.input, ec.output, ec.status, ec.has_blockers, ec.created_at, ec.scheduled_at, ec.completed_at, ec.completed_by, ec.attempt, ec.last_attempt_error, ec.last_attempt_at, ec.leased_by, ec.leased_until, ec.deduplication_key, ec.chain_trace_context, ec.trace_context, TRUE AS deduplicated
 FROM existing_continuations ec
 UNION ALL
-SELECT ed.ord, ed.id, ed.type_name, ed.chain_id, ed.chain_type_name, ed.chain_index, ed.continued_to_job_id, ed.input, ed.output, ed.status, ed.created_at, ed.scheduled_at, ed.completed_at, ed.completed_by, ed.attempt, ed.last_attempt_error, ed.last_attempt_at, ed.leased_by, ed.leased_until, ed.deduplication_key, ed.chain_trace_context, ed.trace_context, TRUE AS deduplicated
+SELECT ed.ord, ed.id, ed.type_name, ed.chain_id, ed.chain_type_name, ed.chain_index, ed.continued_to_job_id, ed.input, ed.output, ed.status, ed.has_blockers, ed.created_at, ed.scheduled_at, ed.completed_at, ed.completed_by, ed.attempt, ed.last_attempt_error, ed.last_attempt_at, ed.leased_by, ed.leased_until, ed.deduplication_key, ed.chain_trace_context, ed.trace_context, TRUE AS deduplicated
 FROM existing_deduplicated ed
 UNION ALL
-SELECT tia.ord, ij.id, ij.type_name, ij.chain_id, ij.chain_type_name, ij.chain_index, ij.continued_to_job_id, ij.input, ij.output, ij.status, ij.created_at, ij.scheduled_at, ij.completed_at, ij.completed_by, ij.attempt, ij.last_attempt_error, ij.last_attempt_at, ij.leased_by, ij.leased_until, ij.deduplication_key, ij.chain_trace_context, ij.trace_context, TRUE AS deduplicated
+SELECT tia.ord, ij.id, ij.type_name, ij.chain_id, ij.chain_type_name, ij.chain_index, ij.continued_to_job_id, ij.input, ij.output, ij.status, ij.has_blockers, ij.created_at, ij.scheduled_at, ij.completed_at, ij.completed_by, ij.attempt, ij.last_attempt_error, ij.last_attempt_at, ij.leased_by, ij.leased_until, ij.deduplication_key, ij.chain_trace_context, ij.trace_context, TRUE AS deduplicated
 FROM to_insert_all tia
 JOIN to_insert ti ON ti.dedup_key = tia.dedup_key AND ti.chain_type_name = tia.chain_type_name
 JOIN inserted_jobs ij ON ti.chain_id = ij.chain_id AND ti.chain_index = ij.chain_index
 WHERE tia.dedup_key IS NOT NULL AND tia.ord != ti.ord
 UNION ALL
-SELECT ti.ord, ij.id, ij.type_name, ij.chain_id, ij.chain_type_name, ij.chain_index, ij.continued_to_job_id, ij.input, ij.output, ij.status, ij.created_at, ij.scheduled_at, ij.completed_at, ij.completed_by, ij.attempt, ij.last_attempt_error, ij.last_attempt_at, ij.leased_by, ij.leased_until, ij.deduplication_key, ij.chain_trace_context, ij.trace_context, (ij.id != ti.id) AS deduplicated
+SELECT ti.ord, ij.id, ij.type_name, ij.chain_id, ij.chain_type_name, ij.chain_index, ij.continued_to_job_id, ij.input, ij.output, ij.status, ij.has_blockers, ij.created_at, ij.scheduled_at, ij.completed_at, ij.completed_by, ij.attempt, ij.last_attempt_error, ij.last_attempt_at, ij.leased_by, ij.leased_until, ij.deduplication_key, ij.chain_trace_context, ij.trace_context, (ij.id != ti.id) AS deduplicated
 FROM inserted_jobs ij JOIN to_insert ti ON ti.chain_id = ij.chain_id AND ti.chain_index = ij.chain_index
 ORDER BY ord
 `,
@@ -638,9 +747,10 @@ has_incomplete_blockers AS (
 ),
 updated_jobs AS (
   UPDATE {{schema}}.{{table_prefix}}job j
-  SET status = 'blocked'
+  SET has_blockers = true
   WHERE j.id IN (SELECT job_id FROM has_incomplete_blockers)
     AND j.status = 'pending'
+    AND j.has_blockers = false
   RETURNING j.*
 ),
 distinct_job_ids AS (
@@ -738,9 +848,9 @@ ready_jobs AS (
 updated AS (
   UPDATE {{schema}}.{{table_prefix}}job j
   SET scheduled_at = now(),
-    status = 'pending'
+    has_blockers = false
   WHERE j.id IN (SELECT job_id FROM ready_jobs)
-    AND j.status = 'blocked'
+    AND j.has_blockers = true
   RETURNING j.*
 ),
 trace_contexts AS (
@@ -852,7 +962,7 @@ WITH _existing AS (
   -- id sets acquire locks consistently and don't deadlock. FOR UPDATE
   -- also makes classification observe the latest committed version, so
   -- the UPDATE below sees the same status we classified against.
-  SELECT id, status FROM {{schema}}.{{table_prefix}}job
+  SELECT id, status, has_blockers FROM {{schema}}.{{table_prefix}}job
   WHERE id = ANY($1::{{id_type}}[])
   ORDER BY id
   FOR UPDATE
@@ -863,14 +973,14 @@ _not_found AS (
   WHERE NOT EXISTS (SELECT 1 FROM _existing e WHERE e.id = i)
 ),
 _not_triggerable AS (
-  SELECT id, status FROM _existing WHERE status != 'pending'
+  SELECT id, status FROM _existing WHERE status != 'pending' OR has_blockers = true
 ),
 _updated AS (
-  -- All-or-nothing: only update when every input id resolves to a pending
-  -- job. If anything is missing or non-pending, no rows are touched.
+  -- All-or-nothing: only update when every input id resolves to a pending,
+  -- unblocked job. If anything is missing or non-triggerable, no rows are touched.
   UPDATE {{schema}}.{{table_prefix}}job
   SET scheduled_at = now()
-  WHERE id IN (SELECT id FROM _existing WHERE status = 'pending')
+  WHERE id IN (SELECT id FROM _existing WHERE status = 'pending' AND has_blockers = false)
     AND NOT EXISTS (SELECT 1 FROM _not_found)
     AND NOT EXISTS (SELECT 1 FROM _not_triggerable)
   RETURNING *
@@ -917,6 +1027,7 @@ WITH acquired_job AS (
   FROM {{schema}}.{{table_prefix}}job
   WHERE type_name IN (SELECT unnest($1::text[]))
     AND status = 'pending'
+    AND has_blockers = false
     AND scheduled_at <= now()
   ORDER BY scheduled_at ASC
   LIMIT 1
@@ -931,6 +1042,7 @@ RETURNING *,
     SELECT 1 FROM {{schema}}.{{table_prefix}}job
     WHERE type_name IN (SELECT unnest($1::text[]))
       AND status = 'pending'
+      AND has_blockers = false
       AND scheduled_at <= now()
     LIMIT 1
   ) AS has_more
@@ -948,6 +1060,7 @@ SELECT GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (job.scheduled_at - now())) * 1000))
 FROM {{schema}}.{{table_prefix}}job as job
 WHERE job.type_name IN (SELECT unnest($1::text[]))
   AND job.status = 'pending'
+  AND job.has_blockers = false
 ORDER BY job.scheduled_at ASC
 LIMIT 1
 FOR UPDATE SKIP LOCKED

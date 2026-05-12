@@ -205,11 +205,14 @@ export const concurrencyGroup: ConformanceGroup<StateAdapterConformanceContext> 
           ]),
         ).then((results) => results.filter((id): id is string => id !== undefined));
 
-        const finalStates = await Promise.all(
-          mainJobIds.map(async (jobId) => stateAdapter.getJob({ jobId })),
-        );
+        const acquiredIds = new Set<string>();
+        for (let i = 0; i < mainJobIds.length; i++) {
+          const { job } = await stateAdapter.acquireJob({ typeNames: ["race-main"] });
+          if (!job) break;
+          acquiredIds.add(job.id);
+        }
 
-        const stranded = finalStates.filter((job) => job?.status === "blocked");
+        const stranded = mainJobIds.filter((id) => !acquiredIds.has(id));
         expect(stranded).toHaveLength(0);
       },
     },

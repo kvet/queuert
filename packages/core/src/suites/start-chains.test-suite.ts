@@ -152,7 +152,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         ),
       );
 
-      expect(main.status).toBe("blocked");
+      expect(main.status).toBe("pending");
     });
 
     it("creates a chain with scheduling", async ({
@@ -519,8 +519,8 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       );
 
       expect(chains).toHaveLength(2);
-      expect(chains[0].status).toBe("blocked");
-      expect(chains[1].status).toBe("blocked");
+      expect(chains[0].status).toBe("pending");
+      expect(chains[1].status).toBe("pending");
     });
 
     it("handles batch with scheduling", async ({
@@ -656,7 +656,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         ),
       );
 
-      expect(blockedChain.status).toBe("blocked");
+      expect(blockedChain.status).toBe("pending");
       expect(unblockedChain.status).toBe("pending");
     });
 
@@ -717,7 +717,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       );
 
       for (const chain of chains) {
-        expect(chain.status).toBe("blocked");
+        expect(chain.status).toBe("pending");
       }
 
       const worker = await createInProcessWorker({

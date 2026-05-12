@@ -27,16 +27,16 @@ type Job<TJobId, TJobTypeName, TChainTypeName, TInput, TOutput, TCanContinue ext
       status: "completed";
       completedAt: Date;
       completedBy: string | null;
-      output: TOutput;
       continuedToJobId: null;
+      output: TOutput;
     }
   | (TCanContinue extends true
       ? {
           status: "completed";
           completedAt: Date;
           completedBy: string | null;
-          output?: never;
           continuedToJobId: TJobId;
+          output?: never;
         }
       : never)
 );
