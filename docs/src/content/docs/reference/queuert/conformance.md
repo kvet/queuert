@@ -68,7 +68,7 @@ await runValidationAdapterConformance(async () => ({
   basic: { buildEntry, buildNonEntry, buildContinuationOnly },
   continuations: { buildNominal, buildStructural },
   blockers: { buildNominal, buildStructural },
-  external: { buildWithExternalSlice },
+  external: { buildWithExternalSlice, buildWithExternalSlices },
 }));
 ```
 
@@ -100,6 +100,10 @@ type ValidationConformanceFixture = {
     buildWithExternalSlice: () => JobTypes<
       /* orders.* slice */,
       /* notifications.* external slice */
+    >;
+    buildWithExternalSlices: () => JobTypes<
+      /* orders.* slice */,
+      /* notifications.* & payments.* external slices passed as a readonly array */
     >;
   };
 };

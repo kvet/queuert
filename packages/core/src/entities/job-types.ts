@@ -7,12 +7,8 @@ export const definitionsSymbol: unique symbol = Symbol("queuert.definitions");
 /** Symbol used to carry phantom external job type definitions on a registry. */
 export const externalDefinitionsSymbol: unique symbol = Symbol("queuert.externalDefinitions");
 
-/** Extract the job type definitions from a {@link JobTypes}. */
+/** Extract the job type definitions from a {@link JobTypes} slice. */
 export type JobTypeDefinitions<T extends JobTypes<any>> = T[typeof definitionsSymbol];
-
-/** Extract the external job type definitions from a {@link JobTypes}. */
-export type ExternalJobTypeDefinitions<T extends JobTypes<any>> =
-  T[typeof externalDefinitionsSymbol];
 
 /**
  * Set of registries produced by {@link createNoopJobTypes} (i.e. via

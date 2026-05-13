@@ -110,12 +110,46 @@ test("zod adapter passes validation conformance", async () => {
             "orders.confirm-order": {
               input: z.object({ orderId: z.number() }),
               output: z.object({ confirmedAt: z.string() }),
-              blockers: z.array(
+              blockers: z.tuple([
                 z.object({ typeName: z.literal("notifications.send-notification") }),
-              ),
+              ]),
             },
           },
           notifications,
+        );
+      },
+      buildWithExternalSlices: () => {
+        const notifications = createZodJobTypes({
+          "notifications.send-notification": {
+            entry: true,
+            input: z.object({ userId: z.string(), message: z.string() }),
+            output: z.object({ sentAt: z.string() }),
+          },
+        });
+        const payments = createZodJobTypes({
+          "payments.charge": {
+            entry: true,
+            input: z.object({ amount: z.number() }),
+            output: z.object({ receiptId: z.string() }),
+          },
+        });
+        return createZodJobTypes(
+          {
+            "orders.place-order": {
+              entry: true,
+              input: z.object({ userId: z.string() }),
+              continueWith: z.object({ typeName: z.literal("orders.confirm-order") }),
+            },
+            "orders.confirm-order": {
+              input: z.object({ orderId: z.number() }),
+              output: z.object({ confirmedAt: z.string() }),
+              blockers: z.tuple([
+                z.object({ typeName: z.literal("notifications.send-notification") }),
+                z.object({ typeName: z.literal("payments.charge") }),
+              ]),
+            },
+          },
+          [notifications, payments] as const,
         );
       },
     },

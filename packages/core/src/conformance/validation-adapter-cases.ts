@@ -161,7 +161,7 @@ export type ValidationConformanceFixture = {
           input: { orderId: number };
           output: { confirmedAt: string };
           continueWith: undefined;
-          blockers: readonly { typeName: "notifications.send-notification" }[];
+          blockers: readonly [{ typeName: "notifications.send-notification" }];
         };
       },
       {
@@ -173,6 +173,51 @@ export type ValidationConformanceFixture = {
           blockers: undefined;
         };
       }
+    >;
+    /**
+     * Cross-slice external typing where the consuming slice references job
+     * types from TWO external slices, passed as a `readonly` array. Adapters
+     * that only thread a single-slice external (the 0.11 `mergeJobTypeRegistries`
+     * regression) won't satisfy this return type.
+     */
+    buildWithExternalSlices: () => JobTypes<
+      {
+        "orders.place-order": {
+          entry: true;
+          input: { userId: string };
+          output: undefined;
+          continueWith: { typeName: "orders.confirm-order" };
+          blockers: undefined;
+        };
+        "orders.confirm-order": {
+          entry: undefined;
+          input: { orderId: number };
+          output: { confirmedAt: string };
+          continueWith: undefined;
+          blockers: readonly [
+            { typeName: "notifications.send-notification" },
+            { typeName: "payments.charge" },
+          ];
+        };
+      },
+      | {
+          "notifications.send-notification": {
+            entry: true;
+            input: { userId: string; message: string };
+            output: { sentAt: string };
+            continueWith: undefined;
+            blockers: undefined;
+          };
+        }
+      | {
+          "payments.charge": {
+            entry: true;
+            input: { amount: number };
+            output: { receiptId: string };
+            continueWith: undefined;
+            blockers: undefined;
+          };
+        }
     >;
   };
 };
@@ -466,6 +511,21 @@ export const validationAdapterConformanceGroups: ConformanceGroup<ValidationAdap
             }).not.toThrow();
             const names = jobTypes.getTypeNames();
             expect([...names].sort()).toEqual(["orders.confirm-order", "orders.place-order"]);
+          },
+        },
+        {
+          name: "registry validates blockers referencing multiple external slices passed as an array",
+          run: async ({ external }, expect) => {
+            const jobTypes = external.buildWithExternalSlices();
+            expect(() => {
+              jobTypes.validateBlockers("orders.confirm-order", [
+                {
+                  typeName: "notifications.send-notification",
+                  input: { userId: "u1", message: "hi" },
+                },
+                { typeName: "payments.charge", input: { amount: 50 } },
+              ]);
+            }).not.toThrow();
           },
         },
       ],

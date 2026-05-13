@@ -8,14 +8,17 @@ import {
 type NoVoid<T> = [T] extends [void] ? never : T;
 type NoVoidOrUndefined<T> = [T] extends [void | undefined] ? never : T;
 
-type MatchingJobTypesByInput<TJobTypeDefinitions extends BaseJobTypeDefinitions, TInput> = {
-  [K in keyof TJobTypeDefinitions]: TJobTypeDefinitions[K] extends { input: infer I }
-    ? [TInput] extends [I]
-      ? K
-      : never
+type MatchingJobTypesByInput<TJobTypeDefinitions, TInput> =
+  TJobTypeDefinitions extends BaseJobTypeDefinitions
+    ? {
+        [K in keyof TJobTypeDefinitions]: TJobTypeDefinitions[K] extends { input: infer I }
+          ? [TInput] extends [I]
+            ? K
+            : never
+          : never;
+      }[keyof TJobTypeDefinitions] &
+        string
     : never;
-}[keyof TJobTypeDefinitions] &
-  string;
 
 type HasContinueWith<TJobType> = TJobType extends { continueWith: JobTypeReference } ? true : false;
 
@@ -30,11 +33,7 @@ type ValidateOutput<TJobType> =
       ? NoVoidOrUndefined<O>
       : never;
 
-type ValidateReference<
-  TRef,
-  TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TValidKeys extends string,
-> =
+type ValidateReference<TRef, TJobTypeDefinitions, TValidKeys extends string> =
   TRef extends NominalJobTypeReference<infer TN>
     ? TN extends TValidKeys
       ? TRef
@@ -47,20 +46,23 @@ type ValidateReference<
 
 type ValidateContinueWith<
   T,
-  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TJobTypeDefinitions,
   TValidKeys extends string,
 > = T extends JobTypeReference ? ValidateReference<T, TJobTypeDefinitions, TValidKeys> : T;
 
-type EntryTypeKeys<T extends BaseJobTypeDefinitions> = {
-  [K in keyof T]: T[K] extends { entry: true } ? K : never;
-}[keyof T] &
-  string;
+type EntryTypeKeys<T> = T extends BaseJobTypeDefinitions
+  ? {
+      [K in keyof T]: T[K] extends { entry: true } ? K : never;
+    }[keyof T] &
+      string
+  : never;
 
-type ValidateBlockers<
-  T,
-  TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TEntryKeys extends string,
-> = T extends readonly [infer First extends JobTypeReference, ...infer Rest]
+type AllKeys<T> = T extends BaseJobTypeDefinitions ? keyof T & string : never;
+
+type ValidateBlockers<T, TJobTypeDefinitions, TEntryKeys extends string> = T extends readonly [
+  infer First extends JobTypeReference,
+  ...infer Rest,
+]
   ? readonly [
       ValidateReference<First, TJobTypeDefinitions, TEntryKeys>,
       ...ValidateBlockers<Rest, TJobTypeDefinitions, TEntryKeys>,
@@ -101,15 +103,15 @@ type ValidateJobType<
 } & OutputProperty<TJobType> &
   BlockersProperty<TJobType, TAll>;
 
-type OverlappingKeys<A, B> = keyof A & keyof B;
+type OverlappingKeys<A, B> = keyof A & AllKeys<B>;
 
 /** Marker type for compile-time validated job type definitions. Applied by {@link defineJobTypes}. */
 export type ValidatedJobTypeDefinitions<
   T extends BaseJobTypeDefinitions,
-  TExternal extends BaseJobTypeDefinitions = Record<never, never>,
+  TExternal extends BaseJobTypeDefinitions,
 > = [OverlappingKeys<T, TExternal>] extends [never]
   ? {
-      [K in keyof T]: ValidateJobType<T[K], T, T & TExternal>;
+      [K in keyof T]: ValidateJobType<T[K], T, T | TExternal>;
     }
   : `Error: local and external definitions share overlapping keys: ${OverlappingKeys<T, TExternal> & string}`;
 
@@ -117,7 +119,7 @@ type InvalidJobTypeKeys<
   T extends BaseJobTypeDefinitions,
   TExternal extends BaseJobTypeDefinitions,
 > = {
-  [K in keyof T & string]: [T[K]] extends [ValidateJobType<T[K], T, T & TExternal>] ? never : K;
+  [K in keyof T & string]: [T[K]] extends [ValidateJobType<T[K], T, T | TExternal>] ? never : K;
 }[keyof T & string];
 
 /** Descriptive error type produced when job type definitions fail validation. Lists the invalid type names. */

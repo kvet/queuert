@@ -8,6 +8,7 @@
 
 import {
   type BaseJobTypeDefinitions,
+  type JobTypesDefinitions,
   type JobTypeDefinitionErrors,
   type JobTypeReference,
   type JobTypes,
@@ -112,14 +113,16 @@ type InferZodJobTypes<T extends Record<string, ZodJobTypeSchema>> = {
  */
 export const createZodJobTypes = <
   const T extends Record<string, ZodJobTypeSchema>,
-  TExternal extends BaseJobTypeDefinitions = Record<never, never>,
+  const TExternal extends
+    | JobTypes<BaseJobTypeDefinitions>
+    | readonly JobTypes<BaseJobTypeDefinitions>[] = readonly [],
 >(
   schemas: [InferZodJobTypes<T>] extends [
-    ValidatedJobTypeDefinitions<InferZodJobTypes<T>, TExternal>,
+    ValidatedJobTypeDefinitions<InferZodJobTypes<T>, JobTypesDefinitions<TExternal>>,
   ]
     ? T
-    : JobTypeDefinitionErrors<InferZodJobTypes<T>, TExternal>,
-  _externalDefinitions?: JobTypes<TExternal>,
+    : JobTypeDefinitionErrors<InferZodJobTypes<T>, JobTypesDefinitions<TExternal>>,
+  _externalDefinitions?: TExternal,
 ) => {
   const _schemas = schemas as Record<string, ZodJobTypeSchema>;
   const getSchema = (typeName: string): ZodJobTypeSchema => {
@@ -130,7 +133,7 @@ export const createZodJobTypes = <
     return schema;
   };
 
-  return createJobTypes<InferZodJobTypes<T>, TExternal>({
+  return createJobTypes<InferZodJobTypes<T>, JobTypesDefinitions<TExternal>>({
     getTypeNames: () => Object.keys(_schemas),
     validateEntry: (typeName) => {
       const schema = getSchema(typeName);

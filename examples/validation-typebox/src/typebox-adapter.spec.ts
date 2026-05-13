@@ -110,12 +110,46 @@ test("typebox adapter passes validation conformance", async () => {
             "orders.confirm-order": {
               input: Type.Object({ orderId: Type.Number() }),
               output: Type.Object({ confirmedAt: Type.String() }),
-              blockers: Type.Array(
+              blockers: Type.Tuple([
                 Type.Object({ typeName: Type.Literal("notifications.send-notification") }),
-              ),
+              ]),
             },
           },
           notifications,
+        );
+      },
+      buildWithExternalSlices: () => {
+        const notifications = createTypeBoxJobTypes({
+          "notifications.send-notification": {
+            entry: true,
+            input: Type.Object({ userId: Type.String(), message: Type.String() }),
+            output: Type.Object({ sentAt: Type.String() }),
+          },
+        });
+        const payments = createTypeBoxJobTypes({
+          "payments.charge": {
+            entry: true,
+            input: Type.Object({ amount: Type.Number() }),
+            output: Type.Object({ receiptId: Type.String() }),
+          },
+        });
+        return createTypeBoxJobTypes(
+          {
+            "orders.place-order": {
+              entry: true,
+              input: Type.Object({ userId: Type.String() }),
+              continueWith: Type.Object({ typeName: Type.Literal("orders.confirm-order") }),
+            },
+            "orders.confirm-order": {
+              input: Type.Object({ orderId: Type.Number() }),
+              output: Type.Object({ confirmedAt: Type.String() }),
+              blockers: Type.Tuple([
+                Type.Object({ typeName: Type.Literal("notifications.send-notification") }),
+                Type.Object({ typeName: Type.Literal("payments.charge") }),
+              ]),
+            },
+          },
+          [notifications, payments] as const,
         );
       },
     },

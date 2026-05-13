@@ -110,10 +110,44 @@ test("arktype adapter passes validation conformance", async () => {
             "orders.confirm-order": {
               input: type({ orderId: "number" }),
               output: type({ confirmedAt: "string" }),
-              blockers: type({ typeName: "'notifications.send-notification'" }).array(),
+              blockers: type([{ typeName: "'notifications.send-notification'" }]),
             },
           },
           notifications,
+        );
+      },
+      buildWithExternalSlices: () => {
+        const notifications = createArkTypeJobTypes({
+          "notifications.send-notification": {
+            entry: true,
+            input: type({ userId: "string", message: "string" }),
+            output: type({ sentAt: "string" }),
+          },
+        });
+        const payments = createArkTypeJobTypes({
+          "payments.charge": {
+            entry: true,
+            input: type({ amount: "number" }),
+            output: type({ receiptId: "string" }),
+          },
+        });
+        return createArkTypeJobTypes(
+          {
+            "orders.place-order": {
+              entry: true,
+              input: type({ userId: "string" }),
+              continueWith: type({ typeName: "'orders.confirm-order'" }),
+            },
+            "orders.confirm-order": {
+              input: type({ orderId: "number" }),
+              output: type({ confirmedAt: "string" }),
+              blockers: type([
+                { typeName: "'notifications.send-notification'" },
+                { typeName: "'payments.charge'" },
+              ]),
+            },
+          },
+          [notifications, payments] as const,
         );
       },
     },

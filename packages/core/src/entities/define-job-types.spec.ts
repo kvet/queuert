@@ -1,7 +1,8 @@
 import { describe, expectTypeOf, it } from "vitest";
 
 import { defineJobTypes } from "./define-job-types.js";
-import { type ExternalJobTypeDefinitions, type JobTypeDefinitions } from "./job-types.js";
+import { type JobTypesDefinitions } from "./merge-job-types.js";
+import { type JobTypeDefinitions } from "./job-types.js";
 import {
   type BlockerChains,
   type CompletedBlockerChains,
@@ -271,6 +272,101 @@ describe("external references (TExternal)", () => {
     expectTypeOf<JobTypeDefinitions<typeof orderJobTypes>>().toHaveProperty("orders.create");
   });
 
+  it("allows structural blockers when external defs are a union of slices (multi-slice external)", () => {
+    const notificationJobTypes = defineJobTypes<{
+      "notifications.send": {
+        entry: true;
+        input: { userId: string; message: string };
+        output: { sentAt: string };
+      };
+    }>();
+    const paymentJobTypes = defineJobTypes<{
+      "payments.charge": {
+        entry: true;
+        input: { amount: number };
+        output: { receiptId: string };
+      };
+    }>();
+    type ExternalUnion = JobTypesDefinitions<
+      readonly [typeof notificationJobTypes, typeof paymentJobTypes]
+    >;
+
+    const matchesFirst = defineJobTypes<
+      {
+        "orders.create": {
+          entry: true;
+          input: { userId: string };
+          output: { orderId: string };
+          blockers: [{ input: { userId: string; message: string } }];
+        };
+      },
+      ExternalUnion
+    >();
+    expectTypeOf<JobTypeDefinitions<typeof matchesFirst>>().toHaveProperty("orders.create");
+
+    const matchesSecond = defineJobTypes<
+      {
+        "orders.create": {
+          entry: true;
+          input: { userId: string };
+          output: { orderId: string };
+          blockers: [{ input: { amount: number } }];
+        };
+      },
+      ExternalUnion
+    >();
+    expectTypeOf<JobTypeDefinitions<typeof matchesSecond>>().toHaveProperty("orders.create");
+
+    const mixed = defineJobTypes<
+      {
+        "orders.create": {
+          entry: true;
+          input: { userId: string };
+          output: { orderId: string };
+          blockers: [
+            { input: { userId: string; message: string } },
+            { typeName: "payments.charge" },
+          ];
+        };
+      },
+      ExternalUnion
+    >();
+    expectTypeOf<JobTypeDefinitions<typeof mixed>>().toHaveProperty("orders.create");
+  });
+
+  it("rejects structural blocker that doesn't match any slice in a union external", () => {
+    const notificationJobTypes = defineJobTypes<{
+      "notifications.send": {
+        entry: true;
+        input: { userId: string; message: string };
+        output: { sentAt: string };
+      };
+    }>();
+    const paymentJobTypes = defineJobTypes<{
+      "payments.charge": {
+        entry: true;
+        input: { amount: number };
+        output: { receiptId: string };
+      };
+    }>();
+    type ExternalUnion = JobTypesDefinitions<
+      readonly [typeof notificationJobTypes, typeof paymentJobTypes]
+    >;
+
+    defineJobTypes<
+      // @ts-expect-error { token: string } matches no slice in the union
+      {
+        "orders.create": {
+          entry: true;
+          input: { userId: string };
+          output: { orderId: string };
+          blockers: [{ input: { token: string } }];
+        };
+      },
+      ExternalUnion
+    >();
+  });
+
   it("rejects external reference that doesn't match any external type", () => {
     const notificationJobTypes = defineJobTypes<{
       "notifications.send": {
@@ -316,32 +412,6 @@ describe("external references (TExternal)", () => {
 
     type Defs = JobTypeDefinitions<typeof localTypes>;
     expectTypeOf<keyof Defs>().toEqualTypeOf<"local.process">();
-  });
-
-  it("ExternalJobTypeDefinitions extracts TExternal from registry", () => {
-    const externalTypes = defineJobTypes<{
-      "external.task": {
-        entry: true;
-        input: { data: string };
-        output: { result: string };
-      };
-    }>();
-
-    const localTypes = defineJobTypes<
-      {
-        "local.process": {
-          entry: true;
-          input: { id: string };
-          output: { done: boolean };
-          blockers: [{ typeName: "external.task" }];
-        };
-      },
-      JobTypeDefinitions<typeof externalTypes>
-    >();
-
-    type ExtDefs = ExternalJobTypeDefinitions<typeof localTypes>;
-    expectTypeOf<keyof ExtDefs>().toEqualTypeOf<"external.task">();
-    expectTypeOf<ExtDefs["external.task"]["input"]>().toEqualTypeOf<{ data: string }>();
   });
 
   it("rejects overlapping keys between T and TExternal", () => {

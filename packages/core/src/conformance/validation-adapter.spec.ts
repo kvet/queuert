@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { type BaseJobTypeDefinitions } from "../entities/job-type.js";
 import { type JobTypes, createJobTypes } from "../entities/job-types.js";
+import { type JobTypesDefinitions } from "../entities/merge-job-types.js";
 import { ConformanceError } from "./runner.js";
 import {
   type ValidationConformanceFixture,
@@ -42,12 +43,15 @@ type ShapeCheckConfig = {
  */
 const createShapeCheckJobTypes = <
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TExternalJobTypeDefinitions extends BaseJobTypeDefinitions = Record<never, never>,
+  const TExternalArg extends
+    | JobTypes<BaseJobTypeDefinitions>
+    | readonly JobTypes<BaseJobTypeDefinitions>[] = readonly [],
 >(
   config: ShapeCheckConfig,
-  externalDefinitions?: JobTypes<TExternalJobTypeDefinitions>,
-): JobTypes<TJobTypeDefinitions, TExternalJobTypeDefinitions> => {
+  externalDefinitions?: TExternalArg,
+): JobTypes<TJobTypeDefinitions, JobTypesDefinitions<TExternalArg>> => {
   void externalDefinitions;
+  type TExternalJobTypeDefinitions = JobTypesDefinitions<TExternalArg>;
   const knownTypes = new Set(config.typeNames);
   const checkKnown = (typeName: string): void => {
     if (!knownTypes.has(typeName)) throw new Error(`unknown type: ${typeName}`);
@@ -237,6 +241,74 @@ const buildPassingFixture = (): ValidationConformanceFixture => ({
           },
         },
         notifications,
+      );
+    },
+    buildWithExternalSlices: () => {
+      const notifications = createShapeCheckJobTypes<{
+        "notifications.send-notification": {
+          entry: true;
+          input: { userId: string; message: string };
+          output: { sentAt: string };
+          continueWith: undefined;
+          blockers: undefined;
+        };
+      }>({
+        typeNames: ["notifications.send-notification"],
+        entryTypes: new Set(["notifications.send-notification"]),
+        inputs: { "notifications.send-notification": { userId: "string", message: "string" } },
+        outputs: { "notifications.send-notification": { sentAt: "string" } },
+        continueWith: { "notifications.send-notification": null },
+        blockers: { "notifications.send-notification": null },
+      });
+      const payments = createShapeCheckJobTypes<{
+        "payments.charge": {
+          entry: true;
+          input: { amount: number };
+          output: { receiptId: string };
+          continueWith: undefined;
+          blockers: undefined;
+        };
+      }>({
+        typeNames: ["payments.charge"],
+        entryTypes: new Set(["payments.charge"]),
+        inputs: { "payments.charge": { amount: "number" } },
+        outputs: { "payments.charge": { receiptId: "string" } },
+        continueWith: { "payments.charge": null },
+        blockers: { "payments.charge": null },
+      });
+      return createShapeCheckJobTypes(
+        {
+          typeNames: ["orders.place-order", "orders.confirm-order"],
+          entryTypes: new Set(["orders.place-order"]),
+          inputs: {
+            "orders.place-order": { userId: "string" },
+            "orders.confirm-order": { orderId: "number" },
+          },
+          outputs: {
+            "orders.place-order": null,
+            "orders.confirm-order": { confirmedAt: "string" },
+          },
+          continueWith: {
+            "orders.place-order": (target) => {
+              if (target.typeName !== "orders.confirm-order") throw new Error("bad");
+            },
+            "orders.confirm-order": null,
+          },
+          blockers: {
+            "orders.place-order": null,
+            "orders.confirm-order": (list) => {
+              for (const blocker of list) {
+                if (
+                  blocker.typeName !== "notifications.send-notification" &&
+                  blocker.typeName !== "payments.charge"
+                ) {
+                  throw new Error("bad");
+                }
+              }
+            },
+          },
+        },
+        [notifications, payments] as const,
       );
     },
   },

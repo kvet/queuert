@@ -8,6 +8,7 @@
 
 import {
   type BaseJobTypeDefinitions,
+  type JobTypesDefinitions,
   type JobTypeDefinitionErrors,
   type JobTypeReference,
   type JobTypes,
@@ -112,14 +113,16 @@ type InferValibotJobTypes<T extends Record<string, ValibotJobTypeSchema>> = {
  */
 export const createValibotJobTypes = <
   const T extends Record<string, ValibotJobTypeSchema>,
-  TExternal extends BaseJobTypeDefinitions = Record<never, never>,
+  const TExternal extends
+    | JobTypes<BaseJobTypeDefinitions>
+    | readonly JobTypes<BaseJobTypeDefinitions>[] = readonly [],
 >(
   schemas: [InferValibotJobTypes<T>] extends [
-    ValidatedJobTypeDefinitions<InferValibotJobTypes<T>, TExternal>,
+    ValidatedJobTypeDefinitions<InferValibotJobTypes<T>, JobTypesDefinitions<TExternal>>,
   ]
     ? T
-    : JobTypeDefinitionErrors<InferValibotJobTypes<T>, TExternal>,
-  _externalDefinitions?: JobTypes<TExternal>,
+    : JobTypeDefinitionErrors<InferValibotJobTypes<T>, JobTypesDefinitions<TExternal>>,
+  _externalDefinitions?: TExternal,
 ) => {
   const _schemas = schemas as Record<string, ValibotJobTypeSchema>;
   const getSchema = (typeName: string): ValibotJobTypeSchema => {
@@ -130,7 +133,7 @@ export const createValibotJobTypes = <
     return schema;
   };
 
-  return createJobTypes<InferValibotJobTypes<T>, TExternal>({
+  return createJobTypes<InferValibotJobTypes<T>, JobTypesDefinitions<TExternal>>({
     getTypeNames: () => Object.keys(_schemas),
     validateEntry: (typeName) => {
       const schema = getSchema(typeName);

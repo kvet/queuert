@@ -1,7 +1,7 @@
 import { type Chain, mapStatePairToChain } from "./entities/chain.js";
 import { type DeduplicationOptions } from "./entities/deduplication.js";
 import { type BaseJobTypeDefinitions } from "./entities/job-type.js";
-import { type JobTypes, type JobTypeDefinitions } from "./entities/job-types.js";
+import { type JobTypes } from "./entities/job-types.js";
 import {
   type BlockerChains,
   type ContinuationJobs,
@@ -17,7 +17,7 @@ import {
 } from "./entities/job-types.resolvers.js";
 import { type Job, type JobStatus, mapStateJobToJob } from "./entities/job.js";
 import {
-  type MergeDefinitions,
+  type JobTypesDefinitions,
   type ValidatedSlices,
   mergeJobTypes,
 } from "./entities/merge-job-types.js";
@@ -399,13 +399,6 @@ export type Client<
   ) => Promise<Page<TBlockedJob>>;
 };
 
-/** Derive TJobTypeDefinitions from a single slice or an array of slices. @internal */
-type ClientDefinitions<T> = T extends readonly JobTypes<any>[]
-  ? MergeDefinitions<T>
-  : T extends JobTypes<any>
-    ? JobTypeDefinitions<T>
-    : never;
-
 /**
  * Create a new Queuert client.
  *
@@ -416,7 +409,7 @@ type ClientDefinitions<T> = T extends readonly JobTypes<any>[]
  * @param options.log - Optional structured log function.
  */
 export const createClient = async <
-  const TJobTypesInput extends JobTypes<any> | readonly [JobTypes<any>, ...JobTypes<any>[]],
+  const TJobTypes extends JobTypes<any> | readonly [JobTypes<any>, ...JobTypes<any>[]],
   TStateAdapter extends StateAdapter<any, any>,
 >({
   stateAdapter: stateAdapterOption,
@@ -428,12 +421,12 @@ export const createClient = async <
   stateAdapter: TStateAdapter;
   notifyAdapter?: NotifyAdapter;
   observabilityAdapter?: ObservabilityAdapter;
-  jobTypes: TJobTypesInput extends readonly JobTypes<any>[]
-    ? ValidatedSlices<TJobTypesInput> & TJobTypesInput
-    : TJobTypesInput;
+  jobTypes: TJobTypes extends readonly JobTypes<any>[]
+    ? ValidatedSlices<TJobTypes> & TJobTypes
+    : TJobTypes;
   log?: Log;
-}): Promise<Client<ClientDefinitions<TJobTypesInput>, TStateAdapter>> => {
-  type TJobTypeDefinitions = ClientDefinitions<TJobTypesInput>;
+}): Promise<Client<JobTypesDefinitions<TJobTypes>, TStateAdapter>> => {
+  type TJobTypeDefinitions = JobTypesDefinitions<TJobTypes>;
   type TJobId = GetStateAdapterJobId<TStateAdapter>;
 
   const jobTypes = Array.isArray(jobTypesOption)

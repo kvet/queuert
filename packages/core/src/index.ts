@@ -17,11 +17,11 @@ export {
 } from "./entities/job-type.validation.js";
 export {
   createJobTypes,
-  type ExternalJobTypeDefinitions,
   type JobTypeDefinitions,
   type JobTypes,
   type JobTypesOptions,
 } from "./entities/job-types.js";
+export { type JobTypesDefinitions } from "./entities/merge-job-types.js";
 export {
   type BlockerChains,
   type JobTypeEntryNames,

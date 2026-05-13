@@ -8,29 +8,44 @@ import {
   noopRegistries,
 } from "./job-types.js";
 
-/** Extract the definitions phantom type from a {@link JobTypes} slice. @internal */
-type ExtractDefinitions<T> = T extends JobTypes<infer D> ? D : never;
-
-/** Recursively merge definitions from a tuple of {@link JobTypes} slices as a UNION (4-at-a-time to avoid TS2589). @internal */
-export type MergeDefinitions<T extends readonly JobTypes<any>[]> = T extends readonly [
-  infer A extends JobTypes<any>,
-  infer B extends JobTypes<any>,
-  infer C extends JobTypes<any>,
-  infer D extends JobTypes<any>,
-  ...infer Rest extends readonly JobTypes<any>[],
+/** @internal Recursively union the definitions of each slice in a tuple, 4-at-a-time to avoid TS2589. */
+type SliceUnion<T> = T extends readonly [
+  infer A extends JobTypes<BaseJobTypeDefinitions>,
+  infer B extends JobTypes<BaseJobTypeDefinitions>,
+  infer C extends JobTypes<BaseJobTypeDefinitions>,
+  infer D extends JobTypes<BaseJobTypeDefinitions>,
+  ...infer Rest extends readonly JobTypes<BaseJobTypeDefinitions>[],
 ]
   ?
-      | ExtractDefinitions<A>
-      | ExtractDefinitions<B>
-      | ExtractDefinitions<C>
-      | ExtractDefinitions<D>
-      | MergeDefinitions<Rest>
+      | (A extends JobTypes<infer DA extends BaseJobTypeDefinitions> ? DA : never)
+      | (B extends JobTypes<infer DB extends BaseJobTypeDefinitions> ? DB : never)
+      | (C extends JobTypes<infer DC extends BaseJobTypeDefinitions> ? DC : never)
+      | (D extends JobTypes<infer DD extends BaseJobTypeDefinitions> ? DD : never)
+      | SliceUnion<Rest>
   : T extends readonly [
-        infer First extends JobTypes<any>,
-        ...infer Rest extends readonly JobTypes<any>[],
+        infer First extends JobTypes<BaseJobTypeDefinitions>,
+        ...infer Rest extends readonly JobTypes<BaseJobTypeDefinitions>[],
       ]
-    ? ExtractDefinitions<First> | MergeDefinitions<Rest>
+    ?
+        | (First extends JobTypes<infer D extends BaseJobTypeDefinitions> ? D : never)
+        | SliceUnion<Rest>
     : never;
+
+/**
+ * Resolve the definitions for a value that is either a single {@link JobTypes}
+ * slice or a `readonly` array of slices. Returns a union of each slice's
+ * definitions; the empty-tuple case maps to `Record<never, never>` so adapter
+ * generics can default the parameter and omit it cleanly.
+ */
+export type JobTypesDefinitions<
+  T extends JobTypes<BaseJobTypeDefinitions> | readonly JobTypes<BaseJobTypeDefinitions>[],
+> = T extends readonly []
+  ? Record<never, never>
+  : T extends readonly JobTypes<BaseJobTypeDefinitions>[]
+    ? SliceUnion<T>
+    : T extends JobTypes<infer D extends BaseJobTypeDefinitions>
+      ? D
+      : never;
 
 /** Distributive keyof that works on unions — returns all keys, not just common ones. @internal */
 type AllKeys<T> = T extends any ? keyof T & string : never;
@@ -52,25 +67,25 @@ export type ValidatedSlices<
   ...infer Rest extends readonly JobTypes<any>[],
 ]
   ? readonly [
-      AssertNoDuplicates<Acc, ExtractDefinitions<A>, A>,
-      AssertNoDuplicates<Acc & ExtractDefinitions<A>, ExtractDefinitions<B>, B>,
+      AssertNoDuplicates<Acc, JobTypesDefinitions<A>, A>,
+      AssertNoDuplicates<Acc & JobTypesDefinitions<A>, JobTypesDefinitions<B>, B>,
       AssertNoDuplicates<
-        Acc & ExtractDefinitions<A> & ExtractDefinitions<B>,
-        ExtractDefinitions<C>,
+        Acc & JobTypesDefinitions<A> & JobTypesDefinitions<B>,
+        JobTypesDefinitions<C>,
         C
       >,
       AssertNoDuplicates<
-        Acc & ExtractDefinitions<A> & ExtractDefinitions<B> & ExtractDefinitions<C>,
-        ExtractDefinitions<D>,
+        Acc & JobTypesDefinitions<A> & JobTypesDefinitions<B> & JobTypesDefinitions<C>,
+        JobTypesDefinitions<D>,
         D
       >,
       ...ValidatedSlices<
         Rest,
         Acc &
-          ExtractDefinitions<A> &
-          ExtractDefinitions<B> &
-          ExtractDefinitions<C> &
-          ExtractDefinitions<D>
+          JobTypesDefinitions<A> &
+          JobTypesDefinitions<B> &
+          JobTypesDefinitions<C> &
+          JobTypesDefinitions<D>
       >,
     ]
   : T extends readonly [
@@ -78,8 +93,8 @@ export type ValidatedSlices<
         ...infer Rest extends readonly JobTypes<any>[],
       ]
     ? readonly [
-        AssertNoDuplicates<Acc, ExtractDefinitions<First>, First>,
-        ...ValidatedSlices<Rest, Acc & ExtractDefinitions<First>>,
+        AssertNoDuplicates<Acc, JobTypesDefinitions<First>, First>,
+        ...ValidatedSlices<Rest, Acc & JobTypesDefinitions<First>>,
       ]
     : readonly [];
 
@@ -97,14 +112,14 @@ export type ValidatedSlices<
  */
 export const mergeJobTypes = <const TSlices extends readonly [JobTypes<any>, ...JobTypes<any>[]]>(
   slices: ValidatedSlices<TSlices> & TSlices,
-): JobTypes<MergeDefinitions<TSlices>> => {
+): JobTypes<JobTypesDefinitions<TSlices>> => {
   const regs = slices as unknown as JobTypes<any>[];
   const allNoop = regs.every((r) => noopRegistries.has(r));
 
   if (allNoop) {
     return createNoopJobTypes<
-      MergeDefinitions<TSlices> & BaseJobTypeDefinitions
-    >() as unknown as JobTypes<MergeDefinitions<TSlices>>;
+      JobTypesDefinitions<TSlices> & BaseJobTypeDefinitions
+    >() as unknown as JobTypes<JobTypesDefinitions<TSlices>>;
   }
 
   const validated = regs.filter((r) => !noopRegistries.has(r));
@@ -183,7 +198,7 @@ export const mergeJobTypes = <const TSlices extends readonly [JobTypes<any>, ...
         () => {},
       );
     },
-    [definitionsSymbol]: undefined as unknown as MergeDefinitions<TSlices>,
+    [definitionsSymbol]: undefined as unknown as JobTypesDefinitions<TSlices>,
     [externalDefinitionsSymbol]: undefined as unknown as Record<never, never>,
   };
 };

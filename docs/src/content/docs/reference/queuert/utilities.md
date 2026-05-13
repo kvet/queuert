@@ -41,8 +41,8 @@ const orderJobTypes = defineJobTypes<
 ```
 
 - `T` = owned definitions (become the registry's phantom type via `JobTypeDefinitions`)
-- `TExternal` = read-only reference context (defaults to `Record<never, never>`, extractable via `ExternalJobTypeDefinitions`)
-- `blockers` validates against `T & TExternal`
+- `TExternal` = read-only reference context (defaults to `Record<never, never>`)
+- `blockers` and `continueWith` references validate against `T` plus `TExternal` (distributively when `TExternal` is a union of slices, so a reference matching any one slice is accepted)
 - The registry's phantom type remains `T` only
 
 ## createJobTypes
@@ -182,7 +182,7 @@ The shape of each job type in the type map passed to `defineJobTypes` or `create
 type JobTypeDefinitions<T extends JobTypes<any>> = T[typeof definitionsSymbol];
 ```
 
-Utility type that extracts the phantom job type definitions from a `JobTypes`. Use this instead of indexing the symbol property directly.
+Utility type that extracts the phantom job type definitions from a single `JobTypes` slice. Constrains its argument to `JobTypes<any>`, so passing a non-slice is a compile error at the call site — use this when you know you have a slice and want that type-level assertion. For the slice-or-array form (e.g. an adapter parameter that may accept either), use [`JobTypesDefinitions`](#jobtypesdefinitions) instead.
 
 ```typescript
 const jobTypes = defineJobTypes<{
@@ -193,13 +193,36 @@ type MyDefs = JobTypeDefinitions<typeof jobTypes>;
 // { "send-email": { entry: true; input: { to: string }; output: { sent: true } } }
 ```
 
-### ExternalJobTypeDefinitions
+### JobTypesDefinitions
 
 ```typescript
-type ExternalJobTypeDefinitions<T extends JobTypes<any>> = T[typeof externalDefinitionsSymbol];
+type JobTypesDefinitions<
+  T extends JobTypes<BaseJobTypeDefinitions> | readonly JobTypes<BaseJobTypeDefinitions>[],
+>;
 ```
 
-Utility type that extracts the external (cross-slice) phantom definitions from a `JobTypes`. Returns `Record<never, never>` when no external types were declared.
+Resolves a value that may be either a single `JobTypes` slice or a `readonly` array of slices into its definitions. Validation-adapter authors thread this through the optional `externalDefinitions` parameter so callers can compose multiple external slices the same way `createClient` accepts `jobTypes`. When you know you have a single slice and want a compile-time assertion to that effect, use [`JobTypeDefinitions`](#jobtypedefinitions) instead.
+
+```typescript
+export const createMyJobTypes = <
+  const T extends Record<string, MySchema>,
+  const TExternal extends
+    | JobTypes<BaseJobTypeDefinitions>
+    | readonly JobTypes<BaseJobTypeDefinitions>[] = readonly [],
+>(
+  schemas: [Infer<T>] extends [
+    ValidatedJobTypeDefinitions<Infer<T>, JobTypesDefinitions<TExternal>>,
+  ]
+    ? T
+    : JobTypeDefinitionErrors<Infer<T>, JobTypesDefinitions<TExternal>>,
+  _externalDefinitions?: TExternal,
+) =>
+  createJobTypes<Infer<T>, JobTypesDefinitions<TExternal>>({
+    /* ... */
+  });
+```
+
+Empty default (`readonly []`) maps to `Record<never, never>` so callers can omit the param entirely.
 
 ### Processors
 

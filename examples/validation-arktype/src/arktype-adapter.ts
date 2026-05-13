@@ -12,6 +12,7 @@ import {
   type JobTypeDefinitionErrors,
   type JobTypeReference,
   type JobTypes,
+  type JobTypesDefinitions,
   type ValidatedJobTypeDefinitions,
   createJobTypes,
 } from "queuert";
@@ -109,14 +110,16 @@ type InferArkTypeJobTypes<T extends Record<string, ArkTypeJobTypeSchema>> = {
  */
 export const createArkTypeJobTypes = <
   const T extends Record<string, ArkTypeJobTypeSchema>,
-  TExternal extends BaseJobTypeDefinitions = Record<never, never>,
+  const TExternal extends
+    | JobTypes<BaseJobTypeDefinitions>
+    | readonly JobTypes<BaseJobTypeDefinitions>[] = readonly [],
 >(
   schemas: [InferArkTypeJobTypes<T>] extends [
-    ValidatedJobTypeDefinitions<InferArkTypeJobTypes<T>, TExternal>,
+    ValidatedJobTypeDefinitions<InferArkTypeJobTypes<T>, JobTypesDefinitions<TExternal>>,
   ]
     ? T
-    : JobTypeDefinitionErrors<InferArkTypeJobTypes<T>, TExternal>,
-  _externalDefinitions?: JobTypes<TExternal>,
+    : JobTypeDefinitionErrors<InferArkTypeJobTypes<T>, JobTypesDefinitions<TExternal>>,
+  _externalDefinitions?: TExternal,
 ) => {
   const _schemas = schemas as Record<string, ArkTypeJobTypeSchema>;
   const getSchema = (typeName: string): ArkTypeJobTypeSchema => {
@@ -127,7 +130,7 @@ export const createArkTypeJobTypes = <
     return schema;
   };
 
-  return createJobTypes<InferArkTypeJobTypes<T>, TExternal>({
+  return createJobTypes<InferArkTypeJobTypes<T>, JobTypesDefinitions<TExternal>>({
     getTypeNames: () => Object.keys(_schemas),
     validateEntry: (typeName) => {
       const schema = getSchema(typeName);

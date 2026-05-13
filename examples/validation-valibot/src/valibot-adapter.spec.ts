@@ -110,12 +110,46 @@ test("valibot adapter passes validation conformance", async () => {
             "orders.confirm-order": {
               input: v.object({ orderId: v.number() }),
               output: v.object({ confirmedAt: v.string() }),
-              blockers: v.array(
+              blockers: v.tuple([
                 v.object({ typeName: v.literal("notifications.send-notification") }),
-              ),
+              ]),
             },
           },
           notifications,
+        );
+      },
+      buildWithExternalSlices: () => {
+        const notifications = createValibotJobTypes({
+          "notifications.send-notification": {
+            entry: true,
+            input: v.object({ userId: v.string(), message: v.string() }),
+            output: v.object({ sentAt: v.string() }),
+          },
+        });
+        const payments = createValibotJobTypes({
+          "payments.charge": {
+            entry: true,
+            input: v.object({ amount: v.number() }),
+            output: v.object({ receiptId: v.string() }),
+          },
+        });
+        return createValibotJobTypes(
+          {
+            "orders.place-order": {
+              entry: true,
+              input: v.object({ userId: v.string() }),
+              continueWith: v.object({ typeName: v.literal("orders.confirm-order") }),
+            },
+            "orders.confirm-order": {
+              input: v.object({ orderId: v.number() }),
+              output: v.object({ confirmedAt: v.string() }),
+              blockers: v.tuple([
+                v.object({ typeName: v.literal("notifications.send-notification") }),
+                v.object({ typeName: v.literal("payments.charge") }),
+              ]),
+            },
+          },
+          [notifications, payments] as const,
         );
       },
     },
