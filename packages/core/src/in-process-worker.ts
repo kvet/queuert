@@ -17,7 +17,10 @@ import {
   type StateAdapter,
   type StateJob,
 } from "./state-adapter/state-adapter.js";
-import { type AttemptMiddleware } from "./worker/attempt-middleware.js";
+import {
+  type AttemptMiddleware,
+  type IsAttemptMiddlewareSubsequence,
+} from "./worker/attempt-middleware.js";
 import { runJobProcess } from "./worker/job-process.js";
 import { type LeaseConfig } from "./worker/lease.js";
 import { type MergedProcessorDefinitions, mergeProcessors } from "./worker/merge-processors.js";
@@ -177,6 +180,49 @@ type ExtraProcessorTypeNames<TProcessorDefs, TClientDefs> = [string] extends [
   ? never
   : Exclude<DistributiveKeys<TProcessorDefs>, DistributiveKeys<TClientDefs>>;
 
+/** Extract slice middleware tuple from a Processors instance (defaults to empty). @internal */
+type SliceMiddleware<T> =
+  T extends Processors<any, infer M extends readonly AttemptMiddleware<any, any, any, any>[]>
+    ? M
+    : readonly [];
+
+/**
+ * For each slice in the array, check whether its middleware tuple contains
+ * `TReq` as an in-order subsequence; replace the slice element with an error
+ * string when it does not. The mapped-tuple form lets TS pinpoint which slice
+ * fails when the worker is constructed with an array of slices.
+ * @internal
+ */
+type ValidateRequiredMiddlewareForSlices<
+  TSlices extends readonly unknown[],
+  TReq extends readonly AttemptMiddleware<any, any, any, any>[],
+> = {
+  [K in keyof TSlices]: IsAttemptMiddlewareSubsequence<
+    TReq,
+    SliceMiddleware<TSlices[K]>
+  > extends true
+    ? TSlices[K]
+    : "Error: this slice does not include all requiredAttemptMiddleware in the declared order";
+};
+
+/**
+ * Combined constraint result for the worker's `processors` option: either the
+ * input unchanged (all checks pass), a single error string (single-slice form),
+ * or a tuple with error strings substituted into the failing positions
+ * (array-of-slices form).
+ * @internal
+ */
+type ValidateRequiredMiddleware<
+  TProcessorsInput,
+  TReq extends readonly AttemptMiddleware<any, any, any, any>[],
+> = [TReq] extends [readonly []]
+  ? TProcessorsInput
+  : TProcessorsInput extends readonly unknown[]
+    ? ValidateRequiredMiddlewareForSlices<TProcessorsInput, TReq>
+    : IsAttemptMiddlewareSubsequence<TReq, SliceMiddleware<TProcessorsInput>> extends true
+      ? TProcessorsInput
+      : "Error: processors slice does not include all requiredAttemptMiddleware in the declared order";
+
 /**
  * A worker that processes jobs in the current process. Created via {@link createInProcessWorker}.
  *
@@ -214,12 +260,15 @@ export type InProcessWorkerDefaults = {
  * @param options.pollIntervalMs - How often to poll for new jobs when no notify adapter wakes the worker. Defaults to 60s.
  * @param options.recoveryBackoffConfig - Backoff configuration for the worker loop itself (not job retries).
  * @param options.defaults - Fallback `backoffConfig` / `leaseConfig` for processors that don't set their own.
+ * @param options.requiredAttemptMiddleware - Middleware instances that every dispatched processor's slice must include as an in-order subsequence. Enforced both at compile time (against the slice middleware tuple inferred by {@link createProcessors}) and at runtime by reference-identity (`===`). The worker does not execute this middleware itself — slices run their own chains.
  * @param options.processors - A single `Processors` from {@link createProcessors}, or an array of slices to merge.
  */
 export const createInProcessWorker = async <
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TStateAdapter extends StateAdapter<any, any>,
   const TProcessorsInput extends Processors | readonly Processors[] = Processors,
+  const TRequiredAttemptMiddleware extends readonly AttemptMiddleware<any, any, any, any>[] =
+    readonly [],
 >({
   client,
   workerName,
@@ -227,6 +276,7 @@ export const createInProcessWorker = async <
   pollIntervalMs: pollIntervalMsOption,
   recoveryBackoffConfig: recoveryBackoffConfigOption,
   defaults: defaultsOption,
+  requiredAttemptMiddleware: requiredAttemptMiddlewareOption,
   processors: processorsOption,
 }: {
   client: Client<TJobTypeDefinitions, TStateAdapter>;
@@ -235,10 +285,11 @@ export const createInProcessWorker = async <
   pollIntervalMs?: number;
   recoveryBackoffConfig?: BackoffConfig;
   defaults?: InProcessWorkerDefaults;
+  requiredAttemptMiddleware?: TRequiredAttemptMiddleware;
   processors: [
     ExtraProcessorTypeNames<WorkerProcessorDefs<TProcessorsInput>, TJobTypeDefinitions>,
   ] extends [never]
-    ? TProcessorsInput
+    ? ValidateRequiredMiddleware<TProcessorsInput, TRequiredAttemptMiddleware>
     : `Error: processors contain job types unknown to the client: ${ExtraProcessorTypeNames<WorkerProcessorDefs<TProcessorsInput>, TJobTypeDefinitions> & string}`;
 }): Promise<InProcessWorker> => {
   const merged = Array.isArray(processorsOption)
@@ -251,6 +302,35 @@ export const createInProcessWorker = async <
 
   const processors = merged as unknown as Record<string, StampedProcessor>;
   const typeNames = Object.keys(processors);
+
+  const requiredAttemptMiddleware = (requiredAttemptMiddlewareOption ??
+    []) as readonly AttemptMiddleware<any, any, any, any>[];
+  if (requiredAttemptMiddleware.length > 0) {
+    const violations: string[] = [];
+    for (const typeName of typeNames) {
+      const sliceMW = processors[typeName][processorAttemptMiddlewareSymbol] ?? [];
+      const missing: number[] = [];
+      let i = 0;
+      for (let r = 0; r < requiredAttemptMiddleware.length; r++) {
+        while (i < sliceMW.length && sliceMW[i] !== requiredAttemptMiddleware[r]) i++;
+        if (i >= sliceMW.length) {
+          missing.push(r);
+        } else {
+          i++;
+        }
+      }
+      if (missing.length > 0) {
+        violations.push(
+          `  - "${typeName}": missing requiredAttemptMiddleware at position(s) [${missing.join(", ")}]`,
+        );
+      }
+    }
+    if (violations.length > 0) {
+      throw new Error(
+        `createInProcessWorker: one or more processors are missing requiredAttemptMiddleware (each slice must include every required middleware instance as an in-order subsequence):\n${violations.join("\n")}`,
+      );
+    }
+  }
 
   const pollIntervalMs = pollIntervalMsOption ?? 60_000;
   const recoveryBackoffConfig = recoveryBackoffConfigOption ?? {

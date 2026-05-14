@@ -15,6 +15,7 @@ const worker = await createInProcessWorker({
   pollIntervalMs?: number,
   recoveryBackoffConfig?: BackoffConfig,
   defaults?: InProcessWorkerDefaults,
+  requiredAttemptMiddleware?: readonly AttemptMiddleware[],
   processors: Processors,
 });
 ```
@@ -27,6 +28,7 @@ Returns `Promise<InProcessWorker>`.
 - **pollIntervalMs** — how often the worker polls for new jobs when no notify adapter wakes it (default: 60s)
 - **recoveryBackoffConfig** — recovery backoff for the worker loop itself (not job retries)
 - **defaults** — fallback `backoffConfig` / `leaseConfig` for processors that don't set their own. Resolution order is: processor → registry → worker `defaults` → library default
+- **requiredAttemptMiddleware** — middleware instances that every dispatched processor's slice must include as an in-order subsequence (additional middleware may appear before, between, or after them). Enforced at compile time against the slice middleware tuple inferred by `createProcessors`, and at runtime by reference identity (`===`). The worker does not execute this middleware itself — slices keep running their own chains; this option only enforces presence. Useful for guaranteeing cross-cutting concerns like auth, tracing, or logging are wired into every slice merged into the worker
 - **processors** — a single `Processors` from `createProcessors`, or an array of slices to merge. See [Slices guide](/queuert/guides/slices/). Middleware is declared on the registry; see [Middleware guide](/queuert/guides/middleware/)
 
 ### InProcessWorkerDefaults

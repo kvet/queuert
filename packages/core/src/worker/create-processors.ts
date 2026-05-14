@@ -15,6 +15,7 @@ import {
   type Processors,
   processorAttemptMiddlewareSymbol,
   processorsDefinitionsSymbol,
+  processorsMiddlewareSymbol,
 } from "./processors.js";
 
 /** Merged definitions: union of own + external defs for typing handler continueWith / blockers. */
@@ -75,7 +76,7 @@ export const createProcessors = <
       MergedCompleteCtx<TAttemptMiddleware>
     >;
   } & Record<Exclude<TProcessors, keyof TJobTypeDefinitions & string>, never>;
-}): Processors<TJobTypeDefinitions> => {
+}): Processors<TJobTypeDefinitions, TAttemptMiddleware> => {
   const middleware = options.attemptMiddleware ?? [];
   const stampedProcessors: Record<string, unknown> = {};
   for (const [typeName, processor] of Object.entries(
@@ -97,5 +98,6 @@ export const createProcessors = <
   }
   return Object.assign({}, stampedProcessors, {
     [processorsDefinitionsSymbol]: undefined as unknown as TJobTypeDefinitions,
-  }) as Processors<TJobTypeDefinitions>;
+    [processorsMiddlewareSymbol]: middleware as unknown as TAttemptMiddleware,
+  }) as Processors<TJobTypeDefinitions, TAttemptMiddleware>;
 };

@@ -60,54 +60,62 @@ export type AttemptMiddleware<
 
 type AnyJobAttemptMiddleware = AttemptMiddleware<any, any, any, any>;
 
-/** Merge handler-phase ctx from a tuple of {@link AttemptMiddleware}s. Unrolled 4-at-a-time to avoid TS2589 on long tuples. */
+/** Merge handler-phase ctx from a tuple of {@link AttemptMiddleware}s. */
 export type MergedAttemptHandlerCtx<T extends readonly AnyJobAttemptMiddleware[]> =
   T extends readonly [
-    AttemptMiddleware<any, infer A, any, any>,
-    AttemptMiddleware<any, infer B, any, any>,
-    AttemptMiddleware<any, infer C, any, any>,
-    AttemptMiddleware<any, infer D, any, any>,
+    AttemptMiddleware<any, infer H, any, any>,
     ...infer Rest extends readonly AnyJobAttemptMiddleware[],
   ]
-    ? A & B & C & D & MergedAttemptHandlerCtx<Rest>
-    : T extends readonly [
-          AttemptMiddleware<any, infer H, any, any>,
-          ...infer Rest extends readonly AnyJobAttemptMiddleware[],
-        ]
-      ? H & MergedAttemptHandlerCtx<Rest>
-      : {};
+    ? H & MergedAttemptHandlerCtx<Rest>
+    : {};
 
 /** Merge prepare-phase ctx from a tuple of {@link AttemptMiddleware}s. */
 export type MergedPrepareCtx<T extends readonly AnyJobAttemptMiddleware[]> = T extends readonly [
-  AttemptMiddleware<any, any, infer A, any>,
-  AttemptMiddleware<any, any, infer B, any>,
-  AttemptMiddleware<any, any, infer C, any>,
-  AttemptMiddleware<any, any, infer D, any>,
+  AttemptMiddleware<any, any, infer P, any>,
   ...infer Rest extends readonly AnyJobAttemptMiddleware[],
 ]
-  ? A & B & C & D & MergedPrepareCtx<Rest>
-  : T extends readonly [
-        AttemptMiddleware<any, any, infer P, any>,
-        ...infer Rest extends readonly AnyJobAttemptMiddleware[],
-      ]
-    ? P & MergedPrepareCtx<Rest>
-    : {};
+  ? P & MergedPrepareCtx<Rest>
+  : {};
 
 /** Merge complete-phase ctx from a tuple of {@link AttemptMiddleware}s. */
 export type MergedCompleteCtx<T extends readonly AnyJobAttemptMiddleware[]> = T extends readonly [
-  AttemptMiddleware<any, any, any, infer A>,
-  AttemptMiddleware<any, any, any, infer B>,
   AttemptMiddleware<any, any, any, infer C>,
-  AttemptMiddleware<any, any, any, infer D>,
   ...infer Rest extends readonly AnyJobAttemptMiddleware[],
 ]
-  ? A & B & C & D & MergedCompleteCtx<Rest>
-  : T extends readonly [
-        AttemptMiddleware<any, any, any, infer C>,
+  ? C & MergedCompleteCtx<Rest>
+  : {};
+
+/** Bidirectional assignability check used for middleware tuple identity. @internal */
+type TypesEqual<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+
+/**
+ * Checks whether `TReq` appears as an in-order subsequence within `TMW`
+ * (by type identity). Required middleware must appear in the declared order,
+ * but arbitrary other middleware may be interleaved before, between, or after.
+ *
+ * Type identity is structural — two structurally identical middleware values
+ * are indistinguishable here. Runtime `===` is the source of truth; this type
+ * is a strong early signal, not a guarantee.
+ * @internal
+ */
+export type IsAttemptMiddlewareSubsequence<
+  TReq extends readonly AnyJobAttemptMiddleware[],
+  TMW extends readonly AnyJobAttemptMiddleware[],
+> = TReq extends readonly []
+  ? true
+  : TMW extends readonly [
+        infer H extends AnyJobAttemptMiddleware,
         ...infer Rest extends readonly AnyJobAttemptMiddleware[],
       ]
-    ? C & MergedCompleteCtx<Rest>
-    : {};
+    ? TReq extends readonly [
+        infer R extends AnyJobAttemptMiddleware,
+        ...infer ReqRest extends readonly AnyJobAttemptMiddleware[],
+      ]
+      ? TypesEqual<H, R> extends true
+        ? IsAttemptMiddlewareSubsequence<ReqRest, Rest>
+        : IsAttemptMiddlewareSubsequence<TReq, Rest>
+      : true
+    : false;
 
 export const runHandlerMiddlewareChain = async <T>(
   attemptMiddleware: readonly AnyJobAttemptMiddleware[] | undefined,
