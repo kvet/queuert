@@ -54,7 +54,11 @@ export {
 export { type TypedAbortSignal } from "./helpers/abort.js";
 export { type BackoffConfig } from "./helpers/backoff.js";
 export { type RetryConfig } from "./helpers/retry.js";
-export { createInProcessWorker, type InProcessWorker } from "./in-process-worker.js";
+export {
+  createInProcessWorker,
+  type InProcessWorker,
+  type InProcessWorkerDefaults,
+} from "./in-process-worker.js";
 export { createInProcessNotifyAdapter } from "./notify-adapter/notify-adapter.in-process.js";
 export { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 export { createConsoleLog } from "./observability-adapter/log.console.js";

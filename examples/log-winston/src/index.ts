@@ -1,12 +1,12 @@
 import {
   type AttemptMiddleware,
   createClient,
+  createInProcessNotifyAdapter,
+  createInProcessStateAdapter,
   createInProcessWorker,
   createProcessors,
   defineJobTypes,
   withTransactionHooks,
-  createInProcessNotifyAdapter,
-  createInProcessStateAdapter,
 } from "queuert";
 import winston from "winston";
 
@@ -89,7 +89,6 @@ const loggerInjectionMiddleware: AttemptMiddleware<any, { log: winston.Logger }>
 // 5. Create and start the worker with the middleware
 const worker = await createInProcessWorker({
   client,
-  workerId: "worker-1",
   processors: createProcessors({
     client,
     jobTypes,

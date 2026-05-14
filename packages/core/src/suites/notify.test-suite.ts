@@ -354,7 +354,6 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
     const worker = await createInProcessWorker({
       client,
-      workerId: "worker",
       concurrency: 1,
       processors: createProcessors({
         client,

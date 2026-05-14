@@ -24,7 +24,7 @@ const client = await createClient({ stateAdapter, notifyAdapter, jobTypes });
 // Customer-facing workload (password resets, 2FA): reserved capacity.
 const transactionalWorker = await createInProcessWorker({
   client,
-  workerId: "email-transactional",
+  workerName: "email-transactional",
   concurrency: 3,
   processors: createProcessors({
     client,
@@ -38,7 +38,7 @@ const transactionalWorker = await createInProcessWorker({
 // Bulk workload (digests, newsletters): throttled, won't interfere with the other worker.
 const marketingWorker = await createInProcessWorker({
   client,
-  workerId: "email-marketing",
+  workerName: "email-marketing",
   concurrency: 1,
   processors: createProcessors({
     client,

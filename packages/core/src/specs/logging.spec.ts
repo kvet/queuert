@@ -77,7 +77,7 @@ describe("Logging", () => {
     });
     const worker = await createInProcessWorker({
       client,
-      workerId: "worker",
+      workerName: "worker",
       concurrency: 1,
       processors: createProcessors({
         client,
@@ -108,7 +108,9 @@ describe("Logging", () => {
       await client.awaitChain(chain, completionOptions);
     });
 
-    const workerArgs = { workerId: "worker" };
+    const workerArgs = {
+      workerId: expect.stringMatching(/^worker-[0-9a-f-]{36}$/) as unknown as string,
+    };
     const chainArgs = {
       typeName: "test",
       id: chain.id,
@@ -722,7 +724,6 @@ describe("Logging", () => {
 
     const worker1 = await createInProcessWorker({
       client,
-      workerId: "w1",
       concurrency: 1,
       pollIntervalMs: leaseConfig.leaseMs,
       processors: createProcessors({
@@ -749,7 +750,6 @@ describe("Logging", () => {
     });
     const worker2 = await createInProcessWorker({
       client,
-      workerId: "w2",
       concurrency: 1,
       pollIntervalMs: leaseConfig.leaseMs,
       processors: createProcessors({

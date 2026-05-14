@@ -1,7 +1,6 @@
 import { describe, expectTypeOf, it } from "vitest";
 
 import { defineJobTypes } from "./define-job-types.js";
-import { type JobTypesDefinitions } from "./merge-job-types.js";
 import { type JobTypeDefinitions } from "./job-types.js";
 import {
   type BlockerChains,
@@ -11,9 +10,10 @@ import {
   type JobTypeContinuation,
   type JobTypeEntryDefinitions,
   type JobTypeReachingEntry,
-  type ResolvedJob,
   type ResolvedChain,
+  type ResolvedJob,
 } from "./job-types.resolvers.js";
+import { type JobTypesDefinitions } from "./merge-job-types.js";
 
 describe("defineJobTypes", () => {
   describe("validation", () => {

@@ -35,6 +35,7 @@ describe("Metrics", () => {
     log,
     expectMetrics,
     expectHistograms,
+    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -53,7 +54,7 @@ describe("Metrics", () => {
     });
     const worker = await createInProcessWorker({
       client,
-      workerId: "worker",
+      workerName: "worker",
       concurrency: 1,
       processors: createProcessors({
         client,
@@ -84,22 +85,24 @@ describe("Metrics", () => {
       await client.awaitChain(chain, completionOptions);
     });
 
+    const workerIdMatcher = expect.stringMatching(/^worker-[0-9a-f-]{36}$/);
+
     await expectMetrics([
       { method: "chainCreated", args: { typeName: "test" } },
       { method: "jobCreated", args: { typeName: "test" } },
-      { method: "workerStarted", args: { workerId: "worker" } },
+      { method: "workerStarted", args: { workerId: workerIdMatcher } },
       { method: "jobAttemptStarted", args: { typeName: "test", status: "running" } },
       { method: "jobAttemptCompleted", args: { typeName: "test", output: { result: true } } },
       { method: "jobCompleted", args: { typeName: "test", output: { result: true } } },
       { method: "chainCompleted", args: { typeName: "test", output: { result: true } } },
-      { method: "workerStopping", args: { workerId: "worker" } },
-      { method: "workerStopped", args: { workerId: "worker" } },
+      { method: "workerStopping", args: { workerId: workerIdMatcher } },
+      { method: "workerStopped", args: { workerId: workerIdMatcher } },
     ]);
 
     await expectHistograms([
       { method: "jobDuration", args: { typeName: "test" } },
       { method: "chainDuration", args: { typeName: "test" } },
-      { method: "jobAttemptDuration", args: { typeName: "test", workerId: "worker" } },
+      { method: "jobAttemptDuration", args: { typeName: "test", workerId: workerIdMatcher } },
     ]);
   });
 
@@ -603,7 +606,6 @@ describe("Metrics", () => {
 
     const worker1 = await createInProcessWorker({
       client,
-      workerId: "w1",
       concurrency: 1,
       pollIntervalMs: leaseConfig.leaseMs,
       processors: createProcessors({
@@ -630,7 +632,6 @@ describe("Metrics", () => {
     });
     const worker2 = await createInProcessWorker({
       client,
-      workerId: "w2",
       concurrency: 1,
       pollIntervalMs: leaseConfig.leaseMs,
       processors: createProcessors({

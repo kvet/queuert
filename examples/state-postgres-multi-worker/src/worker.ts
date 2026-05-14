@@ -8,12 +8,12 @@ const jobTypes = defineJobTypes<{
   process_order: {
     entry: true;
     input: { orderId: string; items: string[]; total: number };
-    output: { processedAt: string; workerId: string };
+    output: { processedAt: string; workerName: string };
   };
 }>();
 
 const connectionString = process.env.CONNECTION_STRING!;
-const workerId = process.env.WORKER_ID!;
+const workerName = process.env.WORKER_NAME!;
 
 const pool = new Pool({ connectionString, max: 5 });
 
@@ -27,7 +27,7 @@ const client = await createClient({ stateAdapter, notifyAdapter, jobTypes });
 
 const worker = await createInProcessWorker({
   client,
-  workerId,
+  workerName,
   concurrency: 2,
   processors: createProcessors({
     client,
@@ -46,7 +46,7 @@ const worker = await createInProcessWorker({
 
           return complete(async () => ({
             processedAt: new Date().toISOString(),
-            workerId,
+            workerName,
           }));
         },
       },

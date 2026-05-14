@@ -37,7 +37,6 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
     const worker = await createInProcessWorker({
       client,
-      workerId: "worker",
       concurrency: 1,
       pollIntervalMs: 50,
       processors: createProcessors({
@@ -103,7 +102,6 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
     const worker = await createInProcessWorker({
       client,
-      workerId: "worker",
       concurrency: 1,
       pollIntervalMs: 50,
       processors: createProcessors({
@@ -176,7 +174,6 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
 
     const worker = await createInProcessWorker({
       client,
-      workerId: "worker",
       concurrency: 1,
       pollIntervalMs: 50,
       processors: createProcessors({
@@ -265,7 +262,6 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
 
     const worker = await createInProcessWorker({
       client,
-      workerId: "worker",
       concurrency: 1,
       pollIntervalMs: 50,
       processors: createProcessors({
@@ -351,7 +347,6 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
 
     const worker = await createInProcessWorker({
       client,
-      workerId: "worker",
       concurrency: 1,
       pollIntervalMs: 50,
       processors: createProcessors({
@@ -429,7 +424,6 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
 
     const worker = await createInProcessWorker({
       client,
-      workerId: "worker",
       concurrency: 1,
       pollIntervalMs: 50,
       processors: createProcessors({
@@ -516,7 +510,6 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
 
     const worker = await createInProcessWorker({
       client,
-      workerId: "worker",
       concurrency: 1,
       pollIntervalMs: 50,
       processors: createProcessors({

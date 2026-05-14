@@ -10,10 +10,11 @@ sidebar:
 ```typescript
 const worker = await createInProcessWorker({
   client: Client,
-  workerId?: string,
+  workerName?: string,
   concurrency?: number,
   pollIntervalMs?: number,
   recoveryBackoffConfig?: BackoffConfig,
+  defaults?: InProcessWorkerDefaults,
   processors: Processors,
 });
 ```
@@ -21,11 +22,23 @@ const worker = await createInProcessWorker({
 Returns `Promise<InProcessWorker>`.
 
 - **client** — the Queuert client to process jobs for
-- **workerId** — unique identifier for this worker (default: random UUID)
+- **workerName** — optional human-readable label included in the worker id. Must match `/^[A-Za-z0-9._-]+$/` when provided (letters, digits, `.`, `_`, `-`). The id is always suffixed with a random UUID (`${workerName}-${uuid}` or just `${uuid}` when omitted), so two replicas with the same name still get distinct ids and cannot collide on lease ownership
 - **concurrency** — maximum number of jobs to process in parallel (default: 1)
 - **pollIntervalMs** — how often the worker polls for new jobs when no notify adapter wakes it (default: 60s)
 - **recoveryBackoffConfig** — recovery backoff for the worker loop itself (not job retries)
+- **defaults** — fallback `backoffConfig` / `leaseConfig` for processors that don't set their own. Resolution order is: processor → registry → worker `defaults` → library default
 - **processors** — a single `Processors` from `createProcessors`, or an array of slices to merge. See [Slices guide](/queuert/guides/slices/). Middleware is declared on the registry; see [Middleware guide](/queuert/guides/middleware/)
+
+### InProcessWorkerDefaults
+
+```typescript
+type InProcessWorkerDefaults = {
+  backoffConfig?: BackoffConfig;
+  leaseConfig?: LeaseConfig;
+};
+```
+
+Worker-level fallbacks applied to every processor that doesn't declare its own `backoffConfig` / `leaseConfig` (whether directly on the processor or via the registry default in `createProcessors`).
 
 ## InProcessWorker — Methods
 

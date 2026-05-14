@@ -116,7 +116,6 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
     const worker1 = await createInProcessWorker({
       client,
-      workerId: "w1",
       concurrency: 1,
       pollIntervalMs: leaseConfig.leaseMs,
       processors: createProcessors({
@@ -148,7 +147,6 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
     const worker2 = await createInProcessWorker({
       client,
-      workerId: "w2",
       concurrency: 1,
       pollIntervalMs: leaseConfig.leaseMs,
       processors: createProcessors({
@@ -251,7 +249,6 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
     const worker1 = await createInProcessWorker({
       client,
-      workerId: "w1",
       concurrency: 1,
       pollIntervalMs: leaseConfig.leaseMs,
       processors: createProcessors({
@@ -286,7 +283,6 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
     const worker2 = await createInProcessWorker({
       client,
-      workerId: "w2",
       concurrency: 1,
       pollIntervalMs: leaseConfig.leaseMs,
       processors: createProcessors({
@@ -392,7 +388,6 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
     const worker = await createInProcessWorker({
       client,
-      workerId: "concurrent-worker",
       concurrency: 2,
       pollIntervalMs: 10,
       processors: createProcessors({

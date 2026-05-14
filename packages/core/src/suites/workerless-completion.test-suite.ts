@@ -470,7 +470,6 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     });
     const worker = await createInProcessWorker({
       client,
-      workerId: "worker",
       concurrency: 1,
       processors: createProcessors({
         client,

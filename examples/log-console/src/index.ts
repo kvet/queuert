@@ -1,12 +1,12 @@
 import {
   createClient,
   createConsoleLog,
+  createInProcessNotifyAdapter,
+  createInProcessStateAdapter,
   createInProcessWorker,
   createProcessors,
   defineJobTypes,
   withTransactionHooks,
-  createInProcessNotifyAdapter,
-  createInProcessStateAdapter,
 } from "queuert";
 
 // 1. Define job types
@@ -38,7 +38,6 @@ const client = await createClient({
 // 3. Create and start worker
 const worker = await createInProcessWorker({
   client,
-  workerId: "worker-1",
   processors: createProcessors({
     client,
     jobTypes,

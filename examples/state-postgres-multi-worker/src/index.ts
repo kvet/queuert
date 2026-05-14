@@ -47,7 +47,7 @@ const jobTypes = defineJobTypes<{
   process_order: {
     entry: true;
     input: { orderId: string; items: string[]; total: number };
-    output: { processedAt: string; workerId: string };
+    output: { processedAt: string; workerName: string };
   };
 }>();
 
@@ -70,7 +70,7 @@ const client = await createClient({
 });
 
 const workerNames = ["alpha", "beta", "gamma"];
-const processingLog: { orderId: string; workerId: string }[] = [];
+const processingLog: { orderId: string; workerName: string }[] = [];
 const processes: ChildProcess[] = [];
 
 console.log(`\nSpawning ${WORKER_COUNT} worker processes...`);
@@ -79,10 +79,10 @@ const readyPromises: Promise<void>[] = [];
 const workerPath = join(__dirname, "worker.ts");
 
 for (let i = 0; i < WORKER_COUNT; i++) {
-  const workerId = workerNames[i];
+  const workerName = workerNames[i];
   const child = fork(workerPath, [], {
     execArgv: ["--import=tsx"],
-    env: { ...process.env, CONNECTION_STRING: pg.connectionString, WORKER_ID: workerId },
+    env: { ...process.env, CONNECTION_STRING: pg.connectionString, WORKER_NAME: workerName },
     stdio: ["inherit", "inherit", "inherit", "ipc"],
   });
 
@@ -93,13 +93,13 @@ for (let i = 0; i < WORKER_COUNT; i++) {
       "message",
       (msg: { type: string; orderId?: string; items?: number; total?: number }) => {
         if (msg.type === "ready") {
-          console.log(`  Process "${workerId}" ready (concurrency: 2)`);
+          console.log(`  Process "${workerName}" ready (concurrency: 2)`);
           resolve();
         } else if (msg.type === "processing") {
           console.log(
-            `  [${workerId}] Processing order ${msg.orderId} (${msg.items} items, $${msg.total})`,
+            `  [${workerName}] Processing order ${msg.orderId} (${msg.items} items, $${msg.total})`,
           );
-          processingLog.push({ orderId: msg.orderId!, workerId });
+          processingLog.push({ orderId: msg.orderId!, workerName });
         }
       },
     );
@@ -141,18 +141,18 @@ console.log("=".repeat(60));
 
 const workerStats = new Map<string, number>();
 for (const entry of processingLog) {
-  workerStats.set(entry.workerId, (workerStats.get(entry.workerId) ?? 0) + 1);
+  workerStats.set(entry.workerName, (workerStats.get(entry.workerName) ?? 0) + 1);
 }
 
 console.log("\nJobs processed per process:");
-for (const [workerId, count] of workerStats.entries()) {
+for (const [workerName, count] of workerStats.entries()) {
   const bar = "█".repeat(count);
-  console.log(`  ${workerId.padEnd(6)} │ ${bar} ${count}`);
+  console.log(`  ${workerName.padEnd(6)} │ ${bar} ${count}`);
 }
 
 console.log("\nOrder processing details:");
 for (const entry of processingLog) {
-  console.log(`  ${entry.orderId} → processed by process "${entry.workerId}"`);
+  console.log(`  ${entry.orderId} → processed by process "${entry.workerName}"`);
 }
 
 console.log("\n" + "=".repeat(60));

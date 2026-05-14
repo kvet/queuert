@@ -336,7 +336,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     });
     const worker = await createInProcessWorker({
       client,
-      workerId: "worker",
+      workerName: "worker",
       concurrency: 1,
       processors: createProcessors({
         client,
@@ -376,7 +376,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
               expect(completedJob.status).toBe("completed");
               if (completedJob.status === "completed") {
                 expectTypeOf(completedJob.completedBy).toEqualTypeOf<string | null>();
-                expect(completedJob.completedBy).toBe("worker");
+                expect(completedJob.completedBy).toMatch(/^worker-[0-9a-f-]{36}$/);
               }
               return completedJob;
             },
@@ -413,6 +413,6 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     // Verify completedBy is set to workerId for worker completion
     const completedJob = await stateAdapter.getJob({ jobId: chain.id });
     expect(completedJob?.status).toBe("completed");
-    expect(completedJob?.completedBy).toBe("worker");
+    expect(completedJob?.completedBy).toMatch(/^worker-[0-9a-f-]{36}$/);
   });
 };

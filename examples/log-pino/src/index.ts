@@ -2,12 +2,12 @@ import pino, { type Logger } from "pino";
 import {
   type AttemptMiddleware,
   createClient,
+  createInProcessNotifyAdapter,
+  createInProcessStateAdapter,
   createInProcessWorker,
   createProcessors,
   defineJobTypes,
   withTransactionHooks,
-  createInProcessNotifyAdapter,
-  createInProcessStateAdapter,
 } from "queuert";
 
 import { createPinoLog } from "./log.js";
@@ -72,7 +72,6 @@ const loggerInjectionMiddleware: AttemptMiddleware<any, { log: Logger }> = {
 // 5. Create and start the worker with the middleware
 const worker = await createInProcessWorker({
   client,
-  workerId: "worker-1",
   processors: createProcessors({
     client,
     jobTypes,

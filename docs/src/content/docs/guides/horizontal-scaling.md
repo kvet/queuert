@@ -15,7 +15,7 @@ The simplest approach: deploy the same worker configuration on multiple machines
 // Process A (e.g., machine-1)
 const workerA = await createInProcessWorker({
   client,
-  workerId: "worker-a",
+  workerName: "worker-a",
   concurrency: 10,
   processors: createProcessors({ client, jobTypes, processors: { ... } }),
 });
@@ -23,13 +23,13 @@ const workerA = await createInProcessWorker({
 // Process B (e.g., machine-2)
 const workerB = await createInProcessWorker({
   client,
-  workerId: "worker-b",
+  workerName: "worker-b",
   concurrency: 10,
   processors: createProcessors({ client, jobTypes, processors: { ... } }),
 });
 ```
 
-Each worker needs a unique `workerId`. Workers compete for available jobs — when one acquires a job, others skip it. The notify adapter (Redis, PostgreSQL LISTEN/NOTIFY, etc.) ensures workers wake up immediately when new jobs are queued.
+`workerName` is an optional human-readable label. The runtime always appends a random UUID, so two replicas sharing the same name still get distinct ids and cannot collide on lease ownership. Workers compete for available jobs — when one acquires a job, others skip it. The notify adapter (Redis, PostgreSQL LISTEN/NOTIFY, etc.) ensures workers wake up immediately when new jobs are queued.
 
 ## Specialized Workers
 
@@ -48,7 +48,7 @@ const client = await createClient({
 
 const worker = await createInProcessWorker({
   client,
-  workerId: `image-worker-${threadId}`,
+  workerName: `image-worker-${threadId}`,
   concurrency: 1,
   processors: createProcessors({
     client,
@@ -72,7 +72,7 @@ for (let i = 0; i < 10; i++) {
 // Lightweight async I/O — single worker in main thread, high concurrency
 const notificationWorker = await createInProcessWorker({
   client,
-  workerId: "notification-worker",
+  workerName: "notification-worker",
   concurrency: 100,
   processors: createProcessors({
     client,

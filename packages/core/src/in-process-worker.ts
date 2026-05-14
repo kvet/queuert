@@ -85,26 +85,19 @@ const waitForNextJob = async ({
   }
 };
 
-const DEFAULT_BACKOFF_CONFIG: BackoffConfig = {
-  initialDelayMs: 10_000,
-  multiplier: 2.0,
-  maxDelayMs: 300_000,
-};
-
-const DEFAULT_LEASE_CONFIG: LeaseConfig = {
-  leaseMs: 60_000,
-  renewIntervalMs: 30_000,
-};
-
 const performJob = async ({
   helpers,
   typeNames,
   processors,
+  defaultBackoffConfig,
+  defaultLeaseConfig,
   workerId,
 }: {
   helpers: Helpers;
   typeNames: string[];
   processors: Record<string, StampedProcessor>;
+  defaultBackoffConfig: BackoffConfig;
+  defaultLeaseConfig: LeaseConfig;
   workerId: string;
 }): Promise<
   { job: null; hasMore: false } | { job: StateJob; hasMore: boolean; execute: () => Promise<void> }
@@ -149,8 +142,8 @@ const performJob = async ({
           attemptHandler: jobTypeProcessor.attemptHandler as any,
           job,
           prepareTransactionContext: prepareTransactionContext as TransactionContext<BaseTxContext>,
-          backoffConfig: jobTypeProcessor.backoffConfig ?? DEFAULT_BACKOFF_CONFIG,
-          leaseConfig: jobTypeProcessor.leaseConfig ?? DEFAULT_LEASE_CONFIG,
+          backoffConfig: jobTypeProcessor.backoffConfig ?? defaultBackoffConfig,
+          leaseConfig: jobTypeProcessor.leaseConfig ?? defaultLeaseConfig,
           workerId,
           attemptMiddleware: jobTypeProcessor[processorAttemptMiddlewareSymbol],
         });
@@ -195,18 +188,32 @@ export type InProcessWorker = {
 };
 
 /**
+ * Per-attempt defaults applied to every job type the worker processes,
+ * unless overridden by the matching processor entry.
+ */
+export type InProcessWorkerDefaults = {
+  /** Default backoff for failed job attempts. Overridden by per-processor `backoffConfig`. */
+  backoffConfig?: BackoffConfig;
+  /** Default lease for job ownership. Overridden by per-processor `leaseConfig`. */
+  leaseConfig?: LeaseConfig;
+};
+
+/**
  * Create an in-process worker for processing jobs.
  *
  * Per-attempt configuration (`attemptMiddleware`, `backoffConfig`,
  * `leaseConfig`) lives on the **processor registry** (see {@link createProcessors}).
  * The worker dispatches to whichever processor matches the job's typeName and
- * runs that slice's middleware chain.
+ * runs that slice's middleware chain. Worker-level `defaults` provide fallbacks
+ * for processors that don't set `backoffConfig` / `leaseConfig` themselves;
+ * precedence is processor > worker `defaults` > built-in defaults.
  *
  * @param options.client - The Queuert client to process jobs for.
- * @param options.workerId - Unique worker identifier. Defaults to a random UUID.
+ * @param options.workerName - Optional human-readable label included in the worker id (which is always suffixed with a random UUID to guarantee uniqueness across replicas). Must match `/^[A-Za-z0-9._-]+$/` when provided.
  * @param options.concurrency - Maximum number of jobs to process in parallel. Defaults to 1.
  * @param options.pollIntervalMs - How often to poll for new jobs when no notify adapter wakes the worker. Defaults to 60s.
  * @param options.recoveryBackoffConfig - Backoff configuration for the worker loop itself (not job retries).
+ * @param options.defaults - Fallback `backoffConfig` / `leaseConfig` for processors that don't set their own.
  * @param options.processors - A single `Processors` from {@link createProcessors}, or an array of slices to merge.
  */
 export const createInProcessWorker = async <
@@ -215,17 +222,19 @@ export const createInProcessWorker = async <
   const TProcessorsInput extends Processors | readonly Processors[] = Processors,
 >({
   client,
-  workerId = randomUUID(),
+  workerName,
   concurrency,
   pollIntervalMs: pollIntervalMsOption,
   recoveryBackoffConfig: recoveryBackoffConfigOption,
+  defaults: defaultsOption,
   processors: processorsOption,
 }: {
   client: Client<TJobTypeDefinitions, TStateAdapter>;
-  workerId?: string;
+  workerName?: string;
   concurrency?: number;
   pollIntervalMs?: number;
   recoveryBackoffConfig?: BackoffConfig;
+  defaults?: InProcessWorkerDefaults;
   processors: [
     ExtraProcessorTypeNames<WorkerProcessorDefs<TProcessorsInput>, TJobTypeDefinitions>,
   ] extends [never]
@@ -249,6 +258,22 @@ export const createInProcessWorker = async <
     multiplier: 2.0,
     maxDelayMs: 300_000,
   };
+  const defaultBackoffConfig = defaultsOption?.backoffConfig ?? {
+    initialDelayMs: 10_000,
+    multiplier: 2.0,
+    maxDelayMs: 300_000,
+  };
+  const defaultLeaseConfig = defaultsOption?.leaseConfig ?? {
+    leaseMs: 60_000,
+    renewIntervalMs: 30_000,
+  };
+  const concurrencyValue = concurrency ?? 1;
+  if (workerName !== undefined && !/^[A-Za-z0-9._-]+$/.test(workerName)) {
+    throw new TypeError(
+      `createInProcessWorker: workerName must be a non-empty string of letters, digits, '.', '_', or '-' (got ${JSON.stringify(workerName)})`,
+    );
+  }
+  const workerId = workerName ? `${workerName}-${randomUUID()}` : randomUUID();
 
   return {
     start: async (): Promise<() => Promise<void>> => {
@@ -256,10 +281,10 @@ export const createInProcessWorker = async <
       const { stateAdapter, notifyAdapter, observabilityHelper } = helpers;
 
       observabilityHelper.workerStarted({ workerId, jobTypeNames: typeNames });
-      observabilityHelper.jobTypeIdleChange(concurrency ?? 1, workerId, typeNames);
+      observabilityHelper.jobTypeIdleChange(concurrencyValue, workerId, typeNames);
 
       const stopController = new AbortController();
-      const executor = createParallelExecutor(concurrency ?? 1);
+      const executor = createParallelExecutor(concurrencyValue);
       const jobIdsInProgress = new Set<string>();
 
       const runWorkerLoop = async () => {
@@ -270,6 +295,8 @@ export const createInProcessWorker = async <
                 helpers,
                 typeNames,
                 processors,
+                defaultBackoffConfig,
+                defaultLeaseConfig,
                 workerId,
               });
 
@@ -351,7 +378,7 @@ export const createInProcessWorker = async <
         stopController.abort();
         await runWorkerLoopPromise;
         await executor.drain();
-        observabilityHelper.jobTypeIdleChange(-(concurrency ?? 1), workerId, typeNames);
+        observabilityHelper.jobTypeIdleChange(-concurrencyValue, workerId, typeNames);
         observabilityHelper.workerStopped({ workerId });
       };
     },

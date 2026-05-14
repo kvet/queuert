@@ -111,7 +111,7 @@ See [Job Processing](../job-processing/) for details on error handling and abort
 
 ## Client-Based Construction
 
-`createInProcessWorker` accepts a `client` instance and extracts infrastructure (`stateAdapter`, `notifyAdapter`, `observabilityAdapter`, `jobTypes`, `log`) from it internally. Worker-specific options (`processors`, `concurrency`, `pollIntervalMs`, `recoveryBackoffConfig`) remain separate parameters. The top-level `recoveryBackoffConfig` controls the worker's own main loop retry behavior (e.g., recovery from database connection errors). Per-attempt configuration — `backoffConfig`, `leaseConfig`, `attemptMiddleware` — lives on the processor registry.
+`createInProcessWorker` accepts a `client` instance and extracts infrastructure (`stateAdapter`, `notifyAdapter`, `observabilityAdapter`, `jobTypes`, `log`) from it internally. Worker-specific options (`processors`, `concurrency`, `pollIntervalMs`, `recoveryBackoffConfig`, `defaults`) remain separate parameters. The top-level `recoveryBackoffConfig` controls the worker's own main loop retry behavior (e.g., recovery from database connection errors). Per-attempt configuration — `backoffConfig`, `leaseConfig`, `attemptMiddleware` — lives on the processor registry; the worker-level `defaults.backoffConfig` / `defaults.leaseConfig` provide a fallback for processors that don't set their own (resolution order: processor → registry → worker `defaults` → library default).
 
 This is purely a construction convenience — no lifecycle coupling is introduced. The client and worker remain independent after construction.
 

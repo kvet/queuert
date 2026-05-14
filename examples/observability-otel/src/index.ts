@@ -139,7 +139,6 @@ const client = await createClient({
 // Create worker with processors
 const worker = await createInProcessWorker({
   client,
-  workerId: "worker-1",
   processors: createProcessors({
     client,
     jobTypes,
