@@ -1,5 +1,5 @@
 ---
-title: Runtime Validation
+title: Validation Adapters
 description: Schema-agnostic runtime validation with Zod, Valibot, TypeBox, or ArkType.
 sidebar:
   order: 3

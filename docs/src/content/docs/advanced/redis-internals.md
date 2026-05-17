@@ -106,7 +106,7 @@ Redis Pub/Sub requires **two separate connections**:
 1. **Command client** — for `PUBLISH`, `SET`, and `EVAL` (Lua scripts). Cannot be in subscribe mode.
 2. **Subscription client** — for `SUBSCRIBE`/`UNSUBSCRIBE`. Blocked in subscribe mode, cannot execute regular commands.
 
-The `RedisNotifyProvider` interface abstracts this — users manage the two connections in their provider implementation. The `createNodeRedisNotifyProvider` helper handles this for the `redis` npm package.
+The `RedisNotifyProvider` interface abstracts this — users manage the two connections in their provider implementation.
 
 ## Shared Listener Pattern
 

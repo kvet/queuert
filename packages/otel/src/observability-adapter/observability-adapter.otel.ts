@@ -127,98 +127,155 @@ export const createOtelObservabilityAdapter = async ({
 
   return {
     workerStarted: ({ workerId }) => {
-      workerStartedCounter?.add(1, { workerId });
+      workerStartedCounter?.add(1, { "queuert.worker.id": workerId });
     },
     workerError: ({ workerId }) => {
-      workerErrorCounter?.add(1, { workerId });
+      workerErrorCounter?.add(1, { "queuert.worker.id": workerId });
     },
     workerStopping: ({ workerId }) => {
-      workerStoppingCounter?.add(1, { workerId });
+      workerStoppingCounter?.add(1, { "queuert.worker.id": workerId });
     },
     workerStopped: ({ workerId }) => {
-      workerStoppedCounter?.add(1, { workerId });
+      workerStoppedCounter?.add(1, { "queuert.worker.id": workerId });
     },
 
     jobCreated: ({ typeName, chainTypeName }) => {
-      jobCreatedCounter?.add(1, { typeName, chainTypeName });
+      jobCreatedCounter?.add(1, {
+        "queuert.job.type": typeName,
+        "queuert.chain.type": chainTypeName,
+      });
     },
     jobAttemptStarted: ({ typeName, chainTypeName, workerId }) => {
-      jobAttemptStartedCounter?.add(1, { typeName, chainTypeName, workerId });
+      jobAttemptStartedCounter?.add(1, {
+        "queuert.job.type": typeName,
+        "queuert.chain.type": chainTypeName,
+        "queuert.worker.id": workerId,
+      });
     },
     jobAttemptTakenByAnotherWorker: ({ typeName, chainTypeName, workerId }) => {
-      jobAttemptTakenByAnotherWorkerCounter?.add(1, { typeName, chainTypeName, workerId });
+      jobAttemptTakenByAnotherWorkerCounter?.add(1, {
+        "queuert.job.type": typeName,
+        "queuert.chain.type": chainTypeName,
+        "queuert.worker.id": workerId,
+      });
     },
     jobAttemptAlreadyCompleted: ({ typeName, chainTypeName, workerId }) => {
-      jobAttemptAlreadyCompletedCounter?.add(1, { typeName, chainTypeName, workerId });
+      jobAttemptAlreadyCompletedCounter?.add(1, {
+        "queuert.job.type": typeName,
+        "queuert.chain.type": chainTypeName,
+        "queuert.worker.id": workerId,
+      });
     },
     jobAttemptLeaseExpired: ({ typeName, chainTypeName, workerId }) => {
-      jobAttemptLeaseExpiredCounter?.add(1, { typeName, chainTypeName, workerId });
+      jobAttemptLeaseExpiredCounter?.add(1, {
+        "queuert.job.type": typeName,
+        "queuert.chain.type": chainTypeName,
+        "queuert.worker.id": workerId,
+      });
     },
     jobAttemptLeaseRenewed: ({ typeName, chainTypeName, workerId }) => {
-      jobAttemptLeaseRenewedCounter?.add(1, { typeName, chainTypeName, workerId });
+      jobAttemptLeaseRenewedCounter?.add(1, {
+        "queuert.job.type": typeName,
+        "queuert.chain.type": chainTypeName,
+        "queuert.worker.id": workerId,
+      });
     },
     jobReaped: ({ typeName, chainTypeName, workerId }) => {
-      jobReapedCounter?.add(1, { typeName, chainTypeName, workerId });
+      jobReapedCounter?.add(1, {
+        "queuert.job.type": typeName,
+        "queuert.chain.type": chainTypeName,
+        "queuert.worker.id": workerId,
+      });
     },
     jobAttemptFailed: ({ typeName, chainTypeName, workerId }) => {
-      jobAttemptFailedCounter?.add(1, { typeName, chainTypeName, workerId });
+      jobAttemptFailedCounter?.add(1, {
+        "queuert.job.type": typeName,
+        "queuert.chain.type": chainTypeName,
+        "queuert.worker.id": workerId,
+      });
     },
     jobAttemptCompleted: ({ typeName, chainTypeName, workerId }) => {
-      jobAttemptCompletedCounter?.add(1, { typeName, chainTypeName, workerId });
+      jobAttemptCompletedCounter?.add(1, {
+        "queuert.job.type": typeName,
+        "queuert.chain.type": chainTypeName,
+        "queuert.worker.id": workerId,
+      });
     },
     jobCompleted: ({ typeName, chainTypeName, workerId, continuedWith }) => {
       jobCompletedCounter?.add(1, {
-        typeName,
-        chainTypeName,
-        workerId: workerId ?? "null",
-        continued: continuedWith ? "true" : "false",
+        "queuert.job.type": typeName,
+        "queuert.chain.type": chainTypeName,
+        ...(workerId !== null ? { "queuert.worker.id": workerId } : {}),
+        "queuert.job.continued": continuedWith !== undefined,
       });
     },
 
     chainCreated: ({ typeName }) => {
-      chainCreatedCounter?.add(1, { chainTypeName: typeName });
+      chainCreatedCounter?.add(1, { "queuert.chain.type": typeName });
     },
     chainCompleted: ({ typeName }) => {
-      chainCompletedCounter?.add(1, { chainTypeName: typeName });
+      chainCompletedCounter?.add(1, { "queuert.chain.type": typeName });
     },
     chainDeleted: ({ typeName }) => {
-      chainDeletedCounter?.add(1, { chainTypeName: typeName });
+      chainDeletedCounter?.add(1, { "queuert.chain.type": typeName });
     },
 
     jobTriggered: ({ typeName, chainTypeName }) => {
-      jobTriggeredCounter?.add(1, { typeName, chainTypeName });
+      jobTriggeredCounter?.add(1, {
+        "queuert.job.type": typeName,
+        "queuert.chain.type": chainTypeName,
+      });
     },
 
     jobBlocked: ({ typeName, chainTypeName }) => {
-      jobBlockedCounter?.add(1, { typeName, chainTypeName });
+      jobBlockedCounter?.add(1, {
+        "queuert.job.type": typeName,
+        "queuert.chain.type": chainTypeName,
+      });
     },
     jobUnblocked: ({ typeName, chainTypeName }) => {
-      jobUnblockedCounter?.add(1, { typeName, chainTypeName });
+      jobUnblockedCounter?.add(1, {
+        "queuert.job.type": typeName,
+        "queuert.chain.type": chainTypeName,
+      });
     },
 
     notifyAdapterError: ({ operation }) => {
-      notifyAdapterErrorCounter?.add(1, { operation });
+      notifyAdapterErrorCounter?.add(1, { "queuert.adapter.operation": operation });
     },
 
     stateAdapterError: ({ operation }) => {
-      stateAdapterErrorCounter?.add(1, { operation });
+      stateAdapterErrorCounter?.add(1, { "queuert.adapter.operation": operation });
     },
 
     chainDuration: ({ typeName, durationMs }) => {
-      chainDurationHistogram?.record(durationMs / 1000, { chainTypeName: typeName });
+      chainDurationHistogram?.record(durationMs / 1000, { "queuert.chain.type": typeName });
     },
     jobDuration: ({ typeName, chainTypeName, durationMs }) => {
-      jobDurationHistogram?.record(durationMs / 1000, { typeName, chainTypeName });
+      jobDurationHistogram?.record(durationMs / 1000, {
+        "queuert.job.type": typeName,
+        "queuert.chain.type": chainTypeName,
+      });
     },
     jobAttemptDuration: ({ typeName, chainTypeName, workerId, durationMs }) => {
-      jobAttemptDurationHistogram?.record(durationMs / 1000, { typeName, chainTypeName, workerId });
+      jobAttemptDurationHistogram?.record(durationMs / 1000, {
+        "queuert.job.type": typeName,
+        "queuert.chain.type": chainTypeName,
+        "queuert.worker.id": workerId,
+      });
     },
 
     jobTypeIdleChange: ({ delta, typeName, workerId }) => {
-      jobTypeIdleGauge?.add(delta, { typeName, workerId });
+      jobTypeIdleGauge?.add(delta, {
+        "queuert.job.type": typeName,
+        "queuert.worker.id": workerId,
+      });
     },
     jobTypeProcessingChange: ({ delta, typeName, workerId }) => {
-      jobTypeProcessingGauge?.add(delta, { typeName, workerId });
+      jobTypeProcessingGauge?.add(delta, {
+        "queuert.job.type": typeName,
+        "queuert.worker.id": workerId,
+      });
     },
 
     startJobSpan(data) {

@@ -170,7 +170,7 @@ Thrown when a transaction hook is accessed before being registered.
 class TransactionContextRequiredError extends Error {}
 ```
 
-Thrown when a mutating client method (e.g. `startChain`, `triggerJob`, `triggerJobs`, `deleteChain`, `deleteChains`) is called without a `tx` provided by `withTransaction`. Mutations must run inside a transaction so the transactional outbox pattern holds.
+Thrown when a mutating client method (e.g. `startChain`, `triggerJob`, `triggerJobs`, `deleteChain`, `deleteChains`) is called without a transaction context provided by `withTransaction`. Mutations must run inside a transaction so the transactional outbox pattern holds.
 
 ## See Also
 

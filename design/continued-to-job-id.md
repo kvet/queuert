@@ -243,7 +243,7 @@ SELECT ...  -- existing union of existing_continuations + existing_deduplicated 
 
 Postgres folds this into the same statement via mutating CTEs. SQLite runs the equivalent as a follow-up `UPDATE … WHERE continued_to_job_id IS NULL` against the inserted ids in the same savepoint.
 
-A zero-row update on this CAS is *not* an error here — it just means we hit the `existing_continuations` path on a re-run of the same continueWith, where the parent was already pointed at the existing successor. The INSERT path uses `ON CONFLICT (chain_id, chain_index) DO UPDATE SET id = ...job.id` (existing pattern) to return the existing row; the parent's `continued_to_job_id` is already correct from the first run.
+A zero-row update on this CAS is _not_ an error here — it just means we hit the `existing_continuations` path on a re-run of the same continueWith, where the parent was already pointed at the existing successor. The INSERT path uses `ON CONFLICT (chain_id, chain_index) DO UPDATE SET id = ...job.id` (existing pattern) to return the existing row; the parent's `continued_to_job_id` is already correct from the first run.
 
 ### What about `start-chains.ts`?
 
@@ -282,7 +282,7 @@ ALTER TABLE {{schema}}.{{table_prefix}}job
   CHECK (continued_to_job_id IS NULL OR status = 'completed');
 ```
 
-The backfill UPDATE rides the existing `(chain_id, chain_index)` UNIQUE — single index scan, fast. The CHECK is added *after* backfill so existing data passes.
+The backfill UPDATE rides the existing `(chain_id, chain_index)` UNIQUE — single index scan, fast. The CHECK is added _after_ backfill so existing data passes.
 
 ### SQLite
 
@@ -339,7 +339,7 @@ No migration. Maintain `continuedToJobId` on write — when `createJobs` runs th
 ## What this doesn't do
 
 - Doesn't add `continuedFromJobId`. No current code path needs it; if dashboard reverse-nav or symmetry pressure surfaces, derive at read time from `chain_index - 1`, no schema change required.
-- Doesn't expose chain *position* (`positionInChain: 3 of 5`). If a use case demands it, add it as a derived view-only field populated from `chain_index` server-side — labelled as a snapshot, not a stable model field.
+- Doesn't expose chain _position_ (`positionInChain: 3 of 5`). If a use case demands it, add it as a derived view-only field populated from `chain_index` server-side — labelled as a snapshot, not a stable model field.
 - Doesn't change `chain_id`. Chains are user-facing; `chain_id` stays.
 - Doesn't change `mapStatePairsToChains`. The chain's effective job is always the latest, which by definition has `continuedToJobId === null` — so output decode proceeds normally.
 

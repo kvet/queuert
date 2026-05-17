@@ -256,7 +256,7 @@ export const extendWithObservabilityOtel = <T extends {}>(
               if (m.dataPointType === DataPointType.SUM && gaugeNames.has(m.descriptor.name)) {
                 for (const p of m.dataPoints) {
                   const attrs = p.attributes as Record<string, string>;
-                  const key = `${m.descriptor.name}:${attrs.typeName ?? ""}`;
+                  const key = `${m.descriptor.name}:${attrs["queuert.job.type"] ?? ""}`;
                   actualCumulative.set(key, (actualCumulative.get(key) ?? 0) + p.value);
                 }
               }

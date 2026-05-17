@@ -56,6 +56,6 @@ Errors thrown by the underlying schema library (`ZodError`, `ValiError`, `TypeBo
 
 ## See also
 
-- [Runtime Validation Integration](/queuert/integrations/runtime-validation/) — the adapter pattern, the six-method contract, and ready-to-copy adapters for Zod, Valibot, TypeBox, and ArkType
+- [Validation Adapters](/queuert/integrations/validation-adapters/) — the adapter pattern, the six-method contract, and ready-to-copy adapters for Zod, Valibot, TypeBox, and ArkType
 - [Custom Adapters](/queuert/advanced/custom-adapters/) — building and conformance-testing your own validation adapter
 - [Error Handling](/queuert/guides/error-handling/) — how `JobTypeValidationError` interacts with retries and chain failure

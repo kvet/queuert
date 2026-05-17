@@ -1,24 +1,24 @@
 ---
 name: publish-review
-description: Run a comprehensive review of the Queuert library before publishing, launching 9 parallel agents to check documentation coherence, API design, implementation verification, feature completeness, API consistency, schema design, code style, benchmarks, and changeset coverage. Use when preparing to publish or validating publish readiness.
+description: Run a comprehensive review of the Queuert library before publishing, launching 10 parallel agents to check documentation coherence, API design, implementation verification, feature completeness, API consistency, schema design, code style, benchmarks, changeset coverage, and OTEL semantic conventions. Use when preparing to publish or validating publish readiness.
 ---
 
 # Publish Readiness Review
 
-Run a comprehensive review of the Queuert library before publishing. This skill launches 9 specialized review agents in parallel to check different aspects of publish readiness.
+Run a comprehensive review of the Queuert library before publishing. This skill launches 10 specialized review agents in parallel to check different aspects of publish readiness.
 
 ## Instructions
 
 When this skill is invoked, you MUST:
 
-1. Launch all 9 review agents IN PARALLEL using the Task tool with a single message containing 9 tool calls
+1. Launch all 10 review agents IN PARALLEL using the Task tool with a single message containing 10 tool calls
 2. Wait for all agents to complete
 3. Write a combined report to `docs/publish-readiness-report.md`
 4. Display a summary of findings in the conversation
 
 ## Agents to Launch
 
-Launch these 9 agents in parallel using the Task tool (all in one message with 9 Task tool calls):
+Launch these 10 agents in parallel using the Task tool (all in one message with 10 Task tool calls):
 
 ### 1. Documentation Coherence Agent
 
@@ -241,6 +241,30 @@ prompt: |
     paths and remediation.
 ```
 
+### 10. OTEL Semantic Conventions Agent
+
+```
+subagent_type: general-purpose
+description: Review OTEL conventions
+prompt: |
+  You are an OpenTelemetry semantic conventions reviewer for the Queuert library.
+
+  First, read the detailed instructions in .claude/agents/publish-review/otel-conventions.md
+
+  Then review the OTEL observability adapter against the official OTEL semantic
+  conventions (messaging spans/metrics/attributes, general attribute naming,
+  metric naming and units, error attributes). Cross-check what the adapter
+  emits against what is documented in docs/src/content/docs/advanced/otel-metrics.md
+  and packages/otel/README.md.
+
+  Use WebFetch to consult the spec pages listed in the instructions file when
+  you need to verify a specific convention — do not invent rules.
+
+  Categorize findings as CRITICAL, WARNING, or SUGGESTION.
+  Return a structured report with specific file paths, line numbers, and the
+  spec section that justifies each call.
+```
+
 ## Report Format
 
 After all agents complete, write the combined report to `docs/publish-readiness-report.md` with this structure:
@@ -291,6 +315,10 @@ Generated: [current date]
 ## 9. Changeset Coverage
 
 [Agent 9 findings]
+
+## 10. OTEL Semantic Conventions
+
+[Agent 10 findings]
 
 ## Action Items
 

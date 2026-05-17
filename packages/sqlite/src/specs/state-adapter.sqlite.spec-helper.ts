@@ -8,11 +8,11 @@ import { type TestAPI, expect } from "vitest";
 import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
 import {
   type BetterSqlite3Provider,
-  type SqliteContext,
+  type BetterSqlite3Context,
   createBetterSqlite3Provider,
 } from "../state-provider/state-provider.better-sqlite3.js";
 
-export type BetterSqlite3StateAdapter = StateAdapter<SqliteContext, UUID>;
+export type BetterSqlite3StateAdapter = StateAdapter<BetterSqlite3Context, UUID>;
 
 export const extendWithStateSqlite = <T>(
   api: TestAPI<T>,

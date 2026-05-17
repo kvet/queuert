@@ -17,13 +17,11 @@ import {
 } from "queuert/testing";
 import { describe, it } from "vitest";
 
-import { extendWithNotifyPostgres } from "./notify-adapter.pg.spec-helper.js";
-import { extendWithStatePostgres } from "./state-adapter.pg.spec-helper.js";
+import { extendWithNotifyPg } from "./notify-adapter.pg.spec-helper.js";
+import { extendWithStatePg } from "./state-adapter.pg.spec-helper.js";
 
 const postgresPostgresIt = extendWithResourceLeakDetection(
-  extendWithNotifyPostgres(
-    extendWithCommon(extendWithStatePostgres(extendWithPostgres(it, import.meta.url))),
-  ),
+  extendWithNotifyPg(extendWithCommon(extendWithStatePg(extendWithPostgres(it, import.meta.url)))),
   { additionalAllowedTypes: TESTCONTAINERS_RESOURCE_TYPES },
 );
 

@@ -12,7 +12,7 @@ import {
 
 export type PgPoolStateAdapter = StateAdapter<PgPoolContext, string>;
 
-export const extendWithStatePostgres = <
+export const extendWithStatePg = <
   T extends {
     postgresConnectionString: string;
   },
@@ -253,5 +253,5 @@ export const extendWithStatePostgres = <
       },
       { scope: "test" },
     ],
-  }) as ReturnType<typeof extendWithStatePostgres<T>>;
+  }) as ReturnType<typeof extendWithStatePg<T>>;
 };

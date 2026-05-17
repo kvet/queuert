@@ -6,7 +6,7 @@ import { type TestAPI, expect } from "vitest";
 import { createPgNotifyAdapter } from "../notify-adapter/notify-adapter.pg.js";
 import { createPgPoolNotifyProvider } from "../notify-provider/notify-provider.pg-pool.js";
 
-export const extendWithNotifyPostgres = <
+export const extendWithNotifyPg = <
   T extends {
     postgresConnectionString: string;
   },
@@ -107,5 +107,5 @@ export const extendWithNotifyPostgres = <
       },
       { scope: "test" },
     ],
-  }) as ReturnType<typeof extendWithNotifyPostgres<T>>;
+  }) as ReturnType<typeof extendWithNotifyPg<T>>;
 };

@@ -1,2 +1,2 @@
-export { extendWithNotifyPostgres } from "./specs/notify-adapter.pg.spec-helper.js";
-export { extendWithStatePostgres } from "./specs/state-adapter.pg.spec-helper.js";
+export { extendWithNotifyPg } from "./specs/notify-adapter.pg.spec-helper.js";
+export { extendWithStatePg } from "./specs/state-adapter.pg.spec-helper.js";

@@ -3,90 +3,87 @@ import { type ScheduleOptions } from "./entities/schedule.js";
 /** Thrown when a job's lease is held by another worker. */
 export class JobTakenByAnotherWorkerError extends Error {
   /** The job that was contested. */
-  readonly jobId: string | undefined;
+  readonly jobId: string;
   /** The worker that attempted to acquire the job. */
-  readonly workerId: string | undefined;
-  /** The worker that currently holds the lease. */
-  readonly leasedBy: string | null | undefined;
+  readonly workerId: string;
+  /** The worker that currently holds the lease, or `null` if unknown. */
+  readonly leasedBy: string | null;
 
   constructor(
     message: string,
-    options?: { jobId?: string; workerId?: string; leasedBy?: string | null; cause?: unknown },
+    options: { jobId: string; workerId: string; leasedBy?: string | null; cause?: unknown },
   ) {
-    super(message, options?.cause !== undefined ? { cause: options.cause } : undefined);
+    super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
     this.name = "JobTakenByAnotherWorkerError";
-    this.jobId = options?.jobId;
-    this.workerId = options?.workerId;
-    this.leasedBy = options?.leasedBy;
+    this.jobId = options.jobId;
+    this.workerId = options.workerId;
+    this.leasedBy = options.leasedBy ?? null;
   }
 }
 
 /** Thrown when a job does not exist. */
 export class JobNotFoundError extends Error {
   /** The ID that was looked up. */
-  readonly jobId: string | undefined;
+  readonly jobId: string;
 
-  constructor(message: string, options?: { jobId?: string; cause?: unknown }) {
-    super(message, options?.cause !== undefined ? { cause: options.cause } : undefined);
+  constructor(message: string, options: { jobId: string; cause?: unknown }) {
+    super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
     this.name = "JobNotFoundError";
-    this.jobId = options?.jobId;
+    this.jobId = options.jobId;
   }
 }
 
 /** Thrown when a chain does not exist. */
 export class ChainNotFoundError extends Error {
   /** The chain ID that was looked up. */
-  readonly chainId: string | undefined;
+  readonly chainId: string;
 
-  constructor(message: string, options?: { chainId?: string; cause?: unknown }) {
-    super(message, options?.cause !== undefined ? { cause: options.cause } : undefined);
+  constructor(message: string, options: { chainId: string; cause?: unknown }) {
+    super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
     this.name = "ChainNotFoundError";
-    this.chainId = options?.chainId;
+    this.chainId = options.chainId;
   }
 }
 
 /** Thrown when attempting to complete an already-completed job. */
 export class JobAlreadyCompletedError extends Error {
   /** The job that was already completed. */
-  readonly jobId: string | undefined;
+  readonly jobId: string;
 
-  constructor(message: string, options?: { jobId?: string; cause?: unknown }) {
-    super(message, options?.cause !== undefined ? { cause: options.cause } : undefined);
+  constructor(message: string, options: { jobId: string; cause?: unknown }) {
+    super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
     this.name = "JobAlreadyCompletedError";
-    this.jobId = options?.jobId;
+    this.jobId = options.jobId;
   }
 }
 
 /** Thrown when attempting to trigger a job that is not in a triggerable state (must be pending). */
 export class JobNotTriggerableError extends Error {
   /** The job that could not be triggered. */
-  readonly jobId: string | undefined;
+  readonly jobId: string;
   /** The job's current status (must be `pending` to trigger). */
-  readonly status: string | undefined;
+  readonly status: string;
 
-  constructor(message: string, options?: { jobId?: string; status?: string; cause?: unknown }) {
-    super(message, options?.cause !== undefined ? { cause: options.cause } : undefined);
+  constructor(message: string, options: { jobId: string; status: string; cause?: unknown }) {
+    super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
     this.name = "JobNotTriggerableError";
-    this.jobId = options?.jobId;
-    this.status = options?.status;
+    this.jobId = options.jobId;
+    this.status = options.status;
   }
 }
 
 /** Thrown when {@link Client.awaitChain | awaitChain} exceeds its timeout or is aborted. */
 export class WaitChainTimeoutError extends Error {
   /** The chain that timed out. */
-  readonly chainId: string | undefined;
+  readonly chainId: string;
   /** The timeout duration in milliseconds. */
-  readonly timeoutMs: number | undefined;
+  readonly timeoutMs: number;
 
-  constructor(
-    message: string,
-    options?: { chainId?: string; timeoutMs?: number; cause?: unknown },
-  ) {
-    super(message, options?.cause !== undefined ? { cause: options.cause } : undefined);
+  constructor(message: string, options: { chainId: string; timeoutMs: number; cause?: unknown }) {
+    super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
     this.name = "WaitChainTimeoutError";
-    this.chainId = options?.chainId;
-    this.timeoutMs = options?.timeoutMs;
+    this.chainId = options.chainId;
+    this.timeoutMs = options.timeoutMs;
   }
 }
 
@@ -143,7 +140,7 @@ export class HookNotRegisteredError extends Error {
 
 /** Thrown (internally or via {@link rescheduleJob}) to reschedule a job for later processing. */
 export class RescheduleJobError extends Error {
-  public readonly schedule: ScheduleOptions;
+  readonly schedule: ScheduleOptions;
   constructor(
     message: string,
     options: {

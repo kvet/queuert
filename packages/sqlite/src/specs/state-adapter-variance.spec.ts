@@ -9,7 +9,7 @@ import {
   createSqliteStateAdapter,
 } from "../state-adapter/state-adapter.sqlite.js";
 import {
-  type SqliteContext,
+  type BetterSqlite3Context,
   createBetterSqlite3Provider,
 } from "../state-provider/state-provider.better-sqlite3.js";
 
@@ -253,7 +253,7 @@ describe("SQLite State Adapter Variance - All Custom Options", () => {
 describe("Migrations", () => {
   const migrationIt = it.extend<{
     db: Database.Database;
-    stateAdapter: SqliteStateAdapter<SqliteContext>;
+    stateAdapter: SqliteStateAdapter<BetterSqlite3Context>;
   }>({
     // oxlint-disable-next-line no-empty-pattern
     db: async ({}, use) => {

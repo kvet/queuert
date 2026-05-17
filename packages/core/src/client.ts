@@ -186,7 +186,7 @@ export type Client<
 > = {
   readonly [helpersSymbol]: Helpers;
 
-  /** Create a new chain. Returns the created chain with a `deduplicated` flag. */
+  /** Create a new chain. Returns the created chain with a `deduplicated` flag. Throws {@link TransactionContextRequiredError} if called without a transaction context. */
   startChain: <TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions>>(
     options: StartChainEntry<TJobId, TJobTypeDefinitions, TChainTypeName> & {
       transactionHooks: TransactionHooks;
@@ -197,7 +197,7 @@ export type Client<
     }
   >;
 
-  /** Create multiple chains in a single batch operation. Returns created chains with `deduplicated` flags, in the same order as input. */
+  /** Create multiple chains in a single batch operation. Returns created chains with `deduplicated` flags, in the same order as input. Throws {@link TransactionContextRequiredError} if called without a transaction context. */
   startChains: <const TChains extends readonly AnyStartChainEntry<TJobId, TJobTypeDefinitions>[]>(
     options: {
       items: TChains;
@@ -205,7 +205,7 @@ export type Client<
     } & GetStateAdapterTxContext<TStateAdapter>,
   ) => Promise<StartChainsResult<TJobId, TJobTypeDefinitions, TChains>>;
 
-  /** Delete a single chain by ID. Returns the deleted chain, or `undefined` if no chain with that ID exists. Throws {@link BlockerReferenceError} if external jobs depend on it. When `cascade` is true, includes transitive dependencies. */
+  /** Delete a single chain by ID. Returns the deleted chain, or `undefined` if no chain with that ID exists. Throws {@link BlockerReferenceError} if external jobs depend on it, {@link TransactionContextRequiredError} if called without a transaction context. When `cascade` is true, includes transitive dependencies. */
   deleteChain: <
     TEntryName extends JobTypeEntryNames<TJobTypeDefinitions> =
       JobTypeEntryNames<TJobTypeDefinitions>,
@@ -217,7 +217,7 @@ export type Client<
     } & GetStateAdapterTxContext<TStateAdapter>,
   ) => Promise<ResolvedChain<TJobId, TJobTypeDefinitions, TEntryName> | undefined>;
 
-  /** Delete chains by ID. Missing IDs are silently skipped. Throws {@link BlockerReferenceError} if external jobs depend on them. When `cascade` is true, includes transitive dependencies. */
+  /** Delete chains by ID. Missing IDs are silently skipped. Throws {@link BlockerReferenceError} if external jobs depend on them, {@link TransactionContextRequiredError} if called without a transaction context. When `cascade` is true, includes transitive dependencies. */
   deleteChains: <
     TEntryName extends JobTypeEntryNames<TJobTypeDefinitions> =
       JobTypeEntryNames<TJobTypeDefinitions>,
@@ -229,7 +229,7 @@ export type Client<
     } & GetStateAdapterTxContext<TStateAdapter>,
   ) => Promise<ResolvedChain<TJobId, TJobTypeDefinitions, TEntryName>[]>;
 
-  /** Trigger a pending job immediately by setting its scheduledAt to now. Throws {@link JobNotFoundError} if the job does not exist, {@link JobNotTriggerableError} if the job is not pending. */
+  /** Trigger a pending job immediately by setting its scheduledAt to now. Throws {@link JobNotFoundError} if the job does not exist, {@link JobNotTriggerableError} if the job is not pending, {@link TransactionContextRequiredError} if called without a transaction context. */
   triggerJob: <
     TJobTypeName extends JobTypeNames<TJobTypeDefinitions> = JobTypeNames<TJobTypeDefinitions>,
   >(
@@ -239,7 +239,7 @@ export type Client<
     } & GetStateAdapterTxContext<TStateAdapter>,
   ) => Promise<ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>>;
 
-  /** Trigger multiple pending jobs immediately. Validation is atomic: throws {@link JobNotFoundError} or {@link JobNotTriggerableError} for the first invalid job before any job is triggered. Returns jobs in input order. Empty `ids` returns `[]`. */
+  /** Trigger multiple pending jobs immediately. Validation is atomic: throws {@link JobNotFoundError} or {@link JobNotTriggerableError} for the first invalid job before any job is triggered, or {@link TransactionContextRequiredError} if called without a transaction context. Returns jobs in input order. Empty `ids` returns `[]`. */
   triggerJobs: <
     TJobTypeName extends JobTypeNames<TJobTypeDefinitions> = JobTypeNames<TJobTypeDefinitions>,
   >(
@@ -249,7 +249,7 @@ export type Client<
     } & GetStateAdapterTxContext<TStateAdapter>,
   ) => Promise<ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>[]>;
 
-  /** Complete a chain from outside a worker. Validates `typeName`, then passes the current job and a `complete` function to the caller. */
+  /** Complete a chain from outside a worker. Validates `typeName`, then passes the current job and a `complete` function to the caller. Throws {@link ChainNotFoundError} if the chain does not exist, {@link JobTypeMismatchError} if the chain's type does not match `typeName`, {@link TransactionContextRequiredError} if called without a transaction context, and {@link JobAlreadyCompletedError} from the inner `complete` callback if the job is already completed. */
   completeChain: <
     TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions>,
     TComplete extends (...args: any[]) => Promise<any> = ChainCompleteOptions<
@@ -273,7 +273,7 @@ export type Client<
     } & GetStateAdapterTxContext<TStateAdapter>,
   ) => Promise<TResult>;
 
-  /** Wait for a chain to complete. Combines polling with notify adapter events. Throws {@link WaitChainTimeoutError} on timeout or abort. */
+  /** Wait for a chain to complete. Combines polling with notify adapter events. Throws {@link WaitChainTimeoutError} on timeout or abort, {@link ChainNotFoundError} if the chain disappears or never existed, {@link JobTypeMismatchError} if `typeName` is provided and does not match. */
   awaitChain: <
     TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
       JobTypeEntryNames<TJobTypeDefinitions>,
@@ -354,7 +354,7 @@ export type Client<
     } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
   ) => Promise<Page<ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>>>;
 
-  /** List jobs within a specific chain, ordered by `chainIndex`. Defaults to ascending order. */
+  /** List jobs within a specific chain, ordered by `chainIndex`. Defaults to ascending order. Pass `typeName` for type narrowing — throws {@link JobTypeMismatchError} on mismatch. */
   listChainJobs: <
     TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
       JobTypeEntryNames<TJobTypeDefinitions>,
@@ -368,7 +368,7 @@ export type Client<
     } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
   ) => Promise<Page<ResolvedChainJobs<TJobId, TJobTypeDefinitions, TChainTypeName>>>;
 
-  /** Get the blocker chains for a specific job. Not paginated — blockers are bounded by design. Pass `typeName` for type narrowing. */
+  /** Get the blocker chains for a specific job. Not paginated — blockers are bounded by design. Pass `typeName` for type narrowing — throws {@link JobTypeMismatchError} on mismatch. */
   getJobBlockers: <
     TJobTypeName extends JobTypeNames<TJobTypeDefinitions> = JobTypeNames<TJobTypeDefinitions>,
     TBlockers extends readonly unknown[] = BlockerChains<TJobId, TJobTypeDefinitions, TJobTypeName>,
@@ -379,7 +379,7 @@ export type Client<
     } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
   ) => Promise<TBlockers>;
 
-  /** List jobs from other chains that are blocked by a given chain. Useful for understanding downstream impact before deletion. */
+  /** List jobs from other chains that are blocked by a given chain. Useful for understanding downstream impact before deletion. Pass `typeName` for type narrowing — throws {@link JobTypeMismatchError} on mismatch. */
   listBlockedJobs: <
     TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
       JobTypeEntryNames<TJobTypeDefinitions>,
@@ -447,7 +447,6 @@ export const createClient = async <
   const client: Client<TJobTypeDefinitions, TStateAdapter> = {
     [helpersSymbol]: helpers,
 
-    /** Create a new chain. Returns the created chain with a `deduplicated` flag. */
     startChain: async <TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions>>(
       options: {
         typeName: TChainTypeName;
@@ -479,7 +478,6 @@ export const createClient = async <
       };
     },
 
-    /** Create multiple chains in a single batch operation. Returns created chains with `deduplicated` flags, in the same order as input. */
     startChains: async <
       const TChains extends readonly AnyStartChainEntry<TJobId, TJobTypeDefinitions>[],
     >(
@@ -497,7 +495,6 @@ export const createClient = async <
       })) as StartChainsResult<TJobId, TJobTypeDefinitions, TChains>;
     },
 
-    /** Delete a single chain by ID. Returns the deleted chain, or `undefined` if no chain with that ID exists. Throws {@link BlockerReferenceError} if external jobs depend on it. When `cascade` is true, includes transitive dependencies. */
     deleteChain: async <
       TEntryName extends JobTypeEntryNames<TJobTypeDefinitions> =
         JobTypeEntryNames<TJobTypeDefinitions>,
@@ -519,7 +516,6 @@ export const createClient = async <
       return deleted.find((chain) => chain.id === id);
     },
 
-    /** Delete chains by ID. Missing IDs are silently skipped. Throws {@link BlockerReferenceError} if external jobs depend on them. When `cascade` is true, includes transitive dependencies. */
     deleteChains: async <
       TEntryName extends JobTypeEntryNames<TJobTypeDefinitions> =
         JobTypeEntryNames<TJobTypeDefinitions>,
@@ -560,7 +556,6 @@ export const createClient = async <
       return deletedChains;
     },
 
-    /** Trigger a pending job immediately by setting its scheduledAt to now. Throws {@link JobNotFoundError} if the job does not exist, {@link JobNotTriggerableError} if the job is not pending. */
     triggerJob: async <
       TJobTypeName extends JobTypeNames<TJobTypeDefinitions> = JobTypeNames<TJobTypeDefinitions>,
     >(
@@ -578,7 +573,6 @@ export const createClient = async <
       return job;
     },
 
-    /** Trigger multiple pending jobs immediately. Validation is atomic: throws {@link JobNotFoundError} or {@link JobNotTriggerableError} for the first invalid job before any job is triggered. Returns jobs in input order. Empty `ids` returns `[]`. */
     triggerJobs: async <
       TJobTypeName extends JobTypeNames<TJobTypeDefinitions> = JobTypeNames<TJobTypeDefinitions>,
     >(
@@ -623,7 +617,6 @@ export const createClient = async <
       );
     },
 
-    /** Complete a chain from outside a worker. Validates `typeName`, then passes the current job and a `complete` function to the caller. */
     completeChain: async <
       TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions>,
       TComplete extends (...args: any[]) => Promise<any> = ChainCompleteOptions<
@@ -752,7 +745,6 @@ export const createClient = async <
       return mapStatePairToChain(updatedChain) as TResult;
     },
 
-    /** Wait for a chain to complete. Combines polling with notify adapter events. Throws {@link WaitChainTimeoutError} on timeout or abort. */
     awaitChain: async <
       TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
         JobTypeEntryNames<TJobTypeDefinitions>,
@@ -854,7 +846,6 @@ export const createClient = async <
       }
     },
 
-    /** Get a single chain by ID. Pass `typeName` for type narrowing — throws {@link JobTypeMismatchError} on mismatch. */
     getChain: async <
       TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
         JobTypeEntryNames<TJobTypeDefinitions>,
@@ -887,7 +878,6 @@ export const createClient = async <
       >;
     },
 
-    /** Get a single job by ID. Pass `typeName` for type narrowing — throws {@link JobTypeMismatchError} on mismatch. */
     getJob: async <
       TJobTypeName extends JobTypeNames<TJobTypeDefinitions> = JobTypeNames<TJobTypeDefinitions>,
     >(
@@ -911,13 +901,7 @@ export const createClient = async <
 
       return mapStateJobToJob(job) as ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>;
     },
-    /**
-     * List chains with filtering and cursor-based pagination. Defaults to newest first.
-     *
-     * @remarks
-     * Filtering by `status` alone is not optimized — it applies to the last job in the chain
-     * and cannot use an index. Always combine with `typeName` or a date range (`from`/`to`).
-     */
+
     listChains: async <TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions>>(
       options: {
         filter?: {
@@ -959,7 +943,6 @@ export const createClient = async <
       };
     },
 
-    /** List jobs with filtering and cursor-based pagination. Blockers are not populated — use `getJobBlockers` for a specific job. Defaults to newest first. */
     listJobs: async <TJobTypeName extends JobTypeNames<TJobTypeDefinitions>>(
       options: {
         filter?: {
@@ -1000,7 +983,6 @@ export const createClient = async <
       };
     },
 
-    /** List jobs within a specific chain, ordered by `chainIndex`. Defaults to ascending order. */
     listChainJobs: async <
       TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
         JobTypeEntryNames<TJobTypeDefinitions>,
@@ -1041,7 +1023,6 @@ export const createClient = async <
       };
     },
 
-    /** Get the blocker chains for a specific job. Not paginated — blockers are bounded by design. Pass `typeName` for type narrowing. */
     getJobBlockers: async <
       TJobTypeName extends JobTypeNames<TJobTypeDefinitions> = JobTypeNames<TJobTypeDefinitions>,
       TBlockers extends readonly unknown[] = BlockerChains<
@@ -1072,7 +1053,6 @@ export const createClient = async <
       return blockers.map((pair) => mapStatePairToChain(pair)) as unknown as TBlockers;
     },
 
-    /** List jobs from other chains that are blocked by a given chain. Useful for understanding downstream impact before deletion. */
     listBlockedJobs: async <
       TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
         JobTypeEntryNames<TJobTypeDefinitions>,
