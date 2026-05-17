@@ -8,6 +8,7 @@ import { createStateJobs } from "./create-state-jobs.js";
 
 type ChainInput = {
   typeName: string;
+  id?: string;
   input: unknown;
   blockers?: Chain<any, any, any, any>[];
   deduplication?: DeduplicationOptions<string>;
@@ -35,6 +36,7 @@ export const startChains = async (
   const results = await createStateJobs(helpers, {
     jobs: chains.map((chain) => ({
       typeName: chain.typeName,
+      id: chain.id,
       chainTypeName: chain.typeName,
       chainIndex: 0,
       input: chain.input,

@@ -37,6 +37,7 @@ const chain = await client.startChain({
   input: { to: "alice@..." },
   transactionHooks,
   tx,
+  id?: JobId,
   deduplication?: DeduplicationOptions,
   schedule?: ScheduleOptions,
   blockers?: Chain[],
@@ -51,7 +52,7 @@ Returns `Chain & { deduplicated: boolean }`.
 const chains = await client.startChains({
   items: [
     { typeName: "send-email", input: { to: "alice@..." } },
-    { typeName: "send-email", input: { to: "bob@..." } },
+    { typeName: "send-email", id: "explicit-id", input: { to: "bob@..." } },
   ],
   transactionHooks,
   tx,

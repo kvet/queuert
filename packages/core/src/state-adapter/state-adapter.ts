@@ -94,11 +94,21 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     lock?: "exclusive";
   }) => Promise<StateJob | undefined>;
 
-  /** Creates jobs. Returns results in the same order as input. */
+  /**
+   * Creates jobs. Returns results in the same order as input.
+   *
+   * Each entry may provide an `id` to assign explicitly; if omitted, the adapter
+   * generates one via its configured `generateId`. Both caller-supplied and
+   * generated IDs are validated via {@link validateId}, throwing `InvalidJobIdError`
+   * before any database write. When `id` is supplied for an entry that turns out to
+   * be deduplicated, the returned job carries the existing row's ID (not the
+   * caller's) and `deduplicated: true`.
+   */
   createJobs: (params: {
     txCtx?: TTxContext;
     jobs: {
       typeName: string;
+      id?: TJobId;
       chainId: TJobId | undefined;
       chainTypeName: string;
       chainIndex: number;

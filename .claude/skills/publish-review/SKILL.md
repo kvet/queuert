@@ -352,7 +352,7 @@ The following items have been reviewed and accepted as intentional design decisi
 - **NATS package exports no types from index.ts**: NATS is experimental. Types will be exported when the API stabilizes. Accepted.
 - **NATS notify adapter uses `nc`/`kv` instead of `provider`**: NATS is experimental. Will standardize to provider pattern when API stabilizes. Accepted.
 - **NATS notify adapter uses `subjectPrefix` while PG and Redis use `channelPrefix`**: Each adapter uses its transport's idiomatic terminology. Accepted.
-- **State adapter factory options differ between PG and SQLite for ID generation**: Intentional — each adapter uses the most natural approach for its database (`idDefault` SQL expression for PG, `idGenerator` JS function for SQLite). Accepted.
+- **State adapter factory options for ID generation are aligned**: Both adapters use `generateId` (JS fn) and `validateId` (optional predicate). PG drops `idDefault` (SQL DEFAULT) in favor of JS-side generation for symmetry and to support caller-supplied IDs uniformly. Accepted.
 - **`TransactionContextRequiredError` does not accept `cause`**: This error signals API misuse (calling mutating methods without `withTransaction`), never caused by another error. Accepted.
 - **OTEL `workerError` does not record error details**: Counter attributes should remain low-cardinality per OTEL best practices. Error details are captured via the Log adapter. Accepted.
 - **`getNextJobAvailableInMsSql` uses `FOR UPDATE SKIP LOCKED`**: Tracked in TODO.md for future cleanup. Accepted for now.

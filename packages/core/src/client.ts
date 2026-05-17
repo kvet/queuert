@@ -149,6 +149,7 @@ type StartChainEntry<
   TTypeName extends JobTypeEntryNames<TJobTypeDefinitions>,
 > = {
   typeName: TTypeName;
+  id?: TJobId;
   input: JobTypeProperty<TJobTypeDefinitions, TTypeName, "input">;
   deduplication?: DeduplicationOptions<TJobId>;
   schedule?: ScheduleOptions;
@@ -186,7 +187,7 @@ export type Client<
 > = {
   readonly [helpersSymbol]: Helpers;
 
-  /** Create a new chain. Returns the created chain with a `deduplicated` flag. Throws {@link TransactionContextRequiredError} if called without a transaction context. */
+  /** Create a new chain. Returns the created chain with a `deduplicated` flag. Pass `id` to assign a caller-supplied ID for the root job; if the chain is deduplicated, the returned chain carries the existing row's ID, not the caller's. Throws {@link InvalidJobIdError} if `id` fails the state adapter's `validateId` check, {@link TransactionContextRequiredError} if called without a transaction context. */
   startChain: <TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions>>(
     options: StartChainEntry<TJobId, TJobTypeDefinitions, TChainTypeName> & {
       transactionHooks: TransactionHooks;
@@ -197,7 +198,7 @@ export type Client<
     }
   >;
 
-  /** Create multiple chains in a single batch operation. Returns created chains with `deduplicated` flags, in the same order as input. Throws {@link TransactionContextRequiredError} if called without a transaction context. */
+  /** Create multiple chains in a single batch operation. Returns created chains with `deduplicated` flags, in the same order as input. Each item may carry an optional `id`; dedup wins over a caller-supplied id when applicable. Throws {@link InvalidJobIdError} if any `id` fails the state adapter's `validateId` check, {@link TransactionContextRequiredError} if called without a transaction context. */
   startChains: <const TChains extends readonly AnyStartChainEntry<TJobId, TJobTypeDefinitions>[]>(
     options: {
       items: TChains;
@@ -450,6 +451,7 @@ export const createClient = async <
     startChain: async <TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions>>(
       options: {
         typeName: TChainTypeName;
+        id?: TJobId;
         input: JobTypeProperty<TJobTypeDefinitions, TChainTypeName, "input">;
         transactionHooks: TransactionHooks;
         deduplication?: DeduplicationOptions<TJobId>;
@@ -465,11 +467,11 @@ export const createClient = async <
         deduplicated: boolean;
       }
     > => {
-      const { input, typeName, deduplication, schedule, blockers, transactionHooks, ...rest } =
+      const { input, id, typeName, deduplication, schedule, blockers, transactionHooks, ...rest } =
         options;
       const txCtx = requireTxCtx(rest);
       const [result] = await startChains(helpers, {
-        chains: [{ typeName, input, deduplication, schedule, blockers }],
+        chains: [{ typeName, id, input, deduplication, schedule, blockers }],
         txCtx,
         transactionHooks,
       });
@@ -669,6 +671,7 @@ export const createClient = async <
           options: {
             continueWith: (options: {
               typeName: string;
+              id?: TJobId;
               input: unknown;
               schedule?: ScheduleOptions;
               blockers?: Chain<any, any, any, any>[];
@@ -688,13 +691,14 @@ export const createClient = async <
 
         const output = await jobCompleteCallback({
           transactionHooks,
-          continueWith: async ({ typeName, input, schedule, blockers }) => {
+          continueWith: async ({ typeName, id, input, schedule, blockers }) => {
             if (continuedJob) {
               throw new Error("continueWith can only be called once");
             }
 
             continuedJob = await continueWith(helpers, {
               typeName,
+              id,
               input,
               txCtx,
               transactionHooks,

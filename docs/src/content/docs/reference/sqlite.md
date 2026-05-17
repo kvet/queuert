@@ -16,7 +16,8 @@ const stateAdapter = await createSqliteStateAdapter({
   stateProvider: SqliteStateProvider,  // You implement this
   tablePrefix?: string,                // Table name prefix (default: "queuert_")
   idType?: string,                     // SQL type for job IDs (default: "TEXT")
-  idGenerator?: () => string,          // ID generator (default: crypto.randomUUID())
+  generateId?: () => string,          // ID generator (default: crypto.randomUUID())
+  validateId?: (id: string) => boolean,  // Optional predicate; runs on generated and caller-supplied IDs
   checkForeignKeys?: boolean,          // Enable PRAGMA foreign_keys (default: true)
 });
 ```

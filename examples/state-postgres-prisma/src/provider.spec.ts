@@ -37,8 +37,6 @@ test("state-postgres-prisma provider passes state adapter conformance", async ()
     const adapter = await createPgStateAdapter({
       stateProvider,
       idType: "text",
-      idDefault: "gen_random_uuid()::text",
-      $idType: "" as string,
     });
     await adapter.migrateToLatest();
 

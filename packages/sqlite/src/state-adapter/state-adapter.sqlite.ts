@@ -15,6 +15,7 @@ import {
 import { type BaseTxContext, type StateAdapter } from "queuert";
 import {
   type StateJob,
+  createIdValidator,
   decodeChainIndexCursor,
   decodeCreatedAtCursor,
   encodeCursor,
@@ -144,7 +145,8 @@ export const createSqliteStateAdapter = async <
   stateProvider,
   tablePrefix = "queuert_",
   idType = "TEXT",
-  idGenerator = () => crypto.randomUUID() as TIdType,
+  generateId: generateIdOption = () => crypto.randomUUID() as TIdType,
+  validateId: validateIdOption,
   checkForeignKeys = true,
   checkAutoVacuum = true,
 }: {
@@ -155,7 +157,9 @@ export const createSqliteStateAdapter = async <
   /** SQL type for the primary key column. @defaultValue `"TEXT"` */
   idType?: string;
   /** Function to generate new job IDs. @defaultValue `() => crypto.randomUUID()` */
-  idGenerator?: () => TIdType;
+  generateId?: () => TIdType;
+  /** Predicate returning `true` if the ID is acceptable. Runs on both generated and caller-supplied IDs; failures throw `InvalidJobIdError`. */
+  validateId?: (id: TIdType) => boolean;
   /** Whether `migrateToLatest()` verifies that `PRAGMA foreign_keys = ON` is set. Disable only if foreign keys are managed externally. @defaultValue `true` */
   checkForeignKeys?: boolean;
   /** Whether `migrateToLatest()` verifies that `PRAGMA auto_vacuum = INCREMENTAL` is set. Required for `vacuum()` to reclaim disk space. @defaultValue `true` */
@@ -169,6 +173,11 @@ export const createSqliteStateAdapter = async <
 > => {
   validateSqlIdentifier(tablePrefix, "tablePrefix");
   validateSqlIdentifier(idType, "idType");
+
+  const { validateId, generateId } = createIdValidator<TIdType>({
+    generateIdOption,
+    validateIdOption,
+  });
 
   const applyTemplate = createTemplateApplier(
     { table_prefix: tablePrefix, id_type: idType },
@@ -313,6 +322,9 @@ export const createSqliteStateAdapter = async <
     },
 
     createJobs: async ({ txCtx, jobs }) => {
+      for (const job of jobs) {
+        if (job.id !== undefined) validateId(job.id, "caller");
+      }
       const results: { job: StateJob; deduplicated: boolean }[] = Array.from({
         length: jobs.length,
       });
@@ -323,6 +335,7 @@ export const createSqliteStateAdapter = async <
       for (let i = 0; i < jobs.length; i++) {
         const {
           typeName,
+          id: providedId,
           chainTypeName,
           chainIndex,
           input,
@@ -383,7 +396,7 @@ export const createSqliteStateAdapter = async <
           intraBatchDedup.set(batchKey, i);
         }
 
-        const newId = idGenerator();
+        const newId = providedId ?? generateId();
         toInsert.push({
           index: i,
           id: newId,

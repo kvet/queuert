@@ -66,6 +66,7 @@ export type AttemptCompleteOptions<
     options: TContinueJobTypeNames extends infer TContinueJobTypeName extends string
       ? {
           typeName: TContinueJobTypeName;
+          id?: GetStateAdapterJobId<TStateAdapter>;
           input: JobTypeProperty<TJobTypeDefinitions, TContinueJobTypeName, "input">;
           schedule?: ScheduleOptions;
         } & (JobTypeHasBlockers<TJobTypeDefinitions, TContinueJobTypeName> extends true
@@ -449,6 +450,7 @@ export const runJobProcess = async ({
           continueWith: (
             options: {
               typeName: string;
+              id?: string;
               input: unknown;
               schedule?: ScheduleOptions;
               blockers?: Chain<any, any, any, any>[];
@@ -489,12 +491,13 @@ export const runJobProcess = async ({
           async (completeCtx) =>
             completeCallback({
               ...completeCtx,
-              continueWith: async ({ typeName, input, schedule, blockers }) => {
+              continueWith: async ({ typeName, id, input, schedule, blockers }) => {
                 if (continuedJob) {
                   throw new Error("continueWith can only be called once");
                 }
                 continuedJob = await continueWith(helpers, {
                   typeName,
+                  id,
                   input,
                   txCtx,
                   transactionHooks,

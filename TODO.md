@@ -4,8 +4,8 @@
 - [?,REF] Add a method to attempt handler to create a transaction mid run that run guarded check
 - [?,REF] Change complete job chain to something more empirical?
 - [?,REF] Reset jobs in chains + dashboard
-- [?,REF] Allow to pass id to createJob, continueWith and other places
 - [?,REF] Allow worker stopping signal to be risen in attempt handler
+- [?,REF] Clean last attempt error in case it didn't produce an error on the last attempt (I see some complete jobs with last attempt error set, which is confusing)
 
 # Short term
 
@@ -28,6 +28,7 @@
 
 # Medium term
 
+- [TASK] Surface caller-supplied job ID collisions as a typed error (e.g. `DuplicateJobIdError`) at the state-adapter boundary. Today, passing an `id` to `startChain` / `startChains` / `continueWith` that already exists (and doesn't hit a dedup path) fails with the raw underlying DB error (PG unique-violation, SQLite `SQLITE_CONSTRAINT_PRIMARYKEY`). Catch in the PG and SQLite adapters and rethrow as a typed error to match the rest of the package's error vocabulary (see `InvalidJobIdError`). Also consider validating intra-batch duplicate IDs upfront so the in-process adapter doesn't silently overwrite while the SQL adapters reject.
 - [?,REF] For update locking in list methods (e.g. `listChainsForCleanup`), add option to skip locking when the method is used in a context where concurrent modifications are not a concern (e.g. cleanup job listing its own completed chains for deletion)
 - [REVIEW] Review dynamic-blockers design — typed prep phase that lets a job decide at runtime what to wait on, with blockers' types still driven by the static `blockers: [...] as const` menu (creation-time vs prep-time invisible to the main handler). See `design/dynamic-blockers.md`
 - [REF] Handle routing with seroval on dashboard instead of path-based routing (e.g. `/chains/${chainId}` → `/chain?chainId=${chainId}`) — simplifies dashboard API and allows more flexible UI patterns (modals, nested views)

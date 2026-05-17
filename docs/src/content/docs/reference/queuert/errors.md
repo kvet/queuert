@@ -172,6 +172,17 @@ class TransactionContextRequiredError extends Error {}
 
 Thrown when a mutating client method (e.g. `startChain`, `triggerJob`, `triggerJobs`, `deleteChain`, `deleteChains`) is called without a transaction context provided by `withTransaction`. Mutations must run inside a transaction so the transactional outbox pattern holds.
 
+## InvalidJobIdError
+
+```typescript
+class InvalidJobIdError extends Error {
+  readonly id: string;
+  readonly source: "generator" | "caller";
+}
+```
+
+Thrown when a job ID fails the state adapter's `validateId` predicate. `source` is `"generator"` when the adapter's `generateId` produced the invalid value and `"caller"` when the caller supplied it (via `startChain({ id })`, `continueWith({ id })`, etc.).
+
 ## See Also
 
 - [Client](/queuert/reference/queuert/client/) — Client API reference

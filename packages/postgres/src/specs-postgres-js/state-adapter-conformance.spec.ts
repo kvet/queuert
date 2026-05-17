@@ -1,4 +1,4 @@
-import { type UUID } from "node:crypto";
+import { type UUID, randomUUID } from "node:crypto";
 
 import { TESTCONTAINERS_RESOURCE_TYPES, extendWithPostgres } from "@queuert/testcontainers";
 import postgres from "postgres";
@@ -81,8 +81,7 @@ it("infers custom ID types through the full stack", async ({ postgresConnectionS
     const stateAdapter = await createPgStateAdapter({
       stateProvider,
       idType: "text",
-      idDefault: "'job.' || gen_random_uuid()::text",
-      $idType: undefined as unknown as `job.${UUID}`,
+      generateId: (): `job.${UUID}` => `job.${randomUUID()}`,
     });
 
     await stateAdapter.migrateToLatest();

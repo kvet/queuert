@@ -131,7 +131,6 @@ type AdapterConfig = {
   schema: string;
   tablePrefix: string;
   idType: string;
-  idDefault: string;
   idDataType: DataType<RuntimeType, string>;
 };
 
@@ -141,7 +140,6 @@ const configs: AdapterConfig[] = [
     schema: "public",
     tablePrefix: "qrt_uuid_",
     idType: "uuid",
-    idDefault: "gen_random_uuid()",
     idDataType: t.uuid(),
   },
   {
@@ -149,7 +147,6 @@ const configs: AdapterConfig[] = [
     schema: "public",
     tablePrefix: "qrt_text_",
     idType: "text",
-    idDefault: "'job.' || gen_random_uuid()::text",
     idDataType: t.string(),
   },
 ];
@@ -169,7 +166,6 @@ const contractIt = it.extend<{
             schema: cfg.schema,
             tablePrefix: cfg.tablePrefix,
             idType: cfg.idType,
-            idDefault: cfg.idDefault,
           });
           await adapter.migrateToLatest();
         }
@@ -216,7 +212,6 @@ describe("PostgreSQL SQL contract", () => {
         schema: cfg.schema,
         table_prefix: cfg.tablePrefix,
         id_type: cfg.idType,
-        id_default: cfg.idDefault,
       });
 
       const sqlCases = (Object.entries(defs) as [string, unknown][]).filter(

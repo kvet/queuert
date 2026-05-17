@@ -66,7 +66,7 @@ it("infers custom ID types through the full stack", async () => {
       stateProvider,
       tablePrefix: "myapp_",
       idType: "TEXT",
-      idGenerator: () => `job.${crypto.randomUUID()}`,
+      generateId: () => `job.${crypto.randomUUID()}`,
     });
 
     await stateAdapter.migrateToLatest();

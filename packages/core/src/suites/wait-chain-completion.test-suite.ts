@@ -1,11 +1,9 @@
 import { type TestAPI } from "vitest";
 
-import {
-  WaitChainTimeoutError,
-  createClient,
-  defineJobTypes,
-  withTransactionHooks,
-} from "../index.js";
+import { createClient } from "../client.js";
+import { defineJobTypes } from "../entities/define-job-types.js";
+import { WaitChainTimeoutError } from "../errors.js";
+import { withTransactionHooks } from "../transaction-hooks.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {

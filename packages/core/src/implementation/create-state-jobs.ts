@@ -19,6 +19,7 @@ export const createStateJobs = async (
   }: {
     jobs: {
       typeName: string;
+      id?: string;
       chainTypeName: string;
       chainIndex: number;
       input: unknown;
@@ -53,6 +54,7 @@ export const createStateJobs = async (
 
   const createJobParams = parsed.map((jobInput, i) => ({
     typeName: jobInput.typeName,
+    id: jobInput.id,
     chainTypeName: jobInput.chainTypeName,
     chainIndex: jobInput.chainIndex,
     input: jobInput.parsedInput,

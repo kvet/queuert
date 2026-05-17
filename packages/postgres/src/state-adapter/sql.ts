@@ -53,7 +53,7 @@ END$$`),
       {
         sql: sql(/* sql */ `
 CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job (
-  id                            {{id_type}} PRIMARY KEY DEFAULT {{id_default}},
+  id                            {{id_type}} PRIMARY KEY,
   type_name                     text NOT NULL,
   chain_id                      {{id_type}} NOT NULL REFERENCES {{schema}}.{{table_prefix}}job(id),
   chain_type_name               text NOT NULL,
@@ -193,6 +193,16 @@ RENAME TO {{table_prefix}}chain_listing_type_name_idx`),
       },
     ],
   },
+  {
+    name: "20260517000000_drop_job_id_default",
+    transactional: true,
+    statements: [
+      {
+        sql: sql(/* sql */ `
+ALTER TABLE {{schema}}.{{table_prefix}}job ALTER COLUMN id DROP DEFAULT`),
+      },
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -247,7 +257,7 @@ export type PgSqlDefinitions = {
   >;
   readonly createJobsSql: TypedSql<
     readonly [
-      DataType<"number", number>,
+      DataType<"array", string[]>,
       DataType<"array", string[]>,
       DataType<"array", (string | null)[]>,
       DataType<"array", string[]>,
@@ -412,8 +422,8 @@ CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}migration (
   const createJobsSql = sql(
     /* sql */ `
 WITH generated_ids AS (
-  SELECT {{id_default}} AS id, ord
-  FROM generate_series(1, $1::integer) AS ord
+  SELECT id, ord
+  FROM unnest($1::{{id_type}}[]) WITH ORDINALITY AS t(id, ord)
 ),
 input_data AS (
   SELECT
@@ -514,7 +524,7 @@ ORDER BY ord
     {
       id: "createJobs",
       params: [
-        t.number(),
+        t.array(),
         t.array(),
         t.array<string | null>(),
         t.array(),

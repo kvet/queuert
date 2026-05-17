@@ -227,13 +227,11 @@ This follows the principle of using each technology's native terminology rather 
 
 State adapters have configuration differences that reflect database capabilities:
 
-| Option       | PostgreSQL             | SQLite                | Rationale                                                   |
-| ------------ | ---------------------- | --------------------- | ----------------------------------------------------------- |
-| Namespace    | `schema`               | `tablePrefix`         | PostgreSQL uses schemas; SQLite prefixes table names        |
-| ID default   | `idDefault` (SQL expr) | N/A                   | PostgreSQL can use SQL expressions like `gen_random_uuid()` |
-| ID generator | N/A                    | `idGenerator` (JS fn) | SQLite needs app-side ID generation                         |
-
-These differences are intentional — each adapter uses the most natural approach for its database.
+| Option       | PostgreSQL           | SQLite               | Rationale                                                    |
+| ------------ | -------------------- | -------------------- | ------------------------------------------------------------ |
+| Namespace    | `schema`             | `tablePrefix`        | PostgreSQL uses schemas; SQLite prefixes table names         |
+| ID generator | `generateId` (JS fn) | `generateId` (JS fn) | Both adapters generate IDs in JS for symmetry                |
+| ID validator | `validateId`         | `validateId`         | Optional predicate runs on generated and caller-supplied IDs |
 
 ### In-Process Adapters
 

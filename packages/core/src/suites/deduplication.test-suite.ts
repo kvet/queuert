@@ -1,7 +1,9 @@
 import { type TestAPI } from "vitest";
 
+import { createClient } from "../client.js";
+import { defineJobTypes } from "../entities/define-job-types.js";
 import { sleep } from "../helpers/sleep.js";
-import { createClient, defineJobTypes, withTransactionHooks } from "../index.js";
+import { withTransactionHooks } from "../transaction-hooks.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {

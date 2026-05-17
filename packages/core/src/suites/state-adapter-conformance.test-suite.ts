@@ -24,17 +24,23 @@ export const stateAdapterConformanceTestSuite = <T extends StateAdapterConforman
   for (const group of stateAdapterConformanceGroups) {
     describe(group.name, () => {
       for (const testCase of group.cases) {
-        it(testCase.name, async ({ stateAdapter, poisonTransaction, skip }) => {
-          try {
-            await testCase.run({ stateAdapter, poisonTransaction }, defaultExpect);
-          } catch (err) {
-            if (err instanceof SkipSignalError) {
-              (skip as unknown as ((note?: string) => void) | undefined)?.(err.reason);
-              return;
+        it(
+          testCase.name,
+          async ({ stateAdapter, generateId, generateInvalidId, poisonTransaction, skip }) => {
+            try {
+              await testCase.run(
+                { stateAdapter, generateId, generateInvalidId, poisonTransaction },
+                defaultExpect,
+              );
+            } catch (err) {
+              if (err instanceof SkipSignalError) {
+                (skip as unknown as ((note?: string) => void) | undefined)?.(err.reason);
+                return;
+              }
+              throw err;
             }
-            throw err;
-          }
-        });
+          },
+        );
       }
     });
   }

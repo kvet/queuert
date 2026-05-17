@@ -3,6 +3,7 @@ import { type BlockerReference } from "../errors.js";
 import { createAsyncRwLock } from "../helpers/async-rw-lock.js";
 import { type OrderDirection, type Page, type PageParams } from "../pagination.js";
 import { decodeChainIndexCursor, decodeCreatedAtCursor, encodeCursor } from "./cursor.js";
+import { createIdValidator } from "./id-validator.js";
 import { type StateAdapter, type StateJob, type StateJobStatus } from "./state-adapter.js";
 
 type BlockerEntry = { index: number; traceContext: string | null };
@@ -115,7 +116,17 @@ const matchesDateRange = (createdAt: Date, from?: Date, to?: Date): boolean => {
 
 export type InProcessStateAdapter = StateAdapter<InProcessContext, string>;
 
-export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapter> => {
+export const createInProcessStateAdapter = async ({
+  generateId: generateIdOption = () => crypto.randomUUID(),
+  validateId: validateIdOption,
+}: {
+  /** Function to generate new job IDs. @defaultValue `() => crypto.randomUUID()` */
+  generateId?: () => string;
+  /** Predicate returning `true` if the ID is acceptable. Runs on both generated and caller-supplied IDs. */
+  validateId?: (id: string) => boolean;
+} = {}): Promise<InProcessStateAdapter> => {
+  const { validateId, generateId } = createIdValidator({ generateIdOption, validateIdOption });
+
   const jobs = new Map<string, StateJob>();
   const pendingByType = new Map<string, SortedSet<StateJob>>();
   const runningByType = new Map<string, SortedSet<StateJob>>();
@@ -557,10 +568,14 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
 
     createJobs: async ({ txCtx, jobs: jobInputs }) =>
       withWriteLock(txCtx, () => {
+        for (const jobInput of jobInputs) {
+          if (jobInput.id !== undefined) validateId(jobInput.id, "caller");
+        }
         const journal = txCtx?.journal;
         const results: { job: StateJob; deduplicated: boolean }[] = [];
         for (const {
           typeName,
+          id: providedId,
           chainTypeName,
           chainIndex,
           input,
@@ -584,7 +599,7 @@ export const createInProcessStateAdapter = async (): Promise<InProcessStateAdapt
             }
           }
 
-          const id = crypto.randomUUID();
+          const id = providedId ?? generateId();
           const now = new Date();
           const resolvedScheduledAt =
             schedule?.at ?? (schedule?.afterMs ? new Date(now.getTime() + schedule.afterMs) : now);

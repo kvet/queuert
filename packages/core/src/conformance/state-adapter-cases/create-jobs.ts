@@ -1,3 +1,4 @@
+import { InvalidJobIdError } from "../../errors.js";
 import { sleep } from "../../helpers/sleep.js";
 import { type StateJob } from "../../state-adapter/state-adapter.js";
 import { type ConformanceGroup } from "../runner.js";
@@ -941,6 +942,97 @@ export const createJobsGroup: ConformanceGroup<StateAdapterConformanceContext> =
         );
 
         expect(results).toEqual([]);
+      },
+    },
+    {
+      name: "uses caller-supplied id when provided",
+      run: async ({ stateAdapter, generateId }, expect) => {
+        const userId = (generateId ?? (() => crypto.randomUUID()))();
+        const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                typeName: "id-test",
+                id: userId,
+                chainId: undefined,
+                chainIndex: 0,
+                chainTypeName: "id-test",
+                input: null,
+              },
+            ],
+          }),
+        );
+        expect(job.id).toBe(userId);
+        expect(job.chainId).toBe(userId);
+      },
+    },
+    {
+      name: "rejects caller-supplied id that fails validateId",
+      run: async ({ stateAdapter, generateInvalidId }, expect) => {
+        if (!generateInvalidId) {
+          expect.skip("adapter has no validateId configured");
+        }
+        const badId = generateInvalidId!();
+        await expect(
+          stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                {
+                  typeName: "invalid-id-test",
+                  id: badId,
+                  chainId: undefined,
+                  chainIndex: 0,
+                  chainTypeName: "invalid-id-test",
+                  input: null,
+                },
+              ],
+            }),
+          ),
+        ).rejects.toThrow(InvalidJobIdError);
+      },
+    },
+    {
+      name: "dedup wins over caller-supplied id",
+      run: async ({ stateAdapter, generateId }, expect) => {
+        const [{ job: first }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                typeName: "id-dedup",
+                chainId: undefined,
+                chainIndex: 0,
+                chainTypeName: "id-dedup",
+                input: null,
+                deduplication: { key: "dedup-id-key" },
+              },
+            ],
+          }),
+        );
+
+        const userId = (generateId ?? (() => crypto.randomUUID()))();
+        const [{ job: second, deduplicated }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                typeName: "id-dedup",
+                id: userId,
+                chainId: undefined,
+                chainIndex: 0,
+                chainTypeName: "id-dedup",
+                input: null,
+                deduplication: { key: "dedup-id-key" },
+              },
+            ],
+          }),
+        );
+
+        expect(deduplicated).toBe(true);
+        expect(second.id).toBe(first.id);
+        expect(second.id).not.toBe(userId);
       },
     },
   ],

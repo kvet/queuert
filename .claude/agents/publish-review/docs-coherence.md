@@ -82,7 +82,7 @@ Read and analyze these files:
 **Example issues to find:**
 
 - `JobTypeValidationError` exported but not documented in core README
-- Configuration option `idGenerator` not explained in adapter README
+- Configuration option `generateId` not explained in adapter README
 
 ## Output Format
 

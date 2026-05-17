@@ -1,13 +1,11 @@
 import { type TestAPI } from "vitest";
 
-import {
-  createClient,
-  createInProcessWorker,
-  createProcessors,
-  defineJobTypes,
-  rescheduleJob,
-  withTransactionHooks,
-} from "../index.js";
+import { createClient } from "../client.js";
+import { defineJobTypes } from "../entities/define-job-types.js";
+import { rescheduleJob } from "../errors.js";
+import { createInProcessWorker } from "../in-process-worker.js";
+import { withTransactionHooks } from "../transaction-hooks.js";
+import { createProcessors } from "../worker/create-processors.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {

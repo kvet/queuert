@@ -38,6 +38,7 @@ export {
   ChainNotFoundError,
   DuplicateJobTypeError,
   HookNotRegisteredError,
+  InvalidJobIdError,
   JobAlreadyCompletedError,
   JobNotFoundError,
   JobNotTriggerableError,

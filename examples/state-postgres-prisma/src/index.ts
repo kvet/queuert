@@ -48,8 +48,6 @@ const stateAdapter = await createPgStateAdapter({
   // string parameters to UUID, causing "operator does not exist: uuid = text".
   // Using TEXT is the recommended workaround. See: https://github.com/prisma/prisma/issues/16969
   idType: "text",
-  idDefault: "gen_random_uuid()::text",
-  $idType: "" as string,
 });
 await stateAdapter.migrateToLatest();
 

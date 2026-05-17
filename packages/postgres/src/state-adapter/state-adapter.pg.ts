@@ -16,6 +16,7 @@ import {
 import { type BaseTxContext, type StateAdapter } from "queuert";
 import {
   type StateJob,
+  createIdValidator,
   decodeChainIndexCursor,
   decodeCreatedAtCursor,
   encodeCursor,
@@ -25,20 +26,11 @@ import { type PgStateProvider } from "../state-provider/state-provider.pg.js";
 import { type DbJob, createPgSqlDefinitions, migrations } from "./sql.js";
 
 const SQL_IDENTIFIER_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
-const SQL_EXPRESSION_DENY = /[;"\\]|--|\/\*|\*\//;
 
 const validateSqlIdentifier = (value: string, name: string): void => {
   if (!SQL_IDENTIFIER_PATTERN.test(value)) {
     throw new Error(
       `Invalid ${name}: "${value}". Must match /^[a-zA-Z_][a-zA-Z0-9_]*$/ to prevent SQL injection.`,
-    );
-  }
-};
-
-const validateSqlExpression = (value: string, name: string): void => {
-  if (SQL_EXPRESSION_DENY.test(value)) {
-    throw new Error(
-      `Invalid ${name}: "${value}". Must not contain ; " \\ -- or /* */ to prevent SQL injection.`,
     );
   }
 };
@@ -82,7 +74,8 @@ export const createPgStateAdapter = async <
   schema = "public",
   tablePrefix = "queuert_",
   idType = "uuid",
-  idDefault = "gen_random_uuid()",
+  generateId: generateIdOption = (() => randomUUID()) as () => TIdType,
+  validateId: validateIdOption,
 }: {
   /** PostgreSQL state provider wrapping the database connection. */
   stateProvider: PgStateProvider<TTxContext>;
@@ -92,8 +85,10 @@ export const createPgStateAdapter = async <
   tablePrefix?: string;
   /** SQL type for the primary key column. @defaultValue `"uuid"` */
   idType?: string;
-  /** SQL expression for the default primary key value. @defaultValue `"gen_random_uuid()"` */
-  idDefault?: string;
+  /** Function to generate new job IDs. IDs are generated in JS and bound as a query parameter; the column has no SQL `DEFAULT`. @defaultValue `() => crypto.randomUUID()` */
+  generateId?: () => TIdType;
+  /** Predicate returning `true` if the ID is acceptable. Runs on both generated and caller-supplied IDs; failures throw `InvalidJobIdError`. */
+  validateId?: (id: TIdType) => boolean;
   /** Phantom property for generic type inference of the ID type. Not used at runtime. */
   $idType?: TIdType;
 }): Promise<
@@ -106,13 +101,16 @@ export const createPgStateAdapter = async <
   validateSqlIdentifier(schema, "schema");
   validateSqlIdentifier(tablePrefix, "tablePrefix");
   validateSqlIdentifier(idType, "idType");
-  validateSqlExpression(idDefault, "idDefault");
+
+  const { validateId, generateId } = createIdValidator<TIdType>({
+    generateIdOption,
+    validateIdOption,
+  });
 
   const applyTemplate = createTemplateApplier({
     schema,
     table_prefix: tablePrefix,
     id_type: idType,
-    id_default: idDefault,
   });
 
   const idDataType = idType === "uuid" ? t.uuid() : t.string();
@@ -226,11 +224,16 @@ export const createPgStateAdapter = async <
     createJobs: async ({ txCtx, jobs }) => {
       if (jobs.length === 0) return [];
 
+      for (const job of jobs) {
+        if (job.id !== undefined) validateId(job.id, "caller");
+      }
+      const ids = jobs.map((j) => (j.id ?? generateId()) as string);
+
       const results = await executeTypedSql({
         txCtx,
         sql: defs.createJobsSql,
         params: [
-          jobs.length,
+          ids,
           jobs.map((j) => j.typeName),
           jobs.map((j) => j.chainId ?? null),
           jobs.map((j) => j.chainTypeName),

@@ -12,6 +12,7 @@ export const continueWith = async <TJobTypeName extends string, TInput>(
   helpers: Helpers,
   {
     typeName,
+    id,
     input,
     txCtx,
     transactionHooks,
@@ -25,6 +26,7 @@ export const continueWith = async <TJobTypeName extends string, TInput>(
     fromTypeName,
   }: {
     typeName: TJobTypeName;
+    id?: string;
     input: TInput;
     txCtx: any;
     transactionHooks: TransactionHooks;
@@ -44,6 +46,7 @@ export const continueWith = async <TJobTypeName extends string, TInput>(
     jobs: [
       {
         typeName,
+        id,
         chainTypeName,
         chainIndex,
         input,

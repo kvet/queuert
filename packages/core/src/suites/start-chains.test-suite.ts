@@ -1,13 +1,11 @@
 import { type TestAPI, describe } from "vitest";
 
-import {
-  TransactionContextRequiredError,
-  createClient,
-  createInProcessWorker,
-  createProcessors,
-  defineJobTypes,
-  withTransactionHooks,
-} from "../index.js";
+import { createClient } from "../client.js";
+import { defineJobTypes } from "../entities/define-job-types.js";
+import { TransactionContextRequiredError } from "../errors.js";
+import { createInProcessWorker } from "../in-process-worker.js";
+import { withTransactionHooks } from "../transaction-hooks.js";
+import { createProcessors } from "../worker/create-processors.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -317,6 +315,44 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
           }),
         ),
       );
+    });
+
+    it("uses caller-supplied id", async ({
+      stateAdapter,
+      generateId,
+      notifyAdapter,
+      withTransaction,
+      observabilityAdapter,
+      log,
+      expect,
+    }) => {
+      const jobTypes = defineJobTypes<{
+        test: { entry: true; input: { value: number }; output: null };
+      }>();
+
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
+      const userId = generateId();
+      const chain = await withTransactionHooks(async (transactionHooks) =>
+        withTransaction(async (txCtx) =>
+          client.startChain({
+            ...txCtx,
+            transactionHooks,
+            typeName: "test",
+            id: userId,
+            input: { value: 1 },
+          }),
+        ),
+      );
+
+      expect(chain.id).toBe(userId);
+      expect(chain.deduplicated).toBe(false);
     });
   });
 
@@ -949,6 +985,46 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
           }),
         ),
       );
+    });
+
+    it("uses caller-supplied ids per item", async ({
+      stateAdapter,
+      generateId,
+      notifyAdapter,
+      withTransaction,
+      observabilityAdapter,
+      log,
+      expect,
+    }) => {
+      const jobTypes = defineJobTypes<{
+        test: { entry: true; input: { value: number }; output: null };
+      }>();
+
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
+      const idA = generateId();
+      const idB = generateId();
+      const chains = await withTransactionHooks(async (transactionHooks) =>
+        withTransaction(async (txCtx) =>
+          client.startChains({
+            ...txCtx,
+            transactionHooks,
+            items: [
+              { typeName: "test", id: idA, input: { value: 1 } },
+              { typeName: "test", id: idB, input: { value: 2 } },
+            ],
+          }),
+        ),
+      );
+
+      expect(chains[0].id).toBe(idA);
+      expect(chains[1].id).toBe(idB);
     });
   });
 };

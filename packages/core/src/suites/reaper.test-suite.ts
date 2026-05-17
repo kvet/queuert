@@ -1,15 +1,13 @@
 import { type TestAPI } from "vitest";
 
+import { createClient } from "../client.js";
+import { defineJobTypes } from "../entities/define-job-types.js";
 import { JobAlreadyCompletedError, JobTakenByAnotherWorkerError } from "../errors.js";
 import { sleep } from "../helpers/sleep.js";
-import {
-  type LeaseConfig,
-  createClient,
-  createInProcessWorker,
-  createProcessors,
-  defineJobTypes,
-  withTransactionHooks,
-} from "../index.js";
+import { createInProcessWorker } from "../in-process-worker.js";
+import { withTransactionHooks } from "../transaction-hooks.js";
+import { createProcessors } from "../worker/create-processors.js";
+import { type LeaseConfig } from "../worker/lease.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {

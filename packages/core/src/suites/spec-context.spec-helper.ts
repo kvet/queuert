@@ -3,19 +3,18 @@ import inspector from "node:inspector";
 
 import { type MockedFunction, type TestAPI, expect, vi } from "vitest";
 
-import {
-  type Log,
-  type NotifyAdapter,
-  type ObservabilityAdapter,
-  createConsoleLog,
-} from "../index.js";
 import { createInProcessNotifyAdapter } from "../notify-adapter/notify-adapter.in-process.js";
+import { type NotifyAdapter } from "../notify-adapter/notify-adapter.js";
+import { createConsoleLog } from "../observability-adapter/log.console.js";
+import { type Log } from "../observability-adapter/log.js";
+import { type ObservabilityAdapter } from "../observability-adapter/observability-adapter.js";
 import { createNoopObservabilityAdapter } from "../observability-adapter/observability-adapter.noop.js";
 import { type StateAdapter } from "../state-adapter/state-adapter.js";
 import { createFlakyBatchGenerator } from "./flaky-test-helper.spec-helper.js";
 
 export type TestSuiteContext = {
   stateAdapter: StateAdapter<{ $test: true }, string>;
+  generateId: () => string;
   notifyAdapter: NotifyAdapter | undefined;
   withTransaction: <T>(cb: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
   poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
@@ -35,11 +34,24 @@ export const extendWithCommon = <
 >(
   it: TestAPI<T>,
 ): TestAPI<
-  T & Pick<TestSuiteContext, "withTransaction" | "withWorkers" | "log" | "observabilityAdapter">
+  T &
+    Pick<
+      TestSuiteContext,
+      "withTransaction" | "withWorkers" | "log" | "observabilityAdapter" | "generateId"
+    >
 > =>
   it.extend<
-    Pick<TestSuiteContext, "withTransaction" | "withWorkers" | "log" | "observabilityAdapter">
+    Pick<
+      TestSuiteContext,
+      "withTransaction" | "withWorkers" | "log" | "observabilityAdapter" | "generateId"
+    >
   >({
+    generateId: [
+      async ({}, use) => {
+        await use(() => crypto.randomUUID());
+      },
+      { scope: "test" },
+    ],
     withTransaction: [
       async ({ stateAdapter }, use) => {
         await use(async (cb) => {

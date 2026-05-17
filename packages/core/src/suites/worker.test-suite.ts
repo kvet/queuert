@@ -1,15 +1,13 @@
 import { type TestAPI } from "vitest";
 
+import { createClient } from "../client.js";
+import { type Chain } from "../entities/chain.js";
+import { defineJobTypes } from "../entities/define-job-types.js";
 import { sleep } from "../helpers/sleep.js";
-import {
-  type AttemptMiddleware,
-  type Chain,
-  createClient,
-  createInProcessWorker,
-  createProcessors,
-  defineJobTypes,
-  withTransactionHooks,
-} from "../index.js";
+import { createInProcessWorker } from "../in-process-worker.js";
+import { withTransactionHooks } from "../transaction-hooks.js";
+import { type AttemptMiddleware } from "../worker/attempt-middleware.js";
+import { createProcessors } from "../worker/create-processors.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {

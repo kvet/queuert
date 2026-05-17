@@ -1,15 +1,15 @@
 import { type TestAPI } from "vitest";
 
+import { createClient } from "../client.js";
+import { defineJobTypes } from "../entities/define-job-types.js";
 import {
   JobNotFoundError,
   JobNotTriggerableError,
   TransactionContextRequiredError,
-  createClient,
-  createInProcessWorker,
-  createProcessors,
-  defineJobTypes,
-  withTransactionHooks,
-} from "../index.js";
+} from "../errors.js";
+import { createInProcessWorker } from "../in-process-worker.js";
+import { withTransactionHooks } from "../transaction-hooks.js";
+import { createProcessors } from "../worker/create-processors.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {

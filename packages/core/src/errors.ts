@@ -1,5 +1,23 @@
 import { type ScheduleOptions } from "./entities/schedule.js";
 
+/** Thrown when a job ID fails the state adapter's `validateId` check. */
+export class InvalidJobIdError extends Error {
+  /** The ID that failed validation. */
+  readonly id: string;
+  /** Where the ID came from: `"generator"` if produced by the adapter's `generateId`, `"caller"` if supplied by the caller. */
+  readonly source: "generator" | "caller";
+
+  constructor(
+    message: string,
+    options: { id: string; source: "generator" | "caller"; cause?: unknown },
+  ) {
+    super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
+    this.name = "InvalidJobIdError";
+    this.id = options.id;
+    this.source = options.source;
+  }
+}
+
 /** Thrown when a job's lease is held by another worker. */
 export class JobTakenByAnotherWorkerError extends Error {
   /** The job that was contested. */

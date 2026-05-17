@@ -25,28 +25,28 @@ PostgreSQL enums provide type safety at the database level — invalid status va
 
 The `job` table stores all job state:
 
-| Column                | Type                           | Description                                                                 |
-| --------------------- | ------------------------------ | --------------------------------------------------------------------------- |
-| `id`                  | configurable (default: `uuid`) | Primary key. Type and default expression are set via `idType` / `idDefault` |
-| `type_name`           | `text`                         | Job type identifier                                                         |
-| `chain_id`            | same as `id`                   | Foreign key to root job — every job in a chain points to the root           |
-| `chain_type_name`     | `text`                         | Type name of the chain (copied from root for query efficiency)              |
-| `chain_index`         | `integer`                      | Position in chain (0 for root, incrementing for continuations)              |
-| `input`               | `jsonb`                        | Job input data                                                              |
-| `output`              | `jsonb`                        | Completion output (null until completed)                                    |
-| `status`              | `job_status`                   | Current state: blocked, pending, running, or completed                      |
-| `created_at`          | `timestamptz`                  | When the job was created                                                    |
-| `scheduled_at`        | `timestamptz`                  | Earliest time the job can be acquired                                       |
-| `completed_at`        | `timestamptz`                  | When the job completed (null until completed)                               |
-| `completed_by`        | `text`                         | Worker ID that completed the job (null for workerless)                      |
-| `attempt`             | `integer`                      | Number of processing attempts (starts at 0)                                 |
-| `last_attempt_at`     | `timestamptz`                  | When the last attempt started                                               |
-| `last_attempt_error`  | `jsonb`                        | Error from last failed attempt                                              |
-| `leased_by`           | `text`                         | Worker ID holding the lease                                                 |
-| `leased_until`        | `timestamptz`                  | Lease expiry time                                                           |
-| `deduplication_key`   | `text`                         | Key for chain deduplication                                                 |
-| `chain_trace_context` | `text`                         | W3C traceparent for chain-level spans                                       |
-| `trace_context`       | `text`                         | W3C traceparent for job-level spans                                         |
+| Column                | Type                           | Description                                                                        |
+| --------------------- | ------------------------------ | ---------------------------------------------------------------------------------- |
+| `id`                  | configurable (default: `uuid`) | Primary key. Type is set via `idType`; values are generated in JS via `generateId` |
+| `type_name`           | `text`                         | Job type identifier                                                                |
+| `chain_id`            | same as `id`                   | Foreign key to root job — every job in a chain points to the root                  |
+| `chain_type_name`     | `text`                         | Type name of the chain (copied from root for query efficiency)                     |
+| `chain_index`         | `integer`                      | Position in chain (0 for root, incrementing for continuations)                     |
+| `input`               | `jsonb`                        | Job input data                                                                     |
+| `output`              | `jsonb`                        | Completion output (null until completed)                                           |
+| `status`              | `job_status`                   | Current state: blocked, pending, running, or completed                             |
+| `created_at`          | `timestamptz`                  | When the job was created                                                           |
+| `scheduled_at`        | `timestamptz`                  | Earliest time the job can be acquired                                              |
+| `completed_at`        | `timestamptz`                  | When the job completed (null until completed)                                      |
+| `completed_by`        | `text`                         | Worker ID that completed the job (null for workerless)                             |
+| `attempt`             | `integer`                      | Number of processing attempts (starts at 0)                                        |
+| `last_attempt_at`     | `timestamptz`                  | When the last attempt started                                                      |
+| `last_attempt_error`  | `jsonb`                        | Error from last failed attempt                                                     |
+| `leased_by`           | `text`                         | Worker ID holding the lease                                                        |
+| `leased_until`        | `timestamptz`                  | Lease expiry time                                                                  |
+| `deduplication_key`   | `text`                         | Key for chain deduplication                                                        |
+| `chain_trace_context` | `text`                         | W3C traceparent for chain-level spans                                              |
+| `trace_context`       | `text`                         | W3C traceparent for job-level spans                                                |
 
 The `chain_id` foreign key references `job(id)`, forming a self-referential relationship where all jobs in a chain point to the root job (chain_index = 0).
 

@@ -17,3 +17,4 @@ export {
   type CreatedAtCursor,
 } from "./state-adapter/cursor.js";
 export { type StateJob, type StateJobStatus } from "./state-adapter/state-adapter.js";
+export { createIdValidator, type IdValidator } from "./state-adapter/id-validator.js";

@@ -13,7 +13,8 @@ const stateAdapter = await createPgStateAdapter({
   schema?: string,                 // PostgreSQL schema name (default: "public")
   tablePrefix?: string,            // Table name prefix (default: "queuert_")
   idType?: string,                 // SQL type for job IDs (default: "uuid")
-  idDefault?: string,              // SQL DEFAULT expression (default: "gen_random_uuid()")
+  generateId?: () => string,      // Generates new IDs in JS (default: () => crypto.randomUUID())
+  validateId?: (id: string) => boolean,  // Optional predicate; runs on generated and caller-supplied IDs
 });
 ```
 
