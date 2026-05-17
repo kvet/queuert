@@ -68,6 +68,8 @@ Supports a small set of mutations (triggering a blocked job, deleting a chain) i
 
 ### Chain list
 
+![Chain list view showing chains with status badges and input previews](../../../assets/dashboard/chains-list.png)
+
 The primary view. Lists chains ordered by creation time (newest first) with inline previews. Each row shows the chain type name, chain ID, status badge, last job type (if the chain has continuations), attempt count (for blocked chains), creation time, and input preview.
 
 Filtering supports searching by chain or job ID and by type name. Filter buttons next to type names and IDs let you quickly narrow results. A "Hide blockers" toggle filters out chains that are blockers for other chains. Pagination is cursor-based with a "Load more" button.
@@ -75,6 +77,8 @@ Filtering supports searching by chain or job ID and by type name. Filter buttons
 Clicking a row navigates to the chain detail view.
 
 ### Chain detail
+
+![Chain detail view showing job sequence, input, and output](../../../assets/dashboard/chain-detail.png)
 
 Shows a specific chain with its full job sequence and blocker relationships.
 
@@ -84,9 +88,13 @@ Shows a specific chain with its full job sequence and blocker relationships.
 
 ### Job list
 
+![Job list view showing jobs across chains with status filters](../../../assets/dashboard/jobs-list.png)
+
 A cross-chain job view with the same layout as the chain list, but each row represents an individual job with a link to its parent chain. Supports filtering by job or chain ID, type name, and status.
 
 ### Job detail
+
+![Job detail view showing status, schedule, and input data for a pending job](../../../assets/dashboard/job-detail.png)
 
 Full job inspection. Shown as a dedicated view when navigating from the job list, or inline-expanded in the chain detail view. Sections appear conditionally based on job state:
 

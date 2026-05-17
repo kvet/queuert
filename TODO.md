@@ -16,13 +16,7 @@
 - [EPIC] Built-in job priority — add `priority INTEGER NOT NULL DEFAULT 0` to the job schema + replace acquisition index with expression index `(type_name, (priority - attempt) DESC, scheduled_at ASC) WHERE has_open_blockers = false AND leased_until IS NULL AND completed_at IS NULL` (predicate inherited from `job-model.md`). Linear demotion via `priority - attempt` in v1; wall-clock aging deferred to v2. Design decisions settled in `design/job-priority.md`: numeric (not named tiers), dedup keeps existing-priority, `continueWith` inherits parent's priority, `getNextJobAvailableInMs` stays priority-blind. Additive on top of `design/job-model.md`. **Depends on `design/job-model.md` implementation.**
 - [EPIC,COMPLEX] Batched processors — opt-in `batchLimit` on a processor; opportunistic batching (process up to N when available, never wait to accumulate). Array-shaped `attemptHandler({ jobs, prepare, complete })`, one prepare/complete per batch, group lease/complete/reap. Replaces the singular state-adapter methods with array-only counterparts. Open questions: `complete`/`continueWith` shape, group reaping, OTel mapping. See `design/batched-processors.md`
 - [EPIC] Marketing surface — visual / social-proof assets (Phase 2 of the May 2026 docs reframe)
-  - [TASK] Update GitHub repo description + topics to match the new tagline ("Type-safe multi-step workflows that commit with your Postgres transactions") — currently still aligned with the old "control flow library" framing
   - [TASK] Architecture diagram on docs landing page (one PNG/SVG showing client + worker + state adapter + notify adapter against your DB)
-  - [TASK] Type-safety GIF or screenshot demonstrating `continueWith` lighting up a wrong-shape compile error in VS Code — surface in README and docs landing
-  - [TASK] Dashboard screenshot in `docs/src/content/docs/integrations/dashboard.mdx` and `docs/src/content/docs/reference/dashboard.md`
-  - [TASK] Verify and surface "0 runtime deps" claim if true (check `packages/core/package.json` dependencies are empty); if not, document what runtime deps each package brings
-  - [TASK] "Used in production by" section on README + docs landing once there's something to put there
-  - [TASK] Surface test count on README (badge or sentence) once it's a number worth quoting
 
 # Medium term
 

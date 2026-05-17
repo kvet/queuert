@@ -9,6 +9,8 @@ sidebar:
 This package is experimental and may change without notice.
 :::
 
+![Dashboard chain list view](../../../assets/dashboard/chains-list.png)
+
 ## createDashboard
 
 ```typescript
