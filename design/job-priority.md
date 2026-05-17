@@ -194,7 +194,7 @@ A subtle point: when `attempt` changes (acquire increments it), the SortedSet po
 
 Per-job input gains `priority?: number`. Default in the SQL is `COALESCE($priority, 0)` for chain starts. For continueWith jobs, the default is "inherit from parent" — implemented by:
 
-- **PG**: `COALESCE($priority, parent.priority, 0)` in the input CTE, similar to how `chain_id` and `chain_type_name` are already inherited (see [continued-to-job-id.md](continued-to-job-id.md) for the parent-derived-fields pattern).
+- **PG**: `COALESCE($priority, parent.priority, 0)` in the input CTE, similar to how `chain_id` and `chain_type_name` are already inherited (see [job-model.md](job-model.md) for the parent-derived-fields pattern).
 - **SQLite**: `COALESCE($priority, (SELECT priority FROM job WHERE id = $continueFromJobId), 0)`.
 - **In-process**: `priority ?? parent?.priority ?? 0` at the JS layer.
 

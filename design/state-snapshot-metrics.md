@@ -1,5 +1,7 @@
 # State-snapshot metrics
 
+> **Builds on**: [job-model.md](job-model.md) — uses the derived `status`, the `has_open_blockers` / `leased_until` / `completed_at` / `succeeded_by_job_id` structural columns, the `last_user_reschedule_attempt` field, and the active-partition partial indexes defined there.
+
 Add an opt-in OTel layer that emits gauges derived by periodically scanning the `job` table, complementing the existing event-driven histograms in [observability-adapter.ts](../packages/core/src/observability-adapter/observability-adapter.ts).
 
 ## Problem
@@ -16,123 +18,116 @@ We want a small set of gauges, derived from a periodic scan, that give an operat
 
 ## Proposed gauges
 
-Six gauges, symmetric jobs/chains pairs. "Chain status" is the terminal job's status (matches `listChains` semantics in [state-adapter.pg.ts:465](../packages/postgres/src/state-adapter/state-adapter.pg.ts#L465)), so the `status` label is interchangeable across the two families.
+Six gauges, symmetric jobs/chains pairs. "Chain status" here means the chain-frontier job's _job_ status (the chain itself is just `open` / `closed` per [job-model.md](job-model.md); when reporting metrics on open chains we want finer-grained "what is the chain _currently doing_?" detail, which is the frontier job's job-status).
 
-| Gauge                                    | Semantic                                                                                                                             |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `incomplete_jobs{type, status}`          | Count of jobs not in `completed`, by job type and status (`pending` / `running` / `blocked`)                                         |
-| `incomplete_chains{type, status}`        | Count of chains whose terminal job isn't `completed`, by chain type and terminal-job status                                          |
-| `oldest_pending_job_age_seconds{type}`   | `now() - MIN(scheduled_at)` over pending jobs by type — the lag of the slowest-moving job class                                      |
-| `oldest_pending_chain_age_seconds{type}` | `now() - MIN(terminal.scheduled_at)` over chains whose terminal is pending, by chain type — lag of the slowest-moving workflow class |
-| `stuck_jobs{type}`                       | Count of pending jobs that have retried `>= N` times without the user calling `rescheduleJob`                                        |
-| `stuck_chains{type}`                     | Count of chains whose terminal job is stuck (one stuck active job per chain by construction)                                         |
+| Gauge                                  | Semantic                                                                                                                                                                         |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `open_jobs{type, status}`              | Count of jobs whose `status ≠ 'completed' AND status ≠ 'continued'`, by job type and derived status (`blocked` / `scheduled` / `ready` / `running`)                              |
+| `open_chains{type, status}`            | Count of chains in `open` status, grouped by chain type and the frontier job's derived status                                                                                    |
+| `oldest_ready_job_age_seconds{type}`   | `now() - MIN(scheduled_at)` over jobs deriving as `ready` (i.e. `has_open_blockers = false AND leased_until IS NULL AND completed_at IS NULL AND scheduled_at ≤ now()`), by type |
+| `oldest_ready_chain_age_seconds{type}` | Same as above but over chains whose frontier job derives as `ready`, by chain type                                                                                               |
+| `stuck_jobs{type}`                     | Count of jobs deriving as `ready` whose `(attempt - COALESCE(last_user_reschedule_attempt, 0)) ≥ N`                                                                              |
+| `stuck_chains{type}`                   | Count of chains whose frontier job is stuck (one stuck frontier per chain by construction)                                                                                       |
 
 Notes on naming and semantics:
 
-- "Incomplete" is used in preference to "running" — chain status maps to a job status enum, but a chain spends very little time literally `running` (most live time is `pending` waiting for a worker, or `blocked`). "Incomplete" matches the existing `dedup.scope='incomplete'` vocabulary in [sql.ts:435](../packages/postgres/src/state-adapter/sql.ts#L435).
-- "Oldest" means _lag_ (`scheduled_at`-derived), only meaningful on `pending`. Lifetime metrics (oldest existing chain regardless of state) are not gauges; if needed they're better as offline `listChains` queries.
+- "Open" matches the chain-status vocabulary in [job-model.md](job-model.md) (`'open' | 'closed'`) and the dedup `scope: 'open' | 'any'`. A job is "open" if its status is one of `blocked | scheduled | ready | running` — i.e. `completed_at IS NULL`.
+- "Oldest" means _lag_ (`scheduled_at`-derived) and is only meaningful on `ready` jobs (scheduled-for-later jobs have no lag yet — their `scheduled_at` is in the future). Lifetime metrics (oldest existing chain regardless of state) are not gauges; if needed they're better as offline `listChains` queries.
 - `stuck_jobs` and `stuck_chains` count the same row set, grouped differently — by job type vs chain type. Both views are useful: which step type is failing, vs which workflow type is stalled.
+- The stuck-threshold is computed as `attempt - COALESCE(last_user_reschedule_attempt, 0)` (the streak of auto-retries since the last user reschedule); the `last_user_reschedule_attempt` column is defined in [job-model.md](job-model.md).
 
-## Schema change
+## Schema dependencies
 
-Add one column on `job`:
+This package adds **no columns** of its own. It depends on schema defined in [job-model.md](job-model.md):
 
-```sql
-attempts_since_reschedule INTEGER NOT NULL DEFAULT 0
-```
-
-Maintained alongside `attempt`:
-
-- **`acquireJob`**: increment by 1 (next to the existing `attempt = attempt + 1` in [sql.ts:837](../packages/postgres/src/state-adapter/sql.ts#L837)).
-- **`rescheduleJob`** when called via user-thrown `RescheduleJobError`: reset to 0.
-- **`rescheduleJob`** when called via the default-backoff retry path: leave alone.
-
-The user-vs-default distinction lives in [handle-job-handler-error.ts:43](../packages/core/src/implementation/handle-job-handler-error.ts#L43) (`isRescheduled` boolean, currently dropped before the adapter call). Plumbing has to thread that through to `rescheduleJob`.
-
-### Why a column, not the existing `last_attempt_error` jsonb
-
-`last_attempt_error` is `jsonb` in the DB but the public contract is `string | null` ([state-adapter.ts:23](../packages/core/src/state-adapter/state-adapter.ts#L23), asserted in [process.test-suite.ts:196](../packages/core/src/suites/process.test-suite.ts#L196)). Repurposing it as `{ message, rescheduled }` would:
-
-1. Be a breaking API change for every consumer of `job.lastAttemptError`, just to add a metric.
-2. Couple unrelated concerns (error reporting + retry-progress tracking).
-3. Lose history — a single boolean can't represent "user rescheduled three times then went silent."
-4. Force expression-indexed jsonb extraction across PG and SQLite for the gauge predicate.
-
-A new int column is +4 bytes per row, indexable with a plain partial, and additive on the public type.
+- `last_user_reschedule_attempt int NULL` — set to the value of `attempt` when `rescheduleJob` is called via user-thrown `RescheduleJobError`; left alone on default-backoff retries. The user-vs-default distinction lives in [handle-job-handler-error.ts:43](../packages/core/src/implementation/handle-job-handler-error.ts#L43); plumbing must thread `userInitiated` through to the adapter.
+- `has_open_blockers`, `leased_until`, `completed_at`, `succeeded_by_job_id` — the structural columns this layer reads.
 
 ## Indexes
 
-Three additions, all partial over the working set:
+This layer reuses the active-partition partial indexes defined in [job-model.md](job-model.md) (`job_pending_listing_idx`, `job_blocked_listing_idx`, `job_running_idx`, `job_chain_tail_idx`). One metrics-specific addition:
 
 ```sql
--- Drives incomplete_jobs counts
-CREATE INDEX job_metrics_active_idx
-  ON job (type_name, status)
-  WHERE status != 'completed';
-
--- Drives incomplete_chains counts and oldest_pending_chain_age
--- (covering: terminal-row lookup via DISTINCT ON chain_id, chain_index DESC)
-CREATE INDEX job_metrics_terminal_idx
-  ON job (chain_id, chain_index DESC)
-  INCLUDE (chain_type_name, status, scheduled_at)
-  WHERE status != 'completed';
-
--- Drives stuck_jobs and stuck_chains
-CREATE INDEX job_stuck_idx
-  ON job (type_name, chain_type_name)
-  WHERE status = 'pending' AND attempts_since_reschedule > 0;
+-- Drives stuck_jobs and stuck_chains: ready jobs whose retry streak has advanced past
+-- the last user reschedule. Cardinality is naturally tiny (only jobs failing without
+-- user intervention).
+CREATE INDEX job_stuck_idx ON job (type_name, chain_type_name)
+  WHERE has_open_blockers = false
+    AND leased_until IS NULL
+    AND completed_at IS NULL
+    AND scheduled_at <= now()       -- ready, not just pending
+    AND attempt > COALESCE(last_user_reschedule_attempt, 0);
 ```
 
-Cardinality is bounded by the active working set — i.e. by whatever the cleanup job leaves behind. **Hard dependency: cleanup job must run.** Without it, the active-set assumption breaks down and aggregate cost grows with lifetime job count.
+Cardinality is bounded by the active working set. **Hard dependency: cleanup job must run.** Without it, the active-set assumption breaks down and aggregate cost grows with lifetime job count.
 
-`oldest_pending_job_age_seconds` needs no new index; it's served by the existing `job_acquisition_idx (type_name, scheduled_at) WHERE status='pending'`.
-
-The `stuck_jobs` partial uses `attempts_since_reschedule > 0` (not a baked-in threshold) so the runtime threshold N stays tunable. Cardinality is naturally tiny — only jobs that have failed at least once without user reschedule.
+The `now()` clause is `IMMUTABLE`-violating and so can't go in the partial-index predicate on Postgres; in practice the index is partial on the structural-only conditions and the `scheduled_at <= now()` filter runs at query time. The same logic applies to SQLite. (Functionally equivalent; the partial just covers slightly more rows than the strict "ready" definition.)
 
 ## Queries
 
 ```sql
--- oldest_pending_job_age_seconds
+-- oldest_ready_job_age_seconds
 SELECT type_name, MIN(scheduled_at)
 FROM job
-WHERE status = 'pending'
+WHERE has_open_blockers = false
+  AND leased_until IS NULL
+  AND completed_at IS NULL
+  AND scheduled_at <= now()
 GROUP BY type_name;
 
--- incomplete_jobs
-SELECT type_name, status, COUNT(*)
+-- open_jobs (counts grouped by derived status over the active partition)
+SELECT
+  type_name,
+  CASE
+    WHEN leased_until IS NOT NULL THEN 'running'
+    WHEN has_open_blockers        THEN 'blocked'
+    WHEN scheduled_at > now()     THEN 'scheduled'
+                                  ELSE 'ready'
+  END AS status,
+  COUNT(*)
 FROM job
-WHERE status != 'completed'
+WHERE completed_at IS NULL
 GROUP BY type_name, status;
 
--- incomplete_chains + oldest_pending_chain_age (single scan)
-WITH terminal AS (
-  SELECT DISTINCT ON (chain_id)
-    chain_id, chain_type_name, status, scheduled_at
+-- open_chains + oldest_ready_chain_age (single scan over chain frontiers)
+WITH frontier AS (
+  SELECT chain_id, chain_type_name, has_open_blockers, leased_until,
+         completed_at, scheduled_at
   FROM job
-  WHERE status != 'completed'
-  ORDER BY chain_id, chain_index DESC
+  WHERE succeeded_by_job_id IS NULL
+    AND completed_at IS NULL          -- restrict to open chains
 )
 SELECT
   chain_type_name,
-  status,
-  COUNT(*) AS incomplete_count,
-  MIN(scheduled_at) FILTER (WHERE status = 'pending') AS oldest_pending
-FROM terminal
+  CASE
+    WHEN leased_until IS NOT NULL THEN 'running'
+    WHEN has_open_blockers        THEN 'blocked'
+    WHEN scheduled_at > now()     THEN 'scheduled'
+                                  ELSE 'ready'
+  END AS status,
+  COUNT(*) AS open_count,
+  MIN(scheduled_at) FILTER (
+    WHERE leased_until IS NULL AND NOT has_open_blockers AND scheduled_at <= now()
+  ) AS oldest_ready
+FROM frontier
 GROUP BY chain_type_name, status;
 
 -- stuck_jobs and stuck_chains (same scan, two group-bys)
 SELECT type_name, chain_type_name, COUNT(*)
 FROM job
-WHERE status = 'pending'
-  AND attempts_since_reschedule >= $1
+WHERE has_open_blockers = false
+  AND leased_until IS NULL
+  AND completed_at IS NULL
+  AND scheduled_at <= now()
+  AND (attempt - COALESCE(last_user_reschedule_attempt, 0)) >= $1
 GROUP BY type_name, chain_type_name;
 ```
 
-The terminal-row insight: for an incomplete chain, the terminal job (`MAX(chain_index)`) is necessarily not `completed` — if it were, with no continuation, the chain would be done. So the scan can drive purely off the active-jobs partition; we never read completed history.
+Chain-frontier insight: for an open chain, the frontier job (`succeeded_by_job_id IS NULL`) is necessarily `completed_at IS NULL`. The `job_chain_tail_idx` (UNIQUE partial on `(chain_id) WHERE succeeded_by_job_id IS NULL`) lets the frontier scan touch one row per chain.
 
-Per-collection cost is dominated by the active-partition scan plus a sort/hash-distinct on `chain_id` for the chain queries — order of milliseconds while the working set is in the tens of thousands. Collection cadence ~60s, so the runner is doing ~one to four index scans per minute, all on partial indexes that don't touch completed rows.
+Per-collection cost is dominated by the active-partition scan plus the partial-index walk on `job_chain_tail_idx` — order of milliseconds while the working set is in the tens of thousands. Collection cadence ~60s, so the runner is doing ~one to four index scans per minute, all on partial indexes that don't touch completed history.
 
-Write amplification: only `job_metrics_active_idx` touches a hot path (every status transition into/out of `completed` updates it), and it's a narrow partial. `job_metrics_terminal_idx` is on the same partition. `job_stuck_idx` updates only on the failure path, which is low-frequency. Worth measuring against `processing-capacity` before committing.
+Write amplification: every active-partition partial index ([job-model.md](job-model.md)) touches the hot path on transitions in/out of completion; `job_stuck_idx` (added here) updates only on failure-path retries, which are low-frequency. Worth measuring against `processing-capacity` before committing.
 
 ## Architecture
 
@@ -171,7 +166,7 @@ const metrics = defineMetricsJob({
   client,
   meter, // OTel Meter from @opentelemetry/api
   intervalMs: 60_000,
-  stuck: { threshold: 5 }, // attempts_since_reschedule >= threshold
+  stuck: { threshold: 5 }, // (attempt - last_user_reschedule_attempt) >= threshold
   // or `mode: "single-runner-shared" | "per-process"` once decided
 });
 
@@ -187,27 +182,21 @@ await metrics.scheduleInitial(); // analogous to scheduling cleanup
 
 ## Cross-adapter implications
 
-- **Postgres** ([packages/postgres](../packages/postgres)): schema migration adds `attempts_since_reschedule` and the three indexes. `acquireJob` and `rescheduleJob` SQL gain the counter logic. Aggregate queries above are PG-native.
-- **SQLite** ([packages/sqlite](../packages/sqlite)): same column + indexes. SQLite supports partial indexes and `INCLUDE` columns differently — `INCLUDE` may need to be replaced with a plain composite index. `DISTINCT ON` isn't supported; use a windowed `ROW_NUMBER() OVER (PARTITION BY chain_id ORDER BY chain_index DESC)` and filter to `rn = 1`.
-- **In-process** ([state-adapter.in-process.ts](../packages/core/src/state-adapter/state-adapter.in-process.ts)): track the counter on the in-memory `Job`; aggregate queries become plain JS reductions. No index considerations.
+The underlying schema (column adds, base indexes, status derivation) is owned by [job-model.md](job-model.md). This layer adds only:
 
-State adapter contract gains:
+- **Postgres** ([packages/postgres](../packages/postgres)): one metrics-specific index (`job_stuck_idx`). Aggregate queries above are PG-native. `acquireJob` and `rescheduleJob` SQL maintain `last_user_reschedule_attempt` per job-model.md.
+- **SQLite** ([packages/sqlite](../packages/sqlite)): same `job_stuck_idx` (modulo SQLite partial-index syntax). The chain-frontier queries don't need `DISTINCT ON` (the UNIQUE partial `job_chain_tail_idx` from job-model.md returns one row per chain directly).
+- **In-process** ([state-adapter.in-process.ts](../packages/core/src/state-adapter/state-adapter.in-process.ts)): aggregate queries become plain JS reductions over the in-memory map. No index considerations.
 
-- New field on `StateJob` / `Job`: `attemptsSinceReschedule: number`.
-- `rescheduleJob` parameter set gains `userInitiated: boolean`.
-- A new state-adapter method per gauge query, or a single `getMetricsSnapshot()` that returns all aggregates in one call. Single method is preferred — keeps the query layer in the adapter where dialect differences live, and matches the "one DB round-trip per period" goal.
+State adapter contract gains a single new method:
+
+- `getMetricsSnapshot()` that returns all aggregates in one call. Single method preferred over one-per-gauge — keeps the dialect-specific query in the adapter and matches the "one DB round-trip per period" goal.
+
+`rescheduleJob` already accepts `userInitiated` per [job-model.md](job-model.md); no further signature changes here.
 
 ## Migration
 
-Non-breaking:
-
-- `attempts_since_reschedule` adds with `DEFAULT 0` — instant in modern PG, additive in SQLite.
-- New indexes are additive.
-- `attemptsSinceReschedule` field on `Job`/`StateJob` is additive.
-
-Mildly breaking:
-
-- `rescheduleJob` adapter signature gains `userInitiated`. Bundled adapters update in lockstep; custom adapter implementers (rare) need to re-implement. Treat as adapter-contract minor bump.
+The metrics layer ships as an additive package — no schema changes beyond what [job-model.md](job-model.md) provides. The only addition is `job_stuck_idx`, applied lazily when `@queuert/otel-state` is first installed and the worker boots (or via a one-time migration shipped with the package).
 
 The `@queuert/otel-state` package is entirely opt-in — installing it has no effect until the user wires the metrics job into their worker.
 
@@ -216,5 +205,5 @@ The `@queuert/otel-state` package is entirely opt-in — installing it has no ef
 1. **Single-runner snapshot distribution.** (a) DB-stored snapshot, (b) per-process scans, or (c) single-runner only. Drives package API.
 2. **`stuck` threshold default.** What value of N is the right "stuck" default? Likely workload-dependent; package should expose it but pick a conservative default (e.g. 5).
 3. **`getMetricsSnapshot` shape.** One method with all aggregates vs one method per gauge family. Preferred: one method, returns a typed snapshot record.
-4. **Should `incomplete_jobs` / `incomplete_chains` skip the `blocked` status?** Blocked work is "incomplete" in the literal sense but isn't lag-relevant — it's waiting on something else by design. Probably keep it but document semantics.
+4. **Should `open_jobs` / `open_chains` skip the `blocked` and `scheduled` statuses?** Blocked work is open in the literal sense but isn't lag-relevant — it's waiting on something else by design. Same for `scheduled` (waiting on time). Probably keep them but document semantics.
 5. **Histogram of `attempt` distribution.** A bucketed `attempt_distribution{type, bucket}` gauge would let users alert on "many jobs at high retry counts" without baking a threshold into the package. Worth a follow-up; not in v1.
