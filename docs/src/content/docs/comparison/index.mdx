@@ -45,8 +45,8 @@ If your problem involves multiple shapes of work — high-throughput queue lanes
 | Category                             | Job-chain library     | Job queue           | Job queue         | Workflow platform          | Workflow platform                |
 | Storage                              | Your DB (PG / SQLite) | Postgres            | Redis             | Separate cluster (or SaaS) | Inngest server (managed or OSS)  |
 | Operate a server?                    | No                    | No                  | Redis             | Yes                        | Yes                              |
-| Transactional enqueue                | ✅ structural         | 🟡 per-call adapter | ❌ app discipline | ❌ app discipline          | ❌ app discipline                |
-| Transactional handler completion     | ✅ structural         | ❌ app discipline   | ❌ app discipline | ❌ app discipline          | ❌ app discipline                |
+| Transactional enqueue                | ✅ structural         | 🟡 per-call adapter  | ❌ app discipline | ❌ app discipline          | ❌ app discipline                |
+| Transactional handler completion     | ✅ structural         | 🟡 per-call adapter  | ❌ app discipline | ❌ app discipline          | ❌ app discipline                |
 | Typed multi-step chains              | ✅ end-to-end         | ❌                  | 🟡 FlowProducer   | ✅ workflow code           | ✅ functions + steps             |
 | Resume work days/weeks later         | ✅ schedule next step | ✅ `sendAfter`      | ✅ `delay` option | ✅ in-line `sleep('30d')`  | ✅ in-line `step.sleep('30d')`   |
 
