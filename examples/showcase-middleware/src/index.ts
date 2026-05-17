@@ -78,7 +78,7 @@ const auditLog: { event: string; userId: string; invoiceId?: string }[] = [];
 
 const resourceMiddleware: AttemptMiddleware<
   any,
-  {},
+  Record<string, never>,
   { user: User },
   { audit: (event: string, extra?: { invoiceId?: string }) => void }
 > = {

@@ -14,7 +14,7 @@ type LogEntry<
   level: TLevel;
   message: TMessage;
   data: TData;
-} & ([TError] extends [never] ? {} : { error: TError });
+} & ([TError] extends [never] ? unknown : { error: TError });
 
 type WorkerBasicData = { workerId: string | null };
 type WorkerStartedLogEntry = LogEntry<

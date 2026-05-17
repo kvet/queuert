@@ -57,7 +57,7 @@ export type AttemptCompleteOptions<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
   TChainTypeName extends string,
-  TCompleteCtx extends Record<string, unknown> = {},
+  TCompleteCtx extends Record<string, unknown> = Record<string, unknown>,
 > = {
   continueWith: <
     // oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- TContinueJobTypeNames drives conditional type inference
@@ -96,7 +96,7 @@ export type AttemptCompleteCallback<
   TJobTypeName extends string,
   TChainTypeName extends string,
   TResult,
-  TCompleteCtx extends Record<string, unknown> = {},
+  TCompleteCtx extends Record<string, unknown> = Record<string, unknown>,
 > = (
   completeOptions: AttemptCompleteOptions<
     TStateAdapter,
@@ -113,7 +113,7 @@ export type AttemptComplete<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
   TChainTypeName extends string,
-  TCompleteCtx extends Record<string, unknown> = {},
+  TCompleteCtx extends Record<string, unknown> = Record<string, unknown>,
 > = <
   TReturn extends
     | JobTypeProperty<TJobTypeDefinitions, TJobTypeName, "output">
@@ -163,7 +163,7 @@ export type AttemptPrepareOptions = { mode: "atomic" | "staged" };
 export type AttemptPrepareCallback<
   TStateAdapter extends StateAdapter<BaseTxContext, any>,
   T,
-  TPrepareCtx extends Record<string, unknown> = {},
+  TPrepareCtx extends Record<string, unknown> = Record<string, unknown>,
 > = (
   prepareCallbackOptions: GetStateAdapterTxContext<TStateAdapter> & TPrepareCtx,
 ) => T | Promise<T>;
@@ -171,7 +171,7 @@ export type AttemptPrepareCallback<
 /** Typed prepare function provided to the {@link AttemptHandler | attemptHandler}. Controls the processing mode and optionally runs a callback within the prepare transaction. */
 export type AttemptPrepare<
   TStateAdapter extends StateAdapter<BaseTxContext, any>,
-  TPrepareCtx extends Record<string, unknown> = {},
+  TPrepareCtx extends Record<string, unknown> = Record<string, unknown>,
 > = {
   (config: AttemptPrepareOptions): Promise<void>;
   <T>(

@@ -71,7 +71,7 @@ type ExpectedSpan = {
   links?: number;
 };
 
-export const extendWithObservabilityOtel = <T extends {}>(
+export const extendWithObservabilityOtel = <T extends Record<string, unknown>>(
   api: TestAPI<T>,
 ): TestAPI<
   T & {

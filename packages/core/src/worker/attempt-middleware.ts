@@ -34,9 +34,9 @@ type RunningJob<TStateAdapter extends StateAdapter<any, any>> = ResolvedJobWithB
  */
 export type AttemptMiddleware<
   TStateAdapter extends StateAdapter<any, any>,
-  THandlerCtx extends Record<string, unknown> = {},
-  TPrepareCtx extends Record<string, unknown> = {},
-  TCompleteCtx extends Record<string, unknown> = {},
+  THandlerCtx extends Record<string, unknown> = Record<string, unknown>,
+  TPrepareCtx extends Record<string, unknown> = Record<string, unknown>,
+  TCompleteCtx extends Record<string, unknown> = Record<string, unknown>,
 > = {
   wrapHandler?: <T>(opts: {
     job: RunningJob<TStateAdapter>;
@@ -67,7 +67,7 @@ export type MergedAttemptHandlerCtx<T extends readonly AnyJobAttemptMiddleware[]
     ...infer Rest extends readonly AnyJobAttemptMiddleware[],
   ]
     ? H & MergedAttemptHandlerCtx<Rest>
-    : {};
+    : unknown;
 
 /** Merge prepare-phase ctx from a tuple of {@link AttemptMiddleware}s. */
 export type MergedPrepareCtx<T extends readonly AnyJobAttemptMiddleware[]> = T extends readonly [
@@ -75,7 +75,7 @@ export type MergedPrepareCtx<T extends readonly AnyJobAttemptMiddleware[]> = T e
   ...infer Rest extends readonly AnyJobAttemptMiddleware[],
 ]
   ? P & MergedPrepareCtx<Rest>
-  : {};
+  : unknown;
 
 /** Merge complete-phase ctx from a tuple of {@link AttemptMiddleware}s. */
 export type MergedCompleteCtx<T extends readonly AnyJobAttemptMiddleware[]> = T extends readonly [
@@ -83,7 +83,7 @@ export type MergedCompleteCtx<T extends readonly AnyJobAttemptMiddleware[]> = T 
   ...infer Rest extends readonly AnyJobAttemptMiddleware[],
 ]
   ? C & MergedCompleteCtx<Rest>
-  : {};
+  : unknown;
 
 /** Bidirectional assignability check used for middleware tuple identity. @internal */
 type TypesEqual<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;

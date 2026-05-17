@@ -95,6 +95,7 @@
     "typescript/no-unnecessary-type-assertion": "warn",
     "typescript/no-unnecessary-type-constraint": "warn",
     "typescript/no-deprecated": "warn",
+    "typescript/no-empty-object-type": "warn",
     "typescript/prefer-nullish-coalescing": "warn",
     "typescript/array-type": "warn",
     "typescript/consistent-type-definitions": ["warn", "type"],

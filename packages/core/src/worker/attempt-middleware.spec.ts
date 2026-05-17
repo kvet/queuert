@@ -105,7 +105,7 @@ describe("AttemptMiddleware ctx type inference", () => {
   });
 
   it("prepareCallback options include prepare ctx alongside txCtx", () => {
-    const w: AttemptMiddleware<any, {}, { tag: string }> = {
+    const w: AttemptMiddleware<any, Record<string, never>, { tag: string }> = {
       wrapPrepare: async ({ next }) => next({ tag: "t" }),
     };
 
@@ -127,7 +127,12 @@ describe("AttemptMiddleware ctx type inference", () => {
   });
 
   it("completeCallback options include complete ctx alongside continueWith & txCtx", () => {
-    const w: AttemptMiddleware<any, {}, {}, { audit: (evt: string) => void }> = {
+    const w: AttemptMiddleware<
+      any,
+      Record<string, never>,
+      Record<string, never>,
+      { audit: (evt: string) => void }
+    > = {
       wrapComplete: async ({ next }) => next({ audit: () => {} }),
     };
 

@@ -33,7 +33,7 @@ export type StateJob = {
 };
 
 /** Base type for state adapter contexts. */
-export type BaseTxContext = {};
+export type BaseTxContext = Record<string, unknown>;
 
 /**
  * Abstracts database operations for job persistence.

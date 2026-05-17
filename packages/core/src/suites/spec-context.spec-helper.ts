@@ -81,7 +81,7 @@ export const extendWithCommon = <
     ],
   }) as any;
 
-export const extendWithNotifyInProcess = <T extends {}>(
+export const extendWithNotifyInProcess = <T extends Record<string, unknown>>(
   it: TestAPI<T>,
 ): TestAPI<T & Pick<TestSuiteContext, "notifyAdapter"> & { flakyNotifyAdapter: NotifyAdapter }> =>
   it.extend<Pick<TestSuiteContext, "notifyAdapter"> & { flakyNotifyAdapter: NotifyAdapter }>({
@@ -158,7 +158,7 @@ export const extendWithNotifyInProcess = <T extends {}>(
     ],
   }) as any;
 
-export const extendWithNotifyNoop = <T extends {}>(
+export const extendWithNotifyNoop = <T extends Record<string, unknown>>(
   it: TestAPI<T>,
 ): TestAPI<T & Pick<TestSuiteContext, "notifyAdapter">> =>
   it.extend<Pick<TestSuiteContext, "notifyAdapter">>({
@@ -176,7 +176,7 @@ const ALLOWED_RESOURCE_TYPES = new Set([
   "GetAddrInfoReqWrap", // DNS lookups - transient
 ]);
 
-export const extendWithResourceLeakDetection = <T extends {}>(
+export const extendWithResourceLeakDetection = <T extends Record<string, unknown>>(
   it: TestAPI<T>,
   options?: { additionalAllowedTypes?: string[] },
 ): TestAPI<T> => {

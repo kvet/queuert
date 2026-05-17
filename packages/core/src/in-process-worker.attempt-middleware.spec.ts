@@ -276,8 +276,8 @@ describe("registry-level attemptMiddleware — runtime per-slice isolation", () 
       },
     };
 
-    type ADefs = { a: { entry: true; input: {}; output: null } };
-    type BDefs = { b: { entry: true; input: {}; output: null } };
+    type ADefs = { a: { entry: true; input: Record<string, never>; output: null } };
+    type BDefs = { b: { entry: true; input: Record<string, never>; output: null } };
     const aReg = defineJobTypes<ADefs>();
     const bReg = defineJobTypes<BDefs>();
     const sa = await createInProcessStateAdapter();

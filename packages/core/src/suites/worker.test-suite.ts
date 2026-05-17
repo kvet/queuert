@@ -379,7 +379,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       jobTypes,
     });
 
-    const prepareMiddleware: AttemptMiddleware<any, {}, { tag: string }> = {
+    const prepareMiddleware: AttemptMiddleware<any, Record<string, never>, { tag: string }> = {
       wrapPrepare: async ({ next }) => {
         order.push("prepare-wrap-before");
         const result = await next({ tag: "prep" });
@@ -451,7 +451,12 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       jobTypes,
     });
 
-    const completeMiddleware: AttemptMiddleware<any, {}, {}, { tag: string }> = {
+    const completeMiddleware: AttemptMiddleware<
+      any,
+      Record<string, never>,
+      Record<string, never>,
+      { tag: string }
+    > = {
       wrapComplete: async ({ next }) => {
         order.push("complete-wrap-before");
         const result = await next({ tag: "complete" });
