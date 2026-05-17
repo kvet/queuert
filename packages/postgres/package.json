@@ -1,6 +1,6 @@
 {
   "name": "@queuert/postgres",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "description": "PostgreSQL state and notify adapter for Queuert",
   "keywords": [
     "background-jobs",
