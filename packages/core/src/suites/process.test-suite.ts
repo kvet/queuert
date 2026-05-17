@@ -232,6 +232,74 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     expect(attempts).toEqual([1, 2, 3]);
   });
 
+  it("clears lastAttemptError after a successful attempt following a failure", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: {
+        entry: true;
+        input: null;
+        output: null;
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        backoffConfig: {
+          initialDelayMs: 1,
+          multiplier: 1,
+          maxDelayMs: 1,
+        },
+        processors: {
+          test: {
+            attemptHandler: async ({ job, prepare, complete }) => {
+              if (job.attempt < 2) {
+                throw new Error("Simulated failure");
+              }
+              await prepare({ mode: "atomic" });
+              return complete(async () => null);
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: null,
+        }),
+      ),
+    );
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitChain(chain, completionOptions);
+    });
+
+    const completedJob = await stateAdapter.getJob({ jobId: chain.id });
+    expect(completedJob?.status).toBe("completed");
+    expect(completedJob?.lastAttemptError).toBeNull();
+  });
+
   it("uses exponential backoff progression for repeated failures", async ({
     stateAdapter,
     notifyAdapter,

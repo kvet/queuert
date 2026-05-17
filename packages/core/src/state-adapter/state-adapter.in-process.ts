@@ -870,6 +870,7 @@ export const createInProcessStateAdapter = async ({
           output,
           leasedBy: null,
           leasedUntil: null,
+          lastAttemptError: null,
         };
 
         writeJob(journal, job, updatedJob);

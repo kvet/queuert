@@ -5,7 +5,6 @@
 - [?,REF] Change complete job chain to something more empirical?
 - [?,REF] Reset jobs in chains + dashboard
 - [?,REF] Allow worker stopping signal to be risen in attempt handler
-- [?,REF] Clean last attempt error in case it didn't produce an error on the last attempt (I see some complete jobs with last attempt error set, which is confusing)
 
 # Short term
 

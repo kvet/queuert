@@ -53,6 +53,55 @@ export const completeJobGroup: ConformanceGroup<StateAdapterConformanceContext> 
       },
     },
     {
+      name: "clears lastAttemptError when completing a job that previously failed",
+      run: async ({ stateAdapter }, expect) => {
+        const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                typeName: "complete-clears-error",
+                chainId: undefined,
+                chainIndex: 0,
+                chainTypeName: "complete-clears-error",
+                input: null,
+              },
+            ],
+          }),
+        );
+
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.acquireJob({ txCtx, typeNames: ["complete-clears-error"] }),
+        );
+
+        const rescheduled = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.rescheduleJob({
+            txCtx,
+            jobId: created.id,
+            schedule: { afterMs: 0 },
+            error: "first attempt failed",
+          }),
+        );
+        expect(rescheduled.lastAttemptError).toBe("first attempt failed");
+
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.acquireJob({ txCtx, typeNames: ["complete-clears-error"] }),
+        );
+
+        const completed = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.completeJob({
+            txCtx,
+            jobId: created.id,
+            output: { ok: true },
+            workerId: "worker-1",
+          }),
+        );
+
+        expect(completed.status).toBe("completed");
+        expect(completed.lastAttemptError).toBeNull();
+      },
+    },
+    {
       name: "completes a job with null workerId (workerless)",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>

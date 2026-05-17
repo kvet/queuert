@@ -631,7 +631,8 @@ SET status = 'completed',
   completed_by = ?,
   output = ?,
   leased_by = NULL,
-  leased_until = NULL
+  leased_until = NULL,
+  last_attempt_error = NULL
 WHERE id = ?
 RETURNING *
 `,
