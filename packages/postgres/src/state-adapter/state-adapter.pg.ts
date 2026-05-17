@@ -708,8 +708,9 @@ export const createPgStateAdapter = async <
   return {
     ...rawAdapter,
     migrateToLatest: async () => {
-      const runMigrations = await executeMigrations<TTxContext>({
+      return executeMigrations<TTxContext>({
         migrations,
+        runInTransaction: stateProvider.withTransaction,
         getAppliedMigrationNames: async (txCtx) => {
           await stateProvider.executeSql({
             txCtx,
@@ -752,8 +753,6 @@ export const createPgStateAdapter = async <
           });
         },
       });
-
-      return stateProvider.withTransaction(runMigrations);
     },
     vacuum: async () => {
       await stateProvider.executeSql({

@@ -71,6 +71,7 @@ export type DbChainRow = DbJob & {
 export const migrations: Migration[] = [
   {
     name: "20240101000000_initial_schema",
+    transactional: true,
     statements: [
       {
         sql: sql(/* sql */ `
@@ -176,6 +177,7 @@ ON {{table_prefix}}job (type_name, created_at DESC) WHERE chain_index = 0`),
   },
   {
     name: "20260430000000_rename_chain_indexes",
+    transactional: true,
     statements: [
       {
         sql: sql(/* sql */ `DROP INDEX IF EXISTS {{table_prefix}}job_chain_index_idx`),

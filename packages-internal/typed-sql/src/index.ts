@@ -112,9 +112,25 @@ export type MigrationStatement = {
   sql: TypedSql;
 };
 
+/**
+ * A schema migration applied once per database. Identified by `name` (the dedup
+ * key recorded in the migrations table) and a list of SQL `statements` run in
+ * order.
+ *
+ * `transactional` controls whether the statements + the migration record run
+ * inside a single transaction:
+ * - `true` — statements + record are atomic; on failure the migration is
+ *   retried from scratch on next startup. Use this for almost all migrations.
+ * - `false` — statements run outside any transaction; only the migration
+ *   record is written transactionally afterwards. Use only when the DB forbids
+ *   transactional execution (e.g., Postgres `CREATE INDEX CONCURRENTLY`).
+ *   Every statement must be idempotent because a partial failure leaves rows
+ *   half-applied and the migration is retried as-is.
+ */
 export type Migration = {
   name: string;
   statements: MigrationStatement[];
+  transactional: boolean;
 };
 
 // ---------------------------------------------------------------------------
@@ -208,32 +224,42 @@ export type MigrationResult = {
 
 export const executeMigrations = async <TTxContext>({
   migrations,
+  runInTransaction,
   getAppliedMigrationNames,
   executeMigrationStatements,
   recordMigration,
 }: {
   migrations: Migration[];
-  getAppliedMigrationNames: (txCtx: TTxContext) => Promise<string[]>;
-  executeMigrationStatements: (txCtx: TTxContext, migration: Migration) => Promise<void>;
-  recordMigration: (txCtx: TTxContext, name: string) => Promise<void>;
-}): Promise<(txCtx: TTxContext) => Promise<MigrationResult>> => {
+  runInTransaction: <T>(fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
+  getAppliedMigrationNames: (txCtx: TTxContext | undefined) => Promise<string[]>;
+  executeMigrationStatements: (
+    txCtx: TTxContext | undefined,
+    migration: Migration,
+  ) => Promise<void>;
+  recordMigration: (txCtx: TTxContext | undefined, name: string) => Promise<void>;
+}): Promise<MigrationResult> => {
   const migrationNames = new Set(migrations.map((m) => m.name));
 
-  return async (txCtx: TTxContext): Promise<MigrationResult> => {
-    const previouslyApplied = await getAppliedMigrationNames(txCtx);
-    const previouslyAppliedSet = new Set(previouslyApplied);
+  const previouslyApplied = await runInTransaction(getAppliedMigrationNames);
+  const previouslyAppliedSet = new Set(previouslyApplied);
 
-    const skipped = previouslyApplied.filter((name) => migrationNames.has(name));
-    const unrecognized = previouslyApplied.filter((name) => !migrationNames.has(name));
-    const pending = migrations.filter((m) => !previouslyAppliedSet.has(m.name));
-    const applied: string[] = [];
+  const skipped = previouslyApplied.filter((name) => migrationNames.has(name));
+  const unrecognized = previouslyApplied.filter((name) => !migrationNames.has(name));
+  const pending = migrations.filter((m) => !previouslyAppliedSet.has(m.name));
+  const applied: string[] = [];
 
-    for (const migration of pending) {
-      await executeMigrationStatements(txCtx, migration);
-      await recordMigration(txCtx, migration.name);
-      applied.push(migration.name);
+  for (const migration of pending) {
+    if (migration.transactional) {
+      await runInTransaction(async (txCtx) => {
+        await executeMigrationStatements(txCtx, migration);
+        await recordMigration(txCtx, migration.name);
+      });
+    } else {
+      await executeMigrationStatements(undefined, migration);
+      await runInTransaction(async (txCtx) => recordMigration(txCtx, migration.name));
     }
+    applied.push(migration.name);
+  }
 
-    return { skipped, applied, unrecognized };
-  };
+  return { skipped, applied, unrecognized };
 };

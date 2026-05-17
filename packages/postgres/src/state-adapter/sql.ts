@@ -39,6 +39,7 @@ export type DbJob = {
 export const migrations: Migration[] = [
   {
     name: "20240101000000_initial_schema",
+    transactional: true,
     statements: [
       {
         sql: sql(/* sql */ `
@@ -152,6 +153,7 @@ ON {{schema}}.{{table_prefix}}job (type_name, created_at DESC) WHERE chain_index
   },
   {
     name: "20240102000000_vacuum_tuning",
+    transactional: true,
     statements: [
       {
         sql: sql(/* sql */ `
@@ -172,6 +174,7 @@ ALTER TABLE {{schema}}.{{table_prefix}}job_blocker SET (
   },
   {
     name: "20260430000000_rename_chain_indexes",
+    transactional: true,
     statements: [
       {
         sql: sql(/* sql */ `
