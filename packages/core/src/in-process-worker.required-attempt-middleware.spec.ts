@@ -7,6 +7,7 @@ import {
   type InProcessStateAdapter,
   createInProcessStateAdapter,
 } from "./state-adapter/state-adapter.in-process.js";
+import { type StateAdapter } from "./state-adapter/state-adapter.js";
 import { type AttemptMiddleware } from "./worker/attempt-middleware.js";
 import { createProcessors } from "./worker/create-processors.js";
 
@@ -206,6 +207,65 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
         processors: [goodSlice, badSlice],
       }),
     ).rejects.toThrow(/"bar": missing requiredAttemptMiddleware at position\(s\) \[0\]/);
+  });
+
+  it("accepts a slice typed against a user-supplied StateAdapter alias", async () => {
+    type MyStateAdapter = StateAdapter<{ db: string }, `job.${string}`>;
+    const mw: AttemptMiddleware<MyStateAdapter> = {
+      wrapHandler: async ({ next }) => next({}),
+    };
+
+    const jobTypes = defineJobTypes<Defs>();
+    const stateAdapter = await createInProcessStateAdapter();
+    const client = await createClient({ stateAdapter, jobTypes });
+
+    const worker = await createInProcessWorker({
+      client,
+      requiredAttemptMiddleware: [mw],
+      processors: createProcessors({
+        client,
+        jobTypes,
+        attemptMiddleware: [mw],
+        processors: {
+          foo: { attemptHandler: async ({ complete }) => complete(async () => null) },
+        },
+      }),
+    });
+
+    const stop = await worker.start();
+    await stop();
+  });
+
+  it("still rejects a mismatched slice when required mw is typed against a StateAdapter alias", async () => {
+    type MyStateAdapter = StateAdapter<{ db: string }, `job.${string}`>;
+    const required: AttemptMiddleware<MyStateAdapter, { userId: string }> = {
+      wrapHandler: async ({ next }) => next({ userId: "u-1" }),
+    };
+    const other: AttemptMiddleware<MyStateAdapter, { traceId: string }> = {
+      wrapHandler: async ({ next }) => next({ traceId: "t-1" }),
+    };
+
+    const jobTypes = defineJobTypes<Defs>();
+    const stateAdapter = await createInProcessStateAdapter();
+    const client = await createClient({ stateAdapter, jobTypes });
+
+    await expect(
+      createInProcessWorker({
+        client,
+        requiredAttemptMiddleware: [required],
+        // @ts-expect-error — slice has a distinct middleware shape; the
+        // subsequence check must still flag this even though both are typed
+        // against the same user-supplied StateAdapter alias.
+        processors: createProcessors({
+          client,
+          jobTypes,
+          attemptMiddleware: [other],
+          processors: {
+            foo: { attemptHandler: async ({ complete }) => complete(async () => null) },
+          },
+        }),
+      }),
+    ).rejects.toThrow(/missing requiredAttemptMiddleware/);
   });
 
   it("is a no-op when requiredAttemptMiddleware is omitted", async () => {

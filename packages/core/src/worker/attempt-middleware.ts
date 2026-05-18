@@ -103,17 +103,17 @@ export type IsAttemptMiddlewareSubsequence<
   TMW extends readonly AnyJobAttemptMiddleware[],
 > = TReq extends readonly []
   ? true
-  : TMW extends readonly [
-        infer H extends AnyJobAttemptMiddleware,
-        ...infer Rest extends readonly AnyJobAttemptMiddleware[],
-      ]
-    ? TReq extends readonly [
-        infer R extends AnyJobAttemptMiddleware,
-        ...infer ReqRest extends readonly AnyJobAttemptMiddleware[],
-      ]
+  : TMW extends readonly [infer H, ...infer Rest]
+    ? TReq extends readonly [infer R, ...infer ReqRest]
       ? TypesEqual<H, R> extends true
-        ? IsAttemptMiddlewareSubsequence<ReqRest, Rest>
-        : IsAttemptMiddlewareSubsequence<TReq, Rest>
+        ? ReqRest extends readonly AnyJobAttemptMiddleware[]
+          ? Rest extends readonly AnyJobAttemptMiddleware[]
+            ? IsAttemptMiddlewareSubsequence<ReqRest, Rest>
+            : false
+          : false
+        : Rest extends readonly AnyJobAttemptMiddleware[]
+          ? IsAttemptMiddlewareSubsequence<TReq, Rest>
+          : false
       : true
     : false;
 
