@@ -1,0 +1,64 @@
+---
+import Diagram from "./Diagram.astro";
+---
+
+<Diagram
+  viewBox="0 0 800 440"
+  alt="Wake-hint flow: a publisher attaches a per-typeName budget to a notification; the first N listeners atomically claim a hint and poll, while additional listeners skip the wake."
+>
+  <!-- Publisher (left) -->
+  <rect x="20" y="170" width="150" height="80" rx="12" class="client" />
+  <text x="95" y="200" class="label-strong">Publisher</text>
+  <text x="95" y="222" class="muted small">schedules 3 jobs</text>
+
+  <!-- Notify adapter (center) -->
+  <g>
+    <rect x="270" y="120" width="260" height="200" rx="14" class="notify" />
+    <text x="400" y="148" class="label-strong text-hint">Notify adapter</text>
+    <text x="400" y="168" class="muted tiny">wake budget per typeName (TTL 60s)</text>
+
+    <!-- Budget visualizer -->
+    <rect x="295" y="190" width="210" height="60" rx="10" class="fill-hint stroke-hint" />
+    <text x="400" y="213" class="tiny muted">budget[typeName]</text>
+    <text x="400" y="237" class="label-strong text-hint mono">3 → 2 → 1 → 0</text>
+
+    <text x="400" y="277" class="muted tiny">consumeWakeHint atomically</text>
+    <text x="400" y="293" class="muted tiny">decrements; returns true while &gt; 0,</text>
+    <text x="400" y="309" class="muted tiny">false once exhausted.</text>
+  </g>
+
+  <!-- Four workers (right): A, B, C wake; D skipped -->
+  <g>
+    <rect x="620" y="55"  width="160" height="50" rx="10" class="worker" />
+    <text x="700" y="85" class="label-strong small">Worker A — wakes</text>
+
+    <rect x="620" y="135" width="160" height="50" rx="10" class="worker" />
+    <text x="700" y="165" class="label-strong small">Worker B — wakes</text>
+
+    <rect x="620" y="215" width="160" height="50" rx="10" class="worker" />
+    <text x="700" y="245" class="label-strong small">Worker C — wakes</text>
+
+    <rect x="620" y="295" width="160" height="50" rx="10" class="job-muted" />
+    <text x="700" y="325" class="muted small">Worker D — skips wake</text>
+  </g>
+
+  <!-- Publisher → Notify (provide hint + notify) -->
+  <path d="M 170,200 L 270,200" class="arrow" marker-end="url(#d-head-stroke)" />
+  <path d="M 170,220 L 270,220" class="arrow" marker-end="url(#d-head-stroke)" />
+  <text x="220" y="194" class="halo tiny">provideWakeHint(t, 3)</text>
+  <text x="220" y="240" class="halo tiny muted">notifyJobScheduled(t)</text>
+
+  <!-- Notify → workers -->
+  <path d="M 530,210 C 570,150 580,90 620,80"   class="arrow s-green" marker-end="url(#d-head-green)" />
+  <path d="M 530,220 C 570,200 580,170 620,160" class="arrow s-green" marker-end="url(#d-head-green)" />
+  <path d="M 530,230 C 570,250 580,230 620,240" class="arrow s-green" marker-end="url(#d-head-green)" />
+  <path d="M 530,240 C 570,300 580,310 620,320" class="arrow dotted s-gray" marker-end="url(#d-head-gray)" />
+
+  <text x="600" y="120" class="halo tiny text-green">true</text>
+  <text x="600" y="195" class="halo tiny text-green">true</text>
+  <text x="600" y="275" class="halo tiny text-green">true</text>
+  <text x="600" y="358" class="halo tiny muted">false</text>
+
+  <!-- Caption -->
+  <text x="400" y="420" class="caption">Publisher attaches a budget of N before notifying; the first N listeners atomically claim a slot. Additional listeners skip the wake.</text>
+</Diagram>

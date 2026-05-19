@@ -1,0 +1,364 @@
+/* Shared diagram primitives. Each .diagram is a hand-positioned SVG figure.
+ *
+ * Layers:
+ *  1. Tokens (CSS vars on .diagram)
+ *  2. Base typography + halo
+ *  3. Generic primitives: .box, .arrow, .cylinder
+ *  4. Color utilities: .stroke-{role}, .fill-{role}, .text-{role}, .arrow.s-{role}
+ *  5. Semantic shortcuts: .client, .worker, .process, .notify, .job, .producer,
+ *     .consumer, .internal, .ok, .err, .txn, .savepoint, .step — pre-styled
+ *     compositions for the entities that recur across diagrams.
+ */
+
+.diagram {
+  --d-blue: #2563eb;
+  --d-green: #16a34a;
+  --d-teal: #0e7490;
+  --d-hint: #d97706; /* amber — notify/wake/optional flows */
+  --d-purple: #7c3aed;
+  --d-red: #dc2626;
+  --d-amber: #ca8a04;
+  --d-gray: #6b7280;
+
+  --d-stroke: var(--sl-color-gray-3, #475569);
+  --d-text: var(--sl-color-white, #1f2937);
+  --d-muted: var(--sl-color-gray-3, #6b7280);
+  --d-bg: var(--sl-color-bg, #ffffff);
+
+  --d-max-width: 780px;
+
+  margin: 1.75rem auto;
+  max-width: var(--d-max-width);
+}
+
+.diagram svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  font-family: var(--sl-font, ui-sans-serif, system-ui, sans-serif);
+}
+
+/* ---------- Typography ---------- */
+.diagram text {
+  fill: var(--d-text);
+  font-size: 15px;
+}
+.diagram text:not([text-anchor]) {
+  text-anchor: middle;
+}
+.diagram .title {
+  font-weight: 600;
+  font-size: 15px;
+}
+.diagram .label-strong {
+  font-weight: 600;
+}
+.diagram .small {
+  font-size: 13px;
+}
+.diagram .tiny {
+  font-size: 12px;
+}
+.diagram .muted {
+  fill: var(--d-muted);
+  font-size: 13px;
+}
+.diagram .caption {
+  fill: var(--d-muted);
+  font-size: 12px;
+  font-style: italic;
+}
+.diagram .mono {
+  font-family: var(--sl-font-mono, ui-monospace, "SF Mono", Menlo, monospace);
+  font-size: 13px;
+}
+
+/* Halo: background-colored outline so labels stay readable over arrows. */
+.diagram .halo {
+  paint-order: stroke fill;
+  stroke: var(--d-bg);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+/* ---------- Generic primitives ---------- */
+.diagram .box {
+  fill: transparent;
+  stroke-width: 1.75;
+  stroke: var(--d-stroke);
+}
+.diagram .box.soft {
+  fill: color-mix(in srgb, currentColor 10%, transparent);
+}
+.diagram .box.solid-fill {
+  fill: color-mix(in srgb, currentColor 16%, transparent);
+}
+.diagram .box.dashed {
+  stroke-dasharray: 6 4;
+  stroke-width: 1.5;
+}
+.diagram .box.dotted {
+  stroke-dasharray: 0 5;
+  stroke-linecap: round;
+  stroke-width: 1.5;
+}
+
+.diagram .arrow {
+  fill: none;
+  stroke-width: 1.5;
+  stroke: var(--d-stroke);
+}
+.diagram .arrow.dashed {
+  stroke-dasharray: 6 4;
+}
+.diagram .arrow.dotted {
+  stroke-dasharray: 1 5;
+  stroke-linecap: round;
+}
+
+/* ---------- Color utilities ---------- */
+.diagram .stroke-blue {
+  stroke: var(--d-blue);
+}
+.diagram .stroke-green {
+  stroke: var(--d-green);
+}
+.diagram .stroke-teal {
+  stroke: var(--d-teal);
+}
+.diagram .stroke-hint {
+  stroke: var(--d-hint);
+}
+.diagram .stroke-purple {
+  stroke: var(--d-purple);
+}
+.diagram .stroke-red {
+  stroke: var(--d-red);
+}
+.diagram .stroke-amber {
+  stroke: var(--d-amber);
+}
+.diagram .stroke-gray {
+  stroke: var(--d-gray);
+}
+
+.diagram .fill-blue {
+  fill: color-mix(in srgb, var(--d-blue) 12%, transparent);
+}
+.diagram .fill-green {
+  fill: color-mix(in srgb, var(--d-green) 12%, transparent);
+}
+.diagram .fill-teal {
+  fill: color-mix(in srgb, var(--d-teal) 12%, transparent);
+}
+.diagram .fill-hint {
+  fill: color-mix(in srgb, var(--d-hint) 12%, transparent);
+}
+.diagram .fill-purple {
+  fill: color-mix(in srgb, var(--d-purple) 12%, transparent);
+}
+.diagram .fill-red {
+  fill: color-mix(in srgb, var(--d-red) 12%, transparent);
+}
+.diagram .fill-amber {
+  fill: color-mix(in srgb, var(--d-amber) 12%, transparent);
+}
+.diagram .fill-gray {
+  fill: color-mix(in srgb, var(--d-gray) 12%, transparent);
+}
+
+.diagram .text-blue {
+  fill: var(--d-blue);
+}
+.diagram .text-green {
+  fill: var(--d-green);
+}
+.diagram .text-teal {
+  fill: var(--d-teal);
+}
+.diagram .text-hint {
+  fill: var(--d-hint);
+}
+.diagram .text-purple {
+  fill: var(--d-purple);
+}
+.diagram .text-red {
+  fill: var(--d-red);
+}
+.diagram .text-amber {
+  fill: var(--d-amber);
+}
+.diagram .text-gray {
+  fill: var(--d-gray);
+}
+.diagram .text-muted {
+  fill: var(--d-muted);
+}
+
+.diagram .arrow.s-blue {
+  stroke: var(--d-blue);
+}
+.diagram .arrow.s-green {
+  stroke: var(--d-green);
+}
+.diagram .arrow.s-teal {
+  stroke: var(--d-teal);
+}
+.diagram .arrow.s-hint {
+  stroke: var(--d-hint);
+}
+.diagram .arrow.s-purple {
+  stroke: var(--d-purple);
+}
+.diagram .arrow.s-red {
+  stroke: var(--d-red);
+}
+.diagram .arrow.s-gray {
+  stroke: var(--d-gray);
+}
+
+/* Marker fills (markers reference by class on their inner <path>) */
+.diagram .head-stroke {
+  fill: var(--d-stroke);
+}
+.diagram .head-blue {
+  fill: var(--d-blue);
+}
+.diagram .head-green {
+  fill: var(--d-green);
+}
+.diagram .head-teal {
+  fill: var(--d-teal);
+}
+.diagram .head-hint {
+  fill: var(--d-hint);
+}
+.diagram .head-purple {
+  fill: var(--d-purple);
+}
+.diagram .head-red {
+  fill: var(--d-red);
+}
+.diagram .head-gray {
+  fill: var(--d-gray);
+}
+
+/* ---------- Cylinder (database shape) ---------- */
+.diagram .cylinder {
+  fill: color-mix(in srgb, var(--d-teal) 10%, transparent);
+  stroke: var(--d-teal);
+  stroke-width: 1.5;
+}
+.diagram .cylinder-top {
+  fill: color-mix(in srgb, var(--d-teal) 18%, transparent);
+  stroke: var(--d-teal);
+  stroke-width: 1.5;
+}
+
+/* ---------- Semantic shortcuts ---------- */
+
+/* Client — solid filled inner blue rounded rect */
+.diagram .client {
+  stroke: var(--d-blue);
+  stroke-width: 1.75;
+  stroke-dasharray: 0;
+  fill: color-mix(in srgb, var(--d-blue) 16%, transparent);
+}
+
+/* Worker — solid filled inner green rounded rect */
+.diagram .worker {
+  stroke: var(--d-green);
+  stroke-width: 1.75;
+  stroke-dasharray: 0;
+  fill: color-mix(in srgb, var(--d-green) 16%, transparent);
+}
+
+/* Process container — dotted outline only, no fill (let the page background show through) */
+.diagram .process {
+  fill: transparent;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-dasharray: 0 5;
+  stroke-linecap: round;
+}
+
+/* Notify / pub-sub / optional container — dashed amber, transparent */
+.diagram .notify {
+  fill: transparent;
+  stroke: var(--d-hint);
+  stroke-width: 1.5;
+  stroke-dasharray: 6 4;
+}
+
+/* Job — generic chain-job rectangle */
+.diagram .job {
+  fill: color-mix(in srgb, var(--d-blue) 10%, transparent);
+  stroke: var(--d-blue);
+  stroke-width: 1.5;
+}
+.diagram .job-accent {
+  /* highlighted job — first-in-chain, blocked target, etc. */
+  fill: color-mix(in srgb, var(--d-hint) 14%, transparent);
+  stroke: var(--d-hint);
+  stroke-width: 1.75;
+}
+.diagram .job-muted {
+  fill: color-mix(in srgb, var(--d-gray) 6%, transparent);
+  stroke: var(--d-gray);
+  stroke-width: 1.5;
+}
+.diagram .job-done {
+  fill: color-mix(in srgb, var(--d-green) 10%, transparent);
+  stroke: var(--d-green);
+  stroke-width: 1.5;
+}
+
+/* OTEL span kinds */
+.diagram .producer {
+  fill: color-mix(in srgb, var(--d-hint) 14%, transparent);
+  stroke: var(--d-hint);
+  stroke-width: 1.5;
+}
+.diagram .consumer {
+  fill: color-mix(in srgb, var(--d-purple) 14%, transparent);
+  stroke: var(--d-purple);
+  stroke-width: 1.5;
+}
+.diagram .internal {
+  fill: color-mix(in srgb, var(--d-gray) 10%, transparent);
+  stroke: var(--d-gray);
+  stroke-width: 1.5;
+}
+
+/* Outcomes */
+.diagram .ok {
+  fill: color-mix(in srgb, var(--d-green) 12%, transparent);
+  stroke: var(--d-green);
+  stroke-width: 1.5;
+}
+.diagram .err {
+  fill: color-mix(in srgb, var(--d-red) 12%, transparent);
+  stroke: var(--d-red);
+  stroke-width: 1.5;
+}
+
+/* Transaction / savepoint nesting */
+.diagram .txn {
+  fill: color-mix(in srgb, var(--d-hint) 6%, transparent);
+  stroke: var(--d-hint);
+  stroke-width: 1.5;
+}
+.diagram .savepoint {
+  fill: color-mix(in srgb, var(--d-amber) 10%, transparent);
+  stroke: var(--d-amber);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+}
+
+/* Step (a discrete phase inside a txn/savepoint, or a generic action box) */
+.diagram .step {
+  fill: color-mix(in srgb, var(--d-blue) 14%, transparent);
+  stroke: var(--d-blue);
+  stroke-width: 1.5;
+}

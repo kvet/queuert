@@ -24,8 +24,6 @@
     "@types/better-sqlite3": "7.6.13",
     "better-sqlite3": "12.9.0",
     "kysely": "0.28.16",
-    "queuert": "workspace:*",
-    "tsx": "4.21.0",
-    "vitest": "4.1.4"
+    "queuert": "workspace:*"
   }
 }

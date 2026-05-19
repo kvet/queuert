@@ -12,7 +12,6 @@
     "winston": "3.19.0"
   },
   "devDependencies": {
-    "@queuert/tsconfig": "workspace:*",
-    "tsx": "4.21.0"
+    "@queuert/tsconfig": "workspace:*"
   }
 }

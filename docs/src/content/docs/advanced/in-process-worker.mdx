@@ -5,6 +5,8 @@ sidebar:
   order: 2
 ---
 
+import WorkerConcurrency from "../../../components/diagrams/WorkerConcurrency.astro";
+
 ## Overview
 
 This document describes the worker design in Queuert: how workers coordinate job processing, manage concurrency, and handle failures.
@@ -17,33 +19,7 @@ Workers process jobs in parallel using slots. See `createInProcessWorker` TSDoc 
 
 ### Architecture
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                         Worker                              │
-│                                                             │
-│  Main Loop                                                  │
-│  ┌───────────────────────────────────────────────────────┐ │
-│  │ 1. Fill available slots                               │ │
-│  │ 2. Reap expired lease (if idle)                       │ │
-│  │ 3. Wait for notification, timeout, or slot completion │ │
-│  └───────────────────────────────────────────────────────┘ │
-│                           │                                 │
-│           ┌───────────────┼───────────────┐                │
-│           ▼               ▼               ▼                │
-│     ┌──────────┐    ┌──────────┐    ┌──────────┐          │
-│     │  Slot 0  │    │  Slot 1  │    │  Slot 2  │  ...     │
-│     │ acquire  │    │ acquire  │    │ acquire  │          │
-│     │ process  │    │ process  │    │ process  │          │
-│     └──────────┘    └──────────┘    └──────────┘          │
-│           │               │               │                 │
-│           └───────────────┴───────────────┘                │
-│                           ▼                                 │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │            Shared State Adapter                      │   │
-│  │         (FOR UPDATE SKIP LOCKED)                     │   │
-│  └─────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
-```
+<WorkerConcurrency />
 
 **How it works:**
 

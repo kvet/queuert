@@ -16,7 +16,6 @@
   },
   "devDependencies": {
     "@queuert/testcontainers": "workspace:*",
-    "@queuert/tsconfig": "workspace:*",
-    "tsx": "4.21.0"
+    "@queuert/tsconfig": "workspace:*"
   }
 }

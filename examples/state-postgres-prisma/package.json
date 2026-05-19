@@ -27,8 +27,6 @@
     "@queuert/tsconfig": "workspace:*",
     "pg": "8.20.0",
     "prisma": "7.7.0",
-    "queuert": "workspace:*",
-    "tsx": "4.21.0",
-    "vitest": "4.1.4"
+    "queuert": "workspace:*"
   }
 }

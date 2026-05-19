@@ -19,7 +19,6 @@
     "@queuert/testcontainers": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
     "nats": "2.29.3",
-    "queuert": "workspace:*",
-    "tsx": "4.21.0"
+    "queuert": "workspace:*"
   }
 }

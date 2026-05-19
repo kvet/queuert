@@ -1,0 +1,68 @@
+---
+import Diagram from "./Diagram.astro";
+---
+
+<Diagram
+  viewBox="0 0 800 555"
+  alt="Queuert architecture: app client and worker both reach the same database; an optional pub/sub adapter wakes workers when new jobs commit."
+>
+  <!-- App process container -->
+  <g style="color: var(--d-blue)">
+    <rect x="30" y="40" width="260" height="170" rx="14" class="process" />
+    <text x="160" y="70" class="title text-blue">App process</text>
+    <rect x="80" y="100" width="160" height="80" rx="10" class="client" />
+    <text x="160" y="148" class="label-strong">Client</text>
+  </g>
+
+  <!-- Worker process container -->
+  <g style="color: var(--d-green)">
+    <rect x="510" y="40" width="260" height="170" rx="14" class="process" />
+    <text x="640" y="70" class="title text-green">Worker process</text>
+    <rect x="560" y="100" width="160" height="80" rx="10" class="worker" />
+    <text x="640" y="148" class="label-strong">Worker</text>
+  </g>
+
+  <!-- Database (cylinder) -->
+  <g>
+    <path
+      d="M 260,265 a 140,18 0 0 1 280,0 v 90 a 140,18 0 0 1 -280,0 z"
+      class="cylinder"
+    />
+    <ellipse cx="400" cy="265" rx="140" ry="18" class="cylinder-top" />
+    <text x="400" y="320" class="label-strong text-teal">Your database</text>
+    <text x="400" y="342" class="muted small">Postgres · SQLite · your own</text>
+    <text x="400" y="395" class="caption">source of truth for jobs</text>
+  </g>
+
+  <!-- Pub/sub (optional) -->
+  <g>
+    <rect x="260" y="435" width="280" height="80" rx="14" class="notify" />
+    <text x="528" y="427" class="caption text-hint" text-anchor="end">*optional</text>
+    <text x="400" y="465" class="label-strong text-hint">Your pub/sub</text>
+    <text x="400" y="490" class="muted small">Postgres LISTEN · Redis · NATS · in-process</text>
+    <text x="400" y="540" class="caption">latency optimization</text>
+  </g>
+
+  <!-- Solid arrows: Client/Worker -> DB (enter cylinder on its sides) -->
+  <path d="M 160,180 C 160,310 215,310 260,310" class="arrow" marker-end="url(#d-head-stroke)" />
+  <path d="M 640,180 C 640,310 585,310 540,310" class="arrow" marker-end="url(#d-head-stroke)" />
+
+  <!-- Dashed wake-hint arrows: Client -> pub/sub -> Worker -->
+  <path d="M 120,180 C 40,290 90,440 258,475" class="arrow dashed s-hint" marker-end="url(#d-head-hint)" />
+  <path d="M 542,475 C 710,440 760,290 680,180" class="arrow dashed s-hint" marker-end="url(#d-head-hint)" />
+
+  <!-- Edge labels -->
+  <g>
+    <text x="200" y="240" text-anchor="start" class="halo">enqueue with your tx</text>
+    <text x="200" y="256" text-anchor="start" class="muted halo">(via state adapter)</text>
+
+    <text x="600" y="240" text-anchor="end" class="halo">acquire · complete in your tx</text>
+    <text x="600" y="256" text-anchor="end" class="muted halo">(via state adapter)</text>
+
+    <text x="96" y="345" class="text-hint label-strong halo">wake hint</text>
+    <text x="96" y="361" class="muted halo">(via notify adapter)</text>
+
+    <text x="704" y="345" class="text-hint label-strong halo">wake</text>
+    <text x="704" y="361" class="muted halo">(via notify adapter)</text>
+  </g>
+</Diagram>

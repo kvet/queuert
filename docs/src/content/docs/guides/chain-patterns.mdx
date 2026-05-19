@@ -5,9 +5,18 @@ sidebar:
   order: 5
 ---
 
+import ChainPattern from "../../../components/diagrams/ChainPattern.astro";
+
 Chains support various execution patterns via `continueWith`:
 
+- [Linear](#linear) — `continueWith` returns the next type
+- [Branched](#branched) — `continueWith` returns one of a union of types
+- [Loop](#loop) — `continueWith` returns the same type until a terminal output
+- [Go-to](#go-to) — `continueWith` jumps to a different type, skipping intermediates
+
 ## Linear
+
+<ChainPattern kind="linear" />
 
 Jobs execute one after another: `create-subscription -> activate-trial`
 
@@ -40,6 +49,8 @@ const jobTypes = defineJobTypes<{
 
 ## Branched
 
+<ChainPattern kind="branched" />
+
 Jobs conditionally continue to different types: `trial-decision -> convert-to-paid | expire-trial`
 
 ```ts
@@ -63,6 +74,8 @@ Jobs conditionally continue to different types: `trial-decision -> convert-to-pa
 ```
 
 ## Loops
+
+<ChainPattern kind="loop" />
 
 Jobs continue to the same type: `charge-billing -> charge-billing -> ... -> done`
 
@@ -93,6 +106,8 @@ const jobTypes = defineJobTypes<{
 ```
 
 ## Go-to
+
+<ChainPattern kind="goto" />
 
 Jobs jump to a different type mid-chain: `charge-billing -> cancel-subscription`
 

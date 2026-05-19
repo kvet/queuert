@@ -1,0 +1,36 @@
+---
+import Diagram from "./Diagram.astro";
+---
+
+<Diagram
+  viewBox="0 0 560 320"
+  alt="Fan-in via blockers: three completed fetch-data chains gate a single process-all job; process-all stays blocked until every fetch-data completes, then transitions to pending."
+>
+  <!-- Three fetch-data jobs (done) on the left -->
+  <g>
+    <rect x="30" y="30" width="170" height="60" rx="10" class="job-done" />
+    <text x="115" y="55" class="label-strong text-green">fetch-data #1</text>
+    <text x="115" y="76" class="muted small">done</text>
+
+    <rect x="30" y="130" width="170" height="60" rx="10" class="job-done" />
+    <text x="115" y="155" class="label-strong text-green">fetch-data #2</text>
+    <text x="115" y="176" class="muted small">done</text>
+
+    <rect x="30" y="230" width="170" height="60" rx="10" class="job-done" />
+    <text x="115" y="255" class="label-strong text-green">fetch-data #3</text>
+    <text x="115" y="276" class="muted small">done</text>
+  </g>
+
+  <!-- process-all (accent, the blocked target) — same size as fetch-data boxes -->
+  <rect x="360" y="130" width="170" height="60" rx="10" class="job-accent" />
+  <text x="445" y="155" class="label-strong text-hint">process-all</text>
+  <text x="445" y="176" class="muted small">blocked → pending</text>
+
+  <!-- Arrows: each fetch-data → process-all left edge -->
+  <path d="M 200,60  C 260,60  310,150 360,150" class="arrow s-green" marker-end="url(#d-head-green)" />
+  <path d="M 200,160 L 360,160" class="arrow s-green" marker-end="url(#d-head-green)" />
+  <path d="M 200,260 C 260,260 310,170 360,170" class="arrow s-green" marker-end="url(#d-head-green)" />
+
+  <!-- Label sits on the middle arrow, between the two groups -->
+  <text x="280" y="152" class="halo small label-strong text-green">all complete</text>
+</Diagram>

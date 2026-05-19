@@ -21,6 +21,7 @@ hero:
 ---
 
 import { Card, CardGrid, LinkCard } from "@astrojs/starlight/components";
+import Architecture from "../../components/diagrams/Architecture.astro";
 
 ## See it in action
 
@@ -92,6 +93,12 @@ const worker = await createInProcessWorker({
 
 const stop = await worker.start();
 ```
+
+## How it fits together
+
+<Architecture />
+
+Your application and your workers both talk to the same database through a **state adapter** — the client enqueues inside your transaction; the worker acquires and completes jobs. A separate **notify adapter** (Postgres `LISTEN/NOTIFY`, Redis pub/sub, NATS, or in-process) is a one-way signal that wakes workers the instant a new row commits, so there's no polling timer between work appearing and work running.
 
 ## Why Queuert
 

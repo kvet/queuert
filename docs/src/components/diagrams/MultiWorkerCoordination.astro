@@ -1,0 +1,64 @@
+---
+import Diagram from "./Diagram.astro";
+---
+
+<Diagram
+  viewBox="0 0 900 600"
+  alt="Multi-worker coordination: the notify adapter broadcasts a wake hint to every worker; all workers attempt to claim from the shared database, but FOR UPDATE SKIP LOCKED means only one wins — the others skip."
+>
+  <!-- Notify adapter on top -->
+  <g>
+    <rect x="270" y="30" width="360" height="90" rx="14" class="notify" />
+    <text x="450" y="65" class="label-strong text-hint">Notify adapter</text>
+    <text x="450" y="92" class="muted small">Postgres LISTEN · Redis · NATS · in-process</text>
+  </g>
+
+  <!-- Three identical workers (middle) -->
+  <g style="color: var(--d-green)">
+    <rect x="60"  y="240" width="200" height="100" rx="14" class="worker" />
+    <text x="160" y="295" class="label-strong">Worker A</text>
+
+    <rect x="350" y="240" width="200" height="100" rx="14" class="worker" />
+    <text x="450" y="295" class="label-strong">Worker B</text>
+
+    <rect x="640" y="240" width="200" height="100" rx="14" class="worker" />
+    <text x="740" y="295" class="label-strong">Worker C</text>
+  </g>
+
+  <!-- Shared database (bottom) -->
+  <g>
+    <path
+      d="M 250,460 a 200,18 0 0 1 400,0 v 70 a 200,18 0 0 1 -400,0 z"
+      class="cylinder"
+    />
+    <ellipse cx="450" cy="460" rx="200" ry="18" class="cylinder-top" />
+    <text x="450" y="500" class="label-strong text-teal">Shared database</text>
+    <text x="450" y="522" class="muted small">FOR UPDATE SKIP LOCKED</text>
+  </g>
+
+  <!-- 1. Wake arrows: notify adapter → every worker -->
+  <path d="M 340,120 L 175,235" class="arrow dashed s-hint" marker-end="url(#d-head-hint)" />
+  <path d="M 450,120 L 450,235" class="arrow dashed s-hint" marker-end="url(#d-head-hint)" />
+  <path d="M 560,120 L 725,235" class="arrow dashed s-hint" marker-end="url(#d-head-hint)" />
+
+  <!-- 2. Claim arrows: workers → DB (A wins solid green; B, C skipped dotted gray) -->
+  <path d="M 175,345 L 290,445" class="arrow s-green" stroke-width="2" marker-end="url(#d-head-green)" />
+  <path d="M 450,345 L 450,445" class="arrow dotted s-gray" marker-end="url(#d-head-gray)" />
+  <path d="M 725,345 L 610,445" class="arrow dotted s-gray" marker-end="url(#d-head-gray)" />
+
+  <!-- Wake labels -->
+  <text x="220" y="190" text-anchor="end"   class="halo small label-strong text-hint">1. wake</text>
+  <text x="220" y="208" text-anchor="end"   class="halo muted small">(via notify adapter)</text>
+
+  <text x="680" y="190" text-anchor="start" class="halo small label-strong text-hint">1. wake</text>
+  <text x="680" y="208" text-anchor="start" class="halo muted small">(via notify adapter)</text>
+
+  <!-- Claim labels -->
+  <text x="180" y="400" text-anchor="end"   class="halo small label-strong text-green">2. claim → wins</text>
+  <text x="180" y="418" text-anchor="end"   class="halo muted small">(via state adapter)</text>
+
+  <text x="465" y="395" text-anchor="start" class="halo small muted">2. claim → skipped</text>
+
+  <text x="720" y="400" text-anchor="start" class="halo small muted">2. claim → skipped</text>
+  <text x="720" y="418" text-anchor="start" class="halo muted small">(via state adapter)</text>
+</Diagram>

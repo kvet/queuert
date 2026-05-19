@@ -23,8 +23,6 @@
     "@queuert/testcontainers": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
     "ioredis": "5.10.1",
-    "queuert": "workspace:*",
-    "tsx": "4.21.0",
-    "vitest": "4.1.4"
+    "queuert": "workspace:*"
   }
 }

@@ -1,0 +1,82 @@
+---
+type Props = {
+  kind: "linear" | "branched" | "loop" | "goto";
+}
+const { kind } = Astro.props;
+
+import Diagram from "./Diagram.astro";
+
+const alt = {
+  linear: "Linear chain: continueWith returns the next type, jobs run one after another.",
+  branched: "Branched chain: continueWith returns a union type, the chain forks to one of several next types.",
+  loop: "Loop chain: continueWith returns the same type, repeating until a terminal output ends the chain.",
+  goto: "Go-to chain: continueWith jumps to a different type, optionally skipping intermediate steps.",
+}[kind];
+---
+
+<Diagram viewBox="0 0 520 160" maxWidth="540px" alt={alt}>
+  {
+    kind === "linear" && (
+      <>
+        <rect x="40"  y="50" width="190" height="60" rx="12" class="job" />
+        <text x="135" y="86" class="label-strong text-blue mono">create-subscription</text>
+
+        <rect x="290" y="50" width="190" height="60" rx="12" class="job" />
+        <text x="385" y="86" class="label-strong text-blue mono">activate-trial</text>
+
+        <path d="M 230,80 L 290,80" class="arrow s-blue" marker-end="url(#d-head-blue)" />
+      </>
+    )
+  }
+
+  {
+    kind === "branched" && (
+      <>
+        <rect x="20"  y="50" width="160" height="60" rx="12" class="job" />
+        <text x="100" y="86" class="label-strong text-blue mono">trial-decision</text>
+
+        <rect x="320" y="15" width="180" height="50" rx="12" class="job" />
+        <text x="410" y="46" class="label-strong text-blue mono">convert-to-paid</text>
+
+        <rect x="320" y="95" width="180" height="50" rx="12" class="job" />
+        <text x="410" y="126" class="label-strong text-blue mono">expire-trial</text>
+
+        <path d="M 180,72 C 250,72 260,40 320,40" class="arrow s-blue" marker-end="url(#d-head-blue)" />
+        <path d="M 180,88 C 250,88 260,120 320,120" class="arrow s-blue" marker-end="url(#d-head-blue)" />
+      </>
+    )
+  }
+
+  {
+    kind === "loop" && (
+      <>
+        <rect x="170" y="60" width="180" height="60" rx="12" class="job" />
+        <text x="260" y="96" class="label-strong text-blue mono">charge-billing</text>
+
+        <!-- Self-loop on "charge-billing" -->
+        <path d="M 290,60 C 290,25 230,25 230,60" class="arrow s-hint" marker-end="url(#d-head-hint)" />
+        <text x="260" y="32" class="halo tiny text-hint">repeat</text>
+      </>
+    )
+  }
+
+  {
+    kind === "goto" && (
+      <>
+        <rect x="20"  y="60" width="180" height="50" rx="12" class="job" />
+        <text x="110" y="91" class="label-strong text-blue mono">charge-billing</text>
+
+        <rect x="280" y="60" width="220" height="50" rx="12" class="job" />
+        <text x="390" y="91" class="label-strong text-blue mono">cancel-subscription</text>
+
+        <!-- Self-loop on "charge-billing" -->
+        <path d="M 140,60 C 140,25 90,25 90,60" class="arrow s-hint" marker-end="url(#d-head-hint)" />
+        <text x="115" y="32" class="halo tiny text-hint">loop</text>
+
+        <!-- Jump arrow charge-billing -> cancel-subscription -->
+        <path d="M 200,85 L 280,85" class="arrow s-red" marker-end="url(#d-head-red)" />
+        <text x="240" y="77" class="halo tiny text-red label-strong">jump</text>
+      </>
+    )
+  }
+</Diagram>

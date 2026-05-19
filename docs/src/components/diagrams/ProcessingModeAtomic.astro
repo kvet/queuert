@@ -1,0 +1,35 @@
+---
+import Diagram from "./Diagram.astro";
+---
+
+<Diagram
+  viewBox="0 0 760 200"
+  alt="Atomic processing mode: a single transaction wraps an optional prepare (read) and a complete (write)."
+>
+  <!-- Transaction container -->
+  <rect x="40" y="30" width="680" height="125" rx="12" class="txn" />
+  <text x="380" y="52" class="muted small">transaction</text>
+
+  <!-- Optional prepare (dashed) -->
+  <rect
+    x="80"
+    y="75"
+    width="280"
+    height="65"
+    rx="8"
+    class="box dashed stroke-blue fill-blue"
+  />
+  <text x="220" y="112" class="small label-strong text-blue">
+    prepare() — read (optional)
+  </text>
+
+  <!-- Complete (solid) -->
+  <rect x="400" y="75" width="280" height="65" rx="8" class="step" />
+  <text x="540" y="112" class="small label-strong text-blue">
+    complete() — write
+  </text>
+
+  <!-- Timeline -->
+  <path d="M 40,180 L 720,180" class="arrow" marker-end="url(#d-head-stroke)" />
+  <text x="380" y="196" class="caption">time</text>
+</Diagram>

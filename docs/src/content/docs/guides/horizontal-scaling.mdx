@@ -5,7 +5,11 @@ sidebar:
   order: 17
 ---
 
+import MultiWorkerCoordination from "../../../components/diagrams/MultiWorkerCoordination.astro";
+
 Deploy multiple worker processes sharing the same database for horizontal scaling. Workers coordinate via database-level locking (`FOR UPDATE SKIP LOCKED`) — no external coordination required.
+
+<MultiWorkerCoordination />
 
 ## Identical Workers
 

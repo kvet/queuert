@@ -22,7 +22,6 @@
     "example-notify-postgres-pg": "workspace:*",
     "example-state-postgres-pg": "workspace:*",
     "pg": "8.20.0",
-    "queuert": "workspace:*",
-    "tsx": "4.21.0"
+    "queuert": "workspace:*"
   }
 }

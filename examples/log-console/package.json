@@ -11,7 +11,6 @@
     "queuert": "workspace:*"
   },
   "devDependencies": {
-    "@queuert/tsconfig": "workspace:*",
-    "tsx": "4.21.0"
+    "@queuert/tsconfig": "workspace:*"
   }
 }

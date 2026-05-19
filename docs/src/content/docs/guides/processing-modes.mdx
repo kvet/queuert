@@ -5,7 +5,12 @@ sidebar:
   order: 2
 ---
 
+import ProcessingModeAtomic from "../../../components/diagrams/ProcessingModeAtomic.astro";
+import ProcessingModeStaged from "../../../components/diagrams/ProcessingModeStaged.astro";
+
 ## Atomic Mode
+
+<ProcessingModeAtomic />
 
 Most jobs don't need `prepare`. Call `complete` directly and you get atomic mode automatically — one transaction for all reads and writes:
 
@@ -25,6 +30,8 @@ Most jobs don't need `prepare`. Call `complete` directly and you get atomic mode
 This is the default path. If you're not sure which mode to use, start here.
 
 ## Staged Mode
+
+<ProcessingModeStaged />
 
 Use staged mode when you need to do work **between** two transactions — typically external API calls that shouldn't hold a database transaction open:
 
@@ -88,7 +95,7 @@ This means even without `prepare`, you can get staged behavior by doing async wo
 
 ## Anti-Patterns
 
-:::danger[Using staged mode with nothing between prepare and complete]
+:::caution[Using staged mode with nothing between prepare and complete]
 Staged mode adds a round-trip and loses read consistency for no benefit. Put everything in
 `complete()` instead.
 
@@ -106,7 +113,7 @@ attemptHandler: async ({ job, prepare, complete }) => {
 
 :::
 
-:::danger[Using prepare({ mode: 'atomic' }) when complete alone suffices]
+:::caution[Using prepare with atomic mode when complete alone suffices]
 This is the same as calling `complete()` directly, but with extra ceremony.
 
 ```ts
