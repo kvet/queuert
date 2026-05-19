@@ -260,6 +260,223 @@ export const unblockJobsGroup: ConformanceGroup<StateAdapterConformanceContext> 
       },
     },
     {
+      name: "raises stale past scheduledAt to current time when unblocking",
+      run: async ({ stateAdapter }, expect) => {
+        const past = new Date(Date.now() - 60 * 60 * 1000);
+
+        const [{ job: blockerJob }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                typeName: "blocker",
+                chainId: undefined,
+                chainIndex: 0,
+                chainTypeName: "blocker",
+                input: null,
+              },
+            ],
+          }),
+        );
+
+        const [{ job: mainJob }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                typeName: "main",
+                chainId: undefined,
+                chainIndex: 0,
+                chainTypeName: "main",
+                input: null,
+                schedule: { at: past },
+              },
+            ],
+          }),
+        );
+
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.addJobsBlockers({
+            txCtx,
+            jobBlockers: [{ jobId: mainJob.id, blockedByChainIds: [blockerJob.chainId] }],
+          }),
+        );
+
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.completeJob({
+            txCtx,
+            jobId: blockerJob.id,
+            output: null,
+            workerId: null,
+          }),
+        );
+
+        const { unblockedJobs } = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.unblockJobs({
+            txCtx,
+            blockedByChainId: blockerJob.chainId,
+          }),
+        );
+
+        expect(unblockedJobs).toHaveLength(1);
+        const unblockedAt = unblockedJobs[0].scheduledAt.getTime();
+        expect(unblockedAt - past.getTime()).toBeGreaterThan(30 * 60 * 1000);
+        expect(Math.abs(unblockedAt - Date.now())).toBeLessThan(60 * 1000);
+      },
+    },
+    {
+      name: "preserves future scheduledAt when unblocking",
+      run: async ({ stateAdapter }, expect) => {
+        const future = new Date(Date.now() + 60 * 60 * 1000);
+
+        const [{ job: blockerJob }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                typeName: "blocker",
+                chainId: undefined,
+                chainIndex: 0,
+                chainTypeName: "blocker",
+                input: null,
+              },
+            ],
+          }),
+        );
+
+        const [{ job: mainJob }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                typeName: "main",
+                chainId: undefined,
+                chainIndex: 0,
+                chainTypeName: "main",
+                input: null,
+                schedule: { at: future },
+              },
+            ],
+          }),
+        );
+
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.addJobsBlockers({
+            txCtx,
+            jobBlockers: [{ jobId: mainJob.id, blockedByChainIds: [blockerJob.chainId] }],
+          }),
+        );
+
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.completeJob({
+            txCtx,
+            jobId: blockerJob.id,
+            output: null,
+            workerId: null,
+          }),
+        );
+
+        const { unblockedJobs } = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.unblockJobs({
+            txCtx,
+            blockedByChainId: blockerJob.chainId,
+          }),
+        );
+
+        expect(unblockedJobs).toHaveLength(1);
+        expect(unblockedJobs[0].scheduledAt.getTime()).toBe(future.getTime());
+      },
+    },
+    {
+      name: "unblocked job with stale past scheduledAt does not jump ahead of already-ready jobs",
+      run: async ({ stateAdapter }, expect) => {
+        const longPast = new Date(Date.now() - 60 * 60 * 1000);
+        const recentPast = new Date(Date.now() - 60 * 1000);
+
+        const [{ job: blockerJob }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                typeName: "fairness-blocker",
+                chainId: undefined,
+                chainIndex: 0,
+                chainTypeName: "fairness-blocker",
+                input: null,
+              },
+            ],
+          }),
+        );
+
+        const [{ job: blockedMain }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                typeName: "fairness-main",
+                chainId: undefined,
+                chainIndex: 0,
+                chainTypeName: "fairness-main",
+                input: { kind: "blocked-since-creation" },
+                schedule: { at: longPast },
+              },
+            ],
+          }),
+        );
+
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.addJobsBlockers({
+            txCtx,
+            jobBlockers: [{ jobId: blockedMain.id, blockedByChainIds: [blockerJob.chainId] }],
+          }),
+        );
+
+        const [{ job: readyMain }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                typeName: "fairness-main",
+                chainId: undefined,
+                chainIndex: 0,
+                chainTypeName: "fairness-main",
+                input: { kind: "ready" },
+                schedule: { at: recentPast },
+              },
+            ],
+          }),
+        );
+
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.completeJob({
+            txCtx,
+            jobId: blockerJob.id,
+            output: null,
+            workerId: null,
+          }),
+        );
+
+        await new Promise((resolve) => setTimeout(resolve, 10));
+
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.unblockJobs({
+            txCtx,
+            blockedByChainId: blockerJob.chainId,
+          }),
+        );
+
+        const first = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.acquireJob({ txCtx, typeNames: ["fairness-main"] }),
+        );
+        const second = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.acquireJob({ txCtx, typeNames: ["fairness-main"] }),
+        );
+
+        expect(first.job?.id).toBe(readyMain.id);
+        expect(second.job?.id).toBe(blockedMain.id);
+      },
+    },
+    {
       name: "returns empty blocker trace contexts when blockers have no trace contexts",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: blockerJob }] = await stateAdapter.withTransaction(async (txCtx) =>

@@ -544,12 +544,15 @@ SELECT
   json_extract(je.value, '$.chain_index'),
   json_extract(je.value, '$.input'),
   json_extract(je.value, '$.deduplication_key'),
-  COALESCE(
-    json_extract(je.value, '$.scheduled_at'),
-    CASE WHEN json_extract(je.value, '$.schedule_after_ms') IS NOT NULL
-      THEN datetime('now', 'subsec', '+' || (json_extract(je.value, '$.schedule_after_ms') / 1000.0) || ' seconds')
-      ELSE NULL
-    END,
+  MAX(
+    COALESCE(
+      json_extract(je.value, '$.scheduled_at'),
+      CASE WHEN json_extract(je.value, '$.schedule_after_ms') IS NOT NULL
+        THEN datetime('now', 'subsec', '+' || (json_extract(je.value, '$.schedule_after_ms') / 1000.0) || ' seconds')
+        ELSE NULL
+      END,
+      datetime('now', 'subsec')
+    ),
     datetime('now', 'subsec')
   ),
   json_extract(je.value, '$.chain_trace_context'),
@@ -680,7 +683,7 @@ HAVING MIN(CASE WHEN blocker_status = 'completed' THEN 1 ELSE 0 END) = 1
   const scheduleBlockedJobsSql = sql(
     /* sql */ `
 UPDATE {{table_prefix}}job
-SET scheduled_at = datetime('now', 'subsec'),
+SET scheduled_at = MAX(scheduled_at, datetime('now', 'subsec')),
     status = 'pending'
 WHERE id IN (SELECT value FROM json_each(?)) AND status = 'blocked'
 RETURNING *
@@ -828,8 +831,10 @@ WHERE id = (
   const rescheduleJobSql = sql(
     /* sql */ `
 UPDATE {{table_prefix}}job
-SET scheduled_at = COALESCE(?,
-    CASE WHEN ? IS NOT NULL THEN datetime('now', 'subsec', '+' || (? / 1000.0) || ' seconds') ELSE NULL END,
+SET scheduled_at = MAX(
+    COALESCE(?,
+      CASE WHEN ? IS NOT NULL THEN datetime('now', 'subsec', '+' || (? / 1000.0) || ' seconds') ELSE NULL END,
+      datetime('now', 'subsec')),
     datetime('now', 'subsec')),
   last_attempt_at = datetime('now', 'subsec'),
   last_attempt_error = ?,

@@ -91,5 +91,41 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
         );
       },
     },
+    {
+      name: "clamps past schedule.at to now",
+      run: async ({ stateAdapter }, expect) => {
+        const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                typeName: "resched-past-test",
+                chainId: undefined,
+                chainIndex: 0,
+                chainTypeName: "resched-past-test",
+                input: null,
+              },
+            ],
+          }),
+        );
+
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.acquireJob({ txCtx, typeNames: ["resched-past-test"] }),
+        );
+
+        const past = new Date(Date.now() - 60 * 60 * 1000);
+        const rescheduled = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.rescheduleJob({
+            txCtx,
+            jobId: created.id,
+            schedule: { at: past },
+            error: "retry",
+          }),
+        );
+
+        expect(rescheduled.scheduledAt.getTime() - past.getTime()).toBeGreaterThan(30 * 60 * 1000);
+        expect(Math.abs(rescheduled.scheduledAt.getTime() - Date.now())).toBeLessThan(60 * 1000);
+      },
+    },
   ],
 };

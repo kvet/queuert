@@ -554,4 +554,192 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       expect(attemptCount).toBe(2);
     });
   });
+
+  it("startChain with past schedule.at clamps scheduledAt to now", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: { attemptHandler: async ({ complete }) => complete(async () => null) },
+        },
+      }),
+    });
+
+    const past = new Date(Date.now() - 60 * 60 * 1000);
+
+    const chain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: null,
+          schedule: { at: past },
+        }),
+      ),
+    );
+
+    const rootJob = await stateAdapter.getJob({ jobId: chain.id });
+    expect(rootJob).toBeDefined();
+    expect(rootJob!.scheduledAt.getTime() - past.getTime()).toBeGreaterThan(30 * 60 * 1000);
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitChain(chain, { timeoutMs: 2000, pollIntervalMs: 50 });
+    });
+  });
+
+  it("continueWith with past schedule.at clamps scheduledAt to now", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      first: { entry: true; input: null; continueWith: { typeName: "second" } };
+      second: { input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    const past = new Date(Date.now() - 60 * 60 * 1000);
+
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          first: {
+            attemptHandler: async ({ complete }) =>
+              complete(async ({ continueWith }) =>
+                continueWith({ typeName: "second", input: null, schedule: { at: past } }),
+              ),
+          },
+          second: { attemptHandler: async ({ complete }) => complete(async () => null) },
+        },
+      }),
+    });
+
+    const chain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "first",
+          input: null,
+        }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitChain(chain, { timeoutMs: 2000, pollIntervalMs: 50 });
+    });
+
+    const chainJobs = await stateAdapter.listChainJobs({
+      chainId: chain.id,
+      orderDirection: "asc",
+      page: { limit: 10 },
+    });
+    const continuation = chainJobs.items.find((j) => j.chainIndex === 1);
+    expect(continuation).toBeDefined();
+    expect(continuation!.scheduledAt.getTime() - past.getTime()).toBeGreaterThan(30 * 60 * 1000);
+  });
+
+  it("rescheduleJob with past schedule.at clamps scheduledAt to now", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    const past = new Date(Date.now() - 60 * 60 * 1000);
+    let attempts = 0;
+    const firstAttemptDone = Promise.withResolvers<void>();
+
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      pollIntervalMs: 50,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            attemptHandler: async ({ complete }) => {
+              attempts++;
+              if (attempts === 1) {
+                firstAttemptDone.resolve();
+                rescheduleJob({ at: past }, "retry");
+              }
+              return complete(async () => null);
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: null,
+        }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await firstAttemptDone.promise;
+      await client.awaitChain(chain, { timeoutMs: 2000, pollIntervalMs: 50 });
+    });
+
+    expect(attempts).toBe(2);
+  });
 };

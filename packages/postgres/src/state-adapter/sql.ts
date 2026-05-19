@@ -499,7 +499,7 @@ inserted_jobs AS (
   SELECT
     ti.id, ti.type_name, COALESCE(ti.chain_id, ti.id), ti.chain_type_name,
     ti.chain_index, ti.input, ti.dedup_key,
-    COALESCE(ti.scheduled_at, now() + (ti.schedule_after_ms || ' milliseconds')::interval, now()),
+    GREATEST(COALESCE(ti.scheduled_at, now() + (ti.schedule_after_ms || ' milliseconds')::interval, now()), now()),
     ti.chain_trace_context, ti.trace_context
   FROM to_insert ti
   ON CONFLICT (chain_id, chain_index) DO UPDATE SET id = {{schema}}.{{table_prefix}}job.id
@@ -681,7 +681,7 @@ ready_jobs AS (
 ),
 updated AS (
   UPDATE {{schema}}.{{table_prefix}}job j
-  SET scheduled_at = now(),
+  SET scheduled_at = GREATEST(j.scheduled_at, now()),
     status = 'pending'
   WHERE j.id IN (SELECT job_id FROM ready_jobs)
     AND j.status = 'blocked'
@@ -773,7 +773,7 @@ WHERE id = $1
   const rescheduleJobSql = sql(
     /* sql */ `
 UPDATE {{schema}}.{{table_prefix}}job
-SET scheduled_at = COALESCE($2::timestamptz, now() + ($3::bigint || ' milliseconds')::interval, now()),
+SET scheduled_at = GREATEST(COALESCE($2::timestamptz, now() + ($3::bigint || ' milliseconds')::interval, now()), now()),
   last_attempt_at = now(),
   last_attempt_error = $4::jsonb,
   leased_by = NULL,

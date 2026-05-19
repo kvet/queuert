@@ -114,6 +114,9 @@ const matchesDateRange = (createdAt: Date, from?: Date, to?: Date): boolean => {
   return true;
 };
 
+const clampToFloor = (requested: Date, now: Date): Date =>
+  requested.getTime() > now.getTime() ? requested : now;
+
 export type InProcessStateAdapter = StateAdapter<InProcessContext, string>;
 
 export const createInProcessStateAdapter = async ({
@@ -601,8 +604,9 @@ export const createInProcessStateAdapter = async ({
 
           const id = providedId ?? generateId();
           const now = new Date();
-          const resolvedScheduledAt =
+          const requestedScheduledAt =
             schedule?.at ?? (schedule?.afterMs ? new Date(now.getTime() + schedule.afterMs) : now);
+          const resolvedScheduledAt = clampToFloor(requestedScheduledAt, now);
 
           const job: StateJob = {
             id,
@@ -720,7 +724,7 @@ export const createInProcessStateAdapter = async ({
             const updatedJob: StateJob = {
               ...job,
               status: "pending",
-              scheduledAt: now,
+              scheduledAt: clampToFloor(job.scheduledAt, now),
             };
             writeJob(journal, job, updatedJob);
             unblockedJobs.push(updatedJob);
@@ -839,8 +843,9 @@ export const createInProcessStateAdapter = async ({
         if (!job) throw new Error("Job not found");
 
         const now = new Date();
-        const resolvedScheduledAt =
+        const requestedScheduledAt =
           schedule.at ?? (schedule.afterMs ? new Date(now.getTime() + schedule.afterMs) : now);
+        const resolvedScheduledAt = clampToFloor(requestedScheduledAt, now);
         const updatedJob: StateJob = {
           ...job,
           scheduledAt: resolvedScheduledAt,

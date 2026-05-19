@@ -3,6 +3,7 @@ import { type TestAPI, expectTypeOf } from "vitest";
 import { createClient } from "../client.js";
 import { type Chain } from "../entities/chain.js";
 import { defineJobTypes } from "../entities/define-job-types.js";
+import { sleep } from "../helpers/sleep.js";
 import { createInProcessWorker } from "../in-process-worker.js";
 import { withTransactionHooks } from "../transaction-hooks.js";
 import { createProcessors } from "../worker/create-processors.js";
@@ -796,5 +797,92 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       expect(resultA.output).toEqual({ finalResult: 99 });
       expect(resultB.output).toEqual({ finalResult: 99 });
     });
+  });
+
+  it("raises scheduledAt to unblock time so blocked-since-creation jobs don't jump the queue", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      blocker: {
+        entry: true;
+        input: null;
+        output: null;
+      };
+      main: {
+        entry: true;
+        input: null;
+        output: null;
+        blockers: [{ typeName: "blocker" }];
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    const blockerHeld = Promise.withResolvers<void>();
+    const releaseBlocker = Promise.withResolvers<void>();
+
+    const mainChain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) => {
+        const blockerChain = await client.startChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "blocker",
+          input: null,
+        });
+        return client.startChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "main",
+          input: null,
+          blockers: [blockerChain],
+        });
+      }),
+    );
+
+    const mainAtCreation = await stateAdapter.getJob({ jobId: mainChain.id });
+    expect(mainAtCreation).toBeDefined();
+    const creationScheduledAt = mainAtCreation!.scheduledAt.getTime();
+
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          blocker: {
+            attemptHandler: async ({ complete }) => {
+              blockerHeld.resolve();
+              await releaseBlocker.promise;
+              return complete(async () => null);
+            },
+          },
+          main: { attemptHandler: async ({ complete }) => complete(async () => null) },
+        },
+      }),
+    });
+
+    await withWorkers([await worker.start()], async () => {
+      await blockerHeld.promise;
+      await sleep(10);
+      releaseBlocker.resolve();
+      await client.awaitChain(mainChain, completionOptions);
+    });
+
+    const unblockedMain = await stateAdapter.getJob({ jobId: mainChain.id });
+    expect(unblockedMain).toBeDefined();
+    expect(unblockedMain!.scheduledAt.getTime()).toBeGreaterThan(creationScheduledAt);
   });
 };

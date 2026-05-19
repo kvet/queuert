@@ -613,6 +613,30 @@ export const createJobsGroup: ConformanceGroup<StateAdapterConformanceContext> =
       },
     },
     {
+      name: "clamps past schedule.at to now (scheduled_at is eligibility floor, never a past lie)",
+      run: async ({ stateAdapter }, expect) => {
+        const past = new Date(Date.now() - 60 * 60 * 1000);
+        const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                typeName: "schedule-past",
+                chainId: undefined,
+                chainIndex: 0,
+                chainTypeName: "schedule-past",
+                input: null,
+                schedule: { at: past },
+              },
+            ],
+          }),
+        );
+
+        expect(job.scheduledAt.getTime() - past.getTime()).toBeGreaterThan(30 * 60 * 1000);
+        expect(Math.abs(job.scheduledAt.getTime() - Date.now())).toBeLessThan(60 * 1000);
+      },
+    },
+    {
       name: "stores and retrieves traceContext and chainTraceContext",
       run: async ({ stateAdapter }, expect) => {
         const chainTraceContext = "00-abc123-chain111-01";
