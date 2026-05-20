@@ -7,6 +7,29 @@ sidebar:
 
 Deduplication prevents duplicate chains from being created. When you start a chain with a deduplication key, Queuert checks if a chain with that key already exists and returns the existing chain instead of creating a new one.
 
+```d2
+...@../_classes.d2
+
+direction: right
+
+call1: "startChain\nkey: 'sync:123'" { class: client; width: 180; height: 70 }
+call2: "startChain\nkey: 'sync:123'" { class: client; width: 180; height: 70 }
+call3: "startChain\nkey: 'sync:123'" { class: client; width: 180; height: 70 }
+
+chain: "chain abc-123\n(existing)" { class: job-accent; width: 180; height: 70 }
+
+new:  "deduplicated: false\nnew chain"     { class: job-done;  width: 180; height: 60 }
+dup1: "deduplicated: true\nreturns abc-123" { class: job-muted; width: 200; height: 60 }
+dup2: "deduplicated: true\nreturns abc-123" { class: job-muted; width: 200; height: 60 }
+
+call1 -> chain: "creates" { class: flow-green }
+call2 -> chain: "match"   { class: dotted }
+call3 -> chain: "match"   { class: dotted }
+chain -> new
+chain -> dup1
+chain -> dup2
+```
+
 ```ts
 // First call creates the chain
 const chain1 = await withTransactionHooks(async (transactionHooks) =>

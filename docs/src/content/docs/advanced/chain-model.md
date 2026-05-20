@@ -5,8 +5,6 @@ sidebar:
   order: 3
 ---
 
-import ChainIdentityModel from "../../../components/diagrams/ChainIdentityModel.astro";
-
 ## Overview
 
 This document describes Queuert's unified job model and the Promise-inspired chain abstraction.
@@ -62,7 +60,22 @@ For the first job in a chain: `job.id === job.chainId`
 
 This isn't redundant—it's a meaningful signal that identifies the chain starter. Continuation jobs have `job.id !== job.chainId` but share the same `chainId` as all other jobs in the chain.
 
-<ChainIdentityModel />
+```d2
+...@../_classes.d2
+
+direction: right
+
+chain: "chain (id = X)" {
+  class: process
+
+  first: "first job\n\nid = X\nchainId = X\n\nid === chainId" { class: job-accent; width: 240; height: 160 }
+  cont:  "continuation\n\nid = Y\nchainId = X\n\nown id, shared chainId" { class: job; width: 240; height: 160 }
+  term:  "terminal\n\nid = Z\nchainId = X\n\nown id, shared chainId" { class: job; width: 240; height: 160 }
+
+  first -> cont: then { class: flow-blue }
+  cont  -> term: then { class: flow-blue }
+}
+```
 
 ## Unified Model Benefits
 

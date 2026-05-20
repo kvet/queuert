@@ -5,9 +5,6 @@ sidebar:
   order: 5
 ---
 
-import WakeHintFlow from "../../../components/diagrams/WakeHintFlow.astro";
-
-
 ## Overview
 
 This document describes the design philosophy behind Queuert's adapter system, including factory patterns, context management, and notification optimization.
@@ -137,7 +134,41 @@ All notifications use broadcast (pub/sub) semantics with three notify/listen pai
 
 To prevent thundering herd when many workers are idle, the publisher attaches a per-typeName budget that gates how many listeners actually wake. Hints are an opt-in pair of methods on `NotifyAdapter`, both keyed by `typeName`:
 
-<WakeHintFlow />
+```d2
+...@../_classes.d2
+
+direction: right
+
+publisher: "Publisher\nschedules 3 jobs" { class: client; width: 200; height: 100 }
+
+notify: |md
+  **Your pub/sub**
+
+  wake budget per typeName *(TTL 60s)*<br/>
+  budget[typeName]: 3 → 2 → 1 → 0
+
+  consumeWakeHint atomically decrements;<br/>
+  returns *true* while > 0,<br/>
+  *false* once exhausted.
+| { class: notify }
+
+workers: {
+  class: process
+  label: " "
+
+  a: "Worker A — wakes" { class: worker }
+  b: "Worker B — wakes" { class: worker }
+  c: "Worker C — wakes" { class: worker }
+  d: "Worker D — skips wake" { class: job-muted }
+}
+
+publisher -> notify: "provideWakeHint(t, 3)\nnotifyJobScheduled(t)" { class: flow }
+
+notify -> workers.a: "true"  { class: flow-green }
+notify -> workers.b: "true"  { class: flow-green }
+notify -> workers.c: "true"  { class: flow-green }
+notify -> workers.d: "false" { class: dotted }
+```
 
 - `provideWakeHint(typeName, count)` — publisher adds `count` to the budget. Composes additively across concurrent publishers (two `provideWakeHint(t, 3)` calls yield a budget of 6).
 - `consumeWakeHint(typeName)` — listener atomically claims one slot. Returns `true` if a slot was claimed, or if no budget is currently tracked (graceful degradation). Returns `false` only when an explicit budget was set and is now exhausted.

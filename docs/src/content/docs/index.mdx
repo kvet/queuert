@@ -21,7 +21,40 @@ hero:
 ---
 
 import { Card, CardGrid, LinkCard } from "@astrojs/starlight/components";
-import Architecture from "../../components/diagrams/Architecture.astro";
+
+```d2
+...@_classes.d2
+
+direction: right
+
+app: App process {
+  class: process
+  client: Client { class: client }
+}
+
+worker_proc: Worker process {
+  class: process
+  worker: Worker { class: worker }
+}
+
+db: |md
+  **Your database**
+
+  Postgres · SQLite · your own
+| { class: database }
+
+notify: |md
+  **Your pub/sub** *(optional)*
+
+  Postgres LISTEN · Redis · NATS · in-process
+| { class: notify }
+
+app.client    -> db: "enqueue\n(via state adapter)" { class: flow }
+worker_proc.worker -> db: "acquire · complete\n(via state adapter)" { class: flow }
+
+app.client    -> notify: "wake hint" { class: wake }
+notify        -> worker_proc.worker: "wake" { class: wake }
+```
 
 ## See it in action
 
@@ -93,12 +126,6 @@ const worker = await createInProcessWorker({
 
 const stop = await worker.start();
 ```
-
-## How it fits together
-
-<Architecture />
-
-Your application and your workers both talk to the same database through a **state adapter** — the client enqueues inside your transaction; the worker acquires and completes jobs. A separate **notify adapter** (Postgres `LISTEN/NOTIFY`, Redis pub/sub, NATS, or in-process) is a one-way signal that wakes workers the instant a new row commits, so there's no polling timer between work appearing and work running.
 
 ## Why Queuert
 

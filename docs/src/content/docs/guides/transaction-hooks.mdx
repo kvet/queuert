@@ -61,6 +61,29 @@ import { Tabs, TabItem, Aside } from "@astrojs/starlight/components";
 
 ## How It Works
 
+```d2
+...@../_classes.d2
+
+direction: right
+
+txn: "transaction" {
+  class: txn
+
+  begin: "BEGIN" { class: step }
+  work: "client.startChain(...)\nhook state mutates\n(e.g. notify event queued)" { class: step; width: 280; height: 90 }
+  end:  "COMMIT / ROLLBACK" { class: step; width: 200; height: 50 }
+
+  begin -> work { class: flow }
+  work  -> end  { class: flow }
+}
+
+flush:   "flush()\nside effects fire\n(notify · webhooks · …)" { class: job-done;  width: 240; height: 90 }
+discard: "discard()\nbuffered state dropped\nnothing leaks"     { class: job-muted; width: 240; height: 90 }
+
+txn.end -> flush:   "on success" { class: flow-green }
+txn.end -> discard: "on error"   { class: flow-red }
+```
+
 `TransactionHooks` is a generic container for named hooks with mutable state. It knows nothing about Queuert itself -- consumers (client, worker) register their own hooks using symbol keys.
 
 A hook definition (`HookDefinition`) contains mutable state, a flush function, an optional discard function, and an optional checkpoint function. Multiple hooks can be registered on the same `TransactionHooks` instance. During the transaction, code mutates hook state freely. After the outer callback completes successfully, each hook's flush function is called with its accumulated state. If the callback throws, each hook's discard function is called instead -- no flush occurs.
@@ -98,6 +121,34 @@ Hooks flush (and discard) concurrently — cross-hook execution order is not gua
 
   </TabItem>
 </Tabs>
+
+```d2
+...@../_classes.d2
+
+direction: right
+
+txn: "transaction" {
+  class: txn
+
+  a: "buffer A\n(kept)" { class: step }
+
+  sp: "savepoint" {
+    class: savepoint
+    b: "buffer B\n(rolled back)" { class: step; width: 180; height: 60 }
+  }
+
+  c: "buffer C\n(kept)" { class: step }
+
+  a  -> sp.b { class: flow }
+  sp.b -> c  { class: flow-red; style.stroke-dash: 3 }
+}
+
+commit:  "COMMIT"   { class: step; width: 120 }
+flushed: "flush()\nonly A and C fire" { class: job-done; width: 220; height: 80 }
+
+txn.c   -> commit  { class: flow }
+commit  -> flushed { class: flow-green }
+```
 
 Savepoints rely on the `checkpoint` callback in `HookDefinition`. When a savepoint is created, each registered hook's `checkpoint` is called to capture its current state. On rollback, the returned function restores the hook state to that point.
 

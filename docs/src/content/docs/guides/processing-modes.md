@@ -5,12 +5,26 @@ sidebar:
   order: 2
 ---
 
-import ProcessingModeAtomic from "../../../components/diagrams/ProcessingModeAtomic.astro";
-import ProcessingModeStaged from "../../../components/diagrams/ProcessingModeStaged.astro";
-
 ## Atomic Mode
 
-<ProcessingModeAtomic />
+```d2
+...@../_classes.d2
+
+direction: right
+
+txn: "transaction" {
+  class: txn
+
+  prepare: "prepare() — read (optional)" {
+    class: client
+    style.stroke-dash: 4
+  }
+
+  complete: "complete() — write" { class: step }
+
+  prepare -> complete { class: flow }
+}
+```
 
 Most jobs don't need `prepare`. Call `complete` directly and you get atomic mode automatically — one transaction for all reads and writes:
 
@@ -31,7 +45,27 @@ This is the default path. If you're not sure which mode to use, start here.
 
 ## Staged Mode
 
-<ProcessingModeStaged />
+```d2
+...@../_classes.d2
+
+direction: right
+
+txn1: "transaction" {
+  class: txn
+  prepare: "prepare() — read" { class: step }
+}
+
+external: "no transaction\nexternal work\nmust be idempotent" { class: job-muted; width: 260; height: 100 }
+
+txn2: "transaction" {
+  class: txn
+  complete: "complete() — write" { class: step }
+}
+
+txn1.prepare -> external { class: flow }
+external     -> txn2.complete { class: flow }
+external     -> external: "lease auto-renews\nworker keeps ownership" { class: wake }
+```
 
 Use staged mode when you need to do work **between** two transactions — typically external API calls that shouldn't hold a database transaction open:
 

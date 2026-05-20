@@ -1,4 +1,5 @@
 import starlight from "@astrojs/starlight";
+import astroD2 from "astro-d2";
 import { defineConfig } from "astro/config";
 import starlightLlmsTxt from "starlight-llms-txt";
 
@@ -6,6 +7,12 @@ export default defineConfig({
   site: "https://kvet.github.io",
   base: "/queuert",
   integrations: [
+    astroD2({
+      sketch: true,
+      layout: "elk",
+      pad: 20,
+      theme: { dark: false },
+    }),
     starlight({
       plugins: [starlightLlmsTxt()],
       title: "Queuert",

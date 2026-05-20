@@ -1,0 +1,179 @@
+vars: {
+  c-blue: "#2563eb"
+  c-green: "#16a34a"
+  c-teal: "#0e7490"
+  c-hint: "#d97706"
+  c-purple: "#7c3aed"
+  c-red: "#dc2626"
+  c-gray: "#6b7280"
+  c-stroke: "#475569"
+  c-muted: "#94a3b8"
+
+  f-blue: "#dbeafe"
+  f-green: "#dcfce7"
+  f-teal: "#ccfbf1"
+  f-hint: "#fef3c7"
+  f-purple: "#ede9fe"
+  f-red: "#fee2e2"
+  f-gray: "#f3f4f6"
+
+  t-blue: "#1e3a8a"
+  t-green: "#14532d"
+  t-teal: "#134e4a"
+  t-hint: "#78350f"
+  t-purple: "#4c1d95"
+  t-red: "#7f1d1d"
+}
+
+classes: {
+  process: {
+    style: {
+      stroke: ${c-muted}
+      stroke-dash: 2
+      fill: "#f8fafc"
+      border-radius: 14
+      font-color: ${c-muted}
+      bold: true
+    }
+  }
+
+  client: {
+    style: {
+      fill: ${f-blue}
+      stroke: ${c-blue}
+      stroke-width: 2
+      font-color: ${t-blue}
+      border-radius: 10
+      bold: true
+    }
+  }
+  worker: {
+    style: {
+      fill: ${f-green}
+      stroke: ${c-green}
+      stroke-width: 2
+      font-color: ${t-green}
+      border-radius: 10
+      bold: true
+    }
+  }
+  database: {
+    shape: cylinder
+    style: {
+      fill: ${f-teal}
+      stroke: ${c-teal}
+      stroke-width: 2
+      font-color: ${t-teal}
+      bold: true
+    }
+  }
+  notify: {
+    shape: queue
+    style: {
+      fill: ${f-hint}
+      stroke: ${c-hint}
+      stroke-width: 2
+      stroke-dash: 4
+      font-color: ${t-hint}
+      bold: true
+    }
+  }
+
+  job: {
+    style: {
+      fill: ${f-purple}
+      stroke: ${c-purple}
+      font-color: ${t-purple}
+      border-radius: 8
+    }
+  }
+  job-accent: {
+    style: {
+      fill: ${c-purple}
+      stroke: ${c-purple}
+      font-color: "#ffffff"
+      border-radius: 8
+      bold: true
+    }
+  }
+  job-done: {
+    style: {
+      fill: ${f-green}
+      stroke: ${c-green}
+      font-color: ${t-green}
+      border-radius: 8
+    }
+  }
+  job-muted: {
+    style: {
+      fill: ${f-gray}
+      stroke: ${c-muted}
+      stroke-dash: 3
+      font-color: ${c-gray}
+      border-radius: 8
+    }
+  }
+
+  blocker: {
+    style: {
+      fill: ${f-red}
+      stroke: ${c-red}
+      stroke-width: 2
+      font-color: ${t-red}
+      border-radius: 8
+      bold: true
+    }
+  }
+
+  step: {
+    style: {
+      fill: "#ffffff"
+      stroke: ${c-stroke}
+      font-color: ${c-stroke}
+      border-radius: 6
+    }
+  }
+  savepoint: {
+    style: {
+      stroke: ${c-hint}
+      stroke-dash: 4
+      fill: ${f-hint}
+      border-radius: 8
+      font-color: ${t-hint}
+      italic: true
+    }
+  }
+  txn: {
+    style: {
+      stroke: ${c-stroke}
+      stroke-dash: 3
+      fill: transparent
+      border-radius: 10
+      font-color: ${c-stroke}
+      italic: true
+    }
+  }
+
+  flow:       { style: { stroke: ${c-stroke}; font-color: ${c-stroke} } }
+  flow-blue:  { style: { stroke: ${c-blue};   font-color: ${t-blue} } }
+  flow-green: { style: { stroke: ${c-green};  font-color: ${t-green} } }
+  flow-red:   { style: { stroke: ${c-red};    font-color: ${t-red} } }
+  flow-gray:  { style: { stroke: ${c-gray};   font-color: ${c-gray} } }
+
+  wake: {
+    style: {
+      stroke: ${c-hint}
+      stroke-dash: 5
+      font-color: ${t-hint}
+      bold: true
+    }
+  }
+  dotted: {
+    style: {
+      stroke: ${c-muted}
+      stroke-dash: 2
+      font-color: ${c-muted}
+      italic: true
+    }
+  }
+}

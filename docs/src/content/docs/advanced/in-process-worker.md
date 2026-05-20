@@ -5,8 +5,6 @@ sidebar:
   order: 2
 ---
 
-import WorkerConcurrency from "../../../components/diagrams/WorkerConcurrency.astro";
-
 ## Overview
 
 This document describes the worker design in Queuert: how workers coordinate job processing, manage concurrency, and handle failures.
@@ -19,7 +17,49 @@ Workers process jobs in parallel using slots. See `createInProcessWorker` TSDoc 
 
 ### Architecture
 
-<WorkerConcurrency />
+```d2
+...@../_classes.d2
+
+direction: down
+
+worker: "Worker (concurrency = 3)" {
+  class: process
+
+  main: "Main loop\nfills empty slots, waits for completions" { class: worker; width: 360; height: 90 }
+
+  slot0: "Slot 0" {
+    class: worker
+    style.fill: "#dcfce7"
+    job: "job A\n(running)" { class: job-accent }
+  }
+  slot1: "Slot 1" {
+    class: worker
+    style.fill: "#dcfce7"
+    job: "job B\n(running)" { class: job-accent }
+  }
+  slot2: "Slot 2" {
+    class: worker
+    style.fill: "#dcfce7"
+    job: "job C\n(running)" { class: job-accent }
+  }
+
+  main -> slot0: "spawn" { class: flow-green }
+  main -> slot1: "spawn" { class: flow-green }
+  main -> slot2: "spawn" { class: flow-green }
+}
+
+db: |md
+  **Your database**
+
+  `FOR UPDATE SKIP LOCKED`
+
+  each slot claims a different job
+| { class: database }
+
+worker.slot0 -> db: "acquire · complete" { class: flow }
+worker.slot1 -> db: "acquire · complete" { class: flow }
+worker.slot2 -> db: "acquire · complete" { class: flow }
+```
 
 **How it works:**
 

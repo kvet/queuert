@@ -7,6 +7,37 @@ sidebar:
 
 Queuert has no built-in `priority` field. Prioritization is a consequence of **partitioning workloads across workers**: each worker owns a subset of job types, and its capacity (concurrency slots) is reserved for those types only. Give an urgent workload its own worker and it can never wait behind a long or slow one.
 
+```d2
+...@../_classes.d2
+
+direction: down
+
+db: |md
+  **Your database**
+
+  jobs filtered by `typeName` per worker
+| { class: database }
+
+txn: "transactional worker\nconcurrency = 3\ntypes: [email.transactional]" {
+  class: process
+
+  a: "slot" { class: worker }
+  b: "slot" { class: worker }
+  c: "slot" { class: worker }
+}
+
+bulk: "marketing worker\nconcurrency = 1\ntypes: [email.marketing]" {
+  class: process
+
+  a: "slot" { class: worker }
+}
+
+txn.a -> db: "acquire transactional" { class: flow-green }
+txn.b -> db: "acquire transactional" { class: flow-green }
+txn.c -> db: "acquire transactional" { class: flow-green }
+bulk.a -> db: "acquire marketing"   { class: flow }
+```
+
 ## Workloads and Capacity
 
 A worker provides a fixed amount of capacity — up to `concurrency` jobs in flight at once. By default, every job type in its processor registry competes for those same slots. If one worker registers every type, a long-running bulk workload can occupy every slot and stall urgent work behind it.

@@ -82,24 +82,36 @@ Savepoints solve this. A savepoint is a checkpoint within a transaction. If code
 
 ### How It Works
 
-```
-┌─ Transaction (acquires job) ──────────────────────────────┐
-│                                                           │
-│   ┌─ Savepoint (prepare callback) ──┐                    │
-│   │  User SQL...                    │ ← throws? rollback  │
-│   │  User SQL...                    │   to savepoint      │
-│   └─────────────────────────────────┘                     │
-│                                                           │
-│   ... async work (staged mode only) ...                   │
-│                                                           │
-│   ┌─ Savepoint (complete callback) ─┐                    │
-│   │  User SQL...                    │ ← throws? rollback  │
-│   │  completeJob / continueWith     │   to savepoint      │
-│   └─────────────────────────────────┘                     │
-│                                                           │
-│   On error: reschedule with backoff  ← always succeeds    │
-│   On success: commit                                      │
-└───────────────────────────────────────────────────────────┘
+```d2
+...@../_classes.d2
+
+direction: down
+
+acquire_txn: "Transaction (acquires job)" {
+  class: txn
+
+  prepare: "Savepoint — prepare callback" {
+    class: savepoint
+    body: "User SQL…\nthrows? rollback to savepoint" { class: step; width: 320; height: 80 }
+  }
+}
+
+async_work: "… async work (staged mode only) …\nlease auto-renews between transactions" { class: job-muted; width: 420; height: 80 }
+
+complete_txn: "Transaction (completes job)" {
+  class: txn
+
+  complete: "Savepoint — complete callback" {
+    class: savepoint
+    body: "User SQL…\ncompleteJob / continueWith\nthrows? rollback to savepoint" { class: step; width: 320; height: 100 }
+  }
+}
+
+result: "On error: reschedule with backoff\nOn success: commit" { class: job-done; width: 400; height: 90 }
+
+acquire_txn  -> async_work   { class: flow }
+async_work   -> complete_txn { class: flow }
+complete_txn -> result       { class: flow }
 ```
 
 On any unhandled error the job is rescheduled with exponential backoff (default: 10 s → 20 s → 40 s → ... capped at 300 s). There is no maximum retry count — jobs retry indefinitely. Use [discriminated unions or compensation patterns](../../guides/error-handling/) to handle permanently failing jobs.

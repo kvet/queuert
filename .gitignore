@@ -35,6 +35,7 @@ dist
 
 # astro
 .astro/
+docs/public/d2/
 
 
 # ide

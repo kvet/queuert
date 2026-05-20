@@ -31,6 +31,20 @@ react to the outcome, or when you want the error to be part of the chain's perma
 
 For workflows that need rollback, continue to a compensation job that undoes previous steps.
 
+```d2
+...@../_classes.d2
+
+direction: right
+
+charge: "charge-card"     { class: job }
+ship:   "ship-order"      { class: job }
+refund: "refund-charge"   { class: job-muted }
+
+charge -> ship:   "success"            { class: flow-green }
+charge -> refund: "decline"            { class: flow-red }
+ship   -> refund: "ship failed"        { class: flow-red }
+```
+
 ```ts
 const jobTypes = defineJobTypes<{
   "charge-card": {

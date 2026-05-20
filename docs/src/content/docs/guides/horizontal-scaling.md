@@ -5,11 +5,42 @@ sidebar:
   order: 17
 ---
 
-import MultiWorkerCoordination from "../../../components/diagrams/MultiWorkerCoordination.astro";
-
 Deploy multiple worker processes sharing the same database for horizontal scaling. Workers coordinate via database-level locking (`FOR UPDATE SKIP LOCKED`) — no external coordination required.
 
-<MultiWorkerCoordination />
+```d2
+...@../_classes.d2
+
+direction: down
+
+notify: |md
+  **Your pub/sub**
+
+  Postgres LISTEN · Redis · NATS · in-process
+| { class: notify }
+
+workers: {
+  class: process
+  label: " "
+
+  a: "Worker A" { class: worker }
+  b: "Worker B" { class: worker }
+  c: "Worker C" { class: worker }
+}
+
+db: |md
+  **Your database**
+
+  `FOR UPDATE SKIP LOCKED`
+| { class: database }
+
+notify -> workers.a: "1. wake" { class: wake }
+notify -> workers.b: "1. wake" { class: wake }
+notify -> workers.c: "1. wake" { class: wake }
+
+workers.a -> db: "2. claim → wins" { class: flow-green }
+workers.b -> db: "2. claim → skipped" { class: dotted }
+workers.c -> db: "2. claim → skipped" { class: dotted }
+```
 
 ## Identical Workers
 

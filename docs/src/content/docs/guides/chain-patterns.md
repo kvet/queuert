@@ -5,8 +5,6 @@ sidebar:
   order: 5
 ---
 
-import ChainPattern from "../../../components/diagrams/ChainPattern.astro";
-
 Chains support various execution patterns via `continueWith`:
 
 - [Linear](#linear) — `continueWith` returns the next type
@@ -16,7 +14,16 @@ Chains support various execution patterns via `continueWith`:
 
 ## Linear
 
-<ChainPattern kind="linear" />
+```d2
+...@../_classes.d2
+
+direction: right
+
+a: "create-subscription" { class: job }
+b: "activate-trial"      { class: job }
+
+a -> b { class: flow-blue }
+```
 
 Jobs execute one after another: `create-subscription -> activate-trial`
 
@@ -49,7 +56,18 @@ const jobTypes = defineJobTypes<{
 
 ## Branched
 
-<ChainPattern kind="branched" />
+```d2
+...@../_classes.d2
+
+direction: right
+
+decision: "trial-decision" { class: job }
+paid:     "convert-to-paid" { class: job }
+expire:   "expire-trial"    { class: job }
+
+decision -> paid   { class: flow-blue }
+decision -> expire { class: flow-blue }
+```
 
 Jobs conditionally continue to different types: `trial-decision -> convert-to-paid | expire-trial`
 
@@ -75,7 +93,15 @@ Jobs conditionally continue to different types: `trial-decision -> convert-to-pa
 
 ## Loops
 
-<ChainPattern kind="loop" />
+```d2
+...@../_classes.d2
+
+direction: right
+
+charge: "charge-billing" { class: job }
+
+charge -> charge: repeat { class: wake }
+```
 
 Jobs continue to the same type: `charge-billing -> charge-billing -> ... -> done`
 
@@ -107,7 +133,17 @@ const jobTypes = defineJobTypes<{
 
 ## Go-to
 
-<ChainPattern kind="goto" />
+```d2
+...@../_classes.d2
+
+direction: right
+
+charge: "charge-billing"      { class: job }
+cancel: "cancel-subscription" { class: job }
+
+charge -> charge: loop { class: wake }
+charge -> cancel: jump { class: flow-red }
+```
 
 Jobs jump to a different type mid-chain: `charge-billing -> cancel-subscription`
 

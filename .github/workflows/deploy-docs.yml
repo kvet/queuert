@@ -27,6 +27,9 @@ jobs:
 
       - uses: ./.github/actions/setup-repo
 
+      - name: Install D2
+        run: curl -fsSL https://d2lang.com/install.sh | sh -s -- --version v0.7.1
+
       - name: Build docs
         run: bun run docs:build
 
