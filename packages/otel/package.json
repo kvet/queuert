@@ -1,6 +1,6 @@
 {
   "name": "@queuert/otel",
-  "version": "0.13.0",
+  "version": "0.14.0",
   "description": "OpenTelemetry observability adapter for Queuert",
   "keywords": [
     "background-jobs",
@@ -58,7 +58,7 @@
     "queuert": "workspace:*"
   },
   "peerDependencies": {
-    "@opentelemetry/api": "^1.0.0",
+    "@opentelemetry/api": "^0.14.0",
     "queuert": "workspace:*"
   },
   "engines": {

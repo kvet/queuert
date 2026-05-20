@@ -1,5 +1,25 @@
 # queuert
 
+## 0.14.0
+
+### Minor Changes
+
+- 66a3c9c: Allow callers to assign job IDs and validate them adapter-side. `startChain`, `startChains`, and the worker `continueWith` callback now accept an optional `id` that becomes the new chain root (or continuation) job ID. State adapters accept a new `validateId` predicate that runs on both adapter-generated and caller-supplied IDs; failures throw the new `InvalidJobIdError`. When deduplication fires, the existing row's ID wins over a caller-supplied `id` (the returned chain carries `deduplicated: true`).
+
+  Adapter ID-generation options are now aligned: both PostgreSQL and SQLite adapters expose a `generateId` function (renamed from `idGenerator` on SQLite; replacing the SQL `idDefault` option on PostgreSQL). The PostgreSQL adapter switches from server-side default expressions to JS-side ID generation, and a new migration drops `DEFAULT gen_random_uuid()` from the `id` column. Existing UUID generation behavior is unchanged for default configurations.
+  - PostgreSQL: replace `idDefault: "gen_random_uuid()"` with `generateId: () => crypto.randomUUID()` (this is the default and can be omitted).
+  - PostgreSQL: replace `idDefault: "'job.' || gen_random_uuid()::text"` with `generateId: () => \`job.${crypto.randomUUID()}\``.
+  - SQLite: rename `idGenerator` option to `generateId`.
+  - Custom state adapter implementations must accept an optional `id` per entry in `createJobs` and apply their own `validateId` predicate.
+
+- 0fd8d55: `scheduled_at` is now the honest "earliest moment eligible" floor: state adapters clamp it to `MAX(requested, now())` on `createJobs`, `rescheduleJob`, and `unblockJobs`. Previously, jobs with a user-supplied past `scheduled_at` (or blocked-since-creation jobs whose original `scheduled_at` went stale while they waited) would jump to the front of the acquisition queue ahead of jobs that genuinely became ready earlier. Behavior change for `unblockJobs`: it previously reset `scheduled_at` to `now()` unconditionally; it now preserves a future `scheduled_at` set at job creation (the clamp picks the later of the two), so an intended future delay survives a blocker round-trip. `triggerJobs` continues to reset to `now()` as an explicit re-anchor. Applies to the PostgreSQL, SQLite, and in-process adapters; no schema migration or backfill required.
+
+### Patch Changes
+
+- 956bbd3: Clear `lastAttemptError` when a job completes successfully. Previously, if a job failed an attempt and then succeeded on a retry, the completed row retained the error string from the prior failed attempt, making completed jobs appear to have errored. `completeJob` now resets `last_attempt_error` to `NULL` in the PostgreSQL, SQLite, and in-process adapters alongside the existing status/output/lease updates.
+- 3da743c: Fix a spurious type error from `createInProcessWorker`'s `requiredAttemptMiddleware` check when the middleware was typed against a user-supplied `StateAdapter` alias (e.g. `AttemptMiddleware<MyStateAdapter>`). Valid processor slices were being flagged as missing required middleware. Runtime behavior was unaffected; this is a type-only fix.
+- 673d669: Tighten `BaseTxContext` from `{}` to `Record<string, unknown>`. The previous `{}` constraint accepted any non-nullish value (string, number, function), letting custom `StateAdapter` authors pick a non-object `TTxContext` without a type error. All built-in adapters are already object-shaped, so no runtime behavior changes.
+
 ## 0.13.0
 
 ### Minor Changes
@@ -76,7 +96,7 @@
 - - Add `vacuum()` method to Postgres state adapter for on-demand dead-tuple reclamation on job tables. New `vacuum_tuning` migration configures fillfactor and aggressive autovacuum settings to reduce table bloat automatically
   - Add `vacuum()` method to SQLite state adapter for on-demand page reclamation via incremental vacuum. `migrateToLatest()` now validates that `auto_vacuum = INCREMENTAL` is set on the database
   - Fix NATS notification buffering: flush the connection after each publish to ensure timely delivery
-  - Relax `@opentelemetry/api` peer dependency from `^1.9.0` to `^1.0.0`
+  - Relax `@opentelemetry/api` peer dependency from `^1.9.0` to `^0.14.0`
 
 ## 0.9.5
 
