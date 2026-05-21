@@ -1,7 +1,7 @@
 import { type ConformanceGroup } from "../runner.js";
-import { type StateAdapterConformanceContext } from "./types.js";
+import { type StateConformanceFixture } from "./types.js";
 
-export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext> = {
+export const rescheduleJobGroup: ConformanceGroup<StateConformanceFixture> = {
   name: "rescheduleJob",
   cases: [
     {

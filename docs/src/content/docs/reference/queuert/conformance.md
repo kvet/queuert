@@ -118,6 +118,8 @@ Conformance verifies the wrapper layer only — the six runtime methods (`getTyp
 ```typescript
 type StateConformanceFixture = {
   stateAdapter: StateAdapter<any, any>;
+  generateId?: () => string;
+  generateInvalidId?: () => string;
   poisonTransaction?: (txCtx: any) => Promise<void>;
   reset?: () => Promise<void>;
   dispose?: () => Promise<void>;

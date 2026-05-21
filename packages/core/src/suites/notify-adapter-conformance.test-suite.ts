@@ -2,12 +2,12 @@ import { type TestAPI, describe } from "vitest";
 
 import { expect as defaultExpect } from "../conformance/expect.js";
 import {
-  type NotifyAdapterConformanceContext,
+  type NotifyConformanceFixture,
   notifyAdapterConformanceGroups,
 } from "../conformance/notify-adapter-cases.js";
 import { SkipSignalError } from "../conformance/runner.js";
 
-export { type NotifyAdapterConformanceContext } from "../conformance/notify-adapter-cases.js";
+export { type NotifyConformanceFixture } from "../conformance/notify-adapter-cases.js";
 
 /**
  * Run the notify adapter conformance cases inside a vitest suite.
@@ -16,7 +16,7 @@ export { type NotifyAdapterConformanceContext } from "../conformance/notify-adap
  * The vitest suite surfaces per-case pass/fail to vitest's reporter while the
  * runner gives end users an embeddable single-test form.
  */
-export const notifyAdapterConformanceTestSuite = <T extends NotifyAdapterConformanceContext>({
+export const notifyAdapterConformanceTestSuite = <T extends NotifyConformanceFixture>({
   it,
 }: {
   it: TestAPI<T>;

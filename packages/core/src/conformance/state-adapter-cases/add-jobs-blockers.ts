@@ -1,7 +1,7 @@
 import { type ConformanceGroup } from "../runner.js";
-import { type StateAdapterConformanceContext } from "./types.js";
+import { type StateConformanceFixture } from "./types.js";
 
-export const addJobsBlockersGroup: ConformanceGroup<StateAdapterConformanceContext> = {
+export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
   name: "addJobsBlockers",
   cases: [
     {

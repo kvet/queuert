@@ -1,8 +1,8 @@
 import { sleep } from "../../helpers/sleep.js";
 import { type ConformanceGroup } from "../runner.js";
-import { type StateAdapterConformanceContext } from "./types.js";
+import { type StateConformanceFixture } from "./types.js";
 
-export const listChainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
+export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
   name: "listChains",
   cases: [
     {

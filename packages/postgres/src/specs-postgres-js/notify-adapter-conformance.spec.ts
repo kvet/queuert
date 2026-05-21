@@ -1,9 +1,6 @@
 import { extendWithPostgres } from "@queuert/testcontainers";
 import postgres from "postgres";
-import {
-  type NotifyAdapterConformanceContext,
-  notifyAdapterConformanceTestSuite,
-} from "queuert/testing";
+import { type NotifyConformanceFixture, notifyAdapterConformanceTestSuite } from "queuert/testing";
 import { it as baseIt, describe } from "vitest";
 
 import { createPgNotifyAdapter } from "../notify-adapter/notify-adapter.pg.js";
@@ -15,7 +12,7 @@ const it = extendWithPostgres(baseIt, import.meta.url);
 it("index");
 
 describe("PostgreSQL Notify Adapter Conformance (postgres.js) - Default Channel Prefix", () => {
-  const conformanceIt = it.extend<NotifyAdapterConformanceContext>({
+  const conformanceIt = it.extend<NotifyConformanceFixture>({
     notifyAdapter: [
       async ({ postgresConnectionString }, use) => {
         const sql = postgres(postgresConnectionString, { max: 10, onnotice: () => {} });
@@ -35,7 +32,7 @@ describe("PostgreSQL Notify Adapter Conformance (postgres.js) - Default Channel 
 });
 
 describe("PostgreSQL Notify Adapter Conformance (postgres.js) - Custom Channel Prefix", () => {
-  const conformanceIt = it.extend<NotifyAdapterConformanceContext>({
+  const conformanceIt = it.extend<NotifyConformanceFixture>({
     notifyAdapter: [
       async ({ postgresConnectionString }, use) => {
         const sql = postgres(postgresConnectionString, { max: 10, onnotice: () => {} });

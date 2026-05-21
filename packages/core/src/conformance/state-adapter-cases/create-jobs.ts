@@ -2,9 +2,9 @@ import { InvalidJobIdError } from "../../errors.js";
 import { sleep } from "../../helpers/sleep.js";
 import { type StateJob } from "../../state-adapter/state-adapter.js";
 import { type ConformanceGroup } from "../runner.js";
-import { type StateAdapterConformanceContext } from "./types.js";
+import { type StateConformanceFixture } from "./types.js";
 
-export const createJobsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
+export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
   name: "createJobs",
   cases: [
     {

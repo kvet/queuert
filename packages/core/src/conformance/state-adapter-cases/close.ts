@@ -1,5 +1,5 @@
 import { type ConformanceGroup } from "../runner.js";
-import { type StateAdapterConformanceContext } from "./types.js";
+import { type StateConformanceFixture } from "./types.js";
 
 /**
  * Verifies `close()` contract: idempotent, provider resources released.
@@ -8,7 +8,7 @@ import { type StateAdapterConformanceContext } from "./types.js";
  * the adapter here does not interfere with other tests because vitest fixtures
  * are test-scoped.
  */
-export const closeGroup: ConformanceGroup<StateAdapterConformanceContext> = {
+export const closeGroup: ConformanceGroup<StateConformanceFixture> = {
   name: "close",
   cases: [
     {

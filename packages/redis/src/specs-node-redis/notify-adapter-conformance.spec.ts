@@ -1,8 +1,5 @@
 import { extendWithRedis } from "@queuert/testcontainers";
-import {
-  type NotifyAdapterConformanceContext,
-  notifyAdapterConformanceTestSuite,
-} from "queuert/testing";
+import { type NotifyConformanceFixture, notifyAdapterConformanceTestSuite } from "queuert/testing";
 import { type RedisClientType, createClient } from "redis";
 import { it as baseIt, describe } from "vitest";
 
@@ -15,7 +12,7 @@ const it = extendWithRedis(baseIt, import.meta.url);
 it("index");
 
 describe("Redis Notify Adapter Conformance - Default Channel Prefix", () => {
-  const conformanceIt = it.extend<NotifyAdapterConformanceContext>({
+  const conformanceIt = it.extend<NotifyConformanceFixture>({
     notifyAdapter: [
       async ({ redisConnectionUrl }, use) => {
         const client = createClient({ url: redisConnectionUrl }) as RedisClientType;
@@ -42,7 +39,7 @@ describe("Redis Notify Adapter Conformance - Default Channel Prefix", () => {
 });
 
 describe("Redis Notify Adapter Conformance - Custom Channel Prefix", () => {
-  const conformanceIt = it.extend<NotifyAdapterConformanceContext>({
+  const conformanceIt = it.extend<NotifyConformanceFixture>({
     notifyAdapter: [
       async ({ redisConnectionUrl }, use) => {
         const client = createClient({ url: redisConnectionUrl }) as RedisClientType;

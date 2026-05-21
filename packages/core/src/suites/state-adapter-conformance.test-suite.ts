@@ -3,11 +3,11 @@ import { type TestAPI, describe } from "vitest";
 import { expect as defaultExpect } from "../conformance/expect.js";
 import { SkipSignalError } from "../conformance/runner.js";
 import {
-  type StateAdapterConformanceContext,
+  type StateConformanceFixture,
   stateAdapterConformanceGroups,
 } from "../conformance/state-adapter-cases.js";
 
-export { type StateAdapterConformanceContext } from "../conformance/state-adapter-cases.js";
+export { type StateConformanceFixture } from "../conformance/state-adapter-cases.js";
 
 /**
  * Run the state adapter conformance cases inside a vitest suite.
@@ -16,7 +16,7 @@ export { type StateAdapterConformanceContext } from "../conformance/state-adapte
  * The vitest suite surfaces per-case pass/fail to vitest's reporter while the
  * runner gives end users an embeddable single-test form.
  */
-export const stateAdapterConformanceTestSuite = <T extends StateAdapterConformanceContext>({
+export const stateAdapterConformanceTestSuite = <T extends StateConformanceFixture>({
   it,
 }: {
   it: TestAPI<T>;

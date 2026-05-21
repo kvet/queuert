@@ -20,14 +20,14 @@ import { reapExpiredJobLeaseGroup } from "./state-adapter-cases/reap-expired-job
 import { renewJobLeaseGroup } from "./state-adapter-cases/renew-job-lease.js";
 import { rescheduleJobGroup } from "./state-adapter-cases/reschedule-job.js";
 import { triggerJobsGroup } from "./state-adapter-cases/trigger-jobs.js";
-import { type StateAdapterConformanceContext } from "./state-adapter-cases/types.js";
+import { type StateConformanceFixture } from "./state-adapter-cases/types.js";
 import { unblockJobsGroup } from "./state-adapter-cases/unblock-jobs.js";
 import { withSavepointGroup } from "./state-adapter-cases/with-savepoint.js";
 import { withTransactionGroup } from "./state-adapter-cases/with-transaction.js";
 
-export { type StateAdapterConformanceContext } from "./state-adapter-cases/types.js";
+export { type StateConformanceFixture } from "./state-adapter-cases/types.js";
 
-export const stateAdapterConformanceGroups: ConformanceGroup<StateAdapterConformanceContext>[] = [
+export const stateAdapterConformanceGroups: ConformanceGroup<StateConformanceFixture>[] = [
   createJobsGroup,
   withTransactionGroup,
   getChainGroup,

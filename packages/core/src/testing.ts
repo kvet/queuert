@@ -14,11 +14,11 @@ export { schedulingTestSuite } from "./suites/scheduling.test-suite.js";
 export { chainsTestSuite } from "./suites/chains.test-suite.js";
 export {
   notifyAdapterConformanceTestSuite,
-  type NotifyAdapterConformanceContext,
+  type NotifyConformanceFixture,
 } from "./suites/notify-adapter-conformance.test-suite.js";
 export {
   stateAdapterConformanceTestSuite,
-  type StateAdapterConformanceContext,
+  type StateConformanceFixture,
 } from "./suites/state-adapter-conformance.test-suite.js";
 export { stateResilienceTestSuite } from "./suites/state-resilience.test-suite.js";
 export { waitChainCompletionTestSuite } from "./suites/wait-chain-completion.test-suite.js";

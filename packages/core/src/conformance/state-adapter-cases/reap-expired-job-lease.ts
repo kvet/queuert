@@ -1,8 +1,8 @@
 import { sleep } from "../../helpers/sleep.js";
 import { type ConformanceGroup } from "../runner.js";
-import { type StateAdapterConformanceContext } from "./types.js";
+import { type StateConformanceFixture } from "./types.js";
 
-export const reapExpiredJobLeaseGroup: ConformanceGroup<StateAdapterConformanceContext> = {
+export const reapExpiredJobLeaseGroup: ConformanceGroup<StateConformanceFixture> = {
   name: "reapExpiredJobLease",
   cases: [
     {

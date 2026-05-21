@@ -2,8 +2,17 @@ import { raceWithSleep, sleep } from "../helpers/sleep.js";
 import { type NotifyAdapter } from "../notify-adapter/notify-adapter.js";
 import { type ConformanceGroup } from "./runner.js";
 
-export type NotifyAdapterConformanceContext = {
+/**
+ * Fixture for the notify adapter conformance suite. Used both as the factory
+ * return shape for {@link runNotifyAdapterConformance} and as the per-case
+ * context the conformance cases receive.
+ */
+export type NotifyConformanceFixture = {
   notifyAdapter: NotifyAdapter;
+  /** Called before each conformance case. Consumed by the runner — cases ignore it. */
+  reset?: () => Promise<void>;
+  /** Called once after all cases finish (pass or fail) to release resources. Consumed by the runner — cases ignore it. */
+  dispose?: () => Promise<void>;
 };
 
 const NEGATIVE_ASSERTION_DELAY_MS = 200;
@@ -27,7 +36,7 @@ const waitFor = async <T>(promise: Promise<T>, label: string): Promise<T> => {
   return captured.value;
 };
 
-export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyAdapterConformanceContext>[] = [
+export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyConformanceFixture>[] = [
   {
     name: "notifyJobScheduled / listenJobScheduled",
     cases: [

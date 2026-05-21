@@ -1,7 +1,7 @@
 import { type ConformanceGroup } from "../runner.js";
-import { type StateAdapterConformanceContext } from "./types.js";
+import { type StateConformanceFixture } from "./types.js";
 
-export const getNextJobAvailableInMsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
+export const getNextJobAvailableInMsGroup: ConformanceGroup<StateConformanceFixture> = {
   name: "getNextJobAvailableInMs",
   cases: [
     {

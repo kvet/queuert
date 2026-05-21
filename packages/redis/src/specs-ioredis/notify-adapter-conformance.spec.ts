@@ -1,9 +1,6 @@
 import { extendWithRedis } from "@queuert/testcontainers";
 import { Redis } from "ioredis";
-import {
-  type NotifyAdapterConformanceContext,
-  notifyAdapterConformanceTestSuite,
-} from "queuert/testing";
+import { type NotifyConformanceFixture, notifyAdapterConformanceTestSuite } from "queuert/testing";
 import { it as baseIt, describe } from "vitest";
 
 import { createRedisNotifyAdapter } from "../notify-adapter/notify-adapter.redis.js";
@@ -15,7 +12,7 @@ const it = extendWithRedis(baseIt, import.meta.url);
 it("index");
 
 describe("Redis Notify Adapter Conformance (ioredis) - Default Channel Prefix", () => {
-  const conformanceIt = it.extend<NotifyAdapterConformanceContext>({
+  const conformanceIt = it.extend<NotifyConformanceFixture>({
     notifyAdapter: [
       async ({ redisConnectionUrl }, use) => {
         const client = new Redis(redisConnectionUrl);
@@ -40,7 +37,7 @@ describe("Redis Notify Adapter Conformance (ioredis) - Default Channel Prefix", 
 });
 
 describe("Redis Notify Adapter Conformance (ioredis) - Custom Channel Prefix", () => {
-  const conformanceIt = it.extend<NotifyAdapterConformanceContext>({
+  const conformanceIt = it.extend<NotifyConformanceFixture>({
     notifyAdapter: [
       async ({ redisConnectionUrl }, use) => {
         const client = new Redis(redisConnectionUrl);
