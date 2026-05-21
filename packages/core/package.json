@@ -1,6 +1,6 @@
 {
   "name": "queuert",
-  "version": "0.14.0",
+  "version": "0.14.1",
   "description": "Durable, typed job chains that commit with your database transactions",
   "keywords": [
     "background-jobs",
