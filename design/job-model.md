@@ -20,6 +20,7 @@ The fixes are coupled: the FK that disambiguates terminal vs handoff is the same
 id                              -- PK
 type_name                       -- string
 chain_id                        -- FK to job(id); root job has chain_id = id
+chain_type_name                 -- string; root job's type_name, copied onto every row in the chain
 chain_index                     -- int, monotonic position in chain (0 = root); SQL-internal
 succeeded_by_job_id             -- FK NULL; set when this job handed off to a successor
 input                           -- jsonb
@@ -32,7 +33,7 @@ leased_until                    -- timestamp NULL; lease deadline (also gates "r
 completed_at                    -- timestamp NULL; set on any terminal event (output or handoff)
 completed_by                    -- string NULL; worker id of completer
 attempt                         -- int NOT NULL DEFAULT 0
-last_user_reschedule_attempt    -- int NULL; value of `attempt` at last user-initiated reschedule
+attempts_since_user_reschedule  -- int NOT NULL DEFAULT 0; ++ on each acquire; reset to 0 on user-initiated reschedule and on unblock (the row resuming after a blocked window starts a fresh streak)
 last_attempt_error              -- jsonb NULL
 last_attempt_at                 -- timestamp NULL
 deduplication_key               -- string NULL
@@ -118,15 +119,21 @@ Order encodes the legal precedence: completion (in either flavor) wins over a st
 
 `completed_at` (not `output IS NOT NULL`) is the completion gate. A handler returning `complete(null)` legitimately writes `output = NULL`.
 
+`status` is a **view, not a stored field** — semantically equivalent to a SQL `CASE` expression over the structural columns. `now` is a parameter of the derivation, not ambient global state: each query passes a single `now` (PG: `now()`, txn-stable; SQLite: `unixepoch()` materialized once into the SELECT; in-process: `Date.now()` once per call) so status is stable within a query and may change across queries — same contract as any time-dependent projection. Only the `scheduled`/`ready` flip depends on the clock; every other transition is driven by a write to a structural column.
+
 ### Chain status
 
 Derived from the chain's tail (`succeeded_by_job_id IS NULL` for `chain_id = X`):
 
 ```ts
 type ChainStatus = "open" | "closed";
+
+function deriveChainStatus(tailRow): ChainStatus {
+  return tailRow.completed_at !== null && tailRow.succeeded_by_job_id === null ? "closed" : "open";
+}
 ```
 
-A chain is `closed` iff its tail row has `completed_at IS NOT NULL`. Naming: `closed` is the antonym of `open` and abstracts over the terminal-completion path (today) plus any future terminal-non-success (cancellation, terminal failure) — those would all be substates of `closed`. The dedup `scope` becomes `'open' | 'any'` for consistency.
+Naming: `closed` is the antonym of `open` and abstracts over the terminal-completion path (today) plus any future terminal-non-success (cancellation, terminal failure) — those would all be substates of `closed`. The dedup `scope` becomes `'open' | 'any'` for consistency.
 
 ## SQL hot paths
 
@@ -151,18 +158,28 @@ ORDER BY leased_until ASC
 LIMIT 1
 FOR UPDATE SKIP LOCKED;
 
--- Chain frontier (the tail, whether closed or open)
+-- Open-chain frontier (the open tail). Hits `job_chain_tail_idx` (1 row).
+SELECT … FROM job
+WHERE chain_id = $1
+  AND succeeded_by_job_id IS NULL
+  AND completed_at IS NULL;
+
+-- Any-chain tail (open or closed). Falls back to `job_chain_position_idx`
+-- because closed tails are not in `job_chain_tail_idx`; the index range scan
+-- on (chain_id) is bounded by chain length.
 SELECT … FROM job
 WHERE chain_id = $1 AND succeeded_by_job_id IS NULL;
--- At most one row (UNIQUE partial index).
 
--- Chain closed?
+-- Chain closed? (closed tail = terminal completion, no successor)
 SELECT 1 FROM job
 WHERE chain_id = $1
   AND succeeded_by_job_id IS NULL
   AND completed_at IS NOT NULL;
 
--- Blocker chain resolved?
+-- Blocker chain resolved? Same shape as "chain closed?"; the chain-tail
+-- partial is open-only, so this query uses `job_chain_position_idx` on
+-- (chain_id, chain_index). One chain-length range scan per blocker — still
+-- O(1) per blocker since closed chains are short to walk in practice.
 SELECT 1 FROM job
 WHERE chain_id = $blocker_chain_id
   AND succeeded_by_job_id IS NULL
@@ -197,9 +214,12 @@ CREATE INDEX job_ready_idx ON job (type_name, scheduled_at)
 CREATE INDEX job_running_idx ON job (leased_until)
   WHERE leased_until IS NOT NULL AND completed_at IS NULL;
 
--- Chain frontier (one row per chain). UNIQUE encodes "at most one tail per chain."
+-- Chain frontier of OPEN chains (one row per open chain). UNIQUE encodes
+-- "at most one open tail per chain." The `completed_at IS NULL` clause is
+-- load-bearing: without it, `continueWith` cannot write atomically — see
+-- [continueWith write order](#why-the-tail-partial-requires-completed_at-is-null).
 CREATE UNIQUE INDEX job_chain_tail_idx ON job (chain_id)
-  WHERE succeeded_by_job_id IS NULL;
+  WHERE succeeded_by_job_id IS NULL AND completed_at IS NULL;
 
 -- Chain ordered traversal + race prevention for continueWith
 CREATE UNIQUE INDEX job_chain_position_idx ON job (chain_id, chain_index);
@@ -207,8 +227,12 @@ CREATE UNIQUE INDEX job_chain_position_idx ON job (chain_id, chain_index);
 -- Dedup (open-scope, common case)
 CREATE INDEX job_dedup_open_idx ON job (deduplication_key, created_at DESC)
   WHERE deduplication_key IS NOT NULL
-    AND chain_index = 0
+    AND chain_id = id
     AND completed_at IS NULL;
+-- `chain_id = id` is the structural "is a chain root" predicate (roots set
+-- chain_id to their own id; non-roots inherit the root's id). Using it here
+-- instead of `chain_index = 0` keeps chain_index out of read-side predicates
+-- — chain_index remains for ordered range scans only.
 
 -- Reverse-lookup: jobs blocked by a given chain
 CREATE INDEX job_blocker_chain_idx ON job_blocker (blocked_by_chain_id);
@@ -225,17 +249,27 @@ CREATE INDEX job_pending_listing_idx ON job (type_name, scheduled_at)
   WHERE has_open_blockers = false
     AND leased_until IS NULL
     AND completed_at IS NULL;
--- Serves both 'ready' and 'scheduled' filters; the now() split is a runtime
--- filter on the index ordering.
+-- "Pending" here is the structural predicate "not blocked, not running, not
+-- completed" — i.e. the union of the derived `ready` and `scheduled` statuses.
+-- The derivation drops `pending` from the public vocabulary (it split into
+-- `ready` and `scheduled`), but the partition itself is still the cheapest
+-- thing to index on, and the now() split between `ready` and `scheduled` is
+-- a runtime filter applied on top of the index-ordered scan. This index also
+-- serves `getNextJobAvailableInMs` (priority-blind wake-up on min(scheduled_at)).
 
-CREATE INDEX job_done_listing_idx ON job (type_name, completed_at DESC)
-  WHERE completed_at IS NOT NULL;
--- Serves both 'completed' and 'continued'; the variant discriminator
--- (succeeded_by_job_id NULL/NOT NULL) is filtered at row inspection.
+CREATE INDEX job_completed_listing_idx ON job (type_name, completed_at DESC)
+  WHERE completed_at IS NOT NULL AND succeeded_by_job_id IS NULL;
+
+CREATE INDEX job_continued_listing_idx ON job (type_name, completed_at DESC)
+  WHERE completed_at IS NOT NULL AND succeeded_by_job_id IS NOT NULL;
+-- Split on the variant discriminator: a completion is either terminal or
+-- handoff, never both, so per-write only one partial is touched. Dashboard
+-- filters for either variant get an exact partial instead of a row-inspection
+-- scan over a mixed partition.
 
 -- Chain listing (root jobs only, by chain type)
 CREATE INDEX chain_listing_idx ON job (chain_type_name, created_at DESC)
-  WHERE chain_index = 0;
+  WHERE chain_id = id;
 ```
 
 Properties:
@@ -267,7 +301,7 @@ type StateJob = {
   completedBy: string | null;
 
   attempt: number;
-  lastUserRescheduleAttempt: number | null;
+  attemptsSinceUserReschedule: number;
   lastAttemptError: string | null;
   lastAttemptAt: Date | null;
 
@@ -284,11 +318,11 @@ type StateJob = {
 
 ### Adapter methods
 
-- `acquireJob({ typeNames, workerId, leaseDurationMs })` — writes `leased_by`, `leased_until`, `attempt++` atomically with row selection. With no stored `status` column, "running" is the presence of `leased_until`, so the lease must be set at acquire time.
+- `acquireJob({ typeNames, workerId, leaseDurationMs })` — writes `leased_by`, `leased_until`, `attempt++`, `attempts_since_user_reschedule++` atomically with row selection. With no stored `status` column, "running" is the presence of `leased_until`, so the lease must be set at acquire time.
 - `completeJob({ jobId, workerId, output? })` — writes `completed_at`, `completed_by`, `output` (nullable; null when the parent's `succeeded_by_job_id` was set earlier by a `continueWith`-driven `createJobs`). Single unified method; the row's `succeeded_by_job_id` distinguishes terminal from handoff.
 - `createJobs` per-job input is `{ kind: "chainStart" | "continueWith", ... }` — for `continueWith`, the adapter inherits `chain_id`, `chain_type_name`, derives `chain_index`, and sets the parent's `succeeded_by_job_id` in the same transaction.
-- `rescheduleJob({ jobId, schedule, error, userInitiated })` — when `userInitiated = true`, sets `last_user_reschedule_attempt = attempt`. Otherwise leaves it.
-- `addJobsBlockers` sets `has_open_blockers = true` on dependents with ≥1 incomplete blocker; `unblockJobs` sets `has_open_blockers = false` when the last blocker resolves.
+- `rescheduleJob({ jobId, schedule, error, userInitiated })` — when `userInitiated = true`, sets `attempts_since_user_reschedule = 0`. Otherwise leaves it.
+- `addJobsBlockers` sets `has_open_blockers = true` on dependents with ≥1 incomplete blocker; `unblockJobs` sets `has_open_blockers = false` and `attempts_since_user_reschedule = 0` when the last blocker resolves. The counter reset on unblock is deliberate: the row was off the active partition during the blocked window, and "stuck" only makes sense as a streak of consecutive failed acquires under runnable conditions. Coming back from blocked starts a new streak.
 
 ### `Job` discriminated union
 
@@ -310,7 +344,24 @@ A ~15,000–25,000× regression — the planner walks the full pending index pro
 
 ### Why `has_open_blockers` but not `job_blocker.open`
 
-The chain-tail partial index makes "is this blocker resolved?" O(1) via the unique partial on `(chain_id) WHERE succeeded_by_job_id IS NULL`. A per-blocker-row `open` boolean would only save aggregation in `unblockJobs`, which already operates on a bounded set (the dependents of the just-completed chain). The single denormalization on `job.has_open_blockers` is irreducible; the second one isn't.
+"Is this blocker resolved?" is a bounded-cost lookup via `job_chain_position_idx` (range scan over a single chain, typically short). The chain-tail partial covers the open case in O(1) and the position index covers the closed-tail case in O(chain length). A per-blocker-row `open` boolean would only save aggregation in `unblockJobs`, which already operates on a bounded set (the dependents of the just-completed chain). The single denormalization on `job.has_open_blockers` is irreducible; the second one isn't.
+
+### Why the tail partial requires `completed_at IS NULL`
+
+A naive `WHERE succeeded_by_job_id IS NULL` predicate would deadlock the natural `continueWith` write. Walk through it:
+
+1. State at tx start: J1 is the current tail (`succeeded_by_job_id IS NULL`, `completed_at IS NULL`). J1 occupies the partial-unique slot for `(chain_id = C)`.
+2. The handler returns `continueWith({ ... })`. The adapter wants to INSERT J2 with `chain_id = C` and `succeeded_by_job_id IS NULL`, then UPDATE J1 to point at J2 and mark it completed.
+
+With the naive predicate, step 2's INSERT immediately conflicts with J1 — both rows want the same partial-unique slot. Partial-unique indexes can't be `DEFERRABLE` in either Postgres or SQLite (deferrability is a constraint property; partial uniques are necessarily plain indexes), so there is no way to defer the conflict to end-of-statement. Single-statement CTE rewrites don't help either: data-modifying CTEs materialize their row mutations into the index as they run.
+
+Adding `AND completed_at IS NULL` to the predicate fixes this by giving the writer a way to evict J1 from the partial before J2 enters:
+
+1. UPDATE J1 SET `completed_at = $now` — J1 leaves the partial.
+2. INSERT J2 with `succeeded_by_job_id = NULL` — J2 enters the partial, no conflict.
+3. UPDATE J1 SET `succeeded_by_job_id = J2.id` — no partial impact (J1 already out).
+
+All three statements live inside the `continueWith` transaction; partial readers between them are not a concern (the tx is the only writer holding the row's lease). The invariant DB-side weakens from "at most one tail per chain" to "at most one open tail per open chain"; the stronger app-level invariant ("exactly one tail per chain at all times") is maintained by the same single write site (`continueWith → createJobs`) and the `(chain_id, chain_index)` UNIQUE. Closed-chain tail lookups (rare; only `chain closed?` / `blocker chain resolved?`) fall back to `job_chain_position_idx`, costing one bounded range scan.
 
 ### Why `succeeded_by_job_id` stored (not derived via `chain_index + 1` lookup)
 
@@ -319,26 +370,71 @@ The chain-tail partial index makes "is this blocker resolved?" O(1) via the uniq
 - **SQLite mutating-CTE problem**: SQLite doesn't support `UPDATE … RETURNING *` joined back to a SELECT. Deriving the field on every read means ~13 SELECT sites each gaining a follow-up query in the SQLite adapter.
 - **Single write site** (`continueWith` → `createJobs`), so drift surface is small and bounded by one CTE.
 
+### Dead-tuple churn
+
+Most state transitions on `job` are non-HOT: every transition touches a column (`leased_until`, `completed_at`, `scheduled_at`, `has_open_blockers`) that appears in at least one partial-index predicate, and PG treats predicate columns as "indexed" for HOT eligibility. A typical job lifecycle generates ~2–3 dead tuples on `job` (acquire + complete, plus one per retry / unblock / continueWith). At sustained throughput this is real index churn — but on PG ≥14 it is carried by engine features, not by schema design.
+
+What carries it:
+
+- **VM-aware vacuum (PG 9.6+)** skips all-visible pages on the heap scan. Cold completed history doesn't get re-scanned just because it's there — only pages that saw recent writes are touched. The autovacuum heap scan cost is bounded by the active set, not the table size.
+- **Bottom-up index deletion (PG 14+)** removes dead/duplicate index entries opportunistically when leaf pages fill, so index bloat from update churn largely self-heals on writes rather than waiting for `vacuum_index_cleanup`.
+- **`INDEX_CLEANUP = AUTO` (PG 14+, default)** skips the index-vacuum pass entirely when the heap pass found few dead tuples.
+
+V1 commitment: **set autovacuum to threshold-based pinning and trust the engine.** Target shape:
+
+```sql
+ALTER TABLE {{schema}}.{{table_prefix}}job SET (
+  fillfactor = 75,
+  autovacuum_vacuum_threshold = 5000,
+  autovacuum_vacuum_scale_factor = 0,
+  autovacuum_analyze_threshold = 5000,
+  autovacuum_analyze_scale_factor = 0,
+  autovacuum_vacuum_cost_delay = 0
+);
+```
+
+Threshold-based pinning (`threshold = 5000, scale_factor = 0`) gives a predictable vacuum cadence regardless of table size — a fixed dead-tuple budget per pass. The historical `scale_factor` knob anchored the trigger to table growth, but on modern PG (VM-aware vacuum) the scan cost no longer scales with the table, so anchoring the trigger to it just delays vacuum on big tables. A future cleanup-style job can dynamically `ALTER TABLE … SET (autovacuum_vacuum_threshold = …)` per deployment if a single static value isn't right.
+
+Current migration `20240102000000_vacuum_tuning` uses `scale_factor = 0.02`; switching it to threshold-based pinning is a follow-up migration step in the job-model alignment EPIC.
+
+PG ≥14 is the supported floor for this workload model. PG 13 reaches end-of-life in November 2025; we don't carry the pre-14 vacuum profile in the design.
+
+Add a dead-tuple-rate gauge in [state-snapshot-metrics.md](state-snapshot-metrics.md)'s follow-up so operators can see if this ever does become the bottleneck.
+
+### Partition-friendliness on `chain_id`
+
+The schema is deliberately structured so a future partitioned PG adapter can range-partition `job` on `chain_id` without schema rework: `chain_id` is immutable from insert (no row moves), self-FKs are chain-local (partition-local lookups), and the chain-scoped uniqueness invariants hold within a partition. Deployment shape, not core schema concern — see [partitioned-pg-adapter.md](partitioned-pg-adapter.md) for the full design.
+
 ### Why no stored `status` column
 
 Every value is a function of structural columns; writes touching multiple representations are drift-prone; enum-domain migrations are heavy (PG `ALTER TYPE ADD VALUE`, SQLite CHECK rewrite via `writable_schema`); the public vocabulary can evolve without renegotiating storage. Read-time derivation via row mapper or SQL CASE is cheap on bounded partial-index partitions.
 
 ### Why `chain_index` stays in storage (hidden from API)
 
-Provides: (a) cheap range-scan ordering for chain listing, (b) `UNIQUE (chain_id, chain_index)` for race prevention on `continueWith`, (c) dedup `chain_index = 0` predicate for "is this a chain root." Replacing range scans with recursive CTEs over `succeeded_by_job_id` is order-of-magnitude slower on cold cache. Keep `chain_index` as an SQL-internal ordering primitive; the public API surfaces `succeeded_by_job_id` instead.
+Provides: (a) cheap range-scan ordering for chain listing, (b) `UNIQUE (chain_id, chain_index)` for race prevention on `continueWith`. Replacing range scans with recursive CTEs over `succeeded_by_job_id` is order-of-magnitude slower on cold cache. Keep `chain_index` as an SQL-internal ordering primitive; the public API surfaces `succeeded_by_job_id` instead.
+
+The "is this a chain root?" predicate uses `chain_id = id` (roots set `chain_id` to their own id; non-roots inherit the root's id), not `chain_index = 0`. Both are correct; `chain_id = id` is preferred because it keeps `chain_index` out of read-side index predicates — its only remaining roles are ordering and uniqueness.
 
 ## Migration from current state
 
-The current `next` branch already has `has_blockers` and `continued_to_job_id` from the prior refactors. This design proposes name refinements and one additive column:
+Delta to apply against the live `dev` branch (PG + SQLite migrations, in order):
 
-1. **Rename** `has_blockers` → `has_open_blockers`. Pure rename: column-level on PG (`ALTER TABLE … RENAME COLUMN`), SQLite via the `ALTER TABLE` rename.
-2. **Rename** `continued_to_job_id` → `succeeded_by_job_id`. Same shape.
-3. **Add** `last_user_reschedule_attempt int NULL`. Backfill is `NULL` (no historical data to recover).
-4. **Add** `job_chain_tail_idx UNIQUE` partial on `(chain_id) WHERE succeeded_by_job_id IS NULL`. This is a new invariant the DB will enforce; backfill should already satisfy it given how `createJobs` writes the FK.
-5. **Rename indexes** to match the new vocabulary (cosmetic).
-6. **Add `chain_index = 0` to the dedup partial** (it's already there) and the `completed_at IS NULL` predicate (open-scope).
+1. **Add `has_open_blockers boolean NOT NULL DEFAULT false`.** Backfill: `true` where `status = 'blocked'`, `false` otherwise.
+2. **Add `succeeded_by_job_id {{id_type}} NULL REFERENCES job(id)`.** Backfill from `chain_index`: for every non-tail row of every chain, set `succeeded_by_job_id` to the row with the same `chain_id` and `chain_index = self.chain_index + 1`. (Tails — including roots of single-job chains — stay `NULL`.) On PG: single `UPDATE … FROM` correlated by `(chain_id, chain_index+1)`. On SQLite: same shape via correlated subquery.
+3. **Add `attempts_since_user_reschedule integer NOT NULL DEFAULT 0`.** No backfill (no historical data to recover; existing rows default to `0`, which conservatively reads as "no auto-retry streak yet" — same answer the metrics layer would give for a brand-new row).
+4. **Drop the stored `status` column and (on PG) the `job_status` enum type.** Replace every read site with the derivation rule in [Derivation rule](#derivation-rule); every writer that previously maintained `status` is removed in the same change. The acquisition lease must be set in the same transaction that selects the row (since "running" is now `leased_until IS NOT NULL`).
+5. **Create `job_chain_tail_idx UNIQUE` partial** on `(chain_id) WHERE succeeded_by_job_id IS NULL AND completed_at IS NULL`. The backfill from step 2 leaves at most one open tail per chain (closed chains end with a row whose `completed_at IS NOT NULL`, which is outside the partial), so the unique constraint is satisfied at creation time. The `completed_at IS NULL` clause is required for the `continueWith` write to be conflict-free — see [Why the tail partial requires completed_at IS NULL](#why-the-tail-partial-requires-completed_at-is-null).
+6. **Rebuild status-dependent indexes against structural predicates**, replacing the `WHERE status = '…'` partials with the predicates from [Indexes](#indexes):
+   - `job_acquisition_idx` → `job_ready_idx` (`WHERE has_open_blockers = false AND leased_until IS NULL AND completed_at IS NULL`).
+   - `job_expired_lease_idx` → `job_running_idx` (`WHERE leased_until IS NOT NULL AND completed_at IS NULL`).
+   - `job_listing_status_idx` is dropped; replaced by the per-status listing partials (`job_blocked_listing_idx`, `job_pending_listing_idx`, `job_completed_listing_idx`, `job_continued_listing_idx`) that match the derivation.
+   - `job_listing_type_name_idx` keeps its shape but is renamed `job_listing_idx` (kept on the full table — the per-status partials handle filtered queries).
+7. **Adjust the dedup partial** (`job_deduplication_idx`) to add the `completed_at IS NULL` predicate (open-scope) and swap the existing `chain_index = 0` clause for `chain_id = id`. Both clauses are equivalent on existing data (the backfill from step 2 leaves roots at `chain_id = id, chain_index = 0` and non-roots at `chain_id = root.id, chain_index > 0`); preferring `chain_id = id` keeps `chain_index` out of read-side index predicates.
+8. **Rename `ChainStatus`** in the public API from the current vocabulary to `'open' | 'closed'`; the dedup `scope` becomes `'open' | 'any'`.
 
-The remaining structural columns (`leased_by`, `leased_until`, `completed_at`, `completed_by`, `output`, `succeeded_by_job_id`, etc.) are already present; only names and one new column change.
+No data loss: every value the old `status` column carried is reconstructible from the structural columns after steps 1–2.
+
+`chain_index` stays on the row indefinitely. It is already SQL-internal (not on `StateJob`); removing the column entirely would force chain-listing queries onto recursive CTEs over `succeeded_by_job_id` (slow on cold cache) and would lose the dedup-root predicate. The column is the cheapest way to express "ordered position in chain" — we keep it.
 
 ## Compatibility with other designs
 
@@ -347,7 +443,7 @@ The remaining structural columns (`leased_by`, `leased_until`, `completed_at`, `
 Depends on:
 
 - **Derived `status` as a labelable thing for gauges.** This design provides it; metrics queries compute status via CASE over the active partition or filter via the per-status listing partials.
-- **`last_user_reschedule_attempt` column** for stuck-job gauges. Added by this design (it was originally proposed there as `attempts_since_reschedule`; this design replaces the counter with the structural monotonic marker — same information, derived `attempt - COALESCE(last_user_reschedule_attempt, 0)`).
+- **`attempts_since_user_reschedule` column** for stuck-job gauges. Added by this design (maintained directly as a counter: `++` on each acquire, reset to `0` on user-initiated reschedule). Stuck-detection queries become `WHERE attempts_since_user_reschedule >= $threshold` with no projection arithmetic.
 - **Active-partition partial indexes** so metrics scans don't touch completed history. Provided by `job_pending_listing_idx`, `job_blocked_listing_idx`, `job_running_idx`, `job_chain_tail_idx` — together they cover every "incomplete" slice the metrics layer needs.
 
 `state-snapshot-metrics.md` should remove its schema-change section (the column add is now here) and reference this doc for the derivation rule and underlying indexes; metrics-specific indexes (if any beyond what's here) remain in that doc.

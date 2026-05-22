@@ -39,5 +39,5 @@
 - [IDEA] Add OpenTelemetry logs support to @queuert/otel adapter (OTEL logs API is experimental)
 - [IDEA] Hard timeout (worker threads) - True isolation with `terminate()`; enables memory limits and untrusted code sandboxing
 - [IDEA] Singletons/concurrency limit
-- [IDEA] Partitioning (PG) - Scaling concern; defer until users hit limits
+- [IDEA] Partitioned PG adapter (`@queuert/postgres-partitioned`) — separate adapter that range-partitions `job` on `chain_id` (UUIDv7 → effectively by chain birthday) for retention via `DROP PARTITION`. Defer until a user hits limits with the standard PG adapter. See `design/partitioned-pg-adapter.md`.
 - [IDEA] Browser runtime support - SQLite WASM (OPFS) state adapter, Web Workers as job processors, BroadcastChannel notify adapter

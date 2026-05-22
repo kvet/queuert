@@ -101,7 +101,7 @@ When `createStateJobs` finds an existing job with the same dedup key, today it r
 
 **No, and the doc is explicit about it.** Three reasons:
 
-1. **Race surface.** Upgrade requires a conditional UPDATE on the existing row. If the row was just acquired (status `running`), the UPDATE either no-ops (priority change useless) or has to roll back acquisition — neither is clean.
+1. **Race surface.** Upgrade requires a conditional UPDATE on the existing row. If the row was just acquired (`leased_until IS NOT NULL`), the UPDATE either no-ops (priority change useless) or has to roll back acquisition — neither is clean.
 2. **Idempotency contract.** Today, dedup is "the work already exists, return the existing handle." Mutation-on-deduplication is a different, surprising contract — a user who calls `startChain({ priority: 0, ... })` twice and once with `priority: 10` would see persistent state changes from a call that was supposed to be a no-op.
 3. **Workaround is trivial.** A user who actually needs "upgrade priority of the pending instance" can read the dedup-result job, then call a future explicit `setJobPriority` API. We don't ship that API in v1 — wait for the request.
 
@@ -143,7 +143,9 @@ WITH acquired_job AS (
   SELECT id
   FROM {{schema}}.{{table_prefix}}job
   WHERE type_name IN (SELECT unnest($1::text[]))
-    AND status = 'pending'
+    AND has_open_blockers = false
+    AND leased_until IS NULL
+    AND completed_at IS NULL
     AND scheduled_at <= now()
   ORDER BY (priority - attempt) DESC, scheduled_at ASC
   LIMIT 1
@@ -151,6 +153,8 @@ WITH acquired_job AS (
 )
 UPDATE ...
 ```
+
+The WHERE predicate matches the partial index defined below; acquisition writes the lease in the same statement (per [job-model.md](job-model.md), "running" is `leased_until IS NOT NULL`, so there's no separate status flip).
 
 The `EXISTS(... LIMIT 1)` clause that produces `has_more` doesn't need ORDER BY changes — it's just a presence check.
 
@@ -215,21 +219,25 @@ Backward-compatible: existing rows get `0`, which is the new default semantic fo
 
 ### Expression index swap
 
-Today's acquisition index ([sql.ts:99-103](../packages/postgres/src/state-adapter/sql.ts#L99)):
+The acquisition index defined in [job-model.md](job-model.md) (`job_ready_idx`):
 
 ```sql
-CREATE INDEX {{table_prefix}}job_acquisition_idx
+CREATE INDEX {{table_prefix}}job_ready_idx
 ON {{schema}}.{{table_prefix}}job (type_name, scheduled_at)
-WHERE status = 'pending'
+WHERE has_open_blockers = false
+  AND leased_until IS NULL
+  AND completed_at IS NULL
 ```
 
-Replaced with an **expression index** on the demotion formula:
+Replaced with an **expression index** on the demotion formula (predicate unchanged):
 
 ```sql
-CREATE INDEX {{table_prefix}}job_acquisition_idx
+CREATE INDEX {{table_prefix}}job_ready_idx
 ON {{schema}}.{{table_prefix}}job
   (type_name, (priority - attempt) DESC, scheduled_at ASC)
-WHERE status = 'pending'
+WHERE has_open_blockers = false
+  AND leased_until IS NULL
+  AND completed_at IS NULL
 ```
 
 Both PG and SQLite support expression indexes natively. The expression must be `IMMUTABLE`, which it is — `LN`, `FLOOR`, and arithmetic on stored columns are all immutable.
@@ -240,9 +248,9 @@ Considered `effective_priority INTEGER GENERATED ALWAYS AS (...) STORED` with a 
 
 |                       | Expression index                                              | STORED generated column                                          |
 | --------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------- |
-| 1M-row migration cost | Index build over `WHERE status = 'pending'` subset (~seconds) | Full table rewrite under `AccessExclusiveLock` (~30-60s blocked) |
+| 1M-row migration cost | Index build over the active-subset partial (~seconds)         | Full table rewrite under `AccessExclusiveLock` (~30-60s blocked) |
 | Disk cost             | One btree                                                     | One btree + one INT per row                                      |
-| Formula change        | `DROP INDEX` + `CREATE INDEX` over pending subset             | Another full table rewrite                                       |
+| Formula change        | `DROP INDEX` + `CREATE INDEX` over the active subset          | Another full table rewrite                                       |
 | MariaDB <10.5         | Needs VIRTUAL generated column workaround when adapter ships  | Native support                                                   |
 | Drift risk            | ORDER BY must match index expression character-for-character  | None                                                             |
 
@@ -250,13 +258,13 @@ The drift risk is the strongest argument for the stored column, but exactly one 
 
 #### Migration impact
 
-Migration runs `DROP INDEX … ; CREATE INDEX …` as two separate statements. The new index is built only over the pending subset (the partial `WHERE status = 'pending'` filter), so build time is bounded by pending count, not total row count. At 100K pending: seconds. At 1M pending: tens of seconds, still fast.
+Migration runs `DROP INDEX … ; CREATE INDEX …` as two separate statements. The new index is built only over the active subset (the partial predicate inherited from [job-model.md](job-model.md): `has_open_blockers = false AND leased_until IS NULL AND completed_at IS NULL`), so build time is bounded by the active count, not total row count. At 100K active: seconds. At 1M active: tens of seconds, still fast.
 
 Index build takes an `AccessExclusiveLock` on the table for the duration of the rebuild. For v1, accept the brief lock and document it. If zero-downtime becomes a hard requirement later, switch the PG migration to `CREATE INDEX CONCURRENTLY` followed by `DROP INDEX CONCURRENTLY` of the old one — queuert doesn't enforce a transactional boundary around migrations, so `CONCURRENTLY` is available without wrapper-level changes.
 
 #### `getNextJobAvailableInMs` interaction
 
-The new index is `(type_name, effective_priority_expr DESC, scheduled_at ASC)` and the wake-up query wants `(type_name, scheduled_at ASC)` ignoring priority. Postgres will still use the index for the `type_name` filter and then sort the small filtered set by `scheduled_at`; the partial index `WHERE status = 'pending'` keeps the candidate set tiny in practice (typically hundreds, occasionally thousands). At 100K pending the wake-up query is still <1 ms. If EXPLAIN measurements show regression in production, add a second partial index `(type_name, scheduled_at ASC) WHERE status = 'pending'` — but not preemptively. Two overlapping partial indexes double write cost on every status flip.
+The new index is `(type_name, effective_priority_expr DESC, scheduled_at ASC)` and the wake-up query wants `(type_name, scheduled_at ASC)` ignoring priority. Postgres will still use the index for the `type_name` filter and then sort the small filtered set by `scheduled_at`; the partial predicate (`has_open_blockers = false AND leased_until IS NULL AND completed_at IS NULL`) keeps the candidate set tiny in practice (typically hundreds, occasionally thousands). At 100K active the wake-up query is still <1 ms. Note: [job-model.md](job-model.md) already defines `job_pending_listing_idx` as `(type_name, scheduled_at)` with the same partial predicate, so the "second partial index" fallback effectively ships by default — no extra cost incurred by this design.
 
 #### Worst-case acquisition behavior
 
@@ -289,9 +297,9 @@ Validation: pre-merge benchmark explicitly seeds this pathology and asserts <5 m
 6. `packages/core/src/implementation/continue-with.ts` — accept `priority?: number`, pass through.
 7. `packages/core/src/implementation/create-state-jobs.ts` — pass `priority` through to the adapter call.
 8. `packages/postgres/src/state-adapter/sql.ts`:
-   - Migration: add column + drop/recreate acquisition index as expression index.
+   - Migration: add column + drop/recreate `job_ready_idx` as an expression index. Predicate unchanged from [job-model.md](job-model.md) (`has_open_blockers = false AND leased_until IS NULL AND completed_at IS NULL`); only the columns expand to include the demotion expression.
    - `dbJobColumns` / row mapping: include `priority`.
-   - `acquireJobSql`: `ORDER BY (priority - attempt) DESC, scheduled_at ASC`. Cross-reference the index definition in a comment so future edits keep them in sync.
+   - `acquireJobSql`: WHERE clause keeps the structural predicate from job-model.md; `ORDER BY (priority - attempt) DESC, scheduled_at ASC`. Cross-reference the index definition in a comment so future edits keep them in sync.
    - `createJobsSql`: insert `priority` with `COALESCE` over input + parent + 0.
    - All SELECTs returning `StateJob` already use `*` or `dbJobColumns`; verify.
 9. `packages/sqlite/src/state-adapter/sql.ts` — same changes as PG.
@@ -350,7 +358,7 @@ I.e. `startChain` with a higher priority bumps an existing dedup'd pending job. 
 
 ### Dynamic priority adjustment (`setJobPriority(id, n)`)
 
-Out of scope for v1. Easy to add later if a use case appears: an UPDATE that requires `status = 'pending'` (running jobs are out of the queue; blocked jobs aren't yet eligible). No schema change needed.
+Out of scope for v1. Easy to add later if a use case appears: an UPDATE conditioned on the same structural predicate as acquisition (`has_open_blockers = false AND leased_until IS NULL AND completed_at IS NULL`) — running jobs are out of the queue, blocked jobs aren't yet eligible, completed ones are terminal. No schema change needed.
 
 ### Floating-point priority
 

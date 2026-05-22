@@ -1,6 +1,6 @@
 # State-snapshot metrics
 
-> **Builds on**: [job-model.md](job-model.md) — uses the derived `status`, the `has_open_blockers` / `leased_until` / `completed_at` / `succeeded_by_job_id` structural columns, the `last_user_reschedule_attempt` field, and the active-partition partial indexes defined there.
+> **Builds on**: [job-model.md](job-model.md) — uses the derived `status`, the `has_open_blockers` / `leased_until` / `completed_at` / `succeeded_by_job_id` structural columns, the `attempts_since_user_reschedule` counter, and the active-partition partial indexes defined there.
 
 Add an opt-in OTel layer that emits gauges derived by periodically scanning the `job` table, complementing the existing event-driven histograms in [observability-adapter.ts](../packages/core/src/observability-adapter/observability-adapter.ts).
 
@@ -26,7 +26,7 @@ Six gauges, symmetric jobs/chains pairs. "Chain status" here means the chain-fro
 | `open_chains{type, status}`            | Count of chains in `open` status, grouped by chain type and the frontier job's derived status                                                                                    |
 | `oldest_ready_job_age_seconds{type}`   | `now() - MIN(scheduled_at)` over jobs deriving as `ready` (i.e. `has_open_blockers = false AND leased_until IS NULL AND completed_at IS NULL AND scheduled_at ≤ now()`), by type |
 | `oldest_ready_chain_age_seconds{type}` | Same as above but over chains whose frontier job derives as `ready`, by chain type                                                                                               |
-| `stuck_jobs{type}`                     | Count of jobs deriving as `ready` whose `(attempt - COALESCE(last_user_reschedule_attempt, 0)) ≥ N`                                                                              |
+| `stuck_jobs{type}`                     | Count of jobs deriving as `ready` whose `attempts_since_user_reschedule ≥ N`                                                                                                     |
 | `stuck_chains{type}`                   | Count of chains whose frontier job is stuck (one stuck frontier per chain by construction)                                                                                       |
 
 Notes on naming and semantics:
@@ -34,13 +34,13 @@ Notes on naming and semantics:
 - "Open" matches the chain-status vocabulary in [job-model.md](job-model.md) (`'open' | 'closed'`) and the dedup `scope: 'open' | 'any'`. A job is "open" if its status is one of `blocked | scheduled | ready | running` — i.e. `completed_at IS NULL`.
 - "Oldest" means _lag_ (`scheduled_at`-derived) and is only meaningful on `ready` jobs (scheduled-for-later jobs have no lag yet — their `scheduled_at` is in the future). Lifetime metrics (oldest existing chain regardless of state) are not gauges; if needed they're better as offline `listChains` queries.
 - `stuck_jobs` and `stuck_chains` count the same row set, grouped differently — by job type vs chain type. Both views are useful: which step type is failing, vs which workflow type is stalled.
-- The stuck-threshold is computed as `attempt - COALESCE(last_user_reschedule_attempt, 0)` (the streak of auto-retries since the last user reschedule); the `last_user_reschedule_attempt` column is defined in [job-model.md](job-model.md).
+- The stuck-threshold reads `attempts_since_user_reschedule` directly (the streak of auto-retries since the last user reschedule); the column is defined in [job-model.md](job-model.md) and maintained by `acquireJob` (`++`) and `rescheduleJob(userInitiated=true)` (`= 0`).
 
 ## Schema dependencies
 
 This package adds **no columns** of its own. It depends on schema defined in [job-model.md](job-model.md):
 
-- `last_user_reschedule_attempt int NULL` — set to the value of `attempt` when `rescheduleJob` is called via user-thrown `RescheduleJobError`; left alone on default-backoff retries. The user-vs-default distinction lives in [handle-job-handler-error.ts:43](../packages/core/src/implementation/handle-job-handler-error.ts#L43); plumbing must thread `userInitiated` through to the adapter.
+- `attempts_since_user_reschedule int NOT NULL DEFAULT 0` — incremented by `acquireJob`; reset to `0` by `rescheduleJob` when called via user-thrown `RescheduleJobError`, and by `unblockJobs` when a blocked dependent's last blocker resolves. Default-backoff retries leave the counter advancing. The user-vs-default distinction lives in [handle-job-handler-error.ts:43](../packages/core/src/implementation/handle-job-handler-error.ts#L43); plumbing must thread `userInitiated` through to the adapter.
 - `has_open_blockers`, `leased_until`, `completed_at`, `succeeded_by_job_id` — the structural columns this layer reads.
 
 ## Indexes
@@ -48,20 +48,19 @@ This package adds **no columns** of its own. It depends on schema defined in [jo
 This layer reuses the active-partition partial indexes defined in [job-model.md](job-model.md) (`job_pending_listing_idx`, `job_blocked_listing_idx`, `job_running_idx`, `job_chain_tail_idx`). One metrics-specific addition:
 
 ```sql
--- Drives stuck_jobs and stuck_chains: ready jobs whose retry streak has advanced past
--- the last user reschedule. Cardinality is naturally tiny (only jobs failing without
--- user intervention).
+-- Drives stuck_jobs and stuck_chains: ready jobs whose auto-retry streak has advanced
+-- past the last user reschedule. Cardinality is bounded by jobs that have been
+-- attempted at least once without a user reschedule in between.
 CREATE INDEX job_stuck_idx ON job (type_name, chain_type_name)
   WHERE has_open_blockers = false
     AND leased_until IS NULL
     AND completed_at IS NULL
-    AND scheduled_at <= now()       -- ready, not just pending
-    AND attempt > COALESCE(last_user_reschedule_attempt, 0);
+    AND attempts_since_user_reschedule > 0;
 ```
 
 Cardinality is bounded by the active working set. **Hard dependency: cleanup job must run.** Without it, the active-set assumption breaks down and aggregate cost grows with lifetime job count.
 
-The `now()` clause is `IMMUTABLE`-violating and so can't go in the partial-index predicate on Postgres; in practice the index is partial on the structural-only conditions and the `scheduled_at <= now()` filter runs at query time. The same logic applies to SQLite. (Functionally equivalent; the partial just covers slightly more rows than the strict "ready" definition.)
+`scheduled_at <= now()` is not in the partial predicate (`now()` is not `IMMUTABLE` on Postgres, and the equivalent issue applies on SQLite); it runs at query time. The partial therefore covers slightly more rows than the strict "ready" definition, but the difference is bounded by jobs currently in backoff.
 
 ## Queries
 
@@ -119,7 +118,7 @@ WHERE has_open_blockers = false
   AND leased_until IS NULL
   AND completed_at IS NULL
   AND scheduled_at <= now()
-  AND (attempt - COALESCE(last_user_reschedule_attempt, 0)) >= $1
+  AND attempts_since_user_reschedule >= $1
 GROUP BY type_name, chain_type_name;
 ```
 
@@ -166,7 +165,7 @@ const metrics = defineMetricsJob({
   client,
   meter, // OTel Meter from @opentelemetry/api
   intervalMs: 60_000,
-  stuck: { threshold: 5 }, // (attempt - last_user_reschedule_attempt) >= threshold
+  stuck: { threshold: 5 }, // attempts_since_user_reschedule >= threshold
   // or `mode: "single-runner-shared" | "per-process"` once decided
 });
 
@@ -184,7 +183,7 @@ await metrics.scheduleInitial(); // analogous to scheduling cleanup
 
 The underlying schema (column adds, base indexes, status derivation) is owned by [job-model.md](job-model.md). This layer adds only:
 
-- **Postgres** ([packages/postgres](../packages/postgres)): one metrics-specific index (`job_stuck_idx`). Aggregate queries above are PG-native. `acquireJob` and `rescheduleJob` SQL maintain `last_user_reschedule_attempt` per job-model.md.
+- **Postgres** ([packages/postgres](../packages/postgres)): one metrics-specific index (`job_stuck_idx`). Aggregate queries above are PG-native. `acquireJob` and `rescheduleJob` SQL maintain `attempts_since_user_reschedule` per job-model.md.
 - **SQLite** ([packages/sqlite](../packages/sqlite)): same `job_stuck_idx` (modulo SQLite partial-index syntax). The chain-frontier queries don't need `DISTINCT ON` (the UNIQUE partial `job_chain_tail_idx` from job-model.md returns one row per chain directly).
 - **In-process** ([state-adapter.in-process.ts](../packages/core/src/state-adapter/state-adapter.in-process.ts)): aggregate queries become plain JS reductions over the in-memory map. No index considerations.
 
