@@ -40,9 +40,9 @@ const worker = await createInProcessWorker({
   client,
   processors: createProcessors({
     client,
-   jobTypes,
+    jobTypes,
     processors: {
-      'long-running-job': {
+      "long-running-job": {
         leaseConfig: { leaseMs: 300_000, renewIntervalMs: 60_000 }, // 5 min lease
         attemptHandler: async ({ job, complete }) => { ... },
       },

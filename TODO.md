@@ -5,6 +5,9 @@
 - [?,REF] Change complete job chain to something more empirical?
 - [?,REF] Reset jobs in chains + dashboard
 - [?,REF] Allow worker stopping signal to be risen in attempt handler
+- [?,REF] Allow custom middleware configuration (change timeouts guide and example to use middleware)
+- [?,REF] Allow triggerJob with the optional schedule parameter to schedule a job in the future
+- [?,REF] Make deduplication `scope` explicit in the recurring-jobs example in `docs/src/content/docs/guides/scheduling.mdx` (currently relies on the implicit `incomplete` default, which is why `excludeChainIds` is needed)
 
 # Short term
 
