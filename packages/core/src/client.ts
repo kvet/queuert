@@ -124,7 +124,7 @@ type CompleteChainResult<
   TCompleteReturn,
 > = [TCompleteReturn] extends [void]
   ? ResolvedChain<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TChainTypeName>
-  : TCompleteReturn extends Job<any, any, any, any, any> &
+  : TCompleteReturn extends Job<any, any, any, any, any, boolean> &
         ({ status: "pending" } | { status: "blocked" })
     ? ResolvedChain<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TChainTypeName>
     : Chain<
@@ -355,7 +355,7 @@ export type Client<
     } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
   ) => Promise<Page<ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>>>;
 
-  /** List jobs within a specific chain, ordered by `chainIndex`. Defaults to ascending order. Pass `typeName` for type narrowing — throws {@link JobTypeMismatchError} on mismatch. */
+  /** List jobs within a specific chain, in chain order. Defaults to ascending order. Pass `typeName` for type narrowing — throws {@link JobTypeMismatchError} on mismatch. */
   listChainJobs: <
     TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
       JobTypeEntryNames<TJobTypeDefinitions>,
@@ -687,7 +687,7 @@ export const createClient = async <
           );
         }
 
-        let continuedJob: Job<any, any, any, any, any> | null = null;
+        let continuedJob: Job<any, any, any, any, any, boolean> | null = null;
 
         const output = await jobCompleteCallback({
           transactionHooks,
@@ -704,12 +704,7 @@ export const createClient = async <
               transactionHooks,
               schedule,
               blockers: blockers as any,
-              chainId: job.chainId,
-              chainIndex: job.chainIndex + 1,
-              chainTypeName: job.chainTypeName,
-              originChainTraceContext: job.chainTraceContext,
-              originTraceContext: job.traceContext,
-              fromTypeName: job.typeName,
+              fromJob: job,
             });
 
             return continuedJob;

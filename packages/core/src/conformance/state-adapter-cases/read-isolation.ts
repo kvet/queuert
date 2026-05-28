@@ -24,8 +24,6 @@ export const readIsolationGroup: ConformanceGroup<StateConformanceFixture> = {
               jobs: [
                 {
                   typeName: "iso-insert",
-                  chainId: undefined,
-                  chainIndex: 0,
                   chainTypeName: "iso-insert",
                   input: null,
                 },
@@ -56,8 +54,6 @@ export const readIsolationGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "iso-update",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "iso-update",
                 input: null,
               },
@@ -116,8 +112,6 @@ export const readIsolationGroup: ConformanceGroup<StateConformanceFixture> = {
               jobs: [
                 {
                   typeName: "iso-list",
-                  chainId: undefined,
-                  chainIndex: 0,
                   chainTypeName: "iso-list",
                   input: null,
                 },
@@ -151,8 +145,6 @@ export const readIsolationGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "iso-blocker-src",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "iso-blocker-src",
                 input: null,
               },
@@ -165,8 +157,6 @@ export const readIsolationGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "iso-blocker-target",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "iso-blocker-target",
                 input: null,
               },
@@ -216,8 +206,6 @@ export const readIsolationGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "iso-delete",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "iso-delete",
                 input: null,
               },
@@ -272,8 +260,6 @@ export const readIsolationGroup: ConformanceGroup<StateConformanceFixture> = {
               jobs: [
                 {
                   typeName: "iso-chain-create",
-                  chainId: undefined,
-                  chainIndex: 0,
                   chainTypeName: "iso-chain-create",
                   input: null,
                 },
@@ -314,8 +300,6 @@ export const readIsolationGroup: ConformanceGroup<StateConformanceFixture> = {
               jobs: [
                 {
                   typeName: "iso-next",
-                  chainId: undefined,
-                  chainIndex: 0,
                   chainTypeName: "iso-next",
                   input: null,
                 },
@@ -345,8 +329,6 @@ export const readIsolationGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "iso-locked-job",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "iso-locked-job",
                 input: null,
               },
@@ -391,8 +373,6 @@ export const readIsolationGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "iso-latest-root",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "iso-latest",
                 input: null,
               },
@@ -416,9 +396,7 @@ export const readIsolationGroup: ConformanceGroup<StateConformanceFixture> = {
               jobs: [
                 {
                   typeName: "iso-latest-cont",
-                  chainId: seed.chainId,
-                  chainIndex: 1,
-                  chainTypeName: "iso-latest",
+                  continueFromJobId: seed.id,
                   input: null,
                 },
               ],
@@ -441,7 +419,7 @@ export const readIsolationGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(observed).toBeDefined();
         const [rootJob, lastJob] = observed!;
         expect(rootJob.id).toBe(seed.id);
-        expect(rootJob.chainIndex).toBe(0);
+        expect(rootJob.id).toBe(rootJob.chainId);
         expect(lastJob).toBeUndefined();
       },
     },
@@ -464,8 +442,6 @@ export const readIsolationGroup: ConformanceGroup<StateConformanceFixture> = {
               jobs: [
                 {
                   typeName: "iso-list-chains",
-                  chainId: undefined,
-                  chainIndex: 0,
                   chainTypeName: "iso-list-chains",
                   input: null,
                 },
@@ -499,8 +475,6 @@ export const readIsolationGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "iso-chain-jobs-root",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "iso-chain-jobs",
                 input: null,
               },
@@ -524,9 +498,7 @@ export const readIsolationGroup: ConformanceGroup<StateConformanceFixture> = {
               jobs: [
                 {
                   typeName: "iso-chain-jobs-cont",
-                  chainId: seed.chainId,
-                  chainIndex: 1,
-                  chainTypeName: "iso-chain-jobs",
+                  continueFromJobId: seed.id,
                   input: null,
                 },
               ],
@@ -560,8 +532,6 @@ export const readIsolationGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "iso-listblocked-src",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "iso-listblocked-src",
                 input: null,
               },
@@ -574,8 +544,6 @@ export const readIsolationGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "iso-listblocked-target",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "iso-listblocked-target",
                 input: null,
               },

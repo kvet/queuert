@@ -17,8 +17,6 @@ export const getJobGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "lookup-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "lookup-test",
                 input: null,
               },
@@ -39,8 +37,6 @@ export const getJobGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "lock-blocking-job",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "lock-blocking-job",
                 input: { value: 1 },
               },

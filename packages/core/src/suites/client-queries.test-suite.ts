@@ -883,7 +883,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       expect(job.status).toBe("pending");
       expect(job.createdAt).toBeInstanceOf(Date);
       expect(job.scheduledAt).toBeInstanceOf(Date);
-      expect(job.chainIndex).toBe(0);
+      expect(job.id).toBe(job.chainId);
       expect(job.attempt).toBe(0);
     });
   });
@@ -912,7 +912,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       expect(page.items).toEqual([]);
     });
 
-    it("listChainJobs returns jobs in chain ordered by chainIndex", async ({
+    it("listChainJobs returns jobs in chain in continuedToJobId order", async ({
       stateAdapter,
       notifyAdapter,
       withTransaction,
@@ -970,16 +970,21 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       const page = await client.listChainJobs({ chainId: chain.id });
 
       expect(page.items.length).toBe(3);
-      expect(page.items[0].chainIndex).toBe(0);
-      expect(page.items[1].chainIndex).toBe(1);
-      expect(page.items[2].chainIndex).toBe(2);
-      expect(page.items[0].input).toEqual({ n: 0 });
-      expect(page.items[1].input).toEqual({ n: 1 });
-      expect(page.items[2].input).toEqual({ n: 2 });
+      const [first, second, third] = page.items;
+      expect(first.input).toEqual({ n: 0 });
+      expect(second.input).toEqual({ n: 1 });
+      expect(third.input).toEqual({ n: 2 });
+      expect(first.id).toBe(chain.id);
       for (const job of page.items) {
         expect(job.chainId).toBe(chain.id);
         expect(job.status).toBe("completed");
       }
+      expect(first).toMatchObject({ status: "completed", continuedToJobId: second.id });
+      expect(second).toMatchObject({ status: "completed", continuedToJobId: third.id });
+      expect(third).toMatchObject({ status: "completed", continuedToJobId: null });
+      expect("output" in first).toBe(false);
+      expect("output" in second).toBe(false);
+      expect(third).toMatchObject({ output: { done: true } });
     });
 
     it("listChainJobs orders descending", async ({
@@ -1043,10 +1048,10 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         orderDirection: "desc",
       });
 
-      expect(asc.items[0].chainIndex).toBe(0);
-      expect(asc.items[1].chainIndex).toBe(1);
-      expect(desc.items[0].chainIndex).toBe(1);
-      expect(desc.items[1].chainIndex).toBe(0);
+      expect(asc.items[0].id).toBe(chain.id);
+      expect(asc.items[1].id).not.toBe(chain.id);
+      expect(desc.items[0].id).not.toBe(chain.id);
+      expect(desc.items[1].id).toBe(chain.id);
     });
 
     it("listChainJobs paginates", async ({
@@ -1107,8 +1112,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       const page1 = await client.listChainJobs({ chainId: chain.id, limit: 2 });
       expect(page1.items).toHaveLength(2);
       expect(page1.nextCursor).not.toBeNull();
-      expect(page1.items[0].chainIndex).toBe(0);
-      expect(page1.items[1].chainIndex).toBe(1);
+      expect(page1.items[0].id).toBe(chain.id);
 
       const page2 = await client.listChainJobs({
         chainId: chain.id,
@@ -1117,7 +1121,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       });
       expect(page2.items).toHaveLength(1);
       expect(page2.nextCursor).toBeNull();
-      expect(page2.items[0].chainIndex).toBe(2);
+      expect(page2.items[0].input).toEqual({ n: 2 });
     });
 
     it("listChainJobs only returns jobs from the specified chain", async ({

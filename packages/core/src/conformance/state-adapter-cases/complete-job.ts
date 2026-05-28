@@ -13,8 +13,6 @@ export const completeJobGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "complete-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "complete-test",
                 input: { value: 1 },
               },
@@ -61,8 +59,6 @@ export const completeJobGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "complete-clears-error",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "complete-clears-error",
                 input: null,
               },
@@ -110,8 +106,6 @@ export const completeJobGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "workerless-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "workerless-test",
                 input: null,
               },

@@ -25,8 +25,6 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "main-chain",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "main-chain",
                 input: null,
               },
@@ -40,8 +38,6 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "blocker-chain",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "blocker-chain",
                 input: null,
               },
@@ -80,10 +76,8 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "test-chain",
-                chainId: undefined,
                 chainTypeName: "test-chain",
                 input: { step: 1 },
-                chainIndex: 0,
               },
             ],
           }),
@@ -95,10 +89,8 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "test-chain-step2",
-                chainId: root.chainId,
-                chainTypeName: "test-chain",
+                continueFromJobId: root.id,
                 input: { step: 2 },
-                chainIndex: 1,
               },
             ],
           }),
@@ -125,10 +117,8 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "send-email",
-                chainId: undefined,
                 chainTypeName: "send-email",
                 input: null,
-                chainIndex: 0,
               },
             ],
           }),
@@ -139,10 +129,8 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "process-payment",
-                chainId: undefined,
                 chainTypeName: "process-payment",
                 input: null,
-                chainIndex: 0,
               },
             ],
           }),
@@ -153,10 +141,8 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "send-email",
-                chainId: undefined,
                 chainTypeName: "send-email",
                 input: null,
-                chainIndex: 0,
               },
             ],
           }),
@@ -182,10 +168,8 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "type-a",
-                chainId: undefined,
                 chainTypeName: "type-a",
                 input: { order: 1 },
-                chainIndex: 0,
               },
             ],
           }),
@@ -197,10 +181,8 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "type-b",
-                chainId: undefined,
                 chainTypeName: "type-b",
                 input: { order: 2 },
-                chainIndex: 0,
               },
             ],
           }),
@@ -212,10 +194,8 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "type-c",
-                chainId: undefined,
                 chainTypeName: "type-c",
                 input: { order: 3 },
-                chainIndex: 0,
               },
             ],
           }),
@@ -242,10 +222,8 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
               jobs: [
                 {
                   typeName: `type-${i}`,
-                  chainId: undefined,
                   chainTypeName: `type-${i}`,
                   input: null,
-                  chainIndex: 0,
                 },
               ],
             }),
@@ -291,10 +269,8 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "type-a",
-                chainId: undefined,
                 chainTypeName: "type-a",
                 input: null,
-                chainIndex: 0,
               },
             ],
           }),
@@ -305,10 +281,8 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "type-b",
-                chainId: undefined,
                 chainTypeName: "type-b",
                 input: null,
-                chainIndex: 0,
               },
             ],
           }),
@@ -332,10 +306,8 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "type-a",
-                chainId: undefined,
                 chainTypeName: "type-a",
                 input: null,
-                chainIndex: 0,
               },
             ],
           }),
@@ -347,10 +319,8 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "type-b",
-                chainId: undefined,
                 chainTypeName: "type-b",
                 input: null,
-                chainIndex: 0,
               },
             ],
           }),
@@ -375,10 +345,8 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
               jobs: [
                 {
                   typeName: `type-${i}`,
-                  chainId: undefined,
                   chainTypeName: `type-${i}`,
                   input: null,
-                  chainIndex: 0,
                 },
               ],
             }),
@@ -413,10 +381,8 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "type-a",
-                chainId: undefined,
                 chainTypeName: "type-a",
                 input: null,
-                chainIndex: 0,
               },
             ],
           }),
@@ -430,10 +396,8 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "type-b",
-                chainId: undefined,
                 chainTypeName: "type-b",
                 input: null,
-                chainIndex: 0,
               },
             ],
           }),
@@ -465,10 +429,8 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "chain-type",
-                chainId: undefined,
                 chainTypeName: "chain-type",
                 input: null,
-                chainIndex: 0,
               },
             ],
           }),
@@ -479,10 +441,8 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "chain-step2",
-                chainId: root.chainId,
-                chainTypeName: "chain-type",
+                continueFromJobId: root.id,
                 input: null,
-                chainIndex: 1,
               },
             ],
           }),
@@ -493,10 +453,8 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "other-type",
-                chainId: undefined,
                 chainTypeName: "other-type",
                 input: null,
-                chainIndex: 0,
               },
             ],
           }),
@@ -520,10 +478,8 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "test-type",
-                chainId: undefined,
                 chainTypeName: "test-type",
                 input: null,
-                chainIndex: 0,
               },
             ],
           }),
@@ -534,10 +490,8 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "test-type",
-                chainId: undefined,
                 chainTypeName: "test-type",
                 input: null,
-                chainIndex: 0,
               },
             ],
           }),

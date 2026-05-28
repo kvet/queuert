@@ -28,7 +28,7 @@ const nextPage = await client.listChains({
   cursor: chains.nextCursor,
 });
 
-// Jobs within a specific chain, ordered by chain index
+// Jobs within a specific chain, in chain order
 const chainJobs = await client.listChainJobs({ chainId });
 
 // Blocker relationships

@@ -14,8 +14,6 @@ export const addJobsBlockersTraceContextsGroup: ConformanceGroup<StateConformanc
             jobs: [
               {
                 typeName: "blocker",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "blocker",
                 input: null,
                 chainTraceContext: blockerChainTraceContext,
@@ -30,8 +28,6 @@ export const addJobsBlockersTraceContextsGroup: ConformanceGroup<StateConformanc
             jobs: [
               {
                 typeName: "main",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "main",
                 input: null,
               },
@@ -62,8 +58,6 @@ export const addJobsBlockersTraceContextsGroup: ConformanceGroup<StateConformanc
             jobs: [
               {
                 typeName: "blockerA",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "blockerA",
                 input: null,
                 chainTraceContext: chainTraceA,
@@ -78,8 +72,6 @@ export const addJobsBlockersTraceContextsGroup: ConformanceGroup<StateConformanc
             jobs: [
               {
                 typeName: "blockerB",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "blockerB",
                 input: null,
                 chainTraceContext: chainTraceB,
@@ -94,8 +86,6 @@ export const addJobsBlockersTraceContextsGroup: ConformanceGroup<StateConformanc
             jobs: [
               {
                 typeName: "main",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "main",
                 input: null,
               },

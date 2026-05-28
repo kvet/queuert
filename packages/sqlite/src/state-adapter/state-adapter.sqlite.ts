@@ -16,8 +16,8 @@ import { type BaseTxContext, type StateAdapter } from "queuert";
 import {
   type StateJob,
   createIdValidator,
-  decodeChainIndexCursor,
-  decodeCreatedAtCursor,
+  decodeCreatedAtWithIdCursor,
+  decodeIdCursor,
   encodeCursor,
 } from "queuert/internal";
 
@@ -58,7 +58,7 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
     typeName: dbJob.type_name,
     chainId: dbJob.chain_id,
     chainTypeName: dbJob.chain_type_name,
-    chainIndex: dbJob.chain_index,
+    continuedToJobId: dbJob.continued_to_job_id,
     input: parseJson(dbJob.input),
     output: parseJson(dbJob.output),
 
@@ -89,6 +89,7 @@ const parseDbChainRow = (row: DbChainRow): { rootJob: DbJob; lastChainJob: DbJob
     chain_id: row.chain_id,
     chain_type_name: row.chain_type_name,
     chain_index: row.chain_index,
+    continued_to_job_id: row.continued_to_job_id,
     input: row.input,
     output: row.output,
     status: row.status,
@@ -113,6 +114,7 @@ const parseDbChainRow = (row: DbChainRow): { rootJob: DbJob; lastChainJob: DbJob
         chain_id: row.lc_chain_id!,
         chain_type_name: row.lc_chain_type_name!,
         chain_index: row.lc_chain_index!,
+        continued_to_job_id: row.lc_continued_to_job_id,
         input: row.lc_input,
         output: row.lc_output,
         status: row.lc_status!,
@@ -328,43 +330,30 @@ export const createSqliteStateAdapter = async <
       const results: { job: StateJob; deduplicated: boolean }[] = Array.from({
         length: jobs.length,
       });
-      const toInsert: { index: number; id: string; json: Record<string, unknown> }[] = [];
+      const toInsert: {
+        index: number;
+        id: string;
+        continueFromJobId: string | null;
+        json: Record<string, unknown>;
+      }[] = [];
       const intraBatchDedup = new Map<string, number>();
       const deferredDupes: { index: number; firstIndex: number }[] = [];
 
       for (let i = 0; i < jobs.length; i++) {
-        const {
-          typeName,
-          id: providedId,
-          chainTypeName,
-          chainIndex,
-          input,
-          chainId,
-          deduplication,
-          schedule,
-          chainTraceContext,
-          traceContext,
-        } = jobs[i];
-        const deduplicationKey = deduplication?.key ?? null;
-        const deduplicationScope = deduplication ? (deduplication.scope ?? "incomplete") : null;
-        const deduplicationWindowMs = deduplication?.windowMs ?? null;
-        const deduplicationExcludeChainIds = deduplication?.excludeChainIds
-          ? JSON.stringify(deduplication.excludeChainIds)
-          : null;
+        const job = jobs[i];
+        const { typeName, id: providedId, input, schedule, chainTraceContext, traceContext } = job;
+        const isChainStart = "chainTypeName" in job;
+        const continueFromJobId = !isChainStart ? job.continueFromJobId : null;
 
-        if (chainId) {
-          const [existingContinuation] = await executeTypedSql({
-            txCtx,
-            sql: defs.findExistingContinuationSql,
-            params: [chainId, chainIndex],
-          });
+        if (isChainStart && job.deduplication?.key) {
+          const deduplicationKey = job.deduplication.key;
+          const deduplicationScope = job.deduplication.scope ?? "incomplete";
+          const deduplicationWindowMs = job.deduplication.windowMs ?? null;
+          const deduplicationExcludeChainIds = job.deduplication.excludeChainIds
+            ? JSON.stringify(job.deduplication.excludeChainIds)
+            : null;
 
-          if (existingContinuation) {
-            results[i] = { job: mapDbJobToStateJob(existingContinuation), deduplicated: true };
-            continue;
-          }
-        } else if (deduplicationKey) {
-          const batchKey = `${deduplicationKey}\0${chainTypeName}`;
+          const batchKey = `${deduplicationKey}\0${job.chainTypeName}`;
           const firstIdx = intraBatchDedup.get(batchKey);
           if (firstIdx !== undefined) {
             deferredDupes.push({ index: i, firstIndex: firstIdx });
@@ -377,7 +366,7 @@ export const createSqliteStateAdapter = async <
             params: [
               deduplicationKey,
               deduplicationKey,
-              chainTypeName,
+              job.chainTypeName,
               deduplicationScope,
               deduplicationScope,
               deduplicationScope,
@@ -400,14 +389,14 @@ export const createSqliteStateAdapter = async <
         toInsert.push({
           index: i,
           id: newId,
+          continueFromJobId,
           json: {
             id: newId,
+            continue_from_job_id: continueFromJobId,
             type_name: typeName,
-            chain_id: chainId ?? null,
-            chain_type_name: chainTypeName,
-            chain_index: chainIndex,
+            chain_type_name: isChainStart ? job.chainTypeName : null,
             input: input !== undefined ? JSON.stringify(input) : null,
-            deduplication_key: deduplicationKey,
+            deduplication_key: isChainStart ? (job.deduplication?.key ?? null) : null,
             scheduled_at: schedule?.at?.toISOString().replace("T", " ").replace("Z", "") ?? null,
             schedule_after_ms: schedule?.afterMs ?? null,
             chain_trace_context: chainTraceContext ?? null,
@@ -429,6 +418,22 @@ export const createSqliteStateAdapter = async <
             job: mapDbJobToStateJob(row),
             deduplicated: row.id !== toInsert[j].id,
           };
+        }
+
+        const parentUpdates = toInsert
+          .map((item, j) => ({ item, row: insertedRows[j] }))
+          .filter(({ item }) => item.continueFromJobId !== null)
+          .map(({ item, row }) => ({
+            parent_id: item.continueFromJobId,
+            new_id: row.id,
+          }));
+
+        if (parentUpdates.length > 0) {
+          await executeTypedSql({
+            txCtx,
+            sql: defs.updateParentContinuedToJobIdSql,
+            params: [JSON.stringify(parentUpdates)],
+          });
         }
       }
 
@@ -654,7 +659,7 @@ export const createSqliteStateAdapter = async <
       return { deleted, blockerRefs: [] };
     },
     listChains: async ({ txCtx, filter, orderDirection, page }) => {
-      const cursor = page.cursor ? decodeCreatedAtCursor(page.cursor) : null;
+      const cursor = page.cursor ? decodeCreatedAtWithIdCursor(page.cursor) : null;
       const conditions: string[] = ["j.chain_index = 0"];
       const params: unknown[] = [];
 
@@ -730,7 +735,7 @@ export const createSqliteStateAdapter = async <
       if (hasMore && lastRow) {
         const { rootJob } = parseDbChainRow(lastRow);
         nextCursor = encodeCursor({
-          type: "createdAt",
+          type: "createdAtWithId",
           id: rootJob.id,
           createdAt: new Date(rootJob.created_at + "Z").toISOString(),
         });
@@ -740,7 +745,7 @@ export const createSqliteStateAdapter = async <
     },
 
     listJobs: async ({ txCtx, filter, orderDirection, page }) => {
-      const cursor = page.cursor ? decodeCreatedAtCursor(page.cursor) : null;
+      const cursor = page.cursor ? decodeCreatedAtWithIdCursor(page.cursor) : null;
       const conditions: string[] = [];
       const params: unknown[] = [];
 
@@ -804,7 +809,7 @@ export const createSqliteStateAdapter = async <
       let nextCursor: string | null = null;
       if (hasMore && lastRow) {
         nextCursor = encodeCursor({
-          type: "createdAt",
+          type: "createdAtWithId",
           id: lastRow.id,
           createdAt: new Date(lastRow.created_at + "Z").toISOString(),
         });
@@ -814,22 +819,32 @@ export const createSqliteStateAdapter = async <
     },
 
     listChainJobs: async ({ txCtx, chainId, orderDirection, page }) => {
-      const cursor = page.cursor ? decodeChainIndexCursor(page.cursor) : null;
-      const conditions: string[] = ["j.chain_id = ?"];
+      const cursor = page.cursor ? decodeIdCursor(page.cursor) : null;
+      const orderDir = orderDirection === "asc" ? "ASC" : "DESC";
       const params: unknown[] = [chainId];
+      let sqlStr: string;
 
       if (cursor) {
-        if (orderDirection === "asc") {
-          conditions.push("(j.chain_index > ? OR (j.chain_index = ? AND j.id > ?))");
-        } else {
-          conditions.push("(j.chain_index < ? OR (j.chain_index = ? AND j.id < ?))");
-        }
-        params.push(cursor.chainIndex, cursor.chainIndex, cursor.id);
+        const cmp = orderDirection === "asc" ? ">" : "<";
+        params.length = 0;
+        params.push(chainId, cursor.id, chainId, page.limit + 1);
+        sqlStr = `WITH start_row AS (
+          SELECT c.chain_index AS sc
+          FROM ${tablePrefix}job c
+          WHERE c.chain_id = ? AND c.id = ?
+        )
+        SELECT j.* FROM ${tablePrefix}job j, start_row s
+        WHERE j.chain_id = ?
+          AND j.chain_index ${cmp} s.sc
+        ORDER BY j.chain_index ${orderDir}, j.id ${orderDir}
+        LIMIT ?`;
+      } else {
+        params.push(page.limit + 1);
+        sqlStr = `SELECT * FROM ${tablePrefix}job j
+        WHERE j.chain_id = ?
+        ORDER BY j.chain_index ${orderDir}, j.id ${orderDir}
+        LIMIT ?`;
       }
-      params.push(page.limit + 1);
-
-      const orderDir = orderDirection === "asc" ? "ASC" : "DESC";
-      const sqlStr = `SELECT * FROM ${tablePrefix}job j WHERE ${conditions.join(" AND ")} ORDER BY j.chain_index ${orderDir}, j.id ${orderDir} LIMIT ?`;
 
       const rows = (await stateProvider.executeSql({
         txCtx,
@@ -847,11 +862,7 @@ export const createSqliteStateAdapter = async <
       const lastRow = pageRows[pageRows.length - 1];
       let nextCursor: string | null = null;
       if (hasMore && lastRow) {
-        nextCursor = encodeCursor({
-          type: "chainIndex",
-          id: lastRow.id,
-          chainIndex: lastRow.chain_index,
-        });
+        nextCursor = encodeCursor({ type: "id", id: lastRow.id });
       }
 
       return { items, nextCursor };
@@ -907,7 +918,7 @@ export const createSqliteStateAdapter = async <
     },
 
     listBlockedJobs: async ({ txCtx, chainId, orderDirection, page }) => {
-      const cursor = page.cursor ? decodeCreatedAtCursor(page.cursor) : null;
+      const cursor = page.cursor ? decodeCreatedAtWithIdCursor(page.cursor) : null;
       const conditions: string[] = [
         `j.id IN (SELECT jb.job_id FROM ${tablePrefix}job_blocker jb WHERE jb.blocked_by_chain_id = ?)`,
       ];
@@ -944,7 +955,7 @@ export const createSqliteStateAdapter = async <
       let nextCursor: string | null = null;
       if (hasMore && lastRow) {
         nextCursor = encodeCursor({
-          type: "createdAt",
+          type: "createdAtWithId",
           id: lastRow.id,
           createdAt: new Date(lastRow.created_at + "Z").toISOString(),
         });

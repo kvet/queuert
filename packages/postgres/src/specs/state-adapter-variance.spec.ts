@@ -144,9 +144,7 @@ describe("PostgreSQL State Adapter Variance - Custom Table Prefix", () => {
     const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
-        jobs: [
-          { typeName: "t", chainId: undefined, chainIndex: 0, chainTypeName: "t", input: null },
-        ],
+        jobs: [{ typeName: "t", chainTypeName: "t", input: null }],
       }),
     );
     expect(UUID_PATTERN.test(job.id)).toBe(true);
@@ -213,9 +211,7 @@ describe("PostgreSQL State Adapter Variance - Custom Schema", () => {
     const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
-        jobs: [
-          { typeName: "t", chainId: undefined, chainIndex: 0, chainTypeName: "t", input: null },
-        ],
+        jobs: [{ typeName: "t", chainTypeName: "t", input: null }],
       }),
     );
     expect(UUID_PATTERN.test(job.id)).toBe(true);
@@ -286,9 +282,7 @@ describe("PostgreSQL State Adapter Variance - Text ID Type", () => {
     const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
-        jobs: [
-          { typeName: "t", chainId: undefined, chainIndex: 0, chainTypeName: "t", input: null },
-        ],
+        jobs: [{ typeName: "t", chainTypeName: "t", input: null }],
       }),
     );
     expect(typeof job.id).toBe("string");
@@ -397,9 +391,7 @@ describe("validateId", () => {
     adapter.withTransaction(async (txCtx) =>
       adapter.createJobs({
         txCtx,
-        jobs: [
-          { typeName: "t", id, chainId: undefined, chainIndex: 0, chainTypeName: "t", input: null },
-        ],
+        jobs: [{ typeName: "t", id, chainTypeName: "t", input: null }],
       }),
     );
 

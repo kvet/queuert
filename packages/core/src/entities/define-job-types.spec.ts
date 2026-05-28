@@ -1247,4 +1247,74 @@ describe("rest/variadic blocker slots", () => {
 
     expectTypeOf<Completed["output"]>().toEqualTypeOf<{ result: number }>();
   });
+
+  describe("ResolvedJob narrowing on continueWith presence", () => {
+    type Defs = {
+      // Has continueWith → can be terminal OR continued
+      step: {
+        entry: true;
+        input: { n: number };
+        output: { final: boolean };
+        continueWith: { typeName: "step" };
+      };
+      // No continueWith → terminal-only
+      terminal: {
+        entry: true;
+        input: { id: string };
+        output: { processed: true };
+      };
+      // No output declared → continued-only (output: never eliminates terminal variant)
+      relay: {
+        entry: true;
+        input: { url: string };
+        continueWith: { typeName: "terminal" };
+      };
+    };
+
+    it("a job type without continueWith narrows to terminal-only", () => {
+      type J = ResolvedJob<string, Defs, "terminal">;
+      type Completed = Extract<J, { status: "completed" }>;
+      type ContinuedSibling = Extract<Completed, { continuedToJobId: string }>;
+
+      expectTypeOf<Completed["output"]>().toEqualTypeOf<{ processed: true }>();
+      expectTypeOf<Completed["continuedToJobId"]>().toEqualTypeOf<null>();
+      expectTypeOf<ContinuedSibling>().toBeNever();
+    });
+
+    it("a job type with continueWith keeps both completed variants", () => {
+      type J = ResolvedJob<string, Defs, "step">;
+      type Completed = Extract<J, { status: "completed" }>;
+      type Terminal = Extract<Completed, { continuedToJobId: null }>;
+      type Continued = Exclude<Completed, { continuedToJobId: null }>;
+
+      expectTypeOf<Terminal["output"]>().toEqualTypeOf<{ final: boolean }>();
+      expectTypeOf<Terminal["continuedToJobId"]>().toEqualTypeOf<null>();
+      expectTypeOf<Continued["continuedToJobId"]>().toEqualTypeOf<string>();
+      expectTypeOf<Continued["output"]>().toEqualTypeOf<undefined>();
+    });
+
+    it("a job type without `output` declared makes the terminal output `never`", () => {
+      type J = ResolvedJob<string, Defs, "relay">;
+      type Completed = Extract<J, { status: "completed" }>;
+      type Terminal = Extract<Completed, { continuedToJobId: null }>;
+      type Continued = Exclude<Completed, { continuedToJobId: null }>;
+
+      expectTypeOf<Terminal["output"]>().toBeNever();
+      expectTypeOf<Continued["continuedToJobId"]>().toEqualTypeOf<string>();
+    });
+
+    it("non-completed states are unaffected by TCanContinue", () => {
+      type Terminal = ResolvedJob<string, Defs, "terminal">;
+      type Step = ResolvedJob<string, Defs, "step">;
+      type TerminalPending = Extract<Terminal, { status: "pending" }>;
+      type TerminalRunning = Extract<Terminal, { status: "running" }>;
+      type StepPending = Extract<Step, { status: "pending" }>;
+      type StepRunning = Extract<Step, { status: "running" }>;
+
+      expectTypeOf<TerminalPending["status"]>().toEqualTypeOf<"pending">();
+      expectTypeOf<TerminalRunning["status"]>().toEqualTypeOf<"running">();
+      expectTypeOf<StepPending["status"]>().toEqualTypeOf<"pending">();
+      expectTypeOf<StepRunning["status"]>().toEqualTypeOf<"running">();
+    });
+  });
 });

@@ -13,8 +13,6 @@ export const rescheduleJobGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "resched-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "resched-test",
                 input: null,
               },
@@ -62,8 +60,6 @@ export const rescheduleJobGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "resched-at-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "resched-at-test",
                 input: null,
               },
@@ -100,8 +96,6 @@ export const rescheduleJobGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "resched-past-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "resched-past-test",
                 input: null,
               },

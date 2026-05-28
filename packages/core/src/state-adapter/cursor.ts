@@ -1,34 +1,33 @@
-export type CreatedAtCursor = {
-  type: "createdAt";
+export type CreatedAtWithIdCursor = {
+  type: "createdAtWithId";
   id: string;
   createdAt: string;
 };
 
-export type ChainIndexCursor = {
-  type: "chainIndex";
+export type IdCursor = {
+  type: "id";
   id: string;
-  chainIndex: number;
 };
 
-export const encodeCursor = (payload: CreatedAtCursor | ChainIndexCursor): string =>
+export const encodeCursor = (payload: CreatedAtWithIdCursor | IdCursor): string =>
   Buffer.from(JSON.stringify(payload)).toString("base64url");
 
-export const decodeCreatedAtCursor = (cursor: string): CreatedAtCursor => {
-  const obj = JSON.parse(Buffer.from(cursor, "base64url").toString()) as Record<string, unknown>;
-  if (obj.type === "createdAt" && typeof obj.id === "string" && typeof obj.createdAt === "string") {
-    return obj as unknown as CreatedAtCursor;
-  }
-  throw new Error("Invalid cursor: expected createdAt cursor");
-};
-
-export const decodeChainIndexCursor = (cursor: string): ChainIndexCursor => {
+export const decodeCreatedAtWithIdCursor = (cursor: string): CreatedAtWithIdCursor => {
   const obj = JSON.parse(Buffer.from(cursor, "base64url").toString()) as Record<string, unknown>;
   if (
-    obj.type === "chainIndex" &&
+    obj.type === "createdAtWithId" &&
     typeof obj.id === "string" &&
-    typeof obj.chainIndex === "number"
+    typeof obj.createdAt === "string"
   ) {
-    return obj as unknown as ChainIndexCursor;
+    return obj as unknown as CreatedAtWithIdCursor;
   }
-  throw new Error("Invalid cursor: expected chainIndex cursor");
+  throw new Error("Invalid cursor: expected createdAtWithId cursor");
+};
+
+export const decodeIdCursor = (cursor: string): IdCursor => {
+  const obj = JSON.parse(Buffer.from(cursor, "base64url").toString()) as Record<string, unknown>;
+  if (obj.type === "id" && typeof obj.id === "string") {
+    return obj as unknown as IdCursor;
+  }
+  throw new Error("Invalid cursor: expected id cursor");
 };

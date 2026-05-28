@@ -13,8 +13,6 @@ export const renewJobLeaseGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "lease-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "lease-test",
                 input: null,
               },
@@ -52,8 +50,6 @@ export const renewJobLeaseGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "re-lease-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "re-lease-test",
                 input: null,
               },

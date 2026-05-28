@@ -4,6 +4,7 @@ import { type ResolvedJob } from "../entities/job-types.resolvers.js";
 import { mapStateJobToJob } from "../entities/job.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
 import { type Helpers } from "../setup-helpers.js";
+import { type StateJob } from "../state-adapter/state-adapter.js";
 import { type TransactionHooks } from "../transaction-hooks.js";
 import { createStateJobs } from "./create-state-jobs.js";
 
@@ -18,12 +19,7 @@ export const continueWith = async <TJobTypeName extends string, TInput>(
     transactionHooks,
     schedule,
     blockers,
-    chainId,
-    chainIndex,
-    chainTypeName,
-    originChainTraceContext,
-    originTraceContext,
-    fromTypeName,
+    fromJob,
   }: {
     typeName: TJobTypeName;
     id?: string;
@@ -32,29 +28,19 @@ export const continueWith = async <TJobTypeName extends string, TInput>(
     transactionHooks: TransactionHooks;
     schedule?: ScheduleOptions;
     blockers?: Chain<any, any, any, any>[];
-    chainId: string;
-    chainIndex: number;
-    chainTypeName: string;
-    originChainTraceContext: string | null;
-    originTraceContext: string | null;
-    fromTypeName: string;
+    fromJob: StateJob;
   },
 ): Promise<ResolvedJob<string, BaseJobTypeDefinitions, TJobTypeName, string>> => {
-  helpers.jobTypes.validateContinueWith(fromTypeName, { typeName, input });
+  helpers.jobTypes.validateContinueWith(fromJob.typeName, { typeName, input });
 
   const [{ job }] = await createStateJobs(helpers, {
     jobs: [
       {
         typeName,
         id,
-        chainTypeName,
-        chainIndex,
         input,
         blockers,
-        chainId,
-        isChainStart: false,
-        originChainTraceContext,
-        originTraceContext,
+        fromJob,
         schedule,
       },
     ],

@@ -13,8 +13,6 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "isolation-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "isolation-test",
                 input: { value: "original" },
               },
@@ -30,8 +28,6 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
               jobs: [
                 {
                   typeName: "rollback-test",
-                  chainId: undefined,
-                  chainIndex: 0,
                   chainTypeName: "rollback-test",
                   input: { value: "should-rollback" },
                 },
@@ -62,8 +58,6 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "update-rollback",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "update-rollback",
                 input: null,
               },
@@ -100,8 +94,6 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "delete-rollback",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "delete-rollback",
                 input: null,
               },
@@ -136,8 +128,6 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "blocker-rollback-a",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "blocker-rollback-a",
                 input: null,
               },
@@ -150,8 +140,6 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "blocker-rollback-b",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "blocker-rollback-b",
                 input: null,
               },
@@ -205,8 +193,6 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
               jobs: [
                 {
                   typeName: "nontx-vs-tx",
-                  chainId: undefined,
-                  chainIndex: 0,
                   chainTypeName: "nontx-vs-tx",
                   input: { side: "tx" },
                 },
@@ -224,8 +210,6 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
           jobs: [
             {
               typeName: "nontx-vs-tx",
-              chainId: undefined,
-              chainIndex: 0,
               chainTypeName: "nontx-vs-tx",
               input: { side: "non-tx" },
             },
@@ -250,8 +234,6 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "mixed-rollback",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "mixed-rollback",
                 input: null,
               },
@@ -264,8 +246,6 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "mixed-rollback",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "mixed-rollback",
                 input: null,
               },

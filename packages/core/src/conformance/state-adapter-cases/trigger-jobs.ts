@@ -14,8 +14,6 @@ export const triggerJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "trigger-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "trigger-test",
                 input: null,
                 schedule: { at: futureDate },
@@ -46,8 +44,6 @@ export const triggerJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "trigger-acquire",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "trigger-acquire",
                 input: null,
                 schedule: { at: futureDate },
@@ -82,8 +78,6 @@ export const triggerJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "trigger-fields",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "trigger-fields",
                 input: { key: "value" },
                 schedule: { at: futureDate },
@@ -113,24 +107,18 @@ export const triggerJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "trigger-batch",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "trigger-batch",
                 input: { i: 1 },
                 schedule: { at: futureDate },
               },
               {
                 typeName: "trigger-batch",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "trigger-batch",
                 input: { i: 2 },
                 schedule: { at: futureDate },
               },
               {
                 typeName: "trigger-batch",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "trigger-batch",
                 input: { i: 3 },
                 schedule: { at: futureDate },
@@ -176,8 +164,6 @@ export const triggerJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "trigger-missing",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "trigger-missing",
                 input: null,
                 schedule: { at: futureDate },
@@ -209,16 +195,12 @@ export const triggerJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "trigger-not-pending",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "trigger-not-pending",
                 input: null,
                 schedule: { at: futureDate },
               },
               {
                 typeName: "trigger-not-pending",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "trigger-not-pending",
                 input: null,
                 schedule: { at: futureDate },

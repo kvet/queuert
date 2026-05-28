@@ -16,8 +16,6 @@ export const concurrencyGroup: ConformanceGroup<StateConformanceFixture> = {
                 jobs: [
                   {
                     typeName: "parallel-tx",
-                    chainId: undefined,
-                    chainIndex: 0,
                     chainTypeName: "parallel-tx",
                     input: { index: i },
                   },
@@ -48,8 +46,6 @@ export const concurrencyGroup: ConformanceGroup<StateConformanceFixture> = {
                 jobs: [
                   {
                     typeName: "parallel-read",
-                    chainId: undefined,
-                    chainIndex: 0,
                     chainTypeName: "parallel-read",
                     input: { index: i },
                   },
@@ -77,8 +73,6 @@ export const concurrencyGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "mixed-concurrency",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "mixed-concurrency",
                 input: null,
               },
@@ -94,8 +88,6 @@ export const concurrencyGroup: ConformanceGroup<StateConformanceFixture> = {
                 jobs: [
                   {
                     typeName: "mixed-tx",
-                    chainId: undefined,
-                    chainIndex: 0,
                     chainTypeName: "mixed-tx",
                     input: { index: i },
                   },
@@ -126,8 +118,6 @@ export const concurrencyGroup: ConformanceGroup<StateConformanceFixture> = {
                 jobs: [
                   {
                     typeName: "acquire-concurrency",
-                    chainId: undefined,
-                    chainIndex: 0,
                     chainTypeName: "acquire-concurrency",
                     input: { index: i },
                   },
@@ -165,8 +155,6 @@ export const concurrencyGroup: ConformanceGroup<StateConformanceFixture> = {
                 jobs: [
                   {
                     typeName: "race-blocker",
-                    chainId: undefined,
-                    chainIndex: 0,
                     chainTypeName: "race-blocker",
                     input: { index },
                   },
@@ -187,8 +175,6 @@ export const concurrencyGroup: ConformanceGroup<StateConformanceFixture> = {
               jobs: [
                 {
                   typeName: "race-main",
-                  chainId: undefined,
-                  chainIndex: 0,
                   chainTypeName: "race-main",
                   input: { index },
                 },

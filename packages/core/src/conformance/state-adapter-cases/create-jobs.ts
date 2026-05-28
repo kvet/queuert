@@ -16,8 +16,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "chain-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "chain-test",
                 input: null,
               },
@@ -37,8 +35,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "root-job",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "root-job",
                 input: null,
               },
@@ -52,9 +48,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "child-job",
-                chainId: rootJob.chainId,
-                chainIndex: 1,
-                chainTypeName: "root-job",
+                continueFromJobId: rootJob.id,
                 input: null,
               },
             ],
@@ -62,7 +56,77 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         expect(childJob.chainId).toBe(rootJob.chainId);
-        expect(childJob.chainIndex).toBe(1);
+        expect(childJob.id).not.toBe(rootJob.id);
+      },
+    },
+    {
+      name: "rejects continuation referencing a non-existent parent",
+      run: async ({ stateAdapter }, expect) => {
+        await expect(
+          stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                {
+                  typeName: "child",
+                  continueFromJobId: "00000000-0000-0000-0000-000000000000",
+                  input: null,
+                },
+              ],
+            }),
+          ),
+        ).rejects.toThrow();
+      },
+    },
+    {
+      name: "marks a second continuation from the same parent as deduplicated",
+      run: async ({ stateAdapter }, expect) => {
+        const [{ job: rootJob }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                typeName: "root",
+                chainTypeName: "c",
+                input: null,
+              },
+            ],
+          }),
+        );
+
+        const [{ job: c1, deduplicated: d1 }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                typeName: "child",
+                continueFromJobId: rootJob.id,
+                input: { v: 1 },
+              },
+            ],
+          }),
+        );
+
+        const [{ job: c2, deduplicated: d2 }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                typeName: "child",
+                continueFromJobId: rootJob.id,
+                input: { v: 2 },
+              },
+            ],
+          }),
+        );
+
+        expect(d1).toBe(false);
+        expect(d2).toBe(true);
+        expect(c2.id).toBe(c1.id);
+        expect(c2.input).toEqual({ v: 1 });
+
+        const rootAfter = await stateAdapter.getJob({ jobId: rootJob.id });
+        expect(rootAfter!.continuedToJobId).toBe(c1.id);
       },
     },
     {
@@ -76,8 +140,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
               jobs: [
                 {
                   typeName: "test-job",
-                  chainId: undefined,
-                  chainIndex: 0,
                   chainTypeName: "test-job",
                   input: { value: i },
                 },
@@ -103,8 +165,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "test-job",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "test-job",
                 input,
               },
@@ -130,8 +190,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "null-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "null-test",
                 input: null,
               },
@@ -148,7 +206,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(job.leasedBy).toBeNull();
         expect(job.leasedUntil).toBeNull();
         expect(job.deduplicationKey).toBeNull();
-        expect(job.chainIndex).toBe(0);
+        expect(job.id).toBe(job.chainId);
       },
     },
     {
@@ -177,8 +235,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "json-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "json-test",
                 input: complexInput,
               },
@@ -199,8 +255,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "dedup-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "dedup-test",
                 input: { value: 1 },
                 deduplication: { key: "same-key" },
@@ -215,8 +269,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "dedup-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "dedup-test",
                 input: { value: 2 },
                 deduplication: { key: "same-key" },
@@ -234,8 +286,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "dedup-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "dedup-test",
                 input: { value: 3 },
                 deduplication: { key: "different-key" },
@@ -256,8 +306,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "chain-root",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "chain-root",
                 input: null,
               },
@@ -265,7 +313,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        expect(rootJob.chainIndex).toBe(0);
+        expect(rootJob.id).toBe(rootJob.chainId);
 
         const [{ job: continuation1, deduplicated: dedup1 }] = await stateAdapter.withTransaction(
           async (txCtx) =>
@@ -274,9 +322,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
               jobs: [
                 {
                   typeName: "chain-step2",
-                  chainId: rootJob.chainId,
-                  chainIndex: 1,
-                  chainTypeName: "chain-root",
+                  continueFromJobId: rootJob.id,
                   input: { value: 1 },
                 },
               ],
@@ -284,7 +330,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         expect(dedup1).toBe(false);
-        expect(continuation1.chainIndex).toBe(1);
+        expect(continuation1.chainId).toBe(rootJob.chainId);
 
         const [{ job: continuation2, deduplicated: dedup2 }] = await stateAdapter.withTransaction(
           async (txCtx) =>
@@ -293,9 +339,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
               jobs: [
                 {
                   typeName: "chain-step2",
-                  chainId: rootJob.chainId,
-                  chainIndex: 1,
-                  chainTypeName: "chain-root",
+                  continueFromJobId: rootJob.id,
                   input: { value: 2 },
                 },
               ],
@@ -316,8 +360,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "chain-root",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "chain-root",
                 input: null,
               },
@@ -332,9 +374,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
               jobs: [
                 {
                   typeName: "chain-step2",
-                  chainId: rootJob.chainId,
-                  chainIndex: 1,
-                  chainTypeName: "chain-root",
+                  continueFromJobId: rootJob.id,
                   input: { from: "tx1" },
                 },
               ],
@@ -346,9 +386,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
               jobs: [
                 {
                   typeName: "chain-step2",
-                  chainId: rootJob.chainId,
-                  chainIndex: 1,
-                  chainTypeName: "chain-root",
+                  continueFromJobId: rootJob.id,
                   input: { from: "tx2" },
                 },
               ],
@@ -369,15 +407,13 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "t",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "t",
                 input: null,
               },
             ],
           }),
         );
-        expect(rootJob.chainIndex).toBe(0);
+        expect(rootJob.id).toBe(rootJob.chainId);
 
         const [{ job: cont1 }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
@@ -385,19 +421,20 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "t2",
-                chainId: rootJob.chainId,
-                chainIndex: 1,
-                chainTypeName: "t",
+                continueFromJobId: rootJob.id,
                 input: null,
               },
             ],
           }),
         );
-        expect(cont1.chainIndex).toBe(1);
+        expect(cont1.chainId).toBe(rootJob.chainId);
 
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJob({ txCtx, jobId: cont1.id, output: null, workerId: null }),
         );
+
+        const updatedRoot = await stateAdapter.getJob({ jobId: rootJob.id });
+        expect(updatedRoot!.continuedToJobId).toBe(cont1.id);
 
         const [{ job: cont2 }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
@@ -405,15 +442,16 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "t3",
-                chainId: rootJob.chainId,
-                chainIndex: 2,
-                chainTypeName: "t",
+                continueFromJobId: cont1.id,
                 input: null,
               },
             ],
           }),
         );
-        expect(cont2.chainIndex).toBe(2);
+        expect(cont2.chainId).toBe(rootJob.chainId);
+
+        const updatedCont1 = await stateAdapter.getJob({ jobId: cont1.id });
+        expect(updatedCont1!.continuedToJobId).toBe(cont2.id);
       },
     },
     {
@@ -425,8 +463,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "scope-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "scope-test",
                 input: null,
                 deduplication: { key: "scope-key", scope: "incomplete" },
@@ -451,8 +487,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
               jobs: [
                 {
                   typeName: "scope-test",
-                  chainId: undefined,
-                  chainIndex: 0,
                   chainTypeName: "scope-test",
                   input: null,
                   deduplication: { key: "scope-key", scope: "incomplete" },
@@ -469,8 +503,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "scope-test-any",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "scope-test-any",
                 input: null,
                 deduplication: { key: "any-key", scope: "any" },
@@ -494,8 +526,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "scope-test-any",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "scope-test-any",
                 input: null,
                 deduplication: { key: "any-key", scope: "any" },
@@ -516,8 +546,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "exclude-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "exclude-test",
                 input: null,
                 deduplication: { key: "exclude-key" },
@@ -534,8 +562,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
               jobs: [
                 {
                   typeName: "exclude-test",
-                  chainId: undefined,
-                  chainIndex: 0,
                   chainTypeName: "exclude-test",
                   input: null,
                   deduplication: { key: "exclude-key" },
@@ -554,8 +580,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
               jobs: [
                 {
                   typeName: "exclude-test",
-                  chainId: undefined,
-                  chainIndex: 0,
                   chainTypeName: "exclude-test",
                   input: null,
                   deduplication: { key: "exclude-key", excludeChainIds: [first.chainId] },
@@ -578,8 +602,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "schedule-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "schedule-test",
                 input: null,
                 schedule: { afterMs: 5000 },
@@ -599,8 +621,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "schedule-test-at",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "schedule-test-at",
                 input: null,
                 schedule: { at: futureDate },
@@ -622,8 +642,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "schedule-past",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "schedule-past",
                 input: null,
                 schedule: { at: past },
@@ -647,8 +665,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "trace-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "trace-test",
                 input: null,
                 chainTraceContext,
@@ -672,8 +688,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "date-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "date-test",
                 input: null,
               },
@@ -697,22 +711,16 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "batch-a",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "batch-a",
                 input: { value: 1 },
               },
               {
                 typeName: "batch-b",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "batch-b",
                 input: { value: 2 },
               },
               {
                 typeName: "batch-c",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "batch-c",
                 input: { value: 3 },
               },
@@ -743,8 +751,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "dedup-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "dedup-test",
                 input: { value: "existing" },
                 deduplication: { key: "dup-key-1" },
@@ -759,16 +765,12 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "dedup-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "dedup-test",
                 input: { value: "new-1" },
                 deduplication: { key: "dup-key-1" },
               },
               {
                 typeName: "dedup-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "dedup-test",
                 input: { value: "new-2" },
                 deduplication: { key: "dup-key-unique" },
@@ -793,8 +795,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "root",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "root",
                 input: null,
               },
@@ -808,9 +808,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "step",
-                chainId: rootJob.chainId,
-                chainIndex: 1,
-                chainTypeName: "root",
+                continueFromJobId: rootJob.id,
                 input: { value: "first" },
               },
             ],
@@ -823,16 +821,12 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "step",
-                chainId: rootJob.chainId,
-                chainIndex: 1,
-                chainTypeName: "root",
+                continueFromJobId: rootJob.id,
                 input: { value: "duplicate" },
               },
               {
                 typeName: "step",
-                chainId: rootJob.chainId,
-                chainIndex: 2,
-                chainTypeName: "root",
+                continueFromJobId: existingContinuation.id,
                 input: { value: "new" },
               },
             ],
@@ -843,7 +837,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(results[0].deduplicated).toBe(true);
         expect(results[0].job.id).toBe(existingContinuation.id);
         expect(results[1].deduplicated).toBe(false);
-        expect(results[1].job.chainIndex).toBe(2);
+        expect(results[1].job.chainId).toBe(rootJob.chainId);
       },
     },
     {
@@ -855,8 +849,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "window-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "window-test",
                 input: null,
                 deduplication: { key: "win-key", scope: "any", windowMs: 100 },
@@ -872,8 +864,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "window-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "window-test",
                 input: null,
                 deduplication: { key: "win-key", scope: "any", windowMs: 100 },
@@ -895,8 +885,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
               jobs: [
                 {
                   typeName: "window-test",
-                  chainId: undefined,
-                  chainIndex: 0,
                   chainTypeName: "window-test",
                   input: null,
                   deduplication: { key: "win-key", scope: "any", windowMs: 100 },
@@ -919,8 +907,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "win-scope-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "win-scope-test",
                 input: null,
                 deduplication: { key: "ws-key", scope: "incomplete", windowMs: 5000 },
@@ -945,8 +931,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "win-scope-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "win-scope-test",
                 input: null,
                 deduplication: { key: "ws-key", scope: "incomplete", windowMs: 5000 },
@@ -979,8 +963,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
               {
                 typeName: "id-test",
                 id: userId,
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "id-test",
                 input: null,
               },
@@ -1006,8 +988,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
                 {
                   typeName: "invalid-id-test",
                   id: badId,
-                  chainId: undefined,
-                  chainIndex: 0,
                   chainTypeName: "invalid-id-test",
                   input: null,
                 },
@@ -1026,8 +1006,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "id-dedup",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "id-dedup",
                 input: null,
                 deduplication: { key: "dedup-id-key" },
@@ -1044,8 +1022,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
               {
                 typeName: "id-dedup",
                 id: userId,
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "id-dedup",
                 input: null,
                 deduplication: { key: "dedup-id-key" },

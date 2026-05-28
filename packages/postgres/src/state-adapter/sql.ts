@@ -13,6 +13,7 @@ export type DbJob = {
   chain_id: string;
   chain_type_name: string;
   chain_index: number;
+  continued_to_job_id: string | null;
 
   input: unknown;
   output: unknown;
@@ -203,6 +204,44 @@ ALTER TABLE {{schema}}.{{table_prefix}}job ALTER COLUMN id DROP DEFAULT`),
       },
     ],
   },
+  {
+    name: "20260520000000_add_continued_to_job_id_column",
+    transactional: true,
+    statements: [
+      {
+        sql: sql(/* sql */ `
+ALTER TABLE {{schema}}.{{table_prefix}}job
+  ADD COLUMN IF NOT EXISTS continued_to_job_id {{id_type}} REFERENCES {{schema}}.{{table_prefix}}job(id)`),
+      },
+    ],
+  },
+  {
+    name: "20260520000001_continued_to_job_id_index",
+    transactional: false,
+    statements: [
+      {
+        sql: sql(/* sql */ `
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS {{table_prefix}}continued_to_job_id_idx
+ON {{schema}}.{{table_prefix}}job (continued_to_job_id)
+WHERE continued_to_job_id IS NOT NULL`),
+      },
+    ],
+  },
+  {
+    name: "20260520000002_backfill_continued_to_job_id",
+    transactional: true,
+    statements: [
+      {
+        sql: sql(/* sql */ `
+UPDATE {{schema}}.{{table_prefix}}job j
+SET continued_to_job_id = n.id
+FROM {{schema}}.{{table_prefix}}job n
+WHERE n.chain_id = j.chain_id
+  AND n.chain_index = j.chain_index + 1
+  AND j.continued_to_job_id IS NULL`),
+      },
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -217,6 +256,7 @@ type PgDbJobCols = {
   readonly type_name: DataType<"string", string>;
   readonly chain_type_name: DataType<"string", string>;
   readonly chain_index: DataType<"number", number>;
+  readonly continued_to_job_id: DataType<RuntimeType, string | null>;
   readonly input: DataType<"json">;
   readonly output: DataType<"json">;
   readonly status: DataType<"string", DbJob["status"]>;
@@ -260,8 +300,7 @@ export type PgSqlDefinitions = {
       DataType<"array", string[]>,
       DataType<"array", string[]>,
       DataType<"array", (string | null)[]>,
-      DataType<"array", string[]>,
-      DataType<"array", number[]>,
+      DataType<"array", (string | null)[]>,
       DataType<"jsonArray", unknown[]>,
       DataType<"array", (string | null)[]>,
       DataType<"array", (string | null)[]>,
@@ -358,13 +397,17 @@ export type PgSqlDefinitions = {
   readonly getChainLockedSql: TypedSql<readonly [Id], PgRowToJsonCols>;
 };
 
-export const createPgSqlDefinitions = (id: DataType<RuntimeType, string>): PgSqlDefinitions => {
+export const createPgSqlDefinitions = (
+  id: DataType<RuntimeType, string>,
+  idNullable: DataType<RuntimeType, string | null>,
+): PgSqlDefinitions => {
   const dbJobColumns = {
     id,
     chain_id: id,
     type_name: t.string(),
     chain_type_name: t.string(),
     chain_index: t.number(),
+    continued_to_job_id: idNullable,
     input: t.json(),
     output: t.json(),
     status: t.string<DbJob["status"]>(),
@@ -425,31 +468,46 @@ WITH generated_ids AS (
   SELECT id, ord
   FROM unnest($1::{{id_type}}[]) WITH ORDINALITY AS t(id, ord)
 ),
-input_data AS (
+raw_input AS (
   SELECT
-    gi.id, type_name, chain_id, chain_type_name, chain_index,
+    type_name, continue_from_job_id, chain_type_name,
     input, dedup_key, dedup_scope, dedup_window_ms, dedup_exclude_chain_ids,
     scheduled_at, schedule_after_ms,
-    chain_trace_context, trace_context, gi.ord
+    chain_trace_context, trace_context, ord
   FROM unnest(
-    $2::text[], $3::{{id_type}}[], $4::text[], $5::integer[],
-    $6::jsonb[], $7::text[], $8::text[], $9::bigint[],
-    $10::text[],
-    $11::timestamptz[], $12::bigint[],
-    $13::text[], $14::text[]
+    $2::text[], $3::{{id_type}}[], $4::text[],
+    $5::jsonb[], $6::text[], $7::text[], $8::bigint[],
+    $9::text[],
+    $10::timestamptz[], $11::bigint[],
+    $12::text[], $13::text[]
   ) WITH ORDINALITY AS t(
-    type_name, chain_id, chain_type_name, chain_index,
+    type_name, continue_from_job_id, chain_type_name,
     input, dedup_key, dedup_scope, dedup_window_ms, dedup_exclude_chain_ids,
     scheduled_at, schedule_after_ms,
     chain_trace_context, trace_context, ord
   )
+),
+input_data AS (
+  SELECT
+    gi.id,
+    raw.type_name,
+    raw.continue_from_job_id,
+    COALESCE(parent.chain_id, gi.id)                       AS chain_id,
+    COALESCE(parent.chain_type_name, raw.chain_type_name)  AS chain_type_name,
+    COALESCE(parent.chain_index + 1, 0)                    AS chain_index,
+    raw.input, raw.dedup_key, raw.dedup_scope, raw.dedup_window_ms, raw.dedup_exclude_chain_ids,
+    raw.scheduled_at, raw.schedule_after_ms,
+    raw.chain_trace_context, raw.trace_context, raw.ord
+  FROM raw_input raw
   JOIN generated_ids gi USING (ord)
+  LEFT JOIN {{schema}}.{{table_prefix}}job parent
+    ON parent.id = raw.continue_from_job_id
 ),
 existing_continuations AS (
   SELECT DISTINCT ON (id2.ord) id2.ord, j.*
   FROM input_data id2
   JOIN {{schema}}.{{table_prefix}}job j
-    ON id2.chain_id IS NOT NULL
+    ON id2.continue_from_job_id IS NOT NULL
     AND j.chain_id = id2.chain_id
     AND j.chain_index = id2.chain_index
     AND j.id != j.chain_id
@@ -497,28 +555,38 @@ to_insert AS (
 inserted_jobs AS (
   INSERT INTO {{schema}}.{{table_prefix}}job (id, type_name, chain_id, chain_type_name, chain_index, input, deduplication_key, scheduled_at, chain_trace_context, trace_context)
   SELECT
-    ti.id, ti.type_name, COALESCE(ti.chain_id, ti.id), ti.chain_type_name,
+    ti.id, ti.type_name, ti.chain_id, ti.chain_type_name,
     ti.chain_index, ti.input, ti.dedup_key,
     GREATEST(COALESCE(ti.scheduled_at, now() + (ti.schedule_after_ms || ' milliseconds')::interval, now()), now()),
     ti.chain_trace_context, ti.trace_context
   FROM to_insert ti
   ON CONFLICT (chain_id, chain_index) DO UPDATE SET id = {{schema}}.{{table_prefix}}job.id
   RETURNING *
+),
+parent_updates AS (
+  UPDATE {{schema}}.{{table_prefix}}job p
+  SET continued_to_job_id = ij.id
+  FROM inserted_jobs ij
+  JOIN input_data id3 ON id3.id = ij.id
+  WHERE id3.continue_from_job_id IS NOT NULL
+    AND p.id = id3.continue_from_job_id
+    AND p.continued_to_job_id IS NULL
+  RETURNING p.id
 )
-SELECT ec.ord, ec.id, ec.type_name, ec.chain_id, ec.chain_type_name, ec.chain_index, ec.input, ec.output, ec.status, ec.created_at, ec.scheduled_at, ec.completed_at, ec.completed_by, ec.attempt, ec.last_attempt_error, ec.last_attempt_at, ec.leased_by, ec.leased_until, ec.deduplication_key, ec.chain_trace_context, ec.trace_context, TRUE AS deduplicated
+SELECT ec.ord, ec.id, ec.type_name, ec.chain_id, ec.chain_type_name, ec.chain_index, ec.continued_to_job_id, ec.input, ec.output, ec.status, ec.created_at, ec.scheduled_at, ec.completed_at, ec.completed_by, ec.attempt, ec.last_attempt_error, ec.last_attempt_at, ec.leased_by, ec.leased_until, ec.deduplication_key, ec.chain_trace_context, ec.trace_context, TRUE AS deduplicated
 FROM existing_continuations ec
 UNION ALL
-SELECT ed.ord, ed.id, ed.type_name, ed.chain_id, ed.chain_type_name, ed.chain_index, ed.input, ed.output, ed.status, ed.created_at, ed.scheduled_at, ed.completed_at, ed.completed_by, ed.attempt, ed.last_attempt_error, ed.last_attempt_at, ed.leased_by, ed.leased_until, ed.deduplication_key, ed.chain_trace_context, ed.trace_context, TRUE AS deduplicated
+SELECT ed.ord, ed.id, ed.type_name, ed.chain_id, ed.chain_type_name, ed.chain_index, ed.continued_to_job_id, ed.input, ed.output, ed.status, ed.created_at, ed.scheduled_at, ed.completed_at, ed.completed_by, ed.attempt, ed.last_attempt_error, ed.last_attempt_at, ed.leased_by, ed.leased_until, ed.deduplication_key, ed.chain_trace_context, ed.trace_context, TRUE AS deduplicated
 FROM existing_deduplicated ed
 UNION ALL
-SELECT tia.ord, ij.id, ij.type_name, ij.chain_id, ij.chain_type_name, ij.chain_index, ij.input, ij.output, ij.status, ij.created_at, ij.scheduled_at, ij.completed_at, ij.completed_by, ij.attempt, ij.last_attempt_error, ij.last_attempt_at, ij.leased_by, ij.leased_until, ij.deduplication_key, ij.chain_trace_context, ij.trace_context, TRUE AS deduplicated
+SELECT tia.ord, ij.id, ij.type_name, ij.chain_id, ij.chain_type_name, ij.chain_index, ij.continued_to_job_id, ij.input, ij.output, ij.status, ij.created_at, ij.scheduled_at, ij.completed_at, ij.completed_by, ij.attempt, ij.last_attempt_error, ij.last_attempt_at, ij.leased_by, ij.leased_until, ij.deduplication_key, ij.chain_trace_context, ij.trace_context, TRUE AS deduplicated
 FROM to_insert_all tia
 JOIN to_insert ti ON ti.dedup_key = tia.dedup_key AND ti.chain_type_name = tia.chain_type_name
-JOIN inserted_jobs ij ON COALESCE(ti.chain_id, ti.id) = ij.chain_id AND ti.chain_index = ij.chain_index
+JOIN inserted_jobs ij ON ti.chain_id = ij.chain_id AND ti.chain_index = ij.chain_index
 WHERE tia.dedup_key IS NOT NULL AND tia.ord != ti.ord
 UNION ALL
-SELECT ti.ord, ij.id, ij.type_name, ij.chain_id, ij.chain_type_name, ij.chain_index, ij.input, ij.output, ij.status, ij.created_at, ij.scheduled_at, ij.completed_at, ij.completed_by, ij.attempt, ij.last_attempt_error, ij.last_attempt_at, ij.leased_by, ij.leased_until, ij.deduplication_key, ij.chain_trace_context, ij.trace_context, (ij.id != ti.id) AS deduplicated
-FROM inserted_jobs ij JOIN to_insert ti ON COALESCE(ti.chain_id, ti.id) = ij.chain_id AND ti.chain_index = ij.chain_index
+SELECT ti.ord, ij.id, ij.type_name, ij.chain_id, ij.chain_type_name, ij.chain_index, ij.continued_to_job_id, ij.input, ij.output, ij.status, ij.created_at, ij.scheduled_at, ij.completed_at, ij.completed_by, ij.attempt, ij.last_attempt_error, ij.last_attempt_at, ij.leased_by, ij.leased_until, ij.deduplication_key, ij.chain_trace_context, ij.trace_context, (ij.id != ti.id) AS deduplicated
+FROM inserted_jobs ij JOIN to_insert ti ON ti.chain_id = ij.chain_id AND ti.chain_index = ij.chain_index
 ORDER BY ord
 `,
     {
@@ -527,8 +595,7 @@ ORDER BY ord
         t.array(),
         t.array(),
         t.array<string | null>(),
-        t.array(),
-        t.array<number>(),
+        t.array<string | null>(),
         t.jsonArray(),
         t.array<string | null>(),
         t.array<string | null>(),

@@ -13,8 +13,6 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "blocker",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "blocker",
                 input: null,
               },
@@ -28,8 +26,6 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "main",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "main",
                 input: null,
               },
@@ -60,8 +56,6 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "blocker",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "blocker",
                 input: null,
               },
@@ -84,8 +78,6 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "main",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "main",
                 input: null,
               },
@@ -117,15 +109,11 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
               jobs: [
                 {
                   typeName: "blocker",
-                  chainId: undefined,
-                  chainIndex: 0,
                   chainTypeName: "blocker",
                   input: null,
                 },
                 {
                   typeName: "blocker",
-                  chainId: undefined,
-                  chainIndex: 0,
                   chainTypeName: "blocker",
                   input: null,
                 },
@@ -139,15 +127,11 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "main",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "main",
                 input: null,
               },
               {
                 typeName: "main",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "main",
                 input: null,
               },
@@ -185,8 +169,6 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "blocker",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "blocker",
                 input: null,
               },
@@ -208,8 +190,6 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "blocker",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "blocker",
                 input: null,
               },
@@ -223,15 +203,11 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "main",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "main",
                 input: null,
               },
               {
                 typeName: "main",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "main",
                 input: null,
               },

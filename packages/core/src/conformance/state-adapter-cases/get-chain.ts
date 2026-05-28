@@ -16,8 +16,6 @@ export const getChainGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "chain-root",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "chain-root",
                 input: { step: 1 },
               },
@@ -41,8 +39,6 @@ export const getChainGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "chain-root",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "chain-root",
                 input: null,
               },
@@ -56,9 +52,7 @@ export const getChainGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "chain-step2",
-                chainId: rootJob.chainId,
-                chainIndex: 1,
-                chainTypeName: "chain-root",
+                continueFromJobId: rootJob.id,
                 input: null,
               },
             ],
@@ -81,8 +75,6 @@ export const getChainGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "single-root",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "single-root",
                 input: null,
               },
@@ -106,8 +98,6 @@ export const getChainGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "single-root-locked",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "single-root-locked",
                 input: null,
               },
@@ -133,8 +123,6 @@ export const getChainGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "chain-lookup-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "chain-lookup-test",
                 input: null,
               },
@@ -157,8 +145,6 @@ export const getChainGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "chain-locked",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "chain-locked",
                 input: null,
               },
@@ -172,9 +158,7 @@ export const getChainGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "chain-locked-step2",
-                chainId: rootJob.chainId,
-                chainIndex: 1,
-                chainTypeName: "chain-locked",
+                continueFromJobId: rootJob.id,
                 input: null,
               },
             ],

@@ -9,7 +9,7 @@ export type StateJob = {
   typeName: string;
   chainId: string;
   chainTypeName: string;
-  chainIndex: number;
+  continuedToJobId: string | null;
   input: unknown;
   output: unknown;
 
@@ -97,7 +97,16 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
   /**
    * Creates jobs. Returns results in the same order as input.
    *
-   * Each entry may provide an `id` to assign explicitly; if omitted, the adapter
+   * Each input is one of two shapes, distinguished structurally:
+   * - **chain start** (`chainTypeName` present): first job in a new chain.
+   *   Adapter generates the chain's id (job's id == chain id), uses the
+   *   provided `chainTypeName`. Supports deduplication.
+   * - **continuation** (`continueFromJobId` present): successor of an existing
+   *   job. Adapter looks up `continueFromJobId` to inherit `chainId` and
+   *   `chainTypeName`, and sets the parent's `continuedToJobId` to the new
+   *   job's id.
+   *
+   * Each entry may also provide an `id` to assign explicitly; if omitted, the adapter
    * generates one via its configured `generateId`. Both caller-supplied and
    * generated IDs are validated via {@link validateId}, throwing `InvalidJobIdError`
    * before any database write. When `id` is supplied for an entry that turns out to
@@ -106,23 +115,27 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
    */
   createJobs: (params: {
     txCtx?: TTxContext;
-    jobs: {
+    jobs: ({
       typeName: string;
       id?: TJobId;
-      chainId: TJobId | undefined;
-      chainTypeName: string;
-      chainIndex: number;
       input: unknown;
-      deduplication?: {
-        key: string;
-        scope?: "incomplete" | "any";
-        windowMs?: number;
-        excludeChainIds?: TJobId[];
-      };
       schedule?: ScheduleOptions;
       chainTraceContext?: string | null;
       traceContext?: string | null;
-    }[];
+    } & (
+      | {
+          chainTypeName: string;
+          deduplication?: {
+            key: string;
+            scope?: "incomplete" | "any";
+            windowMs?: number;
+            excludeChainIds?: TJobId[];
+          };
+        }
+      | {
+          continueFromJobId: TJobId;
+        }
+    ))[];
   }) => Promise<{ job: StateJob; deduplicated: boolean }[]>;
 
   /** Adds blocker dependencies to jobs. Returns results in the same order as input. */

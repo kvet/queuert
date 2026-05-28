@@ -6,7 +6,7 @@
 
 Three coupled smells in prior models, fixable together:
 
-1. **`status` is a denormalized cache.** Every value is decidable from columns the schema already needs for other reasons (`completed_at`, `leased_until`, `has_open_blockers`, `succeeded_by_job_id`). Keeping a stored `status` column forces every writer to maintain two representations in agreement, and every domain extension (continued-vs-terminal, ready-vs-scheduled) forces an enum-domain migration.
+1. **`status` is a denormalized cache.** Every value is decidable from columns the schema already needs for other reasons (`completed_at`, `leased_until`, `has_open_blockers`, `continued_to_job_id`). Keeping a stored `status` column forces every writer to maintain two representations in agreement, and every domain extension (continued-vs-terminal, ready-vs-scheduled) forces an enum-domain migration.
 2. **`output: null` overloaded as a handoff sentinel.** A job that handed off via `continueWith` is `status: 'completed'` with `output: null`. Codecs/validators can't distinguish "terminated with null output" from "handed off, output meaningless." The discriminator wants to be a stored FK column, not a polymorphic null.
 3. **`chain_index` leaks through the public API.** It exists for SQL ordering and race prevention — none of which is a user concern. The user-facing relationship is "this job continues to that job," not "this job is at position N."
 
@@ -21,7 +21,7 @@ id                              -- PK
 type_name                       -- string
 chain_id                        -- FK to job(id); root job has chain_id = id
 chain_index                     -- int, monotonic position in chain (0 = root); SQL-internal
-succeeded_by_job_id             -- FK NULL; set when this job handed off to a successor
+continued_to_job_id             -- FK NULL; set when this job handed off to a successor
 input                           -- jsonb
 output                          -- jsonb NULL; set on terminal completion only
 created_at                      -- timestamp
@@ -82,7 +82,7 @@ type Job<TJobId, TJobTypeName, TChainTypeName, TInput, TOutput, TCanContinue ext
           status: "continued";
           completedAt: Date;
           completedBy: string | null;
-          succeededByJobId: TJobId;
+          continuedToJobId: TJobId;
         }
       : never)
   | ([TOutput] extends [never]
@@ -94,7 +94,7 @@ type Job<TJobId, TJobTypeName, TChainTypeName, TInput, TOutput, TCanContinue ext
 Distinctions resolved vs. the prior model:
 
 - `'pending'` (which collapsed "ready now" and "scheduled for later") splits into `'ready'` and `'scheduled'`.
-- `'completed'` (which collapsed "chain terminus" and "handoff") splits into `'completed'` (terminal, carries `output`) and `'continued'` (handoff, carries `succeededByJobId`).
+- `'completed'` (which collapsed "chain terminus" and "handoff") splits into `'completed'` (terminal, carries `output`) and `'continued'` (handoff, carries `continuedToJobId`).
 - `'blocked'` carries the open blocker chain ids inline — the type-level surface tells the user _what_ is blocking, not just _that_ something is.
 
 ### Derivation rule
@@ -103,7 +103,7 @@ Computed at read time in each adapter's row mapper:
 
 ```ts
 function deriveStatus(row, now): JobStatus {
-  if (row.completed_at !== null && row.succeeded_by_job_id !== null) return "continued";
+  if (row.completed_at !== null && row.continued_to_job_id !== null) return "continued";
   if (row.completed_at !== null) return "completed";
   if (row.leased_until !== null) return "running";
   if (row.has_open_blockers) return "blocked";
@@ -120,7 +120,7 @@ Order encodes the legal precedence: completion (in either flavor) wins over a st
 
 ### Chain status
 
-Derived from the chain's tail (`succeeded_by_job_id IS NULL` for `chain_id = X`):
+Derived from the chain's tail (`continued_to_job_id IS NULL` for `chain_id = X`):
 
 ```ts
 type ChainStatus = "open" | "closed";
@@ -153,19 +153,19 @@ FOR UPDATE SKIP LOCKED;
 
 -- Chain frontier (the tail, whether closed or open)
 SELECT … FROM job
-WHERE chain_id = $1 AND succeeded_by_job_id IS NULL;
+WHERE chain_id = $1 AND continued_to_job_id IS NULL;
 -- At most one row (UNIQUE partial index).
 
 -- Chain closed?
 SELECT 1 FROM job
 WHERE chain_id = $1
-  AND succeeded_by_job_id IS NULL
+  AND continued_to_job_id IS NULL
   AND completed_at IS NOT NULL;
 
 -- Blocker chain resolved?
 SELECT 1 FROM job
 WHERE chain_id = $blocker_chain_id
-  AND succeeded_by_job_id IS NULL
+  AND continued_to_job_id IS NULL
   AND completed_at IS NOT NULL;
 
 -- Listing by computed status (dashboard)
@@ -175,7 +175,7 @@ WHERE chain_id = $blocker_chain_id
 WITH start_row AS (
   SELECT n.chain_index
   FROM job c
-  JOIN job n ON n.id = c.succeeded_by_job_id
+  JOIN job n ON n.id = c.continued_to_job_id
   WHERE c.id = $cursorId
 )
 SELECT j.* FROM job j, start_row s
@@ -199,7 +199,7 @@ CREATE INDEX job_running_idx ON job (leased_until)
 
 -- Chain frontier (one row per chain). UNIQUE encodes "at most one tail per chain."
 CREATE UNIQUE INDEX job_chain_tail_idx ON job (chain_id)
-  WHERE succeeded_by_job_id IS NULL;
+  WHERE continued_to_job_id IS NULL;
 
 -- Chain ordered traversal + race prevention for continueWith
 CREATE UNIQUE INDEX job_chain_position_idx ON job (chain_id, chain_index);
@@ -231,7 +231,7 @@ CREATE INDEX job_pending_listing_idx ON job (type_name, scheduled_at)
 CREATE INDEX job_done_listing_idx ON job (type_name, completed_at DESC)
   WHERE completed_at IS NOT NULL;
 -- Serves both 'completed' and 'continued'; the variant discriminator
--- (succeeded_by_job_id NULL/NOT NULL) is filtered at row inspection.
+-- (continued_to_job_id NULL/NOT NULL) is filtered at row inspection.
 
 -- Chain listing (root jobs only, by chain type)
 CREATE INDEX chain_listing_idx ON job (chain_type_name, created_at DESC)
@@ -241,7 +241,7 @@ CREATE INDEX chain_listing_idx ON job (chain_type_name, created_at DESC)
 Properties:
 
 - Every index is partial on the active subset, the completed subset, or a structurally meaningful slice. No index covers the full table.
-- The `job_chain_tail_idx` UNIQUE encodes an actual invariant: **at most one row per chain has no successor.** Today's `chain_index`-based schema can't express this directly; `succeeded_by_job_id` makes it a DB-enforced constraint.
+- The `job_chain_tail_idx` UNIQUE encodes an actual invariant: **at most one row per chain has no successor.** Today's `chain_index`-based schema can't express this directly; `continued_to_job_id` makes it a DB-enforced constraint.
 - Status-based dashboard filters hit per-status partials; the acquisition / running / dashboard-listing partials together cover every status without a stored `status` column.
 
 ## Public API contract
@@ -257,7 +257,7 @@ type StateJob = {
   input: unknown;
   output: unknown;
 
-  succeededByJobId: string | null;
+  continuedToJobId: string | null;
   hasOpenBlockers: boolean;
 
   status: JobStatus; // derived at read time; never stored
@@ -285,8 +285,8 @@ type StateJob = {
 ### Adapter methods
 
 - `acquireJob({ typeNames, workerId, leaseDurationMs })` — writes `leased_by`, `leased_until`, `attempt++` atomically with row selection. With no stored `status` column, "running" is the presence of `leased_until`, so the lease must be set at acquire time.
-- `completeJob({ jobId, workerId, output? })` — writes `completed_at`, `completed_by`, `output` (nullable; null when the parent's `succeeded_by_job_id` was set earlier by a `continueWith`-driven `createJobs`). Single unified method; the row's `succeeded_by_job_id` distinguishes terminal from handoff.
-- `createJobs` per-job input is `{ kind: "chainStart" | "continueWith", ... }` — for `continueWith`, the adapter inherits `chain_id`, `chain_type_name`, derives `chain_index`, and sets the parent's `succeeded_by_job_id` in the same transaction.
+- `completeJob({ jobId, workerId, output? })` — writes `completed_at`, `completed_by`, `output` (nullable; null when the parent's `continued_to_job_id` was set earlier by a `continueWith`-driven `createJobs`). Single unified method; the row's `continued_to_job_id` distinguishes terminal from handoff.
+- `createJobs` per-job input is `{ kind: "chainStart" | "continueWith", ... }` — for `continueWith`, the adapter inherits `chain_id`, `chain_type_name`, derives `chain_index`, and sets the parent's `continued_to_job_id` in the same transaction.
 - `rescheduleJob({ jobId, schedule, error, userInitiated })` — when `userInitiated = true`, sets `last_user_reschedule_attempt = attempt`. Otherwise leaves it.
 - `addJobsBlockers` sets `has_open_blockers = true` on dependents with ≥1 incomplete blocker; `unblockJobs` sets `has_open_blockers = false` when the last blocker resolves.
 
@@ -310,9 +310,9 @@ A ~15,000–25,000× regression — the planner walks the full pending index pro
 
 ### Why `has_open_blockers` but not `job_blocker.open`
 
-The chain-tail partial index makes "is this blocker resolved?" O(1) via the unique partial on `(chain_id) WHERE succeeded_by_job_id IS NULL`. A per-blocker-row `open` boolean would only save aggregation in `unblockJobs`, which already operates on a bounded set (the dependents of the just-completed chain). The single denormalization on `job.has_open_blockers` is irreducible; the second one isn't.
+The chain-tail partial index makes "is this blocker resolved?" O(1) via the unique partial on `(chain_id) WHERE continued_to_job_id IS NULL`. A per-blocker-row `open` boolean would only save aggregation in `unblockJobs`, which already operates on a bounded set (the dependents of the just-completed chain). The single denormalization on `job.has_open_blockers` is irreducible; the second one isn't.
 
-### Why `succeeded_by_job_id` stored (not derived via `chain_index + 1` lookup)
+### Why `continued_to_job_id` stored (not derived via `chain_index + 1` lookup)
 
 - **Disambiguates terminal vs handoff at the storage layer**, not via the `output IS NULL` sentinel.
 - **Encodes the "at most one successor" invariant via partial UNIQUE index**, DB-enforced.
@@ -325,20 +325,19 @@ Every value is a function of structural columns; writes touching multiple repres
 
 ### Why `chain_index` stays in storage (hidden from API)
 
-Provides: (a) cheap range-scan ordering for chain listing, (b) `UNIQUE (chain_id, chain_index)` for race prevention on `continueWith`, (c) dedup `chain_index = 0` predicate for "is this a chain root." Replacing range scans with recursive CTEs over `succeeded_by_job_id` is order-of-magnitude slower on cold cache. Keep `chain_index` as an SQL-internal ordering primitive; the public API surfaces `succeeded_by_job_id` instead.
+Provides: (a) cheap range-scan ordering for chain listing, (b) `UNIQUE (chain_id, chain_index)` for race prevention on `continueWith`, (c) dedup `chain_index = 0` predicate for "is this a chain root." Replacing range scans with recursive CTEs over `continued_to_job_id` is order-of-magnitude slower on cold cache. Keep `chain_index` as an SQL-internal ordering primitive; the public API surfaces `continued_to_job_id` instead.
 
 ## Migration from current state
 
 The current `next` branch already has `has_blockers` and `continued_to_job_id` from the prior refactors. This design proposes name refinements and one additive column:
 
 1. **Rename** `has_blockers` → `has_open_blockers`. Pure rename: column-level on PG (`ALTER TABLE … RENAME COLUMN`), SQLite via the `ALTER TABLE` rename.
-2. **Rename** `continued_to_job_id` → `succeeded_by_job_id`. Same shape.
-3. **Add** `last_user_reschedule_attempt int NULL`. Backfill is `NULL` (no historical data to recover).
-4. **Add** `job_chain_tail_idx UNIQUE` partial on `(chain_id) WHERE succeeded_by_job_id IS NULL`. This is a new invariant the DB will enforce; backfill should already satisfy it given how `createJobs` writes the FK.
-5. **Rename indexes** to match the new vocabulary (cosmetic).
-6. **Add `chain_index = 0` to the dedup partial** (it's already there) and the `completed_at IS NULL` predicate (open-scope).
+2. **Add** `last_user_reschedule_attempt int NULL`. Backfill is `NULL` (no historical data to recover).
+3. **Add** `job_chain_tail_idx UNIQUE` partial on `(chain_id) WHERE continued_to_job_id IS NULL`. This is a new invariant the DB will enforce; backfill should already satisfy it given how `createJobs` writes the FK.
+4. **Rename indexes** to match the new vocabulary (cosmetic).
+5. **Add `chain_index = 0` to the dedup partial** (it's already there) and the `completed_at IS NULL` predicate (open-scope).
 
-The remaining structural columns (`leased_by`, `leased_until`, `completed_at`, `completed_by`, `output`, `succeeded_by_job_id`, etc.) are already present; only names and one new column change.
+The remaining structural columns (`leased_by`, `leased_until`, `completed_at`, `completed_by`, `output`, `continued_to_job_id`, etc.) are already present; only names and one new column change.
 
 ## Compatibility with other designs
 
@@ -362,7 +361,7 @@ Additive verification:
 - **`getNextJobAvailableInMs` stays priority-blind** (per job-priority.md's own design), and our `job_pending_listing_idx` ordered by `scheduled_at` serves it directly.
 - **`priority` column adds to the row**; `StateJob.priority` adds to the type. Doesn't intersect with any structural column this design defines.
 - **In-process adapter SortedSet** comparator gains the demotion math. This design's in-process model is already a per-status set; job-priority refines the comparator on the same set.
-- **No conflict with `succeeded_by_job_id` / `has_open_blockers` / status derivation** — priority is orthogonal to status and to the chain link.
+- **No conflict with `continued_to_job_id` / `has_open_blockers` / status derivation** — priority is orthogonal to status and to the chain link.
 
 job-priority lands as a strict extension: one column, one index swap, one comparator update.
 

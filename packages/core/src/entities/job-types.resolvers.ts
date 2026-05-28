@@ -189,7 +189,8 @@ export type ResolvedJob<
   TJobTypeName,
   TChainTypeName,
   JobTypeProperty<TJobTypeDefinitions, TJobTypeName, "input">,
-  JobTypeProperty<TJobTypeDefinitions, TJobTypeName, "output">
+  JobTypeProperty<TJobTypeDefinitions, TJobTypeName, "output">,
+  [JobTypeContinuation<TJobTypeDefinitions, TJobTypeName>] extends [never] ? false : true
 >;
 
 export type ResolvedJobWithBlockers<
@@ -214,7 +215,8 @@ export type ContinuationJobs<
           K,
           TChainTypeName,
           JobTypeProperty<TJobTypeDefinitions, K, "input">,
-          JobTypeProperty<TJobTypeDefinitions, K, "output">
+          JobTypeProperty<TJobTypeDefinitions, K, "output">,
+          [JobTypeContinuation<TJobTypeDefinitions, K>] extends [never] ? false : true
         > &
           ({ status: "pending" } | { status: "blocked" });
       }[TContinuation]
@@ -249,7 +251,8 @@ export type ResolvedChainJobs<
           K,
           TChainTypeName,
           JobTypeProperty<TJobTypeDefinitions, K, "input">,
-          JobTypeProperty<TJobTypeDefinitions, K, "output">
+          JobTypeProperty<TJobTypeDefinitions, K, "output">,
+          [JobTypeContinuation<TJobTypeDefinitions, K>] extends [never] ? false : true
         >;
       }[TChainTypeNames]
     : never;

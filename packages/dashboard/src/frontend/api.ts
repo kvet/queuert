@@ -2,7 +2,7 @@ import { type Job as CoreJob, type Chain as CoreChain } from "queuert";
 // @ts-expect-error tsgo doesn't resolve export * re-exports from seroval
 import { deserialize } from "seroval";
 
-export type UnknownJob = CoreJob<string, string, string, unknown, unknown>;
+export type UnknownJob = CoreJob<string, string, string, unknown, unknown, true>;
 export type UnknownChain = CoreChain<string, string, unknown, unknown>;
 
 const BASE = "./api";

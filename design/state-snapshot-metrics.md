@@ -1,6 +1,6 @@
 # State-snapshot metrics
 
-> **Builds on**: [job-model.md](job-model.md) — uses the derived `status`, the `has_open_blockers` / `leased_until` / `completed_at` / `succeeded_by_job_id` structural columns, the `last_user_reschedule_attempt` field, and the active-partition partial indexes defined there.
+> **Builds on**: [job-model.md](job-model.md) — uses the derived `status`, the `has_open_blockers` / `leased_until` / `completed_at` / `continued_to_job_id` structural columns, the `last_user_reschedule_attempt` field, and the active-partition partial indexes defined there.
 
 Add an opt-in OTel layer that emits gauges derived by periodically scanning the `job` table, complementing the existing event-driven histograms in [observability-adapter.ts](../packages/core/src/observability-adapter/observability-adapter.ts).
 
@@ -41,7 +41,7 @@ Notes on naming and semantics:
 This package adds **no columns** of its own. It depends on schema defined in [job-model.md](job-model.md):
 
 - `last_user_reschedule_attempt int NULL` — set to the value of `attempt` when `rescheduleJob` is called via user-thrown `RescheduleJobError`; left alone on default-backoff retries. The user-vs-default distinction lives in [handle-job-handler-error.ts:43](../packages/core/src/implementation/handle-job-handler-error.ts#L43); plumbing must thread `userInitiated` through to the adapter.
-- `has_open_blockers`, `leased_until`, `completed_at`, `succeeded_by_job_id` — the structural columns this layer reads.
+- `has_open_blockers`, `leased_until`, `completed_at`, `continued_to_job_id` — the structural columns this layer reads.
 
 ## Indexes
 
@@ -94,7 +94,7 @@ WITH frontier AS (
   SELECT chain_id, chain_type_name, has_open_blockers, leased_until,
          completed_at, scheduled_at
   FROM job
-  WHERE succeeded_by_job_id IS NULL
+  WHERE continued_to_job_id IS NULL
     AND completed_at IS NULL          -- restrict to open chains
 )
 SELECT
@@ -123,7 +123,7 @@ WHERE has_open_blockers = false
 GROUP BY type_name, chain_type_name;
 ```
 
-Chain-frontier insight: for an open chain, the frontier job (`succeeded_by_job_id IS NULL`) is necessarily `completed_at IS NULL`. The `job_chain_tail_idx` (UNIQUE partial on `(chain_id) WHERE succeeded_by_job_id IS NULL`) lets the frontier scan touch one row per chain.
+Chain-frontier insight: for an open chain, the frontier job (`continued_to_job_id IS NULL`) is necessarily `completed_at IS NULL`. The `job_chain_tail_idx` (UNIQUE partial on `(chain_id) WHERE continued_to_job_id IS NULL`) lets the frontier scan touch one row per chain.
 
 Per-collection cost is dominated by the active-partition scan plus the partial-index walk on `job_chain_tail_idx` — order of milliseconds while the working set is in the tens of thousands. Collection cadence ~60s, so the runner is doing ~one to four index scans per minute, all on partial indexes that don't touch completed history.
 

@@ -484,7 +484,7 @@ export const runJobProcess = async ({
       );
 
       const result = await completeSavepointContext.run(async (txCtx, transactionHooks) => {
-        let continuedJob: Job<any, any, any, any, any> | null = null;
+        let continuedJob: Job<any, any, any, any, any, boolean> | null = null;
         const output = await runCompleteMiddlewareChain(
           attemptMiddleware,
           { job: runningJob, transactionHooks, txCtx },
@@ -503,13 +503,12 @@ export const runJobProcess = async ({
                   transactionHooks,
                   schedule,
                   blockers: blockers as any,
-                  chainId: job.chainId,
-                  chainIndex: job.chainIndex + 1,
-                  chainTypeName: job.chainTypeName,
-                  originChainTraceContext:
-                    attemptSpanHandle?.getChainTraceContext() ?? job.chainTraceContext,
-                  originTraceContext: attemptSpanHandle?.getTraceContext() ?? job.traceContext,
-                  fromTypeName: job.typeName,
+                  fromJob: {
+                    ...job,
+                    chainTraceContext:
+                      attemptSpanHandle?.getChainTraceContext() ?? job.chainTraceContext,
+                    traceContext: attemptSpanHandle?.getTraceContext() ?? job.traceContext,
+                  },
                 });
                 return continuedJob;
               },
@@ -534,10 +533,10 @@ export const runJobProcess = async ({
           ...mapStateJobToJob(completedStateJob),
           blockers: runningJob.blockers,
         };
-        const continued = continuedJob
+        const continuedWith = continuedJob
           ? {
-              jobId: (continuedJob as Job<any, any, any, any, any>).id,
-              jobTypeName: (continuedJob as Job<any, any, any, any, any>).typeName,
+              jobId: (continuedJob as Job<any, any, any, any, any, boolean>).id,
+              jobTypeName: (continuedJob as Job<any, any, any, any, any, boolean>).typeName,
             }
           : undefined;
         const chainCompleted = !continuedJob ? { output } : undefined;
@@ -548,7 +547,7 @@ export const runJobProcess = async ({
           });
           attemptSpanHandle?.end({
             status: "completed",
-            continued,
+            continuedWith,
             chainCompleted,
           });
         });

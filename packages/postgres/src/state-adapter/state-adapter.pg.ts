@@ -17,8 +17,8 @@ import { type BaseTxContext, type StateAdapter } from "queuert";
 import {
   type StateJob,
   createIdValidator,
-  decodeChainIndexCursor,
-  decodeCreatedAtCursor,
+  decodeCreatedAtWithIdCursor,
+  decodeIdCursor,
   encodeCursor,
 } from "queuert/internal";
 
@@ -41,7 +41,7 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
     typeName: dbJob.type_name,
     chainId: dbJob.chain_id,
     chainTypeName: dbJob.chain_type_name,
-    chainIndex: dbJob.chain_index,
+    continuedToJobId: dbJob.continued_to_job_id,
     input: dbJob.input,
     output: dbJob.output,
 
@@ -114,7 +114,8 @@ export const createPgStateAdapter = async <
   });
 
   const idDataType = idType === "uuid" ? t.uuid() : t.string();
-  const defs = createPgSqlDefinitions(idDataType);
+  const idNullableDataType = idType === "uuid" ? t["uuid?"]() : t["string?"]();
+  const defs = createPgSqlDefinitions(idDataType, idNullableDataType);
 
   const executeTypedSql = async <
     TParams extends readonly DataType[],
@@ -235,15 +236,18 @@ export const createPgStateAdapter = async <
         params: [
           ids,
           jobs.map((j) => j.typeName),
-          jobs.map((j) => j.chainId ?? null),
-          jobs.map((j) => j.chainTypeName),
-          jobs.map((j) => j.chainIndex),
+          jobs.map((j) => ("continueFromJobId" in j ? j.continueFromJobId : null)),
+          jobs.map((j) => ("chainTypeName" in j ? j.chainTypeName : null)),
           jobs.map((j) => j.input),
-          jobs.map((j) => j.deduplication?.key ?? null),
-          jobs.map((j) => (j.deduplication ? (j.deduplication.scope ?? "incomplete") : null)),
-          jobs.map((j) => j.deduplication?.windowMs ?? null),
+          jobs.map((j) => ("chainTypeName" in j ? (j.deduplication?.key ?? null) : null)),
           jobs.map((j) =>
-            j.deduplication?.excludeChainIds
+            "chainTypeName" in j && j.deduplication
+              ? (j.deduplication.scope ?? "incomplete")
+              : null,
+          ),
+          jobs.map((j) => ("chainTypeName" in j ? (j.deduplication?.windowMs ?? null) : null)),
+          jobs.map((j) =>
+            "chainTypeName" in j && j.deduplication?.excludeChainIds
               ? JSON.stringify(j.deduplication.excludeChainIds)
               : null,
           ),
@@ -406,7 +410,7 @@ export const createPgStateAdapter = async <
       };
     },
     listChains: async ({ txCtx, filter, orderDirection, page }) => {
-      const cursor = page.cursor ? decodeCreatedAtCursor(page.cursor) : null;
+      const cursor = page.cursor ? decodeCreatedAtWithIdCursor(page.cursor) : null;
       const conditions: string[] = ["root_job.chain_index = 0"];
       const params: unknown[] = [];
       const paramTypes: Record<number, RuntimeType> = {};
@@ -491,7 +495,7 @@ export const createPgStateAdapter = async <
       let nextCursor: string | null = null;
       if (hasMore && lastItem) {
         nextCursor = encodeCursor({
-          type: "createdAt",
+          type: "createdAtWithId",
           id: lastItem.root_job.id,
           createdAt: lastItem.root_job.created_at,
         });
@@ -501,7 +505,7 @@ export const createPgStateAdapter = async <
     },
 
     listJobs: async ({ txCtx, filter, orderDirection, page }) => {
-      const cursor = page.cursor ? decodeCreatedAtCursor(page.cursor) : null;
+      const cursor = page.cursor ? decodeCreatedAtWithIdCursor(page.cursor) : null;
       const conditions: string[] = [];
       const params: unknown[] = [];
       const paramTypes: Record<number, RuntimeType> = {};
@@ -578,7 +582,7 @@ export const createPgStateAdapter = async <
       let nextCursor: string | null = null;
       if (hasMore && lastRow) {
         nextCursor = encodeCursor({
-          type: "createdAt",
+          type: "createdAtWithId",
           id: lastRow.id,
           createdAt: lastRow.created_at,
         });
@@ -588,24 +592,32 @@ export const createPgStateAdapter = async <
     },
 
     listChainJobs: async ({ txCtx, chainId, orderDirection, page }) => {
-      const cursor = page.cursor ? decodeChainIndexCursor(page.cursor) : null;
-      const conditions: string[] = [`j.chain_id = $1::${idType}`];
+      const cursor = page.cursor ? decodeIdCursor(page.cursor) : null;
+      const dir = orderDirection === "asc" ? "ASC" : "DESC";
       const params: unknown[] = [chainId];
       const paramTypes: Record<number, RuntimeType> = {};
-      let p = 2;
+      let sqlStr: string;
 
-      const cmp = orderDirection === "asc" ? ">" : "<";
       if (cursor) {
-        conditions.push(
-          `(j.chain_index ${cmp} $${p}::integer OR (j.chain_index = $${p}::integer AND j.id ${cmp} $${p + 1}::${idType}))`,
-        );
-        params.push(cursor.chainIndex, cursor.id);
-        p += 2;
+        const cmp = orderDirection === "asc" ? ">" : "<";
+        params.push(cursor.id, page.limit + 1);
+        sqlStr = `WITH start_row AS (
+          SELECT c.chain_index AS sc
+          FROM ${schema}.${tablePrefix}job c
+          WHERE c.id = $2::${idType} AND c.chain_id = $1::${idType}
+        )
+        SELECT j.* FROM ${schema}.${tablePrefix}job j, start_row s
+        WHERE j.chain_id = $1::${idType}
+          AND j.chain_index ${cmp} s.sc
+        ORDER BY j.chain_index ${dir}, j.id ${dir}
+        LIMIT $3::integer`;
+      } else {
+        params.push(page.limit + 1);
+        sqlStr = `SELECT * FROM ${schema}.${tablePrefix}job j
+        WHERE j.chain_id = $1::${idType}
+        ORDER BY j.chain_index ${dir}, j.id ${dir}
+        LIMIT $2::integer`;
       }
-      params.push(page.limit + 1);
-
-      const dir = orderDirection === "asc" ? "ASC" : "DESC";
-      const sqlStr = `SELECT * FROM ${schema}.${tablePrefix}job j WHERE ${conditions.join(" AND ")} ORDER BY j.chain_index ${dir}, j.id ${dir} LIMIT $${p}`;
 
       const rows = (await stateProvider.executeSql({
         txCtx,
@@ -623,11 +635,7 @@ export const createPgStateAdapter = async <
       const lastRow = pageRows[pageRows.length - 1];
       let nextCursor: string | null = null;
       if (hasMore && lastRow) {
-        nextCursor = encodeCursor({
-          type: "chainIndex",
-          id: lastRow.id,
-          chainIndex: lastRow.chain_index,
-        });
+        nextCursor = encodeCursor({ type: "id", id: lastRow.id });
       }
 
       return { items, nextCursor };
@@ -660,7 +668,7 @@ export const createPgStateAdapter = async <
     },
 
     listBlockedJobs: async ({ txCtx, chainId, orderDirection, page }) => {
-      const cursor = page.cursor ? decodeCreatedAtCursor(page.cursor) : null;
+      const cursor = page.cursor ? decodeCreatedAtWithIdCursor(page.cursor) : null;
       const conditions: string[] = [
         `j.id IN (SELECT jb.job_id FROM ${schema}.${tablePrefix}job_blocker jb WHERE jb.blocked_by_chain_id = $1::${idType})`,
       ];
@@ -698,7 +706,7 @@ export const createPgStateAdapter = async <
       let nextCursor: string | null = null;
       if (hasMore && lastRow) {
         nextCursor = encodeCursor({
-          type: "createdAt",
+          type: "createdAtWithId",
           id: lastRow.id,
           createdAt: lastRow.created_at,
         });

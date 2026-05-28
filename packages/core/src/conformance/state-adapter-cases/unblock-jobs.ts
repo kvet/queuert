@@ -13,8 +13,6 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "blocker",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "blocker",
                 input: null,
               },
@@ -28,8 +26,6 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "main",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "main",
                 input: null,
               },
@@ -74,8 +70,6 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "blocker",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "blocker",
                 input: null,
               },
@@ -89,8 +83,6 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "blocker",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "blocker",
                 input: null,
               },
@@ -104,8 +96,6 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "main",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "main",
                 input: null,
               },
@@ -153,8 +143,6 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "standalone",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "standalone",
                 input: null,
               },
@@ -181,8 +169,6 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "blocker",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "blocker",
                 input: null,
               },
@@ -196,8 +182,6 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "main",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "main",
                 input: null,
               },
@@ -240,8 +224,6 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "standalone",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "standalone",
                 input: null,
               },
@@ -270,8 +252,6 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "blocker",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "blocker",
                 input: null,
               },
@@ -285,8 +265,6 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "main",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "main",
                 input: null,
                 schedule: { at: past },
@@ -335,8 +313,6 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "blocker",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "blocker",
                 input: null,
               },
@@ -350,8 +326,6 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "main",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "main",
                 input: null,
                 schedule: { at: future },
@@ -399,8 +373,6 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "fairness-blocker",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "fairness-blocker",
                 input: null,
               },
@@ -414,8 +386,6 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "fairness-main",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "fairness-main",
                 input: { kind: "blocked-since-creation" },
                 schedule: { at: longPast },
@@ -437,8 +407,6 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "fairness-main",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "fairness-main",
                 input: { kind: "ready" },
                 schedule: { at: recentPast },
@@ -485,8 +453,6 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "blocker",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "blocker",
                 input: null,
               },
@@ -500,8 +466,6 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "main",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "main",
                 input: null,
               },
