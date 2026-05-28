@@ -2,6 +2,7 @@ import { type TestAPI, expectTypeOf } from "vitest";
 
 import { createClient } from "../client.js";
 import { defineJobTypes } from "../entities/define-job-types.js";
+import { deriveJobStatus } from "../entities/job.js";
 import { sleep } from "../helpers/sleep.js";
 import { createInProcessWorker } from "../in-process-worker.js";
 import { withTransactionHooks } from "../transaction-hooks.js";
@@ -296,7 +297,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     });
 
     const completedJob = await stateAdapter.getJob({ jobId: chain.id });
-    expect(completedJob?.status).toBe("completed");
+    expect(deriveJobStatus(completedJob!)).toBe("completed");
     expect(completedJob?.lastAttemptError).toBeNull();
   });
 
@@ -468,17 +469,17 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
 
     await withWorkers([await worker.start()], async () => {
       const completedChain = await client.awaitChain(chain, completionOptions);
-      expectTypeOf<(typeof completedChain)["status"]>().toEqualTypeOf<"completed">();
+      expectTypeOf<(typeof completedChain)["status"]>().toEqualTypeOf<"closed">();
       expectTypeOf<(typeof completedChain)["output"]>().toEqualTypeOf<{
         result: boolean;
       }>();
-      expect(completedChain.status).toBe("completed");
+      expect(completedChain.status).toBe("closed");
       expect(completedChain.output).toEqual({ result: true });
     });
 
     // Verify completedBy is set to workerId for worker completion
     const completedJob = await stateAdapter.getJob({ jobId: chain.id });
-    expect(completedJob?.status).toBe("completed");
+    expect(deriveJobStatus(completedJob!)).toBe("completed");
     expect(completedJob?.completedBy).toMatch(/^worker-[0-9a-f-]{36}$/);
   });
 };

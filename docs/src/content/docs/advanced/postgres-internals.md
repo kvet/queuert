@@ -13,13 +13,14 @@ This document describes the internal implementation of `@queuert/postgres` — t
 
 The adapter creates its schema via `migrateToLatest()`. All objects live under a configurable PostgreSQL schema (default: `public`) with a table name prefix (default: `queuert_`) for namespace isolation.
 
-### Custom Enum
+### Derived status (no stored column)
 
-```sql
-CREATE TYPE job_status AS ENUM ('blocked', 'pending', 'running', 'completed');
-```
-
-PostgreSQL enums provide type safety at the database level — invalid status values are rejected by the engine rather than relying on application-level checks.
+Job status is **not stored**. It is derived at read time from structural columns
+(`completed_at`, `continued_to_job_id`, `leased_until`, `has_open_blockers`,
+`scheduled_at`) into one of six values: `blocked`, `scheduled`, `ready`,
+`running`, `succeeded`, `completed`. There is no `status` column and no
+`job_status` enum — the public vocabulary can evolve without an enum-domain
+migration, and writers maintain only the structural columns.
 
 ### Job Table
 
@@ -35,7 +36,7 @@ The `job` table stores all job state:
 | `continued_to_job_id` | same as `id`                   | FK to the next job in the chain — non-null exactly when this job has a successor (set transactionally when `continueWith` inserts the next row) |
 | `input`               | `jsonb`                        | Job input data                                                                                                                                  |
 | `output`              | `jsonb`                        | Completion output (null until completed)                                                                                                        |
-| `status`              | `job_status`                   | Current state: blocked, pending, running, or completed                                                                                          |
+| `has_open_blockers`   | `boolean`                      | Denormalized flag: true while ≥1 blocker chain is still open (gates acquisition)                                                                |
 | `created_at`          | `timestamptz`                  | When the job was created                                                                                                                        |
 | `scheduled_at`        | `timestamptz`                  | Earliest time the job can be acquired                                                                                                           |
 | `completed_at`        | `timestamptz`                  | When the job completed (null until completed)                                                                                                   |
@@ -82,10 +83,12 @@ All indexes use partial conditions (WHERE clauses) to minimize size and target s
 ```sql
 CREATE INDEX job_acquisition_idx
   ON job (type_name, scheduled_at)
-  WHERE status = 'pending'
+  WHERE has_open_blockers = false AND leased_until IS NULL AND completed_at IS NULL
 ```
 
-Speeds up `acquireJob` — only pending jobs participate in the index.
+Speeds up `acquireJob` — only `ready`/`scheduled` jobs (not blocked, not leased,
+not completed) participate in the index. A companion `job_chain_tail_idx`
+(`(chain_id) WHERE continued_to_job_id IS NULL`) serves chain-frontier lookups.
 
 ### Chain Uniqueness
 
@@ -121,7 +124,7 @@ Fast lookup for existing chains with the same deduplication key. Only root jobs 
 ```sql
 CREATE INDEX job_expired_lease_idx
   ON job (type_name, leased_until)
-  WHERE status = 'running' AND leased_until IS NOT NULL
+  WHERE leased_until IS NOT NULL AND completed_at IS NULL
 ```
 
 The reaper uses this to find timed-out jobs efficiently.
@@ -159,13 +162,15 @@ The core acquisition query atomically selects and claims a job:
 WITH acquired_job AS (
   SELECT id FROM job
   WHERE type_name IN (...)
-    AND status = 'pending'
+    AND has_open_blockers = false
+    AND leased_until IS NULL
+    AND completed_at IS NULL
     AND scheduled_at <= now()
   ORDER BY scheduled_at ASC
   LIMIT 1
   FOR UPDATE SKIP LOCKED
 )
-UPDATE job SET status = 'running', attempt = attempt + 1
+UPDATE job SET leased_by = $worker, leased_until = now() + $lease, attempt = attempt + 1
 WHERE id = (SELECT id FROM acquired_job)
 RETURNING *, EXISTS(...) AS has_more
 ```
@@ -249,8 +254,8 @@ Unlike Redis and NATS, the PostgreSQL notify adapter does not implement hint-bas
 The adapter uses CTEs (Common Table Expressions) extensively to perform multi-step operations in a single round-trip:
 
 - **Job creation**: Deduplication check + batch INSERT in one query
-- **Blocker management**: INSERT blockers + UPDATE job status from pending to blocked
-- **Unblocking**: UPDATE jobs from blocked to pending when all their blockers have completed (blocker rows are retained to propagate trace context into the unblocked job)
+- **Blocker management**: INSERT blockers + set `has_open_blockers = true` on the gated job
+- **Unblocking**: clear `has_open_blockers` when all of a job's blocker chains have closed (blocker rows are retained to propagate trace context into the unblocked job)
 - **Chain deletion**: Recursive CTE to find connected chains + cascading DELETE
 - **Connected chain discovery**: Recursive CTE traversing blocker relationships in both directions
 
@@ -266,7 +271,7 @@ The adapter configures aggressive autovacuum and storage settings on the job tab
 ALTER TABLE job SET (fillfactor = 75);
 ```
 
-Fillfactor reserves 25% free space per heap page. Jobs go through multiple in-place status updates (pending → running → completed, plus lease renewals), and PostgreSQL can perform these as HOT (Heap-Only Tuple) updates when free space is available in the same page. HOT updates avoid creating new index entries, reducing both index bloat and vacuum workload.
+Fillfactor reserves 25% free space per heap page. Jobs go through multiple in-place updates (lease acquisition, lease renewals, completion), and PostgreSQL can perform these as HOT (Heap-Only Tuple) updates when free space is available in the same page. HOT updates avoid creating new index entries, reducing both index bloat and vacuum workload.
 
 The `job_blocker` table does not set a fillfactor because blockers are inserted and deleted without intermediate updates.
 

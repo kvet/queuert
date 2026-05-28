@@ -59,7 +59,7 @@ chain2.id === chain1.id; // true
 
 The `scope` option controls what jobs to check for duplicates:
 
-- **`incomplete`** (default) -- Only dedup against incomplete chains (allows new chain after previous completes)
+- **`open`** (default) -- Only dedup against open (not-yet-closed) chains (allows a new chain after the previous one closes)
 - **`any`** -- Dedup against any existing chain with this key
 
 ```ts
@@ -71,7 +71,7 @@ await withTransactionHooks(async (transactionHooks) =>
     input: { serviceId: "api-server" },
     deduplication: {
       key: "health:api-server",
-      scope: "incomplete",
+      scope: "open",
     },
   }),
 );
@@ -99,7 +99,7 @@ await withTransactionHooks(async (transactionHooks) =>
 
 ## Excluding Chains
 
-Use `excludeChainIds` to skip specific chains during deduplication matching. This is essential for recurring jobs that self-schedule within a completion callback — the current chain is still incomplete at that point, so without exclusion the new chain would be deduplicated against it.
+Use `excludeChainIds` to skip specific chains during deduplication matching. This is essential for recurring jobs that self-schedule within a completion callback — the current chain is still open at that point, so without exclusion the new chain would be deduplicated against it.
 
 ```ts
 // Inside a processor's completion callback

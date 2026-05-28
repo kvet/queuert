@@ -105,10 +105,8 @@ export function ChainList() {
             }}
           >
             <option value="">All statuses</option>
-            <option value="pending">Pending</option>
-            <option value="running">Running</option>
-            <option value="completed">Completed</option>
-            <option value="blocked">Blocked</option>
+            <option value="open">Open</option>
+            <option value="closed">Closed</option>
           </select>
           <a
             class="filter-warning-inline"

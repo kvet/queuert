@@ -32,7 +32,7 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
         });
 
         const retrieved = await stateAdapter.getJob({ jobId: job.id });
-        expect(retrieved!.status).toBe("completed");
+        expect(retrieved!.completedAt).not.toBeNull();
         expect(retrieved!.output).toEqual({ done: true });
       },
     },
@@ -67,7 +67,7 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
         });
 
         const retrieved = await stateAdapter.getJob({ jobId: job.id });
-        expect(retrieved!.status).toBe("pending");
+        expect(retrieved!.completedAt).toBeNull();
         expect(retrieved!.output).toBeNull();
       },
     },
@@ -165,7 +165,7 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
         });
 
         const retrieved = await stateAdapter.getJob({ jobId: job.id });
-        expect(retrieved!.status).toBe("completed");
+        expect(retrieved!.completedAt).not.toBeNull();
         expect(retrieved!.output).toEqual({ step: 1 });
       },
     },

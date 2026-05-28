@@ -178,7 +178,11 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(retrieved!.id).toBe(created.id);
         expect(retrieved!.typeName).toBe("test-job");
         expect(retrieved!.input).toEqual(input);
-        expect(retrieved!.status).toBe("pending");
+        expect(retrieved!.completedAt).toBeNull();
+        expect(retrieved!.leasedUntil).toBeNull();
+        expect(retrieved!.hasOpenBlockers).toBe(false);
+        expect(retrieved!.scheduledInFuture).toBe(false);
+        expect(retrieved!.hasOpenBlockers).toBe(false);
       },
     },
     {
@@ -465,7 +469,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
                 typeName: "scope-test",
                 chainTypeName: "scope-test",
                 input: null,
-                deduplication: { key: "scope-key", scope: "incomplete" },
+                deduplication: { key: "scope-key", scope: "open" },
               },
             ],
           }),
@@ -489,7 +493,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
                   typeName: "scope-test",
                   chainTypeName: "scope-test",
                   input: null,
-                  deduplication: { key: "scope-key", scope: "incomplete" },
+                  deduplication: { key: "scope-key", scope: "open" },
                 },
               ],
             }),
@@ -731,7 +735,10 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(results).toHaveLength(3);
         for (const result of results) {
           expect(result.deduplicated).toBe(false);
-          expect(result.job.status).toBe("pending");
+          expect(result.job.completedAt).toBeNull();
+          expect(result.job.leasedUntil).toBeNull();
+          expect(result.job.hasOpenBlockers).toBe(false);
+          expect(result.job.scheduledInFuture).toBe(false);
           expect(result.job.chainId).toBe(result.job.id);
         }
         expect(results[0].job.typeName).toBe("batch-a");
@@ -909,7 +916,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
                 typeName: "win-scope-test",
                 chainTypeName: "win-scope-test",
                 input: null,
-                deduplication: { key: "ws-key", scope: "incomplete", windowMs: 5000 },
+                deduplication: { key: "ws-key", scope: "open", windowMs: 5000 },
               },
             ],
           }),
@@ -933,7 +940,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
                 typeName: "win-scope-test",
                 chainTypeName: "win-scope-test",
                 input: null,
-                deduplication: { key: "ws-key", scope: "incomplete", windowMs: 5000 },
+                deduplication: { key: "ws-key", scope: "open", windowMs: 5000 },
               },
             ],
           }),

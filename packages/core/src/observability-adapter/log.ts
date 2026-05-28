@@ -1,5 +1,6 @@
+import { type JobStatus } from "../entities/job.types.js";
 import { type NotifyAdapter } from "../notify-adapter/notify-adapter.js";
-import { type StateAdapter, type StateJob } from "../state-adapter/state-adapter.js";
+import { type StateAdapter } from "../state-adapter/state-adapter.js";
 
 type LogLevel = "info" | "warn" | "error";
 type LogEntry<
@@ -51,7 +52,7 @@ export type JobBasicData = {
   chainTypeName: string;
 };
 /** Job data with processing status, included in attempt-related log entries. */
-export type JobProcessingData = JobBasicData & { status: StateJob["status"]; attempt: number };
+export type JobProcessingData = JobBasicData & { status: JobStatus; attempt: number };
 type JobCreatedLogEntry = LogEntry<
   "job_created",
   "info",

@@ -2,11 +2,11 @@ import { BlockerReferenceError, type Client, withTransactionHooks } from "queuer
 import { helpersSymbol } from "queuert/internal";
 
 import { serovalResponse } from "../response.js";
-import { parseCursor, parseLimit, parseStatusFilter, parseTypeNameFilter } from "./params.js";
+import { parseChainStatusFilter, parseCursor, parseLimit, parseTypeNameFilter } from "./params.js";
 
 export const handleChainsList = async (url: URL, client: Client<any, any>): Promise<Response> => {
   const typeName = parseTypeNameFilter(url.searchParams.get("typeName") ?? undefined);
-  const status = parseStatusFilter(url.searchParams.get("status") ?? undefined);
+  const status = parseChainStatusFilter(url.searchParams.get("status") ?? undefined);
   const root = url.searchParams.get("root") !== "false";
   const id = url.searchParams.get("id") ?? undefined;
   const jobId = url.searchParams.get("jobId") ?? undefined;

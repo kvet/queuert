@@ -41,7 +41,9 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
             }),
           );
 
-        expect(updatedMain.status).toBe("blocked");
+        expect(updatedMain.hasOpenBlockers).toBe(true);
+        expect(updatedMain.hasOpenBlockers).toBe(true);
+        expect(mainJob.hasOpenBlockers).toBe(false);
         expect(incompleteBlockerChainIds).toContain(blockerJob.chainId);
         expect(blockerChainTraceContexts).toHaveLength(1);
         expect(blockerChainTraceContexts[0]).toBeNull();
@@ -93,7 +95,8 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
             }),
           );
 
-        expect(updatedMain.status).toBe("pending");
+        expect(updatedMain.hasOpenBlockers).toBe(false);
+        expect(updatedMain.hasOpenBlockers).toBe(false);
         expect(incompleteBlockerChainIds).toHaveLength(0);
         expect(blockerChainTraceContexts).toHaveLength(1);
         expect(blockerChainTraceContexts[0]).toBeNull();
@@ -151,11 +154,11 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
 
         expect(results).toHaveLength(2);
         expect(results[0].job.id).toBe(main1.id);
-        expect(results[0].job.status).toBe("blocked");
+        expect(results[0].job.hasOpenBlockers).toBe(true);
         expect(results[0].incompleteBlockerChainIds).toContain(blocker1.chainId);
 
         expect(results[1].job.id).toBe(main2.id);
-        expect(results[1].job.status).toBe("blocked");
+        expect(results[1].job.hasOpenBlockers).toBe(true);
         expect(results[1].incompleteBlockerChainIds).toContain(blocker1.chainId);
         expect(results[1].incompleteBlockerChainIds).toContain(blocker2.chainId);
       },
@@ -227,11 +230,11 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
 
         expect(results).toHaveLength(2);
         expect(results[0].job.id).toBe(main1.id);
-        expect(results[0].job.status).toBe("pending");
+        expect(results[0].job.hasOpenBlockers).toBe(false);
         expect(results[0].incompleteBlockerChainIds).toHaveLength(0);
 
         expect(results[1].job.id).toBe(main2.id);
-        expect(results[1].job.status).toBe("blocked");
+        expect(results[1].job.hasOpenBlockers).toBe(true);
         expect(results[1].incompleteBlockerChainIds).toContain(incompleteBlocker.chainId);
       },
     },

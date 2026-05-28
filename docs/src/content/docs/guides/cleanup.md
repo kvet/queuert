@@ -77,7 +77,7 @@ const cleanupProcessorRegistry = createProcessors({
             schedule: { afterMs: CLEANUP_INTERVAL_MS },
             deduplication: {
               key: "queuert.cleanup",
-              scope: "incomplete",
+              scope: "open",
               excludeChainIds: [job.chainId],
             },
           });
@@ -96,7 +96,7 @@ Key patterns used:
 - **Self-exclusion filter** — the cleanup chain filters itself out of the deletion list to avoid deleting its own chain
 - **Cursor pagination** — processes chains in bounded batches using `listChains` cursor, preventing unbounded memory usage
 - **Vacuum** — reclaims disk space after all deletions complete
-- **`deduplication`** with `scope: "incomplete"` — ensures only one cleanup chain is active at a time
+- **`deduplication`** with `scope: "open"` — ensures only one cleanup chain is active at a time
 - **`excludeChainIds`** — prevents the finishing cleanup chain from deduplicating against itself
 - **`schedule`** — defers the next run by `CLEANUP_INTERVAL_MS`
 
@@ -129,7 +129,7 @@ await withTransactionHooks(async (transactionHooks) =>
       transactionHooks,
       typeName: "queuert.cleanup",
       input: null,
-      deduplication: { key: "queuert.cleanup", scope: "incomplete" },
+      deduplication: { key: "queuert.cleanup", scope: "open" },
     }),
   ),
 );

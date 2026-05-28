@@ -61,7 +61,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       id: chain.id,
       typeName: "test",
       input: { value: 1 },
-      status: "pending",
+      status: "open",
     });
 
     await withTransaction(async (txCtx) => {
@@ -144,7 +144,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       id: chain.id,
       typeName: "step1",
       input: { value: 1 },
-      status: "pending",
+      status: "open",
     });
   });
 
@@ -229,7 +229,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
         id: chain.id,
         typeName: "test",
         input: null,
-        status: "running",
+        status: "open",
       });
 
       await jobDeleted.promise;
@@ -285,7 +285,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       }),
     );
 
-    expect(mainChain.status).toBe("blocked");
+    expect(mainChain.status).toBe("open");
 
     // Deleting blocker chain alone should fail — main chain depends on it
     await expect(
@@ -317,13 +317,13 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       id: blockerChain!.id,
       typeName: "blocker",
       input: { value: 1 },
-      status: "pending",
+      status: "open",
     });
     expect(deletedByType.main).toMatchObject({
       id: mainChain.id,
       typeName: "main",
       input: null,
-      status: "blocked",
+      status: "open",
     });
 
     await withTransaction(async (txCtx) => {
@@ -977,8 +977,8 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       ),
     );
 
-    expect(mainA.status).toBe("blocked");
-    expect(mainB.status).toBe("blocked");
+    expect(mainA.status).toBe("open");
+    expect(mainB.status).toBe("open");
 
     await expect(
       withTransactionHooks(async (transactionHooks) =>
@@ -1089,7 +1089,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       id: chain.id,
       typeName: "test",
       input: { value: 42 },
-      status: "pending",
+      status: "open",
     });
 
     const fetched = await client.getChain({ id: chain.id });

@@ -1,4 +1,9 @@
-import { type Chain, mapStatePairToChain } from "./entities/chain.js";
+import {
+  type Chain,
+  type ChainStatus,
+  chainStatusesToClosedFilter,
+  mapStatePairToChain,
+} from "./entities/chain.js";
 import { type DeduplicationOptions } from "./entities/deduplication.js";
 import { type BaseJobTypeDefinitions } from "./entities/job-type.js";
 import { type JobTypes } from "./entities/job-types.js";
@@ -15,7 +20,13 @@ import {
   type ResolvedChainJobs,
   type ResolvedJob,
 } from "./entities/job-types.resolvers.js";
-import { type Job, type JobStatus, mapStateJobToJob } from "./entities/job.js";
+import {
+  deriveJobStatus,
+  type Job,
+  type JobStatus,
+  jobStatusToPredicate,
+  mapStateJobToJob,
+} from "./entities/job.js";
 import {
   type JobTypesDefinitions,
   type ValidatedSlices,
@@ -125,14 +136,19 @@ type CompleteChainResult<
 > = [TCompleteReturn] extends [void]
   ? ResolvedChain<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TChainTypeName>
   : TCompleteReturn extends Job<any, any, any, any, any, boolean> &
-        ({ status: "pending" } | { status: "blocked" })
+        (
+          | { status: "ready" }
+          | { status: "scheduled" }
+          | { status: "blocked" }
+          | { status: "running" }
+        )
     ? ResolvedChain<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TChainTypeName>
     : Chain<
         GetStateAdapterJobId<TStateAdapter>,
         TChainTypeName,
         JobTypeProperty<TJobTypeDefinitions, TChainTypeName, "input">,
         TCompleteReturn
-      > & { status: "completed" };
+      > & { status: "closed" };
 
 type CompleteChainResultFromComplete<
   TStateAdapter extends StateAdapter<any, any>,
@@ -230,7 +246,7 @@ export type Client<
     } & GetStateAdapterTxContext<TStateAdapter>,
   ) => Promise<ResolvedChain<TJobId, TJobTypeDefinitions, TEntryName>[]>;
 
-  /** Trigger a pending job immediately by setting its scheduledAt to now. Throws {@link JobNotFoundError} if the job does not exist, {@link JobNotTriggerableError} if the job is not pending, {@link TransactionContextRequiredError} if called without a transaction context. */
+  /** Trigger a job immediately by setting its scheduledAt to now. Throws {@link JobNotFoundError} if the job does not exist, {@link JobNotTriggerableError} if the job is not `ready` or `scheduled`, {@link TransactionContextRequiredError} if called without a transaction context. */
   triggerJob: <
     TJobTypeName extends JobTypeNames<TJobTypeDefinitions> = JobTypeNames<TJobTypeDefinitions>,
   >(
@@ -240,7 +256,7 @@ export type Client<
     } & GetStateAdapterTxContext<TStateAdapter>,
   ) => Promise<ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>>;
 
-  /** Trigger multiple pending jobs immediately. Validation is atomic: throws {@link JobNotFoundError} or {@link JobNotTriggerableError} for the first invalid job before any job is triggered, or {@link TransactionContextRequiredError} if called without a transaction context. Returns jobs in input order. Empty `ids` returns `[]`. */
+  /** Trigger multiple jobs immediately. Validation is atomic: throws {@link JobNotFoundError} or {@link JobNotTriggerableError} for the first invalid job before any job is triggered, or {@link TransactionContextRequiredError} if called without a transaction context. Returns jobs in input order. Empty `ids` returns `[]`. */
   triggerJobs: <
     TJobTypeName extends JobTypeNames<TJobTypeDefinitions> = JobTypeNames<TJobTypeDefinitions>,
   >(
@@ -288,9 +304,7 @@ export type Client<
       pollIntervalMs?: number;
       signal?: AbortSignal;
     },
-  ) => Promise<
-    ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> & { status: "completed" }
-  >;
+  ) => Promise<ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> & { status: "closed" }>;
 
   /** Get a single chain by ID. Pass `typeName` for type narrowing — throws {@link JobTypeMismatchError} on mismatch. */
   getChain: <
@@ -317,14 +331,14 @@ export type Client<
    * List chains with filtering and cursor-based pagination. Defaults to newest first.
    *
    * @remarks
-   * Filtering by `status` alone is not optimized — it applies to the last job in the chain
-   * and cannot use an index. Always combine with `typeName` or a date range (`from`/`to`).
+   * Filtering by `status` (`open`/`closed`) applies to the chain's tail job.
+   * Always combine with `typeName` or a date range (`from`/`to`) for best performance.
    */
   listChains: <TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions>>(
     options: {
       filter?: {
         typeName?: TChainTypeName[];
-        status?: JobStatus[];
+        status?: ChainStatus[];
         chainId?: TJobId[];
         jobId?: TJobId[];
         root?: boolean;
@@ -600,10 +614,11 @@ export const createClient = async <
         });
       }
       if (notTriggerable.length > 0) {
-        const { id, status } = notTriggerable[0];
+        const job = notTriggerable[0];
+        const status = deriveJobStatus(job);
         throw new JobNotTriggerableError(
-          `Cannot trigger job ${String(id)}: job status is "${status}", must be "pending"`,
-          { jobId: id as string, status },
+          `Cannot trigger job ${String(job.id)}: job status is "${status}", must be "ready" or "scheduled"`,
+          { jobId: job.id, status },
         );
       }
 
@@ -666,7 +681,7 @@ export const createClient = async <
       }
 
       const complete = async (
-        job: StateJob,
+        job: { id: TJobId },
         jobCompleteCallback: (
           options: {
             continueWith: (options: {
@@ -680,10 +695,20 @@ export const createClient = async <
           } & BaseTxContext,
         ) => unknown,
       ): Promise<unknown> => {
-        if (job.status === "completed") {
+        const stateJob = await helpers.stateAdapter.getJob({
+          txCtx,
+          jobId: job.id,
+          lock: "exclusive",
+        });
+        if (!stateJob) {
+          throw new JobNotFoundError(`Job with id ${String(job.id)} not found`, {
+            jobId: job.id as string,
+          });
+        }
+        if (stateJob.completedAt !== null) {
           throw new JobAlreadyCompletedError(
-            `Cannot complete job ${job.id}: job is already completed`,
-            { jobId: job.id },
+            `Cannot complete job ${stateJob.id}: job is already completed`,
+            { jobId: stateJob.id },
           );
         }
 
@@ -704,7 +729,7 @@ export const createClient = async <
               transactionHooks,
               schedule,
               blockers: blockers as any,
-              fromJob: job,
+              fromJob: stateJob,
             });
 
             return continuedJob;
@@ -712,23 +737,37 @@ export const createClient = async <
           ...txCtx,
         });
 
-        const wasRunning = job.status === "running";
+        const wasRunning = stateJob.leasedUntil !== null;
 
         await finishJob(
           helpers,
           continuedJob
-            ? { job, txCtx, transactionHooks, workerId: null, type: "continueWith", continuedJob }
-            : { job, txCtx, transactionHooks, workerId: null, type: "completeChain", output },
+            ? {
+                job: stateJob,
+                txCtx,
+                transactionHooks,
+                workerId: null,
+                type: "continueWith",
+                continuedJob,
+              }
+            : {
+                job: stateJob,
+                txCtx,
+                transactionHooks,
+                workerId: null,
+                type: "completeChain",
+                output,
+              },
         );
 
         if (wasRunning) {
-          bufferNotifyJobOwnershipLost(transactionHooks, helpers.notifyAdapter, job.id);
+          bufferNotifyJobOwnershipLost(transactionHooks, helpers.notifyAdapter, stateJob.id);
         }
 
         return continuedJob ?? output;
       };
 
-      await completeCallback({ job: currentJob, complete });
+      await completeCallback({ job: mapStateJobToJob(currentJob), complete });
 
       const updatedChain = await helpers.stateAdapter.getChain({
         txCtx,
@@ -758,7 +797,7 @@ export const createClient = async <
         signal?: AbortSignal;
       },
     ): Promise<
-      ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> & { status: "completed" }
+      ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> & { status: "closed" }
     > => {
       const { id, typeName } = chain;
       const { timeoutMs, pollIntervalMs = 15_000, signal } = options;
@@ -784,9 +823,9 @@ export const createClient = async <
         }
 
         const mapped = mapStatePairToChain(chainPair);
-        return mapped.status === "completed"
+        return mapped.status === "closed"
           ? (mapped as ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> & {
-              status: "completed";
+              status: "closed";
             })
           : null;
       };
@@ -905,7 +944,7 @@ export const createClient = async <
       options: {
         filter?: {
           typeName?: TChainTypeName[];
-          status?: JobStatus[];
+          status?: ChainStatus[];
           chainId?: TJobId[];
           jobId?: TJobId[];
           root?: boolean;
@@ -923,7 +962,7 @@ export const createClient = async <
         txCtx,
         filter: {
           typeName: filter?.typeName,
-          status: filter?.status,
+          closed: chainStatusesToClosedFilter(filter?.status),
           rootOnly: filter?.root,
           chainId: filter?.chainId,
           jobId: filter?.jobId,
@@ -967,7 +1006,7 @@ export const createClient = async <
           chainTypeName: filter?.chainTypeName,
           jobId: filter?.jobId,
           chainId: filter?.chainId,
-          status: filter?.status,
+          statePredicates: filter?.status?.map(jobStatusToPredicate),
           from: filter?.from,
           to: filter?.to,
         },

@@ -130,7 +130,12 @@ export const concurrencyGroup: ConformanceGroup<StateConformanceFixture> = {
         const results = await Promise.all(
           Array.from({ length: count }, async () =>
             stateAdapter.withTransaction(async (txCtx) =>
-              stateAdapter.acquireJob({ txCtx, typeNames: ["acquire-concurrency"] }),
+              stateAdapter.acquireJob({
+                txCtx,
+                typeNames: ["acquire-concurrency"],
+                workerId: "conformance-worker",
+                leaseDurationMs: 30_000,
+              }),
             ),
           ),
         );
@@ -209,7 +214,7 @@ export const concurrencyGroup: ConformanceGroup<StateConformanceFixture> = {
           mainJobIds.map(async (jobId) => stateAdapter.getJob({ jobId })),
         );
 
-        const stranded = finalStates.filter((job) => job?.status === "blocked");
+        const stranded = finalStates.filter((job) => job?.hasOpenBlockers === true);
         expect(stranded).toHaveLength(0);
       },
     },

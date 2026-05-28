@@ -82,7 +82,7 @@ describe("Dashboard API", () => {
 
       expect(body.items).toHaveLength(1);
       expect(body.items[0].id).toBe(root.id);
-      expect(body.items[0].status).toBe("pending");
+      expect(body.items[0].status).toBe("open");
     });
 
     it("preserves Date objects via seroval", async () => {
@@ -398,7 +398,12 @@ describe("Dashboard API", () => {
       const job = await createJob(stateAdapter, "test-type", null);
 
       await stateAdapter.withTransaction(async (txCtx) =>
-        stateAdapter.acquireJob({ txCtx, typeNames: ["test-type"] }),
+        stateAdapter.acquireJob({
+          txCtx,
+          typeNames: ["test-type"],
+          workerId: "conformance-worker",
+          leaseDurationMs: 30_000,
+        }),
       );
 
       const res = await request(`/api/jobs/${job.id}/trigger`, { method: "POST" });

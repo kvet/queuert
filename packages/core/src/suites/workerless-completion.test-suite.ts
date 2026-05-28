@@ -58,7 +58,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           ...chain,
           complete: async ({ job, complete }) => {
             expect(job.typeName).toEqual("test");
-            expect(job.status).toEqual("pending");
+            expect(job.status).toEqual("ready");
             expect(job.input).toEqual({ value: 42 });
 
             return complete(job, async ({ transactionHooks }) => {
@@ -70,7 +70,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       ),
     );
 
-    expectTypeOf<(typeof completedChain)["status"]>().toEqualTypeOf<"completed">();
+    expectTypeOf<(typeof completedChain)["status"]>().toEqualTypeOf<"closed">();
     expect(completedChain.output).toEqual({ result: 84 });
   });
 
@@ -113,7 +113,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       ),
     );
 
-    expect(chain.status).toEqual("pending");
+    expect(chain.status).toEqual("open");
 
     const completedChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
@@ -137,7 +137,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       ),
     );
 
-    expectTypeOf<(typeof completedChain)["status"]>().toEqualTypeOf<"completed">();
+    expectTypeOf<(typeof completedChain)["status"]>().toEqualTypeOf<"closed">();
     expect(completedChain.output).toEqual({ done: true });
   });
 
@@ -284,7 +284,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       ),
     );
 
-    expect(chain.status).toEqual("pending");
+    expect(chain.status).toEqual("open");
 
     const partiallyCompletedChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
@@ -310,7 +310,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     await withWorkers([await worker.start()], async () => {
       const succeededChain = await client.awaitChain(partiallyCompletedChain, completionOptions);
 
-      expectTypeOf<(typeof succeededChain)["status"]>().toEqualTypeOf<"completed">();
+      expectTypeOf<(typeof succeededChain)["status"]>().toEqualTypeOf<"closed">();
       expect(succeededChain.output).toEqual({ done: true });
     });
   });
@@ -428,12 +428,12 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     expect(completeFn).toHaveBeenCalledWith(
       expect.objectContaining({
-        job: expect.objectContaining({ typeName: "test", status: "pending" }),
+        job: expect.objectContaining({ typeName: "test", status: "ready" }),
       }),
     );
     expect(updatedChain).toMatchObject({
       id: chain.id,
-      status: "pending",
+      status: "open",
     });
   });
 

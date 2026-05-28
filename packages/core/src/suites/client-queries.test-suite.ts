@@ -139,7 +139,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       expect(chain!.id).toBe(created.id);
       expect(chain!.typeName).toBe("order");
       expect(chain!.input).toEqual({ amount: 42 });
-      expect(chain!.status).toBe("pending");
+      expect(chain!.status).toBe("open");
     });
 
     it("getChain narrows return type by typeName", async ({
@@ -259,7 +259,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       expect(job!.id).toBe(chain.id);
       expect(job!.typeName).toBe("notification");
       expect(job!.input).toEqual({ message: "hello" });
-      expect(job!.status).toBe("pending");
+      expect(job!.status).toBe("ready");
     });
 
     it("getJob returns without typeName", async ({
@@ -452,15 +452,27 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         withTransaction,
       });
       const order = await startChain("order", { amount: 50 });
-      await startChain("notification", { message: "hi" });
+      const notification = await startChain("notification", { message: "hi" });
       await startChain("report", { type: "summary" }, [order]);
 
-      const blocked = await client.listChains({ filter: { status: ["blocked"] } });
-      const pending = await client.listChains({ filter: { status: ["pending"] } });
+      await withTransactionHooks(async (transactionHooks) =>
+        withTransaction(async (txCtx) =>
+          client.completeChain({
+            ...txCtx,
+            transactionHooks,
+            typeName: "notification",
+            id: notification.id,
+            complete: async ({ job, complete }) => complete(job, async () => ({ sent: true })),
+          }),
+        ),
+      );
 
-      expect(blocked.items).toHaveLength(1);
-      expect(blocked.items[0].typeName).toBe("report");
-      expect(pending.items).toHaveLength(2);
+      const closed = await client.listChains({ filter: { status: ["closed"] } });
+      const open = await client.listChains({ filter: { status: ["open"] } });
+
+      expect(closed.items).toHaveLength(1);
+      expect(closed.items[0].typeName).toBe("notification");
+      expect(open.items).toHaveLength(2);
     });
 
     it("listChains orders ascending", async ({
@@ -603,7 +615,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       expect(result.id).toBe(chain.id);
       expect(result.typeName).toBe("order");
       expect(result.input).toEqual({ amount: 42 });
-      expect(result.status).toBe("pending");
+      expect(result.status).toBe("open");
       expect(result.createdAt).toBeInstanceOf(Date);
     });
   });
@@ -761,11 +773,11 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       await startChain("report", { type: "summary" }, [order]);
 
       const blocked = await client.listJobs({ filter: { status: ["blocked"] } });
-      const pending = await client.listJobs({ filter: { status: ["pending"] } });
+      const ready = await client.listJobs({ filter: { status: ["ready"] } });
 
       expect(blocked.items).toHaveLength(1);
       expect(blocked.items[0].typeName).toBe("report");
-      expect(pending.items).toHaveLength(2);
+      expect(ready.items).toHaveLength(2);
     });
 
     it("listJobs orders ascending", async ({
@@ -880,7 +892,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
       expect(job.typeName).toBe("notification");
       expect(job.input).toEqual({ message: "test" });
-      expect(job.status).toBe("pending");
+      expect(job.status).toBe("ready");
       expect(job.createdAt).toBeInstanceOf(Date);
       expect(job.scheduledAt).toBeInstanceOf(Date);
       expect(job.id).toBe(job.chainId);
@@ -977,11 +989,11 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       expect(first.id).toBe(chain.id);
       for (const job of page.items) {
         expect(job.chainId).toBe(chain.id);
-        expect(job.status).toBe("completed");
+        expect(job.status).toBeOneOf(["succeeded", "completed"]);
       }
-      expect(first).toMatchObject({ status: "completed", continuedToJobId: second.id });
-      expect(second).toMatchObject({ status: "completed", continuedToJobId: third.id });
-      expect(third).toMatchObject({ status: "completed", continuedToJobId: null });
+      expect(first).toMatchObject({ status: "succeeded", continuedToJobId: second.id });
+      expect(second).toMatchObject({ status: "succeeded", continuedToJobId: third.id });
+      expect(third).toMatchObject({ status: "completed" });
       expect("output" in first).toBe(false);
       expect("output" in second).toBe(false);
       expect(third).toMatchObject({ output: { done: true } });
@@ -1366,14 +1378,14 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       );
 
       const blockersBefore = await client.getJobBlockers({ jobId: mainChain.id });
-      expect(blockersBefore[0].status).not.toBe("completed");
+      expect(blockersBefore[0].status).not.toBe("closed");
 
       await withWorkers([await worker.start()], async () => {
         await client.awaitChain(mainChain, completionOptions);
       });
 
       const blockersAfter = await client.getJobBlockers({ jobId: mainChain.id });
-      expect(blockersAfter[0].status).toBe("completed");
+      expect(blockersAfter[0].status).toBe("closed");
     });
   });
 
@@ -1608,17 +1620,19 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
       const rootJob = await client.getJob({ id: chain.id });
       expect(rootJob).not.toBeNull();
-      expect(rootJob!.status).toBe("completed");
+      expect(rootJob!.status).toBe("succeeded");
 
       const chains = await client.listChains({ filter: { typeName: ["task"] } });
       expect(chains.items).toHaveLength(1);
       const completedChain = chains.items[0];
-      expect(completedChain.status).toBe("completed");
+      expect(completedChain.status).toBe("closed");
       expect((completedChain as { output: unknown }).output).toEqual({ final: 20 });
 
       const jobs = await client.listJobs({ filter: { chainId: [chain.id] } });
       expect(jobs.items).toHaveLength(2);
-      expect(jobs.items.every((j) => j.status === "completed")).toBe(true);
+      expect(jobs.items.every((j) => j.status === "completed" || j.status === "succeeded")).toBe(
+        true,
+      );
 
       const chainJobs = await client.listChainJobs({ chainId: chain.id });
       expect(chainJobs.items).toHaveLength(2);

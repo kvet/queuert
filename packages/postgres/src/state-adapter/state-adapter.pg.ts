@@ -15,6 +15,7 @@ import {
 } from "@queuert/typed-sql";
 import { type BaseTxContext, type StateAdapter } from "queuert";
 import {
+  type JobStatePredicate,
   type StateJob,
   createIdValidator,
   decodeCreatedAtWithIdCursor,
@@ -24,6 +25,38 @@ import {
 
 import { type PgStateProvider } from "../state-provider/state-provider.pg.js";
 import { type DbJob, createPgSqlDefinitions, migrations } from "./sql.js";
+
+/**
+ * Builds a SQL boolean expression (or `null`) selecting rows matching any of the
+ * structural predicates. Conditions are ANDed within a predicate, ORed across.
+ * All comparisons are against columns or `now()`, so no bound params are produced.
+ */
+const buildStatePredicatesSql = (
+  predicates: JobStatePredicate[] | undefined,
+  alias: string,
+): string | null => {
+  if (!predicates || predicates.length === 0) return null;
+  const ored = predicates.map((pred) => {
+    const parts: string[] = [];
+    if (pred.completed !== undefined) {
+      parts.push(`${alias}.completed_at IS ${pred.completed ? "NOT NULL" : "NULL"}`);
+    }
+    if (pred.succeeded !== undefined) {
+      parts.push(`${alias}.continued_to_job_id IS ${pred.succeeded ? "NOT NULL" : "NULL"}`);
+    }
+    if (pred.leased !== undefined) {
+      parts.push(`${alias}.leased_until IS ${pred.leased ? "NOT NULL" : "NULL"}`);
+    }
+    if (pred.hasOpenBlockers !== undefined) {
+      parts.push(`${alias}.has_open_blockers = ${pred.hasOpenBlockers ? "true" : "false"}`);
+    }
+    if (pred.scheduledInFuture !== undefined) {
+      parts.push(`${alias}.scheduled_at ${pred.scheduledInFuture ? ">" : "<="} now()`);
+    }
+    return parts.length > 0 ? `(${parts.join(" AND ")})` : "true";
+  });
+  return `(${ored.join(" OR ")})`;
+};
 
 const SQL_IDENTIFIER_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
@@ -42,10 +75,11 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
     chainId: dbJob.chain_id,
     chainTypeName: dbJob.chain_type_name,
     continuedToJobId: dbJob.continued_to_job_id,
+    hasOpenBlockers: dbJob.has_open_blockers,
+    scheduledInFuture: dbJob.scheduled_in_future,
     input: dbJob.input,
     output: dbJob.output,
 
-    status: dbJob.status,
     createdAt: new Date(dbJob.created_at),
     scheduledAt: new Date(dbJob.scheduled_at),
     completedAt: dbJob.completed_at ? new Date(dbJob.completed_at) : null,
@@ -241,9 +275,7 @@ export const createPgStateAdapter = async <
           jobs.map((j) => j.input),
           jobs.map((j) => ("chainTypeName" in j ? (j.deduplication?.key ?? null) : null)),
           jobs.map((j) =>
-            "chainTypeName" in j && j.deduplication
-              ? (j.deduplication.scope ?? "incomplete")
-              : null,
+            "chainTypeName" in j && j.deduplication ? (j.deduplication.scope ?? "open") : null,
           ),
           jobs.map((j) => ("chainTypeName" in j ? (j.deduplication?.windowMs ?? null) : null)),
           jobs.map((j) =>
@@ -337,11 +369,11 @@ export const createPgStateAdapter = async <
       });
       return result ? result.available_in_ms : null;
     },
-    acquireJob: async ({ txCtx, typeNames }) => {
+    acquireJob: async ({ txCtx, typeNames, workerId, leaseDurationMs }) => {
       const [result] = await executeTypedSql({
         txCtx,
         sql: defs.acquireJobSql,
-        params: [typeNames],
+        params: [typeNames, workerId, leaseDurationMs],
       });
 
       return result
@@ -441,11 +473,8 @@ export const createPgStateAdapter = async <
         paramTypes[p - 1] = "array";
         p++;
       }
-      if (filter?.status?.length) {
-        conditions.push(`last_job.status = ANY($${p}::${schema}.${tablePrefix}job_status[])`);
-        params.push(filter.status);
-        paramTypes[p - 1] = "array";
-        p++;
+      if (filter?.closed !== undefined) {
+        conditions.push(`last_job.completed_at IS ${filter.closed ? "NOT NULL" : "NULL"}`);
       }
       if (filter?.from) {
         conditions.push(`root_job.created_at >= $${p}::timestamptz`);
@@ -511,11 +540,9 @@ export const createPgStateAdapter = async <
       const paramTypes: Record<number, RuntimeType> = {};
       let p = 1;
 
-      if (filter?.status?.length) {
-        conditions.push(`j.status = ANY($${p}::${schema}.${tablePrefix}job_status[])`);
-        params.push(filter.status);
-        paramTypes[p - 1] = "array";
-        p++;
+      const statePredicatesSql = buildStatePredicatesSql(filter?.statePredicates, "j");
+      if (statePredicatesSql) {
+        conditions.push(statePredicatesSql);
       }
       if (filter?.typeName?.length) {
         conditions.push(`j.type_name = ANY($${p}::text[])`);
@@ -656,10 +683,7 @@ export const createPgStateAdapter = async <
       return {
         triggered,
         notFound: row.not_found as TIdType[],
-        notTriggerable: row.not_triggerable.map((r) => ({
-          id: r.id as TIdType,
-          status: r.status as StateJob["status"],
-        })),
+        notTriggerable: row.not_triggerable.map(mapDbJobToStateJob),
       };
     },
 

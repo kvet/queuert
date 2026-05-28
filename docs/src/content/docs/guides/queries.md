@@ -14,7 +14,7 @@ const job = await client.getJob({ id: jobId });
 
 // Paginated lists with filters
 const chains = await client.listChains({
-  filter: { typeName: ["send-email"], status: ["running"] },
+  filter: { typeName: ["send-email"], status: ["open"] },
   limit: 20,
 });
 
@@ -47,12 +47,12 @@ See [examples/showcase-queries](https://github.com/kvet/queuert/tree/main/exampl
 ```ts
 // Expensive — status filter alone still scans every root row
 const all = await client.listChains({
-  filter: { status: ["running"] },
+  filter: { status: ["open"] },
 });
 
 // Efficient — typeName narrows the scan via a partial index
 const filtered = await client.listChains({
-  filter: { typeName: ["send-email"], status: ["running"] },
+  filter: { typeName: ["send-email"], status: ["open"] },
 });
 ```
 

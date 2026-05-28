@@ -16,7 +16,7 @@ fd1: "fetch-data #1\ndone" { class: job-done; width: 200; height: 80 }
 fd2: "fetch-data #2\ndone" { class: job-done; width: 200; height: 80 }
 fd3: "fetch-data #3\ndone" { class: job-done; width: 200; height: 80 }
 
-target: "process-all\nblocked → pending" { class: job-accent; width: 240; height: 90 }
+target: "process-all\nblocked → ready" { class: job-accent; width: 240; height: 90 }
 
 fd1 -> target { class: flow-green }
 fd2 -> target { class: flow-green }

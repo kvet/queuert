@@ -59,7 +59,7 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
     });
     expect(signal.aborted).toBe(false);
 
-    expect(completedChain.status).toBe("completed");
+    expect(completedChain.status).toBe("closed");
     expect(completedChain.output).toEqual({ result: "done" });
   });
 

@@ -43,6 +43,49 @@ const validateSqlIdentifier = (value: string, name: string): void => {
 
 const isoToSqlite = (iso: string): string => iso.replace("T", " ").replace("Z", "");
 
+/**
+ * Builds a SQL boolean expression (or `null`) selecting rows that match any of
+ * the given structural predicates. Within a predicate the conditions are ANDed;
+ * predicates are ORed. All comparisons are against columns or `now()`, so no
+ * bound parameters are produced.
+ */
+const buildStatePredicatesSql = (
+  predicates:
+    | {
+        completed?: boolean;
+        succeeded?: boolean;
+        leased?: boolean;
+        hasOpenBlockers?: boolean;
+        scheduledInFuture?: boolean;
+      }[]
+    | undefined,
+  alias: string,
+): string | null => {
+  if (!predicates || predicates.length === 0) return null;
+  const ored = predicates.map((p) => {
+    const parts: string[] = [];
+    if (p.completed !== undefined) {
+      parts.push(`${alias}.completed_at IS ${p.completed ? "NOT NULL" : "NULL"}`);
+    }
+    if (p.succeeded !== undefined) {
+      parts.push(`${alias}.continued_to_job_id IS ${p.succeeded ? "NOT NULL" : "NULL"}`);
+    }
+    if (p.leased !== undefined) {
+      parts.push(`${alias}.leased_until IS ${p.leased ? "NOT NULL" : "NULL"}`);
+    }
+    if (p.hasOpenBlockers !== undefined) {
+      parts.push(`${alias}.has_open_blockers = ${p.hasOpenBlockers ? 1 : 0}`);
+    }
+    if (p.scheduledInFuture !== undefined) {
+      parts.push(
+        `${alias}.scheduled_at ${p.scheduledInFuture ? ">" : "<="} datetime('now', 'subsec')`,
+      );
+    }
+    return parts.length > 0 ? `(${parts.join(" AND ")})` : "1=1";
+  });
+  return `(${ored.join(" OR ")})`;
+};
+
 const parseJson = (value: string | null): unknown => {
   if (value === null) return null;
   try {
@@ -59,10 +102,11 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
     chainId: dbJob.chain_id,
     chainTypeName: dbJob.chain_type_name,
     continuedToJobId: dbJob.continued_to_job_id,
+    hasOpenBlockers: dbJob.has_open_blockers === 1,
+    scheduledInFuture: dbJob.scheduled_in_future === 1,
     input: parseJson(dbJob.input),
     output: parseJson(dbJob.output),
 
-    status: dbJob.status,
     createdAt: new Date(dbJob.created_at + "Z"),
     scheduledAt: new Date(dbJob.scheduled_at + "Z"),
     completedAt: dbJob.completed_at ? new Date(dbJob.completed_at + "Z") : null,
@@ -92,7 +136,8 @@ const parseDbChainRow = (row: DbChainRow): { rootJob: DbJob; lastChainJob: DbJob
     continued_to_job_id: row.continued_to_job_id,
     input: row.input,
     output: row.output,
-    status: row.status,
+    has_open_blockers: row.has_open_blockers,
+    scheduled_in_future: row.scheduled_in_future,
     created_at: row.created_at,
     scheduled_at: row.scheduled_at,
     completed_at: row.completed_at,
@@ -117,7 +162,8 @@ const parseDbChainRow = (row: DbChainRow): { rootJob: DbJob; lastChainJob: DbJob
         continued_to_job_id: row.lc_continued_to_job_id,
         input: row.lc_input,
         output: row.lc_output,
-        status: row.lc_status!,
+        has_open_blockers: row.lc_has_open_blockers!,
+        scheduled_in_future: row.lc_scheduled_in_future!,
         created_at: row.lc_created_at!,
         scheduled_at: row.lc_scheduled_at!,
         completed_at: row.lc_completed_at,
@@ -347,7 +393,7 @@ export const createSqliteStateAdapter = async <
 
         if (isChainStart && job.deduplication?.key) {
           const deduplicationKey = job.deduplication.key;
-          const deduplicationScope = job.deduplication.scope ?? "incomplete";
+          const deduplicationScope = job.deduplication.scope ?? "open";
           const deduplicationWindowMs = job.deduplication.windowMs ?? null;
           const deduplicationExcludeChainIds = job.deduplication.excludeChainIds
             ? JSON.stringify(job.deduplication.excludeChainIds)
@@ -480,7 +526,7 @@ export const createSqliteStateAdapter = async <
         );
 
         const incompleteBlockerChainIds = blockerStatuses
-          .filter((b) => b.blocker_status !== "completed")
+          .filter((b) => b.blocker_completed !== 1)
           .map((b) => b.blocked_by_chain_id);
 
         if (incompleteBlockerChainIds.length > 0) {
@@ -569,12 +615,12 @@ export const createSqliteStateAdapter = async <
       });
       return result ? result.available_in_ms : null;
     },
-    acquireJob: async ({ txCtx, typeNames }) => {
+    acquireJob: async ({ txCtx, typeNames, workerId, leaseDurationMs }) => {
       const typeNamesJson = JSON.stringify(typeNames);
       const [result] = await executeTypedSql({
         txCtx,
         sql: defs.acquireJobSql,
-        params: [typeNamesJson, typeNamesJson],
+        params: [workerId, leaseDurationMs, typeNamesJson, typeNamesJson],
       });
 
       return result
@@ -682,9 +728,8 @@ export const createSqliteStateAdapter = async <
         );
         params.push(JSON.stringify(filter.jobId));
       }
-      if (filter?.status?.length) {
-        conditions.push("lc.status IN (SELECT value FROM json_each(?))");
-        params.push(JSON.stringify(filter.status));
+      if (filter?.closed !== undefined) {
+        conditions.push(`lc.completed_at IS ${filter.closed ? "NOT NULL" : "NULL"}`);
       }
       if (filter?.from) {
         conditions.push("j.created_at >= ?");
@@ -749,9 +794,9 @@ export const createSqliteStateAdapter = async <
       const conditions: string[] = [];
       const params: unknown[] = [];
 
-      if (filter?.status?.length) {
-        conditions.push("j.status IN (SELECT value FROM json_each(?))");
-        params.push(JSON.stringify(filter.status));
+      const statePredicatesSql = buildStatePredicatesSql(filter?.statePredicates, "j");
+      if (statePredicatesSql) {
+        conditions.push(statePredicatesSql);
       }
       if (filter?.typeName?.length) {
         conditions.push("j.type_name IN (SELECT value FROM json_each(?))");
@@ -888,25 +933,29 @@ export const createSqliteStateAdapter = async <
         };
       }
 
-      const statusRows = await executeTypedSql({
+      const jobRows = await executeTypedSql({
         txCtx,
-        sql: defs.getJobStatusesByIdsSql,
+        sql: defs.getJobsByIdsSql,
         params: [idsJson],
       });
-      const statusById = new Map(statusRows.map((r) => [r.id, r.status]));
+      const jobById = new Map(jobRows.map((r) => [r.id, r]));
 
       const notFound: TIdType[] = [];
-      const notTriggerable: { id: TIdType; status: StateJob["status"] }[] = [];
+      const notTriggerable: StateJob[] = [];
       const seen = new Set<string>();
       for (const id of jobIds) {
         const key = id as string;
         if (seen.has(key)) continue;
         seen.add(key);
-        const status = statusById.get(key);
-        if (status === undefined) {
+        const job = jobById.get(key);
+        if (job === undefined) {
           notFound.push(id);
-        } else if (status !== "pending") {
-          notTriggerable.push({ id, status: status as StateJob["status"] });
+        } else if (
+          job.completed_at !== null ||
+          job.leased_until !== null ||
+          job.has_open_blockers === 1
+        ) {
+          notTriggerable.push(mapDbJobToStateJob(job));
         }
       }
 

@@ -29,7 +29,7 @@ export const triggerJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.triggerJobs({ txCtx, jobIds: [created.id] }),
         );
 
-        expect(triggered[0].status).toBe("pending");
+        expect(triggered[0].scheduledInFuture).toBe(false);
         expect(triggered[0].scheduledAt.getTime()).toBeGreaterThanOrEqual(before - 1000);
         expect(triggered[0].scheduledAt.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
       },
@@ -53,7 +53,12 @@ export const triggerJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         const beforeTrigger = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.acquireJob({ txCtx, typeNames: ["trigger-acquire"] }),
+          stateAdapter.acquireJob({
+            txCtx,
+            typeNames: ["trigger-acquire"],
+            workerId: "conformance-worker",
+            leaseDurationMs: 30_000,
+          }),
         );
         expect(beforeTrigger.job).toBeUndefined();
 
@@ -62,7 +67,12 @@ export const triggerJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         const afterTrigger = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.acquireJob({ txCtx, typeNames: ["trigger-acquire"] }),
+          stateAdapter.acquireJob({
+            txCtx,
+            typeNames: ["trigger-acquire"],
+            workerId: "conformance-worker",
+            leaseDurationMs: 30_000,
+          }),
         );
         expect(afterTrigger.job).toBeDefined();
         expect(afterTrigger.job!.id).toBe(created.id);
@@ -220,7 +230,9 @@ export const triggerJobsGroup: ConformanceGroup<StateConformanceFixture> = {
 
         expect(result.triggered).toEqual([]);
         expect(result.notFound).toEqual([]);
-        expect(result.notTriggerable).toEqual([{ id: toComplete.id, status: "completed" }]);
+        expect(result.notTriggerable).toHaveLength(1);
+        expect(result.notTriggerable[0].id).toBe(toComplete.id);
+        expect(result.notTriggerable[0].completedAt).not.toBeNull();
 
         const after = await stateAdapter.getJob({ jobId: pending.id });
         expect(Math.abs(after!.scheduledAt.getTime() - futureDate.getTime())).toBeLessThan(1000);

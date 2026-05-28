@@ -16,7 +16,7 @@ This document describes Queuert's unified job model and the Promise-inspired cha
 A **Job** is an individual unit of work with a lifecycle:
 
 ```
-blocked/pending → running → completed
+blocked / scheduled / ready → running → succeeded (handoff) | completed (terminal)
 ```
 
 Each job:
@@ -150,10 +150,10 @@ Blockers are declared at the type level and provided via the `blockers` array wh
 
 Parallel entities use consistent lifecycle terminology to reduce cognitive load:
 
-- Job: `blocked`/`pending` → `running` → `completed`
-- Chain: `blocked`/`pending` → `running` → `completed` (reflects status of current job in chain)
+- Job (derived status): `blocked` / `scheduled` / `ready` → `running` → `succeeded` (handoff) or `completed` (terminal)
+- Chain (derived from its tail job): `open` → `closed`
 
-Avoid asymmetric naming (e.g., `started`/`finished` vs `created`/`completed`) even if individual terms seem natural. Consistency across the API produces fewer questions and faster comprehension.
+Job status is derived from structural columns rather than stored, so the vocabulary can evolve without a schema migration. A chain is `closed` once its tail job terminally completes; otherwise it is `open`.
 
 ## Summary
 

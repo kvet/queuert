@@ -116,6 +116,8 @@ const performJob = async ({
       helpers.stateAdapter.acquireJob({
         txCtx,
         typeNames,
+        workerId,
+        leaseDurationMs: defaultLeaseConfig.leaseMs,
       }),
     ));
   } catch (error) {

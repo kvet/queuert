@@ -498,26 +498,31 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.acquireJob({ txCtx, typeNames: ["test-type"] }),
+          stateAdapter.acquireJob({
+            txCtx,
+            typeNames: ["test-type"],
+            workerId: "conformance-worker",
+            leaseDurationMs: 30_000,
+          }),
         );
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJob({ txCtx, jobId: chain1.id, output: null, workerId: "w1" }),
         );
 
         const completed = await stateAdapter.listChains({
-          filter: { status: ["completed"] },
+          filter: { closed: true },
           orderDirection: "desc",
           page: { limit: 10 },
         });
         expect(completed.items).toHaveLength(1);
         expect(completed.items[0][0].id).toBe(chain1.id);
 
-        const pending = await stateAdapter.listChains({
-          filter: { status: ["pending"] },
+        const open = await stateAdapter.listChains({
+          filter: { closed: false },
           orderDirection: "desc",
           page: { limit: 10 },
         });
-        expect(pending.items).toHaveLength(1);
+        expect(open.items).toHaveLength(1);
       },
     },
   ],

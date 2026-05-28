@@ -65,7 +65,7 @@ Returns the root job, last job, all jobs in the chain ordered by chain index, an
 
 **`GET /api/jobs/{jobId}`** — Get job detail with continuation and blockers.
 
-**`POST /api/jobs/{jobId}/trigger`** — Trigger a pending job scheduled for the future. Sets `scheduled_at` to now and notifies the notify adapter. Only works for jobs with status `pending`.
+**`POST /api/jobs/{jobId}/trigger`** — Trigger a job scheduled for the future. Sets `scheduled_at` to now and notifies the notify adapter. Only works for jobs that are not completed, leased, or blocked (i.e. `ready` or `scheduled`).
 
 ### Chain Mutation Endpoints
 
@@ -93,7 +93,7 @@ The frontend is a SolidJS single-page application built with Vite.
 
 **Job List** (`/jobs`) — Cross-chain view of individual jobs with the same filtering and pagination patterns as the chain list.
 
-**Job Detail** (`/jobs/:id`) — Detailed job view with status, timing information, worker/lease details, blockers, input/output data, continuation link, and error details. Shows a "Trigger" button for pending jobs scheduled in the future.
+**Job Detail** (`/jobs/:id`) — Detailed job view with status, timing information, worker/lease details, blockers, input/output data, continuation link, and error details. Shows a "Trigger" button for jobs scheduled in the future.
 
 ### Build and Embedding
 

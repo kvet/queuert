@@ -67,7 +67,12 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
 
         try {
           await stateAdapter.withTransaction(async (txCtx) => {
-            await stateAdapter.acquireJob({ txCtx, typeNames: ["update-rollback"] });
+            await stateAdapter.acquireJob({
+              txCtx,
+              typeNames: ["update-rollback"],
+              workerId: "conformance-worker",
+              leaseDurationMs: 30_000,
+            });
             throw new Error("rollback after acquire");
           });
         } catch {
@@ -75,11 +80,16 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
         }
 
         const after = await stateAdapter.getJob({ jobId: job.id });
-        expect(after?.status).toBe("pending");
+        expect(after?.leasedUntil).toBeNull();
         expect(after?.attempt).toBe(0);
 
         const reacquired = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.acquireJob({ txCtx, typeNames: ["update-rollback"] }),
+          stateAdapter.acquireJob({
+            txCtx,
+            typeNames: ["update-rollback"],
+            workerId: "conformance-worker",
+            leaseDurationMs: 30_000,
+          }),
         );
         expect(reacquired.job?.id).toBe(job.id);
         expect(reacquired.job?.attempt).toBe(1);
@@ -114,7 +124,12 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(after?.id).toBe(job.id);
 
         const reacquired = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.acquireJob({ txCtx, typeNames: ["delete-rollback"] }),
+          stateAdapter.acquireJob({
+            txCtx,
+            typeNames: ["delete-rollback"],
+            workerId: "conformance-worker",
+            leaseDurationMs: 30_000,
+          }),
         );
         expect(reacquired.job?.id).toBe(job.id);
       },
@@ -160,7 +175,7 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
         }
 
         const after = await stateAdapter.getJob({ jobId: target.id });
-        expect(after?.status).toBe("pending");
+        expect(after!.hasOpenBlockers).toBe(false);
 
         const blockers = await stateAdapter.getJobBlockers({ jobId: target.id });
         expect(blockers).toHaveLength(0);
@@ -255,7 +270,12 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
 
         try {
           await stateAdapter.withTransaction(async (txCtx) => {
-            await stateAdapter.acquireJob({ txCtx, typeNames: ["mixed-rollback"] });
+            await stateAdapter.acquireJob({
+              txCtx,
+              typeNames: ["mixed-rollback"],
+              workerId: "conformance-worker",
+              leaseDurationMs: 30_000,
+            });
             await stateAdapter.completeJob({
               txCtx,
               jobId: a.id,
@@ -271,9 +291,10 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
 
         const aAfter = await stateAdapter.getJob({ jobId: a.id });
         const bAfter = await stateAdapter.getJob({ jobId: b.id });
-        expect(aAfter?.status).toBe("pending");
+        expect(aAfter?.leasedUntil).toBeNull();
         expect(aAfter?.completedAt).toBeNull();
-        expect(bAfter?.status).toBe("pending");
+        expect(bAfter?.completedAt).toBeNull();
+        expect(bAfter?.leasedUntil).toBeNull();
 
         const next = await stateAdapter.getNextJobAvailableInMs({
           typeNames: ["mixed-rollback"],

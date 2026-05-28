@@ -21,7 +21,12 @@ export const rescheduleJobGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.acquireJob({ txCtx, typeNames: ["resched-test"] }),
+          stateAdapter.acquireJob({
+            txCtx,
+            typeNames: ["resched-test"],
+            workerId: "conformance-worker",
+            leaseDurationMs: 30_000,
+          }),
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
@@ -43,7 +48,8 @@ export const rescheduleJobGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        expect(rescheduled.status).toBe("pending");
+        expect(rescheduled.scheduledInFuture).toBe(true);
+        expect(rescheduled.leasedUntil).toBeNull();
         expect(rescheduled.scheduledAt.getTime()).toBeGreaterThanOrEqual(before + 4000);
         expect(rescheduled.lastAttemptError).toBe("transient failure");
         expect(rescheduled.lastAttemptAt).toBeInstanceOf(Date);
@@ -68,7 +74,12 @@ export const rescheduleJobGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.acquireJob({ txCtx, typeNames: ["resched-at-test"] }),
+          stateAdapter.acquireJob({
+            txCtx,
+            typeNames: ["resched-at-test"],
+            workerId: "conformance-worker",
+            leaseDurationMs: 30_000,
+          }),
         );
 
         const futureDate = new Date(Date.now() + 30_000);
@@ -81,7 +92,8 @@ export const rescheduleJobGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        expect(rescheduled.status).toBe("pending");
+        expect(rescheduled.scheduledInFuture).toBe(true);
+        expect(rescheduled.leasedUntil).toBeNull();
         expect(Math.abs(rescheduled.scheduledAt.getTime() - futureDate.getTime())).toBeLessThan(
           1000,
         );
@@ -104,7 +116,12 @@ export const rescheduleJobGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.acquireJob({ txCtx, typeNames: ["resched-past-test"] }),
+          stateAdapter.acquireJob({
+            txCtx,
+            typeNames: ["resched-past-test"],
+            workerId: "conformance-worker",
+            leaseDurationMs: 30_000,
+          }),
         );
 
         const past = new Date(Date.now() - 60 * 60 * 1000);

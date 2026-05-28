@@ -4,9 +4,46 @@ import { createAsyncRwLock } from "../helpers/async-rw-lock.js";
 import { type OrderDirection, type Page, type PageParams } from "../pagination.js";
 import { decodeCreatedAtWithIdCursor, decodeIdCursor, encodeCursor } from "./cursor.js";
 import { createIdValidator } from "./id-validator.js";
-import { type StateAdapter, type StateJob, type StateJobStatus } from "./state-adapter.js";
+import { type JobStatePredicate, type StateAdapter, type StateJob } from "./state-adapter.js";
 
-type DbJob = StateJob & { chainIndex: number };
+type DbJob = Omit<StateJob, "scheduledInFuture"> & { chainIndex: number };
+
+/** Ready or scheduled: not completed, not leased, not blocked. */
+const isAcquirable = (job: DbJob): boolean =>
+  job.completedAt === null && job.leasedUntil === null && !job.hasOpenBlockers;
+
+/** Running: leased and not yet completed. */
+const isRunning = (job: DbJob): boolean => job.completedAt === null && job.leasedUntil !== null;
+
+/**
+ * Projects a stored job into a {@link StateJob} read snapshot, evaluating the
+ * clock-relative `scheduledInFuture` flag against `nowMs` at read time.
+ */
+const project = (job: DbJob, nowMs: number = Date.now()): StateJob => ({
+  ...job,
+  scheduledInFuture: job.scheduledAt.getTime() > nowMs,
+});
+
+const projectPair = (
+  [root, last]: [DbJob, DbJob | undefined],
+  nowMs: number = Date.now(),
+): [StateJob, StateJob | undefined] => [
+  project(root, nowMs),
+  last ? project(last, nowMs) : undefined,
+];
+
+const projectJobPage = (page: Page<DbJob>, nowMs: number = Date.now()): Page<StateJob> => ({
+  ...page,
+  items: page.items.map((j) => project(j, nowMs)),
+});
+
+const projectPairPage = (
+  page: Page<[DbJob, DbJob | undefined]>,
+  nowMs: number = Date.now(),
+): Page<[StateJob, StateJob | undefined]> => ({
+  ...page,
+  items: page.items.map((pair) => projectPair(pair, nowMs)),
+});
 
 type BlockerEntry = { index: number; traceContext: string | null };
 
@@ -154,14 +191,14 @@ export const createInProcessStateAdapter = async ({
   const indexInsertJob = (job: DbJob): void => {
     if (!seqByJobId.has(job.id)) seqByJobId.set(job.id, nextSeq++);
 
-    if (job.status === "pending") {
+    if (isAcquirable(job)) {
       let set = pendingByType.get(job.typeName);
       if (!set) {
         set = new SortedSet(cmp.scheduledAt);
         pendingByType.set(job.typeName, set);
       }
       set.insert(job);
-    } else if (job.status === "running") {
+    } else if (isRunning(job)) {
       let set = runningByType.get(job.typeName);
       if (!set) {
         set = new SortedSet(cmp.leasedUntil);
@@ -197,9 +234,9 @@ export const createInProcessStateAdapter = async ({
   };
 
   const indexRemoveJob = (job: DbJob): void => {
-    if (job.status === "pending") {
+    if (isAcquirable(job)) {
       pendingByType.get(job.typeName)?.delete(job);
-    } else if (job.status === "running") {
+    } else if (isRunning(job)) {
       runningByType.get(job.typeName)?.delete(job);
     }
 
@@ -379,7 +416,7 @@ export const createInProcessStateAdapter = async ({
     if (!set || set.size === 0) return undefined;
 
     const now = Date.now();
-    const scope = deduplication.scope ?? "incomplete";
+    const scope = deduplication.scope ?? "open";
     const exclude = deduplication.excludeChainIds
       ? new Set(deduplication.excludeChainIds)
       : undefined;
@@ -389,15 +426,35 @@ export const createInProcessStateAdapter = async ({
     let bestMatch: DbJob | undefined;
     for (const job of set) {
       if (exclude?.has(job.chainId)) continue;
-      if (scope === "incomplete" && job.status === "completed") continue;
+      if (scope === "open" && job.completedAt !== null) continue;
       if (windowStart !== undefined && job.createdAt.getTime() < windowStart) continue;
       if (!bestMatch || job.createdAt > bestMatch.createdAt) bestMatch = job;
     }
     return bestMatch;
   };
 
-  const matchesStatusFilter = (job: DbJob, statuses?: StateJobStatus[]): boolean =>
-    !statuses || statuses.length === 0 || statuses.includes(job.status);
+  const matchesStatePredicate = (job: DbJob, p: JobStatePredicate, now: Date): boolean => {
+    if (p.completed !== undefined && (job.completedAt !== null) !== p.completed) return false;
+    if (p.succeeded !== undefined && (job.continuedToJobId !== null) !== p.succeeded) return false;
+    if (p.leased !== undefined && (job.leasedUntil !== null) !== p.leased) return false;
+    if (p.hasOpenBlockers !== undefined && job.hasOpenBlockers !== p.hasOpenBlockers) return false;
+    if (
+      p.scheduledInFuture !== undefined &&
+      job.scheduledAt.getTime() > now.getTime() !== p.scheduledInFuture
+    ) {
+      return false;
+    }
+    return true;
+  };
+
+  const matchesStatePredicates = (
+    job: DbJob,
+    predicates: JobStatePredicate[] | undefined,
+    now: Date,
+  ): boolean =>
+    !predicates ||
+    predicates.length === 0 ||
+    predicates.some((p) => matchesStatePredicate(job, p, now));
 
   const matchesTypeNameFilter = (job: DbJob, typeNames?: string[]): boolean =>
     !typeNames || typeNames.length === 0 || typeNames.includes(job.typeName);
@@ -556,10 +613,14 @@ export const createInProcessStateAdapter = async ({
         const rootJob = jobs.get(chainId);
         if (!rootJob) return undefined;
         const lastJob = getLastJobInChain(chainId);
-        return [rootJob, lastJob && lastJob.id !== rootJob.id ? lastJob : undefined];
+        return projectPair([rootJob, lastJob && lastJob.id !== rootJob.id ? lastJob : undefined]);
       }),
 
-    getJob: async ({ txCtx, jobId }) => withReadLock(txCtx, () => jobs.get(jobId)),
+    getJob: async ({ txCtx, jobId }) =>
+      withReadLock(txCtx, () => {
+        const job = jobs.get(jobId);
+        return job ? project(job) : undefined;
+      }),
 
     createJobs: async ({ txCtx, jobs: jobInputs }) =>
       withWriteLock(txCtx, () => {
@@ -626,10 +687,10 @@ export const createInProcessStateAdapter = async ({
             chainTypeName,
             chainIndex,
             continuedToJobId: null,
+            hasOpenBlockers: false,
             input,
             output: null,
             chainId,
-            status: "pending",
             createdAt: now,
             scheduledAt: resolvedScheduledAt,
             completedAt: null,
@@ -653,7 +714,7 @@ export const createInProcessStateAdapter = async ({
 
           results.push({ job, deduplicated: false });
         }
-        return results;
+        return results.map((r) => ({ job: project(r.job), deduplicated: r.deduplicated }));
       }),
 
     addJobsBlockers: async ({ txCtx, jobBlockers: jobBlockerInputs }) =>
@@ -681,15 +742,15 @@ export const createInProcessStateAdapter = async ({
           const blockerChainTraceContexts: (string | null)[] = [];
           for (const blockerChainId of blockedByChainIds) {
             const lastJob = getLastJobInChain(blockerChainId);
-            if (!lastJob || lastJob.status !== "completed") {
+            if (!lastJob || lastJob.completedAt === null) {
               incompleteBlockerChainIds.push(blockerChainId);
             }
             const rootJob = jobs.get(blockerChainId);
             blockerChainTraceContexts.push(rootJob?.chainTraceContext ?? null);
           }
 
-          if (incompleteBlockerChainIds.length > 0 && job.status === "pending") {
-            const updatedJob: DbJob = { ...job, status: "blocked" };
+          if (incompleteBlockerChainIds.length > 0 && isAcquirable(job)) {
+            const updatedJob: DbJob = { ...job, hasOpenBlockers: true };
             writeJob(journal, job, updatedJob);
             results.push({
               job: updatedJob,
@@ -701,7 +762,7 @@ export const createInProcessStateAdapter = async ({
           }
         }
 
-        return results;
+        return results.map((r) => ({ ...r, job: project(r.job) }));
       }),
 
     unblockJobs: async ({ txCtx, blockedByChainId }) =>
@@ -713,7 +774,7 @@ export const createInProcessStateAdapter = async ({
 
         const blockedJobIds = blockedByChain.get(blockedByChainId);
         if (!blockedJobIds || blockedJobIds.size === 0) {
-          return { unblockedJobs, blockerTraceContexts };
+          return { unblockedJobs: unblockedJobs.map((j) => project(j)), blockerTraceContexts };
         }
 
         const candidateJobIds = Array.from(blockedJobIds);
@@ -728,12 +789,12 @@ export const createInProcessStateAdapter = async ({
           }
 
           const job = jobs.get(jobId);
-          if (!job || job.status !== "blocked") continue;
+          if (!job || !job.hasOpenBlockers) continue;
 
           let allComplete = true;
           for (const blockerChainId of blockerMap.keys()) {
             const lastJob = getLastJobInChain(blockerChainId);
-            if (!lastJob || lastJob.status !== "completed") {
+            if (!lastJob || lastJob.completedAt === null) {
               allComplete = false;
               break;
             }
@@ -742,7 +803,7 @@ export const createInProcessStateAdapter = async ({
           if (allComplete) {
             const updatedJob: DbJob = {
               ...job,
-              status: "pending",
+              hasOpenBlockers: false,
               scheduledAt: clampToFloor(job.scheduledAt, now),
             };
             writeJob(journal, job, updatedJob);
@@ -750,7 +811,7 @@ export const createInProcessStateAdapter = async ({
           }
         }
 
-        return { unblockedJobs, blockerTraceContexts };
+        return { unblockedJobs: unblockedJobs.map((j) => project(j)), blockerTraceContexts };
       }),
 
     getJobBlockers: async ({ txCtx, jobId }) =>
@@ -769,7 +830,7 @@ export const createInProcessStateAdapter = async ({
           result.push([rootJob, lastJob && lastJob.id !== rootJob.id ? lastJob : undefined]);
         }
 
-        return result;
+        return result.map((pair) => projectPair(pair));
       }),
 
     getNextJobAvailableInMs: async ({ txCtx, typeNames }) =>
@@ -789,7 +850,7 @@ export const createInProcessStateAdapter = async ({
         return Math.max(0, nextScheduledAt - now);
       }),
 
-    acquireJob: async ({ txCtx, typeNames }) =>
+    acquireJob: async ({ txCtx, typeNames, workerId, leaseDurationMs }) =>
       withWriteLock(txCtx, () => {
         const journal = txCtx?.journal;
         const now = new Date();
@@ -829,12 +890,13 @@ export const createInProcessStateAdapter = async ({
 
         const updatedJob: DbJob = {
           ...bestJob,
-          status: "running",
+          leasedBy: workerId,
+          leasedUntil: new Date(nowMs + leaseDurationMs),
           attempt: bestJob.attempt + 1,
         };
         writeJob(journal, bestJob, updatedJob);
 
-        return { job: updatedJob, hasMore };
+        return { job: project(updatedJob, nowMs), hasMore };
       }),
 
     renewJobLease: async ({ txCtx, jobId, workerId, leaseDurationMs }) =>
@@ -848,11 +910,10 @@ export const createInProcessStateAdapter = async ({
           ...job,
           leasedBy: workerId,
           leasedUntil: new Date(now.getTime() + leaseDurationMs),
-          status: "running",
         };
 
         writeJob(journal, job, updatedJob);
-        return updatedJob;
+        return project(updatedJob, now.getTime());
       }),
 
     rescheduleJob: async ({ txCtx, jobId, schedule, error }) =>
@@ -872,11 +933,10 @@ export const createInProcessStateAdapter = async ({
           lastAttemptError: error,
           leasedBy: null,
           leasedUntil: null,
-          status: "pending",
         };
 
         writeJob(journal, job, updatedJob);
-        return updatedJob;
+        return project(updatedJob, now.getTime());
       }),
 
     completeJob: async ({ txCtx, jobId, output, workerId }) =>
@@ -888,7 +948,6 @@ export const createInProcessStateAdapter = async ({
         const now = new Date();
         const updatedJob: DbJob = {
           ...job,
-          status: "completed",
           completedAt: now,
           completedBy: workerId,
           output,
@@ -898,7 +957,7 @@ export const createInProcessStateAdapter = async ({
         };
 
         writeJob(journal, job, updatedJob);
-        return updatedJob;
+        return project(updatedJob, now.getTime());
       }),
 
     reapExpiredJobLease: async ({ txCtx, typeNames, ignoredJobIds }) =>
@@ -932,11 +991,10 @@ export const createInProcessStateAdapter = async ({
           ...candidateJob,
           leasedBy: null,
           leasedUntil: null,
-          status: "pending",
         };
         writeJob(journal, candidateJob, updatedJob);
 
-        return updatedJob;
+        return project(updatedJob, nowMs);
       }),
 
     deleteChains: async ({ txCtx, chainIds, cascade }) =>
@@ -971,7 +1029,7 @@ export const createInProcessStateAdapter = async ({
           writeJob(journal, job, undefined);
         }
 
-        return { deleted, blockerRefs: [] };
+        return { deleted: deleted.map((pair) => projectPair(pair)), blockerRefs: [] };
       }),
 
     listChains: async ({ txCtx, filter, orderDirection, page }) =>
@@ -994,26 +1052,29 @@ export const createInProcessStateAdapter = async ({
         const chains: [DbJob, DbJob | undefined][] = [];
         for (const job of rootJobsByCreatedAt.iterate("asc")) {
           const lastJob = getLastJobInChain(job.id);
+          const tail = lastJob ?? job;
 
           if (idMatchChainIds && !idMatchChainIds.has(job.chainId)) continue;
           if (jobIdMatchChainIds && !jobIdMatchChainIds.has(job.chainId)) continue;
           if (blockerChainIds && blockerChainIds.has(job.chainId)) continue;
           if (!matchesTypeNameFilter(job, filter?.typeName)) continue;
-          if (!matchesStatusFilter(lastJob ?? job, filter?.status)) continue;
+          if (filter?.closed !== undefined && (tail.completedAt !== null) !== filter.closed)
+            continue;
           if (!matchesDateRange(job.createdAt, filter?.from, filter?.to)) continue;
 
           chains.push([job, lastJob && lastJob.id !== job.id ? lastJob : undefined]);
         }
 
-        return paginateByCreatedAt(chains, page, orderDirection);
+        return projectPairPage(paginateByCreatedAt(chains, page, orderDirection));
       }),
 
     listJobs: async ({ txCtx, filter, orderDirection, page }) =>
       withReadLock(txCtx, () => {
+        const now = new Date();
         const matched: DbJob[] = [];
         for (const job of jobs.values()) {
           if (filter?.jobId && !filter.jobId.includes(job.id)) continue;
-          if (!matchesStatusFilter(job, filter?.status)) continue;
+          if (!matchesStatePredicates(job, filter?.statePredicates, now)) continue;
           if (!matchesTypeNameFilter(job, filter?.typeName)) continue;
           if (!matchesChainTypeNameFilter(job, filter?.chainTypeName)) continue;
           if (filter?.chainId && !filter.chainId.includes(job.chainId)) continue;
@@ -1021,14 +1082,14 @@ export const createInProcessStateAdapter = async ({
           matched.push(job);
         }
 
-        return paginateByCreatedAt(matched, page, orderDirection);
+        return projectJobPage(paginateByCreatedAt(matched, page, orderDirection));
       }),
 
     listChainJobs: async ({ txCtx, chainId, orderDirection, page }) =>
       withReadLock(txCtx, () => {
         const chainMap = jobsByChain.get(chainId);
         const matched: DbJob[] = chainMap ? Array.from(chainMap.values()) : [];
-        return paginateByChainIndex(matched, page, orderDirection);
+        return projectJobPage(paginateByChainIndex(matched, page, orderDirection));
       }),
 
     triggerJobs: async ({ txCtx, jobIds }) =>
@@ -1036,7 +1097,7 @@ export const createInProcessStateAdapter = async ({
         if (jobIds.length === 0) return { triggered: [], notFound: [], notTriggerable: [] };
 
         const notFound: string[] = [];
-        const notTriggerable: { id: string; status: DbJob["status"] }[] = [];
+        const notTriggerable: DbJob[] = [];
         const eligible: DbJob[] = [];
         const seen = new Set<string>();
         for (const jobId of jobIds) {
@@ -1044,12 +1105,12 @@ export const createInProcessStateAdapter = async ({
           seen.add(jobId);
           const job = jobs.get(jobId);
           if (!job) notFound.push(jobId);
-          else if (job.status !== "pending") notTriggerable.push({ id: jobId, status: job.status });
+          else if (!isAcquirable(job)) notTriggerable.push(job);
           else eligible.push(job);
         }
 
         if (notFound.length > 0 || notTriggerable.length > 0) {
-          return { triggered: [], notFound, notTriggerable };
+          return { triggered: [], notFound, notTriggerable: notTriggerable.map((j) => project(j)) };
         }
 
         const journal = txCtx?.journal;
@@ -1069,7 +1130,11 @@ export const createInProcessStateAdapter = async ({
           const job = updatedById.get(jobId);
           if (job) triggered.push(job);
         }
-        return { triggered, notFound: [], notTriggerable: [] };
+        return {
+          triggered: triggered.map((j) => project(j, now.getTime())),
+          notFound: [],
+          notTriggerable: [],
+        };
       }),
 
     listBlockedJobs: async ({ txCtx, chainId, orderDirection, page }) =>
@@ -1082,7 +1147,7 @@ export const createInProcessStateAdapter = async ({
             if (job) matched.push(job);
           }
         }
-        return paginateByCreatedAt(matched, page, orderDirection);
+        return projectJobPage(paginateByCreatedAt(matched, page, orderDirection));
       }),
 
     close: async () => {

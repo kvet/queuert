@@ -785,8 +785,8 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       ),
     );
 
-    expect(mainA.status).toBe("blocked");
-    expect(mainB.status).toBe("blocked");
+    expect(mainA.status).toBe("open");
+    expect(mainB.status).toBe("open");
 
     await withWorkers([await worker.start()], async () => {
       const [resultA, resultB] = await Promise.all([

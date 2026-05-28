@@ -7,7 +7,7 @@ sidebar:
 
 ### Job
 
-An individual unit of work. Jobs have a lifecycle: `blocked` → `pending` → `running` → `completed`. Each job belongs to a Job Type and contains typed input/output. Jobs start as `blocked` when they depend on other chains (see [Job Blockers](/queuert/guides/job-blockers/)); otherwise they start as `pending`.
+An individual unit of work. A job's status is one of six values derived from its state: `blocked`, `scheduled`, `ready`, `running`, `succeeded` (handed off to a successor via `continueWith`), or `completed` (terminal). Each job belongs to a Job Type and contains typed input/output. Jobs start as `blocked` when they depend on other chains (see [Job Blockers](/queuert/guides/job-blockers/)); otherwise they start as `ready` (or `scheduled` if scheduled for the future).
 
 ### Chain
 

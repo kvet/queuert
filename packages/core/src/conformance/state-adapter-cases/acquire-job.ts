@@ -34,12 +34,18 @@ export const acquireJobGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         const { job } = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.acquireJob({ txCtx, typeNames: ["acquire-test"] }),
+          stateAdapter.acquireJob({
+            txCtx,
+            typeNames: ["acquire-test"],
+            workerId: "conformance-worker",
+            leaseDurationMs: 30_000,
+          }),
         );
 
         expect(job).toBeDefined();
         expect(job!.input).toEqual({ order: 1 });
-        expect(job!.status).toBe("running");
+        expect(job!.completedAt).toBeNull();
+        expect(job!.leasedUntil).not.toBeNull();
         expect(job!.attempt).toBe(1);
       },
     },
@@ -73,13 +79,23 @@ export const acquireJobGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         const { job: job1, hasMore: hasMore1 } = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.acquireJob({ txCtx, typeNames: ["hasmore-test"] }),
+          stateAdapter.acquireJob({
+            txCtx,
+            typeNames: ["hasmore-test"],
+            workerId: "conformance-worker",
+            leaseDurationMs: 30_000,
+          }),
         );
         expect(job1).toBeDefined();
         expect(hasMore1).toBe(true);
 
         const { job: job2 } = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.acquireJob({ txCtx, typeNames: ["hasmore-test"] }),
+          stateAdapter.acquireJob({
+            txCtx,
+            typeNames: ["hasmore-test"],
+            workerId: "conformance-worker",
+            leaseDurationMs: 30_000,
+          }),
         );
         expect(job2).toBeDefined();
       },
@@ -88,7 +104,12 @@ export const acquireJobGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "returns undefined when no eligible jobs exist",
       run: async ({ stateAdapter }, expect) => {
         const { job, hasMore } = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.acquireJob({ txCtx, typeNames: ["nonexistent-type"] }),
+          stateAdapter.acquireJob({
+            txCtx,
+            typeNames: ["nonexistent-type"],
+            workerId: "conformance-worker",
+            leaseDurationMs: 30_000,
+          }),
         );
 
         expect(job).toBeUndefined();
@@ -113,7 +134,12 @@ export const acquireJobGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         const { job } = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.acquireJob({ txCtx, typeNames: ["future-acquire"] }),
+          stateAdapter.acquireJob({
+            txCtx,
+            typeNames: ["future-acquire"],
+            workerId: "conformance-worker",
+            leaseDurationMs: 30_000,
+          }),
         );
 
         expect(job).toBeUndefined();

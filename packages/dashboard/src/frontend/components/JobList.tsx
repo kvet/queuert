@@ -101,10 +101,12 @@ export function JobList() {
           }}
         >
           <option value="">All statuses</option>
-          <option value="pending">Pending</option>
+          <option value="ready">Ready</option>
+          <option value="scheduled">Scheduled</option>
           <option value="running">Running</option>
-          <option value="completed">Completed</option>
           <option value="blocked">Blocked</option>
+          <option value="succeeded">Succeeded</option>
+          <option value="completed">Completed</option>
         </select>
       </div>
 

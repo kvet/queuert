@@ -75,6 +75,8 @@ export const readIsolationGroup: ConformanceGroup<StateConformanceFixture> = {
             const acquired = await stateAdapter.acquireJob({
               txCtx,
               typeNames: ["iso-update"],
+              workerId: "conformance-worker",
+              leaseDurationMs: 30_000,
             });
             expect(acquired.job?.id).toBe(seed.id);
             signalTxReady!();
@@ -89,7 +91,7 @@ export const readIsolationGroup: ConformanceGroup<StateConformanceFixture> = {
         await txPromise;
 
         const observed = await readPromise;
-        expect(observed?.status).toBe("pending");
+        expect(observed?.leasedUntil).toBeNull();
         expect(observed?.attempt).toBe(0);
       },
     },
@@ -194,7 +196,7 @@ export const readIsolationGroup: ConformanceGroup<StateConformanceFixture> = {
         const observedBlockers = await blockersPromise;
         const observedTarget = await targetReadPromise;
         expect(observedBlockers).toHaveLength(0);
-        expect(observedTarget?.status).toBe("pending");
+        expect(observedTarget!.hasOpenBlockers).toBe(false);
       },
     },
     {
@@ -347,7 +349,12 @@ export const readIsolationGroup: ConformanceGroup<StateConformanceFixture> = {
 
         const txPromise = stateAdapter
           .withTransaction(async (txCtx) => {
-            await stateAdapter.acquireJob({ txCtx, typeNames: ["iso-locked-job"] });
+            await stateAdapter.acquireJob({
+              txCtx,
+              typeNames: ["iso-locked-job"],
+              workerId: "conformance-worker",
+              leaseDurationMs: 30_000,
+            });
             signalTxReady!();
             await gate;
             throw new Error("rollback");
@@ -360,7 +367,7 @@ export const readIsolationGroup: ConformanceGroup<StateConformanceFixture> = {
         await txPromise;
 
         const observed = await readPromise;
-        expect(observed?.status).toBe("pending");
+        expect(observed?.leasedUntil).toBeNull();
         expect(observed?.attempt).toBe(0);
       },
     },

@@ -21,7 +21,12 @@ export const completeJobGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.acquireJob({ txCtx, typeNames: ["complete-test"] }),
+          stateAdapter.acquireJob({
+            txCtx,
+            typeNames: ["complete-test"],
+            workerId: "conformance-worker",
+            leaseDurationMs: 30_000,
+          }),
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
@@ -42,7 +47,8 @@ export const completeJobGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        expect(completed.status).toBe("completed");
+        expect(completed.completedAt).not.toBeNull();
+        expect(completed.continuedToJobId).toBeNull();
         expect(completed.output).toEqual({ result: 42 });
         expect(completed.completedAt).toBeInstanceOf(Date);
         expect(completed.completedBy).toBe("worker-1");
@@ -67,7 +73,12 @@ export const completeJobGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.acquireJob({ txCtx, typeNames: ["complete-clears-error"] }),
+          stateAdapter.acquireJob({
+            txCtx,
+            typeNames: ["complete-clears-error"],
+            workerId: "conformance-worker",
+            leaseDurationMs: 30_000,
+          }),
         );
 
         const rescheduled = await stateAdapter.withTransaction(async (txCtx) =>
@@ -81,7 +92,12 @@ export const completeJobGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(rescheduled.lastAttemptError).toBe("first attempt failed");
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.acquireJob({ txCtx, typeNames: ["complete-clears-error"] }),
+          stateAdapter.acquireJob({
+            txCtx,
+            typeNames: ["complete-clears-error"],
+            workerId: "conformance-worker",
+            leaseDurationMs: 30_000,
+          }),
         );
 
         const completed = await stateAdapter.withTransaction(async (txCtx) =>
@@ -93,7 +109,8 @@ export const completeJobGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        expect(completed.status).toBe("completed");
+        expect(completed.completedAt).not.toBeNull();
+        expect(completed.continuedToJobId).toBeNull();
         expect(completed.lastAttemptError).toBeNull();
       },
     },
@@ -122,7 +139,8 @@ export const completeJobGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        expect(completed.status).toBe("completed");
+        expect(completed.completedAt).not.toBeNull();
+        expect(completed.continuedToJobId).toBeNull();
         expect(completed.completedBy).toBeNull();
       },
     },

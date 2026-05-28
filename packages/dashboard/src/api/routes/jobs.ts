@@ -47,8 +47,7 @@ export const handleJobDetail = async (
     return serovalResponse({ error: "Job not found" }, 404);
   }
 
-  const continuationId =
-    job.status === "completed" && job.continuedToJobId !== null ? job.continuedToJobId : null;
+  const continuationId = (job as { continuedToJobId?: string | null }).continuedToJobId ?? null;
 
   const [blockers, continuation] = await Promise.all([
     client.getJobBlockers({ jobId: job.id }),

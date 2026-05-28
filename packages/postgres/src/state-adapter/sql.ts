@@ -18,7 +18,8 @@ export type DbJob = {
   input: unknown;
   output: unknown;
 
-  status: "blocked" | "pending" | "running" | "completed";
+  has_open_blockers: boolean;
+  scheduled_in_future: boolean;
   created_at: string;
   scheduled_at: string;
   completed_at: string | null;
@@ -242,6 +243,67 @@ WHERE n.chain_id = j.chain_id
       },
     ],
   },
+  {
+    name: "20260524000000_add_has_open_blockers_column",
+    transactional: true,
+    statements: [
+      {
+        sql: sql(/* sql */ `
+ALTER TABLE {{schema}}.{{table_prefix}}job
+  ADD COLUMN IF NOT EXISTS has_open_blockers boolean NOT NULL DEFAULT false`),
+      },
+      {
+        sql: sql(/* sql */ `
+UPDATE {{schema}}.{{table_prefix}}job
+SET has_open_blockers = true
+WHERE status = 'blocked' AND has_open_blockers = false`),
+      },
+    ],
+  },
+  {
+    name: "20260528000000_derive_status",
+    transactional: true,
+    statements: [
+      { sql: sql(/* sql */ `DROP INDEX IF EXISTS {{schema}}.{{table_prefix}}job_acquisition_idx`) },
+      {
+        sql: sql(/* sql */ `DROP INDEX IF EXISTS {{schema}}.{{table_prefix}}job_expired_lease_idx`),
+      },
+      {
+        sql: sql(
+          /* sql */ `DROP INDEX IF EXISTS {{schema}}.{{table_prefix}}job_listing_status_idx`,
+        ),
+      },
+      // Status is now derived at read time; drop the stored column and its enum type.
+      {
+        sql: sql(
+          /* sql */ `ALTER TABLE {{schema}}.{{table_prefix}}job DROP COLUMN IF EXISTS status`,
+        ),
+      },
+      { sql: sql(/* sql */ `DROP TYPE IF EXISTS {{schema}}.{{table_prefix}}job_status`) },
+      {
+        sql: sql(/* sql */ `
+CREATE INDEX IF NOT EXISTS {{table_prefix}}job_acquisition_idx
+ON {{schema}}.{{table_prefix}}job (type_name, scheduled_at)
+WHERE has_open_blockers = false AND leased_until IS NULL AND completed_at IS NULL`),
+      },
+      {
+        sql: sql(/* sql */ `
+CREATE INDEX IF NOT EXISTS {{table_prefix}}job_expired_lease_idx
+ON {{schema}}.{{table_prefix}}job (type_name, leased_until)
+WHERE leased_until IS NOT NULL AND completed_at IS NULL`),
+      },
+      // Chain frontier: the tail (no successor) per chain. Non-unique because
+      // continueWith transiently has two NULL-successor rows mid-transaction
+      // (new tail inserted before the parent's successor link is set); the
+      // "at most one tail" invariant is enforced by the UNIQUE (chain_id, chain_index).
+      {
+        sql: sql(/* sql */ `
+CREATE INDEX IF NOT EXISTS {{table_prefix}}job_chain_tail_idx
+ON {{schema}}.{{table_prefix}}job (chain_id)
+WHERE continued_to_job_id IS NULL`),
+      },
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -259,7 +321,8 @@ type PgDbJobCols = {
   readonly continued_to_job_id: DataType<RuntimeType, string | null>;
   readonly input: DataType<"json">;
   readonly output: DataType<"json">;
-  readonly status: DataType<"string", DbJob["status"]>;
+  readonly has_open_blockers: DataType<"boolean", boolean>;
+  readonly scheduled_in_future: DataType<"boolean", boolean>;
   readonly created_at: DataType<"string", string>;
   readonly scheduled_at: DataType<"string", string>;
   readonly completed_at: DataType<"string?", string | null>;
@@ -357,7 +420,7 @@ export type PgSqlDefinitions = {
     {
       readonly triggered: DataType<"json", DbJob[]>;
       readonly not_found: DataType<"json", string[]>;
-      readonly not_triggerable: DataType<"json", { id: string; status: string }[]>;
+      readonly not_triggerable: DataType<"json", DbJob[]>;
     }
   >;
   readonly renewJobLeaseSql: TypedSql<
@@ -365,7 +428,7 @@ export type PgSqlDefinitions = {
     PgDbJobCols
   >;
   readonly acquireJobSql: TypedSql<
-    readonly [DataType<"array", string[]>],
+    readonly [DataType<"array", string[]>, DataType<"string", string>, DataType<"number", number>],
     PgDbJobCols & { readonly has_more: DataType<"boolean", boolean> }
   >;
   readonly getNextJobAvailableInMsSql: TypedSql<
@@ -410,7 +473,8 @@ export const createPgSqlDefinitions = (
     continued_to_job_id: idNullable,
     input: t.json(),
     output: t.json(),
-    status: t.string<DbJob["status"]>(),
+    has_open_blockers: t.boolean(),
+    scheduled_in_future: t.boolean(),
     created_at: t.string(),
     scheduled_at: t.string(),
     completed_at: t["string?"](),
@@ -523,7 +587,7 @@ existing_deduplicated AS (
     AND j.chain_type_name = id2.chain_type_name
     AND (
       id2.dedup_scope IS NULL
-      OR (id2.dedup_scope = 'incomplete' AND j.status != 'completed')
+      OR (id2.dedup_scope = 'open' AND j.completed_at IS NULL)
       OR (id2.dedup_scope = 'any')
     )
     AND (
@@ -573,19 +637,19 @@ parent_updates AS (
     AND p.continued_to_job_id IS NULL
   RETURNING p.id
 )
-SELECT ec.ord, ec.id, ec.type_name, ec.chain_id, ec.chain_type_name, ec.chain_index, ec.continued_to_job_id, ec.input, ec.output, ec.status, ec.created_at, ec.scheduled_at, ec.completed_at, ec.completed_by, ec.attempt, ec.last_attempt_error, ec.last_attempt_at, ec.leased_by, ec.leased_until, ec.deduplication_key, ec.chain_trace_context, ec.trace_context, TRUE AS deduplicated
+SELECT ec.ord, ec.id, ec.type_name, ec.chain_id, ec.chain_type_name, ec.chain_index, ec.continued_to_job_id, ec.input, ec.output, ec.has_open_blockers, (ec.scheduled_at > now()) AS scheduled_in_future, ec.created_at, ec.scheduled_at, ec.completed_at, ec.completed_by, ec.attempt, ec.last_attempt_error, ec.last_attempt_at, ec.leased_by, ec.leased_until, ec.deduplication_key, ec.chain_trace_context, ec.trace_context, TRUE AS deduplicated
 FROM existing_continuations ec
 UNION ALL
-SELECT ed.ord, ed.id, ed.type_name, ed.chain_id, ed.chain_type_name, ed.chain_index, ed.continued_to_job_id, ed.input, ed.output, ed.status, ed.created_at, ed.scheduled_at, ed.completed_at, ed.completed_by, ed.attempt, ed.last_attempt_error, ed.last_attempt_at, ed.leased_by, ed.leased_until, ed.deduplication_key, ed.chain_trace_context, ed.trace_context, TRUE AS deduplicated
+SELECT ed.ord, ed.id, ed.type_name, ed.chain_id, ed.chain_type_name, ed.chain_index, ed.continued_to_job_id, ed.input, ed.output, ed.has_open_blockers, (ed.scheduled_at > now()) AS scheduled_in_future, ed.created_at, ed.scheduled_at, ed.completed_at, ed.completed_by, ed.attempt, ed.last_attempt_error, ed.last_attempt_at, ed.leased_by, ed.leased_until, ed.deduplication_key, ed.chain_trace_context, ed.trace_context, TRUE AS deduplicated
 FROM existing_deduplicated ed
 UNION ALL
-SELECT tia.ord, ij.id, ij.type_name, ij.chain_id, ij.chain_type_name, ij.chain_index, ij.continued_to_job_id, ij.input, ij.output, ij.status, ij.created_at, ij.scheduled_at, ij.completed_at, ij.completed_by, ij.attempt, ij.last_attempt_error, ij.last_attempt_at, ij.leased_by, ij.leased_until, ij.deduplication_key, ij.chain_trace_context, ij.trace_context, TRUE AS deduplicated
+SELECT tia.ord, ij.id, ij.type_name, ij.chain_id, ij.chain_type_name, ij.chain_index, ij.continued_to_job_id, ij.input, ij.output, ij.has_open_blockers, (ij.scheduled_at > now()) AS scheduled_in_future, ij.created_at, ij.scheduled_at, ij.completed_at, ij.completed_by, ij.attempt, ij.last_attempt_error, ij.last_attempt_at, ij.leased_by, ij.leased_until, ij.deduplication_key, ij.chain_trace_context, ij.trace_context, TRUE AS deduplicated
 FROM to_insert_all tia
 JOIN to_insert ti ON ti.dedup_key = tia.dedup_key AND ti.chain_type_name = tia.chain_type_name
 JOIN inserted_jobs ij ON ti.chain_id = ij.chain_id AND ti.chain_index = ij.chain_index
 WHERE tia.dedup_key IS NOT NULL AND tia.ord != ti.ord
 UNION ALL
-SELECT ti.ord, ij.id, ij.type_name, ij.chain_id, ij.chain_type_name, ij.chain_index, ij.continued_to_job_id, ij.input, ij.output, ij.status, ij.created_at, ij.scheduled_at, ij.completed_at, ij.completed_by, ij.attempt, ij.last_attempt_error, ij.last_attempt_at, ij.leased_by, ij.leased_until, ij.deduplication_key, ij.chain_trace_context, ij.trace_context, (ij.id != ti.id) AS deduplicated
+SELECT ti.ord, ij.id, ij.type_name, ij.chain_id, ij.chain_type_name, ij.chain_index, ij.continued_to_job_id, ij.input, ij.output, ij.has_open_blockers, (ij.scheduled_at > now()) AS scheduled_in_future, ij.created_at, ij.scheduled_at, ij.completed_at, ij.completed_by, ij.attempt, ij.last_attempt_error, ij.last_attempt_at, ij.leased_by, ij.leased_until, ij.deduplication_key, ij.chain_trace_context, ij.trace_context, (ij.id != ti.id) AS deduplicated
 FROM inserted_jobs ij JOIN to_insert ti ON ti.chain_id = ij.chain_id AND ti.chain_index = ij.chain_index
 ORDER BY ord
 `,
@@ -617,7 +681,7 @@ WITH input_data AS (
   FROM unnest($1::{{id_type}}[], $2::{{id_type}}[], $3::text[], $4::integer[]) WITH ORDINALITY AS t(job_id, blocked_by_chain_id, trace_context, blocker_index, ord)
 ),
 locked_blocker_chain_latest AS (
-  SELECT j.id, j.chain_id, j.status
+  SELECT j.id, j.chain_id, j.completed_at
   FROM {{schema}}.{{table_prefix}}job j
   WHERE j.chain_id IN (SELECT DISTINCT blocked_by_chain_id FROM input_data)
     AND NOT EXISTS (
@@ -637,20 +701,22 @@ blockers_status AS (
   SELECT
     ib.job_id,
     ib.blocked_by_chain_id,
-    lbcl.status AS blocker_status
+    lbcl.completed_at AS blocker_completed_at
   FROM inserted_blockers ib
   LEFT JOIN locked_blocker_chain_latest lbcl ON lbcl.chain_id = ib.blocked_by_chain_id
 ),
 has_incomplete_blockers AS (
   SELECT DISTINCT job_id
   FROM blockers_status
-  WHERE blocker_status != 'completed'
+  WHERE blocker_completed_at IS NULL
 ),
 updated_jobs AS (
   UPDATE {{schema}}.{{table_prefix}}job j
-  SET status = 'blocked'
+  SET has_open_blockers = true
   WHERE j.id IN (SELECT job_id FROM has_incomplete_blockers)
-    AND j.status = 'pending'
+    AND j.completed_at IS NULL
+    AND j.leased_until IS NULL
+    AND j.has_open_blockers = false
   RETURNING j.*
 ),
 distinct_job_ids AS (
@@ -666,7 +732,7 @@ final_jobs AS (
 per_job_incomplete AS (
   SELECT
     bs.job_id,
-    COALESCE(array_agg(bs.blocked_by_chain_id) FILTER (WHERE bs.blocker_status != 'completed'), ARRAY[]::{{id_type}}[]) AS incomplete_blocker_chain_ids
+    COALESCE(array_agg(bs.blocked_by_chain_id) FILTER (WHERE bs.blocker_completed_at IS NULL), ARRAY[]::{{id_type}}[]) AS incomplete_blocker_chain_ids
   FROM blockers_status bs
   GROUP BY bs.job_id
 ),
@@ -679,6 +745,7 @@ per_job_trace_contexts AS (
   GROUP BY id2.job_id
 )
 SELECT fj.*,
+  (fj.scheduled_at > now()) AS scheduled_in_future,
   fj.id AS source_job_id,
   COALESCE(pi.incomplete_blocker_chain_ids, ARRAY[]::{{id_type}}[]) AS incomplete_blocker_chain_ids,
   COALESCE(ptc.blocker_chain_trace_contexts, '[]'::json) AS blocker_chain_trace_contexts
@@ -702,15 +769,14 @@ ORDER BY fj.id
   const completeJobSql = sql(
     /* sql */ `
 UPDATE {{schema}}.{{table_prefix}}job
-SET status = 'completed',
-  completed_at = now(),
+SET completed_at = now(),
   completed_by = $3,
   output = $2,
   leased_by = NULL,
   leased_until = NULL,
   last_attempt_error = NULL
 WHERE id = $1
-RETURNING *
+RETURNING *, (scheduled_at > now()) AS scheduled_in_future
 `,
     {
       id: "completeJob",
@@ -731,12 +797,12 @@ blockers_status AS (
     jb.job_id,
     jb.blocked_by_chain_id,
     (
-      SELECT j2.status
+      SELECT j2.completed_at IS NOT NULL
       FROM {{schema}}.{{table_prefix}}job j2
       WHERE j2.chain_id = jb.blocked_by_chain_id
       ORDER BY j2.chain_index DESC
       LIMIT 1
-    ) AS blocker_status
+    ) AS blocker_completed
   FROM {{schema}}.{{table_prefix}}job_blocker jb
   WHERE jb.job_id IN (SELECT job_id FROM direct_blocked)
 ),
@@ -744,15 +810,15 @@ ready_jobs AS (
   SELECT job_id
   FROM blockers_status
   GROUP BY job_id
-  HAVING bool_and(blocker_status = 'completed')
+  HAVING bool_and(COALESCE(blocker_completed, false))
 ),
 updated AS (
   UPDATE {{schema}}.{{table_prefix}}job j
   SET scheduled_at = GREATEST(j.scheduled_at, now()),
-    status = 'pending'
+    has_open_blockers = false
   WHERE j.id IN (SELECT job_id FROM ready_jobs)
-    AND j.status = 'blocked'
-  RETURNING j.*
+    AND j.has_open_blockers = true
+  RETURNING j.*, (j.scheduled_at > now()) AS scheduled_in_future
 ),
 trace_contexts AS (
   SELECT jb.trace_context
@@ -779,15 +845,18 @@ SELECT
 SELECT
   row_to_json(j)  AS root_job,
   row_to_json(lc) AS last_chain_job
-FROM {{schema}}.{{table_prefix}}job AS j
+FROM (
+  SELECT *, (scheduled_at > now()) AS scheduled_in_future
+  FROM {{schema}}.{{table_prefix}}job
+  WHERE id = $1
+) AS j
 LEFT JOIN LATERAL (
-  SELECT *
+  SELECT *, (scheduled_at > now()) AS scheduled_in_future
   FROM {{schema}}.{{table_prefix}}job
   WHERE chain_id = j.id
   ORDER BY chain_index DESC
   LIMIT 1
 ) AS lc ON TRUE
-WHERE j.id = $1
 `,
     {
       id: "getChain",
@@ -803,10 +872,13 @@ SELECT
   row_to_json(j)   AS root_job,
   row_to_json(lc)  AS last_chain_job
 FROM {{schema}}.{{table_prefix}}job_blocker AS b
-JOIN {{schema}}.{{table_prefix}}job AS j
+JOIN (
+  SELECT *, (scheduled_at > now()) AS scheduled_in_future
+  FROM {{schema}}.{{table_prefix}}job
+) AS j
   ON j.id = b.blocked_by_chain_id
 LEFT JOIN LATERAL (
-  SELECT *
+  SELECT *, (scheduled_at > now()) AS scheduled_in_future
   FROM {{schema}}.{{table_prefix}}job
   WHERE chain_id = j.id
   ORDER BY chain_index DESC
@@ -825,7 +897,7 @@ ORDER BY b.index ASC
 
   const getJobSql = sql(
     /* sql */ `
-SELECT *
+SELECT *, (scheduled_at > now()) AS scheduled_in_future
 FROM {{schema}}.{{table_prefix}}job
 WHERE id = $1
 `,
@@ -844,10 +916,9 @@ SET scheduled_at = GREATEST(COALESCE($2::timestamptz, now() + ($3::bigint || ' m
   last_attempt_at = now(),
   last_attempt_error = $4::jsonb,
   leased_by = NULL,
-  leased_until = NULL,
-  status = 'pending'
+  leased_until = NULL
 WHERE id = $1
-RETURNING *
+RETURNING *, (scheduled_at > now()) AS scheduled_in_future
 `,
     {
       id: "rescheduleJob",
@@ -862,8 +933,11 @@ WITH _existing AS (
   -- Lock rows in id order so concurrent triggerJobs calls on overlapping
   -- id sets acquire locks consistently and don't deadlock. FOR UPDATE
   -- also makes classification observe the latest committed version, so
-  -- the UPDATE below sees the same status we classified against.
-  SELECT id, status FROM {{schema}}.{{table_prefix}}job
+  -- the UPDATE below sees the same structural state we classified against.
+  SELECT *,
+    (completed_at IS NULL AND leased_until IS NULL AND has_open_blockers = false) AS is_triggerable,
+    (scheduled_at > now()) AS scheduled_in_future
+  FROM {{schema}}.{{table_prefix}}job
   WHERE id = ANY($1::{{id_type}}[])
   ORDER BY id
   FOR UPDATE
@@ -874,23 +948,23 @@ _not_found AS (
   WHERE NOT EXISTS (SELECT 1 FROM _existing e WHERE e.id = i)
 ),
 _not_triggerable AS (
-  SELECT id, status FROM _existing WHERE status != 'pending'
+  SELECT * FROM _existing WHERE is_triggerable = false
 ),
 _updated AS (
-  -- All-or-nothing: only update when every input id resolves to a pending
-  -- job. If anything is missing or non-pending, no rows are touched.
+  -- All-or-nothing: only update when every input id resolves to a triggerable
+  -- job. If anything is missing or non-triggerable, no rows are touched.
   UPDATE {{schema}}.{{table_prefix}}job
   SET scheduled_at = now()
-  WHERE id IN (SELECT id FROM _existing WHERE status = 'pending')
+  WHERE id IN (SELECT id FROM _existing WHERE is_triggerable = true)
     AND NOT EXISTS (SELECT 1 FROM _not_found)
     AND NOT EXISTS (SELECT 1 FROM _not_triggerable)
-  RETURNING *
+  RETURNING *, (scheduled_at > now()) AS scheduled_in_future
 )
 SELECT
   COALESCE((SELECT json_agg(row_to_json(u)) FROM _updated u), '[]'::json) AS triggered,
   COALESCE((SELECT json_agg(id) FROM _not_found), '[]'::json) AS not_found,
   COALESCE(
-    (SELECT json_agg(json_build_object('id', id, 'status', status)) FROM _not_triggerable),
+    (SELECT json_agg(row_to_json(nt)) FROM _not_triggerable nt),
     '[]'::json
   ) AS not_triggerable
 `,
@@ -900,7 +974,7 @@ SELECT
       columns: {
         triggered: t.json<DbJob[]>(),
         not_found: t.json<string[]>(),
-        not_triggerable: t.json<{ id: string; status: string }[]>(),
+        not_triggerable: t.json<DbJob[]>(),
       },
     },
   );
@@ -909,10 +983,9 @@ SELECT
     /* sql */ `
 UPDATE {{schema}}.{{table_prefix}}job
 SET leased_by = $2,
-  leased_until = now() + ($3::bigint || ' milliseconds')::interval,
-  status = 'running'
+  leased_until = now() + ($3::bigint || ' milliseconds')::interval
 WHERE id = $1
-RETURNING *
+RETURNING *, (scheduled_at > now()) AS scheduled_in_future
 `,
     {
       id: "renewJobLease",
@@ -927,28 +1000,34 @@ WITH acquired_job AS (
   SELECT id
   FROM {{schema}}.{{table_prefix}}job
   WHERE type_name IN (SELECT unnest($1::text[]))
-    AND status = 'pending'
+    AND has_open_blockers = false
+    AND leased_until IS NULL
+    AND completed_at IS NULL
     AND scheduled_at <= now()
   ORDER BY scheduled_at ASC
   LIMIT 1
   FOR UPDATE SKIP LOCKED
 )
 UPDATE {{schema}}.{{table_prefix}}job
-SET status = 'running',
+SET leased_by = $2,
+    leased_until = now() + ($3::bigint || ' milliseconds')::interval,
     attempt = attempt + 1
 WHERE id = (SELECT id FROM acquired_job)
 RETURNING *,
+  (scheduled_at > now()) AS scheduled_in_future,
   EXISTS(
     SELECT 1 FROM {{schema}}.{{table_prefix}}job
     WHERE type_name IN (SELECT unnest($1::text[]))
-      AND status = 'pending'
+      AND has_open_blockers = false
+      AND leased_until IS NULL
+      AND completed_at IS NULL
       AND scheduled_at <= now()
     LIMIT 1
   ) AS has_more
 `,
     {
       id: "acquireJob",
-      params: [t.array()],
+      params: [t.array(), t.string(), t.number()],
       columns: { ...dbJobColumns, has_more: t.boolean() },
     },
   );
@@ -958,7 +1037,9 @@ RETURNING *,
 SELECT GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (job.scheduled_at - now())) * 1000))::integer AS available_in_ms
 FROM {{schema}}.{{table_prefix}}job as job
 WHERE job.type_name IN (SELECT unnest($1::text[]))
-  AND job.status = 'pending'
+  AND job.has_open_blockers = false
+  AND job.leased_until IS NULL
+  AND job.completed_at IS NULL
 ORDER BY job.scheduled_at ASC
 LIMIT 1
 FOR UPDATE SKIP LOCKED
@@ -977,7 +1058,7 @@ WITH job_to_unlock AS (
   FROM {{schema}}.{{table_prefix}}job
   WHERE leased_until IS NOT NULL
     AND leased_until <= now()
-    AND status = 'running'
+    AND completed_at IS NULL
     AND type_name IN (SELECT unnest($1::text[]))
     AND id != ALL($2::{{id_type}}[])
   ORDER BY leased_until ASC
@@ -986,11 +1067,10 @@ WITH job_to_unlock AS (
 )
 UPDATE {{schema}}.{{table_prefix}}job as job
 SET leased_by = NULL,
-  leased_until = NULL,
-  status = 'pending'
+  leased_until = NULL
 FROM job_to_unlock
 WHERE job.id = job_to_unlock.id
-RETURNING job.*
+RETURNING job.*, (job.scheduled_at > now()) AS scheduled_in_future
 `,
     {
       id: "reapExpiredJobLease",
@@ -1045,7 +1125,7 @@ _deleted_jobs AS (
   DELETE FROM {{schema}}.{{table_prefix}}job
   WHERE id IN (SELECT id FROM _locked)
     AND NOT EXISTS (SELECT 1 FROM _external_refs)
-  RETURNING *
+  RETURNING *, (scheduled_at > now()) AS scheduled_in_future
 ),
 _deleted_pairs AS (
   SELECT
@@ -1076,7 +1156,7 @@ SELECT
 
   const getJobLockedSql = sql(
     /* sql */ `
-SELECT *
+SELECT *, (scheduled_at > now()) AS scheduled_in_future
 FROM {{schema}}.{{table_prefix}}job
 WHERE id = $1
 FOR UPDATE
@@ -1093,16 +1173,19 @@ FOR UPDATE
 SELECT
   row_to_json(j)  AS root_job,
   row_to_json(lc) AS last_chain_job
-FROM {{schema}}.{{table_prefix}}job AS j
+FROM (
+  SELECT *, (scheduled_at > now()) AS scheduled_in_future
+  FROM {{schema}}.{{table_prefix}}job
+  WHERE id = $1
+) AS j
 LEFT JOIN LATERAL (
-  SELECT *
+  SELECT *, (scheduled_at > now()) AS scheduled_in_future
   FROM {{schema}}.{{table_prefix}}job
   WHERE chain_id = j.id
   ORDER BY chain_index DESC
   LIMIT 1
   FOR UPDATE
 ) AS lc ON TRUE
-WHERE j.id = $1
 `,
     {
       id: "getChainLocked",

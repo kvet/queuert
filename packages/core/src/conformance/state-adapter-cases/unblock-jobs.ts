@@ -58,7 +58,8 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
 
         expect(unblockedJobs).toHaveLength(1);
         expect(unblockedJobs[0].id).toBe(mainJob.id);
-        expect(unblockedJobs[0].status).toBe("pending");
+        expect(unblockedJobs[0].hasOpenBlockers).toBe(false);
+        expect(unblockedJobs[0].hasOpenBlockers).toBe(false);
       },
     },
     {
@@ -131,7 +132,7 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(unblockedJobs).toHaveLength(0);
 
         const stillBlocked = await stateAdapter.getJob({ jobId: mainJob.id });
-        expect(stillBlocked!.status).toBe("blocked");
+        expect(stillBlocked!.hasOpenBlockers).toBe(true);
       },
     },
     {
@@ -434,10 +435,20 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         const first = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.acquireJob({ txCtx, typeNames: ["fairness-main"] }),
+          stateAdapter.acquireJob({
+            txCtx,
+            typeNames: ["fairness-main"],
+            workerId: "conformance-worker",
+            leaseDurationMs: 30_000,
+          }),
         );
         const second = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.acquireJob({ txCtx, typeNames: ["fairness-main"] }),
+          stateAdapter.acquireJob({
+            txCtx,
+            typeNames: ["fairness-main"],
+            workerId: "conformance-worker",
+            leaseDurationMs: 30_000,
+          }),
         );
 
         expect(first.job?.id).toBe(readyMain.id);

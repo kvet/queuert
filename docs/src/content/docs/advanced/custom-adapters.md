@@ -156,7 +156,7 @@ ConformanceError: 2/132 conformance cases failed (130 passed, 0 skipped)
   x createJobs > preserves provided chainId
     expected 'chain-abc' to be 'chain-xyz'
   x addJobsBlockers > marks job blocked when incomplete blockers present
-    expected 'pending' to be 'blocked'
+    expected hasOpenBlockers false to be true
 ```
 
 `err.cause` is an `AggregateError` holding the original thrown errors with full stacks, so IDEs and CI viewers can jump to the failing case source line inside `queuert/conformance`.

@@ -178,7 +178,7 @@ const chain = await client.getChain({ id: orderChain.id });
 if (chain) {
   console.log(`Chain: ${chain.typeName} (${chain.status})`);
   console.log(`  Input: ${JSON.stringify(chain.input)}`);
-  if (chain.status === "completed") {
+  if (chain.status === "closed") {
     console.log(`  Output: ${JSON.stringify(chain.output)}`);
   }
 }
@@ -197,7 +197,7 @@ assert.equal(missing, undefined);
 console.log("\n--- Scenario 2: Paginated Lists ---\n");
 
 const completedChains = await client.listChains({
-  filter: { status: ["completed"] },
+  filter: { status: ["closed"] },
   limit: 3,
 });
 console.log(`Completed chains (page 1, limit 3): ${completedChains.items.length} items`);
@@ -208,7 +208,7 @@ for (const c of completedChains.items) {
 
 if (completedChains.nextCursor) {
   const page2 = await client.listChains({
-    filter: { status: ["completed"] },
+    filter: { status: ["closed"] },
     cursor: completedChains.nextCursor,
     limit: 3,
   });
@@ -249,7 +249,7 @@ const blockers = await client.getJobBlockers({
 console.log(`Blockers for process-order:`);
 for (const b of blockers) {
   console.log(`  "${b.typeName}" — ${b.status}`);
-  if (b.status === "completed") {
+  if (b.status === "closed") {
     console.log(`    Output: ${JSON.stringify(b.output)}`);
   }
 }

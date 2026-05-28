@@ -22,7 +22,12 @@ export const reapExpiredJobLeaseGroup: ConformanceGroup<StateConformanceFixture>
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.acquireJob({ txCtx, typeNames: ["expire-test"] }),
+          stateAdapter.acquireJob({
+            txCtx,
+            typeNames: ["expire-test"],
+            workerId: "conformance-worker",
+            leaseDurationMs: 30_000,
+          }),
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
@@ -42,7 +47,8 @@ export const reapExpiredJobLeaseGroup: ConformanceGroup<StateConformanceFixture>
 
         expect(expired).toBeDefined();
         expect(expired!.id).toBe(created.id);
-        expect(expired!.status).toBe("pending");
+        expect(expired!.leasedUntil).toBeNull();
+        expect(expired!.completedAt).toBeNull();
         expect(expired!.leasedBy).toBeNull();
         expect(expired!.leasedUntil).toBeNull();
       },
@@ -64,7 +70,12 @@ export const reapExpiredJobLeaseGroup: ConformanceGroup<StateConformanceFixture>
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.acquireJob({ txCtx, typeNames: ["no-expire-test"] }),
+          stateAdapter.acquireJob({
+            txCtx,
+            typeNames: ["no-expire-test"],
+            workerId: "conformance-worker",
+            leaseDurationMs: 30_000,
+          }),
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
@@ -113,10 +124,20 @@ export const reapExpiredJobLeaseGroup: ConformanceGroup<StateConformanceFixture>
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.acquireJob({ txCtx, typeNames: ["ignore-test"] }),
+          stateAdapter.acquireJob({
+            txCtx,
+            typeNames: ["ignore-test"],
+            workerId: "conformance-worker",
+            leaseDurationMs: 30_000,
+          }),
         );
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.acquireJob({ txCtx, typeNames: ["ignore-test"] }),
+          stateAdapter.acquireJob({
+            txCtx,
+            typeNames: ["ignore-test"],
+            workerId: "conformance-worker",
+            leaseDurationMs: 30_000,
+          }),
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>

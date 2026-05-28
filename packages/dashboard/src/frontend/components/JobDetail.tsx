@@ -65,7 +65,7 @@ export function JobDetail() {
                   <dt>Scheduled</dt>
                   <dd>
                     {fmtDate(job.scheduledAt)} (<TimeAgo date={job.scheduledAt} />)
-                    <Show when={job.status === "pending" && job.scheduledAt > new Date()}>
+                    <Show when={job.status === "scheduled"}>
                       {" "}
                       <button
                         class="trigger-btn"

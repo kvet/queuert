@@ -1,7 +1,16 @@
-import { type JobStatus } from "queuert";
+import { type ChainStatus, type JobStatus } from "queuert";
 import { decodeCreatedAtWithIdCursor, decodeIdCursor } from "queuert/internal";
 
-const VALID_STATUSES = new Set<string>(["blocked", "pending", "running", "completed"]);
+const VALID_JOB_STATUSES = new Set<string>([
+  "blocked",
+  "scheduled",
+  "ready",
+  "running",
+  "succeeded",
+  "completed",
+]);
+
+const VALID_CHAIN_STATUSES = new Set<string>(["open", "closed"]);
 
 export const parseTypeNameFilter = (raw: string | undefined): string[] | undefined => {
   if (!raw) return undefined;
@@ -11,8 +20,14 @@ export const parseTypeNameFilter = (raw: string | undefined): string[] | undefin
 
 export const parseStatusFilter = (raw: string | undefined): JobStatus[] | undefined => {
   if (!raw) return undefined;
-  const values = raw.split(",").filter((v) => VALID_STATUSES.has(v));
+  const values = raw.split(",").filter((v) => VALID_JOB_STATUSES.has(v));
   return values.length > 0 ? (values as JobStatus[]) : undefined;
+};
+
+export const parseChainStatusFilter = (raw: string | undefined): ChainStatus[] | undefined => {
+  if (!raw) return undefined;
+  const values = raw.split(",").filter((v) => VALID_CHAIN_STATUSES.has(v));
+  return values.length > 0 ? (values as ChainStatus[]) : undefined;
 };
 
 export const parseCursor = (raw: string | undefined): string | undefined => {

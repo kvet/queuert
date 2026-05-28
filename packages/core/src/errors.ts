@@ -75,11 +75,11 @@ export class JobAlreadyCompletedError extends Error {
   }
 }
 
-/** Thrown when attempting to trigger a job that is not in a triggerable state (must be pending). */
+/** Thrown when attempting to trigger a job that is not in a triggerable state (must be `ready` or `scheduled`). */
 export class JobNotTriggerableError extends Error {
   /** The job that could not be triggered. */
   readonly jobId: string;
-  /** The job's current status (must be `pending` to trigger). */
+  /** The job's current status (must be `ready` or `scheduled` to trigger). */
   readonly status: string;
 
   constructor(message: string, options: { jobId: string; status: string; cause?: unknown }) {

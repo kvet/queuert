@@ -1,11 +1,16 @@
 /** Possible statuses of a job. */
-export type JobStatus = "blocked" | "pending" | "running" | "completed";
+export type JobStatus = "blocked" | "scheduled" | "ready" | "running" | "succeeded" | "completed";
 
 /**
- * A job within a chain. Discriminated union on {@link Job.status | status},
- * with `completed` further split into a *terminal* variant (carries `output`,
- * `continuedToJobId === null`) and a *continued* variant (no `output`,
- * `continuedToJobId` points at the successor job).
+ * A job within a chain. Discriminated union on {@link Job.status | status}.
+ *
+ * The six states are derived (never stored) from the job's structural columns:
+ * - `blocked` — has at least one open blocker chain.
+ * - `scheduled` — eligible for processing in the future (`scheduledAt > now`).
+ * - `ready` — eligible for processing now.
+ * - `running` — currently leased by a worker.
+ * - `succeeded` — handed off to a successor via `continueWith` (carries `continuedToJobId`).
+ * - `completed` — terminally completed (carries `output`).
  *
  * @typeParam TJobId - The job ID type (e.g. `string` or `UUID`)
  * @typeParam TJobTypeName - The job type name literal
@@ -37,22 +42,23 @@ export type Job<
   lastAttemptError: string | null;
 } & (
   | { status: "blocked" }
-  | { status: "pending" }
-  | { status: "running"; leasedBy?: string; leasedUntil?: Date }
-  | {
-      status: "completed";
-      completedAt: Date;
-      completedBy: string | null;
-      output: TOutput;
-      continuedToJobId: null;
-    }
+  | { status: "scheduled" }
+  | { status: "ready" }
+  | { status: "running"; leasedBy: string; leasedUntil: Date }
   | (TCanContinue extends true
       ? {
-          status: "completed";
+          status: "succeeded";
           completedAt: Date;
           completedBy: string | null;
-          output?: never;
           continuedToJobId: TJobId;
         }
       : never)
+  | ([TOutput] extends [never]
+      ? never
+      : {
+          status: "completed";
+          completedAt: Date;
+          completedBy: string | null;
+          output: TOutput;
+        })
 );

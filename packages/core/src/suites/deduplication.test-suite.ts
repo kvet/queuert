@@ -172,7 +172,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           transactionHooks,
           typeName: "test",
           input: { value: 3 },
-          deduplication: { key: "completed-key", scope: "incomplete" },
+          deduplication: { key: "completed-key", scope: "open" },
         }),
       ),
     );
@@ -197,7 +197,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           transactionHooks,
           typeName: "test",
           input: { value: 4 },
-          deduplication: { key: "completed-key", scope: "incomplete" },
+          deduplication: { key: "completed-key", scope: "open" },
         }),
       ),
     );
@@ -284,7 +284,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           transactionHooks,
           typeName: "test",
           input: { value: 3 },
-          deduplication: { key: "completed-key", scope: "incomplete", windowMs: 50 },
+          deduplication: { key: "completed-key", scope: "open", windowMs: 50 },
         }),
       ),
     );
@@ -311,7 +311,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           transactionHooks,
           typeName: "test",
           input: { value: 4 },
-          deduplication: { key: "completed-key", scope: "incomplete", windowMs: 50 },
+          deduplication: { key: "completed-key", scope: "open", windowMs: 50 },
         }),
       ),
     );
@@ -531,7 +531,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           transactionHooks,
           typeName: "test",
           input: { value: 2 },
-          deduplication: { key: "incomplete-key", scope: "incomplete" },
+          deduplication: { key: "incomplete-key", scope: "open" },
         }),
       ),
     );
@@ -564,7 +564,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
             {
               typeName: "test",
               input: { value: 4 },
-              deduplication: { key: "incomplete-key", scope: "incomplete" },
+              deduplication: { key: "incomplete-key", scope: "open" },
             },
           ],
         }),

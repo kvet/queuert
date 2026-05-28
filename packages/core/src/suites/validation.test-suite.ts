@@ -160,7 +160,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       ),
     );
 
-    expect(chain.status).toBe("pending");
+    expect(chain.status).toBe("open");
     expect(chain.input).toEqual({ value: 42 });
   });
 
@@ -513,7 +513,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       ),
     );
 
-    expect(completedChain.status).toBe("completed");
+    expect(completedChain.status).toBe("closed");
     expect(completedChain.output).toEqual({ result: 84 });
   });
 
@@ -618,7 +618,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       ),
     );
 
-    expect(partialChain.status).toBe("pending");
+    expect(partialChain.status).toBe("open");
 
     await withWorkers([await worker.start()], async () => {
       const completed = await client.awaitChain(partialChain, completionOptions);

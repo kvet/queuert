@@ -85,7 +85,7 @@ const cleanupProcessorRegistry = createProcessors({
           });
 
           const chainsToDelete = page.items.filter(
-            (chain) => chain.id !== job.chainId && chain.status === "completed",
+            (chain) => chain.id !== job.chainId && chain.status === "closed",
           );
 
           if (chainsToDelete.length > 0) {
@@ -118,7 +118,7 @@ const cleanupProcessorRegistry = createProcessors({
             schedule: { afterMs: CLEANUP_INTERVAL_MS },
             deduplication: {
               key: "queuert.cleanup",
-              scope: "incomplete",
+              scope: "open",
               excludeChainIds: [job.chainId],
             },
           });
@@ -201,7 +201,7 @@ const scheduleCleanup = async () =>
         transactionHooks,
         typeName: "queuert.cleanup",
         input: null,
-        deduplication: { key: "queuert.cleanup", scope: "incomplete" },
+        deduplication: { key: "queuert.cleanup", scope: "open" },
       });
       return result;
     }),
@@ -233,7 +233,7 @@ assert.equal(afterCleanup.items.length, 1, "only the future-scheduled chain shou
 
 // Check that a next cleanup run was scheduled
 const pendingCleanup = await client.listJobs({
-  filter: { typeName: ["queuert.cleanup"], status: ["pending"] },
+  filter: { typeName: ["queuert.cleanup"], status: ["scheduled"] },
   limit: 10,
 });
 console.log(`\nNext cleanup run scheduled: ${pendingCleanup.items.length > 0 ? "yes" : "no"}`);

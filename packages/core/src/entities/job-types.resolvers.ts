@@ -218,7 +218,7 @@ export type ContinuationJobs<
           JobTypeProperty<TJobTypeDefinitions, K, "output">,
           [JobTypeContinuation<TJobTypeDefinitions, K>] extends [never] ? false : true
         > &
-          ({ status: "pending" } | { status: "blocked" });
+          ({ status: "ready" } | { status: "scheduled" } | { status: "blocked" });
       }[TContinuation]
     : never;
 

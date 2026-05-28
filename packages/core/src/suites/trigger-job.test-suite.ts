@@ -50,7 +50,7 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     );
 
     const beforeTrigger = await client.getJob({ id: chain.id });
-    expect(beforeTrigger!.status).toBe("pending");
+    expect(beforeTrigger!.status).toBe("scheduled");
     expect(beforeTrigger!.scheduledAt.getTime()).toBeGreaterThan(Date.now() + 30_000);
 
     const before = Date.now();
@@ -60,7 +60,7 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       ),
     );
 
-    expect(triggered.status).toBe("pending");
+    expect(triggered.status).toBe("ready");
     expect(triggered.scheduledAt.getTime()).toBeGreaterThanOrEqual(before - 1000);
     expect(triggered.scheduledAt.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
     expect(triggered.typeName).toBe("report");
@@ -131,7 +131,7 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         pollIntervalMs: 100,
       });
 
-      expect(completed.status).toBe("completed");
+      expect(completed.status).toBe("closed");
       expect(completed.output).toEqual({ result: 42 });
     });
   });
@@ -374,7 +374,7 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     expect(triggered).toHaveLength(3);
     for (let i = 0; i < triggered.length; i++) {
       expect(triggered[i].id).toBe(ids[i]);
-      expect(triggered[i].status).toBe("pending");
+      expect(triggered[i].status).toBe("ready");
       expect(triggered[i].scheduledAt.getTime()).toBeGreaterThanOrEqual(before - 1000);
       expect(triggered[i].scheduledAt.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
     }

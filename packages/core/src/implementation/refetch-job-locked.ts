@@ -30,7 +30,7 @@ export const refetchJobLocked = async (
     });
   }
 
-  if (fetchedJob.status === "completed") {
+  if (fetchedJob.completedAt !== null) {
     helpers.observabilityHelper.jobAttemptAlreadyCompleted(fetchedJob, { workerId });
     throw new JobAlreadyCompletedError("Job is already completed", {
       jobId: fetchedJob.id,

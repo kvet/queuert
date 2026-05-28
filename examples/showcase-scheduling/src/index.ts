@@ -304,7 +304,7 @@ const healthChain1 = await withTransactionHooks(async (transactionHooks) =>
       input: { serviceId: "api-server", checkNumber: 1 },
       deduplication: {
         key: "health:api-server",
-        scope: "incomplete", // Only one active instance at a time
+        scope: "open", // Only one active instance at a time
       },
     }),
   ),
@@ -323,7 +323,7 @@ const healthChain2 = await withTransactionHooks(async (transactionHooks) =>
       input: { serviceId: "api-server", checkNumber: 1 },
       deduplication: {
         key: "health:api-server",
-        scope: "incomplete",
+        scope: "open",
       },
     }),
   ),

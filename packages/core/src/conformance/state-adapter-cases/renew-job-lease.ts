@@ -21,7 +21,12 @@ export const renewJobLeaseGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.acquireJob({ txCtx, typeNames: ["lease-test"] }),
+          stateAdapter.acquireJob({
+            txCtx,
+            typeNames: ["lease-test"],
+            workerId: "conformance-worker",
+            leaseDurationMs: 30_000,
+          }),
         );
 
         const before = Date.now();
@@ -38,7 +43,7 @@ export const renewJobLeaseGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(renewed.leasedUntil).toBeInstanceOf(Date);
         expect(renewed.leasedUntil!.getTime()).toBeGreaterThanOrEqual(before + 9_000);
         expect(renewed.leasedUntil!.getTime()).toBeLessThan(before + 11_000);
-        expect(renewed.status).toBe("running");
+        expect(renewed.completedAt).toBeNull();
       },
     },
     {
@@ -58,7 +63,12 @@ export const renewJobLeaseGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.acquireJob({ txCtx, typeNames: ["re-lease-test"] }),
+          stateAdapter.acquireJob({
+            txCtx,
+            typeNames: ["re-lease-test"],
+            workerId: "conformance-worker",
+            leaseDurationMs: 30_000,
+          }),
         );
 
         const first = await stateAdapter.withTransaction(async (txCtx) =>

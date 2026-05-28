@@ -7,10 +7,10 @@
 export type DeduplicationOptions<TJobId> = {
   /** Unique key for deduplication matching. */
   key: string;
-  /** Which existing chains to match against. Defaults to `"incomplete"`. */
-  scope?: "incomplete" | "any";
+  /** Which existing chains to match against. `"open"` matches only chains that are not yet closed; `"any"` matches regardless. Defaults to `"open"`. */
+  scope?: "open" | "any";
   /** Time window in milliseconds — only chains created within this window are matched. */
   windowMs?: number;
-  /** Chain IDs to exclude from deduplication matching. Useful for recurring jobs that self-schedule within a completion callback where the current chain is still incomplete. */
+  /** Chain IDs to exclude from deduplication matching. Useful for recurring jobs that self-schedule within a completion callback where the current chain is still open. */
   excludeChainIds?: TJobId[];
 };

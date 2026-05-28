@@ -9,10 +9,14 @@
   --accent: #3b82f6;
   --accent-hover: #2563eb;
 
-  --status-pending: #eab308;
+  --status-ready: #eab308;
+  --status-scheduled: #f59e0b;
   --status-running: #3b82f6;
   --status-completed: #22c55e;
+  --status-succeeded: #14b8a6;
   --status-blocked: #a855f7;
+  --status-open: #3b82f6;
+  --status-closed: #22c55e;
 
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -232,13 +236,21 @@ a:hover {
   border-radius: 999px;
 }
 
-.status-badge[data-status="pending"] {
-  color: var(--status-pending);
-  background: color-mix(in srgb, var(--status-pending) 15%, transparent);
+.status-badge[data-status="ready"] {
+  color: var(--status-ready);
+  background: color-mix(in srgb, var(--status-ready) 15%, transparent);
+}
+.status-badge[data-status="scheduled"] {
+  color: var(--status-scheduled);
+  background: color-mix(in srgb, var(--status-scheduled) 15%, transparent);
 }
 .status-badge[data-status="running"] {
   color: var(--status-running);
   background: color-mix(in srgb, var(--status-running) 15%, transparent);
+}
+.status-badge[data-status="succeeded"] {
+  color: var(--status-succeeded);
+  background: color-mix(in srgb, var(--status-succeeded) 15%, transparent);
 }
 .status-badge[data-status="completed"] {
   color: var(--status-completed);
@@ -247,6 +259,14 @@ a:hover {
 .status-badge[data-status="blocked"] {
   color: var(--status-blocked);
   background: color-mix(in srgb, var(--status-blocked) 15%, transparent);
+}
+.status-badge[data-status="open"] {
+  color: var(--status-open);
+  background: color-mix(in srgb, var(--status-open) 15%, transparent);
+}
+.status-badge[data-status="closed"] {
+  color: var(--status-closed);
+  background: color-mix(in srgb, var(--status-closed) 15%, transparent);
 }
 
 .load-more {

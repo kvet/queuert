@@ -143,14 +143,19 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.acquireJob({ txCtx, typeNames: ["test-type"] }),
+          stateAdapter.acquireJob({
+            txCtx,
+            typeNames: ["test-type"],
+            workerId: "conformance-worker",
+            leaseDurationMs: 30_000,
+          }),
         );
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJob({ txCtx, jobId: job.id, output: null, workerId: "w1" }),
         );
 
         const result = await stateAdapter.listJobs({
-          filter: { status: ["completed"] },
+          filter: { statePredicates: [{ completed: true, succeeded: false }] },
           orderDirection: "desc",
           page: { limit: 10 },
         });

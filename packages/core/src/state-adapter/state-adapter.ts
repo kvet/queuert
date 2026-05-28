@@ -2,22 +2,40 @@ import { type ScheduleOptions } from "../entities/schedule.js";
 import { type BlockerReference } from "../errors.js";
 import { type OrderDirection, type Page, type PageParams } from "../pagination.js";
 
-export type StateJobStatus = "blocked" | "pending" | "running" | "completed";
+/**
+ * A structural predicate over a job's columns. Used by list filters in place of
+ * a stored `status`. Within one predicate the conditions are ANDed; callers pass
+ * an array to OR several predicates (e.g. one per public status).
+ *
+ * - `completed` — `completedAt IS [NOT] NULL`
+ * - `succeeded` — `continuedToJobId IS [NOT] NULL`
+ * - `leased` — `leasedUntil IS [NOT] NULL`
+ * - `hasOpenBlockers` — the `has_open_blockers` flag
+ * - `scheduledInFuture` — `scheduledAt > now` (evaluated against the adapter's clock)
+ */
+export type JobStatePredicate = {
+  completed?: boolean;
+  succeeded?: boolean;
+  leased?: boolean;
+  hasOpenBlockers?: boolean;
+  scheduledInFuture?: boolean;
+};
 
 export type StateJob = {
   id: string;
   typeName: string;
   chainId: string;
   chainTypeName: string;
-  continuedToJobId: string | null;
   input: unknown;
   output: unknown;
 
-  status: StateJobStatus;
   createdAt: Date;
+  hasOpenBlockers: boolean;
   scheduledAt: Date;
+  scheduledInFuture: boolean;
   completedAt: Date | null;
   completedBy: string | null;
+  continuedToJobId: string | null;
 
   attempt: number;
   lastAttemptError: string | null;
@@ -127,7 +145,7 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
           chainTypeName: string;
           deduplication?: {
             key: string;
-            scope?: "incomplete" | "any";
+            scope?: "open" | "any";
             windowMs?: number;
             excludeChainIds?: TJobId[];
           };
@@ -154,7 +172,7 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     }[]
   >;
 
-  /** Unblocks jobs when a blocker chain completes, transitioning them from blocked to pending. */
+  /** Unblocks jobs when a blocker chain completes, clearing `hasOpenBlockers` once their last blocker resolves. */
   unblockJobs: (params: {
     txCtx?: TTxContext;
     blockedByChainId: TJobId;
@@ -173,19 +191,22 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
   }) => Promise<number | null>;
 
   /**
-   * Acquires a pending job for processing. Returns the job and whether more
+   * Acquires a ready job for processing. Returns the job and whether more
    * jobs are waiting.
    *
-   * Implicit-lock contract: must atomically select a pending row and flip its
-   * status to `running` (typically a single `FOR UPDATE SKIP LOCKED` + `UPDATE`
-   * on Postgres/MySQL). Two parallel callers must never receive the same job,
-   * and a row already locked by another caller must be *skipped* rather than
-   * waited on — otherwise concurrent workers serialize on contended rows
-   * instead of fanning out across the queue.
+   * Implicit-lock contract: must atomically select a ready row (not blocked,
+   * not leased, not completed, `scheduledAt <= now`) and set its lease
+   * (`leased_until`, `leased_by`, `attempt++`) — typically a single
+   * `FOR UPDATE SKIP LOCKED` + `UPDATE` on Postgres/MySQL. Two parallel callers
+   * must never receive the same job, and a row already locked by another caller
+   * must be *skipped* rather than waited on — otherwise concurrent workers
+   * serialize on contended rows instead of fanning out across the queue.
    */
   acquireJob: (params: {
     txCtx?: TTxContext;
     typeNames: string[];
+    workerId: string;
+    leaseDurationMs: number;
   }) => Promise<{ job: StateJob | undefined; hasMore: boolean }>;
 
   /** Renews the lease on a running job. */
@@ -213,7 +234,8 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
   }) => Promise<StateJob>;
 
   /**
-   * Removes an expired lease and resets the job to pending.
+   * Removes an expired lease, clearing the lease fields so the job becomes
+   * acquirable again.
    *
    * Implicit-lock contract: same shape as `acquireJob` — atomic select-and-update
    * on a single row, skipping rows already locked by another caller rather than
@@ -241,12 +263,12 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     blockerRefs: BlockerReference[];
   }>;
 
-  /** Lists chains with pagination and filtering. */
+  /** Lists chains with pagination and filtering. `closed` filters on whether the tail job is terminally completed. */
   listChains: (params: {
     txCtx?: TTxContext;
     filter?: {
       typeName?: string[];
-      status?: StateJobStatus[];
+      closed?: boolean;
       rootOnly?: boolean;
       chainId?: string[];
       jobId?: string[];
@@ -257,11 +279,15 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     page: PageParams;
   }) => Promise<Page<[StateJob, StateJob | undefined]>>;
 
-  /** Lists jobs with pagination and filtering. */
+  /**
+   * Lists jobs with pagination and filtering. `statePredicates` is an OR-array of
+   * structural predicates (see {@link JobStatePredicate}); a job matches when it
+   * satisfies any predicate.
+   */
   listJobs: (params: {
     txCtx?: TTxContext;
     filter?: {
-      status?: StateJobStatus[];
+      statePredicates?: JobStatePredicate[];
       typeName?: string[];
       chainTypeName?: string[];
       chainId?: string[];
@@ -290,19 +316,22 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
   }) => Promise<Page<StateJob>>;
 
   /**
-   * Triggers pending jobs immediately by setting their scheduledAt to now.
+   * Triggers eligible jobs immediately by setting their scheduledAt to now.
    *
-   * All-or-nothing: if any input id is missing or not in `pending` status, no
-   * rows are updated and `triggered` is empty. `notFound` lists ids with no
-   * matching job; `notTriggerable` lists existing jobs whose status is not
-   * `pending`. When every input is eligible, `triggered` contains the updated
-   * jobs in the same order as `jobIds`. Never throws on missing/ineligible
-   * ids — the caller decides how to surface failures.
+   * A job is triggerable when it is neither completed, leased, nor blocked
+   * (i.e. it derives to `ready` or `scheduled`).
+   *
+   * All-or-nothing: if any input id is missing or not triggerable, no rows are
+   * updated and `triggered` is empty. `notFound` lists ids with no matching job;
+   * `notTriggerable` lists existing jobs that are not triggerable (the caller
+   * derives their status). When every input is eligible, `triggered` contains
+   * the updated jobs in the same order as `jobIds`. Never throws on
+   * missing/ineligible ids — the caller decides how to surface failures.
    */
   triggerJobs: (params: { txCtx?: TTxContext; jobIds: TJobId[] }) => Promise<{
     triggered: StateJob[];
     notFound: TJobId[];
-    notTriggerable: { id: TJobId; status: StateJobStatus }[];
+    notTriggerable: StateJob[];
   }>;
 
   /**
