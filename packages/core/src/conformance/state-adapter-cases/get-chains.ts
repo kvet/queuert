@@ -4,8 +4,8 @@ import { type StateConformanceFixture } from "./types.js";
 
 const LOCK_BLOCK_OBSERVATION_MS = 100;
 
-export const getChainGroup: ConformanceGroup<StateConformanceFixture> = {
-  name: "getChain",
+export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
+  name: "getChains",
   cases: [
     {
       name: "handles chain relationships correctly",
@@ -25,7 +25,7 @@ export const getChainGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        const chain = await stateAdapter.getChain({ chainId: rootJob.id });
+        const [chain] = await stateAdapter.getChains({ chainIds: [rootJob.id] });
 
         expect(chain).toBeDefined();
         expect(chain![0].id).toBe(rootJob.id);
@@ -65,7 +65,7 @@ export const getChainGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        const chain = await stateAdapter.getChain({ chainId: rootJob.id });
+        const [chain] = await stateAdapter.getChains({ chainIds: [rootJob.id] });
         expect(chain).toBeDefined();
         expect(chain![0].id).toBe(rootJob.id);
         expect(chain![1]).toBeDefined();
@@ -90,7 +90,7 @@ export const getChainGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        const chain = await stateAdapter.getChain({ chainId: rootJob.id });
+        const [chain] = await stateAdapter.getChains({ chainIds: [rootJob.id] });
 
         expect(chain).toBeDefined();
         expect(chain![0].id).toBe(rootJob.id);
@@ -115,8 +115,8 @@ export const getChainGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        const chain = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.getChain({ txCtx, chainId: rootJob.id, lock: "exclusive" }),
+        const [chain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.getChains({ txCtx, chainIds: [rootJob.id], lock: "exclusive" }),
         );
 
         expect(chain).toBeDefined();
@@ -142,10 +142,8 @@ export const getChainGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
         const nonexistentId = real.chainId.slice(0, -1) + (real.chainId.endsWith("0") ? "1" : "0");
-        const chain = await stateAdapter.getChain({
-          chainId: nonexistentId,
-        });
-        expect(chain).toBeUndefined();
+        const result = await stateAdapter.getChains({ chainIds: [nonexistentId] });
+        expect(result).toEqual([undefined]);
       },
     },
     {
@@ -191,9 +189,9 @@ export const getChainGroup: ConformanceGroup<StateConformanceFixture> = {
         });
 
         const holderTx = stateAdapter.withTransaction(async (txCtx) => {
-          await stateAdapter.getChain({
+          await stateAdapter.getChains({
             txCtx,
-            chainId: rootJob.chainId,
+            chainIds: [rootJob.chainId],
             lock: "exclusive",
           });
           signalLockHeld!();
@@ -205,7 +203,7 @@ export const getChainGroup: ConformanceGroup<StateConformanceFixture> = {
         let waiterResolved = false;
         const waiterTx = stateAdapter
           .withTransaction(async (txCtx) =>
-            stateAdapter.getChain({ txCtx, chainId: rootJob.chainId, lock: "exclusive" }),
+            stateAdapter.getChains({ txCtx, chainIds: [rootJob.chainId], lock: "exclusive" }),
           )
           .then((chain) => {
             waiterResolved = true;
@@ -218,7 +216,7 @@ export const getChainGroup: ConformanceGroup<StateConformanceFixture> = {
         releaseHolder!();
         await holderTx;
 
-        const observed = await waiterTx;
+        const [observed] = await waiterTx;
         expect(observed).toBeDefined();
         expect(observed![0].id).toBe(rootJob.id);
         expect(observed![1]).toBeDefined();

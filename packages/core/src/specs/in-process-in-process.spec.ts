@@ -66,7 +66,7 @@ describe("Wait Chain Completion", () => {
 });
 
 describe("State Resilience", () => {
-  stateResilienceTestSuite({ it: inProcessInProcessIt, skipConcurrencyTests: true });
+  stateResilienceTestSuite({ it: inProcessInProcessIt });
 });
 
 describe("Notify Resilience", () => {

@@ -32,7 +32,7 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(deleted).toHaveLength(1);
         expect(deleted[0][0].id).toBe(job.id);
         expect(deleted[0][1]).toBeUndefined();
-        expect(await stateAdapter.getJob({ jobId: job.id })).toBeUndefined();
+        expect(await stateAdapter.getJobs({ jobIds: [job.id] })).toEqual([undefined]);
       },
     },
     {
@@ -75,8 +75,9 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        expect(await stateAdapter.getJob({ jobId: jobA.id })).toBeUndefined();
-        expect(await stateAdapter.getJob({ jobId: jobB.id })).toBeDefined();
+        expect(await stateAdapter.getJobs({ jobIds: [jobA.id] })).toEqual([undefined]);
+        const jobBResult = await stateAdapter.getJobs({ jobIds: [jobB.id] });
+        expect(Array.isArray(jobBResult) && typeof jobBResult[0] === "object").toBe(true);
       },
     },
     {
@@ -128,7 +129,10 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         ]);
 
         // Blocker chain is still intact
-        expect(await stateAdapter.getJob({ jobId: blockerJob.id })).toBeDefined();
+        const blockerStillThere = await stateAdapter.getJobs({ jobIds: [blockerJob.id] });
+        expect(Array.isArray(blockerStillThere) && typeof blockerStillThere[0] === "object").toBe(
+          true,
+        );
 
         // Deleting both together succeeds
         const { deleted, blockerRefs } = await stateAdapter.withTransaction(async (txCtx) =>
@@ -191,8 +195,8 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         expect(deleted).toHaveLength(2);
-        expect(await stateAdapter.getJob({ jobId: blockerJob.id })).toBeUndefined();
-        expect(await stateAdapter.getJob({ jobId: mainJob.id })).toBeUndefined();
+        expect(await stateAdapter.getJobs({ jobIds: [blockerJob.id] })).toEqual([undefined]);
+        expect(await stateAdapter.getJobs({ jobIds: [mainJob.id] })).toEqual([undefined]);
       },
     },
     {
@@ -321,9 +325,9 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         expect(deleted).toHaveLength(3);
-        expect(await stateAdapter.getJob({ jobId: jobA.id })).toBeUndefined();
-        expect(await stateAdapter.getJob({ jobId: jobB.id })).toBeUndefined();
-        expect(await stateAdapter.getJob({ jobId: jobC.id })).toBeUndefined();
+        expect(await stateAdapter.getJobs({ jobIds: [jobA.id] })).toEqual([undefined]);
+        expect(await stateAdapter.getJobs({ jobIds: [jobB.id] })).toEqual([undefined]);
+        expect(await stateAdapter.getJobs({ jobIds: [jobC.id] })).toEqual([undefined]);
       },
     },
     {
@@ -424,10 +428,10 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         expect(deleted).toHaveLength(4);
-        expect(await stateAdapter.getJob({ jobId: jobA.id })).toBeUndefined();
-        expect(await stateAdapter.getJob({ jobId: jobB.id })).toBeUndefined();
-        expect(await stateAdapter.getJob({ jobId: jobC.id })).toBeUndefined();
-        expect(await stateAdapter.getJob({ jobId: jobD.id })).toBeUndefined();
+        expect(await stateAdapter.getJobs({ jobIds: [jobA.id] })).toEqual([undefined]);
+        expect(await stateAdapter.getJobs({ jobIds: [jobB.id] })).toEqual([undefined]);
+        expect(await stateAdapter.getJobs({ jobIds: [jobC.id] })).toEqual([undefined]);
+        expect(await stateAdapter.getJobs({ jobIds: [jobD.id] })).toEqual([undefined]);
       },
     },
     {
@@ -473,8 +477,9 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
 
         expect(deleted).toHaveLength(1);
         expect(deleted[0][0].id).toBe(jobA.id);
-        expect(await stateAdapter.getJob({ jobId: jobA.id })).toBeUndefined();
-        expect(await stateAdapter.getJob({ jobId: jobB.id })).toBeDefined();
+        expect(await stateAdapter.getJobs({ jobIds: [jobA.id] })).toEqual([undefined]);
+        const jobBSurvives = await stateAdapter.getJobs({ jobIds: [jobB.id] });
+        expect(Array.isArray(jobBSurvives) && typeof jobBSurvives[0] === "object").toBe(true);
       },
     },
   ],

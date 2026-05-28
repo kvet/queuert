@@ -295,7 +295,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       await client.awaitChain(chain, completionOptions);
     });
 
-    const completedJob = await stateAdapter.getJob({ jobId: chain.id });
+    const completedJob = await client.getJob({ id: chain.id });
     expect(completedJob?.status).toBe("completed");
     expect(completedJob?.lastAttemptError).toBeNull();
   });
@@ -476,9 +476,10 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       expect(completedChain.output).toEqual({ result: true });
     });
 
-    // Verify completedBy is set to workerId for worker completion
-    const completedJob = await stateAdapter.getJob({ jobId: chain.id });
+    const completedJob = await client.getJob({ id: chain.id });
     expect(completedJob?.status).toBe("completed");
-    expect(completedJob?.completedBy).toMatch(/^worker-[0-9a-f-]{36}$/);
+    if (completedJob?.status === "completed") {
+      expect(completedJob.completedBy).toMatch(/^worker-[0-9a-f-]{36}$/);
+    }
   });
 };

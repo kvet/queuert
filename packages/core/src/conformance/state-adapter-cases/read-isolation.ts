@@ -39,12 +39,11 @@ export const readIsolationGroup: ConformanceGroup<StateConformanceFixture> = {
           .catch(() => {});
 
         await txReady;
-        const readPromise = stateAdapter.getJob({ jobId: insertedId! });
+        const readPromise = stateAdapter.getJobs({ jobIds: [insertedId!] });
         release!();
         await txPromise;
 
-        const observed = await readPromise;
-        expect(observed).toBeUndefined();
+        expect(await readPromise).toEqual([undefined]);
       },
     },
     {
@@ -88,11 +87,11 @@ export const readIsolationGroup: ConformanceGroup<StateConformanceFixture> = {
           .catch(() => {});
 
         await txReady;
-        const readPromise = stateAdapter.getJob({ jobId: seed.id });
+        const readPromise = stateAdapter.getJobs({ jobIds: [seed.id] });
         release!();
         await txPromise;
 
-        const observed = await readPromise;
+        const [observed] = await readPromise;
         expect(observed?.status).toBe("pending");
         expect(observed?.attempt).toBe(0);
       },
@@ -197,12 +196,12 @@ export const readIsolationGroup: ConformanceGroup<StateConformanceFixture> = {
 
         await txReady;
         const blockersPromise = stateAdapter.getJobBlockers({ jobId: target.id });
-        const targetReadPromise = stateAdapter.getJob({ jobId: target.id });
+        const targetReadPromise = stateAdapter.getJobs({ jobIds: [target.id] });
         release!();
         await txPromise;
 
         const observedBlockers = await blockersPromise;
-        const observedTarget = await targetReadPromise;
+        const [observedTarget] = await targetReadPromise;
         expect(observedBlockers).toHaveLength(0);
         expect(observedTarget?.status).toBe("pending");
       },
@@ -244,11 +243,11 @@ export const readIsolationGroup: ConformanceGroup<StateConformanceFixture> = {
           .catch(() => {});
 
         await txReady;
-        const readPromise = stateAdapter.getJob({ jobId: seed.id });
+        const readPromise = stateAdapter.getJobs({ jobIds: [seed.id] });
         release!();
         await txPromise;
 
-        const observed = await readPromise;
+        const [observed] = await readPromise;
         expect(observed?.id).toBe(seed.id);
       },
     },
@@ -287,12 +286,11 @@ export const readIsolationGroup: ConformanceGroup<StateConformanceFixture> = {
           .catch(() => {});
 
         await txReady;
-        const readPromise = stateAdapter.getChain({ chainId: newChainId! });
+        const readPromise = stateAdapter.getChains({ chainIds: [newChainId!] });
         release!();
         await txPromise;
 
-        const observed = await readPromise;
-        expect(observed).toBeUndefined();
+        expect(await readPromise).toEqual([undefined]);
       },
     },
     {
@@ -373,11 +371,11 @@ export const readIsolationGroup: ConformanceGroup<StateConformanceFixture> = {
           .catch(() => {});
 
         await txReady;
-        const readPromise = stateAdapter.getJob({ jobId: seed.id, lock: "exclusive" });
+        const readPromise = stateAdapter.getJobs({ jobIds: [seed.id], lock: "exclusive" });
         release!();
         await txPromise;
 
-        const observed = await readPromise;
+        const [observed] = await readPromise;
         expect(observed?.status).toBe("pending");
         expect(observed?.attempt).toBe(0);
       },
@@ -430,14 +428,14 @@ export const readIsolationGroup: ConformanceGroup<StateConformanceFixture> = {
           .catch(() => {});
 
         await txReady;
-        const readPromise = stateAdapter.getChain({
-          chainId: seed.chainId,
+        const readPromise = stateAdapter.getChains({
+          chainIds: [seed.chainId],
           lock: "exclusive",
         });
         release!();
         await txPromise;
 
-        const observed = await readPromise;
+        const [observed] = await readPromise;
         expect(observed).toBeDefined();
         const [rootJob, lastJob] = observed!;
         expect(rootJob.id).toBe(seed.id);

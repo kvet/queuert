@@ -25,6 +25,7 @@ export const createDrizzlePgStateProvider = <TSchema extends Record<string, unkn
   prepareStatements?: boolean;
 }): PgStateProvider<DrizzlePgContext<TSchema>> => {
   return {
+    transactionConcurrency: "concurrent",
     withTransaction: async (cb) => {
       return db.transaction(async (tx) => cb({ tx: tx as DrizzlePgTransaction<TSchema> }));
     },

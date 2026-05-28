@@ -246,13 +246,13 @@ Both PG and SQLite support expression indexes natively. The expression must be `
 
 Considered `effective_priority INTEGER GENERATED ALWAYS AS (...) STORED` with a plain index on it. Rejected primarily on **migration cost on existing deployments**:
 
-|                       | Expression index                                              | STORED generated column                                          |
-| --------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------- |
-| 1M-row migration cost | Index build over the active-subset partial (~seconds)         | Full table rewrite under `AccessExclusiveLock` (~30-60s blocked) |
-| Disk cost             | One btree                                                     | One btree + one INT per row                                      |
-| Formula change        | `DROP INDEX` + `CREATE INDEX` over the active subset          | Another full table rewrite                                       |
-| MariaDB <10.5         | Needs VIRTUAL generated column workaround when adapter ships  | Native support                                                   |
-| Drift risk            | ORDER BY must match index expression character-for-character  | None                                                             |
+|                       | Expression index                                             | STORED generated column                                          |
+| --------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------- |
+| 1M-row migration cost | Index build over the active-subset partial (~seconds)        | Full table rewrite under `AccessExclusiveLock` (~30-60s blocked) |
+| Disk cost             | One btree                                                    | One btree + one INT per row                                      |
+| Formula change        | `DROP INDEX` + `CREATE INDEX` over the active subset         | Another full table rewrite                                       |
+| MariaDB <10.5         | Needs VIRTUAL generated column workaround when adapter ships | Native support                                                   |
+| Drift risk            | ORDER BY must match index expression character-for-character | None                                                             |
 
 The drift risk is the strongest argument for the stored column, but exactly one acquisition site references the expression. A code comment at the index definition and the `acquireJobSql` cross-references the two; conformance tests validate ordering. Acceptable.
 

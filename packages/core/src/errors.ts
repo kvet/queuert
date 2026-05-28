@@ -51,6 +51,18 @@ export class JobNotFoundError extends Error {
   }
 }
 
+/** Batch variant of {@link JobNotFoundError} — thrown by the plural {@link Client.triggerJobs | triggerJobs} listing every input id with no matching job. */
+export class JobsNotFoundError extends Error {
+  /** The input ids that had no matching job. */
+  readonly jobIds: readonly string[];
+
+  constructor(message: string, options: { jobIds: readonly string[]; cause?: unknown }) {
+    super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
+    this.name = "JobsNotFoundError";
+    this.jobIds = options.jobIds;
+  }
+}
+
 /** Thrown when a chain does not exist. */
 export class ChainNotFoundError extends Error {
   /** The chain ID that was looked up. */
@@ -79,14 +91,23 @@ export class JobAlreadyCompletedError extends Error {
 export class JobNotTriggerableError extends Error {
   /** The job that could not be triggered. */
   readonly jobId: string;
-  /** The job's current status (must be `pending` to trigger). */
-  readonly status: string;
 
-  constructor(message: string, options: { jobId: string; status: string; cause?: unknown }) {
+  constructor(message: string, options: { jobId: string; cause?: unknown }) {
     super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
     this.name = "JobNotTriggerableError";
     this.jobId = options.jobId;
-    this.status = options.status;
+  }
+}
+
+/** Batch variant of {@link JobNotTriggerableError} — thrown by the plural {@link Client.triggerJobs | triggerJobs} listing every input id whose status is not `pending`. */
+export class JobsNotTriggerableError extends Error {
+  /** The input ids whose status is not `pending`. */
+  readonly jobIds: readonly string[];
+
+  constructor(message: string, options: { jobIds: readonly string[]; cause?: unknown }) {
+    super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
+    this.name = "JobsNotTriggerableError";
+    this.jobIds = options.jobIds;
   }
 }
 

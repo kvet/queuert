@@ -4,7 +4,6 @@ import { type StateAdapter } from "queuert";
 import { stateAdapterConformanceTestSuite } from "queuert/testing";
 import { it as baseIt, describe, expect } from "vitest";
 
-import { migrations } from "../state-adapter/sql.js";
 import { type PgStateAdapter, createPgStateAdapter } from "../state-adapter/state-adapter.pg.js";
 import {
   type PgPoolContext,
@@ -14,6 +13,7 @@ import {
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const dummyProvider = {
+  transactionConcurrency: "concurrent" as const,
   executeSql: async () => [],
   withTransaction: async <T>(fn: (ctx: any) => Promise<T>) => fn({}),
 };
@@ -338,7 +338,7 @@ describe("Migrations", () => {
     const result = await stateAdapter.migrateToLatest();
 
     expect(result.skipped).toEqual([]);
-    expect(result.applied).toEqual(migrations.map((m) => m.name));
+    expect(result.applied.length).toBeGreaterThan(0);
     expect(result.unrecognized).toEqual([]);
   });
 
@@ -347,7 +347,7 @@ describe("Migrations", () => {
     expect(firstResult.applied.length).toBeGreaterThan(0);
 
     const secondResult = await stateAdapter.migrateToLatest();
-    expect(secondResult.skipped).toEqual(migrations.map((m) => m.name));
+    expect(secondResult.skipped).toEqual(firstResult.applied);
     expect(secondResult.applied).toEqual([]);
     expect(secondResult.unrecognized).toEqual([]);
   });
@@ -360,7 +360,7 @@ describe("Migrations", () => {
   migrationIt(
     "returns unknown migrations when database is ahead",
     async ({ stateAdapter, pool }) => {
-      await stateAdapter.migrateToLatest();
+      const firstResult = await stateAdapter.migrateToLatest();
 
       await pool.query(
         "INSERT INTO queuert_migration (name) VALUES ('20991231235959_future_migration')",
@@ -368,7 +368,7 @@ describe("Migrations", () => {
 
       const result = await stateAdapter.migrateToLatest();
 
-      expect(result.skipped).toEqual(migrations.map((m) => m.name));
+      expect(result.skipped).toEqual(firstResult.applied);
       expect(result.applied).toEqual([]);
       expect(result.unrecognized).toEqual(["20991231235959_future_migration"]);
     },

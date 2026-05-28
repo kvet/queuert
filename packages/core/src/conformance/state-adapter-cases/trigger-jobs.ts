@@ -27,10 +27,11 @@ export const triggerJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(Math.abs(created.scheduledAt.getTime() - futureDate.getTime())).toBeLessThan(1000);
 
         const before = Date.now();
-        const { triggered } = await stateAdapter.withTransaction(async (txCtx) =>
+        const triggered = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.triggerJobs({ txCtx, jobIds: [created.id] }),
         );
 
+        expect(triggered).toHaveLength(1);
         expect(triggered[0].status).toBe("pending");
         expect(triggered[0].scheduledAt.getTime()).toBeGreaterThanOrEqual(before - 1000);
         expect(triggered[0].scheduledAt.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
@@ -92,7 +93,7 @@ export const triggerJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        const { triggered } = await stateAdapter.withTransaction(async (txCtx) =>
+        const triggered = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.triggerJobs({ txCtx, jobIds: [created.id] }),
         );
 
@@ -140,34 +141,31 @@ export const triggerJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
         const ids = created.map((c) => c.job.id);
 
-        const result = await stateAdapter.withTransaction(async (txCtx) =>
+        const triggered = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.triggerJobs({ txCtx, jobIds: ids }),
         );
 
-        expect(result.triggered.map((j) => j.id)).toEqual(ids);
-        expect(result.notFound).toEqual([]);
-        expect(result.notTriggerable).toEqual([]);
+        expect(triggered.map((j) => j.id)).toEqual(ids);
 
-        // Also preserves input order when input order differs from insertion order.
+        // Preserves input order when input order differs from insertion order.
         const reversed = [...ids].reverse();
-        const resultReversed = await stateAdapter.withTransaction(async (txCtx) =>
+        const reversedTriggered = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.triggerJobs({ txCtx, jobIds: reversed }),
         );
-        expect(resultReversed.triggered.map((j) => j.id)).toEqual(reversed);
+        expect(reversedTriggered.map((j) => j.id)).toEqual(reversed);
       },
     },
     {
-      name: "returns empty buckets for empty jobIds",
+      name: "returns empty array for empty jobIds",
       run: async ({ stateAdapter }, expect) => {
-        const result = await stateAdapter.withTransaction(async (txCtx) =>
+        const triggered = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.triggerJobs({ txCtx, jobIds: [] }),
         );
-
-        expect(result).toEqual({ triggered: [], notFound: [], notTriggerable: [] });
+        expect(triggered).toEqual([]);
       },
     },
     {
-      name: "reports missing ids in notFound and does not trigger eligible jobs",
+      name: "skips missing ids",
       run: async ({ stateAdapter }, expect) => {
         const futureDate = new Date(Date.now() + 60_000);
         const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
@@ -187,20 +185,15 @@ export const triggerJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         const missingId = crypto.randomUUID();
-        const result = await stateAdapter.withTransaction(async (txCtx) =>
+        const triggered = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.triggerJobs({ txCtx, jobIds: [created.id, missingId] }),
         );
 
-        expect(result.triggered).toEqual([]);
-        expect(result.notFound).toEqual([missingId]);
-        expect(result.notTriggerable).toEqual([]);
-
-        const after = await stateAdapter.getJob({ jobId: created.id });
-        expect(Math.abs(after!.scheduledAt.getTime() - futureDate.getTime())).toBeLessThan(1000);
+        expect(triggered.map((j) => j.id)).toEqual([created.id]);
       },
     },
     {
-      name: "reports non-pending jobs in notTriggerable and does not trigger eligible jobs",
+      name: "skips non-pending ids",
       run: async ({ stateAdapter }, expect) => {
         const futureDate = new Date(Date.now() + 60_000);
         const created = await stateAdapter.withTransaction(async (txCtx) =>
@@ -232,16 +225,11 @@ export const triggerJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.completeJob({ txCtx, jobId: toComplete.id, output: null, workerId: null }),
         );
 
-        const result = await stateAdapter.withTransaction(async (txCtx) =>
+        const triggered = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.triggerJobs({ txCtx, jobIds: [pending.id, toComplete.id] }),
         );
 
-        expect(result.triggered).toEqual([]);
-        expect(result.notFound).toEqual([]);
-        expect(result.notTriggerable).toEqual([{ id: toComplete.id, status: "completed" }]);
-
-        const after = await stateAdapter.getJob({ jobId: pending.id });
-        expect(Math.abs(after!.scheduledAt.getTime() - futureDate.getTime())).toBeLessThan(1000);
+        expect(triggered.map((j) => j.id)).toEqual([pending.id]);
       },
     },
   ],

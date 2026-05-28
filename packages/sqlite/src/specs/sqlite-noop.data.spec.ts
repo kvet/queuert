@@ -49,7 +49,7 @@ describe("Wait Chain Completion", () => {
 });
 
 describe("State Resilience", () => {
-  stateResilienceTestSuite({ it: sqliteNoopIt, skipConcurrencyTests: true });
+  stateResilienceTestSuite({ it: sqliteNoopIt });
 });
 
 describe("Workerless Completion", () => {

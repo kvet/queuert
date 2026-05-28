@@ -96,7 +96,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
             children: [
               expect.objectContaining({ name: "user-completion" }),
               expect.objectContaining({ name: "completeJob" }),
-              expect.objectContaining({ name: "getJob" }),
+              expect.objectContaining({ name: "getJobs" }),
               expect.objectContaining({ name: "unblockJobs" }),
             ],
           }),
@@ -195,14 +195,14 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         name: "withTransaction",
         status: "committed",
         children: [
-          expect.objectContaining({ name: "getJob", args: { lock: "exclusive" } }),
+          expect.objectContaining({ name: "getJobs", args: { lock: "exclusive" } }),
           expect.objectContaining({
             name: "withSavepoint",
             status: "committed",
             children: [
               expect.objectContaining({ name: "user-completion" }),
               expect.objectContaining({ name: "completeJob" }),
-              expect.objectContaining({ name: "getJob" }),
+              expect.objectContaining({ name: "getJobs" }),
               expect.objectContaining({ name: "unblockJobs" }),
             ],
           }),
@@ -306,14 +306,14 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         name: "withTransaction",
         status: "committed",
         children: [
-          expect.objectContaining({ name: "getJob", args: { lock: "exclusive" } }),
+          expect.objectContaining({ name: "getJobs", args: { lock: "exclusive" } }),
           expect.objectContaining({
             name: "withSavepoint",
             status: "committed",
             children: [
               expect.objectContaining({ name: "user-completion" }),
               expect.objectContaining({ name: "completeJob" }),
-              expect.objectContaining({ name: "getJob" }),
+              expect.objectContaining({ name: "getJobs" }),
               expect.objectContaining({ name: "unblockJobs" }),
             ],
           }),
@@ -409,14 +409,14 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         name: "withTransaction",
         status: "committed",
         children: [
-          expect.objectContaining({ name: "getJob", args: { lock: "exclusive" } }),
+          expect.objectContaining({ name: "getJobs", args: { lock: "exclusive" } }),
           expect.objectContaining({
             name: "withSavepoint",
             status: "committed",
             children: [
               expect.objectContaining({ name: "user-completion" }),
               expect.objectContaining({ name: "completeJob" }),
-              expect.objectContaining({ name: "getJob" }),
+              expect.objectContaining({ name: "getJobs" }),
               expect.objectContaining({ name: "unblockJobs" }),
             ],
           }),
@@ -516,7 +516,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
             children: [
               expect.objectContaining({ name: "user-completion" }),
               expect.objectContaining({ name: "completeJob" }),
-              expect.objectContaining({ name: "getJob" }),
+              expect.objectContaining({ name: "getJobs" }),
               expect.objectContaining({ name: "unblockJobs" }),
             ],
           }),
@@ -611,7 +611,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
             children: [
               expect.objectContaining({ name: "user-completion" }),
               expect.objectContaining({ name: "completeJob" }),
-              expect.objectContaining({ name: "getJob" }),
+              expect.objectContaining({ name: "getJobs" }),
               expect.objectContaining({ name: "unblockJobs" }),
             ],
           }),

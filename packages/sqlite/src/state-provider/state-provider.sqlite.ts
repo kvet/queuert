@@ -13,6 +13,12 @@ import { type BaseTxContext } from "queuert";
  */
 export type SqliteStateProvider<TTxContext extends BaseTxContext> = {
   /**
+   * Whether two `withTransaction` callbacks can run concurrently against the
+   * underlying database.
+   */
+  transactionConcurrency: "concurrent" | "serialized";
+
+  /**
    * Executes a callback within a database transaction.
    * Acquires a connection, starts a transaction, executes the callback,
    * commits on success, rolls back on error, and releases the connection.

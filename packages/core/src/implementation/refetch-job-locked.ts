@@ -18,9 +18,9 @@ export const refetchJobLocked = async (
     workerId: string;
   },
 ): Promise<StateJob> => {
-  const fetchedJob = await helpers.stateAdapter.getJob({
+  const [fetchedJob] = await helpers.stateAdapter.getJobs({
     txCtx,
-    jobId: job.id,
+    jobIds: [job.id],
     lock: "exclusive",
   });
 

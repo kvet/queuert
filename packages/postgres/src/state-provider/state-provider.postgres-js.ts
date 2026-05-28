@@ -35,6 +35,7 @@ export const createPostgresJsProvider = ({ sql }: { sql: postgres.Sql }): Postgr
   };
 
   return {
+    transactionConcurrency: "concurrent",
     withTransaction: async (fn) => {
       return sql.begin(async (txSql) => fn({ sql: txSql }) as any);
     },

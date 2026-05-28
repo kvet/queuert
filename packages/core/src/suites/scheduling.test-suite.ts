@@ -601,7 +601,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       ),
     );
 
-    const rootJob = await stateAdapter.getJob({ jobId: chain.id });
+    const rootJob = await client.getJob({ id: chain.id });
     expect(rootJob).toBeDefined();
     expect(rootJob!.scheduledAt.getTime() - past.getTime()).toBeGreaterThan(30 * 60 * 1000);
 

@@ -103,7 +103,7 @@ const job = await client.triggerJob({
 
 Returns `Job`.
 
-Triggers a pending job immediately by setting its `scheduledAt` to now. Throws `JobNotFoundError` if the job does not exist, `JobNotTriggerableError` if the job is not pending.
+Triggers a pending job immediately by setting its `scheduledAt` to now. Throws `JobNotFoundError` if the job does not exist, or `JobNotTriggerableError` if the job is not pending.
 
 ### triggerJobs
 
@@ -117,7 +117,7 @@ const jobs = await client.triggerJobs({
 
 Returns `Job[]` in input order.
 
-Triggers multiple pending jobs in one call. Validation is atomic — if any job is missing or not pending, the entire call fails with `JobNotFoundError` or `JobNotTriggerableError` before any job is triggered. Empty `ids` returns `[]`.
+Triggers multiple pending jobs in one call. Validation is atomic — if any job is missing or not pending, the entire call fails with `JobsNotFoundError` or `JobsNotTriggerableError` (the plural batch variants, listing every offending id) before any job is triggered. Empty `ids` returns `[]`.
 
 ### completeChain
 

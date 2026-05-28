@@ -44,12 +44,12 @@ Each probe is cheap — an empty `job_ready_idx` partial on a fully-completed pa
 
 Order-of-magnitude expectation (cache-warm, PG 16+):
 
-| Partitions | Expected acquire latency |
-| ---------- | ------------------------ |
-| 1 (no partitioning) | 0.01 ms |
-| 8 | ~0.1 ms |
-| 32 | ~0.5 ms |
-| 128 | ~2 ms |
+| Partitions          | Expected acquire latency |
+| ------------------- | ------------------------ |
+| 1 (no partitioning) | 0.01 ms                  |
+| 8                   | ~0.1 ms                  |
+| 32                  | ~0.5 ms                  |
+| 128                 | ~2 ms                    |
 
 For most workloads where partitioning matters, acquire latency at the millisecond scale is acceptable — the win on retention dwarfs it. But if acquire latency is the budget that matters most, the standard adapter remains preferable.
 
@@ -78,11 +78,11 @@ Partition granularity is a tuning knob — daily is the natural default (matches
 
 `job_blocker` has two FKs into `job(id)`: `job_id` (the gated job) and `blocked_by_chain_id` (the root of the blocker chain). These point at potentially different chains — every `job_blocker` row is inherently a cross-chain link. Three shapes were considered:
 
-| Shape | DROP-PARTITION atomicity | Reverse lookup (`unblockJobs` finding dependents) |
-| ----- | ------------------------ | ------------------------------------------------- |
-| **(a) Partition by gated job's chain_id** (denormalized as `job_chain_id` partition key) | Atomic: dropping `job` partition + `job_blocker` partition for the same chain_id range happens together | Cross-partition scan via per-partition `job_blocker_chain_idx`; each index probe is cheap, but they don't free-merge |
-| **(b) Partition by `blocked_by_chain_id`** | Cross-partition: dropping a `job` partition leaves orphan `job_blocker` rows whose `blocked_by_chain_id` is in a different partition | Single-partition lookup — matches the reverse-index access pattern directly |
-| **(c) Leave `job_blocker` non-partitioned** | None: retention needs `DELETE FROM job_blocker WHERE …` before DROP-PARTITION on `job` | Single global index, fastest |
+| Shape                                                                                    | DROP-PARTITION atomicity                                                                                                             | Reverse lookup (`unblockJobs` finding dependents)                                                                    |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| **(a) Partition by gated job's chain_id** (denormalized as `job_chain_id` partition key) | Atomic: dropping `job` partition + `job_blocker` partition for the same chain_id range happens together                              | Cross-partition scan via per-partition `job_blocker_chain_idx`; each index probe is cheap, but they don't free-merge |
+| **(b) Partition by `blocked_by_chain_id`**                                               | Cross-partition: dropping a `job` partition leaves orphan `job_blocker` rows whose `blocked_by_chain_id` is in a different partition | Single-partition lookup — matches the reverse-index access pattern directly                                          |
+| **(c) Leave `job_blocker` non-partitioned**                                              | None: retention needs `DELETE FROM job_blocker WHERE …` before DROP-PARTITION on `job`                                               | Single global index, fastest                                                                                         |
 
 **Choice: (a).** Reasons:
 

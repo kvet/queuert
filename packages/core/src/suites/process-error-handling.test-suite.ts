@@ -372,7 +372,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         name: "withTransaction",
         status: "committed",
         children: [
-          expect.objectContaining({ name: "getJob", args: { lock: "exclusive" } }),
+          expect.objectContaining({ name: "getJobs", args: { lock: "exclusive" } }),
           expect.objectContaining({ name: "rescheduleJob" }),
         ],
       }),
@@ -562,7 +562,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         name: "withTransaction",
         status: "committed",
         children: [
-          expect.objectContaining({ name: "getJob", args: { lock: "exclusive" } }),
+          expect.objectContaining({ name: "getJobs", args: { lock: "exclusive" } }),
           expect.objectContaining({ name: "withSavepoint", status: "rolled-back" }),
           expect.objectContaining({ name: "rescheduleJob" }),
         ],
@@ -661,7 +661,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
             status: "rolled-back",
             children: [
               expect.objectContaining({ name: "completeJob" }),
-              expect.objectContaining({ name: "getJob" }),
+              expect.objectContaining({ name: "getJobs" }),
               expect.objectContaining({ name: "unblockJobs" }),
             ],
           }),
@@ -767,13 +767,13 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         name: "withTransaction",
         status: "committed",
         children: [
-          expect.objectContaining({ name: "getJob", args: { lock: "exclusive" } }),
+          expect.objectContaining({ name: "getJobs", args: { lock: "exclusive" } }),
           expect.objectContaining({
             name: "withSavepoint",
             status: "rolled-back",
             children: [
               expect.objectContaining({ name: "completeJob" }),
-              expect.objectContaining({ name: "getJob" }),
+              expect.objectContaining({ name: "getJobs" }),
               expect.objectContaining({ name: "unblockJobs" }),
             ],
           }),
@@ -1166,7 +1166,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         name: "withTransaction",
         status: "committed",
         children: [
-          expect.objectContaining({ name: "getJob", args: { lock: "exclusive" } }),
+          expect.objectContaining({ name: "getJobs", args: { lock: "exclusive" } }),
           expect.objectContaining({
             name: "withSavepoint",
             status: "rolled-back",
@@ -1396,7 +1396,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         name: "withTransaction",
         status: "committed",
         children: [
-          expect.objectContaining({ name: "getJob", args: { lock: "exclusive" } }),
+          expect.objectContaining({ name: "getJobs", args: { lock: "exclusive" } }),
           expect.objectContaining({
             name: "withSavepoint",
             status: "rolled-back",

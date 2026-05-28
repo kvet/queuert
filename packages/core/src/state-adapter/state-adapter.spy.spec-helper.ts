@@ -66,6 +66,7 @@ export const createSpyStateAdapter = <TTxContext extends BaseTxContext, TJobId e
 
   return {
     calls,
+    transactionConcurrency: stateAdapter.transactionConcurrency,
 
     withTransaction: async (fn) => {
       const call = record({ txCtx: undefined, name: "withTransaction" });
@@ -97,8 +98,8 @@ export const createSpyStateAdapter = <TTxContext extends BaseTxContext, TJobId e
         throw error;
       }
     },
-    getChain: wrap("getChain", stateAdapter.getChain),
-    getJob: wrap("getJob", stateAdapter.getJob),
+    getChains: wrap("getChains", stateAdapter.getChains),
+    getJobs: wrap("getJobs", stateAdapter.getJobs),
     createJobs: wrap("createJobs", stateAdapter.createJobs),
     addJobsBlockers: wrap("addJobsBlockers", stateAdapter.addJobsBlockers),
     unblockJobs: wrap("unblockJobs", stateAdapter.unblockJobs),

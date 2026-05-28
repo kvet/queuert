@@ -44,12 +44,11 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
           // Expected
         }
 
-        const original = await stateAdapter.getJob({ jobId: job.id });
+        const [original] = await stateAdapter.getJobs({ jobIds: [job.id] });
         expect(original).toBeDefined();
 
         if (rolledBackJobId) {
-          const rolledBack = await stateAdapter.getJob({ jobId: rolledBackJobId });
-          expect(rolledBack).toBeUndefined();
+          expect(await stateAdapter.getJobs({ jobIds: [rolledBackJobId] })).toEqual([undefined]);
         }
       },
     },
@@ -80,7 +79,7 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
           // Expected
         }
 
-        const after = await stateAdapter.getJob({ jobId: job.id });
+        const [after] = await stateAdapter.getJobs({ jobIds: [job.id] });
         expect(after?.status).toBe("pending");
         expect(after?.attempt).toBe(0);
 
@@ -118,7 +117,7 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
           // Expected
         }
 
-        const after = await stateAdapter.getJob({ jobId: job.id });
+        const [after] = await stateAdapter.getJobs({ jobIds: [job.id] });
         expect(after?.id).toBe(job.id);
 
         const reacquired = await stateAdapter.withTransaction(async (txCtx) =>
@@ -171,7 +170,7 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
           // Expected
         }
 
-        const after = await stateAdapter.getJob({ jobId: target.id });
+        const [after] = await stateAdapter.getJobs({ jobIds: [target.id] });
         expect(after?.status).toBe("pending");
 
         const blockers = await stateAdapter.getJobBlockers({ jobId: target.id });
@@ -236,7 +235,7 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
         await txPromise;
         const [{ job: outside }] = await nonTxPromise;
 
-        const survived = await stateAdapter.getJob({ jobId: outside.id });
+        const [survived] = await stateAdapter.getJobs({ jobIds: [outside.id] });
         expect(survived?.id).toBe(outside.id);
         expect(survived?.input).toEqual({ side: "non-tx" });
       },
@@ -289,8 +288,8 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
           // Expected
         }
 
-        const aAfter = await stateAdapter.getJob({ jobId: a.id });
-        const bAfter = await stateAdapter.getJob({ jobId: b.id });
+        const [aAfter] = await stateAdapter.getJobs({ jobIds: [a.id] });
+        const [bAfter] = await stateAdapter.getJobs({ jobIds: [b.id] });
         expect(aAfter?.status).toBe("pending");
         expect(aAfter?.completedAt).toBeNull();
         expect(bAfter?.status).toBe("pending");

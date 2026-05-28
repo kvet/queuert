@@ -59,15 +59,17 @@ describe("createTemplateApplier", () => {
     });
   });
 
-  describe("caching", () => {
-    it("returns the identical resolved object on repeated calls for the same input", () => {
+  describe("pure resolution", () => {
+    it("resolves deterministically without retaining inputs", () => {
       const apply = createTemplateApplier({ table_prefix: "qrt_" });
       const stmt = sql("SELECT * FROM {{table_prefix}}job", { id: "getJob" });
 
       const first = apply(stmt);
       const second = apply(stmt);
 
-      expect(second).toBe(first);
+      expect(second).not.toBe(first);
+      expect(second.sql).toBe(first.sql);
+      expect(second.id).toBe(first.id);
     });
   });
 

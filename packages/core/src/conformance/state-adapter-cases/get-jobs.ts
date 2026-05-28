@@ -4,8 +4,8 @@ import { type StateConformanceFixture } from "./types.js";
 
 const LOCK_BLOCK_OBSERVATION_MS = 100;
 
-export const getJobGroup: ConformanceGroup<StateConformanceFixture> = {
-  name: "getJob",
+export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
+  name: "getJobs",
   cases: [
     {
       name: "returns undefined for nonexistent job ID",
@@ -26,8 +26,8 @@ export const getJobGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
         const nonexistentId = real.id.slice(0, -1) + (real.id.endsWith("0") ? "1" : "0");
-        const job = await stateAdapter.getJob({ jobId: nonexistentId });
-        expect(job).toBeUndefined();
+        const result = await stateAdapter.getJobs({ jobIds: [nonexistentId] });
+        expect(result).toEqual([undefined]);
       },
     },
     {
@@ -59,7 +59,7 @@ export const getJobGroup: ConformanceGroup<StateConformanceFixture> = {
 
         // Tx A: acquire the exclusive lock on `seed`, then wait on the gate.
         const holderTx = stateAdapter.withTransaction(async (txCtx) => {
-          await stateAdapter.getJob({ txCtx, jobId: seed.id, lock: "exclusive" });
+          await stateAdapter.getJobs({ txCtx, jobIds: [seed.id], lock: "exclusive" });
           signalLockHeld!();
           await holderGate;
         });
@@ -70,7 +70,7 @@ export const getJobGroup: ConformanceGroup<StateConformanceFixture> = {
         let waiterResolved = false;
         const waiterTx = stateAdapter
           .withTransaction(async (txCtx) =>
-            stateAdapter.getJob({ txCtx, jobId: seed.id, lock: "exclusive" }),
+            stateAdapter.getJobs({ txCtx, jobIds: [seed.id], lock: "exclusive" }),
           )
           .then((job) => {
             waiterResolved = true;
@@ -83,7 +83,7 @@ export const getJobGroup: ConformanceGroup<StateConformanceFixture> = {
         releaseHolder!();
         await holderTx;
 
-        const observed = await waiterTx;
+        const [observed] = await waiterTx;
         expect(observed).toBeDefined();
         expect(observed!.id).toBe(seed.id);
         expect(observed!.input).toEqual({ value: 1 });

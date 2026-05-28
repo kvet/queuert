@@ -851,7 +851,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       }),
     );
 
-    const mainAtCreation = await stateAdapter.getJob({ jobId: mainChain.id });
+    const mainAtCreation = await client.getJob({ id: mainChain.id });
     expect(mainAtCreation).toBeDefined();
     const creationScheduledAt = mainAtCreation!.scheduledAt.getTime();
 
@@ -881,7 +881,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       await client.awaitChain(mainChain, completionOptions);
     });
 
-    const unblockedMain = await stateAdapter.getJob({ jobId: mainChain.id });
+    const unblockedMain = await client.getJob({ id: mainChain.id });
     expect(unblockedMain).toBeDefined();
     expect(unblockedMain!.scheduledAt.getTime()).toBeGreaterThan(creationScheduledAt);
   });

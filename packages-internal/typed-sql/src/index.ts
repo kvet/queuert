@@ -78,7 +78,13 @@ export const t = {
 // TypedSql
 // ---------------------------------------------------------------------------
 
-export type TypedSql<
+/**
+ * A typed SQL statement that may still contain unresolved `{{...}}` template
+ * placeholders. Produced by {@link sql}. Cannot be executed directly — pass
+ * through {@link createTemplateApplier} to obtain an executable
+ * {@link TypedSql}.
+ */
+export type TypedSqlTemplate<
   TParams extends readonly DataType[] = readonly DataType[],
   TColumns extends Record<string, DataType> = Record<string, DataType>,
 > = {
@@ -89,27 +95,40 @@ export type TypedSql<
   readonly columns: TColumns;
 };
 
+declare const appliedBrand: unique symbol;
+
+/**
+ * A {@link TypedSqlTemplate} with all `{{...}}` placeholders resolved.
+ * Brand-only distinct from `TypedSqlTemplate`; the only way to obtain one is
+ * through {@link createTemplateApplier}. Execution helpers accept this type so
+ * a raw template can never be sent to the database.
+ */
+export type TypedSql<
+  TParams extends readonly DataType[] = readonly DataType[],
+  TColumns extends Record<string, DataType> = Record<string, DataType>,
+> = TypedSqlTemplate<TParams, TColumns> & { readonly [appliedBrand]: true };
+
 export const sql = <
   const TParams extends readonly DataType[],
   const TColumns extends Record<string, DataType>,
 >(
   sqlString: string,
   types?: { id?: string; params?: TParams; columns?: TColumns; readOnly?: boolean },
-): TypedSql<TParams, TColumns> =>
+): TypedSqlTemplate<TParams, TColumns> =>
   ({
     id: types?.id,
     sql: sqlString,
     readOnly: types?.readOnly ?? false,
     params: types?.params ?? ([] as unknown as TParams),
     columns: types?.columns ?? ({} as TColumns),
-  }) as TypedSql<TParams, TColumns>;
+  }) as TypedSqlTemplate<TParams, TColumns>;
 
 // ---------------------------------------------------------------------------
 // Migrations
 // ---------------------------------------------------------------------------
 
 export type MigrationStatement = {
-  sql: TypedSql;
+  sql: TypedSqlTemplate;
 };
 
 /**
@@ -141,10 +160,19 @@ export type Migration = {
 // fold a resolved SQL string into a short suffix that disambiguates `id`s
 // across different template variants (e.g. table prefixes) within one process.
 const fnv1aHex = (input: string): string => {
+  const len = input.length;
+  const tail = len & 3;
+  const end = len - tail;
   let hash = 0x811c9dc5;
-  for (let i = 0; i < input.length; i++) {
-    hash ^= input.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193);
+  let i = 0;
+  for (; i < end; i += 4) {
+    hash = Math.imul(hash ^ input.charCodeAt(i), 0x01000193);
+    hash = Math.imul(hash ^ input.charCodeAt(i + 1), 0x01000193);
+    hash = Math.imul(hash ^ input.charCodeAt(i + 2), 0x01000193);
+    hash = Math.imul(hash ^ input.charCodeAt(i + 3), 0x01000193);
+  }
+  for (; i < len; i++) {
+    hash = Math.imul(hash ^ input.charCodeAt(i), 0x01000193);
   }
   return (hash >>> 0).toString(16).padStart(8, "0");
 };
@@ -153,34 +181,53 @@ export const createTemplateApplier = (
   variables: Record<string, string>,
   functions?: Record<string, (...args: string[]) => string>,
 ): (<TParams extends readonly DataType[], TColumns extends Record<string, DataType>>(
-  typedSql: TypedSql<TParams, TColumns>,
+  typedSql: TypedSqlTemplate<TParams, TColumns>,
 ) => TypedSql<TParams, TColumns>) => {
-  const cache = new WeakMap<TypedSql<any, any>, TypedSql<any, any>>();
   const variableEntries = Object.entries(variables);
   const functionEntries = functions ? Object.entries(functions) : [];
 
   return <TParams extends readonly DataType[], TColumns extends Record<string, DataType>>(
-    typedSql: TypedSql<TParams, TColumns>,
+    typedSql: TypedSqlTemplate<TParams, TColumns>,
   ): TypedSql<TParams, TColumns> => {
-    let cached = cache.get(typedSql);
-    if (!cached) {
-      let resolvedSql = typedSql.sql;
-      for (const [key, value] of variableEntries) {
-        resolvedSql = resolvedSql.replaceAll(`{{${key}}}`, value);
-      }
-      for (const [name, fn] of functionEntries) {
-        const pattern = new RegExp(`\\{\\{${name}:([^}]+)\\}\\}`, "g");
-        resolvedSql = resolvedSql.replace(pattern, (_, argsStr: string) => {
-          const args = argsStr.split(":");
-          return fn(...args);
-        });
-      }
-      const resolvedId =
-        typedSql.id !== undefined ? `${typedSql.id}@${fnv1aHex(resolvedSql)}` : undefined;
-      cached = { ...typedSql, id: resolvedId, sql: resolvedSql };
-      cache.set(typedSql, cached);
+    let resolvedSql = typedSql.sql;
+    for (const [key, value] of variableEntries) {
+      resolvedSql = resolvedSql.replaceAll(`{{${key}}}`, value);
     }
-    return cached as TypedSql<TParams, TColumns>;
+    for (const [name, fn] of functionEntries) {
+      const pattern = new RegExp(`\\{\\{${name}:([^}]+)\\}\\}`, "g");
+      resolvedSql = resolvedSql.replace(pattern, (_, argsStr: string) => {
+        const args = argsStr.split(":");
+        return fn(...args);
+      });
+    }
+    const resolvedId =
+      typedSql.id !== undefined ? `${typedSql.id}@${fnv1aHex(resolvedSql)}` : undefined;
+    return { ...typedSql, id: resolvedId, sql: resolvedSql } as TypedSql<TParams, TColumns>;
+  };
+};
+
+/**
+ * Caches resolved templates keyed by a caller-supplied string, so a static
+ * query is resolved (variable substitution + id hashing) only once. Callers
+ * pass a stable key for static queries; dynamic queries should bypass the cache
+ * and resolve inline so the cache cannot grow unbounded.
+ */
+export const createTemplateCache = (): {
+  getOrCompute: <TParams extends readonly DataType[], TColumns extends Record<string, DataType>>(
+    key: string,
+    compute: () => TypedSql<TParams, TColumns>,
+  ) => TypedSql<TParams, TColumns>;
+} => {
+  const cache = new Map<string, TypedSql<any, any>>();
+  return {
+    getOrCompute: (key, compute) => {
+      let resolved = cache.get(key);
+      if (resolved === undefined) {
+        resolved = compute();
+        cache.set(key, resolved);
+      }
+      return resolved;
+    },
   };
 };
 

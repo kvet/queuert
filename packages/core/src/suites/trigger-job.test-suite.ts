@@ -5,6 +5,8 @@ import { defineJobTypes } from "../entities/define-job-types.js";
 import {
   JobNotFoundError,
   JobNotTriggerableError,
+  JobsNotFoundError,
+  JobsNotTriggerableError,
   TransactionContextRequiredError,
 } from "../errors.js";
 import { createInProcessWorker } from "../in-process-worker.js";
@@ -456,7 +458,7 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
           }),
         ),
       ),
-    ).rejects.toThrow(JobNotFoundError);
+    ).rejects.toThrow(JobsNotFoundError);
 
     const chainAJob = await client.getJob({ id: chainA.id });
     expect(chainAJob!.scheduledAt.getTime()).toBeGreaterThan(Date.now() + 30_000);
@@ -534,7 +536,7 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
           }),
         ),
       ),
-    ).rejects.toThrow(JobNotTriggerableError);
+    ).rejects.toThrow(JobsNotTriggerableError);
 
     const pendingJob = await client.getJob({ id: pendingChain.id });
     expect(pendingJob!.scheduledAt.getTime()).toBeGreaterThan(Date.now() + 30_000);

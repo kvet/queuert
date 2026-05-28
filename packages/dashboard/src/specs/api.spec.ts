@@ -1,4 +1,4 @@
-import { createClient, defineJobTypes, createInProcessStateAdapter } from "queuert";
+import { createClient, createInProcessStateAdapter, defineJobTypes } from "queuert";
 // @ts-expect-error tsgo doesn't resolve export * re-exports from seroval
 import { deserialize } from "seroval";
 import { describe, expect, it } from "vitest";
@@ -417,7 +417,7 @@ describe("Dashboard API", () => {
       const body = await parseBody(res);
 
       expect(res.status).toBe(409);
-      expect(body.error).toContain("running");
+      expect(body.error).toContain('not "pending"');
     });
   });
 

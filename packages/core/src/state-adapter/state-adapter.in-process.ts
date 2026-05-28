@@ -532,6 +532,7 @@ export const createInProcessStateAdapter = async ({
   };
 
   const adapter: InProcessStateAdapter = {
+    transactionConcurrency: "serialized",
     withTransaction: async (fn) => {
       using _h = await lock.acquireWrite();
       assertOpen();
@@ -559,15 +560,23 @@ export const createInProcessStateAdapter = async ({
       }
     },
 
-    getChain: async ({ txCtx, chainId }) =>
+    getChains: async ({ txCtx, chainIds }) =>
       withReadLock(txCtx, () => {
-        const rootJob = jobs.get(chainId);
-        if (!rootJob) return undefined;
-        const lastJob = getLastJobInChain(chainId);
-        return [rootJob, lastJob && lastJob.id !== rootJob.id ? lastJob : undefined];
+        const result: ([StateJob, StateJob | undefined] | undefined)[] = [];
+        for (const chainId of chainIds) {
+          const rootJob = jobs.get(chainId);
+          if (!rootJob) {
+            result.push(undefined);
+            continue;
+          }
+          const lastJob = getLastJobInChain(chainId);
+          result.push([rootJob, lastJob && lastJob.id !== rootJob.id ? lastJob : undefined]);
+        }
+        return result;
       }),
 
-    getJob: async ({ txCtx, jobId }) => withReadLock(txCtx, () => jobs.get(jobId)),
+    getJobs: async ({ txCtx, jobIds }) =>
+      withReadLock(txCtx, () => jobIds.map((jobId): StateJob | undefined => jobs.get(jobId))),
 
     createJobs: async ({ txCtx, jobs: jobInputs }) =>
       withWriteLock(txCtx, () => {
@@ -1014,43 +1023,21 @@ export const createInProcessStateAdapter = async ({
 
     triggerJobs: async ({ txCtx, jobIds }) =>
       withWriteLock(txCtx, () => {
-        if (jobIds.length === 0) return { triggered: [], notFound: [], notTriggerable: [] };
-
-        const notFound: string[] = [];
-        const notTriggerable: { id: string; status: StateJob["status"] }[] = [];
-        const eligible: StateJob[] = [];
+        if (jobIds.length === 0) return [];
+        const journal = txCtx?.journal;
+        const now = new Date();
+        const triggered: StateJob[] = [];
         const seen = new Set<string>();
         for (const jobId of jobIds) {
           if (seen.has(jobId)) continue;
           seen.add(jobId);
           const job = jobs.get(jobId);
-          if (!job) notFound.push(jobId);
-          else if (job.status !== "pending") notTriggerable.push({ id: jobId, status: job.status });
-          else eligible.push(job);
-        }
-
-        if (notFound.length > 0 || notTriggerable.length > 0) {
-          return { triggered: [], notFound, notTriggerable };
-        }
-
-        const journal = txCtx?.journal;
-        const now = new Date();
-        const updatedById = new Map<string, StateJob>();
-        for (const job of eligible) {
+          if (!job || job.status !== "pending") continue;
           const updatedJob: StateJob = { ...job, scheduledAt: now };
           writeJob(journal, job, updatedJob);
-          updatedById.set(job.id, updatedJob);
+          triggered.push(updatedJob);
         }
-
-        const triggered: StateJob[] = [];
-        const emitted = new Set<string>();
-        for (const jobId of jobIds) {
-          if (emitted.has(jobId)) continue;
-          emitted.add(jobId);
-          const job = updatedById.get(jobId);
-          if (job) triggered.push(job);
-        }
-        return { triggered, notFound: [], notTriggerable: [] };
+        return triggered;
       }),
 
     listBlockedJobs: async ({ txCtx, chainId, orderDirection, page }) =>

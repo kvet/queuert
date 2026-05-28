@@ -7,9 +7,9 @@ import { completeJobGroup } from "./state-adapter-cases/complete-job.js";
 import { concurrencyGroup } from "./state-adapter-cases/concurrency.js";
 import { createJobsGroup } from "./state-adapter-cases/create-jobs.js";
 import { deleteChainsGroup } from "./state-adapter-cases/delete-chains.js";
-import { getChainGroup } from "./state-adapter-cases/get-chain.js";
+import { getChainsGroup } from "./state-adapter-cases/get-chains.js";
 import { getJobBlockersGroup } from "./state-adapter-cases/get-job-blockers.js";
-import { getJobGroup } from "./state-adapter-cases/get-job.js";
+import { getJobsGroup } from "./state-adapter-cases/get-jobs.js";
 import { getNextJobAvailableInMsGroup } from "./state-adapter-cases/get-next-job-available-in-ms.js";
 import { listBlockedJobsGroup } from "./state-adapter-cases/list-blocked-jobs.js";
 import { listChainJobsGroup } from "./state-adapter-cases/list-chain-jobs.js";
@@ -30,7 +30,7 @@ export { type StateConformanceFixture } from "./state-adapter-cases/types.js";
 export const stateAdapterConformanceGroups: ConformanceGroup<StateConformanceFixture>[] = [
   createJobsGroup,
   withTransactionGroup,
-  getChainGroup,
+  getChainsGroup,
   addJobsBlockersGroup,
   unblockJobsGroup,
   addJobsBlockersTraceContextsGroup,
@@ -43,7 +43,7 @@ export const stateAdapterConformanceGroups: ConformanceGroup<StateConformanceFix
   completeJobGroup,
   reapExpiredJobLeaseGroup,
   deleteChainsGroup,
-  getJobGroup,
+  getJobsGroup,
   listChainsGroup,
   listJobsGroup,
   listChainJobsGroup,

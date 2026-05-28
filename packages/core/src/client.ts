@@ -29,6 +29,8 @@ import {
   JobNotFoundError,
   JobNotTriggerableError,
   JobTypeMismatchError,
+  JobsNotFoundError,
+  JobsNotTriggerableError,
   TransactionContextRequiredError,
   WaitChainTimeoutError,
 } from "./errors.js";
@@ -240,7 +242,7 @@ export type Client<
     } & GetStateAdapterTxContext<TStateAdapter>,
   ) => Promise<ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>>;
 
-  /** Trigger multiple pending jobs immediately. Validation is atomic: throws {@link JobNotFoundError} or {@link JobNotTriggerableError} for the first invalid job before any job is triggered, or {@link TransactionContextRequiredError} if called without a transaction context. Returns jobs in input order. Empty `ids` returns `[]`. */
+  /** Trigger multiple pending jobs immediately. Validation is atomic: throws {@link JobsNotFoundError} or {@link JobsNotTriggerableError} (batch variants listing every offending id) if any input is missing or not pending — no job is triggered on failure. Also throws {@link TransactionContextRequiredError} if called without a transaction context. Returns jobs in input order. Empty `ids` returns `[]`. */
   triggerJobs: <
     TJobTypeName extends JobTypeNames<TJobTypeDefinitions> = JobTypeNames<TJobTypeDefinitions>,
   >(
@@ -250,7 +252,7 @@ export type Client<
     } & GetStateAdapterTxContext<TStateAdapter>,
   ) => Promise<ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>[]>;
 
-  /** Complete a chain from outside a worker. Validates `typeName`, then passes the current job and a `complete` function to the caller. Throws {@link ChainNotFoundError} if the chain does not exist, {@link JobTypeMismatchError} if the chain's type does not match `typeName`, {@link TransactionContextRequiredError} if called without a transaction context, and {@link JobAlreadyCompletedError} from the inner `complete` callback if the job is already completed. */
+  /** Complete a chain from outside a worker. Validates `typeName`, then passes the current job and a `complete` function to the caller. Throws {@link ChainNotFoundError} if the chain does not exist, {@link JobTypeMismatchError} if the chain's type does not match `typeName`, {@link TransactionContextRequiredError} if called without a transaction context, {@link JobAlreadyCompletedError} from the inner `complete` callback if the job is already completed. */
   completeChain: <
     TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions>,
     TComplete extends (...args: any[]) => Promise<any> = ChainCompleteOptions<
@@ -567,12 +569,28 @@ export const createClient = async <
       } & GetStateAdapterTxContext<TStateAdapter>,
     ): Promise<ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>> => {
       const { id, transactionHooks, ...rest } = options;
-      const [job] = await client.triggerJobs<TJobTypeName>({
-        ids: [id],
-        transactionHooks,
-        ...(rest as GetStateAdapterTxContext<TStateAdapter>),
-      });
-      return job;
+      try {
+        const [job] = await client.triggerJobs<TJobTypeName>({
+          ids: [id],
+          transactionHooks,
+          ...(rest as GetStateAdapterTxContext<TStateAdapter>),
+        });
+        return job;
+      } catch (error) {
+        if (error instanceof JobsNotFoundError) {
+          throw new JobNotFoundError(`Job with id ${String(id)} not found`, {
+            jobId: id as string,
+            cause: error,
+          });
+        }
+        if (error instanceof JobsNotTriggerableError) {
+          throw new JobNotTriggerableError(
+            `Cannot trigger job ${String(id)}: job is not "pending"`,
+            { jobId: id as string, cause: error },
+          );
+        }
+        throw error;
+      }
     },
 
     triggerJobs: async <
@@ -587,33 +605,40 @@ export const createClient = async <
       const txCtx = requireTxCtx(rest);
 
       if (ids.length === 0) return [];
-
-      const { triggered, notFound, notTriggerable } = await helpers.stateAdapter.triggerJobs({
+      const classified = await helpers.stateAdapter.getJobs({
         txCtx,
         jobIds: ids,
+        lock: "exclusive",
       });
 
+      const notFound: TJobId[] = [];
+      const notTriggerable: { jobId: TJobId; status: StateJob["status"] }[] = [];
+      classified.forEach((entry, index) => {
+        if (entry === undefined) {
+          notFound.push(ids[index]);
+        } else if (entry.status !== "pending") {
+          notTriggerable.push({ jobId: entry.id as TJobId, status: entry.status });
+        }
+      });
       if (notFound.length > 0) {
-        const id = notFound[0];
-        throw new JobNotFoundError(`Job with id ${String(id)} not found`, {
-          jobId: id as string,
-        });
+        throw new JobsNotFoundError(`Jobs not found: ${notFound.join(", ")}`, { jobIds: notFound });
       }
       if (notTriggerable.length > 0) {
-        const { id, status } = notTriggerable[0];
-        throw new JobNotTriggerableError(
-          `Cannot trigger job ${String(id)}: job status is "${status}", must be "pending"`,
-          { jobId: id as string, status },
+        throw new JobsNotTriggerableError(
+          `Cannot trigger jobs whose status is not "pending": ${notTriggerable
+            .map((j) => `${j.jobId} (${j.status})`)
+            .join(", ")}`,
+          { jobIds: notTriggerable.map((j) => j.jobId) },
         );
       }
 
+      const triggered = await helpers.stateAdapter.triggerJobs({ txCtx, jobIds: ids });
       for (const job of triggered) {
         bufferNotifyJobScheduled(transactionHooks, helpers.notifyAdapter, job);
         bufferObservabilityEvent(transactionHooks, () => {
           helpers.observabilityHelper.jobTriggered(job);
         });
       }
-
       return triggered.map(
         (job) => mapStateJobToJob(job) as ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>,
       );
@@ -643,15 +668,16 @@ export const createClient = async <
     ): Promise<TResult> => {
       const { id, typeName, complete: completeCallback, transactionHooks, ...rest } = options;
       const txCtx = requireTxCtx(rest);
-      const chainPair = await helpers.stateAdapter.getChain({
+      const classified = await helpers.stateAdapter.getChains({
         txCtx,
-        chainId: id,
+        chainIds: [id],
         lock: "exclusive",
       });
 
-      if (!chainPair) {
+      const chainPair = classified[0];
+      if (chainPair === undefined) {
         throw new ChainNotFoundError(`Chain with id ${id} not found`, {
-          chainId: id as string,
+          chainId: id,
         });
       }
 
@@ -735,9 +761,9 @@ export const createClient = async <
 
       await completeCallback({ job: currentJob, complete });
 
-      const updatedChain = await helpers.stateAdapter.getChain({
+      const [updatedChain] = await helpers.stateAdapter.getChains({
         txCtx,
-        chainId: id,
+        chainIds: [id],
       });
 
       if (!updatedChain) {
@@ -771,7 +797,7 @@ export const createClient = async <
       let typeValidated = !typeName;
 
       const checkChain = async () => {
-        const chainPair = await helpers.stateAdapter.getChain({ chainId: id });
+        const [chainPair] = await helpers.stateAdapter.getChains({ chainIds: [id] });
         if (!chainPair) {
           throw new ChainNotFoundError(`Chain with id ${id} not found`, {
             chainId: id as string,
@@ -861,9 +887,9 @@ export const createClient = async <
     ): Promise<ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> | undefined> => {
       const { id, typeName, ...rest } = options;
       const txCtx = normalizeTxCtx(rest);
-      const chainPair = await helpers.stateAdapter.getChain({
+      const [chainPair] = await helpers.stateAdapter.getChains({
         txCtx,
-        chainId: id,
+        chainIds: [id],
       });
 
       if (!chainPair) return undefined;
@@ -892,7 +918,7 @@ export const createClient = async <
     ): Promise<ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName> | undefined> => {
       const { id, typeName, ...rest } = options;
       const txCtx = normalizeTxCtx(rest);
-      const job = await helpers.stateAdapter.getJob({ txCtx, jobId: id });
+      const [job] = await helpers.stateAdapter.getJobs({ txCtx, jobIds: [id] });
 
       if (!job) return undefined;
 
@@ -1003,7 +1029,7 @@ export const createClient = async <
       const txCtx = normalizeTxCtx(rest);
 
       if (typeName) {
-        const chainPair = await helpers.stateAdapter.getChain({ txCtx, chainId });
+        const [chainPair] = await helpers.stateAdapter.getChains({ txCtx, chainIds: [chainId] });
         if (chainPair && chainPair[0].chainTypeName !== typeName) {
           throw new JobTypeMismatchError(
             `Expected chain ${String(chainId)} to have type "${typeName}" but found "${chainPair[0].chainTypeName}"`,
@@ -1044,7 +1070,7 @@ export const createClient = async <
       const txCtx = normalizeTxCtx(rest);
 
       if (typeName) {
-        const job = await helpers.stateAdapter.getJob({ txCtx, jobId });
+        const [job] = await helpers.stateAdapter.getJobs({ txCtx, jobIds: [jobId] });
         if (job && job.typeName !== typeName) {
           throw new JobTypeMismatchError(
             `Expected job ${String(jobId)} to have type "${typeName}" but found "${job.typeName}"`,
@@ -1078,7 +1104,7 @@ export const createClient = async <
       const txCtx = normalizeTxCtx(rest);
 
       if (typeName) {
-        const chainPair = await helpers.stateAdapter.getChain({ txCtx, chainId });
+        const [chainPair] = await helpers.stateAdapter.getChains({ txCtx, chainIds: [chainId] });
         if (chainPair && chainPair[0].chainTypeName !== typeName) {
           throw new JobTypeMismatchError(
             `Expected chain ${String(chainId)} to have type "${typeName}" but found "${chainPair[0].chainTypeName}"`,

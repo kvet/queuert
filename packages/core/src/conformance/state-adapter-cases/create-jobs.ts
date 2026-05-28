@@ -112,13 +112,13 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        const retrieved = await stateAdapter.getJob({ jobId: created.id });
+        const [retrieved] = await stateAdapter.getJobs({ jobIds: [created.id] });
 
         expect(retrieved).toBeDefined();
-        expect(retrieved!.id).toBe(created.id);
-        expect(retrieved!.typeName).toBe("test-job");
-        expect(retrieved!.input).toEqual(input);
-        expect(retrieved!.status).toBe("pending");
+        expect(retrieved?.id).toBe(created.id);
+        expect(retrieved?.typeName).toBe("test-job");
+        expect(retrieved?.input).toEqual(input);
+        expect(retrieved?.status).toBe("pending");
       },
     },
     {
@@ -186,8 +186,8 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        const retrieved = await stateAdapter.getJob({ jobId: job.id });
-        expect(retrieved!.input).toEqual(complexInput);
+        const [retrieved] = await stateAdapter.getJobs({ jobIds: [job.id] });
+        expect(retrieved?.input).toEqual(complexInput);
       },
     },
     {
@@ -658,9 +658,9 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        const retrieved = await stateAdapter.getJob({ jobId: job.id });
-        expect(retrieved!.chainTraceContext).toEqual(chainTraceContext);
-        expect(retrieved!.traceContext).toEqual(traceContext);
+        const [retrieved] = await stateAdapter.getJobs({ jobIds: [job.id] });
+        expect(retrieved?.chainTraceContext).toEqual(chainTraceContext);
+        expect(retrieved?.traceContext).toEqual(traceContext);
       },
     },
     {

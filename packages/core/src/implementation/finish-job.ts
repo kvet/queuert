@@ -57,9 +57,9 @@ export const finishJob = async (
   }
 
   if (!hasContinuedJob) {
-    const chainStartJob = await helpers.stateAdapter.getJob({
+    const [chainStartJob] = await helpers.stateAdapter.getJobs({
       txCtx,
-      jobId: job.chainId,
+      jobIds: [job.chainId],
     });
 
     if (!chainStartJob) {

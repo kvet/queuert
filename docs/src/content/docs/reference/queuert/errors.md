@@ -17,6 +17,16 @@ class JobNotFoundError extends Error {
 
 Thrown when a job cannot be found by ID.
 
+## JobsNotFoundError
+
+```typescript
+class JobsNotFoundError extends Error {
+  readonly jobIds: readonly string[];
+}
+```
+
+Batch variant of `JobNotFoundError`. Thrown by `triggerJobs` when one or more input IDs have no matching job. `jobIds` lists every input id that was not found.
+
 ## ChainNotFoundError
 
 ```typescript
@@ -41,12 +51,21 @@ Thrown when attempting to complete a job that is already completed.
 
 ```typescript
 class JobNotTriggerableError extends Error {
-  readonly jobId: string | undefined;
-  readonly status: string | undefined;
+  readonly jobId: string;
 }
 ```
 
-Thrown by `triggerJob` and `triggerJobs` when a job is not in a triggerable state. Only `pending` jobs can be triggered. `triggerJobs` validates atomically — it throws on the first invalid job before triggering any.
+Thrown by `triggerJob` when the target job is not in a triggerable state. Only `pending` jobs can be triggered. The observed status is included in the error message.
+
+## JobsNotTriggerableError
+
+```typescript
+class JobsNotTriggerableError extends Error {
+  readonly jobIds: readonly string[];
+}
+```
+
+Batch variant of `JobNotTriggerableError`. Thrown by `triggerJobs` when any input job is not `pending`. The validation is atomic — no job is triggered when this is thrown. `jobIds` lists every offending id; the observed statuses are included in the error message.
 
 ## JobTakenByAnotherWorkerError
 

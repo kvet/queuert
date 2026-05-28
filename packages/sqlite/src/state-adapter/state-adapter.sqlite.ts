@@ -4,12 +4,15 @@ import {
   type DataType,
   type InferColumns,
   type InferParams,
+  type Migration,
   type MigrationResult,
   type TypedSql,
   createTemplateApplier,
+  createTemplateCache,
   executeMigrations,
   extractColumnTypes,
   extractParamTypes,
+  sql,
   t,
 } from "@queuert/typed-sql";
 import { type BaseTxContext, type StateAdapter } from "queuert";
@@ -22,14 +25,206 @@ import {
 } from "queuert/internal";
 
 import { type SqliteStateProvider } from "../state-provider/state-provider.sqlite.js";
-import {
-  type DbJob,
-  type DbChainRow,
-  createSqliteSqlDefinitions,
-  jobColumnsPrefixedSelect,
-  jobColumnsSelect,
-  migrations,
-} from "./sql.js";
+
+const jobColumns = [
+  "id",
+  "type_name",
+  "chain_id",
+  "chain_type_name",
+  "chain_index",
+  "input",
+  "output",
+  "status",
+  "created_at",
+  "scheduled_at",
+  "completed_at",
+  "completed_by",
+  "attempt",
+  "last_attempt_at",
+  "last_attempt_error",
+  "leased_by",
+  "leased_until",
+  "deduplication_key",
+  "chain_trace_context",
+  "trace_context",
+] as const;
+
+const jobColumnsSelect = (alias: string): string =>
+  jobColumns.map((c) => `${alias}.${c}`).join(", ");
+
+const jobColumnsPrefixedSelect = (alias: string, prefix: string): string =>
+  jobColumns.map((c) => `${alias}.${c} AS ${prefix}${c}`).join(", ");
+
+type DbJob = {
+  id: string;
+  type_name: string;
+  chain_id: string;
+  chain_type_name: string;
+  chain_index: number;
+  input: string | null;
+  output: string | null;
+
+  status: "blocked" | "pending" | "running" | "completed";
+  created_at: string;
+  scheduled_at: string;
+  completed_at: string | null;
+  completed_by: string | null;
+
+  attempt: number;
+  last_attempt_error: string | null;
+  last_attempt_at: string | null;
+
+  leased_by: string | null;
+  leased_until: string | null;
+
+  deduplication_key: string | null;
+
+  chain_trace_context: string | null;
+  trace_context: string | null;
+};
+
+type DbChainRow = DbJob & {
+  [K in keyof DbJob as `lc_${K}`]: DbJob[K] | null;
+};
+
+const migrations: Migration[] = [
+  {
+    name: "20240101000000_initial_schema",
+    transactional: true,
+    statements: [
+      {
+        sql: sql(`
+CREATE TABLE IF NOT EXISTS {{table_prefix}}job (
+  id                            {{id_type}} PRIMARY KEY,
+  type_name                     TEXT NOT NULL,
+  chain_id                      {{id_type}} NOT NULL REFERENCES {{table_prefix}}job(id),
+  chain_type_name               TEXT NOT NULL,
+  chain_index                   INTEGER NOT NULL,
+
+  input                         TEXT,
+  output                        TEXT,
+
+  -- state
+  status                        TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('blocked','pending','running','completed')),
+  created_at                    TEXT NOT NULL DEFAULT (datetime('now', 'subsec')),
+  scheduled_at                  TEXT NOT NULL DEFAULT (datetime('now', 'subsec')),
+  completed_at                  TEXT,
+  completed_by                  TEXT,
+
+  -- attempts
+  attempt                       INTEGER NOT NULL DEFAULT 0,
+  last_attempt_at               TEXT,
+  last_attempt_error            TEXT,
+
+  -- leasing
+  leased_by                     TEXT,
+  leased_until                  TEXT,
+
+  -- deduplication
+  deduplication_key             TEXT,
+
+  -- tracing
+  chain_trace_context           TEXT,
+  trace_context                 TEXT
+)`),
+      },
+      {
+        sql: sql(`
+CREATE TABLE IF NOT EXISTS {{table_prefix}}job_blocker (
+  job_id                        {{id_type}} NOT NULL REFERENCES {{table_prefix}}job(id),
+  -- NOTE: requires PRAGMA foreign_keys = ON (SQLite default is OFF)
+  blocked_by_chain_id           {{id_type}} NOT NULL REFERENCES {{table_prefix}}job(id),
+  "index"                       INTEGER NOT NULL,
+  trace_context                 TEXT,
+  PRIMARY KEY (job_id, blocked_by_chain_id)
+)`),
+      },
+      {
+        sql: sql(`
+CREATE INDEX IF NOT EXISTS {{table_prefix}}job_acquisition_idx
+ON {{table_prefix}}job (type_name, scheduled_at)
+WHERE status = 'pending'`),
+      },
+      {
+        sql: sql(`
+CREATE UNIQUE INDEX IF NOT EXISTS {{table_prefix}}job_chain_index_idx
+ON {{table_prefix}}job (chain_id, chain_index)`),
+      },
+      {
+        sql: sql(`
+CREATE INDEX IF NOT EXISTS {{table_prefix}}job_deduplication_idx
+ON {{table_prefix}}job (deduplication_key, created_at DESC)
+WHERE deduplication_key IS NOT NULL AND chain_index = 0`),
+      },
+      {
+        sql: sql(`
+CREATE INDEX IF NOT EXISTS {{table_prefix}}job_expired_lease_idx
+ON {{table_prefix}}job (type_name, leased_until)
+WHERE status = 'running' AND leased_until IS NOT NULL`),
+      },
+      {
+        sql: sql(`
+CREATE INDEX IF NOT EXISTS {{table_prefix}}job_blocker_chain_idx
+ON {{table_prefix}}job_blocker (blocked_by_chain_id)`),
+      },
+      {
+        sql: sql(`
+CREATE INDEX IF NOT EXISTS {{table_prefix}}job_chain_listing_idx
+ON {{table_prefix}}job (created_at DESC) WHERE chain_index = 0`),
+      },
+      {
+        sql: sql(`
+CREATE INDEX IF NOT EXISTS {{table_prefix}}job_listing_idx
+ON {{table_prefix}}job (created_at DESC)`),
+      },
+      {
+        sql: sql(`
+CREATE INDEX IF NOT EXISTS {{table_prefix}}job_listing_status_idx
+ON {{table_prefix}}job (status, created_at DESC)`),
+      },
+      {
+        sql: sql(`
+CREATE INDEX IF NOT EXISTS {{table_prefix}}job_listing_type_name_idx
+ON {{table_prefix}}job (type_name, created_at DESC)`),
+      },
+      {
+        sql: sql(`
+CREATE INDEX IF NOT EXISTS {{table_prefix}}job_chain_listing_type_name_idx
+ON {{table_prefix}}job (type_name, created_at DESC) WHERE chain_index = 0`),
+      },
+    ],
+  },
+  {
+    name: "20260430000000_rename_chain_indexes",
+    transactional: true,
+    statements: [
+      {
+        sql: sql(`DROP INDEX IF EXISTS {{table_prefix}}job_chain_index_idx`),
+      },
+      {
+        sql: sql(`
+CREATE UNIQUE INDEX IF NOT EXISTS {{table_prefix}}chain_index_idx
+ON {{table_prefix}}job (chain_id, chain_index)`),
+      },
+      {
+        sql: sql(`DROP INDEX IF EXISTS {{table_prefix}}job_chain_listing_idx`),
+      },
+      {
+        sql: sql(`
+CREATE INDEX IF NOT EXISTS {{table_prefix}}chain_listing_idx
+ON {{table_prefix}}job (created_at DESC) WHERE chain_index = 0`),
+      },
+      {
+        sql: sql(`DROP INDEX IF EXISTS {{table_prefix}}job_chain_listing_type_name_idx`),
+      },
+      {
+        sql: sql(`
+CREATE INDEX IF NOT EXISTS {{table_prefix}}chain_listing_type_name_idx
+ON {{table_prefix}}job (type_name, created_at DESC) WHERE chain_index = 0`),
+      },
+    ],
+  },
+];
 
 const SQL_IDENTIFIER_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
@@ -187,8 +382,55 @@ export const createSqliteStateAdapter = async <
     },
   );
 
+  const templateCache = createTemplateCache();
+
   const idDataType = t.string();
-  const defs = createSqliteSqlDefinitions(idDataType);
+  const dbJobColumns = {
+    id: idDataType,
+    chain_id: idDataType,
+    type_name: t.string(),
+    chain_type_name: t.string(),
+    chain_index: t.number(),
+    input: t["string?"](),
+    output: t["string?"](),
+    status: t.string<DbJob["status"]>(),
+    created_at: t.string(),
+    scheduled_at: t.string(),
+    completed_at: t["string?"](),
+    completed_by: t["string?"](),
+    attempt: t.number(),
+    last_attempt_error: t["string?"](),
+    last_attempt_at: t["string?"](),
+    leased_by: t["string?"](),
+    leased_until: t["string?"](),
+    deduplication_key: t["string?"](),
+    chain_trace_context: t["string?"](),
+    trace_context: t["string?"](),
+  } as const;
+
+  const dbChainRowColumns = {
+    ...dbJobColumns,
+    lc_id: t["string?"](),
+    lc_type_name: t["string?"](),
+    lc_chain_id: t["string?"](),
+    lc_chain_type_name: t["string?"](),
+    lc_chain_index: t["number?"](),
+    lc_input: t["string?"](),
+    lc_output: t["string?"](),
+    lc_status: t["string?"]<DbJob["status"]>(),
+    lc_created_at: t["string?"](),
+    lc_scheduled_at: t["string?"](),
+    lc_completed_at: t["string?"](),
+    lc_completed_by: t["string?"](),
+    lc_attempt: t["number?"](),
+    lc_last_attempt_error: t["string?"](),
+    lc_last_attempt_at: t["string?"](),
+    lc_leased_by: t["string?"](),
+    lc_leased_until: t["string?"](),
+    lc_deduplication_key: t["string?"](),
+    lc_chain_trace_context: t["string?"](),
+    lc_trace_context: t["string?"](),
+  } as const;
 
   const executeTypedSql = async <
     TParams extends readonly DataType[],
@@ -203,15 +445,14 @@ export const createSqliteStateAdapter = async <
   } & (TParams extends readonly []
     ? { params?: undefined }
     : { params: [...InferParams<TParams>] })): Promise<InferColumns<TColumns>[]> => {
-    const resolvedSql = applyTemplate(typedSql);
     return stateProvider.executeSql({
       txCtx,
-      id: resolvedSql.id,
-      sql: resolvedSql.sql,
+      id: typedSql.id,
+      sql: typedSql.sql,
       params: params ?? [],
-      paramTypes: extractParamTypes(resolvedSql.params),
-      columnTypes: extractColumnTypes(resolvedSql.columns),
-      readOnly: resolvedSql.readOnly,
+      paramTypes: extractParamTypes(typedSql.params),
+      columnTypes: extractColumnTypes(typedSql.columns),
+      readOnly: typedSql.readOnly,
     }) as Promise<InferColumns<TColumns>[]>;
   };
 
@@ -222,7 +463,29 @@ export const createSqliteStateAdapter = async <
     if (chainIds.length === 0) return [];
     const connected = await executeTypedSql({
       txCtx,
-      sql: defs.getConnectedChainIdsSql,
+      sql: templateCache.getOrCompute("getConnectedChainIds", () =>
+        applyTemplate(
+          sql(
+            `
+WITH RECURSIVE connected(chain_id) AS (
+  SELECT value AS chain_id FROM json_each(?)
+  UNION
+  -- jb.job_id = chain_id because blockers are added to the root job whose id = chain_id
+  SELECT jb.blocked_by_chain_id AS chain_id
+  FROM {{table_prefix}}job_blocker jb
+  JOIN connected c ON jb.job_id = c.chain_id
+)
+SELECT chain_id FROM connected
+`,
+            {
+              id: "getConnectedChainIds",
+              params: [t.string()],
+              columns: { chain_id: idDataType },
+              readOnly: true,
+            },
+          ),
+        ),
+      ),
       params: [JSON.stringify(chainIds)],
     });
     return connected.map((r) => r.chain_id) as TIdType[];
@@ -236,7 +499,25 @@ export const createSqliteStateAdapter = async <
     const idsJson = JSON.stringify(effectiveChainIds);
     const refs = await executeTypedSql({
       txCtx,
-      sql: defs.checkExternalBlockerRefsSql,
+      sql: templateCache.getOrCompute("checkExternalBlockerRefs", () =>
+        applyTemplate(
+          sql(
+            `
+SELECT jb.job_id, jb.blocked_by_chain_id
+FROM {{table_prefix}}job_blocker jb
+JOIN {{table_prefix}}job j ON j.id = jb.job_id
+WHERE jb.blocked_by_chain_id IN (SELECT value FROM json_each(?))
+  AND j.chain_id NOT IN (SELECT value FROM json_each(?))
+`,
+            {
+              id: "checkExternalBlockerRefs",
+              params: [t.string(), t.string()],
+              columns: { job_id: idDataType, blocked_by_chain_id: idDataType },
+              readOnly: true,
+            },
+          ),
+        ),
+      ),
       params: [idsJson, idsJson],
     });
     return refs.map((r) => ({
@@ -245,81 +526,178 @@ export const createSqliteStateAdapter = async <
     }));
   };
 
-  const rawAdapter: StateAdapter<TTxContext, TIdType> = {
+  return {
+    transactionConcurrency: stateProvider.transactionConcurrency,
+
     withTransaction: stateProvider.withTransaction,
 
     withSavepoint:
       stateProvider.withSavepoint ??
       (async (txCtx, fn) => {
         const sp = `queuert_sp_${randomUUID().replace(/-/g, "_")}`;
-        await stateProvider.executeSql({
+        await executeTypedSql({
           txCtx,
-          sql: `SAVEPOINT ${sp}`,
-          params: [],
-          paramTypes: {},
-          columnTypes: {},
-          readOnly: false,
+          sql: applyTemplate(sql(`SAVEPOINT ${sp}`, { readOnly: true, params: [], columns: {} })),
         });
         try {
           const result = await fn(txCtx);
-          await stateProvider.executeSql({
+          await executeTypedSql({
             txCtx,
-            sql: `RELEASE SAVEPOINT ${sp}`,
-            params: [],
-            paramTypes: {},
-            columnTypes: {},
-            readOnly: false,
+            sql: applyTemplate(
+              sql(`RELEASE SAVEPOINT ${sp}`, { readOnly: true, params: [], columns: {} }),
+            ),
           });
           return result;
         } catch (error) {
-          await stateProvider
-            .executeSql({
-              txCtx,
-              sql: `ROLLBACK TO SAVEPOINT ${sp}`,
-              params: [],
-              paramTypes: {},
-              columnTypes: {},
-              readOnly: false,
-            })
-            .catch(() => {});
+          await executeTypedSql({
+            txCtx,
+            sql: applyTemplate(
+              sql(`ROLLBACK TO SAVEPOINT ${sp}`, { readOnly: true, params: [], columns: {} }),
+            ),
+          }).catch(() => {});
           throw error;
         }
       }),
 
-    getChain: async ({ txCtx, chainId, lock }) => {
+    getChains: (async ({
+      txCtx,
+      chainIds,
+      lock,
+    }: {
+      txCtx?: TTxContext;
+      chainIds: TIdType[];
+      lock?: "exclusive";
+    }) => {
+      if (chainIds.length === 0) return [];
+      const idsJson = JSON.stringify(chainIds);
       if (lock === "exclusive" && txCtx) {
         await executeTypedSql({
           txCtx,
-          sql: defs.lockLatestChainJobSql,
-          params: [chainId],
+          sql: templateCache.getOrCompute("getChainsLocked", () =>
+            applyTemplate(
+              sql(
+                `
+UPDATE {{table_prefix}}job
+SET id = id
+WHERE id IN (
+  SELECT j.id FROM {{table_prefix}}job j
+  WHERE j.chain_id IN (SELECT value FROM json_each(?))
+    AND j.chain_index = (
+      SELECT MAX(chain_index) FROM {{table_prefix}}job WHERE chain_id = j.chain_id
+    )
+)
+`,
+                {
+                  id: "getChainsLocked",
+                  params: [t.string()],
+                  columns: {} as Record<string, never>,
+                },
+              ),
+            ),
+          ),
+          params: [idsJson],
         });
       }
-      const [row] = await executeTypedSql({
+      const rows = await executeTypedSql({
         txCtx,
-        sql: defs.getChainSql,
-        params: [chainId, chainId],
+        sql: templateCache.getOrCompute("getChains", () =>
+          applyTemplate(
+            sql(
+              `
+SELECT
+  {{job_columns:j}},
+  {{job_columns_prefixed:lc:lc_}}
+FROM {{table_prefix}}job AS j
+LEFT JOIN {{table_prefix}}job AS lc
+  ON lc.chain_id = j.id
+  AND lc.chain_index = (
+    SELECT MAX(chain_index) FROM {{table_prefix}}job WHERE chain_id = j.id
+  )
+WHERE j.id IN (SELECT value FROM json_each(?))
+ORDER BY j.id
+`,
+              {
+                id: "getChains",
+                params: [t.string()],
+                columns: { ...dbChainRowColumns },
+                readOnly: true,
+              },
+            ),
+          ),
+        ),
+        params: [idsJson],
       });
-
-      if (!row) return undefined;
-
-      const { rootJob, lastChainJob } = parseDbChainRow(row);
-
-      return [
-        mapDbJobToStateJob(rootJob),
-        lastChainJob && lastChainJob.id !== rootJob.id
-          ? mapDbJobToStateJob(lastChainJob)
-          : undefined,
-      ];
-    },
-    getJob: async ({ txCtx, jobId, lock }) => {
-      const [job] = await executeTypedSql({
-        txCtx,
-        sql: lock === "exclusive" && txCtx ? defs.getJobLockedSql : defs.getJobSql,
-        params: [jobId],
+      const byId = new Map<string, { rootJob: DbJob; lastChainJob: DbJob | null }>();
+      for (const row of rows) {
+        const parsed = parseDbChainRow(row);
+        byId.set(parsed.rootJob.id, parsed);
+      }
+      return chainIds.map((chainId): [StateJob, StateJob | undefined] | undefined => {
+        const parsed = byId.get(chainId as string);
+        if (!parsed) return undefined;
+        const { rootJob, lastChainJob } = parsed;
+        return [
+          mapDbJobToStateJob(rootJob),
+          lastChainJob && lastChainJob.id !== rootJob.id
+            ? mapDbJobToStateJob(lastChainJob)
+            : undefined,
+        ];
       });
-
-      return job ? mapDbJobToStateJob(job) : undefined;
-    },
+    }) as StateAdapter<TTxContext, TIdType>["getChains"],
+    getJobs: (async ({
+      txCtx,
+      jobIds,
+      lock,
+    }: {
+      txCtx?: TTxContext;
+      jobIds: TIdType[];
+      lock?: "exclusive";
+    }) => {
+      if (jobIds.length === 0) return [];
+      const lockedSql =
+        lock === "exclusive" && txCtx
+          ? templateCache.getOrCompute("getJobsLocked", () =>
+              applyTemplate(
+                sql(
+                  `
+UPDATE {{table_prefix}}job
+SET id = id
+WHERE id IN (SELECT value FROM json_each(?))
+RETURNING *
+`,
+                  {
+                    id: "getJobsLocked",
+                    params: [t.string()],
+                    columns: { ...dbJobColumns },
+                  },
+                ),
+              ),
+            )
+          : templateCache.getOrCompute("getJobs", () =>
+              applyTemplate(
+                sql(
+                  `
+SELECT *
+FROM {{table_prefix}}job
+WHERE id IN (SELECT value FROM json_each(?))
+`,
+                  {
+                    id: "getJobs",
+                    params: [t.string()],
+                    columns: { ...dbJobColumns },
+                    readOnly: true,
+                  },
+                ),
+              ),
+            );
+      const idsJson = JSON.stringify(jobIds);
+      const rows = await executeTypedSql({ txCtx, sql: lockedSql, params: [idsJson] });
+      const byId = new Map(rows.map((r) => [r.id, r]));
+      return jobIds.map((jobId): StateJob | undefined => {
+        const row = byId.get(jobId as string);
+        return row ? mapDbJobToStateJob(row) : undefined;
+      });
+    }) as StateAdapter<TTxContext, TIdType>["getJobs"],
 
     createJobs: async ({ txCtx, jobs }) => {
       for (const job of jobs) {
@@ -355,7 +733,24 @@ export const createSqliteStateAdapter = async <
         if (chainId) {
           const [existingContinuation] = await executeTypedSql({
             txCtx,
-            sql: defs.findExistingContinuationSql,
+            sql: templateCache.getOrCompute("findExistingContinuation", () =>
+              applyTemplate(
+                sql(
+                  `
+SELECT *, 1 AS deduplicated
+FROM {{table_prefix}}job
+WHERE chain_id = ? AND chain_index = ? AND id != chain_id
+LIMIT 1
+`,
+                  {
+                    id: "findExistingContinuation",
+                    params: [idDataType, t.number()],
+                    columns: { ...dbJobColumns, deduplicated: t.number() },
+                    readOnly: true,
+                  },
+                ),
+              ),
+            ),
             params: [chainId, chainIndex],
           });
 
@@ -373,7 +768,52 @@ export const createSqliteStateAdapter = async <
 
           const [existingDeduplicated] = await executeTypedSql({
             txCtx,
-            sql: defs.findDeduplicatedJobSql,
+            sql: templateCache.getOrCompute("findDeduplicatedJob", () =>
+              applyTemplate(
+                sql(
+                  `
+SELECT *, 1 AS deduplicated
+FROM {{table_prefix}}job
+WHERE ? IS NOT NULL
+  AND deduplication_key = ?
+  AND chain_index = 0
+  AND chain_type_name = ?
+  AND (
+    ? IS NULL
+    OR (? = 'incomplete' AND status != 'completed')
+    OR (? = 'any')
+  )
+  AND (
+    ? IS NULL
+    OR created_at >= datetime('now', 'subsec', '-' || (? / 1000.0) || ' seconds')
+  )
+  AND (
+    ? IS NULL
+    OR chain_id NOT IN (SELECT value FROM json_each(?))
+  )
+ORDER BY created_at DESC
+LIMIT 1
+`,
+                  {
+                    id: "findDeduplicatedJob",
+                    params: [
+                      t["string?"](),
+                      t["string?"](),
+                      t.string(),
+                      t["string?"](),
+                      t["string?"](),
+                      t["string?"](),
+                      t["number?"](),
+                      t["number?"](),
+                      t["string?"](),
+                      t["string?"](),
+                    ],
+                    columns: { ...dbJobColumns, deduplicated: t.number() },
+                    readOnly: true,
+                  },
+                ),
+              ),
+            ),
             params: [
               deduplicationKey,
               deduplicationKey,
@@ -419,7 +859,45 @@ export const createSqliteStateAdapter = async <
       if (toInsert.length > 0) {
         const insertedRows = await executeTypedSql({
           txCtx,
-          sql: defs.insertJobsSql,
+          sql: templateCache.getOrCompute("insertJobs", () =>
+            applyTemplate(
+              sql(
+                `
+INSERT INTO {{table_prefix}}job (id, type_name, chain_id, chain_type_name, chain_index, input, deduplication_key, scheduled_at, chain_trace_context, trace_context)
+SELECT
+  json_extract(je.value, '$.id'),
+  json_extract(je.value, '$.type_name'),
+  COALESCE(json_extract(je.value, '$.chain_id'), json_extract(je.value, '$.id')),
+  json_extract(je.value, '$.chain_type_name'),
+  json_extract(je.value, '$.chain_index'),
+  json_extract(je.value, '$.input'),
+  json_extract(je.value, '$.deduplication_key'),
+  MAX(
+    COALESCE(
+      json_extract(je.value, '$.scheduled_at'),
+      CASE WHEN json_extract(je.value, '$.schedule_after_ms') IS NOT NULL
+        THEN datetime('now', 'subsec', '+' || (json_extract(je.value, '$.schedule_after_ms') / 1000.0) || ' seconds')
+        ELSE NULL
+      END,
+      datetime('now', 'subsec')
+    ),
+    datetime('now', 'subsec')
+  ),
+  json_extract(je.value, '$.chain_trace_context'),
+  json_extract(je.value, '$.trace_context')
+FROM json_each(?) AS je
+WHERE true
+ON CONFLICT (chain_id, chain_index) DO UPDATE SET id = {{table_prefix}}job.id
+RETURNING *
+`,
+                {
+                  id: "insertJobs",
+                  params: [t.string()],
+                  columns: { ...dbJobColumns },
+                },
+              ),
+            ),
+          ),
           params: [JSON.stringify(toInsert.map((item) => item.json))],
         });
 
@@ -451,19 +929,80 @@ export const createSqliteStateAdapter = async <
 
         await executeTypedSql({
           txCtx,
-          sql: defs.insertJobBlockersSql,
+          sql: templateCache.getOrCompute("insertJobBlockers", () =>
+            applyTemplate(
+              sql(
+                `
+INSERT INTO {{table_prefix}}job_blocker (job_id, blocked_by_chain_id, "index", trace_context)
+SELECT ?, je.value, je.key, json_extract(?, '$[' || je.key || ']')
+FROM json_each(?) AS je
+`,
+                {
+                  id: "insertJobBlockers",
+                  params: [idDataType, t.string(), t.string()],
+                  columns: {},
+                },
+              ),
+            ),
+          ),
           params: [jobId, traceContextsJson, JSON.stringify(blockedByChainIds)],
         });
 
         const blockerStatuses = await executeTypedSql({
           txCtx,
-          sql: defs.checkBlockersStatusSql,
+          sql: templateCache.getOrCompute("checkBlockersStatus", () =>
+            applyTemplate(
+              sql(
+                `
+SELECT
+  jb.job_id,
+  jb.blocked_by_chain_id,
+  (
+    SELECT j2.status
+    FROM {{table_prefix}}job j2
+    WHERE j2.chain_id = jb.blocked_by_chain_id
+    ORDER BY j2.chain_index DESC
+    LIMIT 1
+  ) AS blocker_status
+FROM {{table_prefix}}job_blocker jb
+WHERE jb.job_id = ?
+`,
+                {
+                  id: "checkBlockersStatus",
+                  params: [idDataType],
+                  columns: {
+                    job_id: idDataType,
+                    blocked_by_chain_id: idDataType,
+                    blocker_status: t.string(),
+                  },
+                  readOnly: true,
+                },
+              ),
+            ),
+          ),
           params: [jobId],
         });
 
         const chainTraceContextRows = await executeTypedSql({
           txCtx,
-          sql: defs.getBlockerChainTraceContextsSql,
+          sql: templateCache.getOrCompute("getBlockerChainTraceContexts", () =>
+            applyTemplate(
+              sql(
+                `
+SELECT j.id AS blocked_by_chain_id, j.chain_trace_context
+FROM {{table_prefix}}job j
+WHERE j.id IN (SELECT value FROM json_each(?))
+ORDER BY j.id
+`,
+                {
+                  id: "getBlockerChainTraceContexts",
+                  params: [t.string()],
+                  columns: { blocked_by_chain_id: idDataType, chain_trace_context: t["string?"]() },
+                  readOnly: true,
+                },
+              ),
+            ),
+          ),
           params: [JSON.stringify(blockedByChainIds)],
         });
 
@@ -481,7 +1020,23 @@ export const createSqliteStateAdapter = async <
         if (incompleteBlockerChainIds.length > 0) {
           const [updatedJob] = await executeTypedSql({
             txCtx,
-            sql: defs.updateJobToBlockedSql,
+            sql: templateCache.getOrCompute("updateJobToBlocked", () =>
+              applyTemplate(
+                sql(
+                  `
+UPDATE {{table_prefix}}job
+SET status = 'blocked'
+WHERE id = ? AND status = 'pending'
+RETURNING *
+`,
+                  {
+                    id: "updateJobToBlocked",
+                    params: [idDataType],
+                    columns: { ...dbJobColumns },
+                  },
+                ),
+              ),
+            ),
             params: [jobId],
           });
           if (updatedJob) {
@@ -496,7 +1051,16 @@ export const createSqliteStateAdapter = async <
 
         const [job] = await executeTypedSql({
           txCtx,
-          sql: defs.getJobForBlockersSql,
+          sql: templateCache.getOrCompute("getJobForBlockers", () =>
+            applyTemplate(
+              sql(`SELECT * FROM {{table_prefix}}job WHERE id = ?`, {
+                id: "getJobForBlockers",
+                params: [idDataType],
+                columns: { ...dbJobColumns },
+                readOnly: true,
+              }),
+            ),
+          ),
           params: [jobId],
         });
         results.push({
@@ -512,7 +1076,43 @@ export const createSqliteStateAdapter = async <
     unblockJobs: async ({ txCtx, blockedByChainId }) => {
       const readyJobs = await executeTypedSql({
         txCtx,
-        sql: defs.findReadyJobsSql,
+        sql: templateCache.getOrCompute("findReadyJobs", () =>
+          applyTemplate(
+            sql(
+              `
+WITH direct_blocked AS (
+  SELECT DISTINCT jb.job_id
+  FROM {{table_prefix}}job_blocker jb
+  WHERE jb.blocked_by_chain_id = ?
+),
+blockers_status AS (
+  SELECT
+    jb.job_id,
+    jb.blocked_by_chain_id,
+    (
+      SELECT j2.status
+      FROM {{table_prefix}}job j2
+      WHERE j2.chain_id = jb.blocked_by_chain_id
+      ORDER BY j2.chain_index DESC
+      LIMIT 1
+    ) AS blocker_status
+  FROM {{table_prefix}}job_blocker jb
+  WHERE jb.job_id IN (SELECT job_id FROM direct_blocked)
+)
+SELECT job_id
+FROM blockers_status
+GROUP BY job_id
+HAVING MIN(CASE WHEN blocker_status = 'completed' THEN 1 ELSE 0 END) = 1
+`,
+              {
+                id: "findReadyJobs",
+                params: [idDataType],
+                columns: { job_id: idDataType },
+                readOnly: true,
+              },
+            ),
+          ),
+        ),
         params: [blockedByChainId],
       });
 
@@ -521,7 +1121,24 @@ export const createSqliteStateAdapter = async <
       if (readyJobIds.length > 0) {
         const updatedJobs = await executeTypedSql({
           txCtx,
-          sql: defs.scheduleBlockedJobsSql,
+          sql: templateCache.getOrCompute("scheduleBlockedJobs", () =>
+            applyTemplate(
+              sql(
+                `
+UPDATE {{table_prefix}}job
+SET scheduled_at = MAX(scheduled_at, datetime('now', 'subsec')),
+  status = 'pending'
+WHERE id IN (SELECT value FROM json_each(?)) AND status = 'blocked'
+RETURNING *
+`,
+                {
+                  id: "scheduleBlockedJobs",
+                  params: [t.string()],
+                  columns: { ...dbJobColumns },
+                },
+              ),
+            ),
+          ),
           params: [JSON.stringify(readyJobIds)],
         });
         unblockedJobs = updatedJobs.map(mapDbJobToStateJob);
@@ -531,7 +1148,24 @@ export const createSqliteStateAdapter = async <
 
       const traceContextResults = await executeTypedSql({
         txCtx,
-        sql: defs.getJobBlockerTraceContextsSql,
+        sql: templateCache.getOrCompute("getJobBlockerTraceContexts", () =>
+          applyTemplate(
+            sql(
+              `
+SELECT jb.trace_context
+FROM {{table_prefix}}job_blocker jb
+WHERE jb.blocked_by_chain_id = ?
+  AND jb.trace_context IS NOT NULL
+`,
+              {
+                id: "getJobBlockerTraceContexts",
+                params: [idDataType],
+                columns: { trace_context: t["string?"]() },
+                readOnly: true,
+              },
+            ),
+          ),
+        ),
         params: [blockedByChainId],
       });
       const blockerTraceContexts = traceContextResults.map((r) => r.trace_context);
@@ -541,7 +1175,35 @@ export const createSqliteStateAdapter = async <
     getJobBlockers: async ({ txCtx, jobId }) => {
       const rows = await executeTypedSql({
         txCtx,
-        sql: defs.getJobBlockersSql,
+        sql: templateCache.getOrCompute("getJobBlockers", () =>
+          applyTemplate(
+            sql(
+              `
+SELECT
+  {{job_columns:j}},
+  {{job_columns_prefixed:lc:lc_}}
+FROM {{table_prefix}}job_blocker AS b
+JOIN {{table_prefix}}job AS j
+  ON j.id = b.blocked_by_chain_id
+LEFT JOIN {{table_prefix}}job AS lc
+  ON lc.chain_id = j.id
+  AND lc.chain_index = (
+    SELECT MAX(lj.chain_index)
+    FROM {{table_prefix}}job lj
+    WHERE lj.chain_id = j.id
+  )
+WHERE b.job_id = ?
+ORDER BY b."index" ASC
+`,
+              {
+                id: "getJobBlockers",
+                params: [idDataType],
+                columns: { ...dbChainRowColumns },
+                readOnly: true,
+              },
+            ),
+          ),
+        ),
         params: [jobId],
       });
 
@@ -559,7 +1221,27 @@ export const createSqliteStateAdapter = async <
     getNextJobAvailableInMs: async ({ txCtx, typeNames }) => {
       const [result] = await executeTypedSql({
         txCtx,
-        sql: defs.getNextJobAvailableInMsSql,
+        sql: templateCache.getOrCompute("getNextJobAvailableInMs", () =>
+          applyTemplate(
+            sql(
+              `
+SELECT
+  MAX(0, CAST((julianday(job.scheduled_at) - julianday(datetime('now', 'subsec'))) * 86400000 AS INTEGER)) AS available_in_ms
+FROM {{table_prefix}}job as job INDEXED BY {{table_prefix}}job_acquisition_idx
+WHERE job.type_name IN (SELECT value FROM json_each(?))
+  AND job.status = 'pending'
+ORDER BY job.scheduled_at ASC
+LIMIT 1
+`,
+              {
+                id: "getNextJobAvailableInMs",
+                params: [t.string()],
+                columns: { available_in_ms: t.number() },
+                readOnly: true,
+              },
+            ),
+          ),
+        ),
         params: [JSON.stringify(typeNames)],
       });
       return result ? result.available_in_ms : null;
@@ -568,7 +1250,40 @@ export const createSqliteStateAdapter = async <
       const typeNamesJson = JSON.stringify(typeNames);
       const [result] = await executeTypedSql({
         txCtx,
-        sql: defs.acquireJobSql,
+        sql: templateCache.getOrCompute("acquireJob", () =>
+          applyTemplate(
+            sql(
+              `
+UPDATE {{table_prefix}}job
+SET status = 'running',
+  attempt = attempt + 1
+WHERE id = (
+  SELECT id
+  FROM {{table_prefix}}job INDEXED BY {{table_prefix}}job_acquisition_idx
+  WHERE type_name IN (SELECT value FROM json_each(?))
+    AND status = 'pending'
+    AND scheduled_at <= datetime('now', 'subsec')
+  ORDER BY scheduled_at ASC
+  LIMIT 1
+)
+RETURNING *,
+  EXISTS(
+    SELECT 1
+    FROM {{table_prefix}}job INDEXED BY {{table_prefix}}job_acquisition_idx
+    WHERE type_name IN (SELECT value FROM json_each(?))
+      AND status = 'pending'
+      AND scheduled_at <= datetime('now', 'subsec')
+    LIMIT 1
+  ) AS has_more
+`,
+              {
+                id: "acquireJob",
+                params: [t.string(), t.string()],
+                columns: { ...dbJobColumns, has_more: t.number() },
+              },
+            ),
+          ),
+        ),
         params: [typeNamesJson, typeNamesJson],
       });
 
@@ -579,7 +1294,25 @@ export const createSqliteStateAdapter = async <
     renewJobLease: async ({ txCtx, jobId, workerId, leaseDurationMs }) => {
       const [job] = await executeTypedSql({
         txCtx,
-        sql: defs.renewJobLeaseSql,
+        sql: templateCache.getOrCompute("renewJobLease", () =>
+          applyTemplate(
+            sql(
+              `
+UPDATE {{table_prefix}}job
+SET leased_by = ?,
+  leased_until = datetime('now', 'subsec', '+' || (? / 1000.0) || ' seconds'),
+  status = 'running'
+WHERE id = ?
+RETURNING *
+`,
+              {
+                id: "renewJobLease",
+                params: [t.string(), t.number(), idDataType],
+                columns: { ...dbJobColumns },
+              },
+            ),
+          ),
+        ),
         params: [workerId, leaseDurationMs, jobId],
       });
 
@@ -590,7 +1323,32 @@ export const createSqliteStateAdapter = async <
       const scheduleAfterMsOrNull = schedule.afterMs ?? null;
       const [job] = await executeTypedSql({
         txCtx,
-        sql: defs.rescheduleJobSql,
+        sql: templateCache.getOrCompute("rescheduleJob", () =>
+          applyTemplate(
+            sql(
+              `
+UPDATE {{table_prefix}}job
+SET scheduled_at = MAX(
+    COALESCE(?,
+      CASE WHEN ? IS NOT NULL THEN datetime('now', 'subsec', '+' || (? / 1000.0) || ' seconds') ELSE NULL END,
+      datetime('now', 'subsec')),
+    datetime('now', 'subsec')),
+  last_attempt_at = datetime('now', 'subsec'),
+  last_attempt_error = ?,
+  leased_by = NULL,
+  leased_until = NULL,
+  status = 'pending'
+WHERE id = ?
+RETURNING *
+`,
+              {
+                id: "rescheduleJob",
+                params: [t["string?"](), t["number?"](), t["number?"](), t.string(), idDataType],
+                columns: { ...dbJobColumns },
+              },
+            ),
+          ),
+        ),
         params: [
           scheduledAtIso,
           scheduleAfterMsOrNull,
@@ -605,7 +1363,29 @@ export const createSqliteStateAdapter = async <
     completeJob: async ({ txCtx, jobId, output, workerId }) => {
       const [job] = await executeTypedSql({
         txCtx,
-        sql: defs.completeJobSql,
+        sql: templateCache.getOrCompute("completeJob", () =>
+          applyTemplate(
+            sql(
+              `
+UPDATE {{table_prefix}}job
+SET status = 'completed',
+  completed_at = datetime('now', 'subsec'),
+  completed_by = ?,
+  output = ?,
+  leased_by = NULL,
+  leased_until = NULL,
+  last_attempt_error = NULL
+WHERE id = ?
+RETURNING *
+`,
+              {
+                id: "completeJob",
+                params: [t["string?"](), t["string?"](), idDataType],
+                columns: { ...dbJobColumns },
+              },
+            ),
+          ),
+        ),
         params: [workerId, output !== undefined ? JSON.stringify(output) : null, jobId],
       });
 
@@ -614,7 +1394,35 @@ export const createSqliteStateAdapter = async <
     reapExpiredJobLease: async ({ txCtx, typeNames, ignoredJobIds }) => {
       const [job] = await executeTypedSql({
         txCtx,
-        sql: defs.reapExpiredJobLeaseSql,
+        sql: templateCache.getOrCompute("reapExpiredJobLease", () =>
+          applyTemplate(
+            sql(
+              `
+UPDATE {{table_prefix}}job
+SET leased_by = NULL,
+  leased_until = NULL,
+  status = 'pending'
+WHERE id = (
+  SELECT id
+  FROM {{table_prefix}}job INDEXED BY {{table_prefix}}job_expired_lease_idx
+  WHERE leased_until IS NOT NULL
+    AND leased_until <= datetime('now', 'subsec')
+    AND status = 'running'
+    AND type_name IN (SELECT value FROM json_each(?))
+    AND id NOT IN (SELECT value FROM json_each(?))
+  ORDER BY leased_until ASC
+  LIMIT 1
+)
+RETURNING *
+`,
+              {
+                id: "reapExpiredJobLease",
+                params: [t.string(), t.string()],
+                columns: { ...dbJobColumns },
+              },
+            ),
+          ),
+        ),
         params: [JSON.stringify(typeNames), JSON.stringify(ignoredJobIds ?? [])],
       });
       return job ? mapDbJobToStateJob(job) : undefined;
@@ -629,17 +1437,72 @@ export const createSqliteStateAdapter = async <
       const chainIdsJson = JSON.stringify(effectiveChainIds);
       const rows = await executeTypedSql({
         txCtx,
-        sql: defs.getChainsByChainIdsSql,
+        sql: templateCache.getOrCompute("getChainsByChainIds", () =>
+          applyTemplate(
+            sql(
+              `
+SELECT
+  {{job_columns:j}},
+  {{job_columns_prefixed:lc:lc_}}
+FROM {{table_prefix}}job AS j
+LEFT JOIN {{table_prefix}}job AS lc
+  ON lc.chain_id = j.id
+  AND lc.chain_index = (
+    SELECT MAX(chain_index) FROM {{table_prefix}}job
+    WHERE chain_id = j.id
+  )
+WHERE j.id = j.chain_id
+  AND j.chain_id IN (SELECT value FROM json_each(?))
+`,
+              {
+                id: "getChainsByChainIds",
+                params: [t.string()],
+                columns: { ...dbChainRowColumns },
+                readOnly: true,
+              },
+            ),
+          ),
+        ),
         params: [chainIdsJson],
       });
       await executeTypedSql({
         txCtx,
-        sql: defs.deleteBlockersByChainIdsSql,
+        sql: templateCache.getOrCompute("deleteBlockersByChainIds", () =>
+          applyTemplate(
+            sql(
+              `
+DELETE FROM {{table_prefix}}job_blocker
+WHERE job_id IN (
+  SELECT id FROM {{table_prefix}}job WHERE chain_id IN (SELECT value FROM json_each(?))
+)
+`,
+              {
+                id: "deleteBlockersByChainIds",
+                params: [t.string()],
+                columns: {},
+              },
+            ),
+          ),
+        ),
         params: [chainIdsJson],
       });
       await executeTypedSql({
         txCtx,
-        sql: defs.deleteChainsSql,
+        sql: templateCache.getOrCompute("deleteChains", () =>
+          applyTemplate(
+            sql(
+              `
+DELETE FROM {{table_prefix}}job
+WHERE chain_id IN (SELECT value FROM json_each(?))
+`,
+              {
+                id: "deleteChains",
+                params: [t.string()],
+                columns: {},
+              },
+            ),
+          ),
+        ),
         params: [chainIdsJson],
       });
       const deleted = rows.map((row) => {
@@ -657,10 +1520,12 @@ export const createSqliteStateAdapter = async <
       const cursor = page.cursor ? decodeCreatedAtCursor(page.cursor) : null;
       const conditions: string[] = ["j.chain_index = 0"];
       const params: unknown[] = [];
+      const paramTypes: DataType[] = [];
 
       if (filter?.typeName?.length) {
         conditions.push("j.type_name IN (SELECT value FROM json_each(?))");
         params.push(JSON.stringify(filter.typeName));
+        paramTypes.push(t.string());
       }
       if (filter?.rootOnly) {
         conditions.push(
@@ -670,24 +1535,29 @@ export const createSqliteStateAdapter = async <
       if (filter?.chainId?.length) {
         conditions.push("j.chain_id IN (SELECT value FROM json_each(?))");
         params.push(JSON.stringify(filter.chainId));
+        paramTypes.push(t.string());
       }
       if (filter?.jobId?.length) {
         conditions.push(
           `j.chain_id IN (SELECT chain_id FROM ${tablePrefix}job WHERE id IN (SELECT value FROM json_each(?)))`,
         );
         params.push(JSON.stringify(filter.jobId));
+        paramTypes.push(t.string());
       }
       if (filter?.status?.length) {
         conditions.push("lc.status IN (SELECT value FROM json_each(?))");
         params.push(JSON.stringify(filter.status));
+        paramTypes.push(t.string());
       }
       if (filter?.from) {
         conditions.push("j.created_at >= ?");
         params.push(isoToSqlite(filter.from.toISOString()));
+        paramTypes.push(t.string());
       }
       if (filter?.to) {
         conditions.push("j.created_at <= ?");
         params.push(isoToSqlite(filter.to.toISOString()));
+        paramTypes.push(t.string());
       }
       if (cursor) {
         const cursorCreatedAt = isoToSqlite(cursor.createdAt);
@@ -697,20 +1567,25 @@ export const createSqliteStateAdapter = async <
           conditions.push("(j.created_at > ? OR (j.created_at = ? AND j.id > ?))");
         }
         params.push(cursorCreatedAt, cursorCreatedAt, cursor.id);
+        paramTypes.push(t.string(), t.string(), t.string());
       }
       params.push(page.limit + 1);
+      paramTypes.push(t.number());
 
       const orderDir = orderDirection === "desc" ? "DESC" : "ASC";
       const sqlStr = `SELECT ${jobColumnsSelect("j")}, ${jobColumnsPrefixedSelect("lc", "lc_")} FROM ${tablePrefix}job AS j LEFT JOIN ${tablePrefix}job AS lc ON lc.chain_id = j.id AND lc.rowid = (SELECT lj.rowid FROM ${tablePrefix}job lj WHERE lj.chain_id = j.id ORDER BY lj.chain_index DESC LIMIT 1) WHERE ${conditions.join(" AND ")} ORDER BY j.created_at ${orderDir}, j.id ${orderDir} LIMIT ?`;
 
-      const rows = (await stateProvider.executeSql({
+      const rows = await executeTypedSql({
         txCtx,
-        sql: sqlStr,
+        sql: applyTemplate(
+          sql(sqlStr, {
+            params: paramTypes,
+            columns: dbChainRowColumns,
+            readOnly: true,
+          }),
+        ),
         params,
-        paramTypes: {},
-        columnTypes: extractColumnTypes(defs.dbChainRowColumns),
-        readOnly: true,
-      })) as DbChainRow[];
+      });
 
       const hasMore = rows.length > page.limit;
       const pageRows = hasMore ? rows.slice(0, page.limit) : rows;
@@ -743,34 +1618,42 @@ export const createSqliteStateAdapter = async <
       const cursor = page.cursor ? decodeCreatedAtCursor(page.cursor) : null;
       const conditions: string[] = [];
       const params: unknown[] = [];
+      const paramTypes: DataType[] = [];
 
       if (filter?.status?.length) {
         conditions.push("j.status IN (SELECT value FROM json_each(?))");
         params.push(JSON.stringify(filter.status));
+        paramTypes.push(t.string());
       }
       if (filter?.typeName?.length) {
         conditions.push("j.type_name IN (SELECT value FROM json_each(?))");
         params.push(JSON.stringify(filter.typeName));
+        paramTypes.push(t.string());
       }
       if (filter?.chainTypeName?.length) {
         conditions.push("j.chain_type_name IN (SELECT value FROM json_each(?))");
         params.push(JSON.stringify(filter.chainTypeName));
+        paramTypes.push(t.string());
       }
       if (filter?.chainId?.length) {
         conditions.push("j.chain_id IN (SELECT value FROM json_each(?))");
         params.push(JSON.stringify(filter.chainId));
+        paramTypes.push(t.string());
       }
       if (filter?.jobId?.length) {
         conditions.push("j.id IN (SELECT value FROM json_each(?))");
         params.push(JSON.stringify(filter.jobId));
+        paramTypes.push(t.string());
       }
       if (filter?.from) {
         conditions.push("j.created_at >= ?");
         params.push(isoToSqlite(filter.from.toISOString()));
+        paramTypes.push(t.string());
       }
       if (filter?.to) {
         conditions.push("j.created_at <= ?");
         params.push(isoToSqlite(filter.to.toISOString()));
+        paramTypes.push(t.string());
       }
       if (cursor) {
         const cursorCreatedAt = isoToSqlite(cursor.createdAt);
@@ -780,21 +1663,26 @@ export const createSqliteStateAdapter = async <
           conditions.push("(j.created_at > ? OR (j.created_at = ? AND j.id > ?))");
         }
         params.push(cursorCreatedAt, cursorCreatedAt, cursor.id);
+        paramTypes.push(t.string(), t.string(), t.string());
       }
       params.push(page.limit + 1);
+      paramTypes.push(t.number());
 
       const orderDir = orderDirection === "desc" ? "DESC" : "ASC";
       const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
       const sqlStr = `SELECT * FROM ${tablePrefix}job j ${where} ORDER BY j.created_at ${orderDir}, j.id ${orderDir} LIMIT ?`;
 
-      const rows = (await stateProvider.executeSql({
+      const rows = await executeTypedSql({
         txCtx,
-        sql: sqlStr,
+        sql: applyTemplate(
+          sql(sqlStr, {
+            params: paramTypes,
+            columns: dbJobColumns,
+            readOnly: true,
+          }),
+        ),
         params,
-        paramTypes: {},
-        columnTypes: extractColumnTypes(defs.dbJobColumns),
-        readOnly: true,
-      })) as DbJob[];
+      });
 
       const hasMore = rows.length > page.limit;
       const pageRows = hasMore ? rows.slice(0, page.limit) : rows;
@@ -817,6 +1705,7 @@ export const createSqliteStateAdapter = async <
       const cursor = page.cursor ? decodeChainIndexCursor(page.cursor) : null;
       const conditions: string[] = ["j.chain_id = ?"];
       const params: unknown[] = [chainId];
+      const paramTypes: DataType[] = [idDataType];
 
       if (cursor) {
         if (orderDirection === "asc") {
@@ -825,20 +1714,25 @@ export const createSqliteStateAdapter = async <
           conditions.push("(j.chain_index < ? OR (j.chain_index = ? AND j.id < ?))");
         }
         params.push(cursor.chainIndex, cursor.chainIndex, cursor.id);
+        paramTypes.push(t.number(), t.number(), t.string());
       }
       params.push(page.limit + 1);
+      paramTypes.push(t.number());
 
       const orderDir = orderDirection === "asc" ? "ASC" : "DESC";
       const sqlStr = `SELECT * FROM ${tablePrefix}job j WHERE ${conditions.join(" AND ")} ORDER BY j.chain_index ${orderDir}, j.id ${orderDir} LIMIT ?`;
 
-      const rows = (await stateProvider.executeSql({
+      const rows = await executeTypedSql({
         txCtx,
-        sql: sqlStr,
+        sql: applyTemplate(
+          sql(sqlStr, {
+            params: paramTypes,
+            columns: dbJobColumns,
+            readOnly: true,
+          }),
+        ),
         params,
-        paramTypes: {},
-        columnTypes: extractColumnTypes(defs.dbJobColumns),
-        readOnly: true,
-      })) as DbJob[];
+      });
 
       const hasMore = rows.length > page.limit;
       const pageRows = hasMore ? rows.slice(0, page.limit) : rows;
@@ -858,48 +1752,34 @@ export const createSqliteStateAdapter = async <
     },
 
     triggerJobs: async ({ txCtx, jobIds }) => {
-      if (jobIds.length === 0) return { triggered: [], notFound: [], notTriggerable: [] };
-      const idsJson = JSON.stringify(jobIds);
-
+      if (jobIds.length === 0) return [];
       const rows = await executeTypedSql({
         txCtx,
-        sql: defs.triggerJobsSql,
-        params: [idsJson],
+        sql: templateCache.getOrCompute("triggerJobs", () =>
+          applyTemplate(
+            sql(
+              `
+UPDATE {{table_prefix}}job
+SET scheduled_at = datetime('now', 'subsec')
+WHERE id IN (SELECT value FROM json_each(?))
+  AND status = 'pending'
+RETURNING *
+`,
+              {
+                id: "triggerJobs",
+                params: [t.string()],
+                columns: { ...dbJobColumns },
+              },
+            ),
+          ),
+        ),
+        params: [JSON.stringify(jobIds)],
       });
-
-      if (rows.length > 0) {
-        const orderById = new Map(jobIds.map((id, i) => [id as string, i]));
-        rows.sort((a, b) => orderById.get(a.id)! - orderById.get(b.id)!);
-        return {
-          triggered: rows.map((row) => mapDbJobToStateJob(row)),
-          notFound: [],
-          notTriggerable: [],
-        };
-      }
-
-      const statusRows = await executeTypedSql({
-        txCtx,
-        sql: defs.getJobStatusesByIdsSql,
-        params: [idsJson],
-      });
-      const statusById = new Map(statusRows.map((r) => [r.id, r.status]));
-
-      const notFound: TIdType[] = [];
-      const notTriggerable: { id: TIdType; status: StateJob["status"] }[] = [];
-      const seen = new Set<string>();
-      for (const id of jobIds) {
-        const key = id as string;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        const status = statusById.get(key);
-        if (status === undefined) {
-          notFound.push(id);
-        } else if (status !== "pending") {
-          notTriggerable.push({ id, status: status as StateJob["status"] });
-        }
-      }
-
-      return { triggered: [], notFound, notTriggerable };
+      const orderById = new Map(jobIds.map((id, i) => [id as string, i]));
+      return rows
+        .slice()
+        .sort((a, b) => orderById.get(a.id)! - orderById.get(b.id)!)
+        .map(mapDbJobToStateJob);
     },
 
     close: async () => {
@@ -912,6 +1792,7 @@ export const createSqliteStateAdapter = async <
         `j.id IN (SELECT jb.job_id FROM ${tablePrefix}job_blocker jb WHERE jb.blocked_by_chain_id = ?)`,
       ];
       const params: unknown[] = [chainId];
+      const paramTypes: DataType[] = [idDataType];
 
       if (cursor) {
         const cursorCreatedAt = isoToSqlite(cursor.createdAt);
@@ -921,20 +1802,25 @@ export const createSqliteStateAdapter = async <
           conditions.push("(j.created_at > ? OR (j.created_at = ? AND j.id > ?))");
         }
         params.push(cursorCreatedAt, cursorCreatedAt, cursor.id);
+        paramTypes.push(t.string(), t.string(), t.string());
       }
       params.push(page.limit + 1);
+      paramTypes.push(t.number());
 
       const orderDir = orderDirection === "desc" ? "DESC" : "ASC";
       const sqlStr = `SELECT * FROM ${tablePrefix}job j WHERE ${conditions.join(" AND ")} ORDER BY j.created_at ${orderDir}, j.id ${orderDir} LIMIT ?`;
 
-      const rows = (await stateProvider.executeSql({
+      const rows = await executeTypedSql({
         txCtx,
-        sql: sqlStr,
+        sql: applyTemplate(
+          sql(sqlStr, {
+            params: paramTypes,
+            columns: dbJobColumns,
+            readOnly: true,
+          }),
+        ),
         params,
-        paramTypes: {},
-        columnTypes: extractColumnTypes(defs.dbJobColumns),
-        readOnly: true,
-      })) as DbJob[];
+      });
 
       const hasMore = rows.length > page.limit;
       const pageRows = hasMore ? rows.slice(0, page.limit) : rows;
@@ -952,21 +1838,19 @@ export const createSqliteStateAdapter = async <
 
       return { items, nextCursor };
     },
-  };
-
-  return {
-    ...rawAdapter,
     migrateToLatest: async () => {
       if (checkForeignKeys) {
         await stateProvider.withTransaction(async (txCtx) => {
-          const [fkResult] = (await stateProvider.executeSql({
+          const [fkResult] = await executeTypedSql({
             txCtx,
-            sql: "PRAGMA foreign_keys",
-            params: [],
-            paramTypes: {},
-            columnTypes: { foreign_keys: "number" },
-            readOnly: true,
-          })) as { foreign_keys: number }[];
+            sql: applyTemplate(
+              sql("PRAGMA foreign_keys", {
+                params: [],
+                columns: { foreign_keys: t.number() },
+                readOnly: true,
+              }),
+            ),
+          });
           if (!fkResult || fkResult.foreign_keys !== 1) {
             throw new Error(
               "SQLite foreign_keys pragma is not enabled. " +
@@ -978,13 +1862,15 @@ export const createSqliteStateAdapter = async <
       }
 
       if (checkAutoVacuum) {
-        const [avResult] = (await stateProvider.executeSql({
-          sql: "PRAGMA auto_vacuum",
-          params: [],
-          paramTypes: {},
-          columnTypes: { auto_vacuum: "number" },
-          readOnly: true,
-        })) as { auto_vacuum: number }[];
+        const [avResult] = await executeTypedSql({
+          sql: applyTemplate(
+            sql("PRAGMA auto_vacuum", {
+              params: [],
+              columns: { auto_vacuum: t.number() },
+              readOnly: true,
+            }),
+          ),
+        });
         if (!avResult || avResult.auto_vacuum !== 2) {
           throw new Error(
             "SQLite auto_vacuum pragma is not set to INCREMENTAL. " +
@@ -998,71 +1884,72 @@ export const createSqliteStateAdapter = async <
         migrations,
         runInTransaction: stateProvider.withTransaction,
         getAppliedMigrationNames: async (txCtx) => {
-          await stateProvider.executeSql({
+          await executeTypedSql({
             txCtx,
-            sql: applyTemplate(defs.createMigrationTableSql).sql,
-            params: [],
-            paramTypes: {},
-            columnTypes: {},
-            readOnly: false,
+            sql: applyTemplate(
+              sql(
+                `
+CREATE TABLE IF NOT EXISTS {{table_prefix}}migration (
+            name TEXT PRIMARY KEY,
+            applied_at TEXT NOT NULL DEFAULT (datetime('now', 'subsec'))
+)`,
+                {
+                  id: "createMigrationTable",
+                  params: [],
+                  columns: {},
+                },
+              ),
+            ),
           });
-          const applied = (await stateProvider.executeSql({
+          const applied = await executeTypedSql({
             txCtx,
-            sql: applyTemplate(defs.getAppliedMigrationsSql).sql,
-            params: [],
-            paramTypes: {},
-            columnTypes: { name: "string", applied_at: "string" },
-            readOnly: true,
-          })) as { name: string }[];
+            sql: applyTemplate(
+              sql(`SELECT name, applied_at FROM {{table_prefix}}migration ORDER BY name`, {
+                id: "getAppliedMigrations",
+                params: [],
+                columns: { name: t.string(), applied_at: t.string() },
+                readOnly: true,
+              }),
+            ),
+          });
           return applied.map((m) => m.name);
         },
         executeMigrationStatements: async (txCtx, migration) => {
           for (const stmt of migration.statements) {
-            await stateProvider.executeSql({
-              txCtx,
-              sql: applyTemplate(stmt.sql).sql,
-              params: [],
-              paramTypes: {},
-              columnTypes: {},
-              readOnly: false,
-            });
+            await executeTypedSql({ txCtx, sql: applyTemplate(stmt.sql), params: [] });
           }
         },
         recordMigration: async (txCtx, name) => {
-          await stateProvider.executeSql({
+          await executeTypedSql({
             txCtx,
-            sql: applyTemplate(defs.recordMigrationSql).sql,
+            sql: applyTemplate(
+              sql(
+                `INSERT INTO {{table_prefix}}migration (name) VALUES (?) ON CONFLICT (name) DO NOTHING`,
+                {
+                  id: "recordMigration",
+                  params: [t.string()],
+                  columns: {},
+                },
+              ),
+            ),
             params: [name],
-            paramTypes: { 0: "string" },
-            columnTypes: {},
-            readOnly: false,
           });
         },
       });
     },
     vacuum: async () => {
-      await stateProvider.executeSql({
-        sql: "PRAGMA incremental_vacuum",
-        params: [],
-        paramTypes: {},
-        columnTypes: {},
-        readOnly: false,
+      await executeTypedSql({
+        sql: applyTemplate(sql("PRAGMA incremental_vacuum", { params: [], columns: {} })),
       });
     },
     truncate: async () => {
-      await stateProvider.executeSql({
-        sql: `DELETE FROM ${tablePrefix}job_blocker`,
-        params: [],
-        paramTypes: {},
-        columnTypes: {},
-        readOnly: false,
+      await executeTypedSql({
+        sql: applyTemplate(
+          sql(`DELETE FROM ${tablePrefix}job_blocker`, { params: [], columns: {} }),
+        ),
       });
-      await stateProvider.executeSql({
-        sql: `DELETE FROM ${tablePrefix}job`,
-        params: [],
-        paramTypes: {},
-        columnTypes: {},
-        readOnly: false,
+      await executeTypedSql({
+        sql: applyTemplate(sql(`DELETE FROM ${tablePrefix}job`, { params: [], columns: {} })),
       });
     },
   };

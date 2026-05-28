@@ -22,6 +22,7 @@ export const createBetterSqlite3Provider = ({
   };
 
   return {
+    transactionConcurrency: "serialized",
     withTransaction: async (fn) => {
       using _h = await lock.acquireWrite();
       try {
@@ -41,8 +42,8 @@ export const createBetterSqlite3Provider = ({
       }
     },
     executeSql: async ({ txCtx, id, sql, params, columnTypes, readOnly }) => {
+      const database = txCtx?.db ?? db;
       const run = (): unknown[] => {
-        const database = txCtx?.db ?? db;
         const prepare = (): Database.Statement =>
           id !== undefined ? prepareCached(id, sql) : database.prepare(sql);
         if (Object.keys(columnTypes).length > 0) {

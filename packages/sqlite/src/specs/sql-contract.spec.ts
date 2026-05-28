@@ -1,30 +1,15 @@
-import {
-  type DataType,
-  type RuntimeType,
-  type TypedSql,
-  createTemplateApplier,
-  extractColumnTypes,
-  extractParamTypes,
-  t,
-} from "@queuert/typed-sql";
+import { type RuntimeType } from "@queuert/typed-sql";
 import Database from "better-sqlite3";
+import { type StateAdapter } from "queuert";
+import { stateAdapterConformanceTestSuite } from "queuert/testing";
 import { describe, expect, it } from "vitest";
 
-import {
-  createSqliteSqlDefinitions,
-  jobColumnsPrefixedSelect,
-  jobColumnsSelect,
-} from "../state-adapter/sql.js";
 import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
-import { createBetterSqlite3Provider } from "../state-provider/state-provider.better-sqlite3.js";
-
-const isTypedSql = (v: unknown): v is TypedSql =>
-  typeof v === "object" &&
-  v !== null &&
-  "sql" in v &&
-  "params" in v &&
-  "columns" in v &&
-  "readOnly" in v;
+import {
+  type BetterSqlite3Context,
+  createBetterSqlite3Provider,
+} from "../state-provider/state-provider.better-sqlite3.js";
+import { type SqliteStateProvider } from "../state-provider/state-provider.sqlite.js";
 
 const sqliteTypeMatchesRuntime = (sqliteType: string, runtime: RuntimeType): boolean => {
   const normalized = sqliteType.toUpperCase();
@@ -51,15 +36,8 @@ const sqliteTypeMatchesRuntime = (sqliteType: string, runtime: RuntimeType): boo
   }
 };
 
-// SQLite values come back as strings/numbers/nulls/Buffers. Map `typeof value` to the
-// declared runtime type so we can verify columns whose `stmt.columns()[i].type` is null
-// (expression-derived columns, aggregates, COALESCE, etc).
 const runtimeValueMatchesRuntime = (value: unknown, runtime: RuntimeType): boolean => {
-  if (value == null) {
-    // Null is compatible with any nullable runtime (and non-nullables only surface null
-    // when the caller explicitly accepts it); we can't disprove the declared type here.
-    return true;
-  }
+  if (value == null) return true;
   switch (runtime) {
     case "string":
     case "string?":
@@ -73,7 +51,6 @@ const runtimeValueMatchesRuntime = (value: unknown, runtime: RuntimeType): boole
       return typeof value === "string";
     case "number":
     case "number?":
-      return typeof value === "number" || typeof value === "bigint";
     case "boolean":
     case "boolean?":
       return typeof value === "number" || typeof value === "bigint";
@@ -84,177 +61,119 @@ const runtimeValueMatchesRuntime = (value: unknown, runtime: RuntimeType): boole
   }
 };
 
-const sampleForRuntime = (runtime: RuntimeType): unknown => {
-  switch (runtime) {
-    case "string":
-      // Valid JSON array literal so SQL that passes the string into `json_each(?)` /
-      // `json_extract(?, ...)` succeeds in the sample-binding pass. Valid as a plain
-      // string filter too (just matches nothing on empty tables).
-      return "[]";
-    case "number":
-      return 0;
-    case "boolean":
-      return 0;
-    case "uuid":
-      return "00000000-0000-0000-0000-000000000000";
-    case "json":
-      return "null";
-    case "array":
-    case "jsonArray":
-      return "[]";
-    case "string?":
-    case "number?":
-    case "boolean?":
-    case "uuid?":
-    case "json?":
-    case "date?":
-      return null;
-    default: {
-      const _exhaustive: never = runtime;
-      throw new Error(`sampleForRuntime: unhandled RuntimeType ${_exhaustive as string}`);
-    }
-  }
-};
-
-// Count `?` positional parameters in the SQL, ignoring occurrences inside single-quoted
-// string literals. Good enough for our SQL (no `--` comments contain `?`).
 const countPlaceholders = (sqlText: string): number => {
   const stripped = sqlText.replace(/'(?:''|[^'])*'/g, "");
   return (stripped.match(/\?/g) ?? []).length;
 };
 
-type AdapterConfig = {
-  label: string;
-  tablePrefix: string;
-  idType: string;
-  idDataType: DataType<RuntimeType, string>;
+const validateAgainstDb = (
+  db: Database.Database,
+  args: {
+    sql: string;
+    paramTypes: Record<number, RuntimeType>;
+    columnTypes: Record<string, RuntimeType>;
+    readOnly: boolean;
+  },
+  rows: unknown[],
+): void => {
+  const { sql, paramTypes, columnTypes, readOnly } = args;
+  const ctx = `\n  SQL: ${sql.slice(0, 160).replace(/\s+/g, " ")}${sql.length > 160 ? "..." : ""}`;
+
+  const declaredParamCount = Object.keys(paramTypes).length;
+  const placeholderCount = countPlaceholders(sql);
+  expect(
+    placeholderCount,
+    `declared ${declaredParamCount} params but SQL contains ${placeholderCount} '?' placeholders${ctx}`,
+  ).toBe(declaredParamCount);
+
+  const stmt = db.prepare(sql);
+
+  expect(
+    stmt.readonly,
+    `stmt.readonly is ${stmt.readonly}, declared readOnly is ${readOnly}${ctx}`,
+  ).toBe(readOnly);
+
+  const declaredColumnNames = Object.keys(columnTypes);
+  if (declaredColumnNames.length === 0) return;
+
+  const stmtColumns = stmt.columns();
+  const actualNames = stmtColumns.map((c) => c.name);
+  expect([...actualNames].sort(), `column names mismatch${ctx}`).toEqual(
+    [...declaredColumnNames].sort(),
+  );
+  expect(
+    new Set(actualNames).size,
+    `duplicate column names in result: ${actualNames.join(", ")}${ctx}`,
+  ).toBe(actualNames.length);
+
+  const sampleRow = rows.length > 0 ? (rows[0] as Record<string, unknown>) : undefined;
+  const declaredTypeByName = new Map(stmtColumns.map((c) => [c.name, c.type]));
+  for (const [name, runtime] of Object.entries(columnTypes)) {
+    const sqliteType = declaredTypeByName.get(name);
+    if (sqliteType != null) {
+      expect(
+        sqliteTypeMatchesRuntime(sqliteType, runtime),
+        `column '${name}': SQLite reports declared type '${sqliteType}', declared runtime '${runtime}'${ctx}`,
+      ).toBe(true);
+      continue;
+    }
+    // Expression-derived columns report null type; fall back to a real row when we have one.
+    if (sampleRow && name in sampleRow) {
+      const value = sampleRow[name];
+      expect(
+        runtimeValueMatchesRuntime(value, runtime),
+        `column '${name}': runtime value has typeof '${typeof value}', declared runtime '${runtime}'${ctx}`,
+      ).toBe(true);
+    }
+  }
 };
 
-const configs: AdapterConfig[] = [
-  {
-    label: "tablePrefix=queuert_",
-    tablePrefix: "queuert_",
-    idType: "TEXT",
-    idDataType: t.string(),
-  },
-  {
-    label: "tablePrefix=myapp_jobs_",
-    tablePrefix: "myapp_jobs_",
-    idType: "TEXT",
-    idDataType: t.string(),
-  },
-];
-
-const contractIt = it.extend<{ db: Database.Database }>({
-  db: [
-    // oxlint-disable-next-line no-empty-pattern
-    async ({}, use) => {
-      const db = new Database(":memory:");
-      db.pragma("journal_mode = WAL");
-      db.pragma("auto_vacuum = INCREMENTAL");
-      db.pragma("foreign_keys = ON");
-      for (const cfg of configs) {
-        const adapter = await createSqliteStateAdapter({
-          stateProvider: createBetterSqlite3Provider({ db }),
-          tablePrefix: cfg.tablePrefix,
-          idType: cfg.idType,
-        });
-        await adapter.migrateToLatest();
-      }
-      await use(db);
-      db.close();
+const createValidatingProvider = (
+  db: Database.Database,
+): SqliteStateProvider<BetterSqlite3Context> => {
+  const inner = createBetterSqlite3Provider({ db });
+  return {
+    transactionConcurrency: inner.transactionConcurrency,
+    withTransaction: inner.withTransaction,
+    executeSql: async (args) => {
+      const rows = await inner.executeSql(args);
+      validateAgainstDb(db, args, rows);
+      return rows;
     },
-    { scope: "worker" },
-  ],
-});
+    close: inner.close,
+  };
+};
 
 describe("SQLite SQL contract", () => {
-  for (const cfg of configs) {
-    describe(cfg.label, () => {
-      const defs = createSqliteSqlDefinitions(cfg.idDataType);
-      const applyTemplate = createTemplateApplier(
-        { table_prefix: cfg.tablePrefix, id_type: cfg.idType },
-        { job_columns: jobColumnsSelect, job_columns_prefixed: jobColumnsPrefixedSelect },
-      );
+  const conformanceIt = it.extend<{
+    db: Database.Database;
+    stateAdapter: StateAdapter<{ $test: true }, string>;
+  }>({
+    db: [
+      // oxlint-disable-next-line no-empty-pattern
+      async ({}, use) => {
+        const db = new Database(":memory:");
+        db.pragma("journal_mode = WAL");
+        db.pragma("auto_vacuum = INCREMENTAL");
+        db.pragma("foreign_keys = ON");
+        await use(db);
+        db.close();
+      },
+      { scope: "test" },
+    ],
+    stateAdapter: [
+      async ({ db }, use) => {
+        const stateProvider = createValidatingProvider(db);
+        const adapter = await createSqliteStateAdapter({ stateProvider });
+        await adapter.migrateToLatest();
+        // Conformance doesn't drive these — run them so their SQL hits the validator.
+        await adapter.vacuum();
+        await adapter.truncate();
+        await use(adapter as unknown as StateAdapter<{ $test: true }, string>);
+      },
+      { scope: "test" },
+    ],
+  });
 
-      const sqlCases = (Object.entries(defs) as [string, unknown][]).filter(
-        (e): e is [string, TypedSql] => isTypedSql(e[1]),
-      );
-
-      for (const [key, typedSql] of sqlCases) {
-        contractIt(key, ({ db }) => {
-          const resolved = applyTemplate(typedSql);
-          const declaredParamTypes = extractParamTypes(resolved.params);
-          const declaredColumnTypes = extractColumnTypes(resolved.columns);
-          const paramValues = resolved.params.map((p) => sampleForRuntime(p.type));
-
-          const placeholderCount = countPlaceholders(resolved.sql);
-          expect(
-            placeholderCount,
-            `${key}: declared ${Object.keys(declaredParamTypes).length} params but SQL contains ${placeholderCount} '?' placeholders`,
-          ).toBe(Object.keys(declaredParamTypes).length);
-
-          const stmt = db.prepare(resolved.sql);
-
-          expect(
-            stmt.readonly,
-            `${key}: stmt.readonly is ${stmt.readonly}, declared readOnly is ${resolved.readOnly}`,
-          ).toBe(resolved.readOnly);
-
-          // Execute with sample params inside a SAVEPOINT we always roll back. Validates that:
-          // (a) the declared param count matches what SQLite expects (better-sqlite3 throws
-          //     on count mismatch), and (b) declared runtime types are bind-compatible.
-          // We also harvest the first returned row (if any) to verify column types for
-          // expression-derived columns where `stmt.columns()[i].type` is null.
-          db.exec("SAVEPOINT contract");
-          let firstRow: Record<string, unknown> | undefined;
-          try {
-            if (stmt.reader) {
-              firstRow = stmt.get(...paramValues) as Record<string, unknown> | undefined;
-            } else {
-              stmt.run(...paramValues);
-            }
-          } finally {
-            db.exec("ROLLBACK TO contract");
-            db.exec("RELEASE contract");
-          }
-
-          if (Object.keys(declaredColumnTypes).length > 0) {
-            const stmtColumns = stmt.columns();
-            const actualNames = stmtColumns.map((c) => c.name);
-            const declaredNames = Object.keys(declaredColumnTypes);
-            expect([...actualNames].sort(), `${key}: column names mismatch`).toEqual(
-              [...declaredNames].sort(),
-            );
-            expect(
-              new Set(actualNames).size,
-              `${key}: duplicate column names in result: ${actualNames.join(", ")}`,
-            ).toBe(actualNames.length);
-
-            const declaredTypeByName = new Map(stmtColumns.map((c) => [c.name, c.type]));
-            for (const [name, runtime] of Object.entries(declaredColumnTypes)) {
-              const sqliteType = declaredTypeByName.get(name);
-              if (sqliteType != null) {
-                expect(
-                  sqliteTypeMatchesRuntime(sqliteType, runtime),
-                  `${key} column '${name}': SQLite reports declared type '${sqliteType}', declared runtime '${runtime}'`,
-                ).toBe(true);
-                continue;
-              }
-              // Expression-derived column: fall back to runtime value inspection when a row
-              // is available. Empty result sets leave the column unverified (acceptable —
-              // these queries filter on params we can't meaningfully populate).
-              if (firstRow && name in firstRow) {
-                const value = firstRow[name];
-                expect(
-                  runtimeValueMatchesRuntime(value, runtime),
-                  `${key} column '${name}': runtime value has typeof '${typeof value}', declared runtime '${runtime}'`,
-                ).toBe(true);
-              }
-            }
-          }
-        });
-      }
-    });
-  }
+  stateAdapterConformanceTestSuite({ it: conformanceIt });
 });

@@ -23,6 +23,7 @@ export const createNodeSqliteProvider = ({
   };
 
   return {
+    transactionConcurrency: "serialized",
     withTransaction: async (fn) => {
       using _h = await lock.acquireWrite();
       db.exec("BEGIN");

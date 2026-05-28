@@ -393,7 +393,7 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "listJobs filters by from/to date range",
       run: async ({ stateAdapter }, expect) => {
-        await stateAdapter.withTransaction(async (txCtx) =>
+        const [{ job: jobA }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
@@ -408,9 +408,7 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
         await sleep(50);
-        const midpoint = new Date();
-        await sleep(50);
-        await stateAdapter.withTransaction(async (txCtx) =>
+        const [{ job: jobB }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
@@ -424,6 +422,7 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             ],
           }),
         );
+        const midpoint = new Date((jobA.createdAt.getTime() + jobB.createdAt.getTime()) / 2);
 
         const after = await stateAdapter.listJobs({
           filter: { from: midpoint },

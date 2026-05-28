@@ -44,6 +44,7 @@ export const createPostgresJsStateProvider = ({
   };
 
   return {
+    transactionConcurrency: "concurrent",
     withTransaction: async (cb) => sql.begin(async (txSql) => cb({ sql: txSql }) as any),
     withSavepoint: async (txCtx, fn) =>
       txCtx.sql.savepoint(async (spSql) => fn({ sql: spSql })) as any,

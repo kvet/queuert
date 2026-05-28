@@ -50,6 +50,13 @@ export type BaseTxContext = Record<string, unknown>;
  */
 export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string> = {
   /**
+   * Whether two `withTransaction` callbacks can be in flight against the same
+   * store at once. Forwarded from the underlying state provider. Composite
+   * adapters report `"concurrent"` only if every sub-provider is concurrent.
+   */
+  transactionConcurrency: "concurrent" | "serialized";
+
+  /**
    * Executes a callback within a database transaction.
    * Acquires a connection, starts a transaction, executes the callback,
    * commits on success, rolls back on error, and releases the connection.
@@ -65,34 +72,40 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
   withSavepoint: <T>(txCtx: TTxContext, fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
 
   /**
-   * Gets a chain by its chain ID. Returns [rootJob, lastJob] or undefined.
+   * Gets chains by their chain IDs. Returns one entry per input id in input
+   * order: a `[rootJob, lastJob]` pair when the chain exists, or `undefined`
+   * when no chain with that id exists.
    *
-   * Pass `lock: "exclusive"` from inside a transaction to acquire a write-intent
-   * lock on the latest job in the chain — i.e. the row callers typically extend
-   * (rootJob when the chain has no continuation, otherwise the last
-   * continuation). The rootJob is not locked when a continuation exists, since
-   * `chainTypeName` is immutable and no caller mutates the rootJob via this
-   * path. Backends that support row-level locking (Postgres, MySQL/MariaDB)
-   * block concurrent locked reads on the same row until the transaction ends.
+   * Pass `lock: "exclusive"` from inside a transaction to acquire a
+   * write-intent lock on the latest job in each chain — i.e. the row
+   * callers typically extend (rootJob when the chain has no continuation,
+   * otherwise the last continuation). The rootJob is not locked when a
+   * continuation exists, since `chainTypeName` is immutable and no caller
+   * mutates the rootJob via this path. Backends that support row-level
+   * locking (Postgres, MySQL/MariaDB) block concurrent locked reads on the
+   * same row until the transaction ends.
    */
-  getChain: (params: {
+  getChains: (params: {
     txCtx?: TTxContext;
-    chainId: TJobId;
+    chainIds: TJobId[];
     lock?: "exclusive";
-  }) => Promise<[StateJob, StateJob | undefined] | undefined>;
+  }) => Promise<([StateJob, StateJob | undefined] | undefined)[]>;
 
   /**
-   * Gets a job by its ID.
+   * Gets jobs by their IDs. Returns one entry per input id in input order:
+   * the `StateJob` when it exists, or `undefined` when no job with that id
+   * exists.
    *
-   * Pass `lock: "exclusive"` from inside a transaction to acquire a write-intent
-   * lock on the row; backends that support row-level locking (Postgres,
-   * MySQL/MariaDB) will block concurrent writers until the transaction ends.
+   * Pass `lock: "exclusive"` from inside a transaction to acquire a
+   * write-intent lock on each row; backends that support row-level locking
+   * (Postgres, MySQL/MariaDB) will block concurrent writers until the
+   * transaction ends.
    */
-  getJob: (params: {
+  getJobs: (params: {
     txCtx?: TTxContext;
-    jobId: TJobId;
+    jobIds: TJobId[];
     lock?: "exclusive";
-  }) => Promise<StateJob | undefined>;
+  }) => Promise<(StateJob | undefined)[]>;
 
   /**
    * Creates jobs. Returns results in the same order as input.
@@ -277,20 +290,10 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
   }) => Promise<Page<StateJob>>;
 
   /**
-   * Triggers pending jobs immediately by setting their scheduledAt to now.
-   *
-   * All-or-nothing: if any input id is missing or not in `pending` status, no
-   * rows are updated and `triggered` is empty. `notFound` lists ids with no
-   * matching job; `notTriggerable` lists existing jobs whose status is not
-   * `pending`. When every input is eligible, `triggered` contains the updated
-   * jobs in the same order as `jobIds`. Never throws on missing/ineligible
-   * ids — the caller decides how to surface failures.
+   * Sets `scheduled_at = now()` on the given jobs and returns the updated
+   * rows in input order.
    */
-  triggerJobs: (params: { txCtx?: TTxContext; jobIds: TJobId[] }) => Promise<{
-    triggered: StateJob[];
-    notFound: TJobId[];
-    notTriggerable: { id: TJobId; status: StateJobStatus }[];
-  }>;
+  triggerJobs: (params: { txCtx?: TTxContext; jobIds: TJobId[] }) => Promise<StateJob[]>;
 
   /**
    * Releases internal resources (in-memory indexes, shared caches) and cascades

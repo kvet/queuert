@@ -15,6 +15,7 @@ export const createPrismaSqliteStateProvider = <TPrisma extends PrismaLikeClient
   lock: AsyncRwLock;
 }): SqliteStateProvider<PrismaSqliteContext<TPrisma>> => {
   return {
+    transactionConcurrency: "serialized",
     withTransaction: async (cb) => {
       using _h = await lock.acquireWrite();
       return await prisma.$transaction(async (prisma: TPrisma) => cb({ prisma }));

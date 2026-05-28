@@ -692,14 +692,14 @@
     },
     "packages/core": {
       "name": "queuert",
-      "version": "0.13.0",
+      "version": "0.14.1",
       "devDependencies": {
         "@queuert/tsconfig": "workspace:*",
       },
     },
     "packages/dashboard": {
       "name": "@queuert/dashboard",
-      "version": "0.13.0",
+      "version": "0.14.1",
       "devDependencies": {
         "@queuert/tsconfig": "workspace:*",
         "@solidjs/router": "0.16.1",
@@ -715,7 +715,7 @@
     },
     "packages/nats": {
       "name": "@queuert/nats",
-      "version": "0.13.0",
+      "version": "0.14.1",
       "devDependencies": {
         "@queuert/testcontainers": "workspace:*",
         "@queuert/tsconfig": "workspace:*",
@@ -729,7 +729,7 @@
     },
     "packages/otel": {
       "name": "@queuert/otel",
-      "version": "0.13.0",
+      "version": "0.14.1",
       "devDependencies": {
         "@opentelemetry/api": "1.9.1",
         "@opentelemetry/sdk-metrics": "2.6.1",
@@ -738,13 +738,13 @@
         "queuert": "workspace:*",
       },
       "peerDependencies": {
-        "@opentelemetry/api": "^1.0.0",
+        "@opentelemetry/api": "^0.14.0",
         "queuert": "workspace:*",
       },
     },
     "packages/postgres": {
       "name": "@queuert/postgres",
-      "version": "0.13.0",
+      "version": "0.14.1",
       "devDependencies": {
         "@queuert/testcontainers": "workspace:*",
         "@queuert/tsconfig": "workspace:*",
@@ -760,7 +760,7 @@
     },
     "packages/redis": {
       "name": "@queuert/redis",
-      "version": "0.13.0",
+      "version": "0.14.1",
       "devDependencies": {
         "@queuert/testcontainers": "workspace:*",
         "@queuert/tsconfig": "workspace:*",
@@ -774,7 +774,7 @@
     },
     "packages/sqlite": {
       "name": "@queuert/sqlite",
-      "version": "0.13.0",
+      "version": "0.14.1",
       "devDependencies": {
         "@queuert/tsconfig": "workspace:*",
         "@queuert/typed-sql": "workspace:*",

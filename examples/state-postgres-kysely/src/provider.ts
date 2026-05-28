@@ -9,6 +9,7 @@ export const createKyselyPgStateProvider = <TDatabase>({
   db: Kysely<TDatabase>;
 }): PgStateProvider<KyselyPgContext<TDatabase>> => {
   return {
+    transactionConcurrency: "concurrent",
     withTransaction: async (cb) =>
       db.transaction().execute(async (txDb) => cb({ db: txDb as Kysely<TDatabase> })),
     // `id` not forwarded: Kysely's CompiledQuery.raw has no name field; the pg

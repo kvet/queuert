@@ -21,6 +21,7 @@ export const createPgPoolProvider = ({ pool }: { pool: Pool }): PgPoolProvider =
   };
 
   return {
+    transactionConcurrency: "concurrent",
     executeSql: async ({ txCtx, id, sql, params }) => {
       if (txCtx) return exec(txCtx.poolClient, id, sql, params) as any;
       const poolClient = await pool.connect();

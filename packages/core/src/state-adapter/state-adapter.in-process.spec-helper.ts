@@ -68,6 +68,7 @@ export const extendWithStateInProcess = <T>(
           }) as unknown as T;
 
         const flakyStateAdapter: InProcessStateAdapter = {
+          transactionConcurrency: stateAdapter.transactionConcurrency,
           withTransaction: async (fn) => {
             maybeThrow();
             return stateAdapter.withTransaction(fn);
@@ -76,8 +77,8 @@ export const extendWithStateInProcess = <T>(
             maybeThrow();
             return stateAdapter.withSavepoint(txCtx, fn);
           },
-          getChain: wrap(stateAdapter.getChain),
-          getJob: wrap(stateAdapter.getJob),
+          getChains: wrap(stateAdapter.getChains),
+          getJobs: wrap(stateAdapter.getJobs),
           createJobs: wrap(stateAdapter.createJobs),
           addJobsBlockers: wrap(stateAdapter.addJobsBlockers),
           unblockJobs: wrap(stateAdapter.unblockJobs),

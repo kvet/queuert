@@ -33,9 +33,9 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
           return results;
         });
 
-        const retrieved = await stateAdapter.getJob({ jobId: job.id });
-        expect(retrieved!.status).toBe("completed");
-        expect(retrieved!.output).toEqual({ done: true });
+        const [retrieved] = await stateAdapter.getJobs({ jobIds: [job.id] });
+        expect(retrieved?.status).toBe("completed");
+        expect(retrieved?.output).toEqual({ done: true });
       },
     },
     {
@@ -70,9 +70,9 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
           return results;
         });
 
-        const retrieved = await stateAdapter.getJob({ jobId: job.id });
-        expect(retrieved!.status).toBe("pending");
-        expect(retrieved!.output).toBeNull();
+        const [retrieved] = await stateAdapter.getJobs({ jobIds: [job.id] });
+        expect(retrieved?.status).toBe("pending");
+        expect(retrieved?.output).toBeNull();
       },
     },
     {
@@ -126,12 +126,12 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
           return [job1, job2];
         });
 
-        const job1 = await stateAdapter.getJob({ jobId: jobs[0].id });
-        const job2 = await stateAdapter.getJob({ jobId: jobs[1].id });
+        const [job1] = await stateAdapter.getJobs({ jobIds: [jobs[0].id] });
+        const [job2] = await stateAdapter.getJobs({ jobIds: [jobs[1].id] });
         expect(job1).toBeDefined();
-        expect(job1!.input).toEqual({ before: true });
+        expect(job1?.input).toEqual({ before: true });
         expect(job2).toBeDefined();
-        expect(job2!.input).toEqual({ after: true });
+        expect(job2?.input).toEqual({ after: true });
       },
     },
     {
@@ -176,9 +176,9 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
           return results;
         });
 
-        const retrieved = await stateAdapter.getJob({ jobId: job.id });
-        expect(retrieved!.status).toBe("completed");
-        expect(retrieved!.output).toEqual({ step: 1 });
+        const [retrieved] = await stateAdapter.getJobs({ jobIds: [job.id] });
+        expect(retrieved?.status).toBe("completed");
+        expect(retrieved?.output).toEqual({ step: 1 });
       },
     },
     {
@@ -242,8 +242,8 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
           },
         );
 
-        const before = await stateAdapter.getJob({ jobId: jobBefore.id });
-        const after = await stateAdapter.getJob({ jobId: jobAfter.id });
+        const [before] = await stateAdapter.getJobs({ jobIds: [jobBefore.id] });
+        const [after] = await stateAdapter.getJobs({ jobIds: [jobAfter.id] });
         expect(before).toBeDefined();
         expect(after).toBeDefined();
       },
